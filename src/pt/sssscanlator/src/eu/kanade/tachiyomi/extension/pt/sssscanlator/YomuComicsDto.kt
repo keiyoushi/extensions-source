@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -108,31 +109,23 @@ data class ObraDataDto(
 @Serializable
 data class ChapterDto(
     val id: Int,
-    val number: Double,
-    val title: String,
+    val index: Double,
+    val name: String,
     val date: String? = null,
     val createdAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        val numberStr = if (number % 1 == 0.0) number.toInt().toString() else number.toString().replace(".", "-")
-        name = title
-        chapter_number = number.toFloat()
-        url = "/ler/$mangaSlug/capitulo-$numberStr"
-        date_upload = parseDate(createdAt)
+    fun toSChapter(mangaSlug: String, mangaId: Int): SChapter = SChapter.create().apply {
+        val numberStr = if (index % 1 == 0.0) index.toInt().toString() else index.toString().replace(".", "-")
+        name = this@ChapterDto.name
+        chapter_number = index.toFloat()
+        url = "/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
+        date_upload = DATE_FORMATTER.tryParse(createdAt)
     }
 
-    private fun parseDate(createdAt: String?): Long {
-        if (createdAt != null && createdAt.startsWith("\$D")) {
-            try {
-                // Remove $D prefix and parse ISO date
-                val isoDate = createdAt.removePrefix("\$D")
-                return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).parse(isoDate)?.time ?: 0L
-            } catch (e: Exception) {
-                // Ignore
-            }
+    companion object {
+        private val DATE_FORMATTER by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
         }
-
-        return 0L
     }
 }
 
@@ -156,4 +149,42 @@ data class SessionDto(val user: UserDto)
 data class UserDto(val id: String)
 
 @Serializable
-data class SeriesDto(val id: Int)
+data class SeriesDto(
+    val id: Int,
+    val name: String,
+    val sinopse: String? = null,
+    val description: String? = null,
+    val status: String? = null,
+    val posterImage: String? = null,
+    val coverImage: String? = null,
+    val genres: List<GenreDto> = emptyList(),
+    val releasedAt: String? = null,
+    val type: String? = null,
+    val subType: String? = null,
+    val views: Int? = null,
+    val rating: Int? = null,
+    val chaptersCount: Int? = null,
+    val chapters: List<ChapterDto> = emptyList(),
+    val favorites: Int? = null,
+    val userInfo: String? = null,
+) {
+    fun toSManga(slug: String): SManga = SManga.create().apply {
+        title = this@SeriesDto.name
+        thumbnail_url = coverImage ?: posterImage
+        description = sinopse ?: description
+        genre = genres.joinToString(", ") { it.name }
+        status = when (this@SeriesDto.status) {
+            "ATIVO", "EM_DIA" -> SManga.ONGOING
+            "CONCLUIDO" -> SManga.COMPLETED
+            "HIATO" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+        url = "/obra/$slug"
+    }
+}
+
+@Serializable
+data class GenreDto(
+    val id: Int,
+    val name: String,
+)

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -13,22 +12,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
@@ -49,16 +42,30 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     private val preferences = getPreferences()
 
-    override val client: OkHttpClient by lazy {
-        val token = login()
-        val builder = network.cloudflareClient.newBuilder()
-            .rateLimit(2)
+    private var sessionToken: String? = null
 
-        if (token.isNotEmpty()) {
-            builder.addInterceptor(CookieInterceptor(baseUrl.removePrefix("https://"), "__Secure-authjs.session-token" to token))
+    private val authInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val token = synchronized(this) {
+            sessionToken ?: login()
         }
 
-        builder.build()
+        val newRequest = if (token.isNotEmpty()) {
+            request.newBuilder()
+                .header("Cookie", "__Secure-authjs.session-token=$token")
+                .build()
+        } else {
+            request
+        }
+
+        chain.proceed(newRequest)
+    }
+
+    override val client: OkHttpClient by lazy {
+        network.cloudflareClient.newBuilder()
+            .rateLimit(2)
+            .addInterceptor(authInterceptor)
+            .build()
     }
 
     override fun headersBuilder() = super.headersBuilder()
@@ -72,12 +79,12 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
         val client = network.cloudflareClient
 
-        try {
+        return try {
             val csrfRequest = GET("$baseUrl/api/auth/csrf", headers)
             val csrfResponse = client.newCall(csrfRequest).execute()
             if (!csrfResponse.isSuccessful) {
                 csrfResponse.close()
-                throw IOException("Falha ao obter token CSRF")
+                return ""
             }
             val csrfToken = csrfResponse.parseAs<CsrfDto>().csrfToken
 
@@ -93,23 +100,16 @@ class YomuComics : HttpSource(), ConfigurableSource {
             val cookies = loginResponse.headers.values("Set-Cookie")
             loginResponse.close()
 
-            val sessionToken = cookies.find { it.startsWith("__Secure-authjs.session-token=") }
+            val token = cookies.find { it.startsWith("__Secure-authjs.session-token=") }
                 ?.substringAfter("=")
                 ?.substringBefore(";")
-                ?: throw IOException("Falha ao obter cookie de sessão")
+                ?: return ""
 
-            return sessionToken
+            sessionToken = token
+            token
         } catch (e: Exception) {
             e.printStackTrace()
-            return ""
-        }
-    }
-
-    private fun checkLogin() {
-        val email = preferences.getString(PREF_EMAIL, "") ?: ""
-        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
-        if (email.isEmpty() || password.isEmpty()) {
-            throw IOException(LOGIN_REQUIRED_MESSAGE)
+            ""
         }
     }
 
@@ -207,44 +207,40 @@ class YomuComics : HttpSource(), ConfigurableSource {
     }
 
     // =============================== Details ==============================
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.removePrefix("/obra/")
+        return GET("$baseUrl/api/public/series/$slug", headers)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val obraData = extractObraData(document)
-        return obraData.toSManga()
+        val seriesDto = response.parseAs<SeriesDto>()
+        val slug = response.request.url.pathSegments.last()
+        return seriesDto.toSManga(slug)
     }
 
     // =============================== Chapters =============================
+    override fun chapterListRequest(manga: SManga): Request {
+        return mangaDetailsRequest(manga)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val obraData = extractObraData(document)
-        return obraData.chapters.map { it.toSChapter(obraData.slug) }
+        val seriesDto = response.parseAs<SeriesDto>()
+        val slug = response.request.url.pathSegments.last()
+        return seriesDto.chapters.map { it.toSChapter(slug, seriesDto.id) }.reversed()
     }
 
     // ================================ Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, headers)
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val mangaId = url.queryParameter("id")
+            ?: throw IOException("ID da obra não encontrado na URL do capítulo")
+        val chapterNumber = url.pathSegments.last().removePrefix("capitulo-").replace("-", ".")
+
+        return GET("$baseUrl/api/public/chapters/$mangaId/$chapterNumber", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pathSegments = response.request.url.pathSegments
-        val slug = pathSegments[1]
-        val chapterNumber = pathSegments.last().removePrefix("capitulo-").replace("-", ".")
-
-        val seriesRequest = GET("$baseUrl/api/public/series/$slug", headers)
-        val seriesResponse = client.newCall(seriesRequest).execute()
-        if (!seriesResponse.isSuccessful) {
-            seriesResponse.close()
-            throw IOException("Falha ao obter ID da obra (API: ${seriesResponse.code})")
-        }
-        val mangaId = seriesResponse.parseAs<SeriesDto>().id
-
-        val apiUrl = "$baseUrl/api/public/chapters/$mangaId/$chapterNumber"
-        val apiResponse = client.newCall(GET(apiUrl, headers)).execute()
-        if (!apiResponse.isSuccessful) {
-            apiResponse.close()
-            throw IOException("Falha ao buscar páginas do capítulo (API: ${apiResponse.code})")
-        }
-        val pagesDto = apiResponse.parseAs<ChapterPagesDto>()
+        val pagesDto = response.parseAs<ChapterPagesDto>()
 
         return pagesDto.pages.mapIndexed { index, pageDto ->
             Page(index, "", baseUrl + pageDto.url)
@@ -253,34 +249,6 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException("Not implemented")
-    }
-
-    // ============================= Helpers ============================
-    private fun extractObraData(document: Document): ObraDataDto {
-        val script = document.select("script:containsData(self.__next_f)")
-            .joinToString("\n", transform = Element::data)
-
-        return NEXT_DATA_REGEX.findAll(script)
-            .mapNotNull { matchResult ->
-                try {
-                    val str = matchResult.groupValues[1]
-                    val unescaped = json.decodeFromString<String>("\"$str\"")
-                    val jsonStr = unescaped.substringAfter(':')
-                    val element = json.parseToJsonElement(jsonStr)
-
-                    if (element is JsonArray) {
-                        element.forEach { item ->
-                            if (item is JsonObject && item.containsKey("obraData")) {
-                                return@mapNotNull json.decodeFromJsonElement<ObraDataDto>(item["obraData"]!!)
-                            }
-                        }
-                    }
-                    null
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            .firstOrNull() ?: throw IOException("Dados da obra não encontrados")
     }
 
     // ============================== Settings ==============================
@@ -316,9 +284,6 @@ class YomuComics : HttpSource(), ConfigurableSource {
     companion object {
         private const val PREF_EMAIL = "email"
         private const val PREF_PASSWORD = "password"
-        private const val LOGIN_REQUIRED_MESSAGE = "Faça login nas configurações da extensão para utilizar."
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-
-        private val NEXT_DATA_REGEX = """self\.__next_f\.push\(\[\d+,\s*"(.*?)"\]\)""".toRegex()
     }
 }
