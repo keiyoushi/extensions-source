@@ -215,7 +215,17 @@ data class ApiChapterListResponse(
                 val urlPath: String,
                 val dateCreate: Long? = null,
                 val dateModify: Long? = null,
+                val userNode: UserNode? = null,
             ) {
+                @Serializable
+                data class UserNode(
+                    val data: UserData,
+                ) {
+                    @Serializable
+                    data class UserData(
+                        val name: String? = null,
+                    )
+                }
                 fun toSChapter(): SChapter = SChapter.create().apply {
                     url = urlPath
                     name = buildString {
@@ -228,6 +238,7 @@ data class ApiChapterListResponse(
                         }
                     }.ifEmpty { "Unnamed Chapter: $id" }
                     date_upload = dateModify ?: dateCreate ?: 0L
+                    scanlator = userNode?.data?.name
                 }
             }
         }
