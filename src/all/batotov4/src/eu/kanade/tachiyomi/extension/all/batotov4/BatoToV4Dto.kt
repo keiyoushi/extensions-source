@@ -152,7 +152,21 @@ data class ApiComicNodeResponse(
                     genre = genres?.joinToString { genre -> // Map to the canonical name
                         GenreGroupFilter.options.find { it.value == genre }?.name ?: genre
                     }
-                    status = 0 // Status needs to be parsed separately
+                    status = run {
+                        val statusToCheck = originalStatus ?: uploadStatus
+                        when {
+                            statusToCheck == null -> SManga.UNKNOWN
+                            statusToCheck.contains("pending") -> SManga.UNKNOWN
+                            statusToCheck.contains("ongoing") -> SManga.ONGOING
+                            statusToCheck.contains("cancelled") -> SManga.CANCELLED
+                            statusToCheck.contains("hiatus") -> SManga.ON_HIATUS
+                            statusToCheck.contains("completed") -> when {
+                                uploadStatus?.contains("ongoing") == true -> SManga.PUBLISHING_FINISHED
+                                else -> SManga.COMPLETED
+                            }
+                            else -> SManga.UNKNOWN
+                        }
+                    }
                     thumbnail_url = "$baseUrl${urlCoverOri ?: urlCover600 ?: urlCover900 ?: urlCover300}"
                     description = buildString {
                         if (!summary.isNullOrEmpty()) {
