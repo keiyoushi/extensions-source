@@ -1,0 +1,219 @@
+package eu.kanade.tachiyomi.extension.ja.unext
+
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
+
+class UNext : HttpSource(), ConfigurableSource {
+    override val name = "U-NEXT"
+    private val domain = "unext.jp"
+    override val baseUrl = "https://video.$domain"
+    override val lang = "ja"
+    override val supportsLatest = true
+
+    private val apiUrl = "https://cc.$domain"
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            var request = chain.request()
+            var response = chain.proceed(request)
+
+            while (request.url.host == "cc.unext.jp" && response.code == 200) {
+                val contentType = response.body.contentType()
+                if (contentType?.subtype == "json") {
+                    val bodyString = response.peekBody(64 * 1024).string()
+                    if (bodyString.contains("PersistedQueryNotFound")) {
+                        response.close()
+                        request = request.newBuilder().build()
+                        response = chain.proceed(request)
+                        continue
+                    }
+                }
+                break
+            }
+            response
+        }
+        .build()
+
+    override fun popularMangaRequest(page: Int): Request {
+        val payload = Payload(
+            "cosmo_getBookRanking",
+            PopularVariables("D_C_COMIC", page, 20),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, POPULAR_QUERY_HASH),
+            ),
+        )
+        return apiRequest(payload)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<PopularResponse>().data.bookRanking
+        val mangas = result.books.map { it.bookSakuhin.toSManga() }
+        val hasNextPage = result.pageInfo.let { it.page * it.pageSize < it.results }
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val payload = Payload(
+            "cosmo_getNewBooks",
+            LatestVariables("TAG0000014500", page, 20),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, LATEST_QUERY_HASH),
+            ),
+        )
+        return apiRequest(payload)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAs<LatestResponse>().data.newBooks
+        val mangas = result.books.map { it.toSManga() }
+        val hasNextPage = result.pageInfo.let { it.page * it.pageSize < it.results }
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val payload = Payload(
+            "cosmo_bookFreewordSearch",
+            SearchVariables(query, page, 20, null, "RECOMMEND"),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, SEARCH_QUERY_HASH),
+            ),
+        )
+        return apiRequest(payload)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<SearchResponse>().data.search
+        val mangas = result.books.map { it.toSManga() }
+        val hasNextPage = result.pageInfo.let { it.page * it.pageSize < it.results }
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val btd = manga.url.substringAfterLast("/")
+        val payload = Payload(
+            "cosmo_bookTitleDetail",
+            DetailsVariables(btd, "TOTAL", 2, 5),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, DETAILS_QUERY_HASH),
+            ),
+        )
+        return apiRequest(payload)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        return response.parseAs<DetailsResponse>().data.bookTitle.toSManga()
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val btd = manga.url.substringAfterLast("/")
+        val payload = Payload(
+            "cosmo_bookTitleBooks",
+            ChapterListVariables(btd, 1, 9999),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, CHAPTER_LIST_QUERY_HASH),
+            ),
+        )
+        return apiRequest(payload)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val requestUrl = response.request.url.toString()
+        val sakuhinCode = requestUrl.substringAfter("bookSakuhinCode\":\"").substringBefore("\"")
+        val data = response.parseAs<ChapterListResponse>().data.bookTitleBooks.books
+        val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
+        return data
+            .filterNot { hidePaid && it.isFree != true && it.isPurchased != true }
+            .map { it.toSChapter(sakuhinCode) }
+            .reversed()
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        return baseUrl + manga.url
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url.substringBefore("?")
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val bfc = chapter.url.substringAfterLast("/")
+        val payload = Payload(
+            "cosmo_getBookPlaylistUrl",
+            PageListVariables(bfc),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
+            ),
+        )
+
+        return apiRequest(payload)
+    }
+
+    // TODO: get keys
+    override fun pageListParse(response: Response): List<Page> {
+        val playlistData = response.parseAs<PlaylistResponse>().data.playlistUrl
+
+        val licenseUrl = playlistData.licenseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("play_token", playlistData.playToken)
+            .build()
+
+        val licenseRequest = POST(licenseUrl.toString())
+        client.newCall(licenseRequest).execute().close()
+
+        val baseUrl = playlistData.playlistBaseUrl
+        val ubookFile = playlistData.playlistUrl.ubooks.first().content
+        val zipUrl = "$baseUrl/$ubookFile"
+
+        return listOf(Page(0, zipUrl, ""))
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    private inline fun <reified T> apiRequest(payload: Payload<T>): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("operationName", payload.operationName)
+            .addQueryParameter("variables", payload.variables.toJsonString())
+            .addQueryParameter("extensions", payload.extensions.toJsonString())
+            .build()
+
+        val newHeaders = super.headers.newBuilder()
+            .set("Content-Type", "application/json")
+            .build()
+
+        return GET(url.toString(), newHeaders)
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_PAID_PREF
+            title = "Hide paid chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val HIDE_PAID_PREF = "HIDE_PAID"
+        private const val POPULAR_QUERY_HASH = "1e1e84fd9b5718c37ef030ea8230bbf9ddd1e5b86f5b8ce2c224b3704f0468ec"
+        private const val LATEST_QUERY_HASH = "0570a586caa9869bd5eb0b05a59bdfec853f92dc6cf280ebd583df2cc93e1c21"
+        private const val SEARCH_QUERY_HASH = "2ec7804350bf993678c92a5d79f20812b3b0d5b38aaba2603c9dd291c6df927e"
+        private const val DETAILS_QUERY_HASH = "99f21ebea20b64b11ef5d3b811c2b3fa5b4dbd8c5d2933baadf9c26fc60b35d1"
+        private const val CHAPTER_LIST_QUERY_HASH = "66f0c600259b82a4826fba7be2ace33726f3ec09735e65a421f8f602b481487d"
+        private const val PLAYLIST_QUERY_HASH = "f8a851c14ec61eb42dff966570b2ad49f86eeec7f39d2d32ab0ec58cad268fc1"
+    }
+}
