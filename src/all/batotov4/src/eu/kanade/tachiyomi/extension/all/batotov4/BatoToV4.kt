@@ -551,30 +551,13 @@ open class BatoToV4(
         val result = response.parseAs<ApiComicNodeResponse>()
         val comicData = result.data.response.data
         val manga = comicData.toSManga(baseUrl)
-
-        // Apply status parsing and title cleaning
-        manga.status = parseStatus(comicData.originalStatus, comicData.uploadStatus)
+        
         manga.title = manga.title.cleanTitleIfNeeded()
 
         return manga
     }
 
     override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
-
-    private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
-        val status = workStatus ?: uploadStatus
-        return when {
-            status == null -> SManga.UNKNOWN
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Cancelled") -> SManga.CANCELLED
-            status.contains("Hiatus") -> SManga.ON_HIATUS
-            status.contains("Completed") -> when {
-                uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
-                else -> SManga.COMPLETED
-            }
-            else -> SManga.UNKNOWN
-        }
-    }
 
     // ************ Chapter List ************ //
     override fun chapterListRequest(manga: SManga): Request {
