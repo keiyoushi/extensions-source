@@ -551,7 +551,7 @@ open class BatoToV4(
         val result = response.parseAs<ApiComicNodeResponse>()
         val comicData = result.data.response.data
         val manga = comicData.toSManga(baseUrl)
-        
+
         manga.title = manga.title.cleanTitleIfNeeded()
 
         return manga
