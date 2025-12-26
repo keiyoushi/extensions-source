@@ -74,6 +74,11 @@ val CHAPTER_LIST_QUERY: String = buildQuery {
                     urlPath
                     dateCreate
                     dateModify
+                    userNode {
+                        data {
+                            name
+                        }
+                    }
                 }
             }
         }
