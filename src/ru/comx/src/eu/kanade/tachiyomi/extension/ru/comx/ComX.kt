@@ -43,6 +43,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.text.replace
 
 class ComX : ParsedHttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
@@ -75,6 +76,8 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", baseUrl)
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override val client = network.cloudflareClient.newBuilder()
@@ -125,16 +128,20 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         )
         .addInterceptor { chain ->
             val originalRequest = chain.request()
-            val response = chain.proceed(originalRequest)
+            var response = chain.proceed(originalRequest)
             if (response.code == 404 && response.asJsoup().toString().contains("Protected by Batman")) {
                 throw IOException("Antibot, попробуйте пройти капчу в WebView")
+            }
+            val imgPreload = "https://img"
+            if (response.code == 403 && (originalRequest.url.toString().contains("/comix/")) && !(originalRequest.url.toString().contains(imgPreload))) {
+                val newUrl = originalRequest.url.toString().replace(Regex(".+(?=\\.${baseUrl.substringAfter("://")})"), imgPreload).toHttpUrl()
+                val newRequest = originalRequest.newBuilder().url(newUrl).headers(headers).build()
+                response.close()
+                response = chain.proceed(newRequest)
             }
             response
         }
         .build()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl)
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList())
@@ -344,7 +351,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
             if (isEvent) {
                 chapter.name = chapter.chapter_number.toInt().toString() + " " + chapter.name
             }
-            chapter.setUrlWithoutDomain("/readcomix/" + data["news_id"] + "/" + it.jsonObject["id"]!!.jsonPrimitive.content + ".html")
+            chapter.setUrlWithoutDomain("/reader/" + data["news_id"] + "/" + it.jsonObject["id"]!!.jsonPrimitive.content)
             chapter
         }
         return chapters ?: emptyList()
