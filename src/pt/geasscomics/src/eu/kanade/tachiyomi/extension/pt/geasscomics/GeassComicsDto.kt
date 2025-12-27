@@ -1,131 +1,97 @@
 package eu.kanade.tachiyomi.extension.pt.geasscomics
 
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class Pagination(
-    @SerialName("has_next")
-    val hasNext: Boolean = false,
+data class MangaListDto(
+    val items: List<MangaDto> = emptyList(),
+    val pagination: PaginationDto? = null,
 )
 
 @Serializable
-class PopularDto(
-    @SerialName("obras")
-    val mangas: List<MangaDto> = emptyList(),
-    val pagination: Pagination = Pagination(),
+data class PaginationDto(
+    val pages: Int = 1,
+    val currentPage: Int = 1,
 ) {
-    fun hasNextPage() = pagination.hasNext
+    val hasNextPage: Boolean
+        get() = currentPage < pages
 }
 
 @Serializable
-class LatestDto(
-    @SerialName("recentes")
-    val mangas: List<SimpleMangaDto> = emptyList(),
-)
-
-@Serializable
-class DetailsDto(
-    @SerialName("obra")
-    val manga: MangaDto,
-) {
-    fun toChapters(): List<SChapter> {
-        return manga.chapters.map {
-            SChapter.create().apply {
-                name = it.name
-                chapter_number = it.number.toFloat()
-                url = "/manga/${manga.id}/chapter/${it.number}"
-            }
-        }.sortedBy(SChapter::chapter_number).reversed()
-    }
-}
-
-@Serializable
-class SimpleMangaDto(
-    @SerialName("obra_id")
+data class MangaDto(
     val id: Int,
-    @SerialName("titulo_obra")
     val title: String,
-    @SerialName("capa")
-    val thumbnail_url: String,
+    @SerialName("cover") val thumbnail: String? = null,
+    val synopsis: String? = null,
+    val status: String? = null,
+    val author: AuthorDto? = null,
+    val genres: List<TagDto> = emptyList(),
+    val tags: List<TagDto> = emptyList(),
+    val lastChapters: List<ChapterDto> = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = this@SimpleMangaDto.title
-        thumbnail_url = this@SimpleMangaDto.thumbnail_url
-        url = this@SimpleMangaDto.id.toString()
-    }
-}
-
-@Serializable
-class MangaDto(
-    val id: Int,
-    @SerialName("titulo")
-    val title: String,
-    @SerialName("artista")
-    val artist: String,
-    @SerialName("autor")
-    val author: String,
-    @SerialName("capa")
-    val thumbnail_url: String,
-    @SerialName("generos")
-    val genres: List<Genre>,
-    val sinopse: String,
-    val status: String,
-    @SerialName("capitulos")
-    val chapters: List<ChapterDto> = emptyList(),
-) {
-
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
-        description = this@MangaDto.sinopse
-        thumbnail_url = this@MangaDto.thumbnail_url
-        artist = this@MangaDto.artist
-        author = this@MangaDto.author
-        genre = genres.joinToString { it.name }
-        url = this@MangaDto.id.toString()
+        thumbnail_url = this@MangaDto.thumbnail
+        url = "/obra/${this@MangaDto.id}"
+        description = this@MangaDto.synopsis
+        author = this@MangaDto.author?.toString()
+        genre = (genres + tags).joinToString { it.name }
         status = when (this@MangaDto.status) {
-            "EM ANDAMENTO" -> SManga.ONGOING
-            "COMPLETO" -> SManga.COMPLETED
+            "IN_PROGRESS" -> SManga.ONGOING
+            "COMPLETED" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
         initialized = true
     }
-
-    @Serializable
-    class Genre(
-        @SerialName("nome")
-        val name: String,
-    )
 }
 
 @Serializable
-class ChapterDto(
-    val id: Long,
-    @SerialName("numero")
-    val number: String,
-    @SerialName("titulo")
+data class AuthorDto(
+    val firstName: String? = null,
+    val lastName: String? = null,
+) {
+    override fun toString(): String {
+        return listOfNotNull(firstName, lastName).joinToString(" ").trim()
+    }
+}
+
+@Serializable
+data class TagDto(
+    val id: Int,
     val name: String,
 )
 
 @Serializable
-class PageDto(
-    @SerialName("capitulo")
-    val chapter: Image,
+data class ChapterListDto(
+    val items: List<ChapterDto> = emptyList(),
+)
+
+@Serializable
+data class ChapterDto(
+    val id: Long? = null,
+    val chapter: Float? = null,
+    val number: Float? = null,
+    val title: String,
+    val date: String? = null,
 ) {
-    fun toPages(): List<Page> =
-        chapter.images.mapIndexed { index, source -> Page(index, imageUrl = source.url) }
-
-    @Serializable
-    class Source(
-        val url: String,
-    )
-
-    @Serializable
-    class Image(
-        @SerialName("imagens")
-        val images: List<Source> = emptyList(),
-    )
+    val chapterNumber: Float
+        get() = chapter ?: number ?: 0f
 }
+
+@Serializable
+data class AuthRequestDto(
+    val email: String,
+    val password: String,
+)
+
+@Serializable
+data class AuthResponseDto(
+    val jwt: JwtDto,
+)
+
+@Serializable
+data class JwtDto(
+    val token: String,
+)
