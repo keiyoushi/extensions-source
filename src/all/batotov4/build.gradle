@@ -1,0 +1,8 @@
+ext {
+    extName = 'Bato.to (v4)'
+    extClass = '.BatoFactory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
