@@ -22,6 +22,7 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class Wolftoon : HttpSource() {
 
@@ -253,6 +254,8 @@ class Wolftoon : HttpSource() {
     companion object {
         private val GENRE_REGEX = """Che=(\[[^]]+])""".toRegex()
         private val API_KEY_REGEX = """bse="([^"]+)""".toRegex()
-        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
+        }
     }
 }
