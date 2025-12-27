@@ -28,6 +28,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -195,12 +196,14 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
-        val chapterUrl = document.location()
+        val chapterUrl = document.location().toHttpUrl().newBuilder()
+            .removeAllQueryParameters("style")
+            .build()
 
         // Use minimal headers for JSON request - Cloudflare may be blocking complex requests
         val jsonHeaders = Headers.Builder()
-            .add("Referer", chapterUrl)
-            .add("Accept", "application/json")
+            .add("Referer", chapterUrl.toString())
+            .add("Accept", "*/*")
             .build()
 
         val dialog = try {
