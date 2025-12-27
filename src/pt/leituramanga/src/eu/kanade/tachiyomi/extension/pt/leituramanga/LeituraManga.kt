@@ -104,6 +104,8 @@ class LeituraManga : HttpSource() {
         val result = response.parseAs<MangaResponseDto<MangaDto>>()
         return result.data.toSManga(cdnUrl)
     }
+
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
     // ================= Chapters ==================
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
@@ -115,6 +117,8 @@ class LeituraManga : HttpSource() {
 
         return result.data.data.map { it.toSChapter(mangaDto.slug) }
     }
+
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
     // ================= Pages ==================
 
     override fun pageListParse(response: Response): List<Page> {
