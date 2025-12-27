@@ -42,12 +42,17 @@ class MangaDto(
 
     private fun String.toSlug(): String {
         val noDiacritics = Normalizer.normalize(this, Normalizer.Form.NFD)
-            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+            .replace(MARKS_REGEX, "")
         return noDiacritics.lowercase()
-            .replace(Regex("[^a-z0-9]+"), "-")
+            .replace(NON_ALPHA_REGEX, "-")
             .trim('-')
     }
     fun updatedAt(): Long = DATE_FORMAT.tryParse(updatedAt)
+
+    companion object {
+        private val MARKS_REGEX = "\\p{InCombiningDiacriticalMarks}+".toRegex()
+        private val NON_ALPHA_REGEX = "[^a-z0-9]+".toRegex()
+    }
 }
 
 @Serializable
