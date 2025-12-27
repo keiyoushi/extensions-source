@@ -77,7 +77,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override val client = network.cloudflareClient.newBuilder()
@@ -132,9 +132,16 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
             if (response.code == 404 && response.asJsoup().toString().contains("Protected by Batman")) {
                 throw IOException("Antibot, попробуйте пройти капчу в WebView")
             }
-            val imgPreload = "https://img"
-            if (response.code == 403 && (originalRequest.url.toString().contains("/comix/")) && !(originalRequest.url.toString().contains(imgPreload))) {
-                val newUrl = originalRequest.url.toString().replace(Regex(".+(?=\\.${baseUrl.substringAfter("://")})"), imgPreload).toHttpUrl()
+            val imgPreload = baseUrl.replace(Regex("^https?://"), "img.") // https://img.com-x.life
+            if (response.code == 403 &&
+                (originalRequest.url.toString().contains("/comix/")) &&
+                !(originalRequest.url.toString().contains(imgPreload))
+            ) {
+                val newUrl = originalRequest.url
+                    .newBuilder()
+                    .host(imgPreload)
+                    .build()
+
                 val newRequest = originalRequest.newBuilder().url(newUrl).headers(headers).build()
                 response.close()
                 response = chain.proceed(newRequest)
