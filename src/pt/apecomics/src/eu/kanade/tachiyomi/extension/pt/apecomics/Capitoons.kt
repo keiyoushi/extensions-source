@@ -10,7 +10,7 @@ class Capitoons : MangaThemesia(
     "Capitoons",
     "https://capitoons.com",
     "pt-BR",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val id: Long = 4475020039832513819
 
