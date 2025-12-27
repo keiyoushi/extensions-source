@@ -21,6 +21,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
+import java.util.Locale
 
 class Wolftoon : HttpSource() {
 
@@ -40,8 +41,12 @@ class Wolftoon : HttpSource() {
         .build()
 
     private val scriptUrl: String by lazy {
-        val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-        document.selectFirst("script[type=module][src*=index]")!!.absUrl("src")
+        return@lazy try {
+            val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+            document.selectFirst("script[type=module][src*=index]")!!.absUrl("src")
+        } catch (_: Exception) {
+            baseUrl
+        }
     }
 
     private val apiKey: String by lazy {
@@ -50,9 +55,13 @@ class Wolftoon : HttpSource() {
     }
 
     private val apiHeaders: Headers by lazy {
-        headersBuilder()
-            .set("apikey", apiKey)
-            .build()
+        return@lazy try {
+            headersBuilder()
+                .set("apikey", apiKey)
+                .build()
+        } catch (_: Exception) {
+            headersBuilder().build()
+        }
     }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -201,7 +210,8 @@ class Wolftoon : HttpSource() {
             ?: emptyList()
     }
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String =
+        throw UnsupportedOperationException()
 
     // ================================ Filters =======================================
 
@@ -243,6 +253,6 @@ class Wolftoon : HttpSource() {
     companion object {
         private val GENRE_REGEX = """Che=(\[[^]]+])""".toRegex()
         private val API_KEY_REGEX = """bse="([^"]+)""".toRegex()
-        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
     }
 }
