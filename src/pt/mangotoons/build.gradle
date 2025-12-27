@@ -1,0 +1,9 @@
+ext {
+    extName = 'Mango Toons'
+    extClass = '.MangoToons'
+    baseUrl = 'https://mangotoons.com'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
