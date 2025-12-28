@@ -68,7 +68,6 @@ class AnimeSama : ParsedHttpSource() {
         val button = domainsDocument.getElementsByClass("btn-primary").first()
         if (button == null) throw UnsupportedOperationException("Unable to retrieve the most recent URL for anime-sama.")
         val url = button.absUrl("href")
-        Log.i("AnimeSama", url)
         return Pair(url, "$url/s2/scans/")
     }
 
