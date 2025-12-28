@@ -1,0 +1,9 @@
+ext {
+    extName = 'Wolftoon'
+    extClass = '.Wolftoon'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+    
