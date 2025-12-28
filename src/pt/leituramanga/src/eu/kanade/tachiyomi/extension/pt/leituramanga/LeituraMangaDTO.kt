@@ -8,29 +8,29 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-data class MangaResponseDto<T>(
+class MangaResponseDto<T>(
     val data: T,
 )
 
 @Serializable
-data class PopularDataDto(
+class PopularDataDto(
     val topView: List<MangaDto>,
 )
 
 @Serializable
-data class MangaListDto(
+class MangaListDto(
     val data: List<MangaDto>,
     val pagination: PaginationDto,
 )
 
 @Serializable
-data class PaginationDto(
+class PaginationDto(
     val page: Int,
     val totalPage: Int,
 )
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val _id: String,
     val title: String,
     val slug: String,
@@ -62,23 +62,23 @@ data class MangaDto(
 }
 
 @Serializable
-data class GenreDto(
+class GenreDto(
     val name: String,
 )
 
 @Serializable
-data class ChapterListDto(
+class ChapterListDto(
     val data: List<ChapterDto>,
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val chapterNumber: Double,
     val title: String? = null,
     val releaseDate: String,
 ) {
     fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        val numberStr = if (chapterNumber % 1 == 0.0) chapterNumber.toInt().toString() else chapterNumber.toString()
+        val numberStr = chapterNumber.toString().removeSuffix(".0")
         name = title ?: "Capítulo $numberStr"
         url = "/manga/$mangaSlug/chapter/$numberStr"
         date_upload = dateFormat.tryParse(releaseDate) ?: 0L

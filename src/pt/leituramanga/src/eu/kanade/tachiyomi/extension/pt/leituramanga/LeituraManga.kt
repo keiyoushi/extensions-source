@@ -125,9 +125,9 @@ class LeituraManga : HttpSource() {
         val document = response.asJsoup()
 
         return document.select("div[data-index] img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
+            Page(i, imageUrl = element.attr("abs:src"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw Exception("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
