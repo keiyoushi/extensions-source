@@ -175,7 +175,7 @@ class SeriesDto(
         title = this@SeriesDto.name
         thumbnail_url = coverImage ?: posterImage
         description = sinopse ?: description
-        genre = genres.joinToString() { it.name }
+        genre = genres.joinToString { it.name }
         status = when (this@SeriesDto.status) {
             "ATIVO", "EM_DIA" -> SManga.ONGOING
             "CONCLUIDO" -> SManga.COMPLETED
