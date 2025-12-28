@@ -243,12 +243,12 @@ class YomuComics : HttpSource(), ConfigurableSource {
         val pagesDto = response.parseAs<ChapterPagesDto>()
 
         return pagesDto.pages.mapIndexed { index, pageDto ->
-            Page(index, "", baseUrl + pageDto.url)
+            Page(index, imageUrl = baseUrl + pageDto.url)
         }
     }
 
     override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not implemented")
+        throw UnsupportedOperationException()
     }
 
     // ============================== Settings ==============================

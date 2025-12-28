@@ -6,14 +6,15 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
-data class HomeDto(
+class HomeDto(
     val featuredManga: List<MangaDto> = emptyList(),
 )
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val title: String,
     val slug: String,
     val cover: String? = null,
@@ -26,12 +27,12 @@ data class MangaDto(
 }
 
 @Serializable
-data class UpdatesDto(
+class UpdatesDto(
     val updates: List<UpdateMangaDto> = emptyList(),
 )
 
 @Serializable
-data class UpdateMangaDto(
+class UpdateMangaDto(
     val title: String,
     val slug: String,
     val cover: String? = null,
@@ -44,13 +45,13 @@ data class UpdateMangaDto(
 }
 
 @Serializable
-data class SearchResponseDto(
+class SearchResponseDto(
     val results: List<SearchMangaDto> = emptyList(),
     val pagination: PaginationDto? = null,
 )
 
 @Serializable
-data class SearchMangaDto(
+class SearchMangaDto(
     val id: Int,
     val name: String,
     val slug: String? = null,
@@ -64,7 +65,7 @@ data class SearchMangaDto(
 }
 
 @Serializable
-data class PaginationDto(
+class PaginationDto(
     val page: Int,
     val limit: Int,
     val total: Int,
@@ -72,12 +73,12 @@ data class PaginationDto(
 )
 
 @Serializable
-data class DetailsResponseDto(
+class DetailsResponseDto(
     val obraData: ObraDataDto,
 )
 
 @Serializable
-data class ObraDataDto(
+class ObraDataDto(
     val id: Int,
     val title: String,
     val slug: String,
@@ -95,7 +96,7 @@ data class ObraDataDto(
         description = synopsis
         author = this@ObraDataDto.author
         artist = this@ObraDataDto.artist
-        genre = genres.joinToString(", ")
+        genre = genres.joinToString()
         status = when (this@ObraDataDto.status) {
             "ATIVO", "EM_DIA" -> SManga.ONGOING
             "CONCLUIDO" -> SManga.COMPLETED
@@ -107,7 +108,7 @@ data class ObraDataDto(
 }
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: Int,
     val index: Double,
     val name: String,
@@ -115,7 +116,7 @@ data class ChapterDto(
     val createdAt: String? = null,
 ) {
     fun toSChapter(mangaSlug: String, mangaId: Int): SChapter = SChapter.create().apply {
-        val numberStr = if (index % 1 == 0.0) index.toInt().toString() else index.toString().replace(".", "-")
+        val numberStr = index.toString().removeSuffix(".0").replace(".", "-")
         name = this@ChapterDto.name
         chapter_number = index.toFloat()
         url = "/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
@@ -124,32 +125,34 @@ data class ChapterDto(
 
     companion object {
         private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
         }
     }
 }
 
 @Serializable
-data class ChapterPagesDto(
+class ChapterPagesDto(
     val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
-data class PageDto(
+class PageDto(
     val url: String,
 )
 
 @Serializable
-data class CsrfDto(val csrfToken: String)
+class CsrfDto(val csrfToken: String)
 
 @Serializable
-data class SessionDto(val user: UserDto)
+class SessionDto(val user: UserDto)
 
 @Serializable
-data class UserDto(val id: String)
+class UserDto(val id: String)
 
 @Serializable
-data class SeriesDto(
+class SeriesDto(
     val id: Int,
     val name: String,
     val sinopse: String? = null,
@@ -172,7 +175,7 @@ data class SeriesDto(
         title = this@SeriesDto.name
         thumbnail_url = coverImage ?: posterImage
         description = sinopse ?: description
-        genre = genres.joinToString(", ") { it.name }
+        genre = genres.joinToString() { it.name }
         status = when (this@SeriesDto.status) {
             "ATIVO", "EM_DIA" -> SManga.ONGOING
             "CONCLUIDO" -> SManga.COMPLETED
@@ -184,7 +187,7 @@ data class SeriesDto(
 }
 
 @Serializable
-data class GenreDto(
+class GenreDto(
     val id: Int,
     val name: String,
 )
