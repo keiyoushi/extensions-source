@@ -19,7 +19,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -75,11 +74,6 @@ class Webcomics : HttpSource(), ConfigurableSource {
                 userAgentList = it
             }
     }
-
-    @Serializable
-    private data class UserAgentList(
-        val desktop: List<String>,
-    )
 
     // ========================== Popular =====================================
 
