@@ -114,14 +114,13 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
         return GET("$baseUrl/ajax/search?keyword=$query", headers)
     }
 
-    override fun searchMangaSelector() = "li.list-group-item"
+    override fun searchMangaSelector() = "a.items-center"
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            val urlAndText = element.select("div.ms-2 a")
-            title = urlAndText.text()
-            setUrlWithoutDomain(urlAndText.first()!!.absUrl("href"))
-            thumbnail_url = element.select("a img").first()!!.absUrl("src")
+            title = element.selectFirst("h4")!!.text()
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            setUrlWithoutDomain(element.absUrl("href"))
         }
     }
 
