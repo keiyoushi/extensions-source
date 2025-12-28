@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -176,7 +177,7 @@ class GeassComics : HttpSource(), ConfigurableSource {
             SChapter.create().apply {
                 name = it.title
                 chapter_number = it.chapterNumber
-                val num = if (it.chapterNumber % 1 == 0f) it.chapterNumber.toInt().toString() else it.chapterNumber.toString()
+                val num = it.chapterNumber.toString().removeSuffix(".0")
                 url = "/obra/$mangaId/capitulo/$num"
 
                 date_upload = chapterDateMap["$mangaId-${it.chapterNumber}"] ?: 0L
@@ -185,11 +186,7 @@ class GeassComics : HttpSource(), ConfigurableSource {
     }
 
     private fun parseDate(dateStr: String): Long {
-        return try {
-            dateFormat.parse(dateStr)?.time ?: 0L
-        } catch (e: Exception) {
-            0L
-        }
+        return dateFormat.tryParse(dateStr)
     }
 
     // ========================= Pages ======================================

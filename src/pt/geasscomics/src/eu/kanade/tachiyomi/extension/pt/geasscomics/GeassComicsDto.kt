@@ -5,13 +5,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaListDto(
+class MangaListDto(
     val items: List<MangaDto> = emptyList(),
     val pagination: PaginationDto? = null,
 )
 
 @Serializable
-data class PaginationDto(
+class PaginationDto(
     val pages: Int = 1,
     val currentPage: Int = 1,
 ) {
@@ -20,7 +20,7 @@ data class PaginationDto(
 }
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val id: Int,
     val title: String,
     @SerialName("cover") val thumbnail: String? = null,
@@ -48,7 +48,7 @@ data class MangaDto(
 }
 
 @Serializable
-data class AuthorDto(
+class AuthorDto(
     val firstName: String? = null,
     val lastName: String? = null,
 ) {
@@ -58,18 +58,18 @@ data class AuthorDto(
 }
 
 @Serializable
-data class TagDto(
+class TagDto(
     val id: Int,
     val name: String,
 )
 
 @Serializable
-data class ChapterListDto(
+class ChapterListDto(
     val items: List<ChapterDto> = emptyList(),
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: Long? = null,
     val chapter: Float? = null,
     val number: Float? = null,
@@ -81,17 +81,17 @@ data class ChapterDto(
 }
 
 @Serializable
-data class AuthRequestDto(
+class AuthRequestDto(
     val email: String,
     val password: String,
 )
 
 @Serializable
-data class AuthResponseDto(
+class AuthResponseDto(
     val jwt: JwtDto,
 )
 
 @Serializable
-data class JwtDto(
+class JwtDto(
     val token: String,
 )
