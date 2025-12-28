@@ -17,8 +17,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -59,7 +57,7 @@ class MangoToons : HttpSource() {
         val mangas = result.items.map { dto ->
             SManga.create().apply {
                 title = dto.titulo
-                url = "/obra/${dto.slug ?: dto.id ?: dto.unique_id}"
+                url = "/obra/${dto.id}"
                 thumbnail_url = (dto.capa ?: dto.imagem)?.let { "$cdnUrl/$it" }
             }
         }
@@ -81,7 +79,7 @@ class MangoToons : HttpSource() {
         val mangas = result.items.map { dto ->
             SManga.create().apply {
                 title = dto.titulo
-                url = "/obra/${dto.slug ?: dto.id ?: dto.unique_id}"
+                url = "/obra/${dto.id}"
                 thumbnail_url = (dto.capa ?: dto.imagem)?.let { "$cdnUrl/$it" }
             }
         }
@@ -125,7 +123,7 @@ class MangoToons : HttpSource() {
 
         return SManga.create().apply {
             title = dto.titulo
-            url = "/obra/${dto.slug ?: dto.id ?: dto.unique_id}"
+            url = "/obra/${dto.id}"
             thumbnail_url = (dto.capa ?: dto.imagem)?.let { "$cdnUrl/$it" }
             description = dto.descricao
             genre = dto.tags?.joinToString { it.nome }
@@ -162,7 +160,7 @@ class MangoToons : HttpSource() {
     }
 
     private fun formatChapterNumber(numero: Float): String {
-        return DecimalFormat("#.###", DecimalFormatSymbols(Locale.US)).format(numero)
+        return numero.toString().removeSuffix(".0")
     }
 
     // ================= Pages ===================

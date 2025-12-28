@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 
 @Serializable
-data class MangoResponse<T>(
+class MangoResponse<T>(
     val sucesso: Boolean? = false,
     val dados: T? = null,
     val obras: T? = null,
@@ -19,18 +19,17 @@ data class MangoResponse<T>(
 }
 
 @Serializable
-data class PaginationDto(
+class PaginationDto(
     val hasNextPage: Boolean = false,
 )
 
 @Serializable
-data class MangoMangaDto(
+class MangoMangaDto(
+    @JsonNames("id", "slug", "unique_id")
     val id: Int? = null,
-    val unique_id: String? = null,
     @SerialName("title")
     @JsonNames("nome")
     val titulo: String,
-    val slug: String? = null,
     @SerialName("coverImage") val capa: String? = null,
     val imagem: String? = null,
     val views: Int? = null,
@@ -42,12 +41,12 @@ data class MangoMangaDto(
 )
 
 @Serializable
-data class MangoTagDto(
+class MangoTagDto(
     val nome: String,
 )
 
 @Serializable
-data class MangoChapterDto(
+class MangoChapterDto(
     val id: Int,
     val obra_id: Int,
     val numero: Float,
@@ -56,22 +55,22 @@ data class MangoChapterDto(
 )
 
 @Serializable
-data class MangoPageResponse(
+class MangoPageResponse(
     val sucesso: Boolean? = false,
     val capitulo: MangoPageChapterDto? = null,
 )
 
 @Serializable
-data class MangoPageChapterDto(
+class MangoPageChapterDto(
     val paginas: List<MangoPageDto> = emptyList(),
 )
 
 @Serializable
-data class MangoPageDto(
+class MangoPageDto(
     @SerialName("cdn_id") val url: String,
 )
 
 @Serializable
-data class MangoLatestChapterDto(
+class MangoLatestChapterDto(
     val obra: MangoMangaDto? = null,
 )
