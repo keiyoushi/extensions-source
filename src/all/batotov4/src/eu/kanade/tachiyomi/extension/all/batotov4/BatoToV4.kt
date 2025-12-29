@@ -492,7 +492,6 @@ class BatoToV4(
             addAll(
                 listOf(
                     ChapterCountFilter(),
-                    Filter.Separator(),
                     LetterFilter(),
                     Filter.Separator(),
                     Filter.Header("NOTE: Filters below are incompatible with any other filters!"),

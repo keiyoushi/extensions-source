@@ -43,7 +43,7 @@ class ComicNode(
         author = authors?.joinToString()
         artist = artists?.joinToString()
         genre = genres?.joinToString { genre ->
-            genreOptions.firstOrNull { it.value == genre }?.name ?: genre
+            genreOptions.firstOrNull { it.second == genre }?.first ?: genre
         }
         status = run {
             val statusToCheck = originalStatus ?: uploadStatus
