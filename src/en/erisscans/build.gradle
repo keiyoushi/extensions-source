@@ -1,0 +1,10 @@
+ext {
+    extName = 'Eris Scans'
+    extClass = '.ErisScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://erisscans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
