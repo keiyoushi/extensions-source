@@ -176,13 +176,15 @@ class HeavenManga : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url.toString().substringBefore("?").removeSuffix("/")
         val result = json.decodeFromString<PayloadChaptersDto>(response.body.string())
-        return result.data.map {
-            SChapter.create().apply {
-                name = "Capítulo: ${it.slug}"
-                setUrlWithoutDomain("$mangaUrl/${it.slug}#${it.id}")
-                date_upload = runCatching { dateFormat.parse(it.createdAt)?.time ?: 0 }.getOrDefault(0)
+        return result.data
+            .sortedByDescending { it.slug.toFloatOrNull() }
+            .map {
+                SChapter.create().apply {
+                    name = "Capítulo: ${it.slug}"
+                    setUrlWithoutDomain("$mangaUrl/${it.slug}#${it.id}")
+                    date_upload = runCatching { dateFormat.parse(it.createdAt)?.time ?: 0 }.getOrDefault(0)
+                }
             }
-        }
     }
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -367,7 +369,7 @@ class HeavenManga : ParsedHttpSource() {
 
     companion object {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-        val PAGES_REGEX = """pUrl\s*=\s*(\[.*\])\s*;""".toRegex()
+        val PAGES_REGEX = """pUrl\s*=\s*(\[[\s\S]*?\])\s*;""".toRegex()
         val TRAILING_COMMA_REGEX = """,\s*(\}|\])""".toRegex()
         private const val CHAPTER_LIST_LIMIT = 10000
     }
