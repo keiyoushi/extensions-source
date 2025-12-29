@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.batotov4
 
-import android.R.attr.author
-import android.R.attr.description
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -76,10 +74,12 @@ class ComicNode(
                 append("Alternative Titles:\n")
                 append(altNames.joinToString("\n") { "- $it" })
             }
-        }
+        }.replace(urlRegex, "<$1>")
         initialized = true
     }
 }
+
+private val urlRegex = Regex("""(https?://[^\s<"]+)""")
 
 // ************ Comic Search ************ //
 
@@ -197,7 +197,7 @@ class MyHistoryData(
     }
 }
 
-// ************ User's Publish Comic List ************ //
+// ************ User\'s Publish Comic List ************ //
 
 typealias ApiUserComicListResponse = Data<UserComicListData>
 
