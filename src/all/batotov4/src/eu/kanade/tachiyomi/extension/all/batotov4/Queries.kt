@@ -60,7 +60,7 @@ val CHAPTER_LIST_QUERY: String = buildQuery {
                 data {
                     comicId
                     id
-                    urlPath
+                    serial
                     dname
                     title
                     dateCreate
