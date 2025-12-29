@@ -31,6 +31,17 @@ class GenreResponseDto(
 )
 
 @Serializable
+class GenreListResponseDto(
+    val data: List<GenreItemDto> = emptyList(),
+)
+
+@Serializable
+class GenreItemDto(
+    val _id: String,
+    val name: String,
+)
+
+@Serializable
 class MetadataDto(
     val total: Int = 0,
     val items: Int = 0,

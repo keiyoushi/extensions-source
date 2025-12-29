@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.mangaflix
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +11,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -31,6 +35,23 @@ class MangaFlix : HttpSource() {
     override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
+
+    private var genresList: List<Genre> = emptyList()
+    private var fetchGenresAttempts = 0
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+
+    private fun fetchGenres() {
+        if (genresList.isNotEmpty() || fetchGenresAttempts >= 3) return
+        fetchGenresAttempts++
+        try {
+            val response = client.newCall(GET("$apiUrl/genres?include_adult=true&selected_language=pt-br", headers)).execute()
+            val result = response.parseAs<GenreListResponseDto>()
+            genresList = result.data.map { Genre(it.name, it._id) }
+        } catch (_: Exception) {
+        }
+    }
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
@@ -100,7 +121,7 @@ class MangaFlix : HttpSource() {
                 title = item.name
                 thumbnail_url = item.poster?.default_url
                 description = item.description
-                genre = item.genres.mapNotNull { id -> genres.find { it.id == id }?.name }.joinToString()
+                genre = item.genres.mapNotNull { id -> genresList.find { it.id == id }?.name }.joinToString()
                 url = "/br/manga/${item._id}"
             }
         }
@@ -108,9 +129,12 @@ class MangaFlix : HttpSource() {
     }
 
     override fun getFilterList(): FilterList {
-        return FilterList(
-            GenreFilter(genres),
-        )
+        launchIO { fetchGenres() }
+        return if (genresList.isNotEmpty()) {
+            FilterList(GenreFilter(genresList))
+        } else {
+            FilterList(Filter.Header("Aperte 'Redefinir' para tentar carregar os gêneros"))
+        }
     }
 
     // =========================== Manga Details ============================
