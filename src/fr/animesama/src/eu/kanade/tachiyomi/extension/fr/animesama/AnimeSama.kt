@@ -30,27 +30,17 @@ class AnimeSama : ParsedHttpSource() {
 
     override val name = "AnimeSama"
 
-    private var _baseUrl: String? = null
-    private var _cdn: String? = null
+    override val baseUrl = "https://anime-sama.pw"
 
-    override val baseUrl: String
-        get() {
-            if (_baseUrl == null) {
-                val (url, cdn) = getAnimeSamaURL()
-                _baseUrl = url
-                _cdn = cdn
-            }
-            return _baseUrl!!
-        }
-
-    private val cdn: String
-        get() = _cdn ?: throw IllegalStateException("CDN not initialized")
+    private val cdn = "$baseUrl/s2/scans/"
 
     override val lang = "fr"
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(AnimeSamaInterceptor(network.client, baseUrl, headers))
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
@@ -58,18 +48,6 @@ class AnimeSama : ParsedHttpSource() {
     // filters
     private var genreList = listOf<Pair<String, String>>()
     private var fetchFilterAttempts = 0
-
-    private fun getAnimeSamaURL(): Pair<String, String> {
-        val domainListUrl = "https://anime-sama.pw/".toHttpUrl()
-        val requestToFetchDomains = GET(domainListUrl, headers)
-
-        val domainsResponse = client.newCall(requestToFetchDomains).execute()
-        val domainsDocument = domainsResponse.asJsoup()
-        val button = domainsDocument.getElementsByClass("btn-primary").first()
-        if (button == null) throw UnsupportedOperationException("Unable to retrieve the most recent URL for anime-sama.")
-        val url = button.absUrl("href")
-        return Pair(url, "$url/s2/scans/")
-    }
 
     private suspend fun fetchFilters() {
         if (fetchFilterAttempts < 3 && (genreList.isEmpty())) {
