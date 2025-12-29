@@ -68,7 +68,7 @@ class KuroMangas : HttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "application/json, text/plain, */*")
         .add("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-        .add("Referer", "$baseUrl")
+        .add("Referer", "$baseUrl/catalogo")
         .add("Sec-Fetch-Dest", "empty")
         .add("Sec-Fetch-Mode", "cors")
         .add("Sec-Fetch-Site", "same-origin")

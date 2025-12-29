@@ -2,7 +2,7 @@ ext {
     extName = 'KuroMangas'
     extClass = '.KuroMangas'
     extVersionCode = 5
-    isNsfw = false
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
