@@ -122,6 +122,14 @@ class WeebDex : HttpSource() {
 
     // -------------------- Manga details --------------------
 
+    override fun getMangaUrl(manga: SManga): String {
+        return baseUrl.toHttpUrl().newBuilder()
+            .addEncodedPathSegments(manga.url)
+            .removePathSegment(0)
+            .setPathSegment(0, "title")
+            .build().toString()
+    }
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET("${WeebDexConstants.API_URL}${manga.url}", headers)
     }
@@ -132,6 +140,8 @@ class WeebDex : HttpSource() {
     }
 
     // -------------------- Chapters --------------------
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
         // chapter list is paginated; get all pages
