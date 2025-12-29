@@ -120,12 +120,12 @@ class ChapterListData(
         val title: String? = null,
         val dateCreate: Long? = null,
         val dateModify: Long? = null,
-        val userNode: Data<Name>? = null,
-        val groupNodes: List<Data<Name>>? = null,
+        val userNode: Data<Name?>? = null,
+        val groupNodes: List<Data<Name?>?>? = null,
     ) {
         @Serializable
         class Name(
-            val name: String,
+            val name: String? = null,
         )
 
         fun toSChapter(): SChapter = SChapter.create().apply {
@@ -143,7 +143,7 @@ class ChapterListData(
             }
             chapter_number = serial
             date_upload = dateModify ?: dateCreate ?: 0L
-            scanlator = groupNodes?.joinToString { it.data.name }
+            scanlator = groupNodes?.filter { it?.data?.name != null }?.joinToString { it!!.data!!.name!! }
                 ?: userNode?.data?.name ?: "\u200B"
         }
     }
