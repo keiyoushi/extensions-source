@@ -14,11 +14,11 @@ class ElderMangaUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 2) {
-            val item = "${pathSegments[1]}/${pathSegments[2]}"
+        if (pathSegments != null && pathSegments.size > 1) {
+            val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${ElderManga.URL_SEARCH_PREFIX}$item")
+                putExtra("query", "${ElderManga.PREFIX_ID_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 
