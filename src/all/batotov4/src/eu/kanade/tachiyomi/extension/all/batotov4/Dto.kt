@@ -114,6 +114,7 @@ class ChapterListData(
     class ChapterData(
         val comicId: String,
         val id: String,
+        val urlPath: String,
         @SerialName("dname")
         val displayName: String,
         val title: String? = null,
@@ -122,6 +123,8 @@ class ChapterListData(
         val userNode: Data<Name>? = null,
         val groupNodes: List<Data<Name>>? = null,
     ) {
+        val chapterNumber get() = urlPath.substringAfterLast("ch_").toFloatOrNull()
+
         @Serializable
         class Name(
             val name: String,
@@ -130,6 +133,12 @@ class ChapterListData(
         fun toSChapter(): SChapter = SChapter.create().apply {
             url = "$comicId/$id"
             name = buildString {
+                chapterNumber?.also {
+                    val number = it.toString().substringBefore(".0")
+                    if (!displayName.contains(number)) {
+                        append("Chapter ", number, ": ")
+                    }
+                }
                 append(displayName)
                 if (!title.isNullOrEmpty()) {
                     if (isNotEmpty()) append(": ")
