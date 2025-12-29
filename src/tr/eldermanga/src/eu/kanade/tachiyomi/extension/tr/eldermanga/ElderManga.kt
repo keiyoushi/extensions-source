@@ -8,27 +8,25 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ElderManga : HttpSource() {
+class ElderManga : ParsedHttpSource() {
     override val name = "Elder Manga"
 
     override val baseUrl = "https://eldermanga.com"
-
-    // CDN used for search API responses and images
-    private val CDN_URL = "https://manga3.efsaneler.can.re"
 
     override val lang = "tr"
 
@@ -38,45 +36,33 @@ class ElderManga : HttpSource() {
         .rateLimit(3)
         .build()
 
+    private val json: Json by injectLazy()
+
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/search?page=$page&search=&order=4")
 
-    private fun popularMangaSelector() = "section[aria-label='series area'] .card"
+    override fun popularMangaNextPageSelector() =
+        "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
 
-    private fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    override fun popularMangaSelector() = "section[aria-label='series area'] .card"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("h2")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-
-        val hasNextPage = hasNextPage(document)
-        return MangasPage(mangas, hasNextPage)
-    }
-
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/search?page=$page&search=&order=3")
 
-    private fun latestUpdatesSelector() = popularMangaSelector()
-    private fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
-            latestUpdatesFromElement(element)
-        }
+    override fun latestUpdatesSelector() = popularMangaSelector()
 
-        val hasNextPage = hasNextPage(document)
-        return MangasPage(mangas, hasNextPage)
-    }
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
@@ -84,7 +70,7 @@ class ElderManga : HttpSource() {
             return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
                 val document = response.asJsoup()
                 when {
-                    isMangaPage(document) -> MangasPage(listOf(mangaDetailsParse(response)), false)
+                    isMangaPage(document) -> MangasPage(listOf(mangaDetailsParse(document)), false)
                     else -> MangasPage(emptyList(), false)
                 }
             }
@@ -100,7 +86,7 @@ class ElderManga : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<List<SearchDto>>()
+        val dto = json.decodeFromString<List<SearchDto>>(response.body.string())
         val mangas = dto.map {
             SManga.create().apply {
                 title = it.name
@@ -112,10 +98,13 @@ class ElderManga : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    // Not used (JSON-based search)
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         with(document.selectFirst("#content")!!) {
             title = selectFirst("h1")!!.text()
             thumbnail_url = selectFirst("img")?.absUrl("src")
@@ -133,55 +122,38 @@ class ElderManga : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.list-episode a").map { element ->
-            SChapter.create().apply {
-                name = element.selectFirst("h3")!!.text()
-                date_upload = dateFormat.tryParse(element.selectFirst("span")?.text())
-                setUrlWithoutDomain(element.absUrl("href"))
-            }
-        }
+    override fun chapterListSelector() = "div.list-episode a"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst("h3")!!.text()
+        date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
+        setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun pageListParse(document: Document): List<Page> {
         val script = document.select("script")
             .map { it.html() }.firstOrNull { pageRegex.find(it) != null }
             ?: return emptyList()
 
-        val results = pageRegex.findAll(script).toList()
-        return results.mapIndexed { index, result ->
+        return pageRegex.findAll(script).mapIndexed { index, result ->
             val url = result.groups.get(1)!!.value
-            Page(index, imageUrl = "$CDN_URL/$url")
-        }
+            Page(index, document.location(), "$CDN_URL/$url")
+        }.toList()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = ""
 
     private fun isMangaPage(document: Document): Boolean =
         document.selectFirst("div.grid h2 + p") != null
 
-    private fun hasNextPage(document: Document): Boolean {
-        val navigation = document.selectFirst("section[aria-label='navigation']") ?: return false
-
-        // Mevcut aktif sayfa numarasını bul (!bg-gray-200 !text-gray-800 class'larına sahip)
-        val currentPageElement = navigation.selectFirst("a[class*='!bg-gray-200'][class*='!text-gray-800']")
-        val currentPage = currentPageElement?.text()?.toIntOrNull() ?: return false
-
-        // Tüm sayfa numaralarını topla
-        val pageNumbers = navigation.select("a[href*='page=']")
-            .mapNotNull { it.text().toIntOrNull() }
-            .filter { it > 0 }
-
-        // Eğer mevcut sayfadan büyük sayfa numarası varsa, sonraki sayfa var demektir
-        return pageNumbers.any { it > currentPage }
-    }
+    private fun String.toDate(): Long =
+        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
 
     private fun String.contains(vararg fragment: String): Boolean =
         fragment.any { trim().contains(it, ignoreCase = true) }
 
     companion object {
+        const val CDN_URL = "https://manga3.efsaneler.can.re"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
         val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()
