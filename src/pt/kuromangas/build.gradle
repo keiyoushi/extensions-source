@@ -1,7 +1,7 @@
 ext {
     extName = 'KuroMangas'
     extClass = '.KuroMangas'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = false
 }
 
@@ -9,4 +9,5 @@ apply from: "$rootDir/common.gradle"
 
 dependencies {
     implementation(project(':lib:cookieinterceptor'))
+    implementation(project(':lib:cryptoaes'))
 }

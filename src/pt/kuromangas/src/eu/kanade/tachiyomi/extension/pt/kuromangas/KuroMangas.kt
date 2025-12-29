@@ -47,6 +47,7 @@ class KuroMangas : HttpSource(), ConfigurableSource {
         val cdnHost = cdnUrl.toHttpUrl().host
         network.cloudflareClient.newBuilder()
             .rateLimit(2)
+            .addInterceptor(KuroDecrypt())
             .apply {
                 if (token.isNotEmpty()) {
                     addInterceptor { chain ->
@@ -67,7 +68,7 @@ class KuroMangas : HttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "application/json, text/plain, */*")
         .add("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-        .add("Referer", "$baseUrl/catalogo")
+        .add("Referer", "$baseUrl")
         .add("Sec-Fetch-Dest", "empty")
         .add("Sec-Fetch-Mode", "cors")
         .add("Sec-Fetch-Site", "same-origin")
@@ -242,7 +243,12 @@ class KuroMangas : HttpSource(), ConfigurableSource {
         }.toString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/auth/login", headers, requestBody)
-        val response = network.cloudflareClient.newCall(request).execute()
+
+        val loginClient = network.cloudflareClient.newBuilder()
+            .addInterceptor(KuroDecrypt())
+            .build()
+
+        val response = loginClient.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()
             throw Exception("Login failed: ${response.code}")
