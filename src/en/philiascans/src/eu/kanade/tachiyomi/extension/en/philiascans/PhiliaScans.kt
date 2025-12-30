@@ -161,7 +161,7 @@ class PhiliaScans : Madara(
     override fun parseGenres(document: Document): List<Genre> {
         yearsList = document.select("input[name='release[]']").mapNotNull {
             val value = it.attr("value")
-            val label = it.nextElementSibling()?.text()?.trim() ?: value
+            val label = it.nextElementSibling()?.text() ?: value
             Pair(label, value)
         }
 
