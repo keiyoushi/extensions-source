@@ -44,14 +44,11 @@ class LetterFilter : SelectFilter(
 
 class SortFilter(
     defaultIndex: Int = LATEST_INDEX,
-) : Filter.Sort(
+) : SelectFilter(
     name = "Order by",
-    values = sortOptions.map { it.first }.toTypedArray(),
-    state = Selection(defaultIndex, false),
+    options = sortOptions,
+    default = defaultIndex,
 ) {
-    val selected: String
-        get() = sortOptions[state!!.index].second
-
     companion object {
         const val POPULAR_INDEX = 0 // field_score
         const val LATEST_INDEX = 5 // field_upload

@@ -175,9 +175,7 @@ class BatoToV4(
                     uploadStatus = filter.selected
                 }
                 is SortFilter -> {
-                    if (filter.state != null) {
-                        sort = filter.selected
-                    }
+                    sort = filter.selected
                 }
                 is ChapterCountFilter -> {
                     chapCount = filter.selected
