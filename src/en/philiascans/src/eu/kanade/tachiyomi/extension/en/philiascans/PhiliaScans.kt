@@ -120,8 +120,6 @@ class PhiliaScans : Madara(
             Filter.Separator(),
             TypeFilter(),
             Filter.Separator(),
-            YearFilter(),
-            Filter.Separator(),
             OrderByFilter(
                 intl["order_by_filter_title"],
                 orderByFilterOptions.toList(),
@@ -129,6 +127,11 @@ class PhiliaScans : Madara(
             ),
             Filter.Separator(),
         )
+
+        if (yearsList.isNotEmpty()) {
+            filters.add(YearFilter("Year", yearsList))
+            filters.add(Filter.Separator())
+        }
 
         if (genresList.isNotEmpty()) {
             filters += listOf(
@@ -156,12 +159,20 @@ class PhiliaScans : Madara(
     override fun genresRequest(): Request = GET("$baseUrl/?post_type=wp-manga&s=", headers)
 
     override fun parseGenres(document: Document): List<Genre> {
+        yearsList = document.select("input[name='release[]']").mapNotNull {
+            val value = it.attr("value")
+            val label = it.nextElementSibling()?.text()?.trim() ?: value
+            Pair(label, value)
+        }
+
         return document.select("ul.genres li").mapNotNull {
             val label = it.selectFirst("label")?.text() ?: return@mapNotNull null
             val value = it.selectFirst("input")?.attr("value") ?: return@mapNotNull null
             Genre(label, value)
         }
     }
+
+    private var yearsList: List<Pair<String, String>> = emptyList()
 
     private class CheckBoxVal(name: String, val value: String) : Filter.CheckBox(name)
 
@@ -175,18 +186,9 @@ class PhiliaScans : Madara(
         ).map { CheckBoxVal(it.first, it.second) },
     )
 
-    private class YearFilter : Filter.Group<CheckBoxVal>(
-        "Year",
-        listOf(
-            "2026",
-            "2025",
-            "2024",
-            "2023",
-            "2022",
-            "2021",
-            "2020",
-            "2019",
-        ).map { CheckBoxVal(it, it) },
+    private class YearFilter(title: String, years: List<Pair<String, String>>) : Filter.Group<CheckBoxVal>(
+        title,
+        years.map { CheckBoxVal(it.first, it.second) },
     )
 
     override val orderByFilterOptions: Map<String, String> = mapOf(
