@@ -41,8 +41,7 @@ class AnimeSamaInterceptor(private val client: OkHttpClient, private val baseUrl
     }
 
     private fun fetchAnimeSamaURL(): String {
-        val domainListUrl = baseUrl.toHttpUrl()
-        val requestToFetchDomains = GET(domainListUrl, headers)
+        val requestToFetchDomains = GET(baseUrl, headers)
 
         val domainsResponse = client.newCall(requestToFetchDomains).execute()
         val domainsDocument = domainsResponse.asJsoup()
@@ -50,7 +49,10 @@ class AnimeSamaInterceptor(private val client: OkHttpClient, private val baseUrl
 
         if (button == null) throw UnsupportedOperationException("Unable to retrieve the most recent URL for anime-sama.")
 
-        val url = button.absUrl("href")
-        return url
+        return button.absUrl("href")
+    }
+
+    fun getBaseUrl(): String? {
+        return _baseUrl
     }
 }
