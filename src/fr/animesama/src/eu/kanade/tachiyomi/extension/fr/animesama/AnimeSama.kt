@@ -350,7 +350,6 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        Log.i("AnimeSama", convertUrlToLatestDomain(manga.url))
         return convertUrlToLatestDomain(manga.url)
     }
 
