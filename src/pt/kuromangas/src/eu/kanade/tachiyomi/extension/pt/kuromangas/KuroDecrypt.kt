@@ -71,9 +71,7 @@ class KuroDecrypt : Interceptor {
 
     private fun decrypt(encrypted: String): String {
         if (secretKey.isEmpty() || salt.isEmpty()) return ""
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }.format(Date())
+        val date = synchronized(dateFormat) { dateFormat.format(Date()) }
 
         val key = sha256(secretKey + date + salt)
         return CryptoAES.decrypt(encrypted, key)
@@ -126,6 +124,10 @@ class KuroDecrypt : Interceptor {
         private var salt = ""
         private val lock = Any()
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
         private val SCRIPT_REGEX = """src=["'](/assets/index-[^"']+\.js)["']""".toRegex()
         private val SECRET_REGEX = """const \w+\s*=\s*"(\w{50,})"""".toRegex()
