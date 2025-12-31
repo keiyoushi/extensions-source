@@ -23,7 +23,7 @@ class PopularResponseDto(
 class MangaDto(
     val title: String,
     val slug: String,
-    val imageUrl: String,
+    val imageUrl: String?,
     val genres: List<String>?,
     val synopsis: String?,
     val type: String?,
