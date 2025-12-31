@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.batoto
 
+import eu.kanade.tachiyomi.extension.all.batotov2.BatoTo
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 

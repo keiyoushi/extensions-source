@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class BatoToUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

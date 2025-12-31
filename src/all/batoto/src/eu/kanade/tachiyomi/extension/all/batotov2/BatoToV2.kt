@@ -1,5 +1,6 @@
-package eu.kanade.tachiyomi.extension.all.batoto
+package eu.kanade.tachiyomi.extension.all.batotov2
 
+import android.R
 import android.app.Application
 import android.content.SharedPreferences
 import android.text.Editable
@@ -10,7 +11,6 @@ import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
@@ -49,8 +49,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 import kotlin.random.Random
-import kotlin.text.Regex
 
 open class BatoTo(
     final override val lang: String,
@@ -117,7 +117,7 @@ open class BatoTo(
                             val text = editable.toString()
                             val valid = validate(text)
                             editText.error = if (!valid.first) valid.second else null
-                            editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = editText.error == null
+                            editText.rootView.findViewById<Button>(R.id.button1)?.isEnabled = editText.error == null
                         }
                     },
                 )
@@ -198,7 +198,7 @@ open class BatoTo(
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
+        val manga = SManga.Companion.create()
         val item = element.select("a.item-cover")
         val imgurl = item.select("img").attr("abs:src")
         manga.setUrlWithoutDomain(stripSeriesUrl(item.attr("href")))
@@ -266,7 +266,13 @@ open class BatoTo(
                         is HistoryFilter -> {
                             if (filter.state != 0) {
                                 val filterUrl = "$baseUrl/ajax.my.${filter.selected}.paging"
-                                return client.newCall(POST(filterUrl, headers, formBuilder().build())).asObservableSuccess()
+                                return client.newCall(
+                                    POST(
+                                        filterUrl,
+                                        headers,
+                                        formBuilder().build()
+                                    )
+                                ).asObservableSuccess()
                                     .map { response ->
                                         queryHistoryParse(response)
                                     }
@@ -326,7 +332,7 @@ open class BatoTo(
     private fun queryIDParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val infoElement = document.select("div#mainer div.container-fluid")
-        val manga = SManga.create()
+        val manga = SManga.Companion.create()
         manga.title = infoElement.select("h3").text().removeEntities()
             .cleanTitleIfNeeded()
         manga.thumbnail_url = document.select("div.attr-cover img")
@@ -361,7 +367,7 @@ open class BatoTo(
     }
 
     private fun searchUtilsFromElement(element: Element): SManga {
-        val manga = SManga.create()
+        val manga = SManga.Companion.create()
         manga.setUrlWithoutDomain(stripSeriesUrl(element.select("td a").attr("href")))
         manga.title = element.select("td a").text()
             .cleanTitleIfNeeded()
@@ -370,7 +376,7 @@ open class BatoTo(
     }
 
     private fun searchHistoryFromElement(element: Element): SManga {
-        val manga = SManga.create()
+        val manga = SManga.Companion.create()
         manga.setUrlWithoutDomain(stripSeriesUrl(element.select(".position-relative a").attr("href")))
         manga.title = element.select(".position-relative a").text()
             .cleanTitleIfNeeded()
@@ -405,7 +411,7 @@ open class BatoTo(
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
-        val manga = SManga.create()
+        val manga = SManga.Companion.create()
         val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
         val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
         val originalTitle = infoElement.select("h3").text().removeEntities()
@@ -441,22 +447,22 @@ open class BatoTo(
     private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
         val status = workStatus ?: uploadStatus
         return when {
-            status == null -> SManga.UNKNOWN
-            status.contains("Ongoing") -> SManga.ONGOING
-            status.contains("Cancelled") -> SManga.CANCELLED
-            status.contains("Hiatus") -> SManga.ON_HIATUS
+            status == null -> SManga.Companion.UNKNOWN
+            status.contains("Ongoing") -> SManga.Companion.ONGOING
+            status.contains("Cancelled") -> SManga.Companion.CANCELLED
+            status.contains("Hiatus") -> SManga.Companion.ON_HIATUS
             status.contains("Completed") -> when {
-                uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
-                else -> SManga.COMPLETED
+                uploadStatus?.contains("Ongoing") == true -> SManga.Companion.PUBLISHING_FINISHED
+                else -> SManga.Companion.COMPLETED
             }
-            else -> SManga.UNKNOWN
+            else -> SManga.Companion.UNKNOWN
         }
     }
 
     private fun altChapterParse(response: Response): List<SChapter> {
         return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
             .select("channel > item").map { item ->
-                SChapter.create().apply {
+                SChapter.Companion.create().apply {
                     setUrlWithoutDomain(item.selectFirst("guid")!!.text())
                     name = item.selectFirst("title")!!.text()
                     date_upload = parseAltChapterDate(item.selectFirst("pubDate")!!.text())
@@ -513,7 +519,7 @@ open class BatoTo(
     override fun chapterListSelector() = "div.main div.p-2"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
+        val chapter = SChapter.Companion.create()
         val urlElement = element.select("a.chapt")
         val group = element.select("div.extra > a:not(.ps-3)").text()
         val user = element.select("div.extra > a.ps-3").text()
@@ -669,8 +675,8 @@ open class BatoTo(
                     // FORCE SHORT TIMEOUTS FOR FALLBACKS
                     // If a fallback server doesn't answer in 5 seconds, kill it and move to next.
                     val newResponse = chain
-                        .withConnectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                        .withReadTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                        .withConnectTimeout(5, TimeUnit.SECONDS)
+                        .withReadTimeout(10, TimeUnit.SECONDS)
                         .proceed(newRequest)
 
                     if (newResponse.isSuccessful) {
