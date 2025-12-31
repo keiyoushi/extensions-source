@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.batotov4
 
+import android.content.SharedPreferences
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
@@ -21,7 +22,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Call
@@ -41,9 +41,8 @@ import kotlin.text.Regex
 class BatoToV4(
     override val lang: String,
     private val siteLang: String = lang,
+    private val preferences: SharedPreferences,
 ) : ConfigurableSource, HttpSource() {
-
-    private val preferences by getPreferencesLazy()
 
     override val name: String = "Bato.to V4"
 
@@ -330,7 +329,7 @@ class BatoToV4(
 
     // ************ Manga Details ************ //
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val apiVariables = ApiComicNodeVariables(id = manga.url)
+        val apiVariables = ApiComicNodeVariables(id = getMangaId(manga.url))
 
         return graphQLRequest(apiVariables, COMIC_NODE_QUERY)
     }
@@ -346,10 +345,16 @@ class BatoToV4(
         return "$baseUrl/title/${manga.url}"
     }
 
+    /* Match old v2 Url */
+    private fun getMangaId(url: String): String {
+        val matchResult = seriesIdRegex.find(url)
+        return matchResult?.groups?.get(1)?.value ?: url
+    }
+
     // ************ Chapter List ************ //
     override fun chapterListRequest(manga: SManga): Request {
         val apiVariables = ApiChapterListVariables(
-            comicId = manga.url,
+            comicId = getMangaId(manga.url),
             start = -1,
         )
 
@@ -366,8 +371,7 @@ class BatoToV4(
 
     // ************ Page List ************ //
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfter("/")
-        val apiVariables = ApiChapterNodeVariables(id = chapterId)
+        val apiVariables = ApiChapterNodeVariables(id = chapter.url)
 
         return graphQLRequest(apiVariables, CHAPTER_NODE_QUERY)
     }
@@ -408,9 +412,7 @@ class BatoToV4(
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (comicId, chapterId) = chapter.url.split("/", limit = 2)
-
-        return "$baseUrl/title/$comicId/$chapterId"
+        return "$baseUrl/title/chapter/${chapter.url}"
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -593,5 +595,6 @@ private val userIdRegex = Regex("""/u/(\d+)""")
 
 private const val BROWSE_PAGE_SIZE = 36
 
+private val seriesIdRegex = Regex("""series/(\d+)""")
 private val titleRegex: Regex =
     Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)

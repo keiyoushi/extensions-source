@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.batotov2
 
-import android.R
-import android.app.Application
 import android.content.SharedPreferences
 import android.text.Editable
 import android.text.TextWatcher
@@ -25,7 +23,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -42,26 +39,28 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
-open class BatoTo(
+open class BatoToV2(
     final override val lang: String,
     private val siteLang: String,
+    private val preferences: SharedPreferences,
 ) : ConfigurableSource, ParsedHttpSource() {
-
-    private val preferences by getPreferencesLazy { migrateMirrorPref() }
 
     override val name: String = "Bato.to"
 
-    override val baseUrl: String get() = getMirrorPref()
+    override val baseUrl: String
+        get() {
+            val index = preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()
+                .coerceAtMost(mirrors.size - 1)
+
+            return mirrors[index]
+        }
 
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
@@ -72,12 +71,12 @@ open class BatoTo(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {
-            key = "${MIRROR_PREF_KEY}_$lang"
-            title = MIRROR_PREF_TITLE
-            entries = MIRROR_PREF_ENTRIES
-            entryValues = MIRROR_PREF_ENTRY_VALUES
-            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+            key = MIRROR_PREF_KEY
+            title = "Preferred Mirror"
+            entries = mirrors
+            entryValues = Array(mirrors.size) { it.toString() }
             summary = "%s"
+            setDefaultValue("0")
         }
         val altChapterListPref = CheckBoxPreference(screen.context).apply {
             key = "${ALT_CHAPTER_LIST_PREF_KEY}_$lang"
@@ -117,7 +116,7 @@ open class BatoTo(
                             val text = editable.toString()
                             val valid = validate(text)
                             editText.error = if (!valid.first) valid.second else null
-                            editText.rootView.findViewById<Button>(R.id.button1)?.isEnabled = editText.error == null
+                            editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = editText.error == null
                         }
                     },
                 )
@@ -139,30 +138,6 @@ open class BatoTo(
         screen.addPreference(removeCustomPref)
     }
 
-    private fun getMirrorPref(): String {
-        if (System.getenv("CI") == "true") {
-            return (MIRROR_PREF_ENTRY_VALUES.drop(1) + DEPRECATED_MIRRORS).joinToString("#, ")
-        }
-
-        return preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
-            ?.takeUnless { it == MIRROR_PREF_DEFAULT_VALUE }
-            ?: let {
-                /* Semi-sticky mirror:
-                 * - Don't randomize on boot
-                 * - Don't randomize per language
-                 * - Fallback for non-Android platform
-                 */
-                val seed = runCatching {
-                    val pm = Injekt.get<Application>().packageManager
-                    pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
-                }.getOrElse {
-                    BuildConfig.VERSION_NAME.hashCode().toLong()
-                }
-
-                MIRROR_PREF_ENTRY_VALUES.drop(1).random(Random(seed))
-            }
-    }
-
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
@@ -170,20 +145,19 @@ open class BatoTo(
     private fun customRemoveTitle(): String =
         preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
 
-    private fun SharedPreferences.migrateMirrorPref() {
-        val selectedMirror = getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)!!
-
-        if (selectedMirror in DEPRECATED_MIRRORS) {
-            edit().putString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE).apply()
-        }
-    }
-
     override val supportsLatest = true
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder().apply {
-        addInterceptor(::imageFallbackInterceptor)
-    }.build()
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::imageFallbackInterceptor)
+        .addNetworkInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("Referer", "$baseUrl/")
+                .build()
+
+            chain.proceed(request)
+        }
+        .build()
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/browse?langs=$siteLang&sort=update&page=$page", headers)
@@ -192,13 +166,13 @@ open class BatoTo(
     override fun latestUpdatesSelector(): String {
         return when (siteLang) {
             "" -> "div#series-list div.col"
-            "en,en_us" -> "div#series-list div.col.no-flag"
+            "en", "en_us" -> "div#series-list div.col.no-flag"
             else -> "div#series-list div.col:has([data-lang=\"$siteLang\"])"
         }
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.Companion.create()
+        val manga = SManga.create()
         val item = element.select("a.item-cover")
         val imgurl = item.select("img").attr("abs:src")
         manga.setUrlWithoutDomain(stripSeriesUrl(item.attr("href")))
@@ -270,8 +244,8 @@ open class BatoTo(
                                     POST(
                                         filterUrl,
                                         headers,
-                                        formBuilder().build()
-                                    )
+                                        formBuilder().build(),
+                                    ),
                                 ).asObservableSuccess()
                                     .map { response ->
                                         queryHistoryParse(response)
@@ -332,7 +306,7 @@ open class BatoTo(
     private fun queryIDParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val infoElement = document.select("div#mainer div.container-fluid")
-        val manga = SManga.Companion.create()
+        val manga = SManga.create()
         manga.title = infoElement.select("h3").text().removeEntities()
             .cleanTitleIfNeeded()
         manga.thumbnail_url = document.select("div.attr-cover img")
@@ -367,7 +341,7 @@ open class BatoTo(
     }
 
     private fun searchUtilsFromElement(element: Element): SManga {
-        val manga = SManga.Companion.create()
+        val manga = SManga.create()
         manga.setUrlWithoutDomain(stripSeriesUrl(element.select("td a").attr("href")))
         manga.title = element.select("td a").text()
             .cleanTitleIfNeeded()
@@ -376,7 +350,7 @@ open class BatoTo(
     }
 
     private fun searchHistoryFromElement(element: Element): SManga {
-        val manga = SManga.Companion.create()
+        val manga = SManga.create()
         manga.setUrlWithoutDomain(stripSeriesUrl(element.select(".position-relative a").attr("href")))
         manga.title = element.select(".position-relative a").text()
             .cleanTitleIfNeeded()
@@ -401,17 +375,20 @@ open class BatoTo(
             // Check if trying to use a deprecated mirror, force current mirror
             val httpUrl = manga.url.toHttpUrl()
             if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
-                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                val newHttpUrl = httpUrl.newBuilder().host(baseUrl.toHttpUrl().host)
                 return GET(newHttpUrl.build(), headers)
             }
             return GET(manga.url, headers)
+        }
+        if (manga.url.matches(idRegex)) {
+            return GET("$baseUrl/series/${manga.url}", headers)
         }
         return super.mangaDetailsRequest(manga)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
-        val manga = SManga.Companion.create()
+        val manga = SManga.create()
         val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
         val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
         val originalTitle = infoElement.select("h3").text().removeEntities()
@@ -447,23 +424,27 @@ open class BatoTo(
     private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
         val status = workStatus ?: uploadStatus
         return when {
-            status == null -> SManga.Companion.UNKNOWN
-            status.contains("Ongoing") -> SManga.Companion.ONGOING
-            status.contains("Cancelled") -> SManga.Companion.CANCELLED
-            status.contains("Hiatus") -> SManga.Companion.ON_HIATUS
+            status == null -> SManga.UNKNOWN
+            status.contains("Ongoing") -> SManga.ONGOING
+            status.contains("Cancelled") -> SManga.CANCELLED
+            status.contains("Hiatus") -> SManga.ON_HIATUS
             status.contains("Completed") -> when {
-                uploadStatus?.contains("Ongoing") == true -> SManga.Companion.PUBLISHING_FINISHED
-                else -> SManga.Companion.COMPLETED
+                uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
+                else -> SManga.COMPLETED
             }
-            else -> SManga.Companion.UNKNOWN
+            else -> SManga.UNKNOWN
         }
     }
 
     private fun altChapterParse(response: Response): List<SChapter> {
         return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
             .select("channel > item").map { item ->
-                SChapter.Companion.create().apply {
-                    setUrlWithoutDomain(item.selectFirst("guid")!!.text())
+                SChapter.create().apply {
+                    val chapterUrl = item.selectFirst("guid")!!.text()
+                    val chapterId = chapterIdRegex.find(chapterUrl)
+                        ?.groupValues?.getOrNull(1)?.trim()
+                        ?: chapterUrl
+                    setUrlWithoutDomain(chapterId)
                     name = item.selectFirst("title")!!.text()
                     date_upload = parseAltChapterDate(item.selectFirst("pubDate")!!.text())
                 }
@@ -486,16 +467,19 @@ open class BatoTo(
     override fun chapterListRequest(manga: SManga): Request {
         val id = seriesIdRegex.find(manga.url)
             ?.groups?.get(1)?.value?.trim()
-        return if (getAltChapterListPref() && !id.isNullOrBlank()) {
+            ?: manga.url
+        return if (getAltChapterListPref() && !id.isBlank()) {
             GET("$baseUrl/rss/series/$id.xml", headers)
         } else if (manga.url.startsWith("http")) {
             // Check if trying to use a deprecated mirror, force current mirror
             val httpUrl = manga.url.toHttpUrl()
             if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
-                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                val newHttpUrl = httpUrl.newBuilder().host(baseUrl.toHttpUrl().host)
                 return GET(newHttpUrl.build(), headers)
             }
             GET(manga.url, headers)
+        } else if (manga.url.matches(idRegex)) {
+            return GET("$baseUrl/series/${manga.url}", headers)
         } else {
             super.chapterListRequest(manga)
         }
@@ -519,12 +503,16 @@ open class BatoTo(
     override fun chapterListSelector() = "div.main div.p-2"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.Companion.create()
+        val chapter = SChapter.create()
         val urlElement = element.select("a.chapt")
         val group = element.select("div.extra > a:not(.ps-3)").text()
         val user = element.select("div.extra > a.ps-3").text()
         val time = element.select("div.extra > i.ps-3").text()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
+        val chapterUrl = urlElement.attr("href")
+        val chapterId = chapterIdRegex.find(chapterUrl)
+            ?.groupValues?.getOrNull(1)?.trim()
+            ?: chapterUrl
+        chapter.setUrlWithoutDomain(chapterId)
         chapter.name = urlElement.text()
         chapter.scanlator = when {
             group.isNotBlank() -> group
@@ -594,12 +582,14 @@ open class BatoTo(
             // Check if trying to use a deprecated mirror, force current mirror
             val httpUrl = chapter.url.toHttpUrl()
             if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
-                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                val newHttpUrl = httpUrl.newBuilder().host(baseUrl.toHttpUrl().host)
                 return GET(newHttpUrl.build(), headers)
             }
             return GET(chapter.url, headers)
         }
-        return super.pageListRequest(chapter)
+        return if (chapter.url.matches(idRegex)) {
+            GET("$baseUrl/chapter/${chapter.url}", headers)
+        } else { super.pageListRequest(chapter) }
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -684,7 +674,7 @@ open class BatoTo(
                     }
                     // If this server also failed, close and loop to the next one
                     newResponse.close()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Connection error on this mirror, ignore and loop to next
                 }
             }
@@ -1158,77 +1148,74 @@ open class BatoTo(
 
     companion object {
         private val SERVER_PATTERN = Regex("https://[a-zA-Z]\\d{2}")
-        private val seriesUrlRegex = Regex("""(.*/series/\d+)/.*""")
+        private val seriesUrlRegex = Regex(""".*/series/(\d+)/.*""")
         private val seriesIdRegex = Regex("""series/(\d+)""")
+        private val chapterIdRegex = Regex("""/chapter/(\d+)""") // /chapter/4016325
+        private val idRegex = Regex("""(\d+)""")
         private const val MIRROR_PREF_KEY = "MIRROR"
-        private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
-        private val MIRROR_PREF_ENTRIES = arrayOf(
-            "Auto",
-            // https://batotomirrors.pages.dev/
-            "ato.to",
-            "dto.to",
-            "fto.to",
-            "hto.to",
-            "jto.to",
-            "lto.to",
-            "mto.to",
-            "nto.to",
-            "vto.to",
-            "wto.to",
-            "xto.to",
-            "yto.to",
-            "vba.to",
-            "wba.to",
-            "xba.to",
-            "yba.to",
-            "zba.to",
-            "bato.ac",
-            "bato.bz",
-            "bato.cc",
-            "bato.cx",
-            "bato.id",
-            "bato.pw",
-            "bato.sh",
-            "bato.to",
-            "bato.vc",
-            "bato.day",
-            "bato.red",
-            "bato.run",
-            "batoto.in",
-            "batoto.tv",
-            "batotoo.com",
-            "batotwo.com",
-            "batpub.com",
-            "batread.com",
-            "battwo.com",
-            "xbato.com",
-            "xbato.net",
-            "xbato.org",
-            "zbato.com",
-            "zbato.net",
-            "zbato.org",
-            "comiko.net",
-            "comiko.org",
-            "mangatoto.com",
-            "mangatoto.net",
-            "mangatoto.org",
-            "batocomic.com",
-            "batocomic.net",
-            "batocomic.org",
-            "readtoto.com",
-            "readtoto.net",
-            "readtoto.org",
-            "kuku.to",
-            "okok.to",
-            "ruru.to",
-            "xdxd.to",
-            // "bato.si", // (v4)
-            // "bato.ing", // (v4)
+
+        // https://batotomirrors.pages.dev/
+        private val mirrors = arrayOf(
+            "https://ato.to",
+            "https://dto.to",
+            "https://fto.to",
+            "https://hto.to",
+            "https://jto.to",
+            "https://lto.to",
+            "https://mto.to",
+            "https://nto.to",
+            "https://vto.to",
+            "https://wto.to",
+            "https://xto.to",
+            "https://yto.to",
+            "https://vba.to",
+            "https://wba.to",
+            "https://xba.to",
+            "https://yba.to",
+            "https://zba.to",
+            "https://bato.ac",
+            "https://bato.bz",
+            "https://bato.cc",
+            "https://bato.cx",
+            "https://bato.id",
+            "https://bato.pw",
+            "https://bato.sh",
+            "https://bato.to",
+            "https://bato.vc",
+            "https://bato.day",
+            "https://bato.red",
+            "https://bato.run",
+            "https://batoto.in",
+            "https://batoto.tv",
+            "https://batotoo.com",
+            "https://batotwo.com",
+            "https://batpub.com",
+            "https://batread.com",
+            "https://battwo.com",
+            "https://xbato.com",
+            "https://xbato.net",
+            "https://xbato.org",
+            "https://zbato.com",
+            "https://zbato.net",
+            "https://zbato.org",
+            "https://comiko.net",
+            "https://comiko.org",
+            "https://mangatoto.com",
+            "https://mangatoto.net",
+            "https://mangatoto.org",
+            "https://batocomic.com",
+            "https://batocomic.net",
+            "https://batocomic.org",
+            "https://readtoto.com",
+            "https://readtoto.net",
+            "https://readtoto.org",
+            "https://kuku.to",
+            "https://okok.to",
+            "https://ruru.to",
+            "https://xdxd.to",
         )
-        private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
-        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private val DEPRECATED_MIRRORS = listOf(
             "https://batocc.com", // parked
