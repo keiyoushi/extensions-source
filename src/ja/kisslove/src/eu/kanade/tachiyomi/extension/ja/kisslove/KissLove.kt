@@ -28,7 +28,7 @@ class KissLove : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("api/manga/trending-daily")
+            .addPathSegments("api/manga/trending-daily")
             .build()
         return GET(url, sigAppend())
     }
