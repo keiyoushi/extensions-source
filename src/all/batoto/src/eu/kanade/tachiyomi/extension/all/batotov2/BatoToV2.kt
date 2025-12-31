@@ -62,13 +62,6 @@ open class BatoToV2(
             return mirrors[index]
         }
 
-    override val id: Long = when (lang) {
-        "zh-Hans" -> 2818874445640189582
-        "zh-Hant" -> 38886079663327225
-        "ro-MD" -> 8871355786189601023
-        else -> super.id
-    }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {
             key = MIRROR_PREF_KEY

@@ -20,7 +20,14 @@ open class BatoTo(
     siteLang: String = lang,
 ) : ConfigurableSource, HttpSource() {
 
-    override val name: String = "Bato.to Vx"
+    override val name: String = "Bato.to"
+
+    override val id: Long = when (lang) {
+        "zh-Hans" -> 2818874445640189582
+        "zh-Hant" -> 38886079663327225
+        "ro-MD" -> 8871355786189601023
+        else -> super.id
+    }
 
     private val preferences by getPreferencesLazy()
 
