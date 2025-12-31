@@ -21,12 +21,12 @@ class PopularResponseDto(
 
 @Serializable
 class MangaDto(
-    val title: String,
+    private val title: String,
     val slug: String,
-    val imageUrl: String?,
-    val genres: List<String>?,
-    val synopsis: String?,
-    val type: String?,
+    private val imageUrl: String?,
+    private val genres: List<String>?,
+    private val synopsis: String?,
+    private val type: String?,
     val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
@@ -40,9 +40,9 @@ class MangaDto(
 
 @Serializable
 class ChapterDto(
-    val slug: String,
-    val title: String,
-    val createdAt: String,
+    private val slug: String,
+    private val title: String,
+    private val createdAt: String,
 ) {
     fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
         name = title
