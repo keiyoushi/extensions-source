@@ -46,7 +46,12 @@ class PhiliaScans : HttpSource() {
         val titleLink = element.selectFirst("a.c-title")!!
         title = titleLink.text()
         setUrlWithoutDomain(titleLink.attr("href"))
-        thumbnail_url = element.selectFirst("a.poster div.poster-image-wrapper > img")?.attr("abs:src")
+        thumbnail_url =
+            imageFromElement(element.selectFirst("a.poster div.poster-image-wrapper > img"))?.replace(
+                // try to resolve actual cover from thumbnail, usually has -280x400 suffix
+                "-280x400.",
+                ".",
+            )
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
