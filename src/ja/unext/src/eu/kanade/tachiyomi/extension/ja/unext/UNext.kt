@@ -1,10 +1,16 @@
 package eu.kanade.tachiyomi.extension.ja.unext
 
+import android.annotation.SuppressLint
+import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,6 +24,18 @@ import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.SequenceInputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 class UNext : HttpSource(), ConfigurableSource {
     override val name = "U-NEXT"
@@ -30,6 +48,7 @@ class UNext : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
+        .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             var request = chain.request()
             var response = chain.proceed(request)
@@ -134,8 +153,8 @@ class UNext : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val requestUrl = response.request.url.toString()
-        val sakuhinCode = requestUrl.substringAfter("bookSakuhinCode\":\"").substringBefore("\"")
+        val variables = response.request.url.queryParameter("variables")!!
+        val sakuhinCode = variables.parseAs<ChapterListVariables>().bookSakuhinCode
         val data = response.parseAs<ChapterListResponse>().data.bookTitleBooks.books
         val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
         return data
@@ -149,41 +168,181 @@ class UNext : HttpSource(), ConfigurableSource {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url.substringBefore("?")
+        return baseUrl + chapter.url
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val bfc = chapter.url.substringAfterLast("/")
-        val payload = Payload(
-            "cosmo_getBookPlaylistUrl",
-            PageListVariables(bfc),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
-            ),
-        )
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        return Observable.fromCallable {
+            val bfc = chapter.url.substringAfterLast("#")
 
-        return apiRequest(payload)
+            val payload = Payload(
+                "cosmo_getBookPlaylistUrl",
+                PageListVariables(bfc),
+                Payload.Extensions(
+                    Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
+                ),
+            )
+
+            val apiRequest = apiRequest(payload)
+            val playlistData = client.newCall(apiRequest).execute()
+            val playlistParse = playlistData.parseAs<PlaylistResponse>().data.playlistUrl
+
+            val viewerUrl = getChapterUrl(chapter)
+            val keys = fetchKeys(viewerUrl) ?: throw Exception("Failed to fetch DRM keys via WebView")
+
+            val base = playlistParse.playlistBaseUrl
+            val ubookPath = playlistParse.playlistUrl.ubooks.first().content
+            val zipUrl = "$base/$ubookPath".toHttpUrl().newBuilder().build()
+
+            val cacheDir = Injekt.get<Application>().cacheDir
+            val zipFile = File(cacheDir, "unext_${playlistParse.playToken}.ubook")
+
+            val zipRequest = GET(zipUrl, headers)
+            client.newCall(zipRequest).execute().use { zipResponse ->
+                zipResponse.body.byteStream().use { input ->
+                    zipFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+
+            val realZipFile = convertUzipToZip(zipFile, cacheDir)
+            val indexJson: UBookIndex
+            val drmJson: UBookDrm
+
+            ZipFile(realZipFile).use { zip ->
+                val indexEntry = zip.getEntry("index.json") ?: throw Exception("index.json not found")
+                val drmEntry = zip.getEntry("drm.json") ?: throw Exception("drm.json not found")
+
+                indexJson = zip.getInputStream(indexEntry).bufferedReader().use { it.readText() }.parseAs()
+                drmJson = zip.getInputStream(drmEntry).bufferedReader().use { it.readText() }.parseAs()
+            }
+
+            indexJson.spine.mapIndexed { i, spine ->
+                val pageInfo = indexJson.pages[spine.pageId]
+                    ?: throw Exception("Page definition not found for ${spine.pageId}")
+
+                val entryName = pageInfo.image.src
+                val drmData = drmJson.encryptedFileList[entryName]
+                    ?: throw Exception("DRM metadata not found for $entryName")
+
+                val key = keys[drmData.keyId] ?: throw Exception("Decryption key not found for ${drmData.keyId}")
+
+                val requestData = ImageRequestData(
+                    realZipFile.absolutePath,
+                    entryName,
+                    key,
+                    drmData.iv,
+                    drmData.originalFileSize,
+                )
+
+                val fragment = requestData.toJsonString()
+                Page(i, "http://127.0.0.1/image#$fragment")
+            }
+        }
     }
 
-    // TODO: get keys
-    override fun pageListParse(response: Response): List<Page> {
-        val playlistData = response.parseAs<PlaylistResponse>().data.playlistUrl
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-        val licenseUrl = playlistData.licenseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("play_token", playlistData.playToken)
-            .build()
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun fetchKeys(url: String): Map<String, String>? {
+        val latch = CountDownLatch(1)
+        var result: String? = null
 
-        val licenseRequest = POST(licenseUrl.toString())
-        client.newCall(licenseRequest).execute().close()
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            // webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
-        val baseUrl = playlistData.playlistBaseUrl
-        val ubookFile = playlistData.playlistUrl.ubooks.first().content
-        val zipUrl = "$baseUrl/$ubookFile"
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
 
-        return listOf(Page(0, zipUrl, ""))
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    val script = UNext::class.java
+                        .getResourceAsStream("/assets/script.js")!!
+                        .bufferedReader()
+                        .use { it.readText() }
+
+                    view.evaluateJavascript(script, null)
+                }
+            }
+
+            webView.addJavascriptInterface(
+                object : Any() {
+                    @JavascriptInterface
+                    @Suppress("unused")
+                    fun passKeys(json: String) {
+                        result = json
+                        latch.countDown()
+                        Handler(Looper.getMainLooper()).post {
+                            webView.stopLoading()
+                            webView.destroy()
+                        }
+                    }
+                },
+                "android",
+            )
+
+            webView.loadUrl(url)
+        }
+
+        latch.await(30, TimeUnit.SECONDS)
+        return result?.parseAs<Map<String, String>>()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private fun convertUzipToZip(ubook: File, cacheDir: File): File {
+        val outZip = File(cacheDir, ubook.nameWithoutExtension + ".zip")
+
+        ubook.inputStream().use { raw ->
+            val buffer = ByteArray(4)
+            var skipped = 0
+
+            while (true) {
+                if (raw.read(buffer) != 4) {
+                    throw IllegalStateException("ZIP signature not found in uZIP")
+                }
+                if (buffer[0] == 0x50.toByte() &&
+                    buffer[1] == 0x4B.toByte() &&
+                    buffer[2] == 0x03.toByte() &&
+                    buffer[3] == 0x04.toByte()
+                ) {
+                    break
+                }
+                raw.skip(-3)
+                skipped++
+            }
+
+            val zipIn = ZipInputStream(
+                SequenceInputStream(
+                    ByteArrayInputStream(buffer),
+                    raw,
+                ),
+            )
+
+            ZipOutputStream(outZip.outputStream()).use { zipOut ->
+                var entry = zipIn.nextEntry
+                while (entry != null) {
+                    zipOut.putNextEntry(
+                        ZipEntry(entry.name),
+                    )
+                    zipIn.copyTo(zipOut)
+                    zipOut.closeEntry()
+                    entry = zipIn.nextEntry
+                }
+            }
+        }
+
+        return outZip
+    }
+
+    override fun imageUrlParse(response: Response): String {
+        return response.request.url.toString()
+    }
 
     private inline fun <reified T> apiRequest(payload: Payload<T>): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
@@ -192,7 +351,7 @@ class UNext : HttpSource(), ConfigurableSource {
             .addQueryParameter("extensions", payload.extensions.toJsonString())
             .build()
 
-        val newHeaders = super.headers.newBuilder()
+        val newHeaders = super.headersBuilder()
             .set("Content-Type", "application/json")
             .build()
 

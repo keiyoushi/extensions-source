@@ -7,6 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Suppress("unused")
 @Serializable
@@ -179,7 +180,6 @@ class PlaylistResponse(
     @Serializable
     class PlaylistUrl(
         val playToken: String,
-        val licenseUrl: String,
         val playlistBaseUrl: String,
         val playlistUrl: UbookContainer,
     )
@@ -192,18 +192,6 @@ class PlaylistResponse(
     @Serializable
     class UBook(
         val content: String,
-    )
-}
-
-@Serializable
-class LicenseResponse(
-    val license: LicenseData,
-) {
-    @Serializable
-    class LicenseData(
-        val data: String,
-        val signature: String,
-        val iv: String,
     )
 }
 
@@ -254,16 +242,29 @@ class Book(
     val isFree: Boolean?,
     val isPurchased: Boolean?,
     val credits: List<Credit>?,
+    val bookContent: BookContent?,
 ) {
     @Serializable
     class Thumbnail(
         val standard: String?,
     )
 
+    @Serializable
+    class BookContent(
+        val mainBookFile: BookFile?,
+    )
+
+    @Serializable
+    class BookFile(
+        val code: String,
+    )
+
     fun toSChapter(sakuhinCode: String): SChapter = SChapter.create().apply {
         val lock = if (isFree != true && isPurchased != true) "🔒 " else ""
         name = "$lock${this@Book.name}"
-        url = "/book/view/$sakuhinCode/$code"
+        val bfc = bookContent?.mainBookFile?.code
+        val urlSuffix = if (bfc != null) "#$bfc" else ""
+        url = "/book/view/$sakuhinCode/$code$urlSuffix"
         date_upload = dateFormat.tryParse(publicStartDateTime)
     }
 
@@ -274,4 +275,48 @@ class Book(
     )
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
+@Serializable
+class UBookIndex(
+    val pages: Map<String, UBookPage>,
+    val spine: List<UBookSpine>,
+)
+
+@Serializable
+class UBookPage(
+    val image: UBookImage,
+)
+
+@Serializable
+class UBookImage(
+    val src: String,
+)
+
+@Serializable
+class UBookSpine(
+    val pageId: String,
+)
+
+@Serializable
+class UBookDrm(
+    val encryptedFileList: Map<String, DrmFile>,
+)
+
+@Serializable
+class DrmFile(
+    val iv: String,
+    val keyId: String,
+    val originalFileSize: Long?,
+)
+
+@Serializable
+class ImageRequestData(
+    val zipPath: String,
+    val entryName: String,
+    val key: String,
+    val iv: String,
+    val size: Long?,
+)
+
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
