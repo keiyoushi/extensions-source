@@ -229,7 +229,10 @@ class RoliaScan : ParsedHttpSource() {
     }
 
     private fun getFilters() {
-        parseFilters(client.newCall(searchMangaRequest(0, "", FilterList())).execute())
+        if (optionList.isNotEmpty()) return
+        try {
+            parseFilters(client.newCall(searchMangaRequest(0, "", FilterList())).execute())
+        } catch (_: Exception) { }
     }
 
     private fun parseFilters(response: Response) {
