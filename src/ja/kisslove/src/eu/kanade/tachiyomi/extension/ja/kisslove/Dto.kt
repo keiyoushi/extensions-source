@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.extension.ja.kisslove
 
+import eu.kanade.tachiyomi.extension.ja.kisslove.KissLove.Companion.DATE_FORMATTER
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.time.Instant
 
 @Serializable
 data class PagedManga(
@@ -70,10 +71,8 @@ data class Chapter(
         url = "$id/$slug-chapter-$chapter"
         name = this@Chapter.name?.takeIf { it.isNotBlank() } ?: "Chapter $chapter"
 
-        date_upload = try {
-            Instant.parse(lastUpdate).toEpochMilli()
-        } catch (e: Exception) {
-            0L
-        }
+        date_upload = runCatching {
+            DATE_FORMATTER.tryParse(lastUpdate)
+        }.getOrDefault(0L)
     }
 }

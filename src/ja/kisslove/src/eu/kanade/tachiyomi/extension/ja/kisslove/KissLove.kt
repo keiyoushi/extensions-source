@@ -10,9 +10,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.*
 
 class KissLove : HttpSource() {
     override val name = "KissLove"
@@ -23,7 +26,12 @@ class KissLove : HttpSource() {
     override fun headersBuilder() = super.headersBuilder().apply {
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/trending-daily", sigAppend())
+    override fun popularMangaRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api/manga/trending-daily")
+            .build()
+        return GET(url, sigAppend())
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<List<Manga>>()
@@ -35,7 +43,14 @@ class KissLove : HttpSource() {
         return "$baseUrl/${manga.url}.html"
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga?page=$page&limit=36", sigAppend())
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "36")
+            .build()
+        return GET(url, sigAppend())
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<PagedManga>()
@@ -44,13 +59,23 @@ class KissLove : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/api/search?q=$query", sigAppend())
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/search")
+            .addQueryParameter("q", query)
+            .build()
+        return GET(url, sigAppend())
+    }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$baseUrl/api/manga/slug/${manga.url}", sigAppend())
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga/slug")
+            .addPathSegment(manga.url)
+            .build()
+        return GET(url, sigAppend())
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<Manga>()
@@ -74,7 +99,11 @@ class KissLove : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringBeforeLast("/")
-        return GET("$baseUrl/api/chapter/$id", sigAppend())
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/chapter")
+            .addPathSegment(id)
+            .build()
+        return GET(url, sigAppend())
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -107,5 +136,8 @@ class KissLove : HttpSource() {
 
     companion object {
         private const val CLIENT_ID = "KL9K40zaSyC9K40vOMLLbEcepIFBhUKXwELqxlwTEF"
+        val DATE_FORMATTER by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
+        }
     }
 }
