@@ -26,7 +26,7 @@ class ImageInterceptor : Interceptor {
         }
 
         val data = url.fragment?.parseAs<ImageRequestData>()
-            ?: throw IOException("No API fragment found")
+            ?: throw IOException("No fragment found")
 
         val zipFile = File(data.zipPath)
         if (!zipFile.exists()) throw IOException("File not found at ${data.zipPath}")
@@ -52,32 +52,12 @@ class ImageInterceptor : Interceptor {
             }
         }
 
-        val finalBuffer = if (data.size != null && buffer.size > data.size) {
-            val exactBuffer = Buffer()
-            exactBuffer.write(buffer, data.size)
-            buffer.clear()
-            exactBuffer
-        } else if (data.size == null && buffer.size > 0) {
-            val lastByte = buffer[buffer.size - 1].toInt()
-            if (lastByte in 1..16) {
-                val exactSize = buffer.size - lastByte
-                val exactBuffer = Buffer()
-                exactBuffer.write(buffer, exactSize)
-                buffer.clear()
-                exactBuffer
-            } else {
-                buffer
-            }
-        } else {
-            buffer
-        }
-
         return Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(200)
             .message("OK")
-            .body(finalBuffer.asResponseBody("image/webp".toMediaType(), finalBuffer.size))
+            .body(buffer.asResponseBody("image/webp".toMediaType(), buffer.size))
             .build()
     }
 }

@@ -53,6 +53,7 @@ class UNext : HttpSource(), ConfigurableSource {
             var request = chain.request()
             var response = chain.proceed(request)
 
+            // API request for details sometimes gives "PersistedQueryNotFound" but works after 1-2 retries
             while (request.url.host == "cc.unext.jp" && response.code == 200) {
                 val contentType = response.body.contentType()
                 if (contentType?.subtype == "json") {
@@ -183,12 +184,30 @@ class UNext : HttpSource(), ConfigurableSource {
                 ),
             )
 
-            val apiRequest = apiRequest(payload)
-            val playlistData = client.newCall(apiRequest).execute()
-            val playlistParse = playlistData.parseAs<PlaylistResponse>().data.playlistUrl
+            var playlistParse: PlaylistResponse.PlaylistUrl? = null
+            var keys: Map<String, String>? = null
 
-            val viewerUrl = getChapterUrl(chapter)
-            val keys = fetchKeys(viewerUrl) ?: throw Exception("Failed to fetch DRM keys via WebView")
+            // Try multiple times to load all signed cookies
+            for (i in 1..4) {
+                try {
+                    val apiRequest = apiRequest(payload)
+                    val playlistData = client.newCall(apiRequest).execute()
+                    playlistParse = playlistData.parseAs<PlaylistResponse>().data.playlistUrl
+
+                    val viewerUrl = getChapterUrl(chapter)
+
+                    keys = fetchKeys(viewerUrl)
+
+                    if (keys != null) break
+                } catch (e: Exception) {
+                    if (i == 4) throw e
+                    Thread.sleep(2000)
+                }
+            }
+
+            if (playlistParse == null || keys == null) {
+                throw Exception("Failed to fetch DRM keys. Try again.")
+            }
 
             val base = playlistParse.playlistBaseUrl
             val ubookPath = playlistParse.playlistUrl.ubooks.first().content
@@ -233,11 +252,10 @@ class UNext : HttpSource(), ConfigurableSource {
                     entryName,
                     key,
                     drmData.iv,
-                    drmData.originalFileSize,
                 )
 
                 val fragment = requestData.toJsonString()
-                Page(i, "http://127.0.0.1/image#$fragment")
+                Page(i, "http://127.0.0.1/#$fragment")
             }
         }
     }
@@ -247,12 +265,21 @@ class UNext : HttpSource(), ConfigurableSource {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchKeys(url: String): Map<String, String>? {
+        // Request viewer URL to populate signed cookies
+        var html: String? = null
+        try {
+            val request = GET(url, headers)
+            client.newCall(request).execute().use { response ->
+                html = response.body.string()
+            }
+        } catch (_: Exception) {
+        }
+
         val latch = CountDownLatch(1)
         var result: String? = null
 
         Handler(Looper.getMainLooper()).post {
             val webView = WebView(Injekt.get<Application>())
-            // webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
             with(webView.settings) {
                 javaScriptEnabled = true
@@ -263,12 +290,14 @@ class UNext : HttpSource(), ConfigurableSource {
 
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String?) {
-                    val script = UNext::class.java
-                        .getResourceAsStream("/assets/script.js")!!
-                        .bufferedReader()
-                        .use { it.readText() }
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        val script = UNext::class.java
+                            .getResourceAsStream("/assets/script.js")!!
+                            .bufferedReader()
+                            .use { it.readText() }
 
-                    view.evaluateJavascript(script, null)
+                        view.evaluateJavascript(script, null)
+                    }, 3000,)
                 }
             }
 
@@ -288,51 +317,65 @@ class UNext : HttpSource(), ConfigurableSource {
                 "android",
             )
 
-            webView.loadUrl(url)
+            webView.loadDataWithBaseURL(url, html!!, "text/html", "UTF-8", null)
         }
 
-        latch.await(30, TimeUnit.SECONDS)
+        latch.await(60, TimeUnit.SECONDS)
+
         return result?.parseAs<Map<String, String>>()
     }
 
     private fun convertUzipToZip(ubook: File, cacheDir: File): File {
         val outZip = File(cacheDir, ubook.nameWithoutExtension + ".zip")
 
-        ubook.inputStream().use { raw ->
-            val buffer = ByteArray(4)
-            var skipped = 0
+        if (outZip.exists()) {
+            outZip.delete()
+        }
 
-            while (true) {
-                if (raw.read(buffer) != 4) {
-                    throw IllegalStateException("ZIP signature not found in uZIP")
+        val bufferSize = 64 * 1024
+
+        ubook.inputStream().buffered(bufferSize).use { bufferedInput ->
+            val signature = byteArrayOf(0x50, 0x4B, 0x03, 0x04) // PK\03\04
+            var matchIndex = 0
+            var byteVal: Int
+            var found = false
+
+            while (bufferedInput.read().also { byteVal = it } != -1) {
+                if (byteVal.toByte() == signature[matchIndex]) {
+                    matchIndex++
+                    if (matchIndex == signature.size) {
+                        found = true
+                        break
+                    }
+                } else {
+                    matchIndex = if (byteVal.toByte() == signature[0]) 1 else 0
                 }
-                if (buffer[0] == 0x50.toByte() &&
-                    buffer[1] == 0x4B.toByte() &&
-                    buffer[2] == 0x03.toByte() &&
-                    buffer[3] == 0x04.toByte()
-                ) {
-                    break
-                }
-                raw.skip(-3)
-                skipped++
             }
 
-            val zipIn = ZipInputStream(
-                SequenceInputStream(
-                    ByteArrayInputStream(buffer),
-                    raw,
-                ),
-            )
+            if (!found) {
+                throw IllegalStateException("ZIP signature not found in uZIP")
+            }
 
-            ZipOutputStream(outZip.outputStream()).use { zipOut ->
-                var entry = zipIn.nextEntry
-                while (entry != null) {
-                    zipOut.putNextEntry(
-                        ZipEntry(entry.name),
-                    )
-                    zipIn.copyTo(zipOut)
-                    zipOut.closeEntry()
-                    entry = zipIn.nextEntry
+            val headerStream = ByteArrayInputStream(signature)
+            val validZipStream = SequenceInputStream(headerStream, bufferedInput)
+
+            ZipInputStream(validZipStream).use { zipIn ->
+                ZipOutputStream(outZip.outputStream().buffered(bufferSize)).use { zipOut ->
+                    val dataBuffer = ByteArray(bufferSize)
+                    var entry = zipIn.nextEntry
+
+                    while (entry != null) {
+                        val newEntry = ZipEntry(entry.name)
+                        zipOut.putNextEntry(newEntry)
+
+                        var len: Int
+                        while (zipIn.read(dataBuffer).also { len = it } > 0) {
+                            zipOut.write(dataBuffer, 0, len)
+                        }
+
+                        zipOut.closeEntry()
+                        entry = zipIn.nextEntry
+                    }
                 }
             }
         }
@@ -362,7 +405,8 @@ class UNext : HttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_PAID_PREF
             title = "Hide paid chapters"
-            setDefaultValue(false)
+            summary = "Reading paid chapters is not supported"
+            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 

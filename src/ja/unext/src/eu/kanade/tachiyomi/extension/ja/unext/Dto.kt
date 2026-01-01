@@ -305,7 +305,6 @@ class UBookDrm(
 class DrmFile(
     val iv: String,
     val keyId: String,
-    val originalFileSize: Long?,
 )
 
 @Serializable
@@ -314,7 +313,6 @@ class ImageRequestData(
     val entryName: String,
     val key: String,
     val iv: String,
-    val size: Long?,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
