@@ -6,7 +6,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 class WeebDexHelper {
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH).apply {
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
     fun parseStatus(status: String?): Int {
