@@ -254,7 +254,7 @@ class RoliaScan : ParsedHttpSource() {
         optionList = queries.map {
             it.first to getOptionList(buildRegex(it.second), script)
         }.filter { it.second.isNotEmpty() }
-   }
+    }
 
     private fun getOptionList(pattern: Regex, content: String, cssQuery: String = "option"): List<Option> {
         val query = pattern.find(content)?.groups?.get(1)?.value ?: return emptyList()
