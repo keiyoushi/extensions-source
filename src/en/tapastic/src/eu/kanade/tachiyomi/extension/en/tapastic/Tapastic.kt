@@ -19,9 +19,6 @@ import rx.Observable
 
 class Tapastic : HttpSource() {
 
-    // Originally Tapastic
-    override val id = 3825434541981130345
-
     override val name = "Tapas"
 
     override val lang = "en"
@@ -31,6 +28,8 @@ class Tapastic : HttpSource() {
     private val apiUrl = "https://story-api.${baseUrl.substringAfterLast("/")}"
 
     override val supportsLatest = true
+
+    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .build()
@@ -128,7 +127,7 @@ class Tapastic : HttpSource() {
                 .addQueryParameter("since", System.currentTimeMillis().toString())
                 .addQueryParameter("large", "true")
                 .addQueryParameter("last_access", "0")
-                .addQueryParameter("", "") // make a same request from web
+                .addQueryParameter("", "") // make the same request as the browser
                 .build()
             val response = client.newCall(GET(url, headers)).execute()
             val dto = response.parseAs<DataWrapper<ChapterListDto>>()
