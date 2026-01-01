@@ -209,7 +209,9 @@ class RoliaScan : ParsedHttpSource() {
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun getFilterList(): FilterList {
-        scope.launch { getFilters() }
+        if (optionList.isEmpty()) {
+            scope.launch { getFilters() }
+        }
 
         val filters = mutableListOf<Filter<*>>()
 
@@ -229,7 +231,6 @@ class RoliaScan : ParsedHttpSource() {
     }
 
     private fun getFilters() {
-        if (optionList.isNotEmpty()) return
         try {
             parseFilters(client.newCall(searchMangaRequest(0, "", FilterList())).execute())
         } catch (_: Exception) { }
@@ -252,10 +253,8 @@ class RoliaScan : ParsedHttpSource() {
 
         optionList = queries.map {
             it.first to getOptionList(buildRegex(it.second), script)
-optionList = queries.map {
-  it.first to getOptionList(buildRegex(it.second), script)
-}.filter { it.second.isNotEmpty() }
-    }
+        }.filter { it.second.isNotEmpty() }
+   }
 
     private fun getOptionList(pattern: Regex, content: String, cssQuery: String = "option"): List<Option> {
         val query = pattern.find(content)?.groups?.get(1)?.value ?: return emptyList()
