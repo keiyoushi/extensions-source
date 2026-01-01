@@ -38,7 +38,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val baseUrl: String
         get() {
-            return getCustomDomain().ifBlank { "https://hangtruyen.top" }
+            return getCustomDomain().ifBlank { "https://hangtruyen.page" }
         }
 
     override val client = network.cloudflareClient.newBuilder()

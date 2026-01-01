@@ -27,7 +27,7 @@ import java.util.Locale
 class TruyenTranh3Q : ParsedHttpSource() {
     override val name: String = "TruyenTranh3Q"
     override val lang: String = "vi"
-    override val baseUrl: String = "https://truyentranh3qe.com"
+    override val baseUrl: String = "https://truyentranh3qk.com"
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -38,7 +38,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
         return super.headersBuilder().add("Referer", "$baseUrl/")
     }
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/danh-sach/truyen-yeu-thich?page=$page", headers)
@@ -62,7 +62,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector(): String? = ".page_redirect > a:last-child > p:not(.active)"
+    override fun popularMangaNextPageSelector(): String = ".page_redirect > a:last-child > p:not(.active)"
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page", headers)
@@ -71,7 +71,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
     // same as popularManga
     override fun latestUpdatesSelector(): String = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // search
     private val searchUrl = "$baseUrl/tim-kiem-nang-cao"
@@ -118,7 +118,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
     // same as popularManga
     override fun searchMangaSelector(): String = popularMangaSelector()
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
+    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
@@ -128,25 +128,27 @@ class TruyenTranh3Q : ParsedHttpSource() {
                 status = parseStatus(info.selectFirst("ul.list-info li.status p.col-xs-9")?.text())
                 genre = info.select(".list01 li a").joinToString { it.text() }
             }
-            description = document.select(".book_detail > .story-detail-info").joinToString { it.wholeText() }
+            description = document.select(".book_detail > .story-detail-info").joinToString { it.wholeText().trim() }
             thumbnail_url = document.selectFirst(".book_detail > .book_info > .book_avatar > img")?.absUrl("abs:src")
         }
     }
 
     private fun parseStatus(status: String?): Int {
-        val ongoingStatus = listOf("Đang Cập Nhật", "Đang Tiến Hành")
-        val completedStatus = listOf("Hoàn Thành", "Đã Hoàn Thành")
+        val ongoing = listOf("Đang Cập Nhật", "Đang Tiến Hành")
+        val completed = listOf("Hoàn Thành", "Đã Hoàn Thành")
+        val hiatus = listOf("Tạm ngưng", "Tạm hoãn")
         return when {
             status == null -> SManga.UNKNOWN
-            ongoingStatus.any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING
-            completedStatus.any { status.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+            ongoing.any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING
+            completed.any { status.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+            hiatus.any { status.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }
 
     // chapters
     override fun chapterListSelector(): String = ".works-chapter-list .works-chapter-item"
-    private fun parseRelativeDate(dateString: String): Long {
+    private fun parseDate(dateString: String): Long {
         val number = Regex("""(\d+)""").find(dateString)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
@@ -172,14 +174,6 @@ class TruyenTranh3Q : ParsedHttpSource() {
             listOf("năm", "năm trước").any { dateString.contains(it, ignoreCase = true) } -> {
                 cal.add(Calendar.YEAR, -number); cal.timeInMillis
             }
-            else -> 0
-        }
-    }
-
-    private fun parseChapterDate(dateString: String): Long {
-        val listCal = listOf("giây", "phút", "giờ", "ngày", "tuần", "tháng", "năm", "trước")
-        return when {
-            listCal.any { dateString.contains(it, ignoreCase = true) } -> parseRelativeDate(dateString)
             else -> dateFormat.tryParse(dateString)
         }
     }
@@ -190,7 +184,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
                 name = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
-            date_upload = parseChapterDate(element.selectFirst(".time-chap")?.text() ?: "")
+            date_upload = parseDate(element.select(".time-chap").text())
         }
     }
 
