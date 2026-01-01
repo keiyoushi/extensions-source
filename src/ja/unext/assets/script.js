@@ -2,14 +2,10 @@
     if (window._keyCheckRunning) return;
     window._keyCheckRunning = true;
 
-    let attempts = 0;
     const interval = setInterval(async function() {
-        attempts++;
         try {
             const el = document.querySelector(".swiper");
-            if (!el) {
-                return;
-            }
+            if (!el) return;
 
             const getFiber = n => {
                 const k = Object.keys(n).find(x =>
@@ -29,35 +25,50 @@
                 curr = curr.return;
             }
 
-            if (!mgr) {
-                return;
+            if (!mgr || !mgr.parser || !mgr.parser.drmContext) return;
+            if (!mgr.parser.drmParser || !mgr.parser.drmParser.drmHeader) return;
+
+            const fileList = mgr.parser.drmParser.drmHeader.encryptedFileList;
+            const contextKeys = mgr.parser.drmContext.keys || {};
+            const loadedKeyIds = Object.keys(contextKeys);
+
+            const missingKeyIds = new Set();
+            const keyIdToFilePath = {};
+
+            for (const [path, info] of Object.entries(fileList)) {
+                if (info.keyId && !loadedKeyIds.includes(info.keyId)) {
+                    missingKeyIds.add(info.keyId);
+                    if (!keyIdToFilePath[info.keyId]) {
+                        keyIdToFilePath[info.keyId] = path;
+                    }
+                }
             }
 
-            if (!mgr.parser?.drmContext?.keys) {
-                return;
-            }
-
-            const keys = mgr.parser.drmContext.keys;
-            const ids = Object.keys(keys);
-
-            if (ids.length === 0) {
-                try {
-                    const files = mgr.parser.drmParser.drmHeader.encryptedFileList;
-                    const first = Object.keys(files)[0];
-                    mgr.parser.getBinaryObject(first);
-                } catch (e) {}
+            if (missingKeyIds.size > 0) {
+                for (const kid of missingKeyIds) {
+                    const filePath = keyIdToFilePath[kid];
+                    if (filePath) {
+                        mgr.parser.getBinaryObject(filePath).catch(() => {});
+                    }
+                }
                 return;
             }
 
             const out = {};
-            for (const id of ids) {
-                const raw = await window.crypto.subtle.exportKey("raw", keys[id]);
-                out[id] = btoa(String.fromCharCode(...new Uint8Array(raw)));
+            for (const id of loadedKeyIds) {
+                try {
+                    const raw = await window.crypto.subtle.exportKey("raw", contextKeys[id]);
+                    out[id] = btoa(String.fromCharCode(...new Uint8Array(raw)));
+                } catch (e) {
+                }
             }
 
-            clearInterval(interval);
-            window.android.passKeys(JSON.stringify(out));
+            if (Object.keys(out).length > 0) {
+                clearInterval(interval);
+                window.android.passKeys(JSON.stringify(out));
+            }
 
-        } catch (e) {}
+        } catch (e) {
+        }
     }, 1000);
 })();
