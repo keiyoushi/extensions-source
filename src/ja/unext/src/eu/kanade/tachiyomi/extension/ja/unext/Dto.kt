@@ -262,9 +262,9 @@ class Book(
     fun toSChapter(sakuhinCode: String): SChapter = SChapter.create().apply {
         val lock = if (isFree != true && isPurchased != true) "🔒 " else ""
         name = "$lock${this@Book.name}"
-        val bfc = bookContent?.mainBookFile?.code
-        val urlSuffix = if (bfc != null) "#$bfc" else ""
-        url = "/book/view/$sakuhinCode/$code$urlSuffix"
+        val bookFileCode = bookContent?.mainBookFile?.code
+        val fragment = if (bookFileCode != null) "#$bookFileCode" else ""
+        url = "/book/view/$sakuhinCode/$code$fragment"
         date_upload = dateFormat.tryParse(publicStartDateTime)
     }
 

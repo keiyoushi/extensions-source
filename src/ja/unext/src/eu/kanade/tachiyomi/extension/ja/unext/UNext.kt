@@ -47,17 +47,17 @@ class UNext : HttpSource(), ConfigurableSource {
     private val apiUrl = "https://cc.$domain"
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             var request = chain.request()
             var response = chain.proceed(request)
 
             // API request for details sometimes gives "PersistedQueryNotFound" but works after 1-2 retries
-            while (request.url.host == "cc.unext.jp" && response.code == 200) {
+            while (request.url.host == "cc.unext.jp" && response.isSuccessful) {
                 val contentType = response.body.contentType()
                 if (contentType?.subtype == "json") {
-                    val bodyString = response.peekBody(64 * 1024).string()
+                    val bodyString = response.peekBody(Long.MAX_VALUE).string()
                     if (bodyString.contains("PersistedQueryNotFound")) {
                         response.close()
                         request = request.newBuilder().build()
@@ -126,10 +126,10 @@ class UNext : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val btd = manga.url.substringAfterLast("/")
+        val bookSakuhinCode = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
         val payload = Payload(
             "cosmo_bookTitleDetail",
-            DetailsVariables(btd, "TOTAL", 2, 5),
+            DetailsVariables(bookSakuhinCode, "TOTAL", 2, 5),
             Payload.Extensions(
                 Payload.Extensions.PersistedQuery(1, DETAILS_QUERY_HASH),
             ),
@@ -142,10 +142,10 @@ class UNext : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val btd = manga.url.substringAfterLast("/")
+        val bookSakuhinCode = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
         val payload = Payload(
             "cosmo_bookTitleBooks",
-            ChapterListVariables(btd, 1, 9999),
+            ChapterListVariables(bookSakuhinCode, 1, 9999),
             Payload.Extensions(
                 Payload.Extensions.PersistedQuery(1, CHAPTER_LIST_QUERY_HASH),
             ),
@@ -174,11 +174,11 @@ class UNext : HttpSource(), ConfigurableSource {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.fromCallable {
-            val bfc = chapter.url.substringAfterLast("#")
+            val bookFileCode = (baseUrl + chapter.url).toHttpUrl().fragment
 
             val payload = Payload(
                 "cosmo_getBookPlaylistUrl",
-                PageListVariables(bfc),
+                PageListVariables(bookFileCode!!),
                 Payload.Extensions(
                     Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
                 ),
@@ -255,7 +255,7 @@ class UNext : HttpSource(), ConfigurableSource {
                 )
 
                 val fragment = requestData.toJsonString()
-                Page(i, "http://127.0.0.1/#$fragment")
+                Page(i, imageUrl = "http://127.0.0.1/#$fragment")
             }
         }
     }
@@ -292,7 +292,7 @@ class UNext : HttpSource(), ConfigurableSource {
                 override fun onPageFinished(view: WebView, url: String?) {
                     Handler(Looper.getMainLooper()).postDelayed({
                         val script = UNext::class.java
-                            .getResourceAsStream("/assets/script.js")!!
+                            .getResourceAsStream("/assets/key-extractor.js")!!
                             .bufferedReader()
                             .use { it.readText() }
 
@@ -412,11 +412,30 @@ class UNext : HttpSource(), ConfigurableSource {
 
     companion object {
         private const val HIDE_PAID_PREF = "HIDE_PAID"
+
+        // Monitor network requests to get hashes.
+        // https://video.unext.jp/book/categoryranking/D_C_COMIC?genre=freecomic
+        // https://cc.unext.jp/?operationName=cosmo_getBookRanking&variables={"targetCode":"D_C_COMIC","page":1,"pageSize":20}&extensions={"persistedQuery":{"version":1,"sha256Hash":"1e1e84fd9b5718c37ef030ea8230bbf9ddd1e5b86f5b8ce2c224b3704f0468ec"}}
         private const val POPULAR_QUERY_HASH = "1e1e84fd9b5718c37ef030ea8230bbf9ddd1e5b86f5b8ce2c224b3704f0468ec"
+
+        // https://video.unext.jp/book/newarrivals/freecomic
+        // https://cc.unext.jp/?operationName=cosmo_getNewBooks&variables={"tagCode":"TAG0000014500","page":1,"pageSize":20}&extensions={"persistedQuery":{"version":1,"sha256Hash":"0570a586caa9869bd5eb0b05a59bdfec853f92dc6cf280ebd583df2cc93e1c21"}}
         private const val LATEST_QUERY_HASH = "0570a586caa9869bd5eb0b05a59bdfec853f92dc6cf280ebd583df2cc93e1c21"
+
+        // https://video.unext.jp/freeword/book?query=%E3%81%AE%E3%81%AE
+        // https://cc.unext.jp/?zxuid=b2b5221e77d4&zxemp=29455178&operationName=cosmo_bookFreewordSearch&variables={"query":"のの","page":1,"pageSize":20,"filterSaleType":null,"sortOrder":"RECOMMEND"}&extensions={"persistedQuery":{"version":1,"sha256Hash":"2ec7804350bf993678c92a5d79f20812b3b0d5b38aaba2603c9dd291c6df927e"}}
         private const val SEARCH_QUERY_HASH = "2ec7804350bf993678c92a5d79f20812b3b0d5b38aaba2603c9dd291c6df927e"
+
+        // https://video.unext.jp/book/title/BSD0000820098
+        // https://cc.unext.jp/?operationName=cosmo_bookTitleDetail&variables={"bookSakuhinCode":"BSD0000820098","viewBookCode":"TOTAL","bookListPageSize":2,"bookListChapterPageSize":5}&extensions={"persistedQuery":{"version":1,"sha256Hash":"99f21ebea20b64b11ef5d3b811c2b3fa5b4dbd8c5d2933baadf9c26fc60b35d1"}}
         private const val DETAILS_QUERY_HASH = "99f21ebea20b64b11ef5d3b811c2b3fa5b4dbd8c5d2933baadf9c26fc60b35d1"
+
+        // https://video.unext.jp/book/title/BSD0000820098?bel=true&epi=0
+        // https://cc.unext.jp/?operationName=cosmo_bookTitleBooks&variables={"bookSakuhinCode":"BSD0000820098","booksPage":1,"booksPageSize":9999}&extensions={"persistedQuery":{"version":1,"sha256Hash":"66f0c600259b82a4826fba7be2ace33726f3ec09735e65a421f8f602b481487d"}}
         private const val CHAPTER_LIST_QUERY_HASH = "66f0c600259b82a4826fba7be2ace33726f3ec09735e65a421f8f602b481487d"
+
+        // https://video.unext.jp/book/view/BSD0000820098/BID0001508570
+        // https://cc.unext.jp/?operationName=cosmo_getBookPlaylistUrl&variables={"bookFileCode":"BFC0002699405"}&extensions={"persistedQuery":{"version":1,"sha256Hash":"f8a851c14ec61eb42dff966570b2ad49f86eeec7f39d2d32ab0ec58cad268fc1"}}
         private const val PLAYLIST_QUERY_HASH = "f8a851c14ec61eb42dff966570b2ad49f86eeec7f39d2d32ab0ec58cad268fc1"
     }
 }
