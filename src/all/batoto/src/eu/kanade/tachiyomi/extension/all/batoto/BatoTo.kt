@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.batoto
 
-import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.batotov2.BatoToV2
@@ -13,11 +12,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Response
-import kotlin.getValue
 
 open class BatoTo(
     final override val lang: String,
-    siteLang: String = lang,
+    private val siteLang: String = lang,
 ) : ConfigurableSource, HttpSource() {
 
     override val name: String = "Bato.to"
@@ -31,38 +29,48 @@ open class BatoTo(
 
     private val preferences by getPreferencesLazy()
 
-    private fun siteVer(): String {
-        return preferences.getString("${SITE_VER_PREF_KEY}_$lang", SITE_VER_PREF_DEFAULT_VALUE) ?: SITE_VER_PREF_DEFAULT_VALUE
-    }
+    override val baseUrl: String
+        get() {
+            val index = preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()
+                .coerceAtMost(mirrors.size - 1)
 
-    private val _delegate: HttpSource =
-        when (siteVer()) {
-            "v4" -> BatoToV4(lang, siteLang, preferences)
-            else -> BatoToV2(lang, siteLang, preferences)
+            return mirrors[index]
+        }
+
+    private var _delegate: HttpSource = getDelegateSource()
+
+    private fun getDelegateSource(): HttpSource =
+        if (baseUrl in mirrorsV4) {
+            BatoToV4(baseUrl, lang, siteLang, preferences)
+        } else {
+            BatoToV2(baseUrl, lang, siteLang, preferences)
         }
 
     override val client = _delegate.client
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val siteVerPref = ListPreference(screen.context).apply {
-            key = "${SITE_VER_PREF_KEY}_$lang"
-            title = SITE_VER_PREF_TITLE
-            entries = SITE_VER_PREF_ENTRIES
-            entryValues = SITE_VER_PREF_ENTRIES
-            setDefaultValue(SITE_VER_PREF_DEFAULT_VALUE)
+        ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = "Preferred Mirror"
+            entries = mirrors.map {
+                if (it in mirrorsV4) {
+                    "$it (v4)"
+                } else {
+                    "$it (v2)"
+                }
+            }.toTypedArray()
+            entryValues = Array(mirrors.size) { it.toString() }
             summary = "%s"
+            setDefaultValue("0")
 
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
+                _delegate = getDelegateSource()
                 true
             }
-        }
+        }.also { screen.addPreference(it) }
 
-        screen.addPreference(siteVerPref)
         (_delegate as ConfigurableSource).setupPreferenceScreen(screen)
     }
-
-    override val baseUrl: String get() = _delegate.baseUrl
 
     override val supportsLatest = _delegate.supportsLatest
 
@@ -97,12 +105,74 @@ open class BatoTo(
     override fun getFilterList() = _delegate.getFilterList()
 
     companion object {
-        private const val SITE_VER_PREF_KEY = "SITE_VER"
-        private const val SITE_VER_PREF_TITLE = "Site version"
-        private val SITE_VER_PREF_ENTRIES = arrayOf(
-            "v2",
-            "v4",
+        private const val MIRROR_PREF_KEY = "MIRROR"
+
+        // https://batotomirrors.pages.dev/
+        private val mirrorsV2 = arrayOf(
+            "https://ato.to",
+            "https://dto.to",
+            "https://fto.to",
+            "https://hto.to",
+            "https://jto.to",
+            "https://lto.to",
+            "https://mto.to",
+            "https://nto.to",
+            "https://vto.to",
+            "https://wto.to",
+            "https://xto.to",
+            "https://yto.to",
+            "https://vba.to",
+            "https://wba.to",
+            "https://xba.to",
+            "https://yba.to",
+            "https://zba.to",
+            "https://bato.ac",
+            "https://bato.bz",
+            "https://bato.cc",
+            "https://bato.cx",
+            "https://bato.id",
+            "https://bato.pw",
+            "https://bato.sh",
+            "https://bato.to",
+            "https://bato.vc",
+            "https://bato.day",
+            "https://bato.red",
+            "https://bato.run",
+            "https://batoto.in",
+            "https://batoto.tv",
+            "https://batotoo.com",
+            "https://batotwo.com",
+            "https://batpub.com",
+            "https://batread.com",
+            "https://battwo.com",
+            "https://xbato.com",
+            "https://xbato.net",
+            "https://xbato.org",
+            "https://zbato.com",
+            "https://zbato.net",
+            "https://zbato.org",
+            "https://comiko.net",
+            "https://comiko.org",
+            "https://mangatoto.com",
+            "https://mangatoto.net",
+            "https://mangatoto.org",
+            "https://batocomic.com",
+            "https://batocomic.net",
+            "https://batocomic.org",
+            "https://readtoto.com",
+            "https://readtoto.net",
+            "https://readtoto.org",
+            "https://kuku.to",
+            "https://okok.to",
+            "https://ruru.to",
+            "https://xdxd.to",
         )
-        private val SITE_VER_PREF_DEFAULT_VALUE = SITE_VER_PREF_ENTRIES[0]
+
+        private val mirrorsV4 = arrayOf(
+            "https://bato.si",
+            "https://bato.ing",
+        )
+
+        private val mirrors = mirrorsV2 + mirrorsV4
     }
 }

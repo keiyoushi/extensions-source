@@ -7,7 +7,6 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
@@ -47,6 +46,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 open class BatoToV2(
+    override val baseUrl: String,
     final override val lang: String,
     private val siteLang: String,
     private val preferences: SharedPreferences,
@@ -54,23 +54,22 @@ open class BatoToV2(
 
     override val name: String = "Bato.to"
 
-    override val baseUrl: String
-        get() {
-            val index = preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()
-                .coerceAtMost(mirrors.size - 1)
+    override val supportsLatest = true
 
-            return mirrors[index]
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::imageFallbackInterceptor)
+        .addNetworkInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("Referer", "$baseUrl/")
+                .build()
+
+            chain.proceed(request)
         }
+        .build()
+
+    private val json: Json by injectLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = "Preferred Mirror"
-            entries = mirrors
-            entryValues = Array(mirrors.size) { it.toString() }
-            summary = "%s"
-            setDefaultValue("0")
-        }
         val altChapterListPref = CheckBoxPreference(screen.context).apply {
             key = "${ALT_CHAPTER_LIST_PREF_KEY}_$lang"
             title = ALT_CHAPTER_LIST_PREF_TITLE
@@ -125,7 +124,6 @@ open class BatoToV2(
                 isValid
             }
         }
-        screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
         screen.addPreference(removeOfficialPref)
         screen.addPreference(removeCustomPref)
@@ -137,20 +135,6 @@ open class BatoToV2(
     }
     private fun customRemoveTitle(): String =
         preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
-
-    override val supportsLatest = true
-    private val json: Json by injectLazy()
-
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::imageFallbackInterceptor)
-        .addNetworkInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("Referer", "$baseUrl/")
-                .build()
-
-            chain.proceed(request)
-        }
-        .build()
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/browse?langs=$siteLang&sort=update&page=$page", headers)
@@ -1145,70 +1129,8 @@ open class BatoToV2(
         private val seriesIdRegex = Regex("""series/(\d+)""")
         private val chapterIdRegex = Regex("""/chapter/(\d+)""") // /chapter/4016325
         private val idRegex = Regex("""(\d+)""")
-        private const val MIRROR_PREF_KEY = "MIRROR"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
-
-        // https://batotomirrors.pages.dev/
-        private val mirrors = arrayOf(
-            "https://ato.to",
-            "https://dto.to",
-            "https://fto.to",
-            "https://hto.to",
-            "https://jto.to",
-            "https://lto.to",
-            "https://mto.to",
-            "https://nto.to",
-            "https://vto.to",
-            "https://wto.to",
-            "https://xto.to",
-            "https://yto.to",
-            "https://vba.to",
-            "https://wba.to",
-            "https://xba.to",
-            "https://yba.to",
-            "https://zba.to",
-            "https://bato.ac",
-            "https://bato.bz",
-            "https://bato.cc",
-            "https://bato.cx",
-            "https://bato.id",
-            "https://bato.pw",
-            "https://bato.sh",
-            "https://bato.to",
-            "https://bato.vc",
-            "https://bato.day",
-            "https://bato.red",
-            "https://bato.run",
-            "https://batoto.in",
-            "https://batoto.tv",
-            "https://batotoo.com",
-            "https://batotwo.com",
-            "https://batpub.com",
-            "https://batread.com",
-            "https://battwo.com",
-            "https://xbato.com",
-            "https://xbato.net",
-            "https://xbato.org",
-            "https://zbato.com",
-            "https://zbato.net",
-            "https://zbato.org",
-            "https://comiko.net",
-            "https://comiko.org",
-            "https://mangatoto.com",
-            "https://mangatoto.net",
-            "https://mangatoto.org",
-            "https://batocomic.com",
-            "https://batocomic.net",
-            "https://batocomic.org",
-            "https://readtoto.com",
-            "https://readtoto.net",
-            "https://readtoto.org",
-            "https://kuku.to",
-            "https://okok.to",
-            "https://ruru.to",
-            "https://xdxd.to",
-        )
 
         private val DEPRECATED_MIRRORS = listOf(
             "https://batocc.com", // parked

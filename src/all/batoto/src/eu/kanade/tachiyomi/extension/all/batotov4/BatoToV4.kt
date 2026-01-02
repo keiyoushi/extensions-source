@@ -7,7 +7,6 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -36,23 +35,15 @@ import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
 import java.util.concurrent.TimeUnit
-import kotlin.text.Regex
 
 class BatoToV4(
+    override val baseUrl: String,
     override val lang: String,
     private val siteLang: String = lang,
     private val preferences: SharedPreferences,
 ) : ConfigurableSource, HttpSource() {
 
-    override val name: String = "Bato.to V4"
-
-    override val baseUrl: String
-        get() {
-            val index = preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()
-                .coerceAtMost(mirrors.size - 1)
-
-            return mirrors[index]
-        }
+    override val name: String = "Bato.to"
 
     override val supportsLatest = true
 
@@ -513,15 +504,6 @@ class BatoToV4(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = "Preferred Mirror"
-            entries = mirrors
-            entryValues = Array(mirrors.size) { it.toString() }
-            summary = "%s"
-            setDefaultValue("0")
-        }.also(screen::addPreference)
-
         CheckBoxPreference(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
@@ -578,11 +560,6 @@ class BatoToV4(
     private fun customRemoveTitle(): String =
         preferences.getString(REMOVE_TITLE_CUSTOM_PREF, "")!!
 }
-private const val MIRROR_PREF_KEY = "MIRROR"
-private val mirrors = arrayOf(
-    "https://bato.si",
-    "https://bato.ing",
-)
 
 private val jsonMediaType = "application/json".toMediaType()
 
