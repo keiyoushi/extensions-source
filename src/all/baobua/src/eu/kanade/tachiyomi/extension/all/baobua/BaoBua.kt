@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -53,12 +52,7 @@ class BaoBua() : SimpleParsedHttpSource() {
         val filter = filters.firstInstance<SourceCategorySelector>()
         return filter.selectedCategory?.let {
             GET(it.buildUrl(baseUrl, page), headers)
-        } ?: run {
-            baseUrl.toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
-                .let { GET(it, headers) }
-        }
+        } ?: popularMangaRequest(page)
     }
 
     // region Details
