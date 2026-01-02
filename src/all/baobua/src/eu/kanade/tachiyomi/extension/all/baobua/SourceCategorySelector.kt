@@ -6,9 +6,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 data class SourceCategory(private val name: String, var cat: String) {
     override fun toString() = this.name
 
-    fun buildUrl(baseUrl: String): String {
+    fun buildUrl(baseUrl: String, page: Int): String {
         return "$baseUrl/".toHttpUrl().newBuilder()
-            .addEncodedQueryParameter("cat", this.cat)
+            .addPathSegment("category")
+            .addPathSegment(this.cat)
+            .addQueryParameter("page", page.toString())
             .build()
             .toString()
     }
@@ -24,24 +26,21 @@ class SourceCategorySelector(
 
     companion object {
 
-        fun create(baseUrl: String): SourceCategorySelector {
+        fun create(): SourceCategorySelector {
             val options = listOf(
-                SourceCategory("unselected", ""),
-                SourceCategory("大胸美女", "YmpydEtkNzV5NHJKcDJYVGtOVW0yZz09"),
-                SourceCategory("巨乳美女", "Q09EdlMvMHgweERrUitScTFTaDM4Zz09"),
-                SourceCategory("全裸写真", "eXZzejJPNFRVNzJqKzFDUmNzZEU2QT09"),
-                SourceCategory("chinese", "bG9LamJsWWdSbGcyY0FEZytldkhTZz09"),
-                SourceCategory("chinese models", "OCtTSEI2YzRTcWMvWUsyeDM0aHdzdUIwWDlHMERZUEZaVHUwUEVUVWo3QT0"),
-                SourceCategory("korean", "Tm1ydGlaZ1A2YWM3a3BvYWh6L3dIdz09"),
-                SourceCategory("korea", "bzRjeWR0akQrRWpxRE1xOGF6TW5Tdz09"),
-                SourceCategory("korean models", "TGZTVGtwOCtxTW1TQU1KYWhUb01DQT09"),
-                SourceCategory("big boobs", "UmFLQVkvVndGNlpPckwvZkpVaEE4UT09"),
-                SourceCategory("adult", "b2RFSnlwdWxyREMxVmRpcThKVXRLUT09"),
-                SourceCategory("nude-art", "djFqa293VmFZMEJLdDlUWndsMGtldz09"),
-                SourceCategory("Asian adult photo", "SHBGZHFueTVNeUlxVHRLaU53RjU2NS9VcjNxRVg3VnhqTGJoK25YaVQ1UT0"),
-                SourceCategory("cosplay", "OEI2c000ZDBxakwydjZIUVJaRnlMQT09"),
-                SourceCategory("hot", "c3VRb3RJZ2wrU2tTYmpGSUVqMnFndz09"),
-                SourceCategory("big breast", "dkQ3b0RiK0xpZDRlMVNSY3lUNkJXQT09"),
+                SourceCategory("", ""),
+                SourceCategory("Ao-yem", "Ao-yem"),
+                SourceCategory("Asia", "Asia"),
+                SourceCategory("Beauty", "beauty"),
+                SourceCategory("Bikini", "Bikini"),
+                SourceCategory("China", "China"),
+                SourceCategory("Cosplay", "Cosplay"),
+                SourceCategory("Japan", "Japan"),
+                SourceCategory("Nude", "Nude"),
+                SourceCategory("Sexy", "Sexy"),
+                SourceCategory("Top", "Top"),
+                SourceCategory("Tattoo", "tattoo"),
+                SourceCategory("Vietnam", "Vietnam"),
             )
 
             return SourceCategorySelector("Category", options)
