@@ -52,14 +52,16 @@ class UNext : HttpSource(), ConfigurableSource {
         .addInterceptor { chain ->
             var request = chain.request()
             var response = chain.proceed(request)
+            var retryCount = 0
 
             // API request for details sometimes gives "PersistedQueryNotFound" but works after 1-2 retries
-            while (request.url.host == "cc.unext.jp" && response.isSuccessful) {
+            while (retryCount < 5 && request.url.host == "cc.unext.jp" && response.isSuccessful) {
                 val contentType = response.body.contentType()
                 if (contentType?.subtype == "json") {
                     val bodyString = response.peekBody(Long.MAX_VALUE).string()
                     if (bodyString.contains("PersistedQueryNotFound")) {
                         response.close()
+                        retryCount++
                         request = request.newBuilder().build()
                         response = chain.proceed(request)
                         continue
