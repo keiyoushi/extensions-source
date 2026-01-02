@@ -111,6 +111,16 @@ class PhiliaScans : Madara(
         name = element.selectFirst("zebi")!!.text()
     }
 
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = if (fromSearch) {
+        url?.replace(
+            // try to resolve actual cover from thumbnail, usually has -280x400 suffix
+            "-280x400.",
+            ".",
+        )
+    } else {
+        url
+    }
+
     override val pageListParseSelector = "div#ch-images img"
 
     override fun getFilterList(): FilterList {
