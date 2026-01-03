@@ -27,15 +27,8 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.io.SequenceInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 class UNext : HttpSource(), ConfigurableSource {
     override val name = "U-NEXT"
@@ -213,31 +206,18 @@ class UNext : HttpSource(), ConfigurableSource {
 
             val base = playlistParse.playlistBaseUrl
             val ubookPath = playlistParse.playlistUrl.ubooks.first().content
-            val zipUrl = "$base/$ubookPath".toHttpUrl().newBuilder().build()
+            val zipUrl = "$base/$ubookPath".toHttpUrl().newBuilder().build().toString()
 
-            val cacheDir = Injekt.get<Application>().cacheDir
-            val zipFile = File(cacheDir, "unext_${playlistParse.playToken}.ubook")
+            val headRequest = Request.Builder().url(zipUrl).headers(headers).head().build()
+            val contentLength = client.newCall(headRequest).execute().use {
+                it.header("Content-Length")?.toBigInteger()
+            } ?: throw Exception("Could not get Content-Length")
 
-            val zipRequest = GET(zipUrl, headers)
-            client.newCall(zipRequest).execute().use { zipResponse ->
-                zipResponse.body.byteStream().use { input ->
-                    zipFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
+            val zipHandler = ZipHandler(zipUrl, client, headers, "zip", contentLength)
+            val zip = zipHandler.populate()
 
-            val realZipFile = convertUzipToZip(zipFile, cacheDir)
-            val indexJson: UBookIndex
-            val drmJson: UBookDrm
-
-            ZipFile(realZipFile).use { zip ->
-                val indexEntry = zip.getEntry("index.json") ?: throw Exception("index.json not found")
-                val drmEntry = zip.getEntry("drm.json") ?: throw Exception("drm.json not found")
-
-                indexJson = zip.getInputStream(indexEntry).bufferedReader().use { it.readText() }.parseAs()
-                drmJson = zip.getInputStream(drmEntry).bufferedReader().use { it.readText() }.parseAs()
-            }
+            val indexJson = zip.fetch("index.json", client).toString(Charsets.UTF_8).parseAs<UBookIndex>()
+            val drmJson = zip.fetch("drm.json", client).toString(Charsets.UTF_8).parseAs<UBookDrm>()
 
             indexJson.spine.mapIndexed { i, spine ->
                 val pageInfo = indexJson.pages[spine.pageId]
@@ -248,12 +228,16 @@ class UNext : HttpSource(), ConfigurableSource {
                     ?: throw Exception("DRM metadata not found for $entryName")
 
                 val key = keys[drmData.keyId] ?: throw Exception("Decryption key not found for ${drmData.keyId}")
+                val zipEntry = zip.getEntry(entryName) ?: throw Exception("Entry not found in CD: $entryName")
 
                 val requestData = ImageRequestData(
-                    realZipFile.absolutePath,
-                    entryName,
+                    zipUrl,
+                    zip.zipStartOffset,
+                    zipEntry.localFileHeaderRelativeOffset.toLong(),
+                    zipEntry.compressedSize,
                     key,
                     drmData.iv,
+                    drmData.originalFileSize,
                 )
 
                 val fragment = requestData.toJsonString()
@@ -325,64 +309,6 @@ class UNext : HttpSource(), ConfigurableSource {
         latch.await(60, TimeUnit.SECONDS)
 
         return result?.parseAs<Map<String, String>>()
-    }
-
-    private fun convertUzipToZip(ubook: File, cacheDir: File): File {
-        val outZip = File(cacheDir, ubook.nameWithoutExtension + ".zip")
-
-        if (outZip.exists()) {
-            outZip.delete()
-        }
-
-        val bufferSize = 64 * 1024
-
-        ubook.inputStream().buffered(bufferSize).use { bufferedInput ->
-            val signature = byteArrayOf(0x50, 0x4B, 0x03, 0x04) // PK\03\04
-            var matchIndex = 0
-            var byteVal: Int
-            var found = false
-
-            while (bufferedInput.read().also { byteVal = it } != -1) {
-                if (byteVal.toByte() == signature[matchIndex]) {
-                    matchIndex++
-                    if (matchIndex == signature.size) {
-                        found = true
-                        break
-                    }
-                } else {
-                    matchIndex = if (byteVal.toByte() == signature[0]) 1 else 0
-                }
-            }
-
-            if (!found) {
-                throw IllegalStateException("ZIP signature not found in uZIP")
-            }
-
-            val headerStream = ByteArrayInputStream(signature)
-            val validZipStream = SequenceInputStream(headerStream, bufferedInput)
-
-            ZipInputStream(validZipStream).use { zipIn ->
-                ZipOutputStream(outZip.outputStream().buffered(bufferSize)).use { zipOut ->
-                    val dataBuffer = ByteArray(bufferSize)
-                    var entry = zipIn.nextEntry
-
-                    while (entry != null) {
-                        val newEntry = ZipEntry(entry.name)
-                        zipOut.putNextEntry(newEntry)
-
-                        var len: Int
-                        while (zipIn.read(dataBuffer).also { len = it } > 0) {
-                            zipOut.write(dataBuffer, 0, len)
-                        }
-
-                        zipOut.closeEntry()
-                        entry = zipIn.nextEntry
-                    }
-                }
-            }
-        }
-
-        return outZip
     }
 
     override fun imageUrlParse(response: Response): String {

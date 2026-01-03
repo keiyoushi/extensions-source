@@ -179,7 +179,6 @@ class PlaylistResponse(
 
     @Serializable
     class PlaylistUrl(
-        val playToken: String,
         val playlistBaseUrl: String,
         val playlistUrl: UbookContainer,
     )
@@ -305,14 +304,18 @@ class UBookDrm(
 class DrmFile(
     val iv: String,
     val keyId: String,
+    val originalFileSize: Long,
 )
 
 @Serializable
 class ImageRequestData(
-    val zipPath: String,
-    val entryName: String,
+    val zipUrl: String,
+    val zipStartOffset: Long,
+    val localFileHeaderOffset: Long,
+    val compressedSize: Int,
     val key: String,
     val iv: String,
+    val originalFileSize: Long,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
