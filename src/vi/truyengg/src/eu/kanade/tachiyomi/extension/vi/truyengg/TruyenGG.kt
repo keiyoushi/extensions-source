@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -31,7 +32,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://foxtruyen.com"
+    private val defaultBaseUrl = "https://foxtruyen1.com"
 
     override val supportsLatest = true
 
@@ -48,14 +49,14 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a.book_name")!!.attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a.book_name")!!.absUrl("href"))
         title = element.select("a.book_name").text()
-        thumbnail_url = element.selectFirst(".image-cover img")!!.attr("data-src")
+        thumbnail_url = element.selectFirst(".image-cover img")?.absUrl("data-src")
     }
 
     override fun latestUpdatesSelector() = ".list_item_home .item_home"
@@ -75,22 +76,29 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         name = element.select("a").text()
-        date_upload = parseDate(element.select("span.cl99").text().trim())
+        date_upload = dateFormat.tryParse(element.select("span.cl99").text().trim())
     }
-
-    private fun parseDate(date: String): Long = runCatching {
-        dateFormat.parse(date)?.time
-    }.getOrNull() ?: 0L
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.select("h1[itemprop=name]").text()
         author = document.selectFirst("p:contains(Tác Giả) + p")?.text()
         genre = document.select("a.clblue").joinToString { it.text() }
-        description = document.select("div.story-detail-info").text().trim()
-        thumbnail_url = document.selectFirst(".thumbblock img")!!.attr("abs:src")
-        status = when (document.select("p:contains(Trạng Thái) + p").text()) {
-            "Đang Cập Nhật" -> SManga.ONGOING
-            "Hoàn Thành" -> SManga.COMPLETED
+        description = document.select("div.story-detail-info").joinToString {
+            it.wholeText().trim()
+        }
+        thumbnail_url = document.selectFirst(".thumbblock img")?.absUrl("src")
+        status = parseStatus(document.select("p:contains(Trạng Thái) + p").text())
+    }
+
+    private fun parseStatus(status: String?): Int {
+        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành")
+        val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành")
+        val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn")
+        return when {
+            status == null -> SManga.UNKNOWN
+            ongoingWords.any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING
+            completedWords.any { status.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+            hiatusWords.any { status.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }
@@ -98,7 +106,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
     override fun pageListParse(document: Document): List<Page> =
         document.select(".content_detail img")
             .mapIndexed { idx, it ->
-                Page(idx, imageUrl = it.attr("abs:src"))
+                Page(idx, imageUrl = it.absUrl("src"))
             }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -186,7 +194,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
     class SortByFilter : UriFilter, Filter.Sort(
         "Sắp xếp",
         arrayOf("Ngày đăng", "Ngày cập nhật", "Lượt xem"),
-        Selection(2, false),
+        Selection(1, false),
     ) {
         override fun addToUri(builder: HttpUrl.Builder) {
             val index = state?.index ?: 2
