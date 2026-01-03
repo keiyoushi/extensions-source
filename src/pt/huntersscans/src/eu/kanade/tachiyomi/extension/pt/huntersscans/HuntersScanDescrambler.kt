@@ -5,8 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -19,19 +18,18 @@ object HuntersScanDescrambler {
         val key = String(Base64.decode(keyB64, Base64.DEFAULT), Charset.forName("ISO-8859-1"))
         val sb = StringBuilder()
 
-        for (i in payload.indices) {
-            var keyIndex = (i % key.length) - 1
-            if (keyIndex < 0) keyIndex = key.length + keyIndex
-            val c = payload[i].code - key[keyIndex].code
+        payload.forEachIndexed { i, ch ->
+            val keyIndex = (i + key.length - 1) % key.length
+            val c = ch.code - key[keyIndex].code
             sb.append(c.toChar())
         }
 
-        return Json.decodeFromString<List<String>>(sb.toString())
+        return sb.toString().parseAs<List<String>>()
     }
 
     fun unscrambleImage(inputStream: InputStream, keyJson: String): InputStream {
         val bitmap = BitmapFactory.decodeStream(inputStream)
-        val key = Json.decodeFromString<List<Int>>(keyJson)
+        val key = keyJson.parseAs<List<Int>>()
 
         val width = bitmap.width
         val height = bitmap.height

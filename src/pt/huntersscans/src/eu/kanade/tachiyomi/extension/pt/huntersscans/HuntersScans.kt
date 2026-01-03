@@ -69,8 +69,8 @@ class HuntersScans : Madara(
         val script = document.selectFirst("script:containsData(_HuntersOpts)")?.data()
             ?: return super.pageListParse(document)
 
-        val payload = Regex("""payload:\s*"(.*?)"""").find(script)?.groupValues?.get(1)
-        val sk = Regex("""sk:\s*"(.*?)"""").find(script)?.groupValues?.get(1)
+        val payload = PAYLOAD_REGEX.find(script)?.groupValues?.get(1)
+        val sk = SK_REGEX.find(script)?.groupValues?.get(1)
 
         if (payload != null && sk != null) {
             try {
@@ -99,5 +99,10 @@ class HuntersScans : Madara(
         }
 
         return response
+    }
+
+    companion object {
+        private val PAYLOAD_REGEX = Regex("""payload:\s*"(.*?)"""")
+        private val SK_REGEX = Regex("""sk:\s*"(.*?)"""")
     }
 }
