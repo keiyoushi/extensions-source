@@ -16,14 +16,19 @@ import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
@@ -67,6 +72,11 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::forceHighQualityInterceptor)
         .rateLimit(2, 2)
+        .build()
+
+    // separate client for API calls with minimal rate limiting
+    private val apiClient = network.cloudflareClient.newBuilder()
+        .rateLimit(10, 1)
         .build()
 
     private var failedHighQuality = false
@@ -295,7 +305,30 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun pageListParse(document: Document): List<Page> {
         val scriptData = document.select("script:containsData(self.__next_f.push)")
             .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
-        val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
+
+        val chapterDataMatch = CHAPTER_DATA_REGEX.find(scriptData)
+        val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1)
+
+        if (chapterDataMatch != null && pagesData != null) {
+            // check for premium chapter
+            val chapterId = chapterDataMatch.groupValues[1].toIntOrNull()
+            val isEarlyAccess = chapterDataMatch.groupValues[2] == "true"
+            val pages = try {
+                json.decodeFromString<List<PageDto>>(pagesData.unescape())
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            if (chapterId != null && isEarlyAccess && pages.isEmpty()) {
+                return unlockPremiumChapter(chapterId)
+            }
+        }
+
+        // continue with normal chapter handling
+        if (pagesData == null) {
+            throw Exception("Failed to find chapter pages")
+        }
+
         val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }
         return pageList.mapIndexed { i, page ->
             val newUrl = page.url.toHttpUrlOrNull()?.run {
@@ -307,6 +340,92 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
             Page(i, imageUrl = newUrl ?: page.url)
         }
+    }
+
+    private fun unlockPremiumChapter(chapterId: Int): List<Page> {
+        val xsrfToken = getXsrfToken()
+        val unlockPayload = json.encodeToString(UnlockRequestDto(chapterId))
+
+        val unlockResponse = apiClient.newCall(
+            buildApiRequest("$apiUrl/chapter/unlock", unlockPayload, xsrfToken),
+        ).execute()
+
+        val unlockData = unlockResponse.parseAs<UnlockResponseDto>("Failed to unlock chapter")
+
+        if (!unlockData.success) {
+            throw Exception("Failed to unlock chapter. Please ensure you have premium access.")
+        }
+
+        val unlockToken = unlockData.data.unlockToken
+        val pages = unlockData.data.pages.sortedBy { it.order }
+
+        return pages.mapIndexed { index, page ->
+            val imageUrl = getPageImageUrl(page.id, chapterId, unlockToken, xsrfToken)
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun getPageImageUrl(mediaId: Int, chapterId: Int, unlockToken: String, xsrfToken: String): String {
+        val mediaPayload = json.encodeToString(MediaRequestDto(mediaId, chapterId, unlockToken, "max-quality"))
+
+        val mediaResponse = apiClient.newCall(
+            buildApiRequest("$apiUrl/media", mediaPayload, xsrfToken),
+        ).execute()
+
+        return mediaResponse.parseAs<MediaResponseDto>("Failed to get image URL").data
+    }
+
+    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request {
+        return Request.Builder()
+            .url(url)
+            .headers(headers)
+            .post(jsonPayload.toRequestBody("application/json".toMediaType()))
+            .header("X-XSRF-TOKEN", xsrfToken)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .build()
+    }
+
+    private inline fun <reified T> Response.parseAs(errorPrefix: String): T {
+        if (!isSuccessful) {
+            close()
+            val errorMsg = when (code) {
+                401 -> "Not logged in. Please log in via WebView."
+                403 -> "No premium subscription."
+                419 -> "Session expired. Please log in again via WebView."
+                else -> "$errorPrefix (HTTP $code)"
+            }
+            throw Exception(errorMsg)
+        }
+
+        val responseBody = body?.string() ?: throw Exception("$errorPrefix: Empty response")
+
+        return try {
+            json.decodeFromString<T>(responseBody)
+        } catch (e: Exception) {
+            throw Exception("$errorPrefix: Invalid response")
+        }
+    }
+
+    private fun getXsrfToken(): String {
+        val xsrfToken = sequence {
+            apiUrl.toHttpUrlOrNull()?.let { yield(it) }
+            baseUrl.toHttpUrlOrNull()?.let { yield(it) }
+        }.mapNotNull { httpUrl ->
+            client.cookieJar.loadForRequest(httpUrl)
+                .firstOrNull { it.name.equals("XSRF-TOKEN", ignoreCase = true) }
+                ?.value
+        }.firstOrNull()
+
+        if (xsrfToken == null) {
+            throw Exception("Not logged in. Please log in via WebView to access premium chapters.")
+        }
+
+        // Decode the token (handles case where Cookie.value might not be fully decoded)
+        return runCatching {
+            URLDecoder.decode(xsrfToken, StandardCharsets.UTF_8.name())
+        }.getOrDefault(xsrfToken)
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -382,6 +501,9 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val PAGES_REGEX = """\\"pages\\":(\[.*?])""".toRegex()
+
+        // Match chapter metadata: "chapter":{"id":123..."is_early_access":true}
+        private val CHAPTER_DATA_REGEX = """\\"chapter\\":\{\\"id\\":(\d+).*?\\"is_early_access\\":(true|false)""".toRegex(RegexOption.DOT_MATCHES_ALL)
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
