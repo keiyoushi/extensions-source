@@ -32,14 +32,22 @@ class BaoBua() : SimpleParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    private fun normalizeImageUrl(url: String): String {
+        return if (Regex("^https://i\\d+\\.wp\\.com/").containsMatchIn(url)) {
+            url.replace(Regex("https://i\\d+\\.wp\\.com/"), "https://")
+                .replace("?w=640", "")
+        } else {
+            url
+        }
+    }
+
     override fun simpleMangaSelector() = ".product-item"
 
     override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.select(".product-title").text()
         thumbnail_url = element.selectFirst("img.product-imgreal")?.absUrl("src")
-            ?.replace(Regex("https://i\\d+\\.wp\\.com/"), "https://")
-            ?.replace("?w=640", "")
+            ?.let { normalizeImageUrl(it) }
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
@@ -83,7 +91,7 @@ class BaoBua() : SimpleParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = document.select(".article-body img")
             .mapIndexed { index, element ->
-                Page(index, imageUrl = element.absUrl("src").replace(Regex("https://i\\d+\\.wp\\.com/"), "https://"))
+                Page(index, imageUrl = normalizeImageUrl(element.absUrl("src")))
             }
 
         val nextPageUrl = document.selectFirst("a.page-numbers:contains(Next)")
