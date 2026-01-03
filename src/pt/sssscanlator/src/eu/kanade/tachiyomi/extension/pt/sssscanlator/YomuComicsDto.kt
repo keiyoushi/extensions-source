@@ -19,10 +19,10 @@ class MangaDto(
     val slug: String,
     val cover: String? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = this@MangaDto.title
         thumbnail_url = cover
-        url = "/obra/$slug"
+        url = "$baseUrl/obra/$slug"
     }
 }
 
@@ -37,10 +37,10 @@ class UpdateMangaDto(
     val slug: String,
     val cover: String? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = this@UpdateMangaDto.title
         thumbnail_url = cover
-        url = "/obra/$slug"
+        url = "$baseUrl/obra/$slug"
     }
 }
 
@@ -57,69 +57,31 @@ class SearchMangaDto(
     val slug: String? = null,
     val coverImage: String? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = this@SearchMangaDto.name
         thumbnail_url = coverImage
-        url = if (slug != null) "/obra/$slug" else "/series/$id"
+        url = if (slug != null) "$baseUrl/obra/$slug" else "$baseUrl/series/$id"
     }
 }
 
 @Serializable
 class PaginationDto(
     val page: Int,
-    val limit: Int,
-    val total: Int,
     val pages: Int,
 )
-
-@Serializable
-class DetailsResponseDto(
-    val obraData: ObraDataDto,
-)
-
-@Serializable
-class ObraDataDto(
-    val id: Int,
-    val title: String,
-    val slug: String,
-    val synopsis: String? = null,
-    val cover: String? = null,
-    val status: String? = null,
-    val genres: List<String> = emptyList(),
-    val author: String? = null,
-    val artist: String? = null,
-    val chapters: List<ChapterDto> = emptyList(),
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@ObraDataDto.title
-        thumbnail_url = cover
-        description = synopsis
-        author = this@ObraDataDto.author
-        artist = this@ObraDataDto.artist
-        genre = genres.joinToString()
-        status = when (this@ObraDataDto.status) {
-            "ATIVO", "EM_DIA" -> SManga.ONGOING
-            "CONCLUIDO" -> SManga.COMPLETED
-            "HIATO" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-        url = "/obra/$slug"
-    }
-}
 
 @Serializable
 class ChapterDto(
     val id: Int,
     val index: Double,
     val name: String,
-    val date: String? = null,
     val createdAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String, mangaId: Int): SChapter = SChapter.create().apply {
-        val numberStr = index.toString().removeSuffix(".0").replace(".", "-")
+    fun toSChapter(mangaSlug: String, mangaId: Int, baseUrl: String): SChapter = SChapter.create().apply {
+        val numberStr = index.toString().removeSuffix(".0")
         name = this@ChapterDto.name
         chapter_number = index.toFloat()
-        url = "/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
+        url = "$baseUrl/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
         date_upload = DATE_FORMATTER.tryParse(createdAt)
     }
 
@@ -146,12 +108,6 @@ class PageDto(
 class CsrfDto(val csrfToken: String)
 
 @Serializable
-class SessionDto(val user: UserDto)
-
-@Serializable
-class UserDto(val id: String)
-
-@Serializable
 class SeriesDto(
     val id: Int,
     val name: String,
@@ -161,17 +117,9 @@ class SeriesDto(
     val posterImage: String? = null,
     val coverImage: String? = null,
     val genres: List<GenreDto> = emptyList(),
-    val releasedAt: String? = null,
-    val type: String? = null,
-    val subType: String? = null,
-    val views: Int? = null,
-    val rating: Int? = null,
-    val chaptersCount: Int? = null,
     val chapters: List<ChapterDto> = emptyList(),
-    val favorites: Int? = null,
-    val userInfo: String? = null,
 ) {
-    fun toSManga(slug: String): SManga = SManga.create().apply {
+    fun toSManga(slug: String, baseUrl: String): SManga = SManga.create().apply {
         title = this@SeriesDto.name
         thumbnail_url = coverImage ?: posterImage
         description = sinopse ?: description
@@ -182,12 +130,11 @@ class SeriesDto(
             "HIATO" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        url = "/obra/$slug"
+        url = "$baseUrl/obra/$slug"
     }
 }
 
 @Serializable
 class GenreDto(
-    val id: Int,
     val name: String,
 )

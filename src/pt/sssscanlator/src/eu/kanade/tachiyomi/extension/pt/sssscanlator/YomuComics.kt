@@ -120,7 +120,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val homeDto = response.parseAs<HomeDto>()
-        val mangas = homeDto.featuredManga.map { it.toSManga() }
+        val mangas = homeDto.featuredManga.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
 
@@ -131,7 +131,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesDto = response.parseAs<UpdatesDto>()
-        val mangas = updatesDto.updates.map { it.toSManga() }
+        val mangas = updatesDto.updates.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
@@ -201,21 +201,30 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponseDto>()
-        val mangas = result.results.map { it.toSManga() }
+        val mangas = result.results.map { it.toSManga(baseUrl) }
         val hasNextPage = result.pagination?.let { it.page < it.pages } ?: false
         return MangasPage(mangas, hasNextPage)
     }
 
     // =============================== Details ==============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/obra/")
+        val path = manga.url
+            .removePrefix(baseUrl)
+            .removePrefix("/")
+
+        val slug = if (path.startsWith("obra/")) {
+            path.removePrefix("obra/")
+        } else {
+            path
+        }
+
         return GET("$baseUrl/api/public/series/$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val seriesDto = response.parseAs<SeriesDto>()
         val slug = response.request.url.pathSegments.last()
-        return seriesDto.toSManga(slug)
+        return seriesDto.toSManga(slug, baseUrl)
     }
 
     // =============================== Chapters =============================
@@ -226,12 +235,17 @@ class YomuComics : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val seriesDto = response.parseAs<SeriesDto>()
         val slug = response.request.url.pathSegments.last()
-        return seriesDto.chapters.map { it.toSChapter(slug, seriesDto.id) }.reversed()
+        return seriesDto.chapters.map { it.toSChapter(slug, seriesDto.id, baseUrl) }.reversed()
     }
 
     // ================================ Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val url = if (chapter.url.startsWith("http")) {
+            chapter.url.toHttpUrl()
+        } else {
+            "$baseUrl${chapter.url}".toHttpUrl()
+        }
+
         val mangaId = url.queryParameter("id")
             ?: throw IOException("ID da obra não encontrado na URL do capítulo")
         val chapterNumber = url.pathSegments.last().removePrefix("capitulo-").replace("-", ".")
