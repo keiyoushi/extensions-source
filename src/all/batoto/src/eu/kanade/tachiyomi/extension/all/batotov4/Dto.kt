@@ -129,7 +129,7 @@ class ChapterListData(
         )
 
         fun toSChapter(): SChapter = SChapter.create().apply {
-            url = "$comicId/$id"
+            url = id
             name = buildString {
                 val number = serial.toString().substringBefore(".0")
                 if (!displayName.contains(number)) {
