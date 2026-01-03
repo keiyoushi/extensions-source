@@ -361,7 +361,7 @@ abstract class Senkuro(
                             label.slug,
                             label.rootId,
                         )
-                    }
+                    }.sortedBy { it.name }
         }
     }
     override fun getFilterList(): FilterList {
