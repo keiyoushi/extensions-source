@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.en.tapastic
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -39,6 +41,7 @@ class Tapastic : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(TextInterceptor())
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -175,9 +178,23 @@ class Tapastic : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+
         val pages = document.select("img.content__img").mapIndexed { i, img ->
             Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
+        }.toMutableList()
+
+        if (showAuthorsNotesPref) {
+            val episodeStory = document.select("p.js-episode-story").html()
+
+            if (episodeStory.isNotEmpty()) {
+                val creator = document.selectFirst("a.name.js-fb-tracking")!!.text()
+                pages += Page(
+                    index = pages.size,
+                    imageUrl = TextInterceptorHelper.createUrl("Author's Notes from $creator", episodeStory),
+                )
+            }
         }
+
         return pages.takeIf { it.isNotEmpty() } ?: throw IOException("Chapter locked")
     }
 
@@ -215,10 +232,22 @@ class Tapastic : HttpSource(), ConfigurableSource {
                 true
             }
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_AUTHORS_NOTES_KEY
+            title = "Show author's notes"
+            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                showAuthorsNotesPref = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
     }
 
     private var showLockedChapterPref: Boolean get() =
-        preferences.getBoolean(LOCKED_CHAPTER_VISIBILITY_PREF, false)
+        preferences.getBoolean(LOCKED_CHAPTER_VISIBILITY_PREF, true)
         set(value) {
             preferences.edit()
                 .putBoolean(LOCKED_CHAPTER_VISIBILITY_PREF, value)
@@ -226,16 +255,24 @@ class Tapastic : HttpSource(), ConfigurableSource {
         }
 
     private var showScheduledChapterPrefer: Boolean
-        get() = preferences.getBoolean(SCHEDULED_CHAPTER_VISIBILITY_PREF, false)
+        get() = preferences.getBoolean(SCHEDULED_CHAPTER_VISIBILITY_PREF, true)
         set(value) {
             preferences.edit()
                 .putBoolean(SCHEDULED_CHAPTER_VISIBILITY_PREF, value)
                 .apply()
         }
 
+    private var showAuthorsNotesPref: Boolean
+        get() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, true)
+        set(value) {
+            preferences.edit()
+                .putBoolean(SHOW_AUTHORS_NOTES_KEY, value)
+                .apply()
+        }
     companion object {
         private const val LOCKED_CHAPTER_VISIBILITY_PREF = "lockedChapterVisibilityPref"
         private const val SCHEDULED_CHAPTER_VISIBILITY_PREF = "scheduledChapterVisibilityPref"
+        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0"
     }
 }
