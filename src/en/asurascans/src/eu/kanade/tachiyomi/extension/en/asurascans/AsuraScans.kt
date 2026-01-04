@@ -117,11 +117,16 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/series?genres=&status=-1&types=-1&order=update&page=$page", headers)
+        GET("$baseUrl/page/$page", headers)
 
-    override fun latestUpdatesSelector() = searchMangaSelector()
+    override fun latestUpdatesSelector() = "div.grid.grid-rows-1.grid-cols-1 > div.w-full"
 
-    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        val link = element.selectFirst("a[href^=/series/]")!!
+        setUrlWithoutDomain(link.attr("abs:href").toPermSlugIfNeeded())
+        title = element.selectFirst("span.text-\\[15px\\] a")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+    }
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
