@@ -25,7 +25,7 @@ class BaoBua() : SimpleParsedHttpSource() {
     override val name = "BaoBua"
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 
@@ -33,8 +33,8 @@ class BaoBua() : SimpleParsedHttpSource() {
         .set("Referer", "$baseUrl/")
 
     private fun normalizeImageUrl(url: String): String {
-        return if (Regex("^https://i\\d+\\.wp\\.com/").containsMatchIn(url)) {
-            url.replace(Regex("https://i\\d+\\.wp\\.com/"), "https://")
+        return if (WP_COM_REGEX.containsMatchIn(url)) {
+            url.replace(WP_COM_REPLACE_REGEX, "https://")
                 .replace("?w=640", "")
         } else {
             url
@@ -45,7 +45,7 @@ class BaoBua() : SimpleParsedHttpSource() {
 
     override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.select(".product-title").text()
+        title = element.selectFirst(".product-title")!!.text()
         thumbnail_url = element.selectFirst("img.product-imgreal")?.absUrl("src")
             ?.let { normalizeImageUrl(it) }
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -81,7 +81,7 @@ class BaoBua() : SimpleParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         chapter_number = 0F
-        setUrlWithoutDomain(element.select("link[rel=canonical]").attr("abs:href"))
+        setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.absUrl("href"))
         date_upload = POST_DATE_FORMAT.tryParse(element.selectFirst(".article-date-comment .date")?.text())
         name = "Gallery"
     }
@@ -113,6 +113,8 @@ class BaoBua() : SimpleParsedHttpSource() {
     )
 
     companion object {
-        private val POST_DATE_FORMAT = SimpleDateFormat("EEE MMM dd yyyy", Locale.ROOT)
+        private val WP_COM_REGEX = Regex("^https://i\\d+\\.wp\\.com/")
+        private val WP_COM_REPLACE_REGEX = Regex("https://i\\d+\\.wp\\.com/")
+        private val POST_DATE_FORMAT = SimpleDateFormat("EEE MMM dd yyyy", Locale.US)
     }
 }
