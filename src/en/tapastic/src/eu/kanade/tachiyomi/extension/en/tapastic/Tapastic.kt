@@ -1,6 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.tapastic
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,7 +24,7 @@ import okhttp3.Response
 import okio.IOException
 import rx.Observable
 
-class Tapastic : HttpSource() {
+class Tapastic : HttpSource(), ConfigurableSource {
 
     override val name = "Tapas"
 
@@ -31,7 +38,10 @@ class Tapastic : HttpSource() {
 
     override val versionId: Int = 2
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(TextInterceptor())
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -100,20 +110,33 @@ class Tapastic : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}/info"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val fields = listOf(
-            "series_title",
-            "genres",
-            "img_url",
-        )
-        val url = "$baseUrl${manga.url}/event-properties".toHttpUrl().newBuilder()
-            .addQueryParameter("fields", fields.joinToString(","))
-            .build()
-        return GET(url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<DataWrapper<DetailsWrapper>>().data.toSManga()
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        title = document.selectFirst(".info__right .title")!!.text()
+        thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
+        description = buildString {
+            append(document.selectFirst(".description__body")?.text())
+            document.selectFirst(".colophon")?.text()?.let {
+                appendLine("\n\n$it")
+            }
+        }
+
+        genre = document.select(".genre-btn").map { it.text() }
+            .distinct()
+            .joinToString()
+
+        author = document.select(".creator-section .name").joinToString { it.text() }
+
+        document.selectFirst(".schedule-ico:has(.sp-ico-updated-line-pwt) + .schedule-label")?.text()?.let {
+            status = when {
+                it.contains("updates", ignoreCase = true) -> SManga.ONGOING
+                it.contains("completed", ignoreCase = true) -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        }
+    }
 
     // ============================== Chapters ==================================
 
@@ -131,11 +154,19 @@ class Tapastic : HttpSource() {
                 .build()
             val response = client.newCall(GET(url, headers)).execute()
             val dto = response.parseAs<DataWrapper<ChapterListDto>>()
-            chapters += dto.data.episodes.map(ChapterDto::toSChapter)
+            chapters += dto.data.episodes
+                .filter { it.isPaywalledVisible() && it.isScheduledVisible() }
+                .map(ChapterDto::toSChapter)
         } while (dto.data.hasNextPage())
 
         return Observable.just(chapters)
     }
+
+    private fun ChapterDto.isPaywalledVisible() =
+        showLockedChapterPref || unlocked || free
+
+    private fun ChapterDto.isScheduledVisible() =
+        showScheduledChapterPrefer || !scheduled
 
     override fun chapterListRequest(manga: SManga): Request =
         throw UnsupportedOperationException()
@@ -147,9 +178,23 @@ class Tapastic : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+
         val pages = document.select("img.content__img").mapIndexed { i, img ->
             Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
+        }.toMutableList()
+
+        if (showAuthorsNotesPref) {
+            val episodeStory = document.select("p.js-episode-story").html()
+
+            if (episodeStory.isNotEmpty()) {
+                val creator = document.selectFirst("a.name.js-fb-tracking")!!.text()
+                pages += Page(
+                    index = pages.size,
+                    imageUrl = TextInterceptorHelper.createUrl("Author's Notes from $creator", episodeStory),
+                )
+            }
         }
+
         return pages.takeIf { it.isNotEmpty() } ?: throw IOException("Chapter locked")
     }
 
@@ -159,7 +204,77 @@ class Tapastic : HttpSource() {
 
     override fun getFilterList() = FilterList()
 
+    // ============================== Settings ==================================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOCKED_CHAPTER_VISIBILITY_PREF
+            title = "Show paywalled chapters"
+            summary = buildString {
+                append("Tapas requires login/payment for some chapters. Enable to always show paywalled chapters. ")
+                append("Hiding chapters with paid access will also hide scheduled chapters.")
+            }
+
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                showLockedChapterPref = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SCHEDULED_CHAPTER_VISIBILITY_PREF
+            title = "Show scheduled chapters"
+            summary = "Scheduled chapters can be hidden from the chapter list by enabling this option."
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                showScheduledChapterPrefer = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_AUTHORS_NOTES_KEY
+            title = "Show author's notes"
+            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                showAuthorsNotesPref = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    private var showLockedChapterPref: Boolean get() =
+        preferences.getBoolean(LOCKED_CHAPTER_VISIBILITY_PREF, true)
+        set(value) {
+            preferences.edit()
+                .putBoolean(LOCKED_CHAPTER_VISIBILITY_PREF, value)
+                .apply()
+        }
+
+    private var showScheduledChapterPrefer: Boolean
+        get() = preferences.getBoolean(SCHEDULED_CHAPTER_VISIBILITY_PREF, true)
+        set(value) {
+            preferences.edit()
+                .putBoolean(SCHEDULED_CHAPTER_VISIBILITY_PREF, value)
+                .apply()
+        }
+
+    private var showAuthorsNotesPref: Boolean
+        get() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, true)
+        set(value) {
+            preferences.edit()
+                .putBoolean(SHOW_AUTHORS_NOTES_KEY, value)
+                .apply()
+        }
     companion object {
+        private const val LOCKED_CHAPTER_VISIBILITY_PREF = "lockedChapterVisibilityPref"
+        private const val SCHEDULED_CHAPTER_VISIBILITY_PREF = "scheduledChapterVisibilityPref"
+        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0"
     }
 }
