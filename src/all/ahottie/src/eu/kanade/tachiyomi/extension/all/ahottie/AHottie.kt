@@ -16,7 +16,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class AHottie() : ParsedHttpSource() {
-    override val baseUrl = "https://ahottie.net"
+    override val baseUrl = "https://ahottie.top"
     override val lang = "all"
     override val name = "AHottie"
     override val supportsLatest = false
