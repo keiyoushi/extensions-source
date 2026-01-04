@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -56,7 +57,10 @@ open class Niadd(
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search/?name=$query", headers)
+        val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+            .addQueryParameter("name", query)
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -78,14 +82,10 @@ open class Niadd(
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // Details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
-
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val infoElement = document.select("div.bookside-general, div.detail-general")
 
-        title = document.selectFirst("h1, .book-headline-name")?.text().orEmpty()
+        title = document.selectFirst("h1, .book-headline-name")!!.text()
         author = infoElement.select(".detail-general-cell:contains(Autor) span, [itemprop=author] span").text()
             .replace("Autor (es):", "", ignoreCase = true)
         artist = infoElement.select(".detail-general-cell:contains(Artista) span").text()
@@ -140,7 +140,7 @@ open class Niadd(
             if (synopsisText.isNotBlank()) append(synopsisText)
         }
 
-        thumbnail_url = document.selectFirst("div.detail-img img, div.bookside-img img")?.attr("abs:src").orEmpty()
+        document.selectFirst("div.detail-img img, div.bookside-img img")?.attr("abs:src").also { thumbnail_url = it }
         status = SManga.ONGOING
     }
 
@@ -152,10 +152,8 @@ open class Niadd(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val chapterListContainer = document.select("ul.chapter-list")
+        val chapterListContainer = document.selectFirst("ul.chapter-list")!!
 
-        chapterListContainer.removeClass("dis-hide")
-        document.select(".chp-warn-box").remove()
         return document.select(chapterListSelector()).map { chapterFromElement(it) }
     }
 
@@ -163,23 +161,28 @@ open class Niadd(
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
     private fun parseDate(dateString: String): Long {
-        if (dateString.contains("atrás") || dateString.contains("ago")) {
+        if (dateString.contains("atrás", ignoreCase = true) ||
+            dateString.contains("ago", ignoreCase = true)
+        ) {
+            // For relative dates, current time is an acceptable approximation to ensure chapters are sorted/displayed correctly.
             return System.currentTimeMillis()
         }
+
         return dateFormat.tryParse(dateString)
     }
 
     // Pages
     override fun chapterFromElement(element: Element): SChapter =
         SChapter.create().apply {
-            val rawUrl = element.attr("href")
+            val rawUrl = element.attr("abs:href")
             setUrlWithoutDomain(rawUrl)
 
-            name = element.select("span.chapter-name, span.name").text()
-                .ifBlank { element.text() }
+            name = element.selectFirst("span.chapter-name, span.name")?.text()
+                ?.takeIf(String::isNotBlank)
+                ?: element.text()
 
-            val dateText = element.select("span.chapter-time, span.time").text()
-            date_upload = parseDate(dateText)
+            element.selectFirst("span.chapter-time, span.time")?.text()
+                ?.also { date_upload = parseDate(it) }
 
             chapter_number = CHAPTER_NUMBER_REGEX.find(name)
                 ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
