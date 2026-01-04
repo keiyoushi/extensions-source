@@ -16,6 +16,8 @@ import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -80,6 +82,12 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     private var failedHighQuality = false
+
+    @Volatile
+    private var cachedPremiumAccess: Boolean? = null
+
+    @Volatile
+    private var lastPremiumCheck: Long = 0L
 
     private fun forceHighQualityInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -288,7 +296,9 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
         val chNumber = element.selectFirst("h3")!!.ownText()
         val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
-        name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        val isPremiumChapter = element.selectFirst("svg") != null
+        val baseName = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        name = if (isPremiumChapter && !hasPremiumAccess()) "🔒 $baseName" else baseName
         date_upload = try {
             val text = element.selectFirst("h3 + h3")!!.ownText()
             val cleanText = text.replace(CLEAN_DATE_REGEX, "$1")
@@ -348,6 +358,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun unlockPremiumChapter(chapterId: Int): List<Page> {
+        if (!hasPremiumAccess()) {
+            throw Exception("Premium subscription required. Please log in via WebView and ensure you have an active subscription.")
+        }
+
         val xsrfToken = getXsrfToken()
         val unlockPayload = json.encodeToString(UnlockRequestDto(chapterId))
 
@@ -404,7 +418,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             throw Exception(errorMsg)
         }
 
-        val responseBody = body?.string() ?: throw Exception("$errorPrefix: Empty response")
+        val responseBody = body.string()
 
         return try {
             json.decodeFromString<T>(responseBody)
@@ -431,6 +445,30 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return runCatching {
             URLDecoder.decode(xsrfToken, StandardCharsets.UTF_8.name())
         }.getOrDefault(xsrfToken)
+    }
+
+    private fun hasPremiumAccess(): Boolean {
+        val now = System.currentTimeMillis()
+        val cached = cachedPremiumAccess
+        if (cached != null && now - lastPremiumCheck < PREMIUM_CHECK_CACHE_DURATION) {
+            return cached
+        }
+
+        val hasPremium = runCatching {
+            client.newCall(GET("$apiUrl/user", headers)).execute().use { resp ->
+                if (!resp.isSuccessful) return@use false
+
+                val body = resp.body.string()
+                val userData = json.parseToJsonElement(body).jsonObject
+                val data = userData["data"]?.jsonObject ?: return@use false
+                val premium = data["premium"]?.jsonObject ?: return@use false
+                premium["active"]?.jsonPrimitive?.content?.toBoolean() ?: false
+            }
+        }.getOrDefault(false)
+
+        cachedPremiumAccess = hasPremium
+        lastPremiumCheck = now
+        return hasPremium
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -518,5 +556,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
         private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
+        private const val PREMIUM_CHECK_CACHE_DURATION = 60_000L // 60 seconds
     }
 }
