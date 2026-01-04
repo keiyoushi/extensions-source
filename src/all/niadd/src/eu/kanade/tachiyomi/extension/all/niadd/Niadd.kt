@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
@@ -21,15 +22,21 @@ open class Niadd(
     langParam: String,
 ) : ParsedHttpSource() {
 
-    override val name = "Niadd$nameSuffix"
+    override val name = "Niadd"
     override val baseUrl = baseUrlParam
     override val lang = langParam
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    companion object {
+        private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
+        private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
+        private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
+    }
 
-    override fun imageUrlParse(document: Document): String = ""
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Popular
     override fun popularMangaRequest(page: Int) =
@@ -39,17 +46,18 @@ open class Niadd(
 
     override fun popularMangaFromElement(element: Element): SManga =
         SManga.create().apply {
-            title = element.select("div.manga-name").text()
-            val rawUrl = element.select("a").first()?.attr("href").orEmpty()
-            url = rawUrl.removePrefix(baseUrl)
-            thumbnail_url = element.select("div.manga-img img").attr("abs:src")
+            title = element.selectFirst("div.manga-name")!!.text()
+            val rawUrl = element.selectFirst("a")!!.absUrl("href")
+            setUrlWithoutDomain(rawUrl)
+            element.selectFirst("div.manga-img img")?.attr("abs:src")?.also { thumbnail_url = it }
         }
 
     override fun popularMangaNextPageSelector(): String? = null
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/search/?name=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return GET("$baseUrl/search/?name=$query", headers)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -77,11 +85,11 @@ open class Niadd(
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val infoElement = document.select("div.bookside-general, div.detail-general")
 
-        title = document.select("h1, .book-headline-name").first()?.text().orEmpty()
+        title = document.selectFirst("h1, .book-headline-name")?.text().orEmpty()
         author = infoElement.select(".detail-general-cell:contains(Autor) span, [itemprop=author] span").text()
-            .replace("Autor (es):", "", ignoreCase = true).trim()
+            .replace("Autor (es):", "", ignoreCase = true)
         artist = infoElement.select(".detail-general-cell:contains(Artista) span").text()
-            .replace("Artista:", "", ignoreCase = true).trim()
+            .replace("Artista:", "", ignoreCase = true)
         genre = document.select("[itemprop=genre]").eachText().joinToString()
 
         val yearKeywords = listOf(
@@ -95,13 +103,12 @@ open class Niadd(
 
         val yearRaw = infoElement.select(".detail-general-cell").firstOrNull { cell ->
             yearKeywords.any { cell.text().contains(it, ignoreCase = true) }
-        }?.select("span")?.text()?.trim().orEmpty()
+        }?.selectFirst("span")?.text().orEmpty()
 
         val yearClean = yearRaw
             .let { text ->
                 yearKeywords.fold(text) { acc, keyword -> acc.replace(keyword, "", ignoreCase = true) }
             }
-            .trim()
 
         val synopsisKeywords = listOf(
             "Synopsis",
@@ -115,13 +122,12 @@ open class Niadd(
         val synopsisText = run {
             val titles = document.select(".detail-cate-title")
             for (title in titles) {
-                val titleText = title.text().trim()
+                val titleText = title.text()
                 if (synopsisKeywords.any { keyword -> titleText.contains(keyword, ignoreCase = true) }) {
                     val nextSection = title.nextElementSibling()
                     if (nextSection != null && nextSection.hasClass("detail-section")) {
-                        // evita pegar a seção de gêneros
                         if (!nextSection.select("a[itemprop=genre]").any()) {
-                            return@run nextSection.text().trim()
+                            return@run nextSection.text()
                         }
                     }
                 }
@@ -134,7 +140,7 @@ open class Niadd(
             if (synopsisText.isNotBlank()) append(synopsisText)
         }
 
-        thumbnail_url = document.select("div.detail-img img, div.bookside-img img").attr("abs:src")
+        thumbnail_url = document.selectFirst("div.detail-img img, div.bookside-img img")?.attr("abs:src").orEmpty()
         status = SManga.ONGOING
     }
 
@@ -154,24 +160,20 @@ open class Niadd(
     }
 
     override fun chapterListSelector() = "ul.chapter-list a.hover-underline"
+    private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
     private fun parseDate(dateString: String): Long {
         if (dateString.contains("atrás") || dateString.contains("ago")) {
             return System.currentTimeMillis()
         }
-        return try {
-            val format = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
-            format.parse(dateString)?.time ?: 0L
-        } catch (e: Exception) {
-            0L
-        }
+        return dateFormat.tryParse(dateString)
     }
 
     // Pages
     override fun chapterFromElement(element: Element): SChapter =
         SChapter.create().apply {
             val rawUrl = element.attr("href")
-            url = rawUrl.removePrefix(baseUrl)
+            setUrlWithoutDomain(rawUrl)
 
             name = element.select("span.chapter-name, span.name").text()
                 .ifBlank { element.text() }
@@ -179,25 +181,21 @@ open class Niadd(
             val dateText = element.select("span.chapter-time, span.time").text()
             date_upload = parseDate(dateText)
 
-            chapter_number = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
-                .find(name)
-                ?.groupValues
-                ?.get(1)
-                ?.toFloatOrNull()
-                ?: -1f
+            chapter_number = CHAPTER_NUMBER_REGEX.find(name)
+                ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
         }
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
         val currentUrl = document.location()
         val html = document.html()
+
         if (html.contains("all_imgs_url")) {
-            val arrayPattern = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
-            val match = arrayPattern.find(html)
+            val match = ALL_IMGS_URL_REGEX.find(html)
             if (match != null) {
                 val content = match.groupValues[1]
                 val urls = content.split(",")
-                    .map { it.replace(Regex("""["'\s]"""), "").trim() }
+                    .map { it.replace(CLEAN_IMG_URL_REGEX, "") }
                     .filter { it.startsWith("http") }
 
                 urls.forEachIndexed { i, url ->
