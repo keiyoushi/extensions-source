@@ -204,6 +204,8 @@ class Tapastic : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = FilterList()
 
+    // ============================== Settings ==================================
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = LOCKED_CHAPTER_VISIBILITY_PREF
