@@ -66,11 +66,7 @@ class QiScans : Iken(
         }
 
         return document.getNextJson("images").parseAs<List<PageParseDto>>().sortedBy { it.order }.mapIndexed { idx, p ->
-            // Some new(~Jan 2026) chapters use this format which is wrong and leads to 404s
-            // old: https://media.qiscans.org[/]upload/series/<series>/<chapter>/<image>.webp
-            // new: https://media.qiscans.org[/file/qiscans/]upload/series/<series>/<chapter>/<image>.webp
-            val url = p.url.replaceFirst("/file/qiscans/", "/")
-            Page(idx, imageUrl = url)
+            Page(idx, imageUrl = p.url)
         }
     }
 
