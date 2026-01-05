@@ -125,7 +125,7 @@ abstract class InitManga(
 
                 val urlPath = try {
                     val parsed = fullUrl.toHttpUrlOrNull()
-                    parsed?.encodedPath ?: fullUrl 
+                    parsed?.encodedPath ?: fullUrl
                 } catch (_: Exception) {
                     fullUrl
                 }
