@@ -53,7 +53,7 @@ import javax.crypto.spec.PSource
 class TheBlank : HttpSource(), ConfigurableSource {
     override val name = "The Blank"
     override val lang = "en"
-    override val baseUrl = "https://beta.theblank.net"
+    override val baseUrl = "https://theblank.net"
     private val baseHttpUrl = baseUrl.toHttpUrl()
     override val supportsLatest = true
     override val versionId = 2
