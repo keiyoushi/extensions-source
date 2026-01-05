@@ -80,7 +80,7 @@ abstract class InitManga(
 
     override fun popularMangaNextPageSelector() = SELECTOR_NEXT_PAGE
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$latestUrlSlug/page/$page/", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$latestUrlSlug/page/$page/")
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
