@@ -98,7 +98,7 @@ abstract class InitManga(
         val url = urlBuilder.build()
         return Request.Builder()
             .url(url)
-            .headers(headers) // varsayilan Headers nesneniz
+            .headers(headers)
             .get()
             .build()
     }
