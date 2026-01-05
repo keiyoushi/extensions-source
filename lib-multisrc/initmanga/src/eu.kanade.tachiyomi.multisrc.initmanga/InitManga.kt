@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.initmanga
 
-import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -126,7 +125,7 @@ abstract class InitManga(
 
                 val urlPath = try {
                     val parsed = fullUrl.toHttpUrlOrNull()
-                    parsed?.encodedPath ?: fullUrl // fallback
+                    parsed?.encodedPath ?: fullUrl 
                 } catch (_: Exception) {
                     fullUrl
                 }
@@ -169,29 +168,41 @@ abstract class InitManga(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
-        val processedUrls = mutableSetOf<String>()
+        val visitedUrls = mutableSetOf<String>()
 
-        var doc = response.use { it.asJsoup() }
+        var document = response.asJsoup()
         var currentUrl = response.request.url.toString()
 
-        while (true) {
-            if (!processedUrls.add(currentUrl)) break
+        val cleanUrl: (String) -> String = { it.substringBefore("#").trimEnd('/') }
 
-            val items = doc.select(chapterListSelector())
+        while (true) {
+            if (!visitedUrls.add(cleanUrl(currentUrl))) break
+
+            val items = document.select(chapterListSelector())
             if (items.isEmpty()) break
 
-            chapters.addAll(items.map { chapterFromElement(it) })
+            chapters.addAll(items.map(::chapterFromElement))
 
-            val nextLink = doc.select(popularMangaNextPageSelector()).first()?.attr("abs:href")
-            if (nextLink.isNullOrBlank()) break
+            val nextLink = document.selectFirst("ul.uk-pagination a:has(span[uk-pagination-next]), ul.uk-pagination a[aria-label='Next page']")
 
-            currentUrl = nextLink
-            val nextResponse = runCatching { client.newCall(GET(currentUrl, headers)).execute() }.getOrNull()
+            if (nextLink?.parents()?.any { it.hasClass("uk-disabled") } == true) break
+
+            val nextUrl = nextLink?.attr("abs:href") ?: break
+
+            if (cleanUrl(nextUrl) == cleanUrl(currentUrl) || cleanUrl(nextUrl) in visitedUrls) break
+
+            currentUrl = nextUrl
+
+            val nextResponse = runCatching {
+                client.newCall(GET(currentUrl, headers)).execute()
+            }.getOrNull()
+
             if (nextResponse == null || !nextResponse.isSuccessful) {
                 nextResponse?.close()
                 break
             }
-            doc = nextResponse.use { it.asJsoup() }
+
+            document = nextResponse.asJsoup()
         }
 
         return chapters
@@ -222,7 +233,6 @@ abstract class InitManga(
         }.getOrNull() ?: 0L
     }
 
-    @SuppressLint("NewApi")
     override fun pageListParse(document: Document): List<Page> {
         val html = document.html()
         val encryptedDataMatch = AesDecrypt.REGEX_ENCRYPTED_DATA.find(html)
