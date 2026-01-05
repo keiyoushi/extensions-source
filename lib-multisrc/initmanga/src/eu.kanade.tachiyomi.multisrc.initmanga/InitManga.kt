@@ -145,14 +145,7 @@ abstract class InitManga(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val base = baseUrl.toHttpUrlOrNull() ?: throw IllegalStateException("Invalid baseUrl")
-        val resolved = if (manga.url.startsWith("http")) {
-            manga.url.toHttpUrlOrNull() ?: throw IllegalStateException("Invalid manga.url")
-        } else {
-            base.resolve(manga.url) ?: throw IllegalStateException("Couldn't resolve manga.url")
-        }
-
-        return GET(resolved.toString(), headers)
+        return GET(baseUrl + manga.url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
