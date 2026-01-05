@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.batoto
 
+import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.batotov2.BatoToV2
@@ -15,7 +16,7 @@ import okhttp3.Response
 
 open class BatoTo(
     final override val lang: String,
-    private val siteLang: String = lang,
+    siteLang: String = lang,
 ) : ConfigurableSource, HttpSource() {
 
     override val name: String = "Bato.to"
@@ -37,9 +38,7 @@ open class BatoTo(
             return mirrors[index]
         }
 
-    private var _delegate: HttpSource = getDelegateSource()
-
-    private fun getDelegateSource(): HttpSource =
+    private val _delegate: HttpSource =
         if (baseUrl in mirrorsV4) {
             BatoToV4(baseUrl, lang, siteLang, preferences)
         } else {
@@ -64,7 +63,7 @@ open class BatoTo(
             setDefaultValue("0")
 
             setOnPreferenceChangeListener { _, _ ->
-                _delegate = getDelegateSource()
+                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
                 true
             }
         }.also { screen.addPreference(it) }
