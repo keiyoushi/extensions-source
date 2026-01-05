@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.wolftoon
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
@@ -9,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,33 +39,31 @@ class Wolftoon : HttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
         .rateLimitHost(supabaseUrl.toHttpUrl(), 2, 1)
+        .addInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
         .build()
 
     private val scriptUrl: String by lazy {
-        return@lazy try {
-            val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-            document.selectFirst("script[type=module][src*=index]")!!.absUrl("src")
-        } catch (_: Exception) {
-            baseUrl
-        }
+        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val html = response.body.string()
+        if (html.isBlank()) throw Exception("HTML vazio recebido de $baseUrl")
+        val match = Regex("""src=["']?(/assets/index-[^"'>]+\.js)["']?""").find(html)
+        match?.groupValues?.get(1)?.let { "$baseUrl$it" }
+            ?: throw Exception("URL do script não encontrada no HTML")
     }
 
     private val apiKey: String by lazy {
         val script = client.newCall(GET(scriptUrl, headers)).execute().body.string()
-        API_KEY_REGEX.find(script)?.groupValues?.last() ?: throw Exception("API key not found")
+        API_KEY_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("API key não encontrada no script")
     }
 
     private val apiHeaders: Headers by lazy {
-        return@lazy try {
-            headersBuilder()
-                .set("apikey", apiKey)
-                .build()
-        } catch (_: Exception) {
-            headersBuilder().build()
-        }
+        headersBuilder()
+            .set("apikey", apiKey)
+            .set("Authorization", "Bearer $apiKey")
+            .build()
     }
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", baseUrl)
 
@@ -95,6 +93,7 @@ class Wolftoon : HttpSource() {
         val url = "$supabaseUrl/rest/v1/titles".toHttpUrl().newBuilder()
             .setQueryParameter("select", "*")
             .setQueryParameter("order", "rating.desc")
+            .setQueryParameter("apikey", apiKey)
             .build()
         return GET(url, apiHeaders)
     }
@@ -162,6 +161,7 @@ class Wolftoon : HttpSource() {
         val url = "$supabaseUrl/rest/v1/titles".toHttpUrl().newBuilder()
             .setQueryParameter("select", "*")
             .setQueryParameter("id", "eq.$titleId")
+            .setQueryParameter("apikey", apiKey)
             .build()
         return GET(url, apiHeaders)
     }
@@ -177,6 +177,7 @@ class Wolftoon : HttpSource() {
             .addQueryParameter("select", "id,title_id,chapter_number,created_at")
             .addQueryParameter("title_id", "eq.$titleId")
             .addQueryParameter("order", "chapter_number.desc")
+            .addQueryParameter("apikey", apiKey)
             .fragment(titleId)
             .build()
 
@@ -197,6 +198,7 @@ class Wolftoon : HttpSource() {
                 .addQueryParameter("select", "id,title_id,images")
                 .addQueryParameter("title_id", "eq.$titleId")
                 .addQueryParameter("order", "chapter_number.desc")
+                .addQueryParameter("apikey", apiKey)
                 .fragment(chapterId)
                 .build()
             pageListParse(client.newCall(GET(url, apiHeaders)).execute())
@@ -225,6 +227,7 @@ class Wolftoon : HttpSource() {
         val script = client.newCall(GET(scriptUrl, headers)).execute().body.string()
         genreList = arrayOf("Todos") + (
             GENRE_REGEX.find(script)?.groupValues?.last()
+                ?.replace("'", "\"")
                 ?.parseAs<Array<String>>()
                 ?: emptyArray()
             )
@@ -252,8 +255,8 @@ class Wolftoon : HttpSource() {
     }
 
     companion object {
-        private val GENRE_REGEX = """Che=(\[[^]]+])""".toRegex()
-        private val API_KEY_REGEX = """bse="([^"]+)""".toRegex()
+        private val GENRE_REGEX = """\w+\s*=\s*(\['Ação',[^]]+])""".toRegex()
+        private val API_KEY_REGEX = """supabase\.co['"],\s*[a-zA-Z0-9_$]+\s*=\s*['"](eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[^'"]+)['"]""".toRegex()
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
         }

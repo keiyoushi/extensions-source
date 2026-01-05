@@ -1,9 +1,12 @@
 ext {
     extName = 'Wolftoon'
     extClass = '.Wolftoon'
-    extVersionCode = 1
+    extVersionCode = 3
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
-    
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
+}

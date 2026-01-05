@@ -18,12 +18,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class Webcomics : HttpSource(), ConfigurableSource {
 
@@ -37,20 +35,45 @@ class Webcomics : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
     private val preferences = getPreferences()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (request.isSearchRequest()) {
+                val ua = getDesktopUA()
+
+                val newHeaders = request.headers.newBuilder()
+                    .set("User-Agent", ua.desktop.random())
+                    .build()
+
+                val newRequest = request.newBuilder()
+                    .headers(newHeaders)
+                    .build()
+                return@addInterceptor chain.proceed(newRequest)
+            }
+            chain.proceed(request)
+        }
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
         )
         .build()
+
+    private fun Request.isSearchRequest(): Boolean =
+        url.pathSegments.contains("search") || url.pathSegments.count { segment -> segment == "All" } == 1
+
+    private var userAgentList: UserAgentList? = null
+
+    private fun getDesktopUA(): UserAgentList {
+        return userAgentList ?: network.cloudflareClient.newCall(GET(UA_DB_URL))
+            .execute().parseAs<UserAgentList>().also {
+                userAgentList = it
+            }
+    }
 
     // ========================== Popular =====================================
 
@@ -107,9 +130,9 @@ class Webcomics : HttpSource(), ConfigurableSource {
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select(".container .van-list div a").map { element ->
+        val mangas = document.select(".list-item a").map { element ->
             SManga.create().apply {
-                title = element.selectFirst("h5.info_name")!!.text()
+                title = element.selectFirst(".info-title")!!.text()
                 thumbnail_url = element.selectFirst("img[src]")?.absUrl("src")
                 setUrlWithoutDomain(element.absUrl("href"))
             }
@@ -174,7 +197,7 @@ class Webcomics : HttpSource(), ConfigurableSource {
             ?: throw Exception("You may need to log in")
 
         return PAGE_REGEX.findAll(script.data()).mapIndexed { index, match ->
-            Page(index, imageUrl = match.groups[0]!!.value.unicode())
+            Page(index, imageUrl = match.groupValues.last().unicode())
         }.toList()
     }
 
@@ -204,9 +227,6 @@ class Webcomics : HttpSource(), ConfigurableSource {
     )
 
     // =============================== Utlis ====================================
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
 
     private fun String.toPathSegment(): String {
         return this
@@ -225,21 +245,22 @@ class Webcomics : HttpSource(), ConfigurableSource {
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
 
-        // Force UA for desktop, as mobile versions return an empty page
         preferences.getString(PREF_KEY_RANDOM_UA, "off")?.let {
             if (it != "off") {
                 return@let
             }
             preferences.edit()
-                .putString(PREF_KEY_RANDOM_UA, "desktop")
+                .putString(PREF_KEY_RANDOM_UA, "mobile")
                 .apply()
         }
     }
 
     companion object {
-        val PAGE_REGEX = """src:(\s+)?"([^"]+)""".toRegex()
+        val PAGE_REGEX = """src:(?:\s+)?"([^"]+)""".toRegex()
         val WHITE_SPACE_REGEX = """[\s]+""".toRegex()
         val PUNCTUATION_REGEX = "[\\p{Punct}]".toRegex()
         val UNICODE_REGEX = "\\\\u([0-9A-Fa-f]{4})|\\\\U([0-9A-Fa-f]{8})".toRegex()
+
+        private const val UA_DB_URL = "https://keiyoushi.github.io/user-agents/user-agents.json"
     }
 }
