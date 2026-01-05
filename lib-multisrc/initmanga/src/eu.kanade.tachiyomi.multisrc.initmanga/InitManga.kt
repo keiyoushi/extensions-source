@@ -63,21 +63,22 @@ abstract class InitManga(
         return GET("$baseUrl/$popularUrlSlug/$path")
     }
 
-    override fun popularMangaSelector() = SELECTOR_CARD
+    override fun popularMangaSelector() = "div.uk-panel"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         val linkElement = element.selectFirst("h3 a")
             ?: element.selectFirst("div.uk-overflow-hidden a")
             ?: element.selectFirst("a")
+            ?: throw Exception("Not Found")
 
         title = element.select("h3").text().trim().ifEmpty { "Bilinmeyen Seri" }
-        setUrlWithoutDomain(linkElement?.attr("href") ?: "")
+        setUrlWithoutDomain(linkElement.attr("href"))
         thumbnail_url = element.select("img").let { img ->
             img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
         }
     }
 
-    override fun popularMangaNextPageSelector() = SELECTOR_NEXT_PAGE
+    override fun popularMangaNextPageSelector() = "a:contains(Sonraki), a.next, #next-link a"
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$latestUrlSlug/page/$page/")
 
@@ -303,9 +304,4 @@ abstract class InitManga(
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    companion object {
-        private const val SELECTOR_CARD = "div.uk-panel"
-        private const val SELECTOR_NEXT_PAGE = "a:contains(Sonraki), a.next, #next-link a"
-    }
 }
