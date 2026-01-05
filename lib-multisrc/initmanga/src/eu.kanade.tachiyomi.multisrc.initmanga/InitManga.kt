@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.initmanga
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.initmanga.aes.AesDecrypt
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -109,7 +110,6 @@ abstract class InitManga(
             SManga.create().apply {
                 val rawTitle = dto.title
                 title = Jsoup.parse(rawTitle!!).text().trim()
-
                 val fullUrl = dto.url.orEmpty()
 
                 val urlPath = try {
@@ -203,23 +203,50 @@ abstract class InitManga(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val encryptedData =
-            document.selectFirst("script:containsData(InitMangaEncryptedChapter)")?.data()
-                ?.substringAfter("Chapter=")
+        val encryptedData = document.selectFirst("script[src*=dmFyIElua]")?.attr("src")
+            ?.substringAfter("base64,")
+            ?.substringBeforeLast("\"")
 
-        if (encryptedData != null) {
+        // RagnarScans
+
+        if (encryptedData.isNullOrEmpty()) {
+            val content = AesDecrypt.REGEX_ENCRYPTED_DATA.find(document.html())!!.groupValues[1]
             runCatching {
-                val encryptedObject = json.parseToJsonElement(encryptedData).jsonObject
+                val encryptedObject = json.parseToJsonElement(content).jsonObject
                 val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
                 val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
                 val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
-
-                val decryptedContent = AesDecrypt.decryptLayered(encryptedData, ciphertext, ivHex, saltHex)
+                val decryptedContent = AesDecrypt.decryptLayered(document.html(), ciphertext, ivHex, saltHex)
 
                 if (!decryptedContent.isNullOrEmpty()) {
                     return parseDecryptedPages(decryptedContent)
                 }
+
+                return fallbackPages(document)
             }
+        }
+
+        // Merlin Toons
+
+        val decodedBytes = Base64.decode(encryptedData, Base64.DEFAULT)
+        val decodedString = String(decodedBytes, Charsets.UTF_8) // String ismini düzelttim
+
+        runCatching {
+            val regex = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})""", RegexOption.DOT_MATCHES_ALL)
+            val jsonString = regex.find(decodedString)?.groupValues?.get(1)
+                ?: decodedString.substringAfter("InitMangaEncryptedChapter=").substringBeforeLast(";")
+            val encryptedObject = json.parseToJsonElement(jsonString).jsonObject
+
+            val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
+            val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
+            val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
+            val decryptedContent = AesDecrypt.decryptLayered(document.html(), ciphertext, ivHex, saltHex)
+
+            if (!decryptedContent.isNullOrEmpty()) {
+                return parseDecryptedPages(decryptedContent)
+            }
+        }.onFailure {
+            error(it)
         }
 
         return fallbackPages(document)
