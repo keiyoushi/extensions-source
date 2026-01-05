@@ -175,7 +175,7 @@ abstract class Madara(
             }
 
             selectFirst(popularMangaUrlSelectorImg)?.let {
-                manga.thumbnail_url = imageFromElement(it)
+                manga.thumbnail_url = processThumbnail(imageFromElement(it), true)
             }
         }
 
@@ -600,7 +600,7 @@ abstract class Madara(
                 manga.title = it.ownText()
             }
             selectFirst("img")?.let {
-                manga.thumbnail_url = imageFromElement(it)
+                manga.thumbnail_url = processThumbnail(imageFromElement(it), true)
             }
         }
 
@@ -688,7 +688,7 @@ abstract class Madara(
                 }
             }
             selectFirst(mangaDetailsSelectorThumbnail)?.let {
-                manga.thumbnail_url = imageFromElement(it)
+                manga.thumbnail_url = processThumbnail(imageFromElement(it))
             }
             select(mangaDetailsSelectorStatus).last()?.let {
                 manga.status = with(it.text().filter { ch -> ch.isLetterOrDigit() || ch.isWhitespace() }.trim()) {
@@ -783,6 +783,11 @@ abstract class Madara(
             .filter(URL_REGEX::matches)
             .maxOfOrNull(String::toString)
     }
+
+    /**
+     *  Apply any additional processing to the thumbnail URL if needed.
+     */
+    protected open fun processThumbnail(url: String?, fromSearch: Boolean = false): String? = url
 
     /**
      * Set it to true if the source uses the new AJAX endpoint to
