@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.initmanga
 
+import eu.kanade.tachiyomi.multisrc.initmanga.aes.AesDecrypt
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,13 +9,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -41,7 +44,7 @@ abstract class InitManga(
     private val json: Json by injectLazy()
 
     @Serializable
-    data class SearchDto(
+    class SearchDto(
         val title: String? = null,
         val url: String? = null,
         val thumb: String? = null,
@@ -60,27 +63,25 @@ abstract class InitManga(
 
     override fun popularMangaRequest(page: Int): Request {
         val path = if (page == 1) "" else "page/$page/"
-        return GET("$baseUrl/$popularUrlSlug/$path")
+        return GET("$baseUrl/$popularUrlSlug/$path", headers)
     }
 
     override fun popularMangaSelector() = "div.uk-panel"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val linkElement = element.selectFirst("h3 a")
-            ?: element.selectFirst("div.uk-overflow-hidden a")
+        val linkElement = element.selectFirst("h3 a, div.uk-overflow-hidden a")
             ?: element.selectFirst("a")
-            ?: throw Exception("Not Found")
 
         title = element.select("h3").text().trim().ifEmpty { "Bilinmeyen Seri" }
-        setUrlWithoutDomain(linkElement.attr("href"))
+        setUrlWithoutDomain(linkElement!!.attr("href"))
         thumbnail_url = element.select("img").let { img ->
             img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
         }
     }
 
-    override fun popularMangaNextPageSelector() = "a:contains(Sonraki), a.next, #next-link a"
+    override fun popularMangaNextPageSelector() = "a:contains(Sonraki), a.next, #next-link a, li#next-link"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$latestUrlSlug/page/$page/")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$latestUrlSlug/page/$page/", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -89,38 +90,25 @@ abstract class InitManga(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = "$baseUrl/wp-json/initlise/v1/search".toHttpUrlOrNull()?.newBuilder()
-            ?: throw IllegalStateException("Invalid baseUrl")
+        val urlBuilder = "$baseUrl/wp-json/initlise/v1/search".toHttpUrl().newBuilder()
 
         urlBuilder.addQueryParameter("term", query)
         urlBuilder.addQueryParameter("page", page.toString())
 
         val url = urlBuilder.build()
-        return Request.Builder()
-            .url(url)
-            .headers(headers)
-            .get()
-            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (!response.isSuccessful) {
-            throw IOException("Search request failed: ${response.code}")
-        }
-
         val bodyText = response.body.string()
         if (bodyText.isEmpty()) throw IOException("Empty response body")
 
-        val list: List<SearchDto> = try {
-            json.decodeFromString(bodyText)
-        } catch (e: Exception) {
-            throw IOException("Failed to parse search JSON", e)
-        }
+        val list: List<SearchDto> = bodyText.parseAs()
 
         val mangas = list.map { dto ->
             SManga.create().apply {
-                val rawTitle = dto.title ?: ""
-                title = Jsoup.parse(rawTitle).text().trim()
+                val rawTitle = dto.title
+                title = Jsoup.parse(rawTitle!!).text().trim()
 
                 val fullUrl = dto.url.orEmpty()
 
@@ -153,7 +141,7 @@ abstract class InitManga(
 
         val siteTitle = document.selectFirst("h1")?.text()
         val mangaTitle = document.selectFirst("h2.uk-h3")?.text()
-        title = if (!mangaTitle.isNullOrBlank()) mangaTitle else siteTitle ?: "Başlık Yok"
+        title = if (!mangaTitle.isNullOrBlank()) mangaTitle else siteTitle!!
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -169,42 +157,30 @@ abstract class InitManga(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
-        val visitedUrls = mutableSetOf<String>()
-
         var document = response.asJsoup()
-        var currentUrl = response.request.url.toString()
+        val baseUrl = response.request.url
+        var page = 2
 
-        val cleanUrl: (String) -> String = { it.substringBefore("#").trimEnd('/') }
-
-        while (true) {
-            if (!visitedUrls.add(cleanUrl(currentUrl))) break
-
+        do {
             val items = document.select(chapterListSelector())
             if (items.isEmpty()) break
 
             chapters.addAll(items.map(::chapterFromElement))
 
-            val nextLink = document.selectFirst("ul.uk-pagination a:has(span[uk-pagination-next]), ul.uk-pagination a[aria-label='Next page']")
+            val nextUrl = baseUrl.newBuilder()
+                .addPathSegment("bolum")
+                .addPathSegment("page")
+                .addPathSegment(page.toString())
+                .build()
 
-            if (nextLink?.parents()?.any { it.hasClass("uk-disabled") } == true) break
+            page++
 
-            val nextUrl = nextLink?.attr("abs:href") ?: break
-
-            if (cleanUrl(nextUrl) == cleanUrl(currentUrl) || cleanUrl(nextUrl) in visitedUrls) break
-
-            currentUrl = nextUrl
-
-            val nextResponse = runCatching {
-                client.newCall(GET(currentUrl, headers)).execute()
-            }.getOrNull()
-
-            if (nextResponse == null || !nextResponse.isSuccessful) {
-                nextResponse?.close()
-                break
-            }
-
+            val nextResponse = client.newCall(GET(nextUrl, headers)).execute()
             document = nextResponse.asJsoup()
-        }
+            nextResponse.close()
+
+            val hasNextPage = document.selectFirst("ul.uk-pagination a:not(:matchesOwn(\\S))[href^=http]") != null
+        } while (hasNextPage)
 
         return chapters
     }
@@ -212,8 +188,7 @@ abstract class InitManga(
     override fun chapterListSelector() = "div.chapter-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val select = element.selectFirst("a")
-        setUrlWithoutDomain(select?.attr("href") ?: "")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
 
         val rawName = element.select("h3").text().trim()
 
@@ -226,26 +201,27 @@ abstract class InitManga(
 
         date_upload = runCatching {
             if (dateStr.isNotEmpty()) {
-                uploadDateFormatter.parse(dateStr)?.time
+                uploadDateFormatter.tryParse(dateStr)
             } else {
                 val fallbackDate = element.select("time").attr("datetime")
-                fallbackDateFormatter.parse(fallbackDate)?.time
+                fallbackDateFormatter.tryParse(fallbackDate)
             }
         }.getOrNull() ?: 0L
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val html = document.html()
-        val encryptedDataMatch = AesDecrypt.REGEX_ENCRYPTED_DATA.find(html)
+        val encryptedData =
+            document.selectFirst("script:containsData(InitMangaEncryptedChapter)")?.data()
+                ?.substringAfter("Chapter=")
 
-        if (encryptedDataMatch != null) {
+        if (encryptedData != null) {
             runCatching {
-                val encryptedObject = json.parseToJsonElement(encryptedDataMatch.groupValues[1]).jsonObject
+                val encryptedObject = json.parseToJsonElement(encryptedData).jsonObject
                 val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
                 val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
                 val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
 
-                val decryptedContent = AesDecrypt.decryptLayered(html, ciphertext, ivHex, saltHex)
+                val decryptedContent = AesDecrypt.decryptLayered(encryptedData, ciphertext, ivHex, saltHex)
 
                 if (!decryptedContent.isNullOrEmpty()) {
                     return parseDecryptedPages(decryptedContent)
@@ -262,20 +238,13 @@ abstract class InitManga(
         return if (trimmed.startsWith("<")) {
             val doc = Jsoup.parseBodyFragment(trimmed, baseUrl)
             doc.select("img").mapIndexedNotNull { i, img ->
-                val src = img.absUrl("data-src")
-                    .ifEmpty { img.absUrl("src") }
-                    .ifEmpty { img.absUrl("data-lazy-src") }
+                val src = img.absUrl("abs:data-src")
+                    .ifEmpty { img.absUrl("abs:src") }
+                    .ifEmpty { img.absUrl("abs:data-lazy-src") }
 
                 val finalSrc = src.ifBlank {
-                    val raw = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
+                    img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
                         .ifEmpty { img.attr("abs:data-lazy-src") }
-                    when {
-                        raw.startsWith("//") -> "https:$raw"
-                        raw.startsWith("/") -> baseUrl.toHttpUrlOrNull()?.resolve(raw)?.toString()
-                            ?: (baseUrl.trimEnd('/') + raw)
-
-                        else -> raw
-                    }
                 }
 
                 if (finalSrc.isBlank()) null else Page(i, imageUrl = finalSrc)
