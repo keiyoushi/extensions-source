@@ -9,16 +9,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -36,6 +41,13 @@ abstract class InitManga(
 
     private val json: Json by injectLazy()
 
+    @Serializable
+    data class SearchDto(
+        val title: String? = null,
+        val url: String? = null,
+        val thumb: String? = null,
+    )
+
     private val uploadDateFormatter by lazy {
         SimpleDateFormat("d MMMM yyyy HH:mm", Locale("tr"))
     }
@@ -45,12 +57,11 @@ abstract class InitManga(
     }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", USER_AGENT)
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val path = if (page == 1) "" else "page/$page/"
-        return GET("$baseUrl/$popularUrlSlug/$path", headers)
+        return GET("$baseUrl/$popularUrlSlug/$path")
     }
 
     override fun popularMangaSelector() = SELECTOR_CARD
@@ -63,7 +74,7 @@ abstract class InitManga(
         title = element.select("h3").text().trim().ifEmpty { "Bilinmeyen Seri" }
         setUrlWithoutDomain(linkElement?.attr("href") ?: "")
         thumbnail_url = element.select("img").let { img ->
-            img.attr("data-src").ifEmpty { img.attr("src") }
+            img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
         }
     }
 
@@ -77,43 +88,56 @@ abstract class InitManga(
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
-        return if (query.isNotBlank()) {
-            fetchSearchFromApi(query)
-        } else {
-            super.getSearchManga(page, query, filters)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val urlBuilder = "$baseUrl/wp-json/initlise/v1/search".toHttpUrlOrNull()?.newBuilder()
+            ?: throw IllegalStateException("Invalid baseUrl")
+
+        urlBuilder.addQueryParameter("term", query)
+        urlBuilder.addQueryParameter("page", page.toString())
+
+        val url = urlBuilder.build()
+        return Request.Builder()
+            .url(url)
+            .headers(headers) // varsayilan Headers nesneniz
+            .get()
+            .build()
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (!response.isSuccessful) {
+            throw IOException("Search request failed: ${response.code}")
         }
-    }
 
-    private fun fetchSearchFromApi(query: String): MangasPage {
-        return runCatching {
-            client.newCall(GET("$baseUrl/wp-json/initlise/v1/search?term=$query", headers)).execute().use { response ->
-                if (!response.isSuccessful) return@use MangasPage(emptyList(), false)
+        val bodyText = response.body.string()
+        if (bodyText.isEmpty()) throw IOException("Empty response body")
 
-                val bodyText = response.body.string()
-                if (bodyText.isEmpty()) return@use MangasPage(emptyList(), false)
+        val list: List<SearchDto> = try {
+            json.decodeFromString(bodyText)
+        } catch (e: Exception) {
+            throw IOException("Failed to parse search JSON", e)
+        }
 
-                if (bodyText.trim().startsWith("[")) {
-                    val searchResults = json.parseToJsonElement(bodyText).jsonArray
-                    val mangas = searchResults.map { element ->
-                        val jsonObject = element.jsonObject
-                        SManga.create().apply {
-                            val rawTitle = jsonObject["title"]?.jsonPrimitive?.content ?: ""
-                            title = Jsoup.parse(rawTitle).text().trim()
-                            setUrlWithoutDomain(jsonObject["url"]?.jsonPrimitive?.content ?: "")
-                            thumbnail_url = jsonObject["thumb"]?.jsonPrimitive?.content
-                        }
-                    }
-                    MangasPage(mangas, false)
-                } else {
-                    MangasPage(emptyList(), false)
+        val mangas = list.map { dto ->
+            SManga.create().apply {
+                val rawTitle = dto.title ?: ""
+                title = Jsoup.parse(rawTitle).text().trim()
+
+                val fullUrl = dto.url.orEmpty()
+
+                val urlPath = try {
+                    val parsed = fullUrl.toHttpUrlOrNull()
+                    parsed?.encodedPath ?: fullUrl // fallback
+                } catch (_: Exception) {
+                    fullUrl
                 }
-            }
-        }.getOrElse { MangasPage(emptyList(), false) }
-    }
+                setUrlWithoutDomain(urlPath)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/page/$page/?s=$query", headers)
+                thumbnail_url = dto.thumb
+            }
+        }
+
+        return MangasPage(mangas, false)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -132,33 +156,42 @@ abstract class InitManga(
         title = if (!mangaTitle.isNullOrBlank()) mangaTitle else siteTitle ?: "Başlık Yok"
     }
 
-    override suspend fun getChapterList(manga: SManga): List<SChapter> {
+    override fun chapterListRequest(manga: SManga): Request {
+        val base = baseUrl.toHttpUrlOrNull() ?: throw IllegalStateException("Invalid baseUrl")
+        val resolved = if (manga.url.startsWith("http")) {
+            manga.url.toHttpUrlOrNull() ?: throw IllegalStateException("Invalid manga.url")
+        } else {
+            base.resolve(manga.url) ?: throw IllegalStateException("Couldn't resolve manga.url")
+        }
+
+        return GET(resolved.toString(), headers)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
-
-        var url = if (manga.url.startsWith("http")) manga.url else baseUrl + manga.url
-
-        var page = 0
-        val maxPages = 50
         val processedUrls = mutableSetOf<String>()
 
-        while (page++ < maxPages) {
-            if (!processedUrls.add(url)) break
+        var doc = response.use { it.asJsoup() }
+        var currentUrl = response.request.url.toString()
 
-            val response = runCatching { client.newCall(GET(url, headers)).execute() }.getOrNull()
-            if (response == null || !response.isSuccessful) {
-                response?.close()
-                break
-            }
+        while (true) {
+            if (!processedUrls.add(currentUrl)) break
 
-            val doc = response.use { it.asJsoup() }
             val items = doc.select(chapterListSelector())
-
             if (items.isEmpty()) break
 
             chapters.addAll(items.map { chapterFromElement(it) })
 
-            val nextLink = doc.select(popularMangaNextPageSelector()).first()
-            url = nextLink?.attr("abs:href") ?: break
+            val nextLink = doc.select(popularMangaNextPageSelector()).first()?.attr("abs:href")
+            if (nextLink.isNullOrBlank()) break
+
+            currentUrl = nextLink
+            val nextResponse = runCatching { client.newCall(GET(currentUrl, headers)).execute() }.getOrNull()
+            if (nextResponse == null || !nextResponse.isSuccessful) {
+                nextResponse?.close()
+                break
+            }
+            doc = nextResponse.use { it.asJsoup() }
         }
 
         return chapters
@@ -216,19 +249,37 @@ abstract class InitManga(
         val trimmed = content.trim()
 
         return if (trimmed.startsWith("<")) {
-            Jsoup.parseBodyFragment(trimmed).select("img").mapIndexed { i, img ->
-                val src = img.attr("data-src")
-                    .ifEmpty { img.attr("src") }
-                    .ifEmpty { img.attr("data-lazy-src") }
-                val finalSrc = if (src.startsWith("/")) baseUrl + src else src
-                Page(i, "", finalSrc)
+            val doc = Jsoup.parseBodyFragment(trimmed, baseUrl)
+            doc.select("img").mapIndexedNotNull { i, img ->
+                val src = img.absUrl("data-src")
+                    .ifEmpty { img.absUrl("src") }
+                    .ifEmpty { img.absUrl("data-lazy-src") }
+
+                val finalSrc = src.ifBlank {
+                    val raw = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
+                        .ifEmpty { img.attr("abs:data-lazy-src") }
+                    when {
+                        raw.startsWith("//") -> "https:$raw"
+                        raw.startsWith("/") -> baseUrl.toHttpUrlOrNull()?.resolve(raw)?.toString()
+                            ?: (baseUrl.trimEnd('/') + raw)
+
+                        else -> raw
+                    }
+                }
+
+                if (finalSrc.isBlank()) null else Page(i, imageUrl = finalSrc)
             }
         } else {
             runCatching {
                 json.parseToJsonElement(trimmed).jsonArray.mapIndexed { i, el ->
                     val src = el.jsonPrimitive.content
-                    val finalSrc = if (src.startsWith("/")) baseUrl + src else src
-                    Page(i, "", finalSrc)
+                    val finalSrc = when {
+                        src.startsWith("//") -> "https:$src"
+                        src.startsWith("/") -> baseUrl.toHttpUrlOrNull()?.resolve(src)?.toString()
+                            ?: (baseUrl.trimEnd('/') + src)
+                        else -> src
+                    }
+                    Page(i, imageUrl = finalSrc)
                 }
             }.getOrElse { emptyList() }
         }
@@ -236,7 +287,7 @@ abstract class InitManga(
 
     private fun fallbackPages(document: Document): List<Page> {
         return document.select("div#chapter-content img[src]").mapIndexed { i, img ->
-            val src = img.attr("abs:src").ifEmpty { img.attr("data-src") }
+            val src = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
             Page(i, "", src)
         }
     }
@@ -244,7 +295,6 @@ abstract class InitManga(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private const val SELECTOR_CARD = "div.uk-panel"
         private const val SELECTOR_NEXT_PAGE = "a:contains(Sonraki), a.next, #next-link a"
     }

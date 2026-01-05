@@ -3,7 +3,7 @@ ext {
     extClass = '.RagnarScans'
     themePkg = 'initmanga'
     baseUrl = 'https://ragnarscans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 45
     isNsfw = false
 }
 apply from: "$rootDir/common.gradle"

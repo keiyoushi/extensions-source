@@ -3,7 +3,7 @@ ext {
     extClass = '.MerlinScans'
     themePkg = 'initmanga'
     baseUrl = 'https://merlintoon.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 32
     isNsfw = false
 }
 apply from: "$rootDir/common.gradle"
