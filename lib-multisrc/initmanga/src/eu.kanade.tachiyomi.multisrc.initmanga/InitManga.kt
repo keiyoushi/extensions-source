@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.initmanga
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.initmanga.aes.AesDecrypt
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -48,6 +49,23 @@ abstract class InitManga(
         val thumb: String? = null,
     )
 
+    protected class GenreData(
+        val name: String,
+        val url: String,
+    )
+
+    protected class Genre(
+        name: String,
+        val url: String,
+    ) : Filter.CheckBox(name)
+
+    protected class GenreListFilter(
+        name: String,
+        genres: List<Genre>,
+    ) : Filter.Group<Genre>(name, genres)
+
+    protected var genrelist: List<GenreData>? = null
+
     private val uploadDateFormatter by lazy {
         SimpleDateFormat("d MMMM yyyy HH:mm", Locale("tr"))
     }
@@ -62,6 +80,52 @@ abstract class InitManga(
     override fun popularMangaRequest(page: Int): Request {
         val path = if (page == 1) "" else "page/$page/"
         return GET("$baseUrl/$popularUrlSlug/$path", headers)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        if (genrelist == null) {
+            genrelist = parseGenres(response.asJsoup(response.peekBody(Long.MAX_VALUE).string()))
+        }
+        return super.popularMangaParse(response)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        if (genrelist == null) {
+            genrelist = parseGenres(response.asJsoup(response.peekBody(Long.MAX_VALUE).string()))
+        }
+        return super.latestUpdatesParse(response)
+    }
+
+    protected open fun parseGenres(document: Document): List<GenreData>? {
+        return document.selectFirst("ul.uk-list.uk-text-small, div#uk-tab-3")?.select("li a, a")?.map { element ->
+            GenreData(
+                name = element.text(),
+                url = element.attr("href"),
+            )
+        }
+    }
+
+    protected open fun getGenreList(): List<Genre> {
+        return genrelist?.map { Genre(it.name, it.url) }.orEmpty()
+    }
+
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>()
+
+        if (!genrelist.isNullOrEmpty()) {
+            filters.add(
+                Filter.Header("Not: Birden fazla kategori seçilirse sadece ilki kullanılır"),
+            )
+            filters.add(
+                GenreListFilter("Kategoriler", getGenreList()),
+            )
+        } else {
+            filters.add(
+                Filter.Header("Kategoriler yükleniyor..."),
+            )
+        }
+
+        return FilterList(filters)
     }
 
     override fun popularMangaSelector() = "div.uk-panel"
@@ -88,8 +152,31 @@ abstract class InitManga(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = "$baseUrl/wp-json/initlise/v1/search".toHttpUrl().newBuilder()
+        val genreFilter = filters.findInstance<GenreListFilter>()
+        val selectedGenres = genreFilter?.state?.filter { it.state }.orEmpty()
 
+        val selectedGenre = selectedGenres.firstOrNull()
+
+        if (selectedGenre != null && query.isEmpty()) {
+            val genreUrl = selectedGenre.url.let { url ->
+                when {
+                    url.startsWith("http") -> url
+                    url.startsWith("/") -> "$baseUrl$url"
+                    else -> "$baseUrl/$url"
+                }
+            }
+
+            val finalUrl = if (page > 1) {
+                val cleanUrl = genreUrl.trimEnd('/')
+                "$cleanUrl/page/$page/"
+            } else {
+                genreUrl
+            }
+
+            return GET(finalUrl, headers)
+        }
+
+        val urlBuilder = "$baseUrl/wp-json/initlise/v1/search".toHttpUrl().newBuilder()
         urlBuilder.addQueryParameter("term", query)
         urlBuilder.addQueryParameter("page", page.toString())
 
@@ -97,9 +184,25 @@ abstract class InitManga(
         return GET(url, headers)
     }
 
+    private inline fun <reified T> Iterable<*>.findInstance(): T? {
+        return firstOrNull { it is T } as? T
+    }
+
     override fun searchMangaParse(response: Response): MangasPage {
         val bodyText = response.body.string()
         if (bodyText.isEmpty()) throw IOException("Empty response body")
+
+        if (bodyText.trimStart().startsWith("<") || bodyText.trimStart().startsWith("<!")) {
+            if (genrelist == null) {
+                genrelist = parseGenres(Jsoup.parse(bodyText, baseUrl))
+            }
+            val document = Jsoup.parse(bodyText, baseUrl)
+            val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
+
+            val hasNextPage = document.selectFirst("ul.uk-pagination li:not(#prev-link) a:not(:matchesOwn(\\S))[href^=http]") != null
+
+            return MangasPage(mangas, hasNextPage)
+        }
 
         val list: List<SearchDto> = bodyText.parseAs()
 
