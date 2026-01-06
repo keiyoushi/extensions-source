@@ -63,7 +63,7 @@ class Wolftoon : HttpSource() {
             .build()
     }
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", baseUrl)
 

@@ -7,12 +7,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class Field(
-    private val thumbnailImage: Map<String, String>,
+    private val bookCoverImage: Map<String, String>,
 ) {
-    val thumbnailUrl: String? get() = thumbnailImage.values.firstOrNull()?.let { "$it.png" }
+    val thumbnailUrl: String? get() = bookCoverImage.values.firstOrNull()?.let { "$it.png" }
 }
 
 @Serializable
@@ -66,26 +67,6 @@ class DataWrapper<T>(
 }
 
 @Serializable
-class DetailsWrapper(
-    val body: MangaDetailsDto,
-) {
-    fun toSManga() = SManga.create().apply {
-        title = body.title
-        thumbnail_url = body.thumbnailUrl
-        genre = body.genres.joinToString()
-    }
-}
-
-@Serializable
-class MangaDetailsDto(
-    @SerialName("series_title")
-    val title: String,
-    @SerialName("img_url")
-    val thumbnailUrl: String,
-    val genres: List<String>,
-)
-
-@Serializable
 class ChapterListDto(
     val pagination: Pagination,
     val episodes: List<ChapterDto>,
@@ -101,13 +82,18 @@ class ChapterDto(
     val date: String,
     val unlocked: Boolean,
     val free: Boolean,
+    val scene: Float,
+    val scheduled: Boolean,
 ) {
     fun toSChapter() = SChapter.create().apply {
         name = if (unlocked || free) title else "🔒 $title "
         date_upload = DATE_FORMAT.tryParse(date)
+        chapter_number = scene
         url = "/episode/${this@ChapterDto.id}"
     }
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 }
