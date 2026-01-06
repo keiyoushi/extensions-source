@@ -75,20 +75,8 @@ class BatoToV4(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("id:") || query.startsWith("https://")) {
-            val id = if (query.startsWith("https://")) {
-                val path = query.toHttpUrl().pathSegments
-
-                if (path.size > 1 && path[0] == "title") {
-                    path[1].substringBefore("-")
-                } else if (path.size > 1 && path[0] == "series") {
-                    path[1]
-                } else {
-                    return Observable.error(Exception("Unknown url"))
-                }
-            } else {
-                query.substringAfter("id:")
-            }
+        if (query.startsWith("id:", true)) {
+            val id = query.lowercase().substringAfter("id:")
 
             if (id.toIntOrNull() == null) {
                 return Observable.error(Exception("comic id must be integer"))
@@ -572,6 +560,7 @@ private val userIdRegex = Regex("""/u/(\d+)""")
 
 private const val BROWSE_PAGE_SIZE = 36
 
+// Match old v2 Url
 private val seriesIdRegex = Regex("""series/(\d+)""")
 private val titleRegex: Regex =
     Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)

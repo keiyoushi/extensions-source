@@ -173,8 +173,13 @@ open class BatoToV2(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
-            query.startsWith("ID:") -> {
-                val id = query.substringAfter("ID:")
+            query.startsWith("id:", true) -> {
+                val id = query.lowercase().substringAfter("id:")
+
+                if (id.toIntOrNull() == null) {
+                    return Observable.error(Exception("comic id must be integer"))
+                }
+
                 client.newCall(GET("$baseUrl/series/$id", headers)).asObservableSuccess()
                     .map { response ->
                         queryIDParse(response)

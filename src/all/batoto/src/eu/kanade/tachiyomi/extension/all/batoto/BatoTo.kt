@@ -7,12 +7,15 @@ import eu.kanade.tachiyomi.extension.all.batotov2.BatoToV2
 import eu.kanade.tachiyomi.extension.all.batotov4.BatoToV4
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import rx.Observable
 
 open class BatoTo(
     final override val lang: String,
@@ -91,7 +94,22 @@ open class BatoTo(
     // searchMangaRequest is not used, see fetchSearchManga instead
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = _delegate.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val path = query.toHttpUrl().pathSegments
+            val id = if (path.size > 1 && path[0] == "title") {
+                path[1].substringBefore("-")
+            } else if (path.size > 1 && path[0] == "series") {
+                path[1]
+            } else {
+                return Observable.error(Exception("Unknown url"))
+            }
+
+            return _delegate.fetchSearchManga(page, "id:$id", filters)
+        }
+
+        return _delegate.fetchSearchManga(page, query, filters)
+    }
 
     override fun fetchChapterList(manga: SManga) = _delegate.fetchChapterList(manga)
     override fun fetchPageList(chapter: SChapter) = _delegate.fetchPageList(chapter)
