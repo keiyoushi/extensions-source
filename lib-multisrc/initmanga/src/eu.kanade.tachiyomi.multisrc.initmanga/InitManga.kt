@@ -13,9 +13,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,7 +25,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -41,8 +40,6 @@ abstract class InitManga(
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     @Serializable
     class SearchDto(
@@ -212,7 +209,7 @@ abstract class InitManga(
         if (encryptedData.isNullOrEmpty()) {
             val content = AesDecrypt.REGEX_ENCRYPTED_DATA.find(document.html())!!.groupValues[1]
             runCatching {
-                val encryptedObject = json.parseToJsonElement(content).jsonObject
+                val encryptedObject: JsonObject = content.parseAs()
                 val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
                 val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
                 val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
@@ -235,7 +232,7 @@ abstract class InitManga(
             val regex = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})""", RegexOption.DOT_MATCHES_ALL)
             val jsonString = regex.find(decodedString)?.groupValues?.get(1)
                 ?: decodedString.substringAfter("InitMangaEncryptedChapter=").substringBeforeLast(";")
-            val encryptedObject = json.parseToJsonElement(jsonString).jsonObject
+            val encryptedObject: JsonObject = jsonString.parseAs()
 
             val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
             val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
@@ -271,7 +268,7 @@ abstract class InitManga(
             }
         } else {
             runCatching {
-                json.parseToJsonElement(trimmed).jsonArray.mapIndexed { i, el ->
+                trimmed.parseAs<JsonArray>().jsonArray.mapIndexed { i, el ->
                     val src = el.jsonPrimitive.content
                     val finalSrc = when {
                         src.startsWith("//") -> "https:$src"
