@@ -19,10 +19,10 @@ class MangaDto(
     val slug: String,
     val cover: String? = null,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDto.title
         thumbnail_url = cover
-        url = "$baseUrl/obra/$slug"
+        url = "/obra/$slug"
     }
 }
 
@@ -37,10 +37,10 @@ class UpdateMangaDto(
     val slug: String,
     val cover: String? = null,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@UpdateMangaDto.title
         thumbnail_url = cover
-        url = "$baseUrl/obra/$slug"
+        url = "/obra/$slug"
     }
 }
 
@@ -57,10 +57,10 @@ class SearchMangaDto(
     val slug: String? = null,
     val coverImage: String? = null,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@SearchMangaDto.name
         thumbnail_url = coverImage
-        url = if (slug != null) "$baseUrl/obra/$slug" else "$baseUrl/series/$id"
+        url = if (slug != null) "/obra/$slug" else "/series/$id"
     }
 }
 
@@ -77,11 +77,11 @@ class ChapterDto(
     val name: String,
     val createdAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String, mangaId: Int, baseUrl: String): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String, mangaId: Int): SChapter = SChapter.create().apply {
         val numberStr = index.toString().removeSuffix(".0")
         name = this@ChapterDto.name
         chapter_number = index.toFloat()
-        url = "$baseUrl/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
+        url = "/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
         date_upload = DATE_FORMATTER.tryParse(createdAt)
     }
 
@@ -119,7 +119,7 @@ class SeriesDto(
     val genres: List<GenreDto> = emptyList(),
     val chapters: List<ChapterDto> = emptyList(),
 ) {
-    fun toSManga(slug: String, baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(slug: String): SManga = SManga.create().apply {
         title = this@SeriesDto.name
         thumbnail_url = coverImage ?: posterImage
         description = sinopse ?: description
@@ -130,7 +130,7 @@ class SeriesDto(
             "HIATO" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        url = "$baseUrl/obra/$slug"
+        url = "/obra/$slug"
     }
 }
 

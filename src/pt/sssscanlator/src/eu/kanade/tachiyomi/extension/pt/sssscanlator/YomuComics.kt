@@ -120,7 +120,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val homeDto = response.parseAs<HomeDto>()
-        val mangas = homeDto.featuredManga.map { it.toSManga(baseUrl) }
+        val mangas = homeDto.featuredManga.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -131,7 +131,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesDto = response.parseAs<UpdatesDto>()
-        val mangas = updatesDto.updates.map { it.toSManga(baseUrl) }
+        val mangas = updatesDto.updates.map { it.toSManga() }
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
@@ -201,7 +201,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponseDto>()
-        val mangas = result.results.map { it.toSManga(baseUrl) }
+        val mangas = result.results.map { it.toSManga() }
         val hasNextPage = result.pagination?.let { it.page < it.pages } ?: false
         return MangasPage(mangas, hasNextPage)
     }
@@ -224,10 +224,14 @@ class YomuComics : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response): SManga {
         val seriesDto = response.parseAs<SeriesDto>()
         val slug = response.request.url.pathSegments.last()
-        return seriesDto.toSManga(slug, baseUrl)
+        return seriesDto.toSManga(slug)
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     // =============================== Chapters =============================
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
     override fun chapterListRequest(manga: SManga): Request {
         return mangaDetailsRequest(manga)
     }
@@ -235,7 +239,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val seriesDto = response.parseAs<SeriesDto>()
         val slug = response.request.url.pathSegments.last()
-        return seriesDto.chapters.map { it.toSChapter(slug, seriesDto.id, baseUrl) }.reversed()
+        return seriesDto.chapters.map { it.toSChapter(slug, seriesDto.id) }.reversed()
     }
 
     // ================================ Pages ===============================
