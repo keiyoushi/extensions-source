@@ -1,85 +1,95 @@
 package eu.kanade.tachiyomi.extension.zh.bakamh
 
-import android.content.Context
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.Preference
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.zh.bakamh.BakamhPreferences.baseUrl
+import eu.kanade.tachiyomi.extension.zh.bakamh.BakamhPreferences.preferenceMigration
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import okhttp3.Headers
+import okhttp3.Response
+import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-object BakamhPreferences {
+class Bakamh :
+    Madara(
+        "巴卡漫画",
+        BakamhPreferences.DEFAULT_DOMAIN,
+        "zh",
+        SimpleDateFormat("yyyy 年 M 月 d 日", Locale.CHINESE),
+    ),
+    ConfigurableSource {
 
-    private const val PS_KEY_ROOT = "BAKAMH"
-    private const val PS_KEY_DOMAIN = "$PS_KEY_ROOT::DOMAIN"
-    private const val PS_KEY_DOMAIN_DEFAULT = "$PS_KEY_DOMAIN::DEFAULT"
-    private const val PS_KEY_DOMAIN_OVERRIDE = "$PS_KEY_DOMAIN::OVERRIDE"
+    private val preferences = getPreferences { preferenceMigration() }
 
-    const val DEFAULT_DOMAIN = "https://bakamh.com"
+    override val baseUrl by lazy { preferences.baseUrl() }
 
-    internal fun SharedPreferences.preferenceMigration() {
-        // refresh when DEFAULT_DOMAIN update
-        refreshDefaultValue(PS_KEY_DOMAIN_DEFAULT, PS_KEY_DOMAIN_OVERRIDE, DEFAULT_DOMAIN)
+    // 你提供的固定 User-Agent
+    private val myUserAgent = "Mozilla/5.0 (Linux; arm_64; Android 16; SM-G965F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.110 YaBrowser/25.12.2.123 Mobile Safari/537.36"
+
+    override val client = network.cloudflareClient.newBuilder()
+        // 移除随机UA拦截器，直接构建
+        .build()
+
+    override fun headersBuilder(): Headers.Builder {
+        return Headers.Builder() // 重新构建，不完全依赖 super 避免 UA 被覆盖
+            .add("User-Agent", myUserAgent)
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+            .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+            .add("Referer", "$baseUrl/")
+            .add("Cache-Control", "max-age=0")
+            .add("Sec-Fetch-Dest", "document")
+            .add("Sec-Fetch-Mode", "navigate")
+            .add("Sec-Fetch-Site", "same-origin")
+            .add("Sec-Fetch-User", "?1")
+            .add("Upgrade-Insecure-Requests", "1")
     }
 
-    private fun SharedPreferences.refreshDefaultValue(
-        key: String,
-        overrideKey: String,
-        defaultValue: String,
-    ) {
-        val current = getString(key, defaultValue)!!
-        if (current != defaultValue) {
-            edit()
-                .putString(key, defaultValue)
-                .putString(overrideKey, defaultValue)
-                .apply()
-        }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        BakamhPreferences.buildPreferences(screen.context)
+            .forEach(screen::addPreference)
     }
 
-    internal fun SharedPreferences.baseUrl(): String {
-        val httpUrl = getString(PS_KEY_DOMAIN_OVERRIDE, DEFAULT_DOMAIN)!!.toHttpUrl()
+    override val mangaDetailsSelectorStatus = ".post-content_item:contains(状态) .summary-content"
+    
+    override fun chapterListSelector() =
+        ".chapter-loveYou a, li:not(.menu-item) a[onclick], li:not(.menu-item) a"
 
-        return httpUrl.newBuilder()
-            .scheme("https")
-            .host(httpUrl.host)
-            .build()
-            .toString()
-            .removeSuffix("/")
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val mangaUrl = response.request.url.toString().lowercase()
+        return response.asJsoup()
+            .select(chapterListSelector())
+            .mapNotNull { parseChapter(it, mangaUrl) }
+            .distinctBy { it.url } // 去重
     }
 
-    internal fun buildPreferences(context: Context): List<Preference> {
-        return listOf(
-            buildDomainPreference(context),
-        )
-    }
-
-    internal fun buildDomainPreference(context: Context): Preference {
-        return EditTextPreference(context).apply {
-            key = PS_KEY_DOMAIN_OVERRIDE
-            title = "域名设置"
-            summary = "如果当前域名无法访问，可在此处设置，重启应用后生效。"
-            dialogTitle = title
-            dialogMessage = "域名可在发布页获取，默认域名为 $DEFAULT_DOMAIN"
-
-            setDefaultValue(DEFAULT_DOMAIN)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    (newValue as String).toHttpUrl()
-                } catch (_: IllegalArgumentException) {
-                    Toast.makeText(
-                        context,
-                        "设置域名失败！",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    return@setOnPreferenceChangeListener false
-                }
-
-                Toast.makeText(
-                    context,
-                    "域名设置为 $newValue ！重启应用后生效。",
-                    Toast.LENGTH_LONG,
-                ).show()
-                true
+    private fun parseChapter(element: Element, mangaUrl: String): SChapter? {
+        // Current URL attribute
+        if (element.hasAttr("storage-chapter-url")) {
+            return SChapter.create().apply {
+                url = element.absUrl("storage-chapter-url")
+                name = element.text()
+                chapter_number = 0F
             }
         }
+
+        // Compatibility operation for modified versions
+        return element.attributes()
+            .firstOrNull { attr ->
+                val value = attr.value.lowercase()
+                value.startsWith(mangaUrl) &&
+                    value != mangaUrl && // Not current URL
+                    !value.startsWith("$mangaUrl#comment") // Not comment
+            }
+            ?.let { attr ->
+                SChapter.create().apply {
+                    url = element.absUrl(attr.key)
+                    name = element.text()
+                    chapter_number = 0F
+                }
+            }
     }
 }
