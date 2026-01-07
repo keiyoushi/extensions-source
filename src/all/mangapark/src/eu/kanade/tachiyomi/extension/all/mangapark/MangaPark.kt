@@ -272,43 +272,24 @@ class MangaPark(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-
-        if (response.isSuccessful) return response
-
         val urlString = request.url.toString()
 
-        response.close()
-
+        // Fix image URLs by replacing CDN server domains with the current site domain
         if (SERVER_PATTERN.containsMatchIn(urlString)) {
-            // Sorted list: Most reliable servers FIRST
-            val servers = listOf("s01", "s03", "s04", "s00", "s05", "s06", "s07", "s08", "s09", "s10", "s02")
+            // Extract the path portion after //sXX
+            val parts = urlString.split("//", limit = 2)
+            if (parts.size == 2) {
+                val afterProtocol = parts[1]
+                val pathStartIndex = afterProtocol.indexOf("/")
+                if (pathStartIndex != -1) {
+                    val path = afterProtocol.substring(pathStartIndex)
+                    val fixedUrl = "$baseUrl$path"
 
-            for (server in servers) {
-                val newUrl = urlString.replace(SERVER_PATTERN, "https://$server")
+                    val newRequest = request.newBuilder()
+                        .url(fixedUrl)
+                        .build()
 
-                // Skip if we are about to try the exact same URL that just failed
-                if (newUrl == urlString) continue
-
-                val newRequest = request.newBuilder()
-                    .url(newUrl)
-                    .build()
-
-                try {
-                    // FORCE SHORT TIMEOUTS FOR FALLBACKS
-                    // If a fallback server doesn't answer in 5 seconds, kill it and move to next.
-                    val newResponse = chain
-                        .withConnectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                        .withReadTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                        .proceed(newRequest)
-
-                    if (newResponse.isSuccessful) {
-                        return newResponse
-                    }
-                    // If this server also failed, close and loop to the next one
-                    newResponse.close()
-                } catch (e: Exception) {
-                    // Connection error on this mirror, ignore and loop to next
+                    return chain.proceed(newRequest)
                 }
             }
         }
