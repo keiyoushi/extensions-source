@@ -112,7 +112,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<MangaListResponse>()
-        val mangas = result.data.map { it.toSManga() }
+        val mangas = result.data.orEmpty().map { it.toSManga() }
         val hasNextPage = result.page < result.pages
         return MangasPage(mangas, hasNextPage)
     }
@@ -223,7 +223,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val manga = response.parseAs<MangaDetailsDto>()
-        return manga.chapters.map { it.toSChapter(manga.slug) }
+        return manga.chapters.orEmpty().map { it.toSChapter(manga.slug) }
     }
 
     // ==================== Page ==========================

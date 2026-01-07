@@ -19,7 +19,7 @@ private val dateFormat by lazy {
 
 @Serializable
 class MangaListResponse(
-    val data: List<MangaListDto> = emptyList(),
+    val data: List<MangaListDto>? = null,
     val page: Int = 1,
     val pages: Int = 1,
 )
@@ -41,7 +41,7 @@ class MangaDetailsDto(
     val artist: String? = null,
     val status: String,
     val categories: List<CategoryDto> = emptyList(),
-    val chapters: List<ChapterDto> = emptyList(),
+    val chapters: List<ChapterDto>? = null,
 )
 
 @Serializable
