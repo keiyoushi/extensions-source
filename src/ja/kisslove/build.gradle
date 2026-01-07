@@ -6,3 +6,7 @@ ext {
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    api(project(":lib:i18n"))
+}
