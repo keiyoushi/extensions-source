@@ -235,7 +235,11 @@ abstract class InitManga(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        description = document.select("div#manga-description p").text()
+        description = document.select("div#manga-description").clone()
+            .apply {
+                select("a, span").remove()
+            }
+            .text()
         genre = document.select("div#genre-tags a").joinToString { it.text() }
         thumbnail_url = document.selectFirst("div.single-thumb img")?.attr("abs:src")
             ?: document.selectFirst("a.story-cover img")?.attr("abs:src")
