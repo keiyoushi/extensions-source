@@ -29,9 +29,9 @@ class KissLove : HttpSource() {
     override val supportsLatest = true
 
     private val intl = Intl(
-        lang,
+        Locale.getDefault().language,
         setOf("en", "ja", "zh"),
-        "en",
+        lang,
         this::class.java.classLoader!!,
     )
     private val scope = CoroutineScope(Dispatchers.IO)
