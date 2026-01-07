@@ -89,7 +89,9 @@ class KissLove : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<Manga>()
         val slug = result.slug
-        return result.chapters.map { it.toSChapter(slug) }
+        return result.chapters
+            .sortedByDescending { it.chapter }
+            .map { it.toSChapter(slug) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
