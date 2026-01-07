@@ -8,5 +8,5 @@ class RagnarScans : InitManga(
     "tr",
     mangaUrlDirectory = "manga",
     popularUrlSlug = "en-cok-takip-edilenler",
-    versionId = 2
+    versionId = 2,
 )
