@@ -7,4 +7,5 @@ class MerlinScans : InitManga(
     "https://merlintoon.com",
     "tr",
     latestUrlSlug = "son-guncellenenler",
+    versionId = 2
 )
