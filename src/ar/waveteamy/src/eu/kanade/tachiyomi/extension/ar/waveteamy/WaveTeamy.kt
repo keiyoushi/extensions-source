@@ -40,12 +40,12 @@ class WaveTeamy : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.attr("href"))
-            
+
             // Get title from h3 or img alt
             title = element.select("h3").text().ifEmpty {
                 element.select("img").attr("alt")
             }
-            
+
             // Get thumbnail
             thumbnail_url = element.select("img").attr("abs:src")
         }
@@ -81,17 +81,17 @@ class WaveTeamy : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             // Title from h1 or meta
-            title = document.select("h1").first()?.text() ?: 
-                    document.select("meta[property=og:title]").attr("content")
-            
+            title = document.select("h1").first()?.text()
+                ?: document.select("meta[property=og:title]").attr("content")
+
             // Description
             description = document.select("p.text-sm, div.description").text()
-            
+
             // Thumbnail
             thumbnail_url = document.select("img[alt*='cover'], meta[property=og:image]")
-                .first()?.attr("abs:src") ?: 
-                document.select("meta[property=og:image]").attr("content")
-            
+                .first()?.attr("abs:src")
+                ?: document.select("meta[property=og:image]").attr("content")
+
             // Status - look for Arabic status text
             val statusText = document.text()
             status = when {
@@ -100,10 +100,10 @@ class WaveTeamy : ParsedHttpSource() {
                 statusText.contains("متوقف") -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
-            
+
             // Genre/tags
             genre = document.select("a[href*='/genre/'], span.genre").joinToString { it.text() }
-            
+
             // Author
             author = document.select("span:contains(المؤلف), span:contains(Author)").text()
                 .replace("المؤلف:", "").replace("Author:", "").trim()
@@ -116,12 +116,12 @@ class WaveTeamy : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.attr("href"))
-            
+
             // Chapter name
             name = element.select("span, p, h3, h4").text().ifEmpty {
                 element.text()
             }
-            
+
             // Date - try to parse if available
             date_upload = 0L // Will be 0 if not found
         }
@@ -133,7 +133,7 @@ class WaveTeamy : ParsedHttpSource() {
             Page(
                 index,
                 "",
-                element.attr("abs:src").ifEmpty { element.attr("abs:data-src") }
+                element.attr("abs:src").ifEmpty { element.attr("abs:data-src") },
             )
         }
     }
