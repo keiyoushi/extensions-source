@@ -163,3 +163,11 @@ class UserDto(
     val username: String? = null,
     val name: String? = null,
 )
+
+// ========================= Browser Token DTOs =========================
+
+@Serializable
+class BrowserTokenResponse(
+    val success: Boolean,
+    val token: String,
+)

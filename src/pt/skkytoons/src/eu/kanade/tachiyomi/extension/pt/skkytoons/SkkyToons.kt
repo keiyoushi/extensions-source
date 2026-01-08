@@ -50,20 +50,57 @@ class SkkyToons : HttpSource(), ConfigurableSource {
         coerceInputValues = true
     }
 
+    private var browserToken: String? = null
+
+    private fun getBrowserToken(): String {
+        browserToken?.let { return it }
+        val request = GET("$apiUrl/api/browser-token", headers)
+        val response = network.cloudflareClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            return ""
+        }
+        val tokenResponse = response.parseAs<BrowserTokenResponse>()
+        browserToken = tokenResponse.token
+        return tokenResponse.token
+    }
+
     override val client by lazy {
-        val token = getToken()
+        val authToken = getToken()
         network.cloudflareClient.newBuilder()
             .rateLimit(3)
-            .apply {
-                if (token.isNotEmpty()) {
-                    addInterceptor { chain ->
-                        val request = chain.request()
-                        val newRequest = request.newBuilder()
-                            .header("Authorization", "Bearer $token")
-                            .build()
-                        chain.proceed(newRequest)
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val requestUrl = request.url.toString()
+
+                if (requestUrl.startsWith(apiUrl) && !requestUrl.contains("/api/browser-token")) {
+                    if (authToken.isEmpty()) {
+                        throw Exception(LOGIN_REQUIRED_MESSAGE)
                     }
                 }
+
+                val newRequest = request.newBuilder()
+                    .apply {
+                        if (authToken.isNotEmpty()) {
+                            header("Authorization", "Bearer $authToken")
+                        }
+                        if (requestUrl.startsWith(apiUrl) && !requestUrl.contains("/api/browser-token")) {
+                            runCatching { getBrowserToken() }.getOrNull()?.let { bt ->
+                                if (bt.isNotEmpty()) {
+                                    header("x-browser-token", bt)
+                                }
+                            }
+                        }
+                        if (requestUrl.startsWith("$apiUrl/api/cdn/")) {
+                            runCatching { getBrowserToken() }.getOrNull()?.let { bt ->
+                                if (bt.isNotEmpty()) {
+                                    url(request.url.newBuilder().addQueryParameter("_bt", bt).build())
+                                }
+                            }
+                        }
+                    }
+                    .build()
+                chain.proceed(newRequest)
             }
             .build()
     }
@@ -100,18 +137,14 @@ class SkkyToons : HttpSource(), ConfigurableSource {
         return runCatching { login(email, password) }.getOrDefault("")
     }
 
-    private fun checkLogin() {
-        val email = preferences.getString(PREF_EMAIL, "") ?: ""
-        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
-        if (email.isEmpty() || password.isEmpty()) {
-            throw Exception(LOGIN_REQUIRED_MESSAGE)
-        }
-    }
-
     private fun login(email: String, password: String): String {
+        val bt = runCatching { getBrowserToken() }.getOrDefault("")
+        val loginHeaders = headers.newBuilder()
+            .apply { if (bt.isNotEmpty()) add("x-browser-token", bt) }
+            .build()
         val payload = json.encodeToString(LoginRequest(email, password))
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
-        val request = POST("$apiUrl/api/auth/login", headers, requestBody)
+        val request = POST("$apiUrl/api/auth/login", loginHeaders, requestBody)
         val response = network.cloudflareClient.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()
@@ -124,7 +157,6 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     // ============================= Popular ================================
 
     override fun popularMangaRequest(page: Int): Request {
-        checkLogin()
         val url = "$apiUrl/api/mangas/ranking".toHttpUrl().newBuilder()
             .addQueryParameter("period", "all")
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -141,7 +173,6 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     // ============================= Latest =================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        checkLogin()
         val url = "$apiUrl/api/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -159,7 +190,6 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     // ============================= Search =================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        checkLogin()
         val url = "$apiUrl/api/mangas/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -239,7 +269,6 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     // ============================= Details ================================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        checkLogin()
         val slug = manga.url.removePrefix("/manga/")
         return GET("$apiUrl/api/mangas/$slug", headers)
     }
@@ -253,7 +282,6 @@ class SkkyToons : HttpSource(), ConfigurableSource {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return Observable.fromCallable {
-            checkLogin()
             val slug = manga.url.removePrefix("/manga/")
 
             val detailsRequest = GET("$apiUrl/api/mangas/$slug", headers)
@@ -297,8 +325,7 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     // ============================= Pages ==================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        checkLogin()
-        val chapterId = chapter.url.removePrefix("/chapter/").substringBefore("/")
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[1]
         return GET("$apiUrl/api/chapters/$chapterId", headers)
     }
 
@@ -316,6 +343,7 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/")
+            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
         return GET(page.imageUrl!!, newHeaders)
     }
@@ -328,9 +356,9 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val parts = chapter.url.removePrefix("/chapter/").split("/")
-        val mangaSlug = parts.getOrElse(1) { "" }
-        val chapterNumber = parts.getOrElse(2) { "" }
+        val pathSegments = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        val mangaSlug = pathSegments.getOrElse(2) { "" }
+        val chapterNumber = pathSegments.getOrElse(3) { "" }
         return "$baseUrl/ler/$mangaSlug/$chapterNumber"
     }
 
