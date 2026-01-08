@@ -272,18 +272,10 @@ class MangaPark(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-
-        if (response.isSuccessful) return response
-
         val url = request.url
-
-        response.close()
-
         val fixedUrl = url.newBuilder()
             .host(baseUrl.toHttpUrl().host)
             .build()
-
         val newRequest = request.newBuilder()
             .url(fixedUrl)
             .build()
