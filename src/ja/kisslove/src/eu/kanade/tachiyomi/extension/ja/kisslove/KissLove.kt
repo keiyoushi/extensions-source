@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -34,7 +34,8 @@ class KissLove : HttpSource() {
         lang,
         this::class.java.classLoader!!,
     )
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private var cachedGenres: List<CheckBoxFilter>? = null
+    private val genresMutex = Mutex()
 
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -162,33 +163,49 @@ class KissLove : HttpSource() {
     }.build()
 
     override fun getFilterList(): FilterList {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("api/genres")
-            .build()
-
         val filterList = ArrayList<Filter<*>>()
-        scope.launch {
-            try {
-                val genres = client.newCall(GET(url, sigAppend()))
-                    .await()
-                    .parseAs<List<Genre>>()
-                    .map {
-                        CheckBoxFilter(it.name)
-                    }
-
-                filterList.add(
-                    GenreFilter(
-                        intl["genre"],
-                        genres,
-                    ),
-                )
-            } catch (_: Exception) {
-            }
-        }
 
         filterList.add(StatusFilter(intl["status"], getStatusList()))
 
+        val genres = getCachedGenres()
+        if (genres.isNotEmpty()) {
+            filterList.add(
+                GenreFilter(
+                    intl["genre"],
+                    genres,
+                ),
+            )
+        }
+
         return FilterList(filterList)
+    }
+
+    private fun getCachedGenres(): List<CheckBoxFilter> {
+        cachedGenres?.let { return it }
+
+        return runBlocking {
+            genresMutex.withLock {
+                cachedGenres?.let { return@withLock it }
+
+                try {
+                    val url = baseUrl.toHttpUrl().newBuilder()
+                        .addPathSegments("api/genres")
+                        .build()
+
+                    val genres = client.newCall(GET(url, sigAppend()))
+                        .await()
+                        .parseAs<List<Genre>>()
+                        .map {
+                            CheckBoxFilter(it.name)
+                        }
+
+                    cachedGenres = genres
+                    genres
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+        }
     }
 
     private fun getStatusList() = arrayOf(
