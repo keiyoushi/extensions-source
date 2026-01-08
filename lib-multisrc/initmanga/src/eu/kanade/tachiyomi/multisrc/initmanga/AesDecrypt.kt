@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.initmanga.aes
+package eu.kanade.tachiyomi.multisrc.initmanga
 
 import android.util.Base64
 import org.jsoup.Jsoup
