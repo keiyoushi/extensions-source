@@ -171,3 +171,36 @@ class BrowserTokenResponse(
     val success: Boolean,
     val token: String,
 )
+
+@Serializable
+class BrowserChallengeResponse(
+    val success: Boolean,
+    val challenge: ChallengeDto,
+)
+
+@Serializable
+class ChallengeDto(
+    val challengeId: String,
+    val powChallenge: String,
+    val powDifficulty: Int,
+    val jsChallenge: JsChallengeDto,
+    val expiresAt: Long,
+    val signature: String,
+)
+
+@Serializable
+class JsChallengeDto(
+    val code: String,
+    val expectedResultHash: String,
+)
+
+@Serializable
+class TokenSolutionRequest(
+    val challengeId: String,
+    val powChallenge: String,
+    val powNonce: String,
+    val jsResult: String,
+    val expiresAt: Long,
+    val signature: String,
+    val expectedResultHash: String,
+)

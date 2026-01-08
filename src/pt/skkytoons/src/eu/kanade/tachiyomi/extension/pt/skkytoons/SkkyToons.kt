@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.skkytoons
 
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -27,6 +32,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -54,15 +61,65 @@ class SkkyToons : HttpSource(), ConfigurableSource {
 
     private fun getBrowserToken(): String {
         browserToken?.let { return it }
-        val request = GET("$apiUrl/api/browser-token", headers)
-        val response = network.cloudflareClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            response.close()
+
+        val challengeRequest = GET("$apiUrl/api/browser-challenge", headers)
+        val challengeResponse = network.cloudflareClient.newCall(challengeRequest).execute()
+        if (!challengeResponse.isSuccessful) {
+            challengeResponse.close()
             return ""
         }
-        val tokenResponse = response.parseAs<BrowserTokenResponse>()
-        browserToken = tokenResponse.token
-        return tokenResponse.token
+        val challenge = challengeResponse.parseAs<BrowserChallengeResponse>().challenge
+
+        val powNonce = solvePow(challenge.powChallenge, challenge.powDifficulty)
+
+        val jsResult = solveJsChallenge(challenge.jsChallenge.code)
+
+        val solution = TokenSolutionRequest(
+            challengeId = challenge.challengeId,
+            powChallenge = challenge.powChallenge,
+            powNonce = powNonce,
+            jsResult = jsResult,
+            expiresAt = challenge.expiresAt,
+            signature = challenge.signature,
+            expectedResultHash = challenge.jsChallenge.expectedResultHash,
+        )
+        val solutionBody = json.encodeToString(solution).toRequestBody(JSON_MEDIA_TYPE)
+        val tokenRequest = POST("$apiUrl/api/browser-token", headers, solutionBody)
+        val tokenResponse = network.cloudflareClient.newCall(tokenRequest).execute()
+        if (!tokenResponse.isSuccessful) {
+            tokenResponse.close()
+            return ""
+        }
+        val tokenResult = tokenResponse.parseAs<BrowserTokenResponse>()
+        browserToken = tokenResult.token
+        return tokenResult.token
+    }
+
+    private fun solvePow(powChallenge: String, difficulty: Int): String {
+        val prefix = "0".repeat(difficulty)
+        var nonce = 0L
+        while (true) {
+            val hash = sha256("$powChallenge$nonce")
+            if (hash.startsWith(prefix)) {
+                return nonce.toString()
+            }
+            nonce++
+        }
+    }
+
+    private fun sha256(input: String): String {
+        val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun solveJsChallenge(code: String): String {
+        val cleanCode = code.replace(
+            Regex("""if \(typeof document.*?INVALID_ENV.*?\}""", RegexOption.DOT_MATCHES_ALL),
+            "",
+        )
+        return QuickJs.create().use { engine ->
+            engine.evaluate(cleanCode) as? String ?: "INVALID"
+        }
     }
 
     override val client by lazy {
@@ -108,6 +165,9 @@ class SkkyToons : HttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "application/json, text/plain, */*")
         .add("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        .add("Cache-Control", "no-cache")
+        .add("Origin", baseUrl)
+        .add("Pragma", "no-cache")
         .add("Referer", "$baseUrl/")
         .add("Sec-Fetch-Dest", "empty")
         .add("Sec-Fetch-Mode", "cors")
@@ -134,6 +194,10 @@ class SkkyToons : HttpSource(), ConfigurableSource {
         if (email.isEmpty() || password.isEmpty()) {
             return ""
         }
+
+        val cachedToken = preferences.getString(PREF_TOKEN, "") ?: ""
+        if (cachedToken.isNotEmpty()) return cachedToken
+
         return runCatching { login(email, password) }.getOrDefault("")
     }
 
@@ -151,7 +215,25 @@ class SkkyToons : HttpSource(), ConfigurableSource {
             throw Exception("Login failed: ${response.code}")
         }
         val loginResponse = response.parseAs<ApiResponse<LoginResponseData>>()
-        return loginResponse.data.accessToken
+        val token = loginResponse.data.accessToken
+        preferences.edit().putString(PREF_TOKEN, token).apply()
+        return token
+    }
+
+    private fun checkLogin(email: String, password: String) {
+        if (email.isEmpty() || password.isEmpty()) return
+
+        Thread {
+            val token = runCatching { login(email, password) }.getOrDefault("")
+            val message = if (token.isNotEmpty()) {
+                "Login realizado com sucesso"
+            } else {
+                "Falha no login"
+            }
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(Injekt.get<Application>(), message, Toast.LENGTH_LONG).show()
+            }
+        }.start()
     }
 
     // ============================= Popular ================================
@@ -394,6 +476,12 @@ class SkkyToons : HttpSource(), ConfigurableSource {
                 append("\n$warning")
             }
             setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().remove(PREF_TOKEN).apply()
+                val password = preferences.getString(PREF_PASSWORD, "") ?: ""
+                checkLogin(newValue as String, password)
+                true
+            }
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
@@ -405,6 +493,12 @@ class SkkyToons : HttpSource(), ConfigurableSource {
                 append("\n$warning")
             }
             setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().remove(PREF_TOKEN).apply()
+                val email = preferences.getString(PREF_EMAIL, "") ?: ""
+                checkLogin(email, newValue as String)
+                true
+            }
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -420,6 +514,7 @@ class SkkyToons : HttpSource(), ConfigurableSource {
         private const val CHAPTERS_LIMIT = 100
         private const val PREF_EMAIL = "skkytoons_email"
         private const val PREF_PASSWORD = "skkytoons_password"
+        private const val PREF_TOKEN = "skkytoons_token"
         private const val PREF_SHOW_NSFW_FILTERS = "skkytoons_show_nsfw_filters"
         private const val LOGIN_REQUIRED_MESSAGE = "Por favor, insira um email e uma senha nas configurações para logar"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
