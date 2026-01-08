@@ -105,7 +105,8 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
 
     private var searchNextPage = 1
     private var searchHash: Int? = null
-    private lateinit var searchIterator: Iterator<SManga>
+    private lateinit var searchIterator: Iterator<PixivIllust>
+    private lateinit var searchPredicates: List<(PixivIllust) -> Boolean>
 
     override fun fetchSearchManga(
         page: Int,
@@ -129,15 +130,18 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
 
         // Deeplink selection of specific IDs: simply fetch the single object and return
         when (target) {
-            is PixivTarget.Illustration ->
+            is PixivTarget.Illustration -> {
                 singleResult(getIllustCached(target.illustId)?.toSManga())
+            }
             is PixivTarget.Series -> {
                 // TODO: caching!
                 val series = ApiCall("/touch/ajax/illust/series/${target.seriesId}")
                     .executeApi<PixivSeriesDetails>().getOrNull()?.series
                 singleResult(series?.toSManga())
             }
-            else -> null
+            else -> {
+                null
+            }
         }?.let { return it }
 
         val filters = filters.list as PixivFilters
@@ -147,13 +151,19 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
             searchHash = hash
 
             lateinit var searchSequence: Sequence<PixivIllust>
-            lateinit var predicates: List<(PixivIllust) -> Boolean>
+            // clear predicates
+            searchPredicates = emptyList()
 
             // TODO: it would be useful to allow multiple user: tags in the query
+            // NOTE: probably wouldn't be terribly hard, make makeUserIdIllustSearchSequence accept a
+            // list of ids, make PixivTarget.fromSearchQuery handle returning a list of targets or
+            // make User target a list (it's just that then you think about supporting mixed lists of
+            // multiples of all types, and then have to deal with how to return a mixed list of user
+            // results and singletons...)
             if (target is PixivTarget.User) {
                 searchSequence = makeUserIdIllustSearchSequence(id = target.userId, type = filters.type)
 
-                predicates = buildList {
+                searchPredicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
                     filters.makeRatingPredicate()?.let(::add)
                 }
@@ -168,14 +178,13 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
                     dateAfter = filters.dateAfter.ifBlank { null },
                 )
 
-                predicates = buildList {
+                searchPredicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
                     filters.makeUsersPredicate()?.let(::add)
                 }
             } else if (filters.users.isNotBlank()) {
                 searchSequence = makeUserIllustSearchSequence(nick = filters.users, type = filters.type)
-
-                predicates = buildList {
+                searchPredicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
                     filters.makeRatingPredicate()?.let(::add)
                 }
@@ -189,22 +198,58 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
                     dateBefore = filters.dateBefore.ifBlank { null },
                     dateAfter = filters.dateAfter.ifBlank { null },
                 )
-
-                predicates = emptyList()
             }
 
-            if (predicates.isNotEmpty()) {
-                searchSequence = searchSequence.filter { predicates.all { p -> p(it) } }
-            }
-
-            searchIterator = searchSequence.toSManga().iterator()
+            searchIterator = searchSequence.iterator()
             searchNextPage = 2
         } else {
             require(page == searchNextPage++)
         }
 
-        val mangas = searchIterator.truncateToList(50).toList()
+        val filteredIllusts = if (searchPredicates.isEmpty()) {
+            searchIterator.truncateToList(TARGET_RESULTS)
+        } else {
+            // if we have a filter let's be a little smarter about how to get enough results
+            fetchWithAdaptiveWindow(searchIterator, searchPredicates)
+        }
+
+        val mangas = filteredIllusts.toSManga()
         return Observable.just(MangasPage(mangas, hasNextPage = mangas.isNotEmpty()))
+    }
+
+    // fetch with variable window size - if filter is strong and we're not getting a lot of
+    // results, cast a bigger net.
+    //
+    // this filters post-truncate to avoid the case where a strong filter will cause the search
+    // to spin forever and futilely fetch page after page trying to get enough results to return
+    private fun fetchWithAdaptiveWindow(
+        iterator: Iterator<PixivIllust>,
+        predicates: List<(PixivIllust) -> Boolean>,
+    ): List<PixivIllust> {
+        val sampleIllusts = iterator.truncateToList(RESULTS_PER_PAGE)
+        val sampleFiltered = sampleIllusts.filter { illust -> predicates.all { p -> p(illust) } }
+
+        val hitRate = if (sampleIllusts.isNotEmpty()) {
+            sampleFiltered.size.toDouble() / sampleIllusts.size
+        } else {
+            0.0
+        }
+        val estimatedWindow = if (hitRate > 0) {
+            (TARGET_RESULTS / hitRate).toInt().coerceIn(RESULTS_PER_PAGE, MAX_WINDOW_SIZE)
+        } else {
+            MAX_WINDOW_SIZE
+        }
+
+        // get estimated rest of unfiltered items needed to hit target results
+        val remainingNeeded = (estimatedWindow - RESULTS_PER_PAGE).coerceAtLeast(0)
+        val additionalIllusts = if (remainingNeeded > 0) {
+            iterator.truncateToList(remainingNeeded)
+        } else {
+            emptyList()
+        }
+
+        val allIllusts = sampleIllusts + additionalIllusts
+        return allIllusts.filter { illust -> predicates.all { p -> p(illust) } }
     }
 
     private fun makeIllustSearchSequence(
@@ -518,6 +563,11 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
 
     companion object {
         private const val PREF_IMAGE_QUALITY = "pref_image_quality"
+
+        // constants for fetchWithAdaptiveWindow
+        private const val TARGET_RESULTS = 50
+        private const val RESULTS_PER_PAGE = 36
+        private const val MAX_WINDOW_SIZE = 1000 // roughly 25 pages
     }
 
     override fun chapterListParse(response: Response): List<SChapter> =

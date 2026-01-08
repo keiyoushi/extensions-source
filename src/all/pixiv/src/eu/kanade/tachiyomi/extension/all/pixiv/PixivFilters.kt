@@ -25,7 +25,7 @@ internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
 
     private val ratingFilter = object : Filter.Select<String>("Rating", RATING_VALUES, 0) {}.also(::add)
 
-    init { add(Filter.Header("(the following are ignored when the user filter is in use)")) }
+    init { add(Filter.Header("(the following are ignored when the users filter is in use)")) }
 
     private val orderFilter = object : Filter.Sort("Order", arrayOf("Date posted")) {}.also(::add)
     private val dateBeforeFilter = object : Filter.Text("Posted before") {}.also(::add)
@@ -51,7 +51,7 @@ internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
 
     fun makeUsersPredicate(): ((PixivIllust) -> Boolean)? {
         val users = users.ifBlank { return null }
-        val regex = Regex(users.split(' ').joinToString("|") { Regex.escape(it) })
+        val regex = Regex(users.split(' ').joinToString("|") { Regex.escape(it) }, RegexOption.IGNORE_CASE)
 
         return { it.author_details?.user_name?.contains(regex) == true }
     }
