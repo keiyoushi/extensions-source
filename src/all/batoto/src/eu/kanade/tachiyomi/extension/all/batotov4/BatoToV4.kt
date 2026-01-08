@@ -572,9 +572,7 @@ class BatoToV4(
 
             setOnPreferenceChangeListener { _, newValue ->
                 val blacklistStr = newValue as String
-                val blacklist = blacklistStr.split(",")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
+                val blacklist = parseCommaList(blacklistStr)
 
                 imageServerManager.updateBlacklist(blacklist)
 
@@ -594,13 +592,7 @@ class BatoToV4(
 
             setOnPreferenceChangeListener { _, newValue ->
                 val fallbackStr = newValue as String
-                val fallbackList = if (fallbackStr.isEmpty()) {
-                    null
-                } else {
-                    fallbackStr.split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                }
+                val fallbackList = parseCommaList(fallbackStr)
 
                 imageServerManager.updateFallbackServers(fallbackList)
 
@@ -625,15 +617,9 @@ class BatoToV4(
 
     private fun getBlacklistSummary(): String {
         val blacklistStr = preferences.getString(BLACKLIST_SERVERS_PREF, "")!!
-        val blacklist = if (blacklistStr.isEmpty()) {
-            imageServerManager.getDefaultBlacklistedServers()
-        } else {
-            blacklistStr.split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-        }
-        return if (blacklist.isEmpty()) {
-            "Using default: ${imageServerManager.getDefaultBlacklistedServers().joinToString(", ")}"
+        val blacklist = parseCommaList(blacklistStr) ?: imageServerManager.getDefaultBlacklistedServers()
+        return if (blacklist == imageServerManager.getDefaultBlacklistedServers()) {
+            "Using default: ${blacklist.joinToString(", ")}"
         } else {
             "Blacklisted: ${blacklist.joinToString(", ")}"
         }
@@ -641,15 +627,9 @@ class BatoToV4(
 
     private fun getFallbackSummary(fallbackStr: String? = null): String {
         val fallback = fallbackStr ?: preferences.getString(FALLBACK_SERVERS_PREF, "")!!
-        val servers = if (fallback.isEmpty()) {
-            imageServerManager.getDefaultFallbackServers()
-        } else {
-            fallback.split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-        }
-        return if (servers.isEmpty()) {
-            "Using default: ${imageServerManager.getDefaultFallbackServers().joinToString(", ")}"
+        val servers = parseCommaList(fallback) ?: imageServerManager.getDefaultFallbackServers()
+        return if (servers == imageServerManager.getDefaultFallbackServers()) {
+            "Using default: ${servers.joinToString(", ")}"
         } else {
             "Fallback order: ${servers.joinToString(", ")}"
         }
@@ -686,6 +666,14 @@ class BatoToV4(
         }
 
         return explanation + serverList
+    }
+
+    private fun parseCommaList(value: String?): List<String>? {
+        if (value.isNullOrEmpty()) return null
+        return value.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .takeIf { it.isNotEmpty() }
     }
 
     private fun isRemoveTitleVersion(): Boolean {
