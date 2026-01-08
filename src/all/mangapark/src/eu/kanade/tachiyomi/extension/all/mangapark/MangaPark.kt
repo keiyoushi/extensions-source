@@ -272,30 +272,23 @@ class MangaPark(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val urlString = request.url.toString()
+        val response = chain.proceed(request)
 
-        // Fix image URLs by replacing CDN server domains with the current site domain
-        if (SERVER_PATTERN.containsMatchIn(urlString)) {
-            // Extract the path portion after //sXX
-            val parts = urlString.split("//", limit = 2)
-            if (parts.size == 2) {
-                val afterProtocol = parts[1]
-                val pathStartIndex = afterProtocol.indexOf("/")
-                if (pathStartIndex != -1) {
-                    val path = afterProtocol.substring(pathStartIndex)
-                    val fixedUrl = "$baseUrl$path"
+        if (response.isSuccessful) return response
 
-                    val newRequest = request.newBuilder()
-                        .url(fixedUrl)
-                        .build()
+        val url = request.url
 
-                    return chain.proceed(newRequest)
-                }
-            }
-        }
+        response.close()
 
-        // If everything failed, re-run original request to return the standard error
-        return chain.proceed(request)
+        val fixedUrl = url.newBuilder()
+            .host(baseUrl.toHttpUrl().host)
+            .build()
+
+        val newRequest = request.newBuilder()
+            .url(fixedUrl)
+            .build()
+
+        return chain.proceed(newRequest)
     }
 
     // sets necessary cookies to not block genres like `Hentai`
