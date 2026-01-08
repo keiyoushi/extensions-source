@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -16,14 +20,20 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class Pixiv(override val lang: String) : HttpSource() {
+class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
     override val name = "Pixiv"
     override val baseUrl = "https://www.pixiv.net"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder().add("Referer", "$baseUrl/")
@@ -67,18 +77,18 @@ class Pixiv(override val lang: String) : HttpSource() {
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         if (page == 1) {
             popularMangaIterator = sequence {
-                val call = ApiCall("/touch/ajax/ranking/illust?mode=daily&type=manga")
+                val rankingCall = ApiCall("/touch/ajax/ranking/illust?mode=daily&type=manga")
 
                 for (p in countUp(start = 1)) {
-                    call.url.setEncodedQueryParameter("page", p.toString())
+                    rankingCall.url.setEncodedQueryParameter("page", p.toString())
 
-                    val entries = call.executeApi<PixivRankings>().getOrThrow().ranking!!
+                    val entries = rankingCall.executeApi<PixivRankings>().getOrThrow().ranking!!
                     if (entries.isEmpty()) break
 
-                    val call = ApiCall("/touch/ajax/illust/details/many")
-                    entries.forEach { call.url.addEncodedQueryParameter("illust_ids[]", it.illustId!!) }
+                    val detailsCall = ApiCall("/touch/ajax/illust/details/many")
+                    entries.forEach { detailsCall.url.addEncodedQueryParameter("illust_ids[]", it.illustId!!) }
 
-                    call.executeApi<PixivIllustsDetails>().getOrThrow().illust_details!!.forEach { yield(it) }
+                    detailsCall.executeApi<PixivIllustsDetails>().getOrThrow().illust_details!!.forEach { yield(it) }
                 }
             }
                 .toSManga()
@@ -102,7 +112,7 @@ class Pixiv(override val lang: String) : HttpSource() {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
-        val target = PixivTarget.fromUri(query) /*?: PixivTarget.fromSearchQuery(query)*/
+        val target = PixivTarget.fromUri(query) ?: PixivTarget.fromSearchQuery(query)
 
         val singleResult = { manga: SManga? ->
             Observable.just(
@@ -141,10 +151,7 @@ class Pixiv(override val lang: String) : HttpSource() {
 
             // TODO: it would be useful to allow multiple user: tags in the query
             if (target is PixivTarget.User) {
-                searchSequence = makeUserIdIllustSearchSequence(
-                    id = target.userId,
-                    type = filters.type,
-                )
+                searchSequence = makeUserIdIllustSearchSequence(id = target.userId, type = filters.type)
 
                 predicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
@@ -166,10 +173,7 @@ class Pixiv(override val lang: String) : HttpSource() {
                     filters.makeUsersPredicate()?.let(::add)
                 }
             } else if (filters.users.isNotBlank()) {
-                searchSequence = makeUserIllustSearchSequence(
-                    nick = filters.users,
-                    type = filters.type,
-                )
+                searchSequence = makeUserIllustSearchSequence(nick = filters.users, type = filters.type)
 
                 predicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
@@ -237,24 +241,55 @@ class Pixiv(override val lang: String) : HttpSource() {
         }
     }
 
+    // search by username
     private fun makeUserIllustSearchSequence(nick: String, type: String?) = sequence<PixivIllust> {
-        val searchUsers = HttpCall("/search_user.php?s_mode=s_usr")
-            .apply { url.addQueryParameter("nick", nick) }
+        val searchUsers = HttpCall("/search/users")
+            .apply {
+                url.addQueryParameter("s_mode", "s_usr")
+                url.addQueryParameter("nick", nick)
+                url.addQueryParameter("i", "1")
+                url.addQueryParameter("comment", "")
+                // have to use desktop User-Agent to get __NEXT_DATA__ (mobile version is SPA without embedded data)
+                request.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            }
 
         for (p in countUp(start = 1)) {
             searchUsers.url.setEncodedQueryParameter("p", p.toString())
 
-            val userIds = searchUsers.execute().asJsoup()
-                .select(".user-recommendation-item > a").eachAttr("href")
-                .map { it.substringAfterLast('/') }
+            val response = searchUsers.execute()
+            val htmlBody = response.body.string()
+
+            val doc = org.jsoup.Jsoup.parse(htmlBody)
+            val nextDataScript = doc.select("script#__NEXT_DATA__").first()?.data() ?: break
+
+            val nextData = json.decodeFromString<PixivNextData>(nextDataScript)
+            val pageProps = nextData.props.pageProps
+            val userIds = pageProps.userIds
 
             if (userIds.isEmpty()) break
 
-            for (userId in userIds) {
-                yieldAll(makeUserIdIllustSearchSequence(userId, type))
+            // users is Map<String (userId as string), PixivUserInfo>, userIds is List<Long>
+            val users = pageProps.userData?.users
+            val exactMatchUserId = users?.let { userData ->
+                userIds.find { userId ->
+                    userData[userId.toString()]?.name?.equals(nick, ignoreCase = true) == true
+                }
+            }
+
+            if (exactMatchUserId != null) {
+                // found exact match, fetch and return works from this exact user
+                yieldAll(makeUserIdIllustSearchSequence(exactMatchUserId.toString(), type))
+                break
+            } else {
+                // return works from all users
+                for (userId in userIds) {
+                    yieldAll(makeUserIdIllustSearchSequence(userId.toString(), type))
+                }
             }
         }
     }
+
+    // lookup directly by user id
     private fun makeUserIdIllustSearchSequence(id: String, type: String?) = sequence<PixivIllust> {
         val fetchUserIllusts = ApiCall("/touch/ajax/user/illusts")
             .apply {
@@ -445,9 +480,44 @@ class Pixiv(override val lang: String) : HttpSource() {
 
         val pages = ApiCall("/ajax/illust/$illustId/pages")
             .executeApi<List<PixivIllustPage>>().getOrThrow()
-            .mapIndexed { i, it -> Page(i, chapter.url, it.urls!!.original!!) }
+            .mapIndexed { i, page ->
+                val imageUrl = getImageUrl(page.urls!!)
+                Page(i, chapter.url, imageUrl)
+            }
 
         return Observable.just(pages)
+    }
+
+    private fun getImageUrl(urls: PixivIllustPageUrls): String {
+        val quality = preferences.getString(PREF_IMAGE_QUALITY, "original")!!
+
+        val sizeOrder = listOf("thumb_mini", "small", "regular", "original")
+        val startIndex = sizeOrder.indexOf(quality).takeIf { it >= 0 } ?: sizeOrder.lastIndex
+
+        return sizeOrder.drop(startIndex).firstNotNullOf { size ->
+            when (size) {
+                "thumb_mini" -> urls.thumb_mini
+                "small" -> urls.small
+                "regular" -> urls.regular
+                "original" -> urls.original
+                else -> null
+            }
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_IMAGE_QUALITY
+            title = "Image quality"
+            entries = arrayOf("Thumb Mini", "Small", "Regular", "Original")
+            entryValues = arrayOf("thumb_mini", "small", "regular", "original")
+            setDefaultValue("original")
+            summary = "%s"
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_IMAGE_QUALITY = "pref_image_quality"
     }
 
     override fun chapterListParse(response: Response): List<SChapter> =
