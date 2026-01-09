@@ -75,6 +75,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
+    // Order by
     private val orderBy = arrayOf(
         Order("Semua", ""),
         Order("A-Z", "title"),
@@ -83,12 +84,14 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Order("Populer", "popular"),
     )
 
+    // Status
     private val statusList = arrayOf(
         Status("Semua", ""),
         Status("Berlanjut", "publishing"),
         Status("Selesai", "finished"),
     )
 
+    // Category
     private val categoryNames = arrayOf(
         Category("Semua", ""),
         Category("Doujinshi", "Doujinshi"),
@@ -96,6 +99,19 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Category("Manhwa", "Manhwa"),
     )
 
+    // Author Group Series
+    private class AuthorGroupSeriesOption(val display: String, val key: String) {
+        override fun toString(): String = display
+    }
+
+    private val authorGroupSeriesOptions = arrayOf(
+        AuthorGroupSeriesOption("None", ""),
+        AuthorGroupSeriesOption("Author", "author"),
+        AuthorGroupSeriesOption("Group", "group"),
+        AuthorGroupSeriesOption("Series", "series"),
+    )
+
+    // Genre
     private fun genreList() = listOf(
         Genre("Age Progression", "age-progression"),
         Genre("Age Regression", "age-regression"),
@@ -250,17 +266,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Yuri", "yuri"),
     )
 
-    private class AuthorGroupSeriesOption(val display: String, val key: String) {
-        override fun toString(): String = display
-    }
-
-    private val authorGroupSeriesOptions = arrayOf(
-        AuthorGroupSeriesOption("None", ""),
-        AuthorGroupSeriesOption("Author", "author"),
-        AuthorGroupSeriesOption("Group", "group"),
-        AuthorGroupSeriesOption("Series", "series"),
-    )
-
+    // Filter Header
     private class AuthorGroupSeriesFilter(options: Array<AuthorGroupSeriesOption>) : Filter.Select<AuthorGroupSeriesOption>("Filter by Author/Group/Series", options, 0)
     private class AuthorGroupSeriesValueFilter : Filter.Text("Nama Author/Group/Series")
     private class CharacterFilter : Filter.Text("Karakter")
@@ -269,6 +275,26 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private class GenreList(genre: List<Genre>) : Filter.Group<Genre>("Genre", genre)
     private class StatusList(status: Array<Status>) : Filter.Select<Status>("Status", status, 0)
 
+    // Manga Entries List
+    private fun basicInformationFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        val rawUrl = element.selectFirst("a[data-state=closed]")!!.attr("href")
+
+        val normalizedUrl = when {
+            rawUrl.startsWith("/read/") -> rawUrl
+            rawUrl.startsWith("/manga/") -> rawUrl.replace("/manga/", "/read/")
+            else -> rawUrl
+        }
+
+        manga.title = element.select("a[data-state=closed] img").attr("alt")
+        manga.setUrlWithoutDomain(normalizedUrl)
+        element.select("a[data-state=closed] img").first()?.let {
+            manga.thumbnail_url = imageFromElement(it)
+        }
+        return manga
+    }
+
+    /*
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[data-state=closed]")!!.absUrl("href"))
         title = element.select("a[data-state=closed] img").attr("alt")
@@ -276,10 +302,12 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             thumbnail_url = imageFromElement(it)
         }
     }
+     */
 
     private val qualityRegex = Regex("q=\\d+")
     private val widthRegex = Regex("w=(\\d+)")
 
+    // Thumbnail Entries
     private fun imageFromElement(element: Element): String {
         val srcset = element.attr("srcset")
         val src = element.attr("src")
@@ -306,6 +334,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     private val datePrefixRegex = Regex("([+-]\\d{2}):(\\d{2})$")
 
+    // Date Parser
     private fun parseApiDate(date: String?): Long {
         if (date.isNullOrBlank()) return 0L
 
@@ -326,13 +355,17 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
+    // Popular
+    override fun popularMangaFromElement(element: Element): SManga =
+        basicInformationFromElement(element)
+
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/manga?order=popular&page=$page", headers)
     }
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+        basicInformationFromElement(element)
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/manga?order=updated&page=$page", headers)
@@ -349,7 +382,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Search & FIlter
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = "$baseUrl/manga".toHttpUrlOrNull()!!
             .newBuilder()
@@ -399,12 +431,12 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             }
         }
 
+        // Author Group Series handling
         val agsFilter = filters.firstInstanceOrNull<AuthorGroupSeriesFilter>()
         val agsValueFilter = filters.firstInstanceOrNull<AuthorGroupSeriesValueFilter>()
         val selectedOption = agsFilter?.values?.getOrNull(agsFilter.state)
         val filterValue = agsValueFilter?.state?.trim() ?: ""
 
-        // Author Group Series handling
         if (query.isBlank() && selectedOption != null && selectedOption.key.isNotBlank()) {
             val typePath = selectedOption.key
             val requestUrl =
@@ -421,8 +453,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+        basicInformationFromElement(element)
 
+    // Filter List Selection
     override fun getFilterList() = FilterList(
         Filter.Header("NB: Tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya, serta harus memasukkan nama Author, Group dan Series secara lengkap!"),
         AuthorGroupSeriesFilter(authorGroupSeriesOptions),
@@ -442,6 +475,17 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
     private val widthThumbnailRegex = Regex("url=([^&]+)")
 
+    // URL Compatibility with older versions
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = manga.url
+        val finalUrl = if (url.contains("/manga/")) {
+            url.replace("/manga/", "/read/")
+        } else url
+
+        return GET(baseUrl + finalUrl)
+    }
+
+    //Entries display
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("section.flex div.flex-1 tbody")!!
         val groupName = infoElement.selectFirst("td:contains(Group) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
@@ -592,6 +636,11 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
                 real ?: hdProxy ?: src
             }
+        manga.setUrlWithoutDomain(
+            document.location()
+                .substringAfter(baseUrl)
+                .replace("/manga/", "/read/")
+        )
 
         return manga
     }
@@ -720,8 +769,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override fun imageRequest(page: Page): Request {
         val headers = Headers.Builder()
             .set("Accept", "image/avif,image/webp,*/*")
-            .set("Origin", "https://doujindesu.tv")
-            .set("Referer", "https://doujindesu.tv/")
+            .set("Origin", "$baseUrl")
+            .set("Referer", "$baseUrl/")
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
