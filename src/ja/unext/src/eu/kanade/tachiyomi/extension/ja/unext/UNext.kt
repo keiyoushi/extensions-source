@@ -159,7 +159,7 @@ class UNext : HttpSource(), ConfigurableSource {
         val data = response.parseAs<ChapterListResponse>().data.bookTitleBooks.books
         val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
         return data
-            .filterNot { hidePaid && it.isFree != true && it.isPurchased != true }
+            .filterNot { hidePaid && it.isFree != true && it.isPurchased != true && it.rightsExpirationDatetime == null }
             .map { it.toSChapter(sakuhinCode) }
             .reversed()
     }
