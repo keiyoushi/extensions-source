@@ -480,12 +480,14 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         val url = manga.url
         val finalUrl = if (url.contains("/manga/")) {
             url.replace("/manga/", "/read/")
-        } else url
+        } else {
+            url
+        }
 
         return GET(baseUrl + finalUrl)
     }
 
-    //Entries display
+    // Entries display
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("section.flex div.flex-1 tbody")!!
         val groupName = infoElement.selectFirst("td:contains(Group) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
@@ -639,7 +641,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         manga.setUrlWithoutDomain(
             document.location()
                 .substringAfter(baseUrl)
-                .replace("/manga/", "/read/")
+                .replace("/manga/", "/read/"),
         )
 
         return manga
