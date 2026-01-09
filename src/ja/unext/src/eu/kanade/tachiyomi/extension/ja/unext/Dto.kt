@@ -169,7 +169,7 @@ class ChapterListResponse(
 
 @Serializable
 class PlaylistResponse(
-    val data: Data,
+    val data: Data?,
 ) {
     @Serializable
     class Data(
