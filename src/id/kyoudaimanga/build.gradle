@@ -2,7 +2,7 @@ ext {
     extName = 'KyoudaiManga'
     extClass = '.KyoudaiManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://kyoudaimanga.my.id'
+    baseUrl = 'https://www.kyoudaimanga.my.id'
     overrideVersionCode = 1
     isNsfw = true
 }

@@ -6,7 +6,7 @@ import java.util.Locale
 
 class KyoudaiManga : MangaThemesia(
     "KyoudaiManga",
-    "https://kyoudaimanga.my.id",
+    "https://www.kyoudaimanga.my.id",
     "id",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.forLanguageTag("id")),
 ) {
