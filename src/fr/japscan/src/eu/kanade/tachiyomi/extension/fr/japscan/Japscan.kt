@@ -233,7 +233,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
                     val value = attr.value
-                    value.startsWith("/manga/") || value.startsWith("/manhua/") || value.startsWith("/manhwa/")
+                    value.startsWith("/manga/") || value.startsWith("/manhua/") || value.startsWith("/manhwa/") || value.startsWith("/bd/") || value.startsWith("/comic/")
                 }
                 if (attrMatch != null) {
                     val name = el.ownText().ifBlank { el.text() }
