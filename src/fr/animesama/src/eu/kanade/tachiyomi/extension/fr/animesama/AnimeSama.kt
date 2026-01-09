@@ -30,15 +30,17 @@ class AnimeSama : ParsedHttpSource() {
 
     override val name = "AnimeSama"
 
-    override val baseUrl = "https://anime-sama.si"
+    override val baseUrl = "https://anime-sama.pw"
 
     private val cdn = "$baseUrl/s2/scans/"
 
     override val lang = "fr"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
+    private val interceptor = AnimeSamaInterceptor(network.cloudflareClient, baseUrl, headers)
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(interceptor)
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
@@ -341,5 +343,17 @@ class AnimeSama : ParsedHttpSource() {
             .build()
 
         return GET(page.imageUrl!!, imgHeaders)
+    }
+
+    fun convertUrlToLatestDomain(url: String): String {
+        return "${interceptor.getBaseUrl()!!}$url"
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        return convertUrlToLatestDomain(manga.url)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return convertUrlToLatestDomain(chapter.url)
     }
 }
