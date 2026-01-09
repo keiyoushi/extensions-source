@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.kuromangas
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -50,7 +49,6 @@ class KuroMangas : HttpSource(), ConfigurableSource {
             .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
-                    addInterceptor(CookieInterceptor(API_HOST, "token" to token))
                     addInterceptor { chain ->
                         val request = chain.request()
                         if (request.url.host == cdnHost) {
@@ -69,7 +67,10 @@ class KuroMangas : HttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "application/json, text/plain, */*")
         .add("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/catalogo")
+        .add("Sec-Fetch-Dest", "empty")
+        .add("Sec-Fetch-Mode", "cors")
+        .add("Sec-Fetch-Site", "same-origin")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
@@ -241,7 +242,7 @@ class KuroMangas : HttpSource(), ConfigurableSource {
         }.toString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/auth/login", headers, requestBody)
-        val response = network.client.newCall(request).execute()
+        val response = network.cloudflareClient.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()
             throw Exception("Login failed: ${response.code}")
