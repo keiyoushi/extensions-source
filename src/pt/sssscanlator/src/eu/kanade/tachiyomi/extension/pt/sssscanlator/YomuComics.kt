@@ -208,7 +208,16 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     // =============================== Details ==============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/obra/")
+        val path = manga.url
+            .removePrefix(baseUrl)
+            .removePrefix("/")
+
+        val slug = if (path.startsWith("obra/")) {
+            path.removePrefix("obra/")
+        } else {
+            path
+        }
+
         return GET("$baseUrl/api/public/series/$slug", headers)
     }
 
@@ -218,7 +227,11 @@ class YomuComics : HttpSource(), ConfigurableSource {
         return seriesDto.toSManga(slug)
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     // =============================== Chapters =============================
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
     override fun chapterListRequest(manga: SManga): Request {
         return mangaDetailsRequest(manga)
     }
@@ -231,7 +244,12 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     // ================================ Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val url = if (chapter.url.startsWith("http")) {
+            chapter.url.toHttpUrl()
+        } else {
+            "$baseUrl${chapter.url}".toHttpUrl()
+        }
+
         val mangaId = url.queryParameter("id")
             ?: throw IOException("ID da obra não encontrado na URL do capítulo")
         val chapterNumber = url.pathSegments.last().removePrefix("capitulo-").replace("-", ".")
