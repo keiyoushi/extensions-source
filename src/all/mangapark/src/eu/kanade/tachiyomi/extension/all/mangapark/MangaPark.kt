@@ -61,8 +61,6 @@ class MangaPark(
         }
         rateLimitHost(apiUrl.toHttpUrl(), 1)
         addInterceptor(::imageFallbackInterceptor)
-        // intentionally after rate limit interceptor so thumbnails are not rate limited
-        addInterceptor(::thumbnailDomainInterceptor)
     }.build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -307,25 +305,6 @@ class MangaPark(
         }
 
         return chain.proceed(request)
-    }
-
-    private fun thumbnailDomainInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url
-
-        return if (url.host == THUMBNAIL_LOOPBACK_HOST) {
-            val newUrl = url.newBuilder()
-                .host(domain)
-                .build()
-
-            val newRequest = request.newBuilder()
-                .url(newUrl)
-                .build()
-
-            chain.proceed(newRequest)
-        } else {
-            chain.proceed(request)
-        }
     }
 
     override fun imageUrlParse(response: Response): String {
