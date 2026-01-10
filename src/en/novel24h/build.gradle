@@ -1,0 +1,10 @@
+ext {
+    extName = 'Novel24h'
+    extClass = '.Novel24h'
+    themePkg = 'madara'
+    baseUrl = 'https://24hnovel.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
