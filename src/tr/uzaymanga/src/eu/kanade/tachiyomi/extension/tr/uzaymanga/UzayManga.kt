@@ -155,7 +155,7 @@ class UzayManga : ParsedHttpSource() {
         fragment.any { trim().contains(it, ignoreCase = true) }
 
     companion object {
-        const val CDN_URL = "https://manga2.efsaneler.can.re"
+        const val CDN_URL = "https://uzaymangacdn3.efsaneler.can.re"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
         val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()

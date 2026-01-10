@@ -2,9 +2,69 @@ package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.text.SimpleDateFormat
+
+@Serializable
+class QwikData(
+    @SerialName("_objs") val objects: List<JsonElement>,
+) {
+    inline fun <reified T> parseAsList(): List<T> {
+        val arr = objects
+        val results = mutableListOf<T>()
+        var i = 0
+
+        while (i < arr.size) {
+            var mapIndex = i
+            while (mapIndex < arr.size && arr[mapIndex] !is JsonObject) {
+                mapIndex++
+            }
+            if (mapIndex >= arr.size) break
+
+            val map = arr[mapIndex].jsonObject
+
+            val objContent = buildMap {
+                for ((key, jsonIndex) in map) {
+                    val ref = jsonIndex.jsonPrimitive.content
+
+                    val index = try {
+                        ref.toInt(radix = 36)
+                    } catch (_: Exception) {
+                        throw Exception("Invalid base36 index: $ref")
+                    }
+
+                    val rawValue = arr.getOrNull(index)
+
+                    put(key, unwrapJson(rawValue))
+                }
+            }
+
+            results.add(JsonObject(objContent).parseAs<T>())
+
+            i = mapIndex + 1
+        }
+
+        return results
+    }
+
+    fun unwrapJson(el: JsonElement?): JsonElement {
+        return when (el) {
+            is JsonPrimitive -> el
+            is JsonObject -> el
+            is JsonArray -> JsonArray(el.map { unwrapJson(it) })
+            else -> JsonNull
+        }
+    }
+}
 
 @Serializable
 class PayloadLatestDto(
@@ -37,6 +97,22 @@ class PayloadSeriesDto(
     @SerialName("last_page") private val lastPage: Int = 0,
 ) {
     fun hasNextPage() = currentPage < lastPage
+}
+
+@Serializable
+class QwikSeriesDto(
+    private val id: Long,
+    val name: String,
+    private val slug: String,
+    private val cover: String? = null,
+    val type: String? = null,
+    @SerialName("is_mature") val isMature: Boolean = false,
+) {
+    fun toSManga(imageCdnUrl: String) = SManga.create().apply {
+        url = "/series/comic-$slug#$id"
+        title = name
+        thumbnail_url = cover?.let { "$imageCdnUrl/$it" }
+    }
 }
 
 @Serializable
@@ -88,11 +164,17 @@ class PayloadChaptersDto(
 class ChapterDto(
     private val id: Long,
     private val name: String,
+    private val title: String? = null,
     @SerialName("published_at") val date: String,
 ) {
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = "/capitulo/$id/"
-        name = "Capítulo ${this@ChapterDto.name}"
+        name = buildString {
+            append("Capítulo ${this@ChapterDto.name}")
+            title?.let {
+                append(": $it")
+            }
+        }
         date_upload = try {
             dateFormat.parse(date)?.time ?: 0L
         } catch (e: Exception) {

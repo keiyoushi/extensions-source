@@ -3,7 +3,7 @@ ext {
     extClass = '.AllPornComic'
     themePkg = 'madara'
     baseUrl = 'https://allporncomic.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

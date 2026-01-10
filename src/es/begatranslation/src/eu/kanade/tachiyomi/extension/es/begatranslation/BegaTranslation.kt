@@ -10,7 +10,7 @@ class BegaTranslation : Madara(
     "Bega Translation",
     "https://begatranslation.com",
     "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
 ) {
     override val useNewChapterEndpoint = true
     override val mangaSubString = "series"

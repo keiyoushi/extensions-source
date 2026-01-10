@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -22,7 +23,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -33,7 +33,7 @@ class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
 
     override val lang: String = "vi"
 
-    private val defaultBaseUrl = "https://truyenqqgo.com"
+    private val defaultBaseUrl = "https://truyenqqno.com"
 
     private val preferences: SharedPreferences = getPreferences()
 
@@ -61,7 +61,7 @@ class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
         val anchor = element.selectFirst(".book_info .qtip a")!!
         setUrlWithoutDomain(anchor.attr("href"))
         title = anchor.text()
-        thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
+        thumbnail_url = element.selectFirst(".book_avatar img")?.absUrl("src")
     }
 
     // Selector của nút trang kế tiếp
@@ -108,19 +108,16 @@ class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
         title = document.select("h1").text()
         author = info.select(".org").joinToString { it.text() }
         genre = document.select(".list01 li").joinToString { it.text() }
-        description = document.select(".story-detail-info").textWithLinebreaks()
-        thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
+        description = document.select(".story-detail-info").joinToString {
+            it.select("a, strong, p").unwrap()
+            it.wholeText().trim()
+        }
+        thumbnail_url = document.selectFirst("img[itemprop=image]")?.absUrl("src")
         status = when (info.select(".status > p:last-child").text()) {
             "Đang Cập Nhật" -> SManga.ONGOING
             "Hoàn Thành" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-    }
-
-    private fun Elements.textWithLinebreaks(): String {
-        this.select("p").prepend("\\n")
-        this.select("br").prepend("\\n")
-        return this.text().replace("\\n", "\n").replace("\n ", "\n")
     }
 
     // Chapters
@@ -129,12 +126,8 @@ class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         name = element.select("a").text().trim()
-        date_upload = parseDate(element.select(".time-chap").text())
+        date_upload = dateFormat.tryParse(element.select(".time-chap").text())
     }
-
-    private fun parseDate(date: String): Long = runCatching {
-        dateFormat.parse(date)?.time
-    }.getOrNull() ?: 0L
 
     override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter)
         .newBuilder()
@@ -145,7 +138,7 @@ class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
     override fun pageListParse(document: Document): List<Page> =
         document.select(".page-chapter img:not([src*='stress.gif'])")
             .mapIndexed { idx, it ->
-                Page(idx, imageUrl = it.attr("abs:src"))
+                Page(idx, imageUrl = it.absUrl("src"))
             }
 
     override fun imageUrlParse(document: Document): String =

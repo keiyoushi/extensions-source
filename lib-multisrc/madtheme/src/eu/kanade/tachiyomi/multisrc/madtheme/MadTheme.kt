@@ -141,7 +141,7 @@ abstract class MadTheme(
         title = element.selectFirst("a")!!.attr("title")
         element.selectFirst(".summary")?.text()?.let { description = it }
         element.select(".genres > *").joinToString { it.text() }.takeIf { it.isNotEmpty() }?.let { genre = it }
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:data-src")
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:data-src") + "#image-request"
     }
 
     /*
@@ -155,7 +155,7 @@ abstract class MadTheme(
         title = document.selectFirst(".detail h1")!!.text()
         author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
         genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
-        thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src")
+        thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src") + "#image-request"
 
         val altNames = document.selectFirst(".detail h2")?.text()
             ?.split(',', ';')

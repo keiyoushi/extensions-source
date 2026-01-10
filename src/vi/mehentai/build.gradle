@@ -1,0 +1,10 @@
+ext {
+    extName = "MeHentai"
+    extClass = ".MeHentai"
+    themePkg = "manhwaz"
+    baseUrl = "https://mehentai.tv"
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

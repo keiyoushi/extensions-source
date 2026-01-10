@@ -25,7 +25,7 @@ class PopularComicDto(
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
-        url = slug.removePrefix("/")
+        url = slug.removePrefix("/").replace("manga/", "manhwa/")
     }
 }
 
@@ -44,16 +44,14 @@ class LatestDto(
 @Serializable
 class LatestComicDto(
     @SerialName("create") val latestChapterDate: Long,
-    @SerialName("id_manhwa") val slug: String,
-    @SerialName("_plataforma") val platform: String,
+    @SerialName("id_rel") val slug: String,
     @SerialName("name_manhwa") private val name: String,
     @SerialName("img") private val thumbnail: String,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
-        val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
-        url = "$type/$slug"
+        url = "manhwa/$slug"
     }
 }
 
@@ -65,16 +63,14 @@ class PayloadSearchDto(
 
 @Serializable
 class SearchComicDto(
-    @SerialName("_id") val slug: String,
-    @SerialName("_plataforma") val platform: String,
+    @SerialName("real_id") val slug: String,
     @SerialName("the_real_name") private val name: String,
     @SerialName("_imagen") private val thumbnail: String,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
-        val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
-        url = "$type/$slug"
+        url = "manhwa/$slug"
     }
 }
 

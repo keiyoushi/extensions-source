@@ -62,7 +62,7 @@ class HentaiCosplay : HttpSource() {
                 SManga.create().apply {
                     setUrlWithoutDomain(element.absUrl("href"))
                     thumbnail_url = element.selectFirst("img")
-                        ?.absUrl("data-original")
+                        ?.absUrl("src")
                         ?.replace("http://", "https://")
                     title = element.selectFirst("span:not(.posted)")!!.text()
                     element.selectFirst("span.posted")

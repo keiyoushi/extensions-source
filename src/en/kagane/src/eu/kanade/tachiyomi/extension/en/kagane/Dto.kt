@@ -17,17 +17,30 @@ class SearchDto(
 
     @Serializable
     class Book(
-        val name: String,
         val id: String,
+        val name: String,
+        val source: String,
+        @SerialName("books_count")
+        val booksCount: Int,
+        @SerialName("release_date")
+        val releaseDate: String?,
     ) {
 
-        fun toSManga(domain: String): SManga = SManga.create().apply {
-            title = name
+        fun toSManga(domain: String, showSource: Boolean): SManga = SManga.create().apply {
+            title = if (showSource) "${name.trim()} [$source]" else name
             url = id
             thumbnail_url = "$domain/api/v1/series/$id/thumbnail"
         }
     }
 }
+
+@Serializable
+class AlternateSeries(
+    @SerialName("books_count")
+    val booksCount: Int,
+    @SerialName("release_date")
+    val releaseDate: String?,
+)
 
 @Serializable
 class DetailsDto(
@@ -56,7 +69,7 @@ class DetailsDto(
 
         author = authors.joinToString()
         description = desc.toString()
-        genre = genres.joinToString()
+        genre = (listOf(source) + genres).joinToString()
         status = this@DetailsDto.status.toStatus()
     }
 
@@ -64,6 +77,7 @@ class DetailsDto(
         return when (this) {
             "ONGOING" -> SManga.ONGOING
             "ENDED" -> SManga.COMPLETED
+            "HIATUS" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }
@@ -83,17 +97,21 @@ class ChapterDto(
         val releaseDate: String?,
         @SerialName("pages_count")
         val pagesCount: Int,
+        @SerialName("number_sort")
+        val number: Float,
     ) {
-        fun toSChapter(index: Int): SChapter = SChapter.create().apply {
+        fun toSChapter(useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
             url = "$seriesId;$id;$pagesCount"
             name = title
             date_upload = dateFormat.tryParse(releaseDate)
-            chapter_number = index.toFloat()
+            if (useSourceChapterNumber) {
+                chapter_number = number
+            }
         }
     }
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
     }
 }
 
@@ -101,4 +119,8 @@ class ChapterDto(
 class ChallengeDto(
     @SerialName("access_token")
     val accessToken: String,
+    @SerialName("cache_url")
+    val cacheUrl: String,
+    @SerialName("page_mapping")
+    val pageMapping: Map<Int, String>,
 )

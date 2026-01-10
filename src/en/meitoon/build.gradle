@@ -1,0 +1,10 @@
+ext {
+    extName = 'MeiToon'
+    extClass = '.MeiToon'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://meitoon.org'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

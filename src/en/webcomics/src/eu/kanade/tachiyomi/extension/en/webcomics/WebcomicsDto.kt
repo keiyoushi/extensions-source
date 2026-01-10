@@ -32,3 +32,8 @@ data class ChapterDto(
     val name: String,
     val update_time: Long,
 )
+
+@Serializable
+class UserAgentList(
+    val desktop: List<String>,
+)

@@ -63,7 +63,12 @@ fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPr
     val translatedCount = episodes.flatMap { it.translated_languages }
         .groupingBy { it }.eachCount()
 
-    val titles = fetchTitles(client, headers)
+    // framagit.org is IP blocked in some countries
+    val titles = try {
+        fetchTitles(client, headers)
+    } catch (e: Exception) {
+        null
+    }
 
     val langs = client.newCall(GET("$BASE_URL/0_sources/langs.json", headers))
         .execute().parseAs<LangsDto>().entries.map { (key, dto) ->
@@ -81,7 +86,7 @@ fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPr
         .also { if (preferences.lang.isEmpty()) editor.chooseLang(it) }
         .map {
             val progress = "${it.translatedCount}/$total translated"
-            LangData(it.key, it.name, progress, it.translators, titles[it.key])
+            LangData(it.key, it.name, progress, it.translators, titles?.get(it.key) ?: if (it.key == "en") TITLE else "$TITLE (${it.key.uppercase()})")
         }
 
     editor.putString(LANG_DATA_PREF, ProtoBuf.encodeToBase64(langs)).apply()

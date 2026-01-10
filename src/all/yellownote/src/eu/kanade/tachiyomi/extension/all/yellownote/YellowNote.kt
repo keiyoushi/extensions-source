@@ -95,7 +95,7 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
     }
 
     override fun simpleNextPageSelector() =
-        "div.pager:first-of-type > span.pager-num.current + a.pager-num"
+        "div.pager:first-of-type > a.pager-next"
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/photos/sort-hot/$page.html", headers)

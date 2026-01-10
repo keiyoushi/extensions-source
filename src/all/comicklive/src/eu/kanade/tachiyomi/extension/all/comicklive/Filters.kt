@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.comicklive
 
 import eu.kanade.tachiyomi.source.model.Filter
 import java.util.Calendar
+import kotlin.collections.filter
 
 abstract class SelectFilter(
     name: String,
@@ -38,15 +39,20 @@ abstract class TriStateGroupFilter(
     val excluded get() = state.filter { it.isExcluded() }.map { it.slug }
 }
 
-class SortFilter : SelectFilter(
-    name = "Sort",
-    options = listOf(
-        "Latest" to "created_at",
-        "Popular" to "user_follow_count",
-        "Highest Rating" to "rating",
-        "Last Uploaded" to "uploaded",
-    ),
+private val getSortsList = listOf(
+    "Latest" to "created_at",
+    "Popular" to "user_follow_count",
+    "Highest Rating" to "rating",
+    "Last Uploaded" to "uploaded",
 )
+
+class SortFilter : Filter.Sort(
+    name = "Sort",
+    values = getSortsList.map { it.first }.toTypedArray(),
+    state = Selection(0, false),
+) {
+    val selected get() = state?.let { getSortsList[it.index] }?.second.takeIf { it?.isNotEmpty() ?: false }
+}
 
 class GenreFilter(genres: List<Metadata.Name>) : TriStateGroupFilter(
     name = "Genre",
@@ -56,6 +62,10 @@ class GenreFilter(genres: List<Metadata.Name>) : TriStateGroupFilter(
 class TagFilter(tags: List<Metadata.Name>) : TriStateGroupFilter(
     name = "Tags",
     options = tags.map { it.name to it.slug },
+)
+
+class TagFilterText : Filter.Text(
+    name = "Tags",
 )
 
 class DemographicFilter : CheckBoxGroup(

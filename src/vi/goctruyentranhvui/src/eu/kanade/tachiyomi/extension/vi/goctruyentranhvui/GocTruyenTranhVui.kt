@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -53,13 +54,19 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    private val xhrHeaders by lazy {
+        headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+    }
+
     override fun popularMangaRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("home/filter")
             addQueryParameter("p", (page - 1).toString())
             addQueryParameter("value", "recommend")
         }.build(),
-        headers,
+        xhrHeaders,
     )
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -70,7 +77,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
         "$apiUrl/search?p=${page - 1}&orders%5B%5D=recentDate",
-        headers,
+        xhrHeaders,
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -80,7 +87,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
-        return GET("$baseUrl/api/comic/$mangaId/chapter?limit=-1#$slug", headers)
+        return GET("$baseUrl/api/comic/$mangaId/chapter?limit=-1#$slug", xhrHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -108,40 +115,38 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         else -> SManga.UNKNOWN
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-        val pattern = Regex("chapterJson:\\s*`(.*?)`")
-        val match = pattern.find(html) ?: throw Exception("Không tìm thấy Json") // find json
-        val jsonPage = match.groups[1]!!.value
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = chapter.url
+        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
+        val comicId = url.substringAfter("#")
 
-        val imageUrls = if (jsonPage.isEmpty()) {
-            val regexMangaId = Regex("""comic\s*=\s*\{\s*id:\s*"(\d{10})"""")
-            val matchId = regexMangaId.find(html) ?: throw Exception("Không tìm thấy mangaId") // find mangaId
-            val mangaId = matchId.groups[1]!!.value
-            val nameEn = response.request.url.toString().substringAfter("/truyen/").substringBefore("/")
-            val chapterNumber = response.request.url.toString().substringAfterLast("chuong-")
-            val body = FormBody.Builder()
-                .add("comicId", mangaId)
-                .add("chapterNumber", chapterNumber)
-                .add("nameEn", nameEn)
-                .build()
-            val request = POST("$baseUrl/api/chapter/auth", pageHeaders, body)
-            client.newCall(request).execute().parseAs<ResultDto<ImageListDto>>().result.data
-        } else {
-            jsonPage.parseAs<ImageListWrapper>().body.result.data
-        }
-        return imageUrls.mapIndexed { i, url ->
+        val body = FormBody.Builder()
+            .add("comicId", comicId)
+            .add("chapterNumber", numberChapter)
+            .add("nameEn", slug)
+            .build()
+
+        return POST("$baseUrl/api/chapter/loadAll", pageHeaders, body)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val jsonPage = response.parseAs<ResultDto<ImageListDto>>().result.data ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+
+        return jsonPage.mapIndexed { i, url ->
             val finalUrl = if (url.startsWith("/image/")) { baseUrl + url } else { url }
             Page(i, imageUrl = finalUrl)
         }
     }
+
     private val pageHeaders by lazy {
         getToken()?.let {
             headersBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .add("Authorization", it)
+                .set("X-Requested-With", "XMLHttpRequest")
+                .set("Origin", baseUrl)
+                .set("Authorization", it)
                 .build()
-        } ?: throw Exception("Vui lòng đăng nhập trong WebView")
+        } ?: xhrHeaders
     }
     private var _token: String? = null
 
@@ -150,9 +155,8 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         _token?.also { return it }
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val customToken = preferences.getString("custom_token", null)
-        if (!customToken.isNullOrBlank()) {
-            return customToken
+        if (!customToken().isNullOrBlank()) {
+            return customToken()
         }
         if (_token != null) return _token
 
@@ -210,14 +214,24 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         GenreList(getGenreList()),
     )
 
+    private fun customToken(): String? = preferences.getString(CUSTOM_TOKEN, null)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val tokenPref = EditTextPreference(screen.context).apply {
-            key = "custom_token"
+        EditTextPreference(screen.context).apply {
+            key = CUSTOM_TOKEN
             title = "Authorization Token"
             summary = "Enter token manually"
             dialogTitle = "Authorization Token"
-            dialogMessage = "Token: ${getToken()}"
-        }
-        screen.addPreference(tokenPref)
+            customToken()?.let { dialogMessage = if (it.isNotEmpty()) "Token: ${customToken()}" else "Only show manually entered token, do not show token from WebView" }
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val CUSTOM_TOKEN = "custom_token"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
     }
 }

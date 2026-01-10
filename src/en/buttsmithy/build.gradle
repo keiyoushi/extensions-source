@@ -1,8 +1,12 @@
 ext {
     extName = 'buttsmithy'
     extClass = '.Buttsmithy'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:textinterceptor'))
+}

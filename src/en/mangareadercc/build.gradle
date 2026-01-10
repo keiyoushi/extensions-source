@@ -1,9 +1,9 @@
 ext {
-    extName = 'MangaReader.cc'
-    extClass = '.MangaReaderCC'
+    extName = 'MangaReader.in'
+    extClass = '.MangaReaderIN'
     themePkg = 'paprika'
-    baseUrl = 'https://www.mangareader.cc'
-    overrideVersionCode = 3
+    baseUrl = 'https://mangareader.in'
+    overrideVersionCode = 4
     isNsfw = true
 }
 

@@ -7,10 +7,14 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -50,34 +54,49 @@ class MangaCrab :
 
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
 
+    private val imageKeyRegex = """'X-Img-Key'\s*:\s*'(.*?)'""".toRegex()
+
+    override fun pageListParse(document: Document): List<Page> {
+        launchIO { countViews(document) }
+
+        val imageKey = document.selectFirst("script:containsData('X-Img-Key')")?.data()
+            ?.let { script ->
+                imageKeyRegex.find(script)?.groups?.get(1)?.value
+            }
+            ?: throw Exception("Image key not found")
+
+        return document.select(pageListParseSelector).mapIndexed { index, element ->
+            val imageUrl = element.selectFirst("img")?.let { imageFromElement(it) }
+            Page(index, document.location(), "$imageUrl#$imageKey")
+        }
+    }
+
     override fun imageFromElement(element: Element): String? {
         val url = element.attributes()
             .firstNotNullOfOrNull { attr ->
                 element.absUrl(attr.key).toHttpUrlOrNull()
-                    ?.takeIf { it.encodedPath == "/validate.php" }
+                    ?.takeIf { it.encodedQuery.toString().contains("wp-content") }
             }
-
-        val fileUrl = url
-            ?.queryParameter("file")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { file ->
-                url.newBuilder()
-                    .encodedPath("/$file")
-                    .query(null)
-                    .build()
-            }
-
-        val imageAbsUrl = element.attributes().firstOrNull { it.value.toHttpUrlOrNull() != null }?.value
 
         return when {
-            fileUrl != null -> fileUrl.toString()
+            url != null -> url.toString()
             element.hasAttr("data-src") -> element.attr("abs:data-src")
             element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
             element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
             element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
             element.hasAttr("data-src-base64") -> element.attr("abs:data-src-base64")
-            imageAbsUrl != null -> imageAbsUrl
             else -> element.attr("abs:src")
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl!!.substringBeforeLast("#")
+        val imageKey = page.imageUrl!!.substringAfterLast("#")
+        val headers = headers.newBuilder()
+            .set("Referer", page.url)
+            .set("X-Img-Key", imageKey)
+            .build()
+
+        return GET(imageUrl, headers)
     }
 }

@@ -204,7 +204,7 @@ class UngTyComics : ParsedHttpSource(), ConfigurableSource {
 }
 
 private const val PREF_BASE_URL = "baseUrl"
-private val MIRRORS = arrayOf("https://www.ungtycomics.io", "https://ungtycomicsvip.com", "https://topdammy.com")
+private val MIRRORS = arrayOf("https://ungtycomicsa.com")
 private val DATE_FORMAT = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
 
 private class GenreFilter(val genres: List<Genre>) : Filter.Select<String>(

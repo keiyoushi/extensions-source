@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.comicklive
 import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -19,16 +20,17 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.CacheControl
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
+import okio.IOException
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -113,38 +115,50 @@ class Comick(
 
     private var nextCursor: String? = null
 
+    private val spaceSlashRegex = Regex("[ /]")
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (page == 1) {
             nextCursor = null
         }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
-            addQueryParameter("order_by", filters.firstInstance<SortFilter>().selected)
-            addQueryParameter("order_direction", "desc")
+            filters.firstInstance<SortFilter>().let {
+                addQueryParameter("order_by", it.selected)
+                addQueryParameter("order_direction", if (it.state!!.ascending) "asc" else "desc")
+            }
             filters.firstInstanceOrNull<GenreFilter>()?.let { genre ->
                 genre.included.forEach {
-                    addQueryParameter("genres[]", it)
+                    addQueryParameter("genres", it)
                 }
                 genre.excluded.forEach {
-                    addQueryParameter("excludes[]", it)
+                    addQueryParameter("excludes", it)
+                }
+            }
+            filters.firstInstanceOrNull<TagFilterText>()?.let { text ->
+                text.state.split(",").filter(String::isNotBlank).forEach {
+                    val value = it.trim().lowercase().replace(spaceSlashRegex, "-")
+                    addQueryParameter(
+                        if (value.startsWith("-")) "excluded_tags" else "tags",
+                        value.replaceFirst("-", ""),
+                    )
                 }
             }
             filters.firstInstanceOrNull<TagFilter>()?.let { tag ->
                 tag.included.forEach {
-                    addQueryParameter("tags[]", it)
+                    addQueryParameter("tags", it)
                 }
                 tag.excluded.forEach {
-                    addQueryParameter("excluded_tags[]", it)
+                    addQueryParameter("excluded_tags", it)
                 }
             }
             filters.firstInstance<DemographicFilter>().checked.forEach {
-                addQueryParameter("demographic[]", it)
+                addQueryParameter("demographic", it)
             }
             filters.firstInstance<CreatedAtFilter>().selected?.let {
                 addQueryParameter("time", it)
             }
             filters.firstInstance<TypeFilter>().checked.forEach {
-                addQueryParameter("country[]", it)
+                addQueryParameter("country", it)
             }
             filters.firstInstance<MinimumChaptersFilter>().state.let {
                 if (it.isNotBlank()) {
@@ -207,8 +221,8 @@ class Comick(
         val filters: MutableList<Filter<*>> = mutableListOf(
             SortFilter(),
             DemographicFilter(),
-            CreatedAtFilter(),
             TypeFilter(),
+            CreatedAtFilter(),
             MinimumChaptersFilter(),
             StatusFilter(),
             ContentRatingFilter(),
@@ -220,18 +234,40 @@ class Comick(
             GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_CACHE),
         ).await()
 
-        // the cache only request fails if it was not cached already
-        if (!response.isSuccessful) {
-            CoroutineScope(Dispatchers.IO).launch {
-                metadataClient.newCall(
-                    GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_NETWORK),
-                ).await().closeQuietly()
-            }
+        val getTags = preferences.getBoolean(GET_TAGS, true)
 
+        val textTags: List<Filter<*>> = listOf(
+            Filter.Separator(),
+            Filter.Header("Separate tags with commas (,)"),
+            Filter.Header("Prepend with dash (-) to exclude"),
+            TagFilterText(),
+            Filter.Separator(),
+        )
+
+        if (!response.isSuccessful) {
+            metadataClient.newCall(
+                GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_NETWORK),
+            ).enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(name, "Unable to fetch filters", e)
+                    }
+                },
+            )
+
+            if (!getTags) {
+                filters.addAll(
+                    index = 2,
+                    textTags,
+                )
+            }
             filters.addAll(
                 index = 0,
                 listOf(
-                    Filter.Header("Press 'reset' to load genres and tags"),
+                    Filter.Header("Press 'reset' to load genres ${if (getTags) "and tags" else ""}"),
                     Filter.Separator(),
                 ),
             )
@@ -243,23 +279,37 @@ class Comick(
         } catch (e: Throwable) {
             Log.e(name, "Unable to parse filters", e)
 
+            if (!getTags) {
+                filters.addAll(
+                    index = 2,
+                    textTags,
+                )
+            }
             filters.addAll(
                 index = 0,
                 listOf(
-                    Filter.Header("Failed to parse genres and tags"),
+                    Filter.Header("Failed to parse genres ${if (getTags) "and tags" else ""}"),
                     Filter.Separator(),
                 ),
             )
             return@runBlocking FilterList(filters)
         }
 
-        filters.addAll(
-            index = 1,
-            listOf(
-                GenreFilter(data.genres),
-                TagFilter(data.tags),
-            ),
+        filters.add(
+            index = 3,
+            GenreFilter(data.genres),
         )
+        if (!getTags) {
+            filters.addAll(
+                index = 4,
+                textTags,
+            )
+        } else {
+            filters.add(
+                index = 4,
+                TagFilter(data.tags),
+            )
+        }
         return@runBlocking FilterList(filters)
     }
 
@@ -292,7 +342,7 @@ class Comick(
                 if (data.titles.isNotEmpty()) {
                     append("\n\n Alternative Titles: \n")
                     data.titles.forEach {
-                        append(it.title, "\n")
+                        append("- ", it.title.trim(), "\n")
                     }
                 }
             }.trim()
@@ -375,8 +425,17 @@ class Comick(
             summary = "%s"
             setDefaultValue("0")
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = GET_TAGS
+            title = "Tags Input Type"
+            summaryOn = "Tags will be in a form of scrollable list"
+            summaryOff = "Tags will need to be inputted manually"
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
 }
 
 private val domains = arrayOf("https://comick.live", "https://comick.art")
 private const val DOMAIN_PREF = "domain_pref"
+private const val GET_TAGS = "get_tags"

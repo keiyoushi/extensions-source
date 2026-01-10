@@ -241,17 +241,17 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         return textDate.replace("Май", "Мая").let {
             try {
                 dateParseRu.parse(it)?.time ?: 0L
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 0L
             }
         }
     }
 
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
-        response.asJsoup().select("div.gallery-item img").mapIndexed { index, img ->
+        response.asJsoup().select("""img[title~=.+][loading="lazy"]""").mapIndexed { index, img ->
             add(Page(index, imageUrl = img.attr("abs:data-src")))
         }
-        if (size == 0 && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
+        if (isEmpty() && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
             throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
         }
     }

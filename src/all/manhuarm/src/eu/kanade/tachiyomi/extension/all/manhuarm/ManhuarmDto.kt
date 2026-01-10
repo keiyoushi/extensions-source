@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm
 
-import android.os.Build
-import android.util.Base64
-import androidx.annotation.RequiresApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -21,23 +18,12 @@ import java.io.IOException
 class PageDto(
     @SerialName("image")
     val imageUrl: String,
-
     @SerialName("texts")
     @Serializable(with = DialogListSerializer::class)
     val dialogues: List<Dialog> = emptyList(),
 )
 
 @Serializable
-class DialogDto(
-    private val data: String,
-) {
-    val content: String by lazy {
-        Base64.decode(data, Base64.DEFAULT).toString(Charsets.UTF_8)
-    }
-}
-
-@Serializable
-@RequiresApi(Build.VERSION_CODES.O)
 data class Dialog(
     val x: Float,
     val y: Float,
@@ -47,7 +33,6 @@ data class Dialog(
     val textByLanguage: Map<String, String> = emptyMap(),
 ) {
     var scale: Float = 1F
-
     val height: Float get() = scale * _height
     val width: Float get() = scale * _width
 
@@ -62,18 +47,34 @@ data class Dialog(
 
 private object DialogListSerializer :
     JsonTransformingSerializer<List<Dialog>>(ListSerializer(Dialog.serializer())) {
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        return JsonArray(
-            element.jsonArray.map { jsonElement ->
-                val coordinates = getCoordinates(jsonElement)
-                val textByLanguage = getDialogs(jsonElement)
 
-                buildJsonObject {
-                    put("x", coordinates[0])
-                    put("y", coordinates[1])
-                    put("_width", coordinates[2])
-                    put("_height", coordinates[3])
-                    put("textByLanguage", textByLanguage)
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        if (element !is JsonArray) {
+            return JsonArray(emptyList())
+        }
+
+        if (element.jsonArray.isEmpty()) {
+            return JsonArray(emptyList())
+        }
+
+        return JsonArray(
+            element.jsonArray.mapNotNull { jsonElement ->
+                try {
+                    val coordinates = getCoordinates(jsonElement) ?: return@mapNotNull null
+                    val textByLanguage = getDialogs(jsonElement)
+
+                    // Validate coordinates array has at least 4 elements
+                    if (coordinates.size < 4) return@mapNotNull null
+
+                    buildJsonObject {
+                        put("x", coordinates[0])
+                        put("y", coordinates[1])
+                        put("_width", coordinates[2])
+                        put("_height", coordinates[3])
+                        put("textByLanguage", textByLanguage)
+                    }
+                } catch (e: Exception) {
+                    null
                 }
             },
         )
@@ -86,6 +87,7 @@ private object DialogListSerializer :
                 ?: throw IOException("Dialog box position not found")
         }
     }
+
     private fun getDialogs(element: JsonElement): JsonObject {
         return buildJsonObject {
             when (element) {

@@ -2,8 +2,8 @@ ext {
     extName = 'Violet Scans'
     extClass = '.VioletScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://violetscans.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://violetscans.org'
+    overrideVersionCode = 3
     isNsfw = false
 }
 

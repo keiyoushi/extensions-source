@@ -1,0 +1,10 @@
+ext {
+    extName = 'Spicy Scan'
+    extClass = '.SpicyScan'
+    themePkg = 'spicytheme'
+    baseUrl = 'https://spicyseries.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
