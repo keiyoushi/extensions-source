@@ -61,13 +61,13 @@ class Nekopost : HttpSource() {
     override fun latestUpdatesRequest(page: Int) =
         projectRequest(
             "latest",
-            LatestRequest(0, PagingInfo(page, PAGE_SIZE)),
+            LatestRequest("c", PagingInfo(page, PAGE_SIZE)),
         )
 
     override fun popularMangaRequest(page: Int) =
         projectRequest(
             "list/popular",
-            PopularRequest("mc", PagingInfo(page, PAGE_SIZE)),
+            PopularRequest("nf", PagingInfo(page, PAGE_SIZE)),
         )
 
     private inline fun <reified T> projectRequest(endpoint: String, body: T): Request {
@@ -79,17 +79,17 @@ class Nekopost : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        parseProjectList(response, filterTypes = setOf("m", "c"), hasNextPage = true)
+        parseProjectList(response, filterTypes = null, hasNextPage = true)
 
     override fun popularMangaParse(response: Response): MangasPage =
-        parseProjectList(response, filterTypes = setOf("m", "c"), hasNextPage = true)
+        parseProjectList(response, filterTypes = null, hasNextPage = true)
 
     override fun searchMangaParse(response: Response): MangasPage =
         parseProjectList(response, filterTypes = setOf("m"), hasNextPage = false)
 
     private fun parseProjectList(
         response: Response,
-        filterTypes: Set<String>,
+        filterTypes: Set<String>?,
         hasNextPage: Boolean,
     ): MangasPage {
         val projectList: RawProjectSearchSummaryList = json.decodeFromString(response.body.string())
@@ -102,7 +102,7 @@ class Nekopost : HttpSource() {
             projectList
                 .listProject
                 .asSequence()
-                .filter { it.projectType in filterTypes }
+                .filter { filterTypes == null || it.projectType in filterTypes }
                 .map { project ->
                     SManga.create().apply {
                         url = project.pid.toString()
@@ -115,7 +115,7 @@ class Nekopost : HttpSource() {
                 }
                 .toList()
 
-        return MangasPage(mangaList, hasNextPage)
+        return MangasPage(mangaList, hasNextPage && mangaList.isNotEmpty() && mangaList.size >= PAGE_SIZE)
     }
 
     private fun buildCoverUrl(projectId: String, coverVersion: Int? = null): String {
@@ -203,9 +203,26 @@ class Nekopost : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val cleanQuery = query.trim()
+        val projectIdRegex = Regex("""nekopost\.net/manga/(\d+)""")
+        val matchResult = projectIdRegex.find(cleanQuery)
+
+        val keyword = if (matchResult != null) {
+            val projectId = matchResult.groupValues[1]
+            try {
+                val response = client.newCall(GET("$projectDataEndpoint/$projectId", commonHeaders)).execute()
+                val projectInfo: RawProjectInfo = json.decodeFromString(response.body.string())
+                projectInfo.projectInfo.projectName
+            } catch (e: Exception) {
+                projectId
+            }
+        } else {
+            cleanQuery
+        }
+
         val searchData =
             SearchRequest(
-                keyword = query,
+                keyword = keyword,
                 status = 0,
                 paging = PagingInfo(pageNo = page, pageSize = 100),
             )

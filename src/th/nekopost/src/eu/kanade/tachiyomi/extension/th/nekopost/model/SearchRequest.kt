@@ -23,6 +23,6 @@ data class PopularRequest(
 
 @Serializable
 data class LatestRequest(
-    val status: Int,
+    val type: String,
     val paging: PagingInfo,
 )
