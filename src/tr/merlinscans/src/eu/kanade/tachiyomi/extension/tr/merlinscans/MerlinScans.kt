@@ -1,12 +1,11 @@
 package eu.kanade.tachiyomi.extension.tr.merlinscans
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 
-class MerlinScans : MangaThemesia(
+class MerlinScans : InitManga(
     "Merlin Scans",
-    "https://merlinscans.com",
+    "https://merlintoon.com",
     "tr",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
+    latestUrlSlug = "son-guncellenenler",
+    versionId = 2,
 )
