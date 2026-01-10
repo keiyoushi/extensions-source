@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.batotov4
 
+import android.content.SharedPreferences
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Call
@@ -36,24 +35,15 @@ import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
 import java.util.concurrent.TimeUnit
-import kotlin.text.Regex
 
 class BatoToV4(
+    override val baseUrl: String,
     override val lang: String,
     private val siteLang: String = lang,
+    private val preferences: SharedPreferences,
 ) : ConfigurableSource, HttpSource() {
 
-    private val preferences by getPreferencesLazy()
-
-    override val name: String = "Bato.to V4"
-
-    override val baseUrl: String
-        get() {
-            val index = preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()
-                .coerceAtMost(mirrors.size - 1)
-
-            return mirrors[index]
-        }
+    override val name: String = "Bato.to"
 
     override val supportsLatest = true
 
@@ -85,20 +75,8 @@ class BatoToV4(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("id:") || query.startsWith("https://")) {
-            val id = if (query.startsWith("https://")) {
-                val path = query.toHttpUrl().pathSegments
-
-                if (path.size > 1 && path[0] == "title") {
-                    path[1].substringBefore("-")
-                } else if (path.size > 1 && path[0] == "series") {
-                    path[1]
-                } else {
-                    return Observable.error(Exception("Unknown url"))
-                }
-            } else {
-                query.substringAfter("id:")
-            }
+        if (query.startsWith("id:", true)) {
+            val id = query.lowercase().substringAfter("id:")
 
             if (id.toIntOrNull() == null) {
                 return Observable.error(Exception("comic id must be integer"))
@@ -330,7 +308,7 @@ class BatoToV4(
 
     // ************ Manga Details ************ //
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val apiVariables = ApiComicNodeVariables(id = manga.url)
+        val apiVariables = ApiComicNodeVariables(id = getMangaId(manga.url))
 
         return graphQLRequest(apiVariables, COMIC_NODE_QUERY)
     }
@@ -346,10 +324,16 @@ class BatoToV4(
         return "$baseUrl/title/${manga.url}"
     }
 
+    /* Match old v2 Url */
+    private fun getMangaId(url: String): String {
+        val matchResult = seriesIdRegex.find(url)
+        return matchResult?.groups?.get(1)?.value ?: url
+    }
+
     // ************ Chapter List ************ //
     override fun chapterListRequest(manga: SManga): Request {
         val apiVariables = ApiChapterListVariables(
-            comicId = manga.url,
+            comicId = getMangaId(manga.url),
             start = -1,
         )
 
@@ -366,8 +350,7 @@ class BatoToV4(
 
     // ************ Page List ************ //
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfter("/")
-        val apiVariables = ApiChapterNodeVariables(id = chapterId)
+        val apiVariables = ApiChapterNodeVariables(id = chapter.url)
 
         return graphQLRequest(apiVariables, CHAPTER_NODE_QUERY)
     }
@@ -408,9 +391,7 @@ class BatoToV4(
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (comicId, chapterId) = chapter.url.split("/", limit = 2)
-
-        return "$baseUrl/title/$comicId/$chapterId"
+        return "$baseUrl/title/chapter/${chapter.url}"
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -511,15 +492,6 @@ class BatoToV4(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = "Preferred Mirror"
-            entries = mirrors
-            entryValues = Array(mirrors.size) { it.toString() }
-            summary = "%s"
-            setDefaultValue("0")
-        }.also(screen::addPreference)
-
         CheckBoxPreference(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
@@ -576,11 +548,6 @@ class BatoToV4(
     private fun customRemoveTitle(): String =
         preferences.getString(REMOVE_TITLE_CUSTOM_PREF, "")!!
 }
-private const val MIRROR_PREF_KEY = "MIRROR"
-private val mirrors = arrayOf(
-    "https://bato.si",
-    "https://bato.ing",
-)
 
 private val jsonMediaType = "application/json".toMediaType()
 
@@ -593,5 +560,7 @@ private val userIdRegex = Regex("""/u/(\d+)""")
 
 private const val BROWSE_PAGE_SIZE = 36
 
+// Match old v2 Url
+private val seriesIdRegex = Regex("""series/(\d+)""")
 private val titleRegex: Regex =
     Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.batotov4
+package eu.kanade.tachiyomi.extension.all.batoto
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -20,7 +20,7 @@ class UrlActivity : Activity() {
         try {
             startActivity(mainIntent)
         } catch (e: ActivityNotFoundException) {
-            Log.e("BatoTo v4", "Unable to launch activity", e)
+            Log.e("BatoTo", "Unable to launch activity", e)
         }
 
         finish()
