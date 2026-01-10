@@ -29,11 +29,7 @@ import java.util.Locale
 
 class Nekopost : HttpSource() {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        encodeDefaults = true
-    }
+    private val json: Json by injectLazy()
 
     override val baseUrl = "https://www.nekopost.net"
     override val lang = "th"
@@ -225,6 +221,6 @@ class Nekopost : HttpSource() {
     override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 
     companion object {
-        private const val PAGE_SIZE = 30
+        private const val PAGE_SIZE = 5
     }
 }
