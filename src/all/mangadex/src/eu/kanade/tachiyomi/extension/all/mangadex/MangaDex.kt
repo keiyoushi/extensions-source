@@ -180,6 +180,17 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     // Search manga section
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("http") && query.contains("mangadex.org")) {
+            val url = query.trim()
+            if (url.contains("/title/")) {
+                val match = MDConstants.uuidRegex.find(url)
+                if (match != null) {
+                    val mangaId = match.value
+                    return super.fetchSearchManga(page, MDConstants.prefixIdSearch + mangaId, filters)
+                }
+            }
+        }
+
         return when {
             query.startsWith(MDConstants.prefixChSearch) ->
                 getMangaIdFromChapterId(query.removePrefix(MDConstants.prefixChSearch))

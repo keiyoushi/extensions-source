@@ -179,7 +179,6 @@ class Nekopost : HttpSource() {
                     thumbnail_url = "$fileHost/collectManga/${it.pid}/${it.pid}_cover.jpg?ver=${it.coverVersion}"
                 }
             }
-
         return MangasPage(mangaList, false)
     }
 }
