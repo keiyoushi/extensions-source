@@ -8,6 +8,7 @@ class Sasangeyou : MangaThemesia(
     "Sasangeyou",
     "https://sasangeyou.net",
     "id",
+    "/manga",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.forLanguageTag("id")),
 ) {
 
