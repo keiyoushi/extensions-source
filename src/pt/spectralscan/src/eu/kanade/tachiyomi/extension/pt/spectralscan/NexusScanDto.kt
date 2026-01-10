@@ -10,270 +10,76 @@ import java.util.Locale
 import java.util.TimeZone
 
 private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 }
 
-class SelectFilter(
-    displayName: String = "",
-    val parameter: String = "",
-    private val vals: Array<Pair<String, String>>,
-    state: Int = 0,
-) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
-    fun selected() = vals[state].second
-}
-
-val sortList = arrayOf(
-    "Mais Recentes" to "latest",
-    "Mais Populares" to "popular",
-    "Melhor Avaliação" to "rating",
-    "Nome (A-Z)" to "name_asc",
-    "Nome (Z-A)" to "name_desc",
-)
-
-val genreList = arrayOf(
-    "Todos os Gêneros" to "",
-    "Academia de Magia" to "academia-de-magia",
-    "Acadêmica" to "academica",
-    "Ação" to "acao",
-    "Adaptação" to "adaptacao",
-    "Adaptação de Novel" to "adaptacao-de-novel",
-    "Adultério" to "adulterio",
-    "Adulto" to "adulto",
-    "Ahegao" to "ahegao",
-    "Apocalipse" to "apocalipse",
-    "App" to "app",
-    "Artes Marciais" to "artes-marciais",
-    "Aventura" to "aventura",
-    "BDSM" to "bdsm",
-    "Bondage" to "bondage",
-    "Bullying" to "bullying",
-    "Bunda Grande" to "bunda-grande",
-    "Campus" to "campus",
-    "Cartoon" to "cartoon",
-    "Casada" to "casada",
-    "Casamento" to "casamento",
-    "Club" to "club",
-    "Comédia" to "comedia",
-    "Comédia Romântica" to "comedia-romantica",
-    "Comida" to "comida",
-    "Cotidiano" to "cotidiano",
-    "Crime" to "crime",
-    "Culinária" to "culinaria",
-    "Cultivo" to "cultivo",
-    "Curta" to "curta",
-    "Cyberpunk" to "cyberpunk",
-    "Dark Romance" to "dark-romance",
-    "Demônio" to "demonio",
-    "Demônios" to "demonios",
-    "Dominação" to "dominacao",
-    "Doujinshi" to "doujinshi",
-    "Dragões" to "dragoes",
-    "Drama" to "drama",
-    "Ecchi" to "ecchi",
-    "Escolar" to "escolar",
-    "Escritório" to "escritorio",
-    "Esporte" to "esporte",
-    "Esportes" to "Esportes",
-    "Estratégia" to "estrategia",
-    "Estudante" to "estudante",
-    "Exibicionismo" to "exibicionismo",
-    "Família" to "familia",
-    "Família Real" to "familia-real",
-    "Fantasia" to "fantasia",
-    "Fantasmas" to "fantasmas",
-    "Fetiche" to "fetiche",
-    "Ficção Científica" to "ficcao-cientifica",
-    "Futanari" to "futanari",
-    "Game" to "game",
-    "Game System" to "game-system",
-    "Gangster" to "gangster",
-    "Gender Bender" to "gender-bender",
-    "Gênio" to "genio",
-    "Gore" to "gore",
-    "Guerra" to "guerra",
-    "Hardcore" to "hardcore",
-    "Harem" to "harem",
-    "Harém Reverso" to "harem-reverso",
-    "Hentai" to "hentai",
-    "Híbrido" to "hibrido",
-    "História" to "historia",
-    "Histórico" to "historico",
-    "Horror" to "horror",
-    "Idols" to "idols",
-    "Incesto" to "incesto",
-    "Isekai" to "isekai",
-    "Jogo" to "jogo",
-    "Jogos" to "jogos",
-    "Josei" to "josei",
-    "Luta" to "luta",
-    "Máfia" to "mafia",
-    "Magia" to "magia",
-    "Magia Escolar" to "magia-escolar",
-    "Mature" to "mature",
-    "Mecha" to "mecha",
-    "Médico" to "medico",
-    "Metaverso" to "metaverso",
-    "Milf" to "milf",
-    "Militar" to "militar",
-    "Mistério" to "misterio",
-    "Mitologia" to "mitologia",
-    "MMORPG" to "mmorpg",
-    "Monstros" to "monstros",
-    "Murim" to "murim",
-    "Música" to "musica",
-    "Musical" to "musical",
-    "Nerd" to "nerd",
-    "Netori" to "netori",
-    "Obsessão" to "obsessao",
-    "One Shot" to "one-shot",
-    "Oneshot" to "oneshot",
-    "Peitões" to "peitoes",
-    "Perda de Memória" to "perda-de-memoria",
-    "Polícia" to "policia",
-    "Policial" to "policial",
-    "Portais" to "portais",
-    "Pós-apocalíptico" to "pos-apocaliptico",
-    "Profecias" to "profecias",
-    "Prostituição" to "prostituicao",
-    "Psicológico" to "psicologico",
-    "Psicopata" to "psicopata",
-    "Realidade Virtual" to "realidade-virtual",
-    "Realismo" to "realismo",
-    "Reencarnação" to "reencarnacao",
-    "Reencontro" to "reencontro",
-    "Regressão" to "regressao",
-    "Retornado" to "retornado",
-    "Retorno" to "retorno",
-    "Revenge" to "revenge",
-    "Romance" to "romance",
-    "RPG" to "rpg",
-    "Sangue" to "sangue",
-    "School Life" to "school-life",
-    "Sci-Fi" to "sci-fi",
-    "Seinen" to "seinen",
-    "Sem Censura" to "sem-censura",
-    "Shoujo" to "shoujo",
-    "Shounen" to "shounen",
-    "Sistema" to "sistema",
-    "Sistema de Níveis" to "sistema-de-niveis",
-    "Slice of Life" to "slice-of-life",
-    "Smut" to "smut",
-    "Sobrenatural" to "sobrenatural",
-    "Sobrevivência" to "sobrevivencia",
-    "Sombrio" to "sombrio",
-    "Sports" to "sports",
-    "Submissão" to "submissao",
-    "Sugestivo" to "sugestivo",
-    "Super Poderes" to "super-poderes",
-    "Supernatural" to "supernatural",
-    "Superpoderes" to "superpoderes",
-    "Suspense" to "suspense",
-    "Tecnológico" to "tecnologico",
-    "Tela de Sistema" to "tela-de-sistema",
-    "Terror" to "terror",
-    "Thriller" to "thriller",
-    "Tomboy" to "tomboy",
-    "Torre" to "torre",
-    "Tóxico" to "toxico",
-    "Tragédia" to "tragedia",
-    "Traição" to "traicao",
-    "Triângulo" to "triangulo",
-    "Tsundere" to "tsundere",
-    "Universitários" to "universitarios",
-    "Vampiro" to "vampiro",
-    "Vampiros" to "vampiros",
-    "Viagem no Tempo" to "viagem-no-tempo",
-    "Vida Adulta" to "vida-adulta",
-    "Vida Cotidiana" to "vida-cotidiana",
-    "Vida Escolar" to "vida-escolar",
-    "Video Game" to "video-game",
-    "Video Games" to "video-games",
-    "Vídeo Game" to "video-game-1",
-    "Vingança" to "vinganca",
-    "Violência" to "violencia",
-    "Volta no Tempo" to "volta-no-tempo",
-    "VRMMO" to "vrmmo",
-    "Web Comic" to "web-comic",
-    "Webcomic" to "webcomic",
-    "Wuxia" to "wuxia",
-    "Xianxia" to "xianxia",
-    "Xuanhuan" to "xuanhuan",
-    "Yuri" to "yuri",
-    "Zumbis" to "zumbis",
-)
-
-val typeList = arrayOf(
-    "Todos os Tipos" to "",
-    "Manga" to "manga",
-    "Manhwa" to "manhwa",
-    "Manhua" to "manhua",
-    "Webtoon" to "webtoon",
-    "Comic" to "comic",
-    "HQ" to "hq",
-    "Pornhwa" to "pornhwa",
-)
+// ==================== API Response DTOs ====================
 
 @Serializable
 class MangaListResponse(
-    val html: String = "",
-    val has_next: Boolean = false,
+    val data: List<MangaListDto>? = null,
+    val page: Int = 1,
+    val pages: Int = 1,
 )
 
 @Serializable
-class PageData(
-    val page_number: Int = 0,
-    val image_url: String = "",
-)
-
-@Serializable
-data class MangaDetailsResponse(
-    val success: Boolean,
-    val manga: MangaDetails,
-)
-
-@Serializable
-data class MangaDetails(
+class MangaListDto(
+    val slug: String,
     val title: String,
-    val description: String,
-    val cover_url: String,
+    val coverImage: String? = null,
+)
+
+@Serializable
+class MangaDetailsDto(
+    val slug: String,
+    val title: String,
+    val description: String? = null,
+    val coverImage: String? = null,
     val author: String? = null,
     val artist: String? = null,
     val status: String,
-    val categories: List<Category>,
+    val categories: List<CategoryDto> = emptyList(),
+    val chapters: List<ChapterDto>? = null,
 )
 
 @Serializable
-data class Category(
+class CategoryDto(
     val name: String,
 )
 
 @Serializable
-data class ChapterListApiResponse(
-    val success: Boolean,
-    val chapters: List<ChapterApi>,
-    val pagination: Pagination,
-)
-
-@Serializable
-data class ChapterApi(
+class ChapterDto(
+    val id: Int,
     val number: String,
-    val title: String,
-    val url: String,
-    val published_at: String,
+    val title: String? = null,
+    val createdAt: String,
 )
 
 @Serializable
-data class Pagination(
-    val has_next: Boolean,
-    val next_page: Int? = null,
+class ReadResponse(
+    val pages: List<PageDto> = emptyList(),
 )
 
-fun MangaDetails.toSManga(slug: String) = SManga.create().apply {
-    url = "/manga/$slug/"
+@Serializable
+class PageDto(
+    val imageUrl: String,
+    val pageNumber: Int,
+)
+
+// ==================== Conversion Functions ====================
+
+fun MangaListDto.toSManga() = SManga.create().apply {
+    url = "/manga/$slug"
     title = this@toSManga.title
-    thumbnail_url = cover_url
+    thumbnail_url = coverImage
+}
+
+fun MangaDetailsDto.toSManga() = SManga.create().apply {
+    url = "/manga/$slug"
+    title = this@toSManga.title
+    thumbnail_url = coverImage
     description = this@toSManga.description
     author = this@toSManga.author
     artist = this@toSManga.artist
@@ -281,24 +87,275 @@ fun MangaDetails.toSManga(slug: String) = SManga.create().apply {
     genre = categories.joinToString { it.name }
 }
 
-fun ChapterApi.toSChapter() = SChapter.create().apply {
-    val title = if (this@toSChapter.title.isNotEmpty()) {
-        "${this@toSChapter.title} $number"
+fun ChapterDto.toSChapter(mangaSlug: String) = SChapter.create().apply {
+    url = "/read/$id/$mangaSlug"
+    name = if (!title.isNullOrBlank()) {
+        "$title $number"
     } else {
-        "Capítulo $number"
+        "Capítulo ${number.removeSuffix(".0")}"
     }
-    name = title
-    url = this@toSChapter.url
-
-    val cleanDate = published_at.substringBefore(".")
-    date_upload = dateFormat.tryParse(cleanDate)
+    date_upload = dateFormat.tryParse(createdAt.substringBefore("."))
 }
 
-private fun String?.parseStatus() = when {
-    this == null -> SManga.UNKNOWN
-    listOf("em andamento", "ongoing", "ativo", "lançando").any { contains(it, ignoreCase = true) } -> SManga.ONGOING
-    listOf("completo", "completed", "finalizado").any { contains(it, ignoreCase = true) } -> SManga.COMPLETED
-    listOf("pausado", "hiato", "on hiatus").any { contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
-    listOf("cancelado", "cancelled", "dropped").any { contains(it, ignoreCase = true) } -> SManga.CANCELLED
+private fun String?.parseStatus() = when (this?.lowercase()) {
+    "ongoing" -> SManga.ONGOING
+    "completed" -> SManga.COMPLETED
+    "hiatus" -> SManga.ON_HIATUS
+    "cancelled" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
 }
+
+// ==================== Filters ====================
+
+class SelectFilter(
+    displayName: String,
+    val parameter: String,
+    private val vals: Array<Pair<String, String>>,
+    state: Int = 0,
+) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    fun selected() = vals[state].second
+}
+
+class CheckboxGroup(
+    displayName: String,
+    val parameter: String,
+    val items: List<CheckboxItem>,
+) : Filter.Group<CheckboxItem>(displayName, items) {
+    fun selected() = items.filter { it.state }.map { it.value }
+}
+
+class CheckboxItem(
+    displayName: String,
+    val value: String,
+) : Filter.CheckBox(displayName, false)
+
+val sortList = arrayOf(
+    "Visualizações" to "views",
+    "Atualização" to "updatedAt",
+    "Adicionado" to "created",
+    "Título" to "title",
+    "Avaliações" to "rating",
+    "Capitulos" to "chapters",
+    "Ano" to "releaseYear",
+)
+
+val orderList = arrayOf(
+    "Decrescente" to "desc",
+    "Crescente" to "asc",
+)
+
+val statusList = arrayOf(
+    Pair("Em Andamento", "ongoing"),
+    Pair("Completo", "completed"),
+    Pair("Cancelado", "cancelled"),
+    Pair("Hiato", "hiatus"),
+)
+
+val typeList = arrayOf(
+    Pair("Manga", "manga"),
+    Pair("Manhwa", "manhwa"),
+    Pair("Manhua", "manhua"),
+    Pair("Webtoon", "webtoon"),
+    Pair("Comic", "comic"),
+    Pair("HQ", "hq"),
+    Pair("Pornhwa", "pornhwa"),
+)
+
+val categoryModeList = arrayOf(
+    "Qualquer categoria (OU)" to "or",
+    "Todas categorias (E)" to "and",
+)
+
+val genreList = arrayOf(
+    Pair("Academia de Magia", "academia-de-magia"),
+    Pair("Acadêmica", "academica"),
+    Pair("Ação", "acao"),
+    Pair("Adaptação", "adaptacao"),
+    Pair("Adaptação de Novel", "adaptacao-de-novel"),
+    Pair("Adultério", "adulterio"),
+    Pair("Adulto", "adulto"),
+    Pair("Ahegao", "ahegao"),
+    Pair("Apocalipse", "apocalipse"),
+    Pair("App", "app"),
+    Pair("Artes Marciais", "artes-marciais"),
+    Pair("Aventura", "aventura"),
+    Pair("BDSM", "bdsm"),
+    Pair("Bondage", "bondage"),
+    Pair("Bullying", "bullying"),
+    Pair("Bunda Grande", "bunda-grande"),
+    Pair("Campus", "campus"),
+    Pair("Cartoon", "cartoon"),
+    Pair("Casada", "casada"),
+    Pair("Casamento", "casamento"),
+    Pair("Club", "club"),
+    Pair("Comédia", "comedia"),
+    Pair("Comédia Romântica", "comedia-romantica"),
+    Pair("Comida", "comida"),
+    Pair("Cotidiano", "cotidiano"),
+    Pair("Crime", "crime"),
+    Pair("Culinária", "culinaria"),
+    Pair("Cultivo", "cultivo"),
+    Pair("Curta", "curta"),
+    Pair("Cyberpunk", "cyberpunk"),
+    Pair("Dark Romance", "dark-romance"),
+    Pair("Demônio", "demonio"),
+    Pair("Demônios", "demonios"),
+    Pair("Dominação", "dominacao"),
+    Pair("Doujinshi", "doujinshi"),
+    Pair("Dragões", "dragoes"),
+    Pair("Drama", "drama"),
+    Pair("Ecchi", "ecchi"),
+    Pair("Escolar", "escolar"),
+    Pair("Escritório", "escritorio"),
+    Pair("Esporte", "esporte"),
+    Pair("Esportes", "esportes"),
+    Pair("Estratégia", "estrategia"),
+    Pair("Estudante", "estudante"),
+    Pair("Exibicionismo", "exibicionismo"),
+    Pair("Família", "familia"),
+    Pair("Família Real", "familia-real"),
+    Pair("Fantasia", "fantasia"),
+    Pair("Fantasmas", "fantasmas"),
+    Pair("Fetiche", "fetiche"),
+    Pair("Ficção Científica", "ficcao-cientifica"),
+    Pair("Futanari", "futanari"),
+    Pair("Game", "game"),
+    Pair("Game System", "game-system"),
+    Pair("Gangster", "gangster"),
+    Pair("Gender Bender", "gender-bender"),
+    Pair("Gênio", "genio"),
+    Pair("Gore", "gore"),
+    Pair("Guerra", "guerra"),
+    Pair("Hardcore", "hardcore"),
+    Pair("Harem", "harem"),
+    Pair("Harém Reverso", "harem-reverso"),
+    Pair("Hentai", "hentai"),
+    Pair("Híbrido", "hibrido"),
+    Pair("História", "historia"),
+    Pair("Histórico", "historico"),
+    Pair("Horror", "horror"),
+    Pair("Idols", "idols"),
+    Pair("Incesto", "incesto"),
+    Pair("Isekai", "isekai"),
+    Pair("Jogo", "jogo"),
+    Pair("Jogos", "jogos"),
+    Pair("Josei", "josei"),
+    Pair("Luta", "luta"),
+    Pair("Máfia", "mafia"),
+    Pair("Magia", "magia"),
+    Pair("Magia Escolar", "magia-escolar"),
+    Pair("Mature", "mature"),
+    Pair("Mecha", "mecha"),
+    Pair("Médico", "medico"),
+    Pair("Metaverso", "metaverso"),
+    Pair("Milf", "milf"),
+    Pair("Militar", "militar"),
+    Pair("Mistério", "misterio"),
+    Pair("Mitologia", "mitologia"),
+    Pair("MMORPG", "mmorpg"),
+    Pair("Monstros", "monstros"),
+    Pair("Murim", "murim"),
+    Pair("Música", "musica"),
+    Pair("Musical", "musical"),
+    Pair("Nerd", "nerd"),
+    Pair("Netori", "netori"),
+    Pair("Obsessão", "obsessao"),
+    Pair("One Shot", "one-shot"),
+    Pair("Oneshot", "oneshot"),
+    Pair("Peitões", "peitoes"),
+    Pair("Perda de Memória", "perda-de-memoria"),
+    Pair("Polícia", "policia"),
+    Pair("Policial", "policial"),
+    Pair("Portais", "portais"),
+    Pair("Pós-apocalíptico", "pos-apocaliptico"),
+    Pair("Profecias", "profecias"),
+    Pair("Prostituição", "prostituicao"),
+    Pair("Psicológico", "psicologico"),
+    Pair("Psicopata", "psicopata"),
+    Pair("Realidade Virtual", "realidade-virtual"),
+    Pair("Realismo", "realismo"),
+    Pair("Reencarnação", "reencarnacao"),
+    Pair("Reencontro", "reencontro"),
+    Pair("Regressão", "regressao"),
+    Pair("Retornado", "retornado"),
+    Pair("Retorno", "retorno"),
+    Pair("Revenge", "revenge"),
+    Pair("Romance", "romance"),
+    Pair("RPG", "rpg"),
+    Pair("Sangue", "sangue"),
+    Pair("School Life", "school-life"),
+    Pair("Sci-Fi", "sci-fi"),
+    Pair("Seinen", "seinen"),
+    Pair("Sem Censura", "sem-censura"),
+    Pair("Shoujo", "shoujo"),
+    Pair("Shounen", "shounen"),
+    Pair("Sistema", "sistema"),
+    Pair("Sistema de Níveis", "sistema-de-niveis"),
+    Pair("Slice of Life", "slice-of-life"),
+    Pair("Smut", "smut"),
+    Pair("Sobrenatural", "sobrenatural"),
+    Pair("Sobrevivência", "sobrevivencia"),
+    Pair("Sombrio", "sombrio"),
+    Pair("Sports", "sports"),
+    Pair("Submissão", "submissao"),
+    Pair("Sugestivo", "sugestivo"),
+    Pair("Super Poderes", "super-poderes"),
+    Pair("Supernatural", "supernatural"),
+    Pair("Superpoderes", "superpoderes"),
+    Pair("Suspense", "suspense"),
+    Pair("Tecnológico", "tecnologico"),
+    Pair("Tela de Sistema", "tela-de-sistema"),
+    Pair("Terror", "terror"),
+    Pair("Thriller", "thriller"),
+    Pair("Tomboy", "tomboy"),
+    Pair("Torre", "torre"),
+    Pair("Tóxico", "toxico"),
+    Pair("Tragédia", "tragedia"),
+    Pair("Traição", "traicao"),
+    Pair("Triângulo", "triangulo"),
+    Pair("Tsundere", "tsundere"),
+    Pair("Universitários", "universitarios"),
+    Pair("Vampiro", "vampiro"),
+    Pair("Vampiros", "vampiros"),
+    Pair("Viagem no Tempo", "viagem-no-tempo"),
+    Pair("Vida Adulta", "vida-adulta"),
+    Pair("Vida Cotidiana", "vida-cotidiana"),
+    Pair("Vida Escolar", "vida-escolar"),
+    Pair("Video Game", "video-game"),
+    Pair("Video Games", "video-games"),
+    Pair("Vídeo Game", "video-game-1"),
+    Pair("Vingança", "vinganca"),
+    Pair("Violência", "violencia"),
+    Pair("Volta no Tempo", "volta-no-tempo"),
+    Pair("VRMMO", "vrmmo"),
+    Pair("Web Comic", "web-comic"),
+    Pair("Webcomic", "webcomic"),
+    Pair("Wuxia", "wuxia"),
+    Pair("Xianxia", "xianxia"),
+    Pair("Xuanhuan", "xuanhuan"),
+    Pair("Yuri", "yuri"),
+    Pair("Zumbis", "zumbis"),
+)
+
+val themeList = arrayOf(
+    Pair("Animais", "animais"),
+    Pair("Artes Marciais", "artes-marciais-tema"),
+    Pair("Culinária", "culinaria-tema"),
+    Pair("Esporte", "esporte-tema"),
+    Pair("Fantasia", "fantasia-tema"),
+    Pair("Ficção Científica", "ficcao-cientifica-tema"),
+    Pair("Histórico", "historico-tema"),
+    Pair("Isekai", "isekai-tema"),
+    Pair("Jogo", "jogo-tema"),
+    Pair("Militar", "militar-tema"),
+    Pair("Monstros", "monstros-tema"),
+    Pair("Música", "musica-tema"),
+    Pair("Reencarnação", "reencarnacao-tema"),
+    Pair("Robôs", "robos"),
+    Pair("Sobrenatural", "sobrenatural-tema"),
+    Pair("Super Herói", "super-heroi"),
+    Pair("Vampiros", "vampiros-tema"),
+    Pair("Vilão", "vilao"),
+    Pair("Virtual Reality", "virtual-reality"),
+    Pair("Zumbis", "zumbis-tema"),
+)
