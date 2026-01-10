@@ -15,10 +15,14 @@ private val RATING_PREDICATES: Array<((PixivIllust) -> Boolean)?> =
     arrayOf(null, { it.x_restrict == "0" }, { it.x_restrict == "1" })
 
 internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
+    init { add(Filter.Header("Deeplinks supported in search: pixiv link, aid:123, user:123, sid:123")) }
+
     private val typeFilter = object : Filter.Select<String>("Type", TYPE_VALUES, 2) {}.also(::add)
     private val tagsFilter = object : Filter.Text("Tags") {}.also(::add)
     private val tagsModeFilter = object : Filter.Select<String>("Tags mode", TAGS_MODE_VALUES, 0) {}.also(::add)
     private val usersFilter = object : Filter.Text("Users") {}.also(::add)
+    init { add(Filter.Header("The usersFilter filter acts as lookup when search query is blank (requires login via WebView)")) }
+
     private val ratingFilter = object : Filter.Select<String>("Rating", RATING_VALUES, 0) {}.also(::add)
 
     init { add(Filter.Header("(the following are ignored when the users filter is in use)")) }
@@ -47,7 +51,7 @@ internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
 
     fun makeUsersPredicate(): ((PixivIllust) -> Boolean)? {
         val users = users.ifBlank { return null }
-        val regex = Regex(users.split(' ').joinToString("|") { Regex.escape(it) })
+        val regex = Regex(users.split(' ').joinToString("|") { Regex.escape(it) }, RegexOption.IGNORE_CASE)
 
         return { it.author_details?.user_name?.contains(regex) == true }
     }

@@ -56,6 +56,9 @@ internal data class PixivIllustPage(
 
 @Serializable
 internal data class PixivIllustPageUrls(
+    val thumb_mini: String? = null,
+    val small: String? = null,
+    val regular: String? = null,
     val original: String? = null,
 )
 
@@ -96,4 +99,32 @@ internal data class PixivRankings(
 internal data class PixivRankingEntry(
     val illustId: String? = null,
     val rank: Int? = null,
+)
+
+// Data models for parsing __NEXT_DATA__ from /search/users endpoint
+@Serializable
+internal data class PixivNextData(
+    val props: PixivNextDataProps,
+)
+
+@Serializable
+internal data class PixivNextDataProps(
+    val pageProps: PixivPageProps,
+)
+
+@Serializable
+internal data class PixivPageProps(
+    val userIds: List<Long> = emptyList(),
+    val userData: PixivUserData? = null,
+)
+
+@Serializable
+internal data class PixivUserData(
+    val users: Map<String, PixivUserInfo> = emptyMap(),
+)
+
+@Serializable
+internal data class PixivUserInfo(
+    val id: String,
+    val name: String,
 )
