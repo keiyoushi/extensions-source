@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -39,6 +40,10 @@ class UNext : HttpSource(), ConfigurableSource {
 
     private val apiUrl = "https://cc.$domain"
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    // Paid chapters redirect to the app on mobile UA, but are readable with desktop UA
+    override fun headersBuilder() = super.headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -154,7 +159,7 @@ class UNext : HttpSource(), ConfigurableSource {
         val data = response.parseAs<ChapterListResponse>().data.bookTitleBooks.books
         val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
         return data
-            .filterNot { hidePaid && it.isFree != true && it.isPurchased != true }
+            .filterNot { hidePaid && it.isFree != true && it.isPurchased != true && it.rightsExpirationDatetime == null }
             .map { it.toSChapter(sakuhinCode) }
             .reversed()
     }
@@ -179,18 +184,17 @@ class UNext : HttpSource(), ConfigurableSource {
                 ),
             )
 
-            var playlistParse: PlaylistResponse.PlaylistUrl? = null
+            val apiRequest = apiRequest(payload)
+            val playlistData = client.newCall(apiRequest).execute()
+            val playlistParse = playlistData.parseAs<PlaylistResponse>().data?.playlistUrl
+                ?: throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
+
             var keys: Map<String, String>? = null
 
             // Try multiple times to load all signed cookies
             for (i in 1..4) {
                 try {
-                    val apiRequest = apiRequest(payload)
-                    val playlistData = client.newCall(apiRequest).execute()
-                    playlistParse = playlistData.parseAs<PlaylistResponse>().data.playlistUrl
-
                     val viewerUrl = getChapterUrl(chapter)
-
                     keys = fetchKeys(viewerUrl)
 
                     if (keys != null) break
@@ -200,7 +204,7 @@ class UNext : HttpSource(), ConfigurableSource {
                 }
             }
 
-            if (playlistParse == null || keys == null) {
+            if (keys == null) {
                 throw Exception("Failed to fetch DRM keys. Try again.")
             }
 
@@ -254,7 +258,7 @@ class UNext : HttpSource(), ConfigurableSource {
         // Request viewer URL to populate signed cookies
         var html: String? = null
         try {
-            val request = GET(url, headers)
+            val request = GET(url, headers, CacheControl.FORCE_NETWORK)
             client.newCall(request).execute().use { response ->
                 html = response.body.string()
             }
@@ -272,6 +276,7 @@ class UNext : HttpSource(), ConfigurableSource {
                 domStorageEnabled = true
                 databaseEnabled = true
                 blockNetworkImage = true
+                userAgentString = headers["User-Agent"]
             }
 
             webView.webViewClient = object : WebViewClient() {
@@ -326,14 +331,13 @@ class UNext : HttpSource(), ConfigurableSource {
             .set("Content-Type", "application/json")
             .build()
 
-        return GET(url.toString(), newHeaders)
+        return GET(url.toString(), newHeaders, CacheControl.FORCE_NETWORK)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_PAID_PREF
             title = "Hide paid chapters"
-            summary = "Reading paid chapters is not supported"
             setDefaultValue(true)
         }.also(screen::addPreference)
     }

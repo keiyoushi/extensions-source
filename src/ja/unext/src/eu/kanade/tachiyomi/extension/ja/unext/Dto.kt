@@ -169,7 +169,7 @@ class ChapterListResponse(
 
 @Serializable
 class PlaylistResponse(
-    val data: Data,
+    val data: Data?,
 ) {
     @Serializable
     class Data(
@@ -240,6 +240,7 @@ class Book(
     private val publicStartDateTime: String?,
     val isFree: Boolean?,
     val isPurchased: Boolean?,
+    val rightsExpirationDatetime: String?,
     val credits: List<Credit>?,
     val bookContent: BookContent?,
 ) {
@@ -259,7 +260,7 @@ class Book(
     )
 
     fun toSChapter(sakuhinCode: String): SChapter = SChapter.create().apply {
-        val lock = if (isFree != true && isPurchased != true) "🔒 " else ""
+        val lock = if (isFree != true && isPurchased != true && rightsExpirationDatetime == null) "🔒 " else ""
         name = "$lock${this@Book.name}"
         val bookFileCode = bookContent?.mainBookFile?.code
         val fragment = if (bookFileCode != null) "#$bookFileCode" else ""
