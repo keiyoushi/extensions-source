@@ -21,11 +21,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -298,9 +298,9 @@ abstract class Luscious(
                             url.startsWith("//") -> chapter.url = "https:$url"
                             else -> chapter.url = url
                         }
-                        chapter.chapter_number = it.jsonObject["position"]!!.jsonPrimitive.int.toFloat()
+                        chapter.chapter_number = it.jsonObject["position"]!!.jsonPrimitive.double.toFloat()
                         chapter.name = chapter.chapter_number.toInt().toString() + " - " + it.jsonObject["title"]!!.jsonPrimitive.content
-                        chapter.date_upload = "${it.jsonObject["created"]!!.jsonPrimitive.long}000".toLong()
+                        chapter.date_upload = (it.jsonObject["created"]!!.jsonPrimitive.double.toLong()) * 1000
                         chapters.add(chapter)
                     }
                     if (nextPage) {
