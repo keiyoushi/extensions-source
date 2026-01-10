@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.th.nekopost
 
+import eu.kanade.tachiyomi.extension.th.nekopost.model.LatestRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingInfo
+import eu.kanade.tachiyomi.extension.th.nekopost.model.PopularRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
-import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -27,62 +28,142 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Nekopost : HttpSource() {
-    private val json: Json by injectLazy()
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        encodeDefaults = true
+    }
 
     override val baseUrl = "https://www.nekopost.net"
     override val lang = "th"
     override val name = "Nekopost"
-    override val supportsLatest = false
+    override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val latestMangaEndpoint = "https://api.osemocphoto.com/frontAPI/getLatestChapter/m"
     private val projectDataEndpoint = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
     private val fileHost = "https://www.osemocphoto.com"
 
-    private val existingProject = HashSet<String>()
-    private var firstPageNulled = false
+    private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th"))
+    private val commonHeaders by lazy { headersBuilder().build() }
+
+    private val apiHeaders by lazy {
+        headersBuilder().set("Accept", "*/*").set("Content-Type", "application/json").build()
     }
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private fun getStatus(status: String) = when (status) {
-        "1" -> SManga.ONGOING
-        "2" -> SManga.COMPLETED
-        "3" -> SManga.LICENSED
-        else -> SManga.UNKNOWN
+    private fun getStatus(status: String) =
+        when (status) {
+            "1" -> SManga.ONGOING
+            "2" -> SManga.COMPLETED
+            "3" -> SManga.LICENSED
+            else -> SManga.UNKNOWN
+        }
+
+    override fun latestUpdatesRequest(page: Int) =
+        projectRequest(
+            "latest",
+            LatestRequest(0, PagingInfo(page, PAGE_SIZE)),
+        )
+
+    override fun popularMangaRequest(page: Int) =
+        projectRequest(
+            "list/popular",
+            PopularRequest("mc", PagingInfo(page, PAGE_SIZE)),
+        )
+
+    private inline fun <reified T> projectRequest(endpoint: String, body: T): Request {
+        return POST(
+            "$baseUrl/api/project/$endpoint",
+            apiHeaders,
+            json.encodeToString(body).toRequestBody(),
+        )
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        parseProjectList(response, filterTypes = setOf("m", "c"), hasNextPage = true)
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun popularMangaParse(response: Response): MangasPage =
+        parseProjectList(response, filterTypes = setOf("m", "c"), hasNextPage = true)
+
+    override fun searchMangaParse(response: Response): MangasPage =
+        parseProjectList(response, filterTypes = setOf("m"), hasNextPage = false)
+
+    private fun parseProjectList(
+        response: Response,
+        filterTypes: Set<String>,
+        hasNextPage: Boolean,
+    ): MangasPage {
+        val projectList: RawProjectSearchSummaryList = json.decodeFromString(response.body.string())
+
+        if (projectList.listProject.isNullOrEmpty()) {
+            return MangasPage(emptyList(), false)
+        }
+
+        val mangaList =
+            projectList
+                .listProject
+                .asSequence()
+                .filter { it.projectType in filterTypes }
+                .map { project ->
+                    SManga.create().apply {
+                        url = project.pid.toString()
+                        title = project.projectName
+                        status = project.status
+                        thumbnail_url =
+                            buildCoverUrl(project.pid.toString(), project.coverVersion)
+                        initialized = false
+                    }
+                }
+                .toList()
+
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    private fun buildCoverUrl(projectId: String, coverVersion: Int? = null): String {
+        val base = "$fileHost/collectManga/$projectId/${projectId}_cover.jpg"
+        return if (coverVersion != null) "$base?ver=$coverVersion" else base
+    }
+
+    override fun mangaDetailsRequest(manga: SManga) =
+        GET("$projectDataEndpoint/${manga.url}", commonHeaders)
+
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val projectInfo: RawProjectInfo = json.decodeFromString(response.body.string())
 
         return SManga.create().apply {
-            projectInfo.projectInfo.let {
-                url = it.projectId
-                title = it.projectName
-                artist = it.artistName
-                author = it.authorName
-                description = it.info
-                status = getStatus(it.status)
-                thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg"
+            projectInfo.projectInfo.let { info ->
+                url = info.projectId
+                title = info.projectName
+                artist = info.artistName
+                author = info.authorName
+                description = info.info
+                status = getStatus(info.status)
+                thumbnail_url = buildCoverUrl(info.projectId)
                 initialized = true
             }
-            genre = projectInfo.projectCategoryUsed?.joinToString(", ") { it.categoryName }.orEmpty()
+            genre =
+                projectInfo
+                    .projectCategoryUsed
+                    ?.joinToString(", ") { it.categoryName }
+                    .orEmpty()
         }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", baseUrl)
+        val headers =
+            Headers.headersOf(
+                "accept",
+                "*/*",
+                "content-type",
+                "text/plain;charset=UTF-8",
+                "origin",
+                baseUrl,
+            )
         return GET("$projectDataEndpoint/${manga.url}", headers)
     }
 
@@ -103,10 +184,12 @@ class Nekopost : HttpSource() {
                 chapter_number = chapter.chapterNo.toFloat()
                 scanlator = chapter.providerName
             }
-        } ?: emptyList()
+        }
+            ?: emptyList()
     }
 
-    override fun pageListRequest(chapter: SChapter) = GET("$fileHost/collectManga/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter) =
+        GET("$fileHost/collectManga/${chapter.url}", commonHeaders)
 
     override fun getChapterUrl(chapter: SChapter) =
         "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
@@ -123,62 +206,25 @@ class Nekopost : HttpSource() {
         }
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        if (page <= 1) existingProject.clear()
-        return GET("$latestMangaEndpoint/${if (firstPageNulled) page else page - 1}", headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val projectList: RawProjectSummaryList = json.decodeFromString(response.body.string())
-
-        projectList.listChapter ?: run {
-            firstPageNulled = true
-            return MangasPage(emptyList(), hasNextPage = false)
-        }
-
-        val mangaList = projectList.listChapter
-            .filterNot { it.projectId in existingProject }
-            .map {
-                existingProject.add(it.projectId)
-                SManga.create().apply {
-                    url = it.projectId
-                    title = it.projectName
-                    thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg"
-                    initialized = false
-                }
-            }
-
-        return MangasPage(mangaList, hasNextPage = true)
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchHeaders = headersBuilder()
-            .set("Accept", "*/*")
-            .set("Content-Type", "application/json")
-            .build()
-
-        val searchData = SearchRequest(
-            keyword = query,
-            status = 0,
-            paging = PagingInfo(pageNo = page, pageSize = 100),
+        val searchData =
+            SearchRequest(
+                keyword = query,
+                status = 0,
+                paging = PagingInfo(pageNo = page, pageSize = 100),
+            )
+        return POST(
+            "$baseUrl/api/project/search",
+            apiHeaders,
+            json.encodeToString(searchData).toRequestBody(),
         )
-
-        return POST("$baseUrl/api/project/search", searchHeaders, Json.encodeToString(searchData).toRequestBody())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val projectList: RawProjectSearchSummaryList = json.decodeFromString(response.body.string())
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-        val mangaList = projectList.listProject
-            .filter { it.projectType == "m" }
-            .map {
-                SManga.create().apply {
-                    url = it.pid.toString()
-                    title = it.projectName
-                    status = it.status
-                    thumbnail_url = "$fileHost/collectManga/${it.pid}/${it.pid}_cover.jpg?ver=${it.coverVersion}"
-                }
-            }
-        return MangasPage(mangaList, false)
+    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
+
+    companion object {
+        private const val PAGE_SIZE = 30
     }
 }
