@@ -50,13 +50,13 @@ class MangaStop :
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-        .add("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
-        .add("Sec-Fetch-Dest", "document")
-        .add("Sec-Fetch-Mode", "navigate")
-        .add("Sec-Fetch-Site", "none")
-        .add("Sec-Fetch-User", "?1")
-        .add("Upgrade-Insecure-Requests", "1")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        .set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "none")
+        .set("Sec-Fetch-User", "?1")
+        .set("Upgrade-Insecure-Requests", "1")
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)

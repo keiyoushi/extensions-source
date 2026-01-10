@@ -10,33 +10,80 @@ class ClientHintsInterceptor : Interceptor {
         val userAgent = request.header("User-Agent")
             ?: return chain.proceed(request)
 
-        val chromeVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "143"
-        val isMobile = userAgent.contains("Android") || userAgent.contains("Mobile")
+        val browserInfo = detectBrowser(userAgent)
+            ?: return chain.proceed(request)
 
-        val secChUa = "\"Google Chrome\";v=\"$chromeVersion\", \"Chromium\";v=\"$chromeVersion\", \"Not A(Brand\";v=\"24\""
+        val isMobile = userAgent.contains("Mobile") ||
+            userAgent.contains("Android") ||
+            userAgent.contains("iPhone") ||
+            userAgent.contains("iPad")
 
-        val platform = when {
-            userAgent.contains("Windows") -> "\"Windows\""
-            userAgent.contains("Android") -> "\"Android\""
-            userAgent.contains("Mac") -> "\"macOS\""
-            userAgent.contains("Linux") -> "\"Linux\""
-            else -> "\"Windows\""
-        }
+        val platform = detectPlatform(userAgent)
+        val secChUa = buildSecChUa(browserInfo)
 
         val newRequest = request.newBuilder()
-            .header("Sec-Ch-Ua", secChUa)
-            .header("Sec-Ch-Ua-Mobile", if (isMobile) "?1" else "?0")
-            .header("Sec-Ch-Ua-Platform", platform)
+            .header("Sec-CH-UA", secChUa)
+            .header("Sec-CH-UA-Mobile", if (isMobile) "?1" else "?0")
+            .header("Sec-CH-UA-Platform", platform)
             .header("DNT", "1")
-            .header("Cache-Control", "no-cache")
-            .header("Pragma", "no-cache")
-            .header("Priority", "u=0, i")
             .build()
 
         return chain.proceed(newRequest)
     }
 
+    private fun detectBrowser(userAgent: String): BrowserInfo? {
+        return when {
+            userAgent.contains("Firefox/") && !userAgent.contains("Chrome") -> null
+
+            userAgent.contains("Safari/") &&
+                !userAgent.contains("Chrome") &&
+                !userAgent.contains("Chromium") -> null
+
+            userAgent.contains("Edg/") || userAgent.contains("EdgA/") || userAgent.contains("EdgiOS/") -> {
+                val edgeVersion = EDGE_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+                val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: edgeVersion
+                BrowserInfo("Microsoft Edge", edgeVersion, chromiumVersion)
+            }
+
+            userAgent.contains("OPR/") -> {
+                val operaVersion = OPERA_REGEX.find(userAgent)?.groupValues?.get(1) ?: "118"
+                val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+                BrowserInfo("Opera", operaVersion, chromiumVersion)
+            }
+
+            userAgent.contains("Chrome/") -> {
+                val chromeVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+                BrowserInfo("Google Chrome", chromeVersion, chromeVersion)
+            }
+
+            else -> null
+        }
+    }
+
+    private fun detectPlatform(userAgent: String): String {
+        return when {
+            userAgent.contains("Windows") -> "\"Windows\""
+            userAgent.contains("Android") -> "\"Android\""
+            userAgent.contains("iPhone") || userAgent.contains("iPad") -> "\"iOS\""
+            userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> "\"macOS\""
+            userAgent.contains("Linux") -> "\"Linux\""
+            else -> "\"Windows\""
+        }
+    }
+
+    private fun buildSecChUa(info: BrowserInfo): String {
+        return "\"${info.name}\";v=\"${info.version}\", \"Chromium\";v=\"${info.chromiumVersion}\", \"Not A(Brand\";v=\"24\""
+    }
+
+    private data class BrowserInfo(
+        val name: String,
+        val version: String,
+        val chromiumVersion: String,
+    )
+
     companion object {
         private val CHROME_REGEX = Regex("""Chrome/(\d+)""")
+        private val EDGE_REGEX = Regex("""Edg[^/]*/(\d+)""")
+        private val OPERA_REGEX = Regex("""OPR/(\d+)""")
     }
 }
