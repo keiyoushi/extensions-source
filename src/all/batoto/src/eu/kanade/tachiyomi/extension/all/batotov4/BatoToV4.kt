@@ -576,6 +576,13 @@ private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
 private const val PAGE_FRAGMENT = "page"
 private val userIdRegex = Regex("""/u/(\d+)""")
 
+private const val BROWSE_PAGE_SIZE = 36
+
+// Match old v2 Url
+private val seriesIdRegex = Regex("""series/(\d+)""")
+private val titleRegex: Regex =
+    Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
+
 /**
  * Manages image server fallback logic, including blacklisting and backoff tracking.
  */
@@ -625,10 +632,3 @@ private class ImageServerManager() {
         return url.replace(serverPattern, "https://$newServer")
     }
 }
-
-private const val BROWSE_PAGE_SIZE = 36
-
-// Match old v2 Url
-private val seriesIdRegex = Regex("""series/(\d+)""")
-private val titleRegex: Regex =
-    Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
