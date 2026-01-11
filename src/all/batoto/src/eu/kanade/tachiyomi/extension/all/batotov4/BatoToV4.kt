@@ -426,16 +426,14 @@ class BatoToV4(
         val urlString = request.url.toString()
         val originalServer = this.imageServerManager.extractServerFromUrl(urlString) ?: return chain.proceed(request)
 
-        val backoffEnabled = preferences.getBoolean(ENABLE_BACKOFF_PREF, true)
-
         // Try original server if not skipped
-        if (!this.imageServerManager.shouldSkip(originalServer, backoffEnabled)) {
+        if (!this.imageServerManager.shouldSkip(originalServer)) {
             tryServer(chain, request, originalServer)?.let { return it }
         }
 
         // Try fallback servers
-        for (server in this.imageServerManager.getValidServers()) {
-            if (this.imageServerManager.shouldSkip(server, backoffEnabled)) continue
+        for (server in this.imageServerManager.fallbackServers) {
+            if (this.imageServerManager.shouldSkip(server)) continue
 
             val newUrl = this.imageServerManager.replaceServerInUrl(urlString, server)
             val newRequest = request.newBuilder().url(newUrl).build()
@@ -560,120 +558,6 @@ class BatoToV4(
                 isValid
             }
         }.also(screen::addPreference)
-
-        // Blacklisted image servers preference
-        EditTextPreference(screen.context).apply {
-            key = BLACKLIST_SERVERS_PREF
-            title = "Blacklisted image servers"
-            summary = getBlacklistSummary()
-            setDefaultValue("")
-            dialogTitle = "Blacklisted servers"
-            dialogMessage = "Comma-separated list of server names to skip (e.g. k07,k01,n03). Leave empty to use default."
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val blacklistStr = newValue as String
-                val blacklist = parseCommaList(blacklistStr)
-
-                imageServerManager.updateBlacklist(blacklist)
-
-                summary = getBlacklistSummary()
-                true
-            }
-        }.also(screen::addPreference)
-
-        // Fallback servers list preference
-        EditTextPreference(screen.context).apply {
-            key = FALLBACK_SERVERS_PREF
-            title = "Fallback image servers"
-            summary = getFallbackSummary()
-            setDefaultValue("")
-            dialogTitle = "Fallback servers"
-            dialogMessage = "Comma-separated list of server names in order of preference (e.g. n03,n00,k06). Leave empty to use default."
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val fallbackStr = newValue as String
-                val fallbackList = parseCommaList(fallbackStr)
-
-                imageServerManager.updateFallbackServers(fallbackList)
-
-                summary = getFallbackSummary(fallbackStr)
-                true
-            }
-        }.also(screen::addPreference)
-
-        // Skip failed servers (backoff) preference
-        CheckBoxPreference(screen.context).apply {
-            key = ENABLE_BACKOFF_PREF
-            title = "Skip failed servers"
-            summary = getBackoffSummary()
-            setDefaultValue(true)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                summary = getBackoffSummary(newValue as Boolean)
-                true
-            }
-        }.also(screen::addPreference)
-    }
-
-    private fun getBlacklistSummary(): String {
-        val blacklistStr = preferences.getString(BLACKLIST_SERVERS_PREF, "")!!
-        val blacklist = parseCommaList(blacklistStr) ?: imageServerManager.getDefaultBlacklistedServers()
-        return if (blacklist == imageServerManager.getDefaultBlacklistedServers()) {
-            "Using default: ${blacklist.joinToString(", ")}"
-        } else {
-            "Blacklisted: ${blacklist.joinToString(", ")}"
-        }
-    }
-
-    private fun getFallbackSummary(fallbackStr: String? = null): String {
-        val fallback = fallbackStr ?: preferences.getString(FALLBACK_SERVERS_PREF, "")!!
-        val servers = parseCommaList(fallback) ?: imageServerManager.getDefaultFallbackServers()
-        return if (servers == imageServerManager.getDefaultFallbackServers()) {
-            "Using default: ${servers.joinToString(", ")}"
-        } else {
-            "Fallback order: ${servers.joinToString(", ")}"
-        }
-    }
-
-    private fun getBackoffSummary(isEnabled: Boolean? = null): String {
-        val serverStatuses = imageServerManager.getAllServerStatuses()
-        val enabled = isEnabled ?: preferences.getBoolean(ENABLE_BACKOFF_PREF, true)
-
-        val explanation = if (enabled) "Automatically skipping servers that return 500 errors for 1 hour" else "Not skipping servers that return 500 errors"
-
-        val inBackoffServers = serverStatuses.entries.filter { imageServerManager.isInBackoff(it.key) }
-
-        val serverList = if (enabled) {
-            if (inBackoffServers.isEmpty()) {
-                "\nNo servers in backoff"
-            } else {
-                "\nServers in backoff:\n" + inBackoffServers
-                    .sortedBy { it.key }
-                    .joinToString("\n") { (server, _) ->
-                        "$server: ${imageServerManager.getBackoffTimeLeftString(server)}"
-                    }
-            }
-        } else {
-            if (inBackoffServers.isEmpty()) {
-                "\nNo servers recently failed"
-            } else {
-                "\nServers recently failed:\n" + inBackoffServers
-                    .sortedBy { it.key }
-                    .joinToString("\n") { (server, status) ->
-                        "$server: error ${status.statusCode} (${imageServerManager.getTimeSinceStatus(server)} ago)"
-                    }
-            }
-        }
-
-        return explanation + serverList
-    }
-
-    private fun parseCommaList(value: String?): List<String>? {
-        if (value.isNullOrEmpty()) return null
-        return value.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .takeIf { it.isNotEmpty() }
     }
 
     private fun isRemoveTitleVersion(): Boolean {
@@ -688,9 +572,6 @@ private val jsonMediaType = "application/json".toMediaType()
 
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
-private const val BLACKLIST_SERVERS_PREF = "BLACKLIST_SERVERS"
-private const val FALLBACK_SERVERS_PREF = "FALLBACK_SERVERS"
-private const val ENABLE_BACKOFF_PREF = "ENABLE_BACKOFF"
 
 private const val PAGE_FRAGMENT = "page"
 private val userIdRegex = Regex("""/u/(\d+)""")
@@ -698,21 +579,14 @@ private val userIdRegex = Regex("""/u/(\d+)""")
 /**
  * Manages image server fallback logic, including blacklisting and backoff tracking.
  */
-private class ImageServerManager(
-    blacklistedServers: List<String>? = null,
-    fallbackServers: List<String>? = null,
-) {
+private class ImageServerManager() {
     val serverPattern = Regex("https://([a-zA-Z]\\d{2})")
 
-    // Sorted list: Most reliable servers FIRST
-    private val defaultFallbackServers = listOf(
+    val fallbackServers = listOf(
         "n03", "n00", "n01", "n02", "n04", "n05", "n06", "n07", "n08", "n09", "n10",
         "k03", "k06", "k00", "k01", "k02", "k04", "k05", "k08", "k09",
     )
-    private val defaultBlacklistedServers = listOf("k07")
-
-    private var validServers = (fallbackServers ?: defaultFallbackServers).toMutableList()
-    private val blacklist = (blacklistedServers ?: defaultBlacklistedServers).toMutableList()
+    val blacklist = listOf("k07")
 
     // Server status tracking
     data class ServerStatus(
@@ -725,8 +599,8 @@ private class ImageServerManager(
 
     private val BACKOFF_DURATION_MS = 3_600_000L // 1 hour
 
-    fun shouldSkip(server: String, backoffEnabled: Boolean = true): Boolean {
-        return server in blacklist || (backoffEnabled && isInBackoff(server))
+    fun shouldSkip(server: String): Boolean {
+        return server in blacklist || isInBackoff(server)
     }
 
     fun isInBackoff(server: String): Boolean {
@@ -743,27 +617,6 @@ private class ImageServerManager(
         )
     }
 
-    fun getBackoffTimeLeftString(server: String): String {
-        val status = serverStatus[server] ?: return "0s"
-        val backoffEnd = status.timestamp + BACKOFF_DURATION_MS
-        val remaining = maxOf(backoffEnd - System.currentTimeMillis(), 0)
-
-        val seconds = remaining / 1000
-        val minutes = seconds / 60
-        val remainingSeconds = seconds % 60
-        return if (minutes > 0) "${minutes}m ${remainingSeconds}s" else "${remainingSeconds}s"
-    }
-
-    fun getTimeSinceStatus(server: String): String {
-        val status = serverStatus[server] ?: return "0s"
-        val diff = System.currentTimeMillis() - status.timestamp
-
-        val seconds = diff / 1000
-        val minutes = seconds / 60
-        val remainingSeconds = seconds % 60
-        return if (minutes > 0) "${minutes}m ${remainingSeconds}s" else "${remainingSeconds}s"
-    }
-
     fun extractServerFromUrl(url: String): String? {
         return serverPattern.find(url)?.groups?.get(1)?.value
     }
@@ -771,25 +624,6 @@ private class ImageServerManager(
     fun replaceServerInUrl(url: String, newServer: String): String {
         return url.replace(serverPattern, "https://$newServer")
     }
-
-    fun getAllServerStatuses(): Map<String, ServerStatus> {
-        return serverStatus.toMap()
-    }
-
-    fun getValidServers(): List<String> = validServers.toList()
-
-    fun updateBlacklist(blacklistedServers: List<String>?) {
-        blacklist.clear()
-        blacklist.addAll(blacklistedServers ?: defaultBlacklistedServers)
-    }
-
-    fun updateFallbackServers(servers: List<String>?) {
-        validServers.clear()
-        validServers.addAll(servers ?: defaultFallbackServers)
-    }
-
-    fun getDefaultFallbackServers(): List<String> = defaultFallbackServers
-    fun getDefaultBlacklistedServers(): List<String> = defaultBlacklistedServers
 }
 
 private const val BROWSE_PAGE_SIZE = 36
