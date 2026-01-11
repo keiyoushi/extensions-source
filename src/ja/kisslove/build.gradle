@@ -1,8 +1,12 @@
 ext {
     extName = 'KissLove'
     extClass = '.KissLove'
-    extVersionCode = 17
+    extVersionCode = 18
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    api(project(":lib:i18n"))
+}
