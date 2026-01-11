@@ -23,6 +23,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import okhttp3.CacheControl
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -321,10 +322,48 @@ abstract class EHentai(
                 tags[namespace] = currentTags
             }
 
+            if (!getTagTranslateServerPref().isBlank()) tagTranslate(tags)
+
             // Copy metadata to manga
             SManga.create().apply {
                 copyTo(this)
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            }
+        }
+    }
+
+    private fun tagTranslate(
+        tags: MutableMap<String, List<Tag>>,
+    ) {
+        val allTagKeys = buildString {
+            tags.forEach { (ns, list) ->
+                list.forEach { tag ->
+                    if (isNotEmpty()) append(',')
+                    append(ns).append(':').append(tag.name)
+                }
+            }
+        }
+        if (allTagKeys.isBlank()) return
+        val translatedMap = runCatching {
+            val url = Uri.parse(getTagTranslateServerPref())
+                .buildUpon()
+                .appendQueryParameter("tags", allTagKeys)
+                .build()
+                .toString()
+            val request = GET(url)
+            client.newCall(request).execute().use { resp ->
+                resp.takeIf { it.isSuccessful }?.body?.string()
+                    ?.parseAs<Map<String, String>>()
+                    .orEmpty()
+            }
+        }.getOrDefault(emptyMap())
+        if (translatedMap.isEmpty()) return
+        translatedMap.forEach { (key, value) ->
+            val (ns, name) = key.split(':', limit = 2)
+            tags[ns]?.let { list ->
+                tags[ns] = list.map {
+                    if (it.name == name) it.copy(name = value) else it
+                }
             }
         }
     }
@@ -630,6 +669,11 @@ abstract class EHentai(
         private const val IGNEOUS_PREF_SUMMARY = "igneous value override"
         private const val IGNEOUS_PREF_DEFAULT_VALUE = ""
 
+        private const val TAG_TRANSLATE_SERVER_PREF_KEY = "tag translate chinese server"
+        private const val TAG_TRANSLATE_SERVER_PREF_TITLE = "tag_translate_server_url"
+        private const val TAG_TRANSLATE_SERVER_PREF_SUMMARY = "tag_translate_server_url value"
+        private const val TAG_TRANSLATE_SERVER_PREF_DEFAULT_VALUE = ""
+
         private const val FORCE_EH = "FORCE_EH"
         private const val FORCE_EH_TITLE = "Force e-hentai"
         private const val FORCE_EH_SUMMARY = "Force e-hentai to avoid content on exhentai"
@@ -684,10 +728,19 @@ abstract class EHentai(
             setDefaultValue(IGNEOUS_PREF_DEFAULT_VALUE)
         }
 
+        val tagTranslateServerPref = EditTextPreference(screen.context).apply {
+            key = TAG_TRANSLATE_SERVER_PREF_KEY
+            title = TAG_TRANSLATE_SERVER_PREF_TITLE
+            summary = TAG_TRANSLATE_SERVER_PREF_SUMMARY
+
+            setDefaultValue(TAG_TRANSLATE_SERVER_PREF_DEFAULT_VALUE)
+        }
+
         screen.addPreference(forceEhPref)
         screen.addPreference(memberIdPref)
         screen.addPreference(passHashPref)
         screen.addPreference(igneousPref)
+        screen.addPreference(tagTranslateServerPref)
         screen.addPreference(originalImagePref)
         screen.addPreference(enforceLanguagePref)
     }
@@ -728,6 +781,10 @@ abstract class EHentai(
 
     private fun getIgneousPref(): String {
         return getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
+    }
+
+    private fun getTagTranslateServerPref(): String {
+        return getCookieValue(TAG_TRANSLATE_SERVER_PREF_TITLE, TAG_TRANSLATE_SERVER_PREF_DEFAULT_VALUE, TAG_TRANSLATE_SERVER_PREF_KEY)
     }
 
     private fun getForceEhPref(): Boolean {
