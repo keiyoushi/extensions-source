@@ -143,7 +143,7 @@ class ChapterListData(
                     append(title)
                 }
             }
-            chapter_number = serial ?: 0f
+            serial?.let { chapter_number = it }
             date_upload = dateModify ?: dateCreate ?: 0L
             scanlator = groupNodes?.filter { it?.data?.name != null }?.joinToString { it!!.data!!.name!! }
                 ?: userNode?.data?.name ?: "\u200B"
