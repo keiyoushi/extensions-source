@@ -203,9 +203,8 @@ class ImageServerManager() {
 
     val fallbackServers = listOf(
         "n03", "n00", "n01", "n02", "n04", "n05", "n06", "n07", "n08", "n09", "n10",
-        "k03", "k06", "k00", "k01", "k02", "k04", "k05", "k08", "k09",
     )
-    val blacklist = listOf("k07")
+    val blacklist = listOf("k00", "k01", "k03", "k04", "k05", "k06", "k07", "k08", "k09")
 
     // Server status tracking
     data class ServerStatus(
