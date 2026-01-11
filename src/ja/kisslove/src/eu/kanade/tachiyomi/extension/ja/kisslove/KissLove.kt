@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -35,7 +35,7 @@ class KissLove : HttpSource() {
         this::class.java.classLoader!!,
     )
     private var cachedGenres: List<CheckBoxFilter>? = null
-    private val genresMutex = Mutex()
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -167,43 +167,38 @@ class KissLove : HttpSource() {
 
         filterList.add(StatusFilter(intl["status"], getStatusList()))
 
-        val genres = getCachedGenres()
-        if (genres.isNotEmpty()) {
+        val genres = cachedGenres
+        if (!genres.isNullOrEmpty()) {
             filterList.add(
                 GenreFilter(
                     intl["genre"],
                     genres,
                 ),
             )
+        } else {
+            filterList.add(Filter.Header(intl["genreTip"]))
+            launchAsyncGenreLoad()
         }
 
         return FilterList(filterList)
     }
 
-    private fun getCachedGenres(): List<CheckBoxFilter> {
-        cachedGenres?.let { return it }
+    private fun launchAsyncGenreLoad() {
+        scope.launch {
+            try {
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegments("api/genres")
+                    .build()
 
-        return runBlocking {
-            genresMutex.withLock {
-                cachedGenres?.let { return@withLock it }
+                val genres = client.newCall(GET(url, sigAppend()))
+                    .await()
+                    .parseAs<List<Genre>>()
+                    .map {
+                        CheckBoxFilter(it.name)
+                    }
 
-                try {
-                    val url = baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegments("api/genres")
-                        .build()
-
-                    val genres = client.newCall(GET(url, sigAppend()))
-                        .await()
-                        .parseAs<List<Genre>>()
-                        .map {
-                            CheckBoxFilter(it.name)
-                        }
-
-                    cachedGenres = genres
-                    genres
-                } catch (_: Exception) {
-                    emptyList()
-                }
+                cachedGenres = genres
+            } catch (_: Exception) {
             }
         }
     }
