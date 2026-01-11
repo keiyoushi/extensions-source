@@ -46,8 +46,6 @@ class BatoToV4(
 
     override val name: String = "Bato.to"
 
-    private val imageServerManager: ImageServerManager = ImageServerManager()
-
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
@@ -60,6 +58,8 @@ class BatoToV4(
             chain.proceed(request)
         }
         .build()
+
+    private val imageServerManager: ImageServerManager = ImageServerManager()
 
     // ************ Search ************ //
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
@@ -368,7 +368,6 @@ class BatoToV4(
                 Page(
                     index = index,
                     imageUrl = url.toHttpUrl().newBuilder()
-                        .fragment(PAGE_FRAGMENT)
                         .build()
                         .toString(),
                 )
@@ -416,11 +415,6 @@ class BatoToV4(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-
-        // Handle non-page requests normally
-        if (request.url.fragment != PAGE_FRAGMENT) {
-            return chain.proceed(request)
-        }
 
         // Extract server, or proceed normally if not found
         val urlString = request.url.toString()
@@ -573,7 +567,6 @@ private val jsonMediaType = "application/json".toMediaType()
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
 
-private const val PAGE_FRAGMENT = "page"
 private val userIdRegex = Regex("""/u/(\d+)""")
 
 private const val BROWSE_PAGE_SIZE = 36
