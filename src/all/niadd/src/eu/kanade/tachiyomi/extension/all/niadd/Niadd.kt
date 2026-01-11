@@ -34,7 +34,13 @@ open class Niadd(
         private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
     }
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+    override fun headersBuilder(): Headers.Builder =
+        super.headersBuilder()
+            // Hardcoded User-Agent required to bypass Niadd hotlink protection for cover images.
+            .set(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            )
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -163,8 +169,8 @@ open class Niadd(
         if (dateString.contains("atrás", ignoreCase = true) ||
             dateString.contains("ago", ignoreCase = true)
         ) {
-            // For relative dates, current time is an acceptable approximation to ensure chapters are sorted/displayed correctly.
-            return System.currentTimeMillis()
+            // TODO: Parse relative date
+            return 0L
         }
 
         return dateFormat.tryParse(dateString)
@@ -215,7 +221,7 @@ open class Niadd(
                 .build()
 
             return client.newCall(GET(sourceUrl, requestHeaders)).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("Falha ao seguir bloqueio: ${response.code}")
+                if (!response.isSuccessful) throw Exception("Failed to follow redirect: ${response.code}")
                 pageListParse(response.asJsoup())
             }
         }
