@@ -34,6 +34,7 @@ import okhttp3.Response
 import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class BatoToV4(
@@ -57,6 +58,8 @@ class BatoToV4(
             chain.proceed(request)
         }
         .build()
+
+    private val imageServerManager: ImageServerManager = ImageServerManager()
 
     // ************ Search ************ //
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
@@ -365,7 +368,6 @@ class BatoToV4(
                 Page(
                     index = index,
                     imageUrl = url.toHttpUrl().newBuilder()
-                        .fragment(PAGE_FRAGMENT)
                         .build()
                         .toString(),
                 )
@@ -413,45 +415,58 @@ class BatoToV4(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
 
-        if (request.url.fragment != PAGE_FRAGMENT || response.isSuccessful) {
-            return response
+        // Extract server, or proceed normally if not found
+        val urlString = request.url.toString()
+        val originalServer = this.imageServerManager.extractServerFromUrl(urlString) ?: return chain.proceed(request)
+
+        // Try original server if not skipped
+        if (!this.imageServerManager.shouldSkip(originalServer)) {
+            tryServer(chain, request, originalServer)?.let { return it }
         }
 
-        response.closeQuietly()
+        // Try fallback servers
+        for (server in this.imageServerManager.fallbackServers) {
+            if (this.imageServerManager.shouldSkip(server)) continue
 
-        val urlString = request.url.toString()
+            val newUrl = this.imageServerManager.replaceServerInUrl(urlString, server)
+            val newRequest = request.newBuilder().url(newUrl).build()
 
-        if (SERVER_PATTERN.containsMatchIn(urlString)) {
-            // Sorted list: Most reliable servers FIRST
-            val servers = listOf("n03", "n00", "n01", "n02", "n04", "n05", "n06", "n07", "n08", "n09", "n10", "k03", "k06", "k07", "k00", "k01", "k02", "k04", "k05", "k08", "k09")
-
-            for (server in servers) {
-                val newUrl = urlString.replace(SERVER_PATTERN, "https://$server")
-
-                val newRequest = request.newBuilder()
-                    .url(newUrl)
-                    .build()
-
-                try {
-                    val newResponse = chain
-                        .withConnectTimeout(5, TimeUnit.SECONDS)
-                        .withReadTimeout(10, TimeUnit.SECONDS)
-                        .proceed(newRequest)
-
-                    if (newResponse.isSuccessful) {
-                        return newResponse
-                    }
-
-                    newResponse.close()
-                } catch (_: Exception) {
-                    // Connection error on this mirror, ignore and loop to next
-                }
-            }
+            tryServer(chain, newRequest, server, withTimeout = true)?.let { return it }
         }
 
         return chain.proceed(request)
+    }
+
+    private fun tryServer(
+        chain: Interceptor.Chain,
+        request: Request,
+        server: String,
+        withTimeout: Boolean = false,
+    ): Response? {
+        return try {
+            // FORCE SHORT TIMEOUTS FOR FALLBACKS
+            // If a fallback server doesn't answer in 5 seconds, kill it and move to next server.
+            val modifiedChain = if (withTimeout) {
+                chain.withConnectTimeout(5, TimeUnit.SECONDS)
+                    .withReadTimeout(10, TimeUnit.SECONDS)
+            } else {
+                chain
+            }
+
+            val response = modifiedChain.proceed(request)
+            imageServerManager.recordImageServerStatus(server, response.code)
+
+            if (response.isSuccessful) {
+                response
+            } else {
+                response.close()
+                null
+            }
+        } catch (_: Exception) {
+            imageServerManager.recordImageServerStatus(server, 0) // Unknown error
+            null
+        }
     }
 
     override fun getFilterList(): FilterList {
@@ -554,8 +569,6 @@ private val jsonMediaType = "application/json".toMediaType()
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
 
-private const val PAGE_FRAGMENT = "page"
-private val SERVER_PATTERN = Regex("https://[a-zA-Z]\\d{2}")
 private val userIdRegex = Regex("""/u/(\d+)""")
 
 private const val BROWSE_PAGE_SIZE = 36
@@ -564,3 +577,53 @@ private const val BROWSE_PAGE_SIZE = 36
 private val seriesIdRegex = Regex("""series/(\d+)""")
 private val titleRegex: Regex =
     Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
+
+/**
+ * Manages image server fallback logic, including blacklisting and backoff tracking.
+ */
+private class ImageServerManager() {
+    val serverPattern = Regex("https://([a-zA-Z]\\d{2})")
+
+    val fallbackServers = listOf(
+        "n03", "n00", "n01", "n02", "n04", "n05", "n06", "n07", "n08", "n09", "n10",
+        "k03", "k06", "k00", "k01", "k02", "k04", "k05", "k08", "k09",
+    )
+    val blacklist = listOf("k07")
+
+    // Server status tracking
+    data class ServerStatus(
+        val canBackoff: Boolean,
+        val statusCode: Int = 0,
+        val timestamp: Long = System.currentTimeMillis(),
+    )
+
+    private val serverStatus = ConcurrentHashMap<String, ServerStatus>()
+
+    private val BACKOFF_DURATION_MS = 3_600_000L // 1 hour
+
+    fun shouldSkip(server: String): Boolean {
+        return server in blacklist || isInBackoff(server)
+    }
+
+    fun isInBackoff(server: String): Boolean {
+        val status = serverStatus[server] ?: return false
+        return status.canBackoff && System.currentTimeMillis() - status.timestamp < BACKOFF_DURATION_MS
+    }
+
+    fun recordImageServerStatus(server: String, statusCode: Int) {
+        val now = System.currentTimeMillis()
+        serverStatus[server] = ServerStatus(
+            canBackoff = statusCode in 500..599,
+            statusCode = statusCode,
+            timestamp = now,
+        )
+    }
+
+    fun extractServerFromUrl(url: String): String? {
+        return serverPattern.find(url)?.groups?.get(1)?.value
+    }
+
+    fun replaceServerInUrl(url: String, newServer: String): String {
+        return url.replace(serverPattern, "https://$newServer")
+    }
+}
