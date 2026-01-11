@@ -445,6 +445,8 @@ class BatoToV4(
         withTimeout: Boolean = false,
     ): Response? {
         return try {
+            // FORCE SHORT TIMEOUTS FOR FALLBACKS
+            // If a fallback server doesn't answer in 5 seconds, kill it and move to next server.
             val modifiedChain = if (withTimeout) {
                 chain.withConnectTimeout(5, TimeUnit.SECONDS)
                     .withReadTimeout(10, TimeUnit.SECONDS)
