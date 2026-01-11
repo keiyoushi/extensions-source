@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -41,7 +41,7 @@ class Beauty3600000 : ParsedHttpSource() {
     }
 
     override fun popularMangaNextPageSelector() = ".next"
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page/", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/${getPageUri(page)}", headers)
     override fun popularMangaSelector() = "#blog-entries > article"
 
     // Search
@@ -53,14 +53,14 @@ class Beauty3600000 : ParsedHttpSource() {
         val categoryFilter = filterList.findInstance<CategoryFilter>()!!
         var searchQuery = query
         val searchPath: String = when {
-            tagFilter.state.isNotEmpty() -> "$baseUrl/tag/${tagFilter.state}/page/$page/"
-            categoryFilter.state != 0 -> "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/"
+            tagFilter.state.isNotEmpty() -> "$baseUrl/tag/${tagFilter.state}/${getPageUri(page)}"
+            categoryFilter.state != 0 -> "$baseUrl/category/${categoryFilter.toUriPart()}/${getPageUri(page)}"
             query.startsWith("tag:") -> {
                 tagFilter.state = searchQuery.substringAfter("tag:")
                 searchQuery = ""
-                "$baseUrl/tag/${tagFilter.state}/page/$page/"
+                "$baseUrl/tag/${tagFilter.state}/${getPageUri(page)}"
             }
-            else -> "$baseUrl/page/$page/"
+            else -> "$baseUrl/${getPageUri(page)}"
         }
         return when {
             searchQuery.isNotEmpty() -> GET(
@@ -101,7 +101,7 @@ class Beauty3600000 : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.select("link[rel=\"shortlink\"]").attr("href"))
         name = "Gallery"
-        date_upload = getDate(element.select("#main time").attr("datetime"))
+        date_upload = DATE_FORMAT.tryParse(element.select("#main time").attr("datetime"))
     }
 
     override fun chapterListSelector() = "html"
@@ -139,17 +139,17 @@ class Beauty3600000 : ParsedHttpSource() {
         "Category",
         arrayOf(
             Pair("Any", ""),
-            Pair("Gravure", "gravure"),
             Pair("Aidol", "aidol"),
-            Pair("Magazine", "magazine"),
-            Pair("Korea", "korea"),
-            Pair("Thailand", "thailand"),
-            Pair("Chinese", "chinese"),
-            Pair("Japan", "japan"),
             Pair("China", "china"),
-            Pair("Uncategorized", "uncategorized"),
+            Pair("Chinese", "chinese"),
+            Pair("Cosplay", "cosplay"),
+            Pair("Gravure", "gravure"),
+            Pair("Japan", "japan"),
+            Pair("Korea", "korea"),
             Pair("Magazine", "magazine"),
             Pair("Photobook", "photobook"),
+            Pair("Thailand", "thailand"),
+            Pair("Uncategorized", "uncategorized"),
             Pair("Western", "western"),
         ),
     )
@@ -158,12 +158,10 @@ class Beauty3600000 : ParsedHttpSource() {
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
-    private fun getDate(str: String): Long {
-        return try {
-            DATE_FORMAT.parse(str).time
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun getPageUri(page: Int) = if (page == 1) {
+        ""
+    } else {
+        "page/$page/"
     }
 
     companion object {
