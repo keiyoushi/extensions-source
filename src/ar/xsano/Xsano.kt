@@ -7,7 +7,6 @@ import java.util.Locale
 class Xsano : Madara(
     "Xsano Manga",
     "https://www.xsano-manga.com",
-    "ar",
-    SimpleDateFormat("MMMM d, yyyy", Locale("ar"))
+    "ar",  // اللغة العربية
+    SimpleDateFormat("MMMM d, yyyy", Locale("ar", "SA")) // إضافة رمز البلد
 )
-
