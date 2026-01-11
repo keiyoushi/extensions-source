@@ -37,10 +37,10 @@ data class Manga(
     val showads: Int?,
     val slug: String,
     val submitter: Long?,
-    val total: Long,
+    val total: Long?,
     @SerialName("trans_group") val transGroup: String,
     val views: Long,
-    @SerialName("vote_count") val voteCount: Long,
+    @SerialName("vote_count") val voteCount: Long?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = this@Manga.slug
@@ -76,3 +76,8 @@ data class Chapter(
         }.getOrDefault(0L)
     }
 }
+
+@Serializable
+data class Genre(
+    val name: String,
+)
