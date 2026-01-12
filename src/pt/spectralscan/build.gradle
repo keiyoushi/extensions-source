@@ -1,12 +1,8 @@
 ext {
     extName = 'Nexus Scan'
     extClass = '.NexusScan'
-    extVersionCode = 56
+    extVersionCode = 57
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:cookieinterceptor'))
-}
