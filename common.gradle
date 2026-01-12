@@ -14,7 +14,7 @@ if (theme != null) evaluationDependsOn(theme.path)
 android {
     compileSdk AndroidConfig.compileSdk
 
-    namespace "eu.kanade.tachiyomi.extension"
+    namespace "eu.kanade.tachiyomi.extension.ar.xsano"
     sourceSets {
         main {
             manifest.srcFile layout.buildDirectory.file('tempAndroidManifest.xml')
