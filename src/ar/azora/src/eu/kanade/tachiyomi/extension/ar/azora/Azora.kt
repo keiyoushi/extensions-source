@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ar.azora
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -23,6 +24,13 @@ class Azora : Iken(
         }.build()
 
         return GET(url, headers)
+    }
+    override fun chapterListRequest(manga: SManga): Request {
+        // Migration from old web theme to the new one(madara -> Iken)
+        if (manga.url.startsWith("/series/")) {
+            throw Exception("Migrate from $name to $name (same extension)")
+        }
+        return super.chapterListRequest(manga)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
