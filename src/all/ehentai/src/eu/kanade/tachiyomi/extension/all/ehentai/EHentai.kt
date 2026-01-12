@@ -322,7 +322,7 @@ abstract class EHentai(
                 tags[namespace] = currentTags
             }
 
-            if (!getTagTranslateServerPref().isBlank()) tagTranslate(tags)
+            if (!getTranslateTagServerUrlPref().isBlank()) tagTranslate(tags)
 
             // Copy metadata to manga
             SManga.create().apply {
@@ -345,7 +345,7 @@ abstract class EHentai(
         }
         if (allTagKeys.isBlank()) return
         val translatedMap = runCatching {
-            val url = Uri.parse(getTagTranslateServerPref())
+            val url = Uri.parse(getTranslateTagServerUrlPref())
                 .buildUpon()
                 .appendQueryParameter("tags", allTagKeys)
                 .build()
@@ -669,10 +669,10 @@ abstract class EHentai(
         private const val IGNEOUS_PREF_SUMMARY = "igneous value override"
         private const val IGNEOUS_PREF_DEFAULT_VALUE = ""
 
-        private const val TAG_TRANSLATE_SERVER_PREF_KEY = "tag translate chinese server"
-        private const val TAG_TRANSLATE_SERVER_PREF_TITLE = "tag_translate_server_url"
-        private const val TAG_TRANSLATE_SERVER_PREF_SUMMARY = "tag_translate_server_url value"
-        private const val TAG_TRANSLATE_SERVER_PREF_DEFAULT_VALUE = ""
+        private const val TRANSLATE_TAG_SERVER_URL_PREF_KEY = "translate the ehentai tag server url"
+        private const val TRANSLATE_TAG_SERVER_URL_PREF_TITLE = "Translate the ehentai tag server URL"
+        private const val TRANSLATE_TAG_SERVER_URL_PREF_SUMMARY = "Translate the ehentai tag server URL value"
+        private const val TRANSLATE_TAG_SERVER_URL_PREF_DEFAULT_VALUE = ""
 
         private const val FORCE_EH = "FORCE_EH"
         private const val FORCE_EH_TITLE = "Force e-hentai"
@@ -728,19 +728,19 @@ abstract class EHentai(
             setDefaultValue(IGNEOUS_PREF_DEFAULT_VALUE)
         }
 
-        val tagTranslateServerPref = EditTextPreference(screen.context).apply {
-            key = TAG_TRANSLATE_SERVER_PREF_KEY
-            title = TAG_TRANSLATE_SERVER_PREF_TITLE
-            summary = TAG_TRANSLATE_SERVER_PREF_SUMMARY
+        val translateTagServerUrlPref = EditTextPreference(screen.context).apply {
+            key = TRANSLATE_TAG_SERVER_URL_PREF_KEY
+            title = TRANSLATE_TAG_SERVER_URL_PREF_TITLE
+            summary = TRANSLATE_TAG_SERVER_URL_PREF_SUMMARY
 
-            setDefaultValue(TAG_TRANSLATE_SERVER_PREF_DEFAULT_VALUE)
+            setDefaultValue(TRANSLATE_TAG_SERVER_URL_PREF_DEFAULT_VALUE)
         }
 
         screen.addPreference(forceEhPref)
         screen.addPreference(memberIdPref)
         screen.addPreference(passHashPref)
         screen.addPreference(igneousPref)
-        screen.addPreference(tagTranslateServerPref)
+        screen.addPreference(translateTagServerUrlPref)
         screen.addPreference(originalImagePref)
         screen.addPreference(enforceLanguagePref)
     }
@@ -783,8 +783,8 @@ abstract class EHentai(
         return getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
     }
 
-    private fun getTagTranslateServerPref(): String {
-        return getCookieValue(TAG_TRANSLATE_SERVER_PREF_TITLE, TAG_TRANSLATE_SERVER_PREF_DEFAULT_VALUE, TAG_TRANSLATE_SERVER_PREF_KEY)
+    private fun getTranslateTagServerUrlPref(): String {
+        return preferences.getString(TRANSLATE_TAG_SERVER_URL_PREF_KEY, TRANSLATE_TAG_SERVER_URL_PREF_SUMMARY) ?: TRANSLATE_TAG_SERVER_URL_PREF_SUMMARY
     }
 
     private fun getForceEhPref(): Boolean {
