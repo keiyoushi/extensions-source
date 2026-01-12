@@ -9,13 +9,14 @@ import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryLi
 import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -23,13 +24,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Nekopost : HttpSource() {
-
-    private val json: Json by injectLazy()
 
     override val baseUrl = "https://www.nekopost.net"
     override val lang = "th"
@@ -41,8 +40,6 @@ class Nekopost : HttpSource() {
     private val fileHost = "https://www.osemocphoto.com"
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
-
-    private val commonHeaders by lazy { headersBuilder().build() }
 
     private val apiHeaders by lazy {
         headersBuilder().set("Accept", "*/*").set("Content-Type", "application/json").build()
@@ -74,8 +71,27 @@ class Nekopost : HttpSource() {
         return POST(
             "$baseUrl/api/project/$endpoint",
             apiHeaders,
-            json.encodeToString(body).toRequestBody(),
+            Json.encodeToString(body).toRequestBody(),
         )
+    }
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        val cleanQuery = query.trim()
+        val projectIdRegex = Regex("""nekopost\.net/manga/(\d+)""")
+        val matchResult = projectIdRegex.find(cleanQuery)
+
+        return if (matchResult != null) {
+            val projectId = matchResult.groupValues[1]
+            client.newCall(GET("$projectDataEndpoint/$projectId", headers))
+                .asObservableSuccess()
+                .map { response -> MangasPage(listOf(mangaDetailsParse(response)), false) }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage =
@@ -92,7 +108,7 @@ class Nekopost : HttpSource() {
         filterTypes: Set<String>?,
         hasNextPage: Boolean,
     ): MangasPage {
-        val projectList: RawProjectSearchSummaryList = json.decodeFromString(response.body.string())
+        val projectList = response.parseAs<RawProjectSearchSummaryList>()
 
         if (projectList.listProject.isNullOrEmpty()) {
             return MangasPage(emptyList(), false)
@@ -115,7 +131,10 @@ class Nekopost : HttpSource() {
                 }
                 .toList()
 
-        return MangasPage(mangaList, hasNextPage && mangaList.isNotEmpty() && mangaList.size >= PAGE_SIZE)
+        return MangasPage(
+            mangaList,
+            hasNextPage && mangaList.isNotEmpty() && mangaList.size >= PAGE_SIZE,
+        )
     }
 
     private fun buildCoverUrl(projectId: String, coverVersion: Int? = null): String {
@@ -124,12 +143,12 @@ class Nekopost : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga) =
-        GET("$projectDataEndpoint/${manga.url}", commonHeaders)
+        GET("$projectDataEndpoint/${manga.url}", headers)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val projectInfo: RawProjectInfo = json.decodeFromString(response.body.string())
+        val projectInfo = response.parseAs<RawProjectInfo>()
 
         return SManga.create().apply {
             projectInfo.projectInfo.let { info ->
@@ -164,7 +183,7 @@ class Nekopost : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val projectInfo: RawProjectInfo = json.decodeFromString(response.body.string())
+        val projectInfo = response.parseAs<RawProjectInfo>()
 
         if (getStatus(projectInfo.projectInfo.status) == SManga.LICENSED) {
             throw Exception("Licensed - No chapter to show")
@@ -185,13 +204,13 @@ class Nekopost : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter) =
-        GET("$fileHost/collectManga/${chapter.url}", commonHeaders)
+        GET("$fileHost/collectManga/${chapter.url}", headers)
 
     override fun getChapterUrl(chapter: SChapter) =
         "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterInfo: RawChapterInfo = json.decodeFromString(response.body.string())
+        val chapterInfo = response.parseAs<RawChapterInfo>()
         val basePath = "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}"
 
         return chapterInfo.pageItem.map { page ->
@@ -203,33 +222,16 @@ class Nekopost : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val cleanQuery = query.trim()
-        val projectIdRegex = Regex("""nekopost\.net/manga/(\d+)""")
-        val matchResult = projectIdRegex.find(cleanQuery)
-
-        val keyword = if (matchResult != null) {
-            val projectId = matchResult.groupValues[1]
-            try {
-                val response = client.newCall(GET("$projectDataEndpoint/$projectId", commonHeaders)).execute()
-                val projectInfo: RawProjectInfo = json.decodeFromString(response.body.string())
-                projectInfo.projectInfo.projectName
-            } catch (e: Exception) {
-                projectId
-            }
-        } else {
-            cleanQuery
-        }
-
         val searchData =
             SearchRequest(
-                keyword = keyword,
+                keyword = query.trim(),
                 status = 0,
                 paging = PagingInfo(pageNo = page, pageSize = 100),
             )
         return POST(
             "$baseUrl/api/project/search",
             apiHeaders,
-            json.encodeToString(searchData).toRequestBody(),
+            Json.encodeToString(searchData).toRequestBody(),
         )
     }
 
