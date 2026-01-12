@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,18 +13,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.Jsoup
-import rx.Observable
-import java.io.IOException
+import kotlin.random.Random
 
 class NexusScan : HttpSource(), ConfigurableSource {
 
@@ -37,7 +29,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override val name = "Nexus Scan"
 
-    override val baseUrl = "https://nexustoons.site"
+    override val baseUrl = "https://nexustoons.com"
 
     override val supportsLatest = true
 
@@ -45,99 +37,120 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
-        .addNetworkInterceptor(CookieInterceptor("nexustoons.site", emptyList()))
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-            val path = response.request.url.encodedPath
-
-            if (path.startsWith("/accounts/login") || path.startsWith("/login")) {
-                response.close()
-                throw IOException("Faça o login na WebView para acessar o conteúdo")
-            }
-
-            response
-        }
         .build()
 
-    private val ajaxHeaders by lazy {
+    private val apiHeaders by lazy {
         headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .add("Referer", "$baseUrl/biblioteca/")
+            .add("Accept", "application/json")
+            .add("Referer", "$baseUrl/")
             .build()
     }
 
-    private var currentMangaSlug: String? = null
+    private val onlyNsfw: Boolean
+        get() = preferences.getBoolean(PREF_ONLY_NSFW_KEY, PREF_ONLY_NSFW_DEFAULT)
 
-    // ==================== AJAX Manga List ==========================
+    // ==================== URL Helpers ==========================
 
-    private fun parseMangaListResponse(response: Response): MangasPage {
-        val result = response.parseAs<MangaListResponse>()
-        val document = Jsoup.parse(result.html, baseUrl)
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-        val mangas = document.select("a.content-card[href*='/manga/']").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                title = element.selectFirst(".font-semibold")!!.text()
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
+    override fun getChapterUrl(chapter: SChapter): String {
+        val parts = chapter.url.substringAfter("/read/").split("/")
+        val chapterId = parts[0]
+        val mangaSlug = parts.getOrNull(1) ?: ""
+        return "$baseUrl/r/${encodeChapterUrl(chapterId, mangaSlug)}"
+    }
+
+    private fun encodeChapterUrl(chapterId: String, mangaSlug: String = ""): String {
+        val timestamp = System.currentTimeMillis().toString(36)
+        val padding = randomString(20 + Random.nextInt(11))
+        val data = "$chapterId|$mangaSlug|$timestamp|$padding"
+
+        val xored = xorCipher(data, CHAPTER_ENCRYPTION_KEY)
+        val firstEncode = base64UrlEncode(xored)
+        val secondEncode = base64UrlEncode("$firstEncode|${randomString(10)}")
+
+        return if (secondEncode.length >= 64) {
+            secondEncode
+        } else {
+            secondEncode + randomString(64 - secondEncode.length)
         }
+    }
 
-        return MangasPage(mangas, result.has_next)
+    private fun xorCipher(input: String, key: String): String {
+        return input.mapIndexed { i, char ->
+            (char.code xor key[i % key.length].code).toChar()
+        }.joinToString("")
+    }
+
+    private fun base64UrlEncode(input: String): String {
+        val bytes = input.map { it.code.toByte() }.toByteArray()
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+            .replace('+', '-')
+            .replace('/', '_')
+            .trimEnd('=')
+    }
+
+    private fun randomString(length: Int): String {
+        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        return buildString(length) {
+            repeat(length) { append(chars.random()) }
+        }
     }
 
     // ==================== Popular ==========================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/ajax/load-mangas/".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("sort", "popular")
-            .addQueryParameter("q", "")
-            .addQueryParameter("genre", "")
-            .addQueryParameter("type", "")
-            .addQueryParameter("view", "grid")
+            .addQueryParameter("limit", "50")
+            .addQueryParameter("includeNsfw", "true")
+            .apply { if (onlyNsfw) addQueryParameter("onlyNsfw", "true") }
+            .addQueryParameter("sortBy", "views")
             .build()
-        return GET(url, ajaxHeaders)
+        return GET(url, apiHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        return parseMangaListResponse(response)
+        val result = response.parseAs<MangaListResponse>()
+        val mangas = result.data.orEmpty().map { it.toSManga() }
+        val hasNextPage = result.page < result.pages
+        return MangasPage(mangas, hasNextPage)
     }
 
     // ==================== Latest ==========================
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        syncNSFW()
-        return super.fetchLatestUpdates(page)
-    }
-
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/ajax/load-mangas/".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("sort", "latest")
-            .addQueryParameter("q", "")
-            .addQueryParameter("genre", "")
-            .addQueryParameter("type", "")
-            .addQueryParameter("view", "grid")
+            .addQueryParameter("limit", "50")
+            .addQueryParameter("includeNsfw", "true")
+            .apply { if (onlyNsfw) addQueryParameter("onlyNsfw", "true") }
+            .addQueryParameter("sortBy", "lastChapterAt")
             .build()
-        return GET(url, ajaxHeaders)
+        return GET(url, apiHeaders)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return parseMangaListResponse(response)
-    }
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // ==================== Search ==========================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        syncNSFW()
-        return super.fetchSearchManga(page, query, filters)
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var sortValue = "popular"
-        var genreValue = ""
-        var typeValue = ""
+        val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "30")
+            .addQueryParameter("includeNsfw", "true")
+
+        if (query.isNotBlank()) {
+            url.addQueryParameter("search", query)
+        }
+
+        var sortBy = "updatedAt"
+        var sortOrder = "desc"
+        var categoryMode = "or"
+        val statusList = mutableListOf<String>()
+        val typeList = mutableListOf<String>()
+        val genreList = mutableListOf<String>()
+        val themeList = mutableListOf<String>()
 
         filters.forEach { filter ->
             when (filter) {
@@ -145,9 +158,20 @@ class NexusScan : HttpSource(), ConfigurableSource {
                     val value = filter.selected()
                     if (value.isNotEmpty()) {
                         when (filter.parameter) {
-                            "sort" -> sortValue = value
-                            "genre" -> genreValue = value
-                            "type" -> typeValue = value
+                            "sortBy" -> sortBy = value
+                            "sortOrder" -> sortOrder = value
+                            "categoryMode" -> categoryMode = value
+                        }
+                    }
+                }
+                is CheckboxGroup -> {
+                    val selected = filter.selected()
+                    if (selected.isNotEmpty()) {
+                        when (filter.parameter) {
+                            "status" -> statusList.addAll(selected)
+                            "type" -> typeList.addAll(selected)
+                            "genres" -> genreList.addAll(selected)
+                            "themes" -> themeList.addAll(selected)
                         }
                     }
                 }
@@ -155,127 +179,67 @@ class NexusScan : HttpSource(), ConfigurableSource {
             }
         }
 
-        val url = "$baseUrl/ajax/load-mangas/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("sort", sortValue)
-            .addQueryParameter("q", query)
-            .addQueryParameter("genre", genreValue)
-            .addQueryParameter("type", typeValue)
-            .addQueryParameter("view", "grid")
-            .build()
+        url.addQueryParameter("sortBy", sortBy)
+        url.addQueryParameter("sortOrder", sortOrder)
+        url.addQueryParameter("categoryMode", categoryMode)
 
-        return GET(url, ajaxHeaders)
+        if (statusList.isNotEmpty()) {
+            url.addQueryParameter("status", statusList.joinToString(","))
+        }
+        if (typeList.isNotEmpty()) {
+            url.addQueryParameter("type", typeList.joinToString(","))
+        }
+        if (genreList.isNotEmpty()) {
+            url.addQueryParameter("genres", genreList.joinToString(","))
+        }
+        if (themeList.isNotEmpty()) {
+            url.addQueryParameter("themes", themeList.joinToString(","))
+        }
+
+        return GET(url.build(), apiHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return parseMangaListResponse(response)
-    }
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ==================== Details =======================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        currentMangaSlug = getMangaSlug(manga.url)
-        return client.newCall(GET("$baseUrl${manga.url}", headers)).asObservableSuccess()
-            .map { response ->
-                val document = response.asJsoup()
-                val script = document.selectFirst("script[id=page-api-urls]")?.data()
-                val urls = script?.parseAs<Map<String, String>>() ?: emptyMap()
-
-                val apiUrl = urls["mangaDetails"]!!
-                val finalApiUrl = if (apiUrl.startsWith("http")) apiUrl else "$baseUrl$apiUrl"
-
-                val headers = headersBuilder()
-                    .set("Referer", "$baseUrl${manga.url}")
-                    .build()
-
-                client.newCall(GET(finalApiUrl, headers)).execute()
-                    .parseAs<MangaDetailsResponse>()
-                    .manga.toSManga(currentMangaSlug!!)
-            }
-    }
+    private fun getMangaSlug(url: String) = url.substringAfter("/manga/").trimEnd('/')
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}", headers)
+        val slug = getMangaSlug(manga.url)
+        return GET("$baseUrl/api/manga/$slug", apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException("Not used")
+        return response.parseAs<MangaDetailsDto>().toSManga()
     }
 
     // ==================== Chapter =======================
 
-    private fun getMangaSlug(url: String) = url.substringAfter("/manga/").trimEnd('/')
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(GET("$baseUrl${manga.url}", headers)).asObservableSuccess()
-            .flatMap { response ->
-                val document = response.asJsoup()
-                val script = document.selectFirst("script[id=page-api-urls]")?.data()
-                val urls = script?.parseAs<Map<String, String>>() ?: emptyMap()
-
-                val chaptersApiUrl = urls["chaptersApi"]!!
-                val finalApiUrl = if (chaptersApiUrl.startsWith("http")) chaptersApiUrl else "$baseUrl$chaptersApiUrl"
-
-                val referer = "$baseUrl${manga.url}"
-                val headers = headersBuilder()
-                    .set("Referer", referer)
-                    .build()
-
-                client.newCall(GET("$finalApiUrl?page=1&sort=desc&q=", headers)).asObservableSuccess()
-                    .map { it.parseAs<ChapterListApiResponse>() }
-                    .flatMap { firstPage ->
-                        val chapters = firstPage.chapters.map { it.toSChapter() }
-
-                        if (!firstPage.pagination.has_next) {
-                            Observable.just(chapters)
-                        } else {
-                            fetchRemainingChaptersApi(chapters, firstPage.pagination.next_page!!, finalApiUrl, headers)
-                        }
-                    }
-            }
-    }
-
-    private fun fetchRemainingChaptersApi(
-        accumulatedChapters: List<SChapter>,
-        nextPage: Int,
-        chaptersApiUrl: String,
-        headers: Headers,
-    ): Observable<List<SChapter>> {
-        val url = "$chaptersApiUrl?page=$nextPage&sort=desc&q="
-
-        return client.newCall(GET(url, headers)).asObservableSuccess()
-            .map { it.parseAs<ChapterListApiResponse>() }
-            .flatMap { page ->
-                val newChapters = page.chapters.map { it.toSChapter() }
-                val allChapters = accumulatedChapters + newChapters
-
-                if (page.pagination.has_next) {
-                    fetchRemainingChaptersApi(allChapters, page.pagination.next_page!!, chaptersApiUrl, headers)
-                } else {
-                    Observable.just(allChapters)
-                }
-            }
-    }
-
     override fun chapterListRequest(manga: SManga): Request {
-        throw UnsupportedOperationException("Not used")
+        val slug = getMangaSlug(manga.url)
+        return GET("$baseUrl/api/manga/$slug", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException("Not used")
+        val manga = response.parseAs<MangaDetailsDto>()
+        return manga.chapters.orEmpty().map { it.toSChapter(manga.slug) }
     }
 
     // ==================== Page ==========================
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.substringAfter("/read/").substringBefore("/")
+        return GET("$baseUrl/api/read/$chapterId", apiHeaders)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-
-        val pageData = document.selectFirst("script[id^=d-][type='application/json']")?.data()
-            ?: return emptyList()
-
-        return pageData.parseAs<List<PageData>>().mapIndexed { index, page ->
-            Page(index, imageUrl = page.image_url)
-        }
+        val readResponse = response.parseAs<ReadResponse>()
+        return readResponse.pages
+            .sortedBy { it.pageNumber }
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = page.imageUrl)
+            }
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -292,69 +256,45 @@ class NexusScan : HttpSource(), ConfigurableSource {
     // ==================== Filters ==========================
 
     override fun getFilterList() = FilterList(
-        SelectFilter("Ordenar Por", "sort", sortList),
-        SelectFilter("Gênero", "genre", genreList),
-        SelectFilter("Tipo", "type", typeList),
+        SelectFilter("Ordenar Por", "sortBy", sortList),
+        SelectFilter("Ordem", "sortOrder", orderList),
+        SelectFilter("Modo de Categoria", "categoryMode", categoryModeList),
+        CheckboxGroup(
+            "Status",
+            "status",
+            statusList.map { CheckboxItem(it.first, it.second) },
+        ),
+        CheckboxGroup(
+            "Tipo",
+            "type",
+            typeList.map { CheckboxItem(it.first, it.second) },
+        ),
+        CheckboxGroup(
+            "Gêneros",
+            "genres",
+            genreList.map { CheckboxItem(it.first, it.second) },
+        ),
+        CheckboxGroup(
+            "Temas",
+            "themes",
+            themeList.map { CheckboxItem(it.first, it.second) },
+        ),
     )
 
     // ==================== Settings ==========================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_ADULT_KEY
-            title = "Exibir conteúdo adulto (+18)"
-            summary = "Habilita a visualização de conteúdo adulto nas listas."
-            setDefaultValue(PREF_ADULT_DEFAULT)
+            key = PREF_ONLY_NSFW_KEY
+            title = "Mostrar apenas conteúdo +18"
+            summary = "Quando habilitado, exibe apenas conteúdo adulto nas listagens."
+            setDefaultValue(PREF_ONLY_NSFW_DEFAULT)
         }.also(screen::addPreference)
     }
 
-    private fun syncNSFW() {
-        try {
-            val baseHttpUrl = baseUrl.toHttpUrl()
-            var cookies = client.cookieJar.loadForRequest(baseHttpUrl)
-
-            if (cookies.none { it.name == "csrftoken" }) {
-                client.newCall(GET(baseUrl, headers)).execute().close()
-                cookies = client.cookieJar.loadForRequest(baseHttpUrl)
-            }
-
-            val csrfToken = cookies
-                .firstOrNull { it.name == "csrftoken" }
-                ?.value
-                ?: return
-
-            val hasSession = cookies.any { it.name == "sessionid" }
-            val isAdultActive = preferences.getBoolean(PREF_ADULT_KEY, PREF_ADULT_DEFAULT)
-
-            if (!hasSession && !isAdultActive) return
-
-            val lastState = preferences.getBoolean(PREF_ADULT_SYNCED_KEY, !isAdultActive)
-            if (hasSession && lastState == isAdultActive) return
-
-            val body = """{"is_adult_active":$isAdultActive}"""
-                .toRequestBody("application/json".toMediaType())
-
-            val request = POST(
-                "$baseUrl/ajax/toggle-adult-content/",
-                headers.newBuilder()
-                    .set("X-CSRFToken", csrfToken)
-                    .set("Referer", "$baseUrl/")
-                    .set("X-Requested-With", "XMLHttpRequest")
-                    .build(),
-                body,
-            )
-
-            val response = client.newCall(request).execute()
-            response.close()
-
-            preferences.edit().putBoolean(PREF_ADULT_SYNCED_KEY, isAdultActive).apply()
-        } catch (_: Exception) {
-        }
-    }
-
     companion object {
-        private const val PREF_ADULT_KEY = "pref_adult_content"
-        private const val PREF_ADULT_DEFAULT = false
-        private const val PREF_ADULT_SYNCED_KEY = "pref_adult_synced"
+        private const val PREF_ONLY_NSFW_KEY = "pref_only_nsfw"
+        private const val PREF_ONLY_NSFW_DEFAULT = false
+        private const val CHAPTER_ENCRYPTION_KEY = "NexusToons2026SecretKeyForChapterEncryption!@#\$"
     }
 }

@@ -41,18 +41,14 @@ class MangaLivre :
         .build()
 
     override val useNewChapterEndpoint = true
-    override val pageListParseSelector = ""
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-        .set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Site", "same-origin")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        .set("Cache-Control", "no-cache")
+        .set("Pragma", "no-cache")
         .set("Upgrade-Insecure-Requests", "1")
-        .set("Connection", "keep-alive")
 
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"
 
@@ -69,12 +65,10 @@ class MangaLivre :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val urls = MangaLivreImageExtractor.extractImageUrls(document)
-            ?: throw Exception("Failed to load images. Please open the chapter in WebView first.")
-
-        return urls.mapIndexed { idx, url ->
-            Page(idx, document.location(), url)
-        }
+        return document.select(".reading-content .page-break img.wp-manga-chapter-img[src]")
+            .mapIndexed { idx, img ->
+                Page(idx, document.location(), img.attr("abs:src").trim())
+            }
     }
 
     override fun imageRequest(page: Page): Request {

@@ -69,6 +69,7 @@ class ComicFury(
     private val archiveSelector = "a:has(div.archive-chapter)"
     private val chapterSelector = "a:has(div.archive-comic)"
     private val nextArchivePageSelector = "#scroll-content > .onsite-viewer-back-link + .archive-pages a"
+    private val nextChapterPageSelector = "#scroll-content > .webcomic-title-content-inner + .archive-pages a"
     private lateinit var currentPage: org.jsoup.nodes.Document
 
     private fun Element.toSManga(): SChapter {
@@ -88,22 +89,29 @@ class ComicFury(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsp = response.asJsoup()
+        val chapters = mutableListOf<SChapter>()
 
-        return if (jsp.selectFirst(archiveSelector) != null) {
-            val chapters = mutableListOf<SChapter>()
+        if (jsp.selectFirst(archiveSelector) != null) {
             jsp.select(archiveSelector).eachAttr("abs:href").map { url ->
                 chapters.addAll(collect(url))
                 currentPage.select(nextArchivePageSelector).eachAttr("abs:href")
                     .mapNotNull { nextUrl -> chapters.addAll(collect(nextUrl)) }
             }
-            chapters
-                .mapIndexed { index, sChapter -> sChapter.apply { chapter_number = index.toFloat() } }
-                .reversed()
         } else {
-            jsp.select(chapterSelector).mapIndexed { i, element ->
-                element.toSManga().apply { chapter_number = "0.$i".toFloat() }
-            }.reversed()
+            chapters.addAll(
+                jsp.select(chapterSelector).map { element ->
+                    element.toSManga()
+                },
+            )
+            jsp.select(nextChapterPageSelector).eachAttr("abs:href")
+                .mapNotNull { nextUrl ->
+                    chapters.addAll(collect(nextUrl))
+                }
         }
+
+        return chapters
+            .mapIndexed { index, sChapter -> sChapter.apply { chapter_number = index.toFloat() } }
+            .reversed()
     }
 
     override fun pageListParse(response: Response): List<Page> {
