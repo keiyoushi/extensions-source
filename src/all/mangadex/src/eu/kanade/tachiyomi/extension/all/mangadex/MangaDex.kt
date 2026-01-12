@@ -186,7 +186,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
                 val match = MDConstants.uuidRegex.find(url)
                 if (match != null) {
                     val mangaId = match.value
-                    return super.fetchSearchManga(page, MDConstants.prefixIdSearch + mangaId, filters)
+                    return fetchSearchManga(page, MDConstants.prefixIdSearch + mangaId, filters)
                 }
             }
         }
