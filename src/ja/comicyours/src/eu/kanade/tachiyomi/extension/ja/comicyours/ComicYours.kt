@@ -62,7 +62,7 @@ class ComicYours : GigaViewer(
 
         while (true) {
             val result = paginatedChaptersRequest(referer, aggregateId, offset)
-            val resultData = result.parseAs<List<PaginationDto>>()
+            val resultData = result.parseAs<List<Dto>>()
 
             if (resultData.isEmpty()) break
 
