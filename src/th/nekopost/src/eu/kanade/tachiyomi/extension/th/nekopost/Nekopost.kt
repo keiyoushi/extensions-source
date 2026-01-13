@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.extension.th.nekopost.model.LatestRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.PopularRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
+import eu.kanade.tachiyomi.extension.th.nekopost.model.RawLatestChapterList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
@@ -19,7 +20,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -42,7 +42,10 @@ class Nekopost : HttpSource() {
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
 
     private val apiHeaders by lazy {
-        headersBuilder().set("Accept", "*/*").set("Content-Type", "application/json").build()
+        headersBuilder()
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .build()
     }
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
@@ -58,13 +61,13 @@ class Nekopost : HttpSource() {
     override fun latestUpdatesRequest(page: Int) =
         projectRequest(
             "latest",
-            LatestRequest("c", PagingInfo(page, PAGE_SIZE)),
+            LatestRequest("m", PagingInfo(page, PAGE_SIZE)),
         )
 
     override fun popularMangaRequest(page: Int) =
         projectRequest(
             "list/popular",
-            PopularRequest("nf", PagingInfo(page, PAGE_SIZE)),
+            PopularRequest("mc", PagingInfo(page, PAGE_SIZE)),
         )
 
     private inline fun <reified T> projectRequest(endpoint: String, body: T): Request {
@@ -88,14 +91,16 @@ class Nekopost : HttpSource() {
             val projectId = matchResult.groupValues[1]
             client.newCall(GET("$projectDataEndpoint/$projectId", headers))
                 .asObservableSuccess()
-                .map { response -> MangasPage(listOf(mangaDetailsParse(response)), false) }
+                .map { response ->
+                    MangasPage(listOf(mangaDetailsParse(response)), false)
+                }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        parseProjectList(response, filterTypes = null, hasNextPage = true)
+        parseLatestChapterList(response)
 
     override fun popularMangaParse(response: Response): MangasPage =
         parseProjectList(response, filterTypes = null, hasNextPage = true)
@@ -103,7 +108,43 @@ class Nekopost : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage =
         parseProjectList(response, filterTypes = setOf("m"), hasNextPage = false)
 
-    private fun parseProjectList(response: Response, filterTypes: Set<String>?, hasNextPage: Boolean): MangasPage {
+    private fun parseLatestChapterList(response: Response): MangasPage {
+        val chapterList = response.parseAs<RawLatestChapterList>()
+
+        if (chapterList.listChapter.isNullOrEmpty()) {
+            return MangasPage(emptyList(), false)
+        }
+
+        val mangaList =
+            chapterList
+                .listChapter
+                .asSequence()
+                .map { chapter ->
+                    SManga.create().apply {
+                        url = chapter.pid.toString()
+                        title = chapter.projectName
+                        status = getStatus(chapter.status)
+                        thumbnail_url =
+                            buildCoverUrl(
+                                chapter.pid.toString(),
+                                chapter.coverVersion,
+                            )
+                        initialized = false
+                    }
+                }
+                .toList()
+
+        return MangasPage(
+            mangaList,
+            mangaList.isNotEmpty() && mangaList.size >= PAGE_SIZE,
+        )
+    }
+
+    private fun parseProjectList(
+        response: Response,
+        filterTypes: Set<String>?,
+        hasNextPage: Boolean,
+    ): MangasPage {
         val projectList = response.parseAs<RawProjectSearchSummaryList>()
 
         if (projectList.listProject.isNullOrEmpty()) {
@@ -121,7 +162,10 @@ class Nekopost : HttpSource() {
                         title = project.projectName
                         status = project.status
                         thumbnail_url =
-                            buildCoverUrl(project.pid.toString(), project.coverVersion)
+                            buildCoverUrl(
+                                project.pid.toString(),
+                                project.coverVersion,
+                            )
                         initialized = false
                     }
                 }
@@ -179,7 +223,8 @@ class Nekopost : HttpSource() {
 
         return projectInfo.projectChapterList?.map { chapter ->
             SChapter.create().apply {
-                url = "$projectId/${chapter.chapterId}/${projectId}_${chapter.chapterId}.json"
+                url =
+                    "$projectId/${chapter.chapterId}/${projectId}_${chapter.chapterId}.json"
                 name = chapter.chapterName
                 date_upload = dateFormat.parse(chapter.createDate)?.time ?: 0L
                 chapter_number = chapter.chapterNo.toFloat()
@@ -197,7 +242,8 @@ class Nekopost : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterInfo = response.parseAs<RawChapterInfo>()
-        val basePath = "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}"
+        val basePath =
+            "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}"
 
         return chapterInfo.pageItem.map { page ->
             Page(
@@ -221,11 +267,12 @@ class Nekopost : HttpSource() {
         )
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String =
+        throw UnsupportedOperationException()
 
     override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 
     companion object {
-        private const val PAGE_SIZE = 5
+        private const val PAGE_SIZE = 20
     }
 }
