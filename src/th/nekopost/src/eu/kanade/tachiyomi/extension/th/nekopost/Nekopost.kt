@@ -61,13 +61,13 @@ class Nekopost : HttpSource() {
     override fun latestUpdatesRequest(page: Int) =
         projectRequest(
             "latest",
-            LatestRequest("m", PagingInfo(page, PAGE_SIZE)),
+            LatestRequest("m", PagingInfo(page, LATEST_PAGE_SIZE)),
         )
 
     override fun popularMangaRequest(page: Int) =
         projectRequest(
             "list/popular",
-            PopularRequest("mc", PagingInfo(page, PAGE_SIZE)),
+            PopularRequest("mc", PagingInfo(1, POPULAR_PAGE_SIZE)),
         )
 
     private inline fun <reified T> projectRequest(endpoint: String, body: T): Request {
@@ -103,10 +103,10 @@ class Nekopost : HttpSource() {
         parseLatestChapterList(response)
 
     override fun popularMangaParse(response: Response): MangasPage =
-        parseProjectList(response, filterTypes = null, hasNextPage = true)
+        parseProjectList(response, filterTypes = null, isPaginated = false)
 
     override fun searchMangaParse(response: Response): MangasPage =
-        parseProjectList(response, filterTypes = setOf("m"), hasNextPage = false)
+        parseProjectList(response, filterTypes = setOf("m"), isPaginated = true)
 
     private fun parseLatestChapterList(response: Response): MangasPage {
         val chapterList = response.parseAs<RawLatestChapterList>()
@@ -134,16 +134,15 @@ class Nekopost : HttpSource() {
                 }
                 .toList()
 
-        return MangasPage(
-            mangaList,
-            mangaList.isNotEmpty() && mangaList.size >= PAGE_SIZE,
-        )
+        val hasNextPage = mangaList.size == LATEST_PAGE_SIZE
+
+        return MangasPage(mangaList, hasNextPage)
     }
 
     private fun parseProjectList(
         response: Response,
         filterTypes: Set<String>?,
-        hasNextPage: Boolean,
+        isPaginated: Boolean,
     ): MangasPage {
         val projectList = response.parseAs<RawProjectSearchSummaryList>()
 
@@ -171,10 +170,14 @@ class Nekopost : HttpSource() {
                 }
                 .toList()
 
-        return MangasPage(
-            mangaList,
-            hasNextPage && mangaList.isNotEmpty() && mangaList.size >= PAGE_SIZE,
-        )
+        val hasNextPage =
+            if (isPaginated) {
+                mangaList.size == SEARCH_PAGE_SIZE
+            } else {
+                false
+            }
+
+        return MangasPage(mangaList, hasNextPage)
     }
 
     private fun buildCoverUrl(projectId: String, coverVersion: Int? = null): String {
@@ -258,7 +261,7 @@ class Nekopost : HttpSource() {
             SearchRequest(
                 keyword = query.trim(),
                 status = 0,
-                paging = PagingInfo(pageNo = page, pageSize = 100),
+                paging = PagingInfo(pageNo = page, pageSize = SEARCH_PAGE_SIZE),
             )
         return POST(
             "$baseUrl/api/project/search",
@@ -273,6 +276,8 @@ class Nekopost : HttpSource() {
     override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 
     companion object {
-        private const val PAGE_SIZE = 20
+        private const val POPULAR_PAGE_SIZE = 5
+        private const val LATEST_PAGE_SIZE = 15
+        private const val SEARCH_PAGE_SIZE = 100
     }
 }
