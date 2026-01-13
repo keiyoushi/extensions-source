@@ -103,11 +103,7 @@ class Nekopost : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage =
         parseProjectList(response, filterTypes = setOf("m"), hasNextPage = false)
 
-    private fun parseProjectList(
-        response: Response,
-        filterTypes: Set<String>?,
-        hasNextPage: Boolean,
-    ): MangasPage {
+    private fun parseProjectList(response: Response, filterTypes: Set<String>?, hasNextPage: Boolean): MangasPage {
         val projectList = response.parseAs<RawProjectSearchSummaryList>()
 
         if (projectList.listProject.isNullOrEmpty()) {
@@ -169,18 +165,8 @@ class Nekopost : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val headers =
-            Headers.headersOf(
-                "accept",
-                "*/*",
-                "content-type",
-                "text/plain;charset=UTF-8",
-                "origin",
-                baseUrl,
-            )
-        return GET("$projectDataEndpoint/${manga.url}", headers)
-    }
+    override fun chapterListRequest(manga: SManga) =
+        GET("$projectDataEndpoint/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val projectInfo = response.parseAs<RawProjectInfo>()
