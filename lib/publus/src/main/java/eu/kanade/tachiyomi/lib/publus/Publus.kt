@@ -8,8 +8,8 @@ import android.util.Base64
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import kotlin.math.floor
@@ -29,55 +29,41 @@ object Publus {
             val request = chain.request()
             val url = request.url
 
-            if (url.fragment?.startsWith("publus_meta") == true) {
+            if (url.fragment?.startsWith("publus?") == true) {
                 val response = chain.proceed(request.newBuilder().url(url).build())
+                val fragment = url.fragment!!
+                val params = parseFragment(fragment)
+                val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
 
-                if (!response.isSuccessful) return response
+                val keys = listOf(
+                    hexToBytes(params["k1"]!!),
+                    hexToBytes(params["k2"]!!),
+                    hexToBytes(params["k3"]!!)
+                )
 
-                val bodyBytes = response.body.bytes()
-                val mediaType = response.body.contentType()
+                val attributes = PublusPageAttributes(
+                    no = params["no"]!!.toInt(),
+                    ns = params["ns"]!!.toLong(),
+                    ps = params["ps"]!!.toLong(),
+                    rs = params["rs"]!!.toLong(),
+                    blockWidth = params["bw"]!!.toInt(),
+                    blockHeight = params["bh"]!!.toInt()
+                )
 
-                try {
-                    val fragment = url.fragment!!
-                    val params = parseFragment(fragment)
+                val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params["pid"]!!)
+                val buffer = Buffer()
+                unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
 
-                    val bitmap = BitmapFactory.decodeByteArray(bodyBytes, 0, bodyBytes.size)
-                        ?: return response.newBuilder().body(bodyBytes.toResponseBody(mediaType)).build()
-
-                    val keys = listOf(
-                        hexToBytes(params["k1"]!!),
-                        hexToBytes(params["k2"]!!),
-                        hexToBytes(params["k3"]!!)
-                    )
-
-                    val attributes = PublusPageAttributes(
-                        no = params["no"]!!.toInt(),
-                        ns = params["ns"]!!.toLong(),
-                        ps = params["ps"]!!.toLong(),
-                        rs = params["rs"]!!.toLong(),
-                        blockWidth = params["bw"]!!.toInt(),
-                        blockHeight = params["bh"]!!.toInt()
-                    )
-
-                    val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params["pid"]!!)
-
-                    val output = ByteArrayOutputStream()
-                    unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, output)
-                    val newBody = output.toByteArray().toResponseBody("image/jpeg".toMediaType())
-
-                    return response.newBuilder().body(newBody).build()
-
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    return response.newBuilder().body(bodyBytes.toResponseBody(mediaType)).build()
-                }
+                return response.newBuilder()
+                    .body(buffer.asResponseBody("image/jpeg".toMediaType()))
+                    .build()
             }
 
             return chain.proceed(request)
         }
 
         private fun parseFragment(fragment: String): Map<String, String> {
-            return fragment.removePrefix("publus_meta?").split("&").associate {
+            return fragment.removePrefix("publus?").split("&").associate {
                 val parts = it.split("=")
                 parts[0] to URLDecoder.decode(parts[1], "UTF-8")
             }

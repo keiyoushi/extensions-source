@@ -144,7 +144,7 @@ class ComicBoost : HttpSource() {
             val imageUrl = cPhp + filename
 
             val fragment = buildString {
-                append("publus_meta?")
+                append("publus?")
                 append("pid=${enc(contentEntry.file)}")
                 append("&no=${details.no}")
                 append("&ns=${details.ns}")
