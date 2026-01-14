@@ -18,18 +18,39 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
 
     override val imageSelector = ".main"
 
-    override fun String.numbered(number: Any) = "$number: $this"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val englishDates = try {
+            getComicDateMappingFromEnglishArchive()
+        } catch (e: Exception) {
+            emptyMap()
+        }
 
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(chapterListSelector).map {
+        return response.asJsoup().select(chapterListSelector).map {
             SChapter.create().apply {
                 url = it.attr("href")
-                name = it.child(0).attr("title")
-                chapter_number = url.removeSurrounding("/").toFloat()
-                // no dates available
-                date_upload = 0L
+                val comicNumber = url.removeSurrounding("/").toIntOrNull()
+                val title = it.child(0).attr("alt")
+
+                name = chapterTitleFormatter(comicNumber ?: 0, title)
+                chapter_number = comicNumber?.toFloat() ?: 0f
+
+                // use English publication date instead of translation date
+                date_upload = if (comicNumber != null && englishDates.containsKey(comicNumber)) {
+                    englishDates[comicNumber]!!.timestamp()
+                } else {
+                    0L
+                }
             }
         }
+    }
+
+    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
+        return try {
+            container.child(5).child(0)
+        } catch (e: Exception) {
+            container.selectFirst("img")
+        }
+    }
 
     override fun pageListParse(response: Response) =
         response.asJsoup().selectFirst(imageSelector)!!.let {
