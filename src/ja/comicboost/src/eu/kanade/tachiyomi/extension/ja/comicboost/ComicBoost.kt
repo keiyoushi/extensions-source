@@ -115,6 +115,7 @@ class ComicBoost : HttpSource() {
         val cUrl = "$baseUrl/pageapi/viewer/c.php".toHttpUrl().newBuilder()
             .addQueryParameter("cid", cid)
             .build()
+
         val cRequest = GET(cUrl, headers)
         val cResponse = client.newCall(cRequest).execute()
         val cPhp = cResponse.parseAs<CPhpResponse>().url

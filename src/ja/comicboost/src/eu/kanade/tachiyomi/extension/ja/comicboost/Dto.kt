@@ -15,7 +15,6 @@ class ConfigPack(
 
 @Serializable
 class PublusConfiguration(
-    @SerialName("file-name-version") val fileNameVersion: String? = null,
     val contents: List<PublusContentEntry>,
 )
 

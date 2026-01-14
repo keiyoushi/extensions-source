@@ -34,11 +34,15 @@ object Publus {
 
                 if (!response.isSuccessful) return response
 
+                val bodyBytes = response.body.bytes()
+                val mediaType = response.body.contentType()
+
                 try {
                     val fragment = url.fragment!!
                     val params = parseFragment(fragment)
 
-                    val bitmap = BitmapFactory.decodeStream(response.body.byteStream()) ?: return response
+                    val bitmap = BitmapFactory.decodeByteArray(bodyBytes, 0, bodyBytes.size)
+                        ?: return response.newBuilder().body(bodyBytes.toResponseBody(mediaType)).build()
 
                     val keys = listOf(
                         hexToBytes(params["k1"]!!),
@@ -59,13 +63,13 @@ object Publus {
 
                     val output = ByteArrayOutputStream()
                     unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, output)
-                    val body = output.toByteArray().toResponseBody("image/png".toMediaType())
+                    val newBody = output.toByteArray().toResponseBody("image/jpeg".toMediaType())
 
-                    return response.newBuilder().body(body).build()
+                    return response.newBuilder().body(newBody).build()
 
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    return response
+                    return response.newBuilder().body(bodyBytes.toResponseBody(mediaType)).build()
                 }
             }
 
@@ -112,7 +116,7 @@ object Publus {
             return DecodedResult(resultStr, listOf(state.key1, state.key2, state.key3))
         }
 
-        data class DecodedResult(val json: String, val keys: List<IntArray>)
+        class DecodedResult(val json: String, val keys: List<IntArray>)
 
         private class State(
             var payload: IntArray,
@@ -136,6 +140,7 @@ object Publus {
             var dIdx = 0
             var s = 0
 
+            // Header Parsing
             while (s < 128) {
                 if (s >= dataStr.length) break
                 val c1 = b64Map[dataStr[s++].code]; val c2 = b64Map[dataStr[s++].code]
@@ -152,6 +157,7 @@ object Publus {
                 currentTarget[dIdx++] = b3
             }
 
+            // Body Parsing
             val payloadStr = dataStr.substring(128)
             val payloadBytes = Base64.decode(payloadStr, Base64.DEFAULT)
             val payloadInts = payloadBytes.map { it.toInt() and 0xFF }.toIntArray()
@@ -496,9 +502,9 @@ object Publus {
 
             val vD4j = a3f(
                 v94j.toDouble(),
-                (blocksX.toLong() * 4294967296L + b0j).toDouble(),
-                (blocksY.toLong() * 4294967296L + b0k).toDouble(),
-                (b0a.toLong() * 4294967296L + b0n).toDouble()
+                (blocksX.toLong() * 4294967296L + (b0j.toLong() and 0xFFFFFFFFL)).toDouble(),
+                (blocksY.toLong() * 4294967296L + (b0k.toLong() and 0xFFFFFFFFL)).toDouble(),
+                (b0a.toLong() * 4294967296L + (b0n.toLong() and 0xFFFFFFFFL)).toDouble()
             )
 
             val moves = mutableListOf<Move>()
