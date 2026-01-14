@@ -19,8 +19,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class TeamX : ParsedHttpSource(), ConfigurableSource {
@@ -177,9 +175,7 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
         return allElements.map { chapterFromElement(it) }
     }
 
-    private val chapterFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.getDefault())
-
-    override fun chapterListSelector() = "div.chapter-card a"
+    override fun chapterListSelector() = "div.chapter-card"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
@@ -191,16 +187,14 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
                 false -> "$chpNum - $chpTitle"
             }
 
-            date_upload = parseChapterDate(element.select("div.chapter-info div.chapter-date").text())
+            // data-date is Unix timestamp (seconds)
+            date_upload = element.attr("data-date")
+                .toLongOrNull()
+                ?.times(1000)
+                ?: 0L
 
-            setUrlWithoutDomain(element.attr("href"))
+            setUrlWithoutDomain(element.select("a").attr("href"))
         }
-    }
-
-    private fun parseChapterDate(date: String): Long {
-        return runCatching {
-            chapterFormat.parse(date)?.time
-        }.getOrNull() ?: 0
     }
 
     private fun String?.toStatus() = when (this) {
