@@ -1,13 +1,5 @@
-package eu.kanade.tachiyomi.extension.tr.sadscans
-
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-
-val json: Json = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-}
 
 @Serializable
 data class SadScansSearch(val result: SearchResult?)
@@ -28,10 +20,7 @@ data class SearchJson(
 )
 
 @Serializable
-data class TrpcResponse(
-    val result: TrpcResult? = null,
-    val error: TrpcError? = null,
-)
+data class TrpcResponse(val result: TrpcResult? = null, val error: TrpcError? = null)
 
 @Serializable
 data class TrpcError(val message: String? = null, val code: Int? = null)
@@ -50,10 +39,7 @@ data class SeriesDataDto(
 )
 
 @Serializable
-data class PaginationDto(
-    val totalPages: Int? = null,
-    val total: Int? = null,
-)
+data class PaginationDto(val totalPages: Int? = null, val total: Int? = null)
 
 @Serializable
 data class SeriesInfoDto(val id: String? = null, val name: String? = null)
@@ -67,6 +53,13 @@ data class NextJsChapterDto(
 )
 
 @Serializable
-data class SadScansPageDto(
-    val src: String?,
+data class SadScansPageDto(val src: String?)
+
+@Serializable
+data class ProofDto(
+    val proof: String? = null,
+    val timestamp: Long? = null,
+    val sig: String? = null,
+    val chapterId: String? = null,
+    val endpoint: String? = null,
 )
