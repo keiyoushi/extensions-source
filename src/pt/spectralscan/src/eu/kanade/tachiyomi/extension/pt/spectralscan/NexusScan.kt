@@ -37,6 +37,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(NexusDecrypt.createInterceptor())
         .build()
 
     private val apiHeaders by lazy {
