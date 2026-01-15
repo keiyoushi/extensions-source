@@ -202,10 +202,10 @@ class Verdinha : HttpSource(), ConfigurableSource {
 
         return dto.pages.mapIndexed { index, page ->
             val imageUrl = when {
-                page.path != null && page.src != null && !page.src.startsWith("/") && !page.src.contains("/") ->
-                    "$apiUrl/cdn${page.path}/${page.src}"
                 page.path != null && page.path.contains(".") ->
-                    "$apiUrl/${page.path}"
+                    "$apiUrl/cdn/${page.path}"
+                page.path != null && page.src != null ->
+                    "$apiUrl/cdn/${page.path}${page.src}"
                 page.src != null && page.src.startsWith("/") ->
                     "$apiUrl/cdn/wp-content/uploads/WP-manga/data${page.src}"
                 page.src != null && page.src.contains("/") ->
