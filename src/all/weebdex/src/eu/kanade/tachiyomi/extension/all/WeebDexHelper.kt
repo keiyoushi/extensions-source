@@ -1,4 +1,6 @@
-import eu.kanade.tachiyomi.extension.en.weebdex.WeebDexConstants
+package eu.kanade.tachiyomi.extension.all.weebdex
+
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import java.text.SimpleDateFormat
@@ -19,7 +21,7 @@ class WeebDexHelper {
         }
     }
 
-    fun buildCoverUrl(mangaId: String, cover: eu.kanade.tachiyomi.extension.en.weebdex.dto.CoverDto?): String? {
+    fun buildCoverUrl(mangaId: String, cover: CoverDto?): String? {
         if (cover == null) return null
         val ext = cover.ext
         return "${WeebDexConstants.CDN_COVER_URL}/$mangaId/${cover.id}$ext"

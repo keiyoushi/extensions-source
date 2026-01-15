@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.weebdex
+package eu.kanade.tachiyomi.extension.all.weebdex
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

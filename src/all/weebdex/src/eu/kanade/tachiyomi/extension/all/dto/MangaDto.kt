@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.extension.en.weebdex.dto
+package eu.kanade.tachiyomi.extension.all.weebdex.dto
 
-import WeebDexHelper
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexHelper
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable

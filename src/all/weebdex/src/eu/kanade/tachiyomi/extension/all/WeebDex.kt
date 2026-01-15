@@ -1,9 +1,9 @@
-package eu.kanade.tachiyomi.extension.en.weebdex
+package eu.kanade.tachiyomi.extension.all.weebdex
 
-import eu.kanade.tachiyomi.extension.en.weebdex.dto.ChapterDto
-import eu.kanade.tachiyomi.extension.en.weebdex.dto.ChapterListDto
-import eu.kanade.tachiyomi.extension.en.weebdex.dto.MangaDto
-import eu.kanade.tachiyomi.extension.en.weebdex.dto.MangaListDto
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,10 +18,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class WeebDex : HttpSource() {
+open class WeebDex(
+    override val lang: String,
+    private val weebdexLang: String = lang,
+) : HttpSource() {
     override val name = "WeebDex"
     override val baseUrl = "https://weebdex.org"
-    override val lang = "en"
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
@@ -39,6 +41,11 @@ class WeebDex : HttpSource() {
             .addQueryParameter("sort", "views")
             .addQueryParameter("order", "desc")
             .addQueryParameter("hasChapters", "1")
+            .apply {
+                if (weebdexLang != "all") {
+                    addQueryParameter("availableTranslatedLang", weebdexLang)
+                }
+            }
             .build()
         return GET(url, headers)
     }
@@ -56,6 +63,11 @@ class WeebDex : HttpSource() {
             .addQueryParameter("sort", "updatedAt")
             .addQueryParameter("order", "desc")
             .addQueryParameter("hasChapters", "1")
+            .apply {
+                if (weebdexLang != "all") {
+                    addQueryParameter("availableTranslatedLang", weebdexLang)
+                }
+            }
             .build()
         return GET(url, headers)
     }
@@ -68,6 +80,11 @@ class WeebDex : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = WeebDexConstants.API_MANGA_URL.toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
+            .apply {
+                if (weebdexLang != "all") {
+                    addQueryParameter("availableTranslatedLang", weebdexLang)
+                }
+            }
 
         if (query.isNotBlank()) {
             urlBuilder.addQueryParameter("title", query)
@@ -145,7 +162,15 @@ class WeebDex : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         // chapter list is paginated; get all pages
-        return GET("${WeebDexConstants.API_URL}${manga.url}/chapters?order=desc", headers)
+        val url = "${WeebDexConstants.API_URL}${manga.url}/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("order", "desc")
+            .apply {
+                if (weebdexLang != "all") {
+                    addQueryParameter("tlang", weebdexLang)
+                }
+            }
+            .build()
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {

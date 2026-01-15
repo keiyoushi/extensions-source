@@ -1,7 +1,7 @@
-package eu.kanade.tachiyomi.extension.en.weebdex.dto
+package eu.kanade.tachiyomi.extension.all.weebdex.dto
 
-import WeebDexHelper
-import eu.kanade.tachiyomi.extension.en.weebdex.WeebDexConstants
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Contextual
@@ -11,7 +11,7 @@ import org.jsoup.parser.Parser
 
 @Serializable
 class ChapterListDto(
-    private val data: List<ChapterDto> = emptyList(),
+    val data: List<ChapterDto> = emptyList(),
     val page: Int = 1,
     val limit: Int = 0,
     val total: Int = 0,
@@ -30,6 +30,7 @@ class ChapterDto(
     private val chapter: String? = null,
     private val volume: String? = null,
     @SerialName("published_at") private val publishedAt: String = "",
+    val language: String = "",
     private val data: List<PageData>? = null,
     @SerialName("data_optimized") private val dataOptimized: List<PageData>? = null,
     private val relationships: ChapterRelationshipsDto? = null,
