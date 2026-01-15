@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.oduto
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,14 +17,16 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import keiyoushi.utils.tryParse
 
 @Suppress("unused")
-class Oduto(
-    override val baseUrl: String = "https://nb19u.blogspot.com",
-    override val lang: String = "ar",
-    override val name: String = "Oduto",
-    override val supportsLatest: Boolean = false,
-) : HttpSource() {
+class Oduto : HttpSource() {
+
+    override val baseUrl = "https://nb19u.blogspot.com"
+    override val lang = "ar"
+    override val name = "Oduto"
+    override val supportsLatest = false
+
     override val client: OkHttpClient =
         network.cloudflareClient
             .newBuilder()
@@ -60,13 +61,6 @@ class Oduto(
     private fun chapterNextPageSelector() = "#Blog1 > div.iPostsNavigation > button[data-load]"
     private fun chapterListSelector() = "#Blog1 article.blog-post.index-post"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(GET(baseUrl + manga.url, headers))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response)
-            }
-    }
     override fun chapterListParse(response: Response): List<SChapter> {
         val allElements = mutableListOf<Element>()
         var document = response.asJsoup()
@@ -88,7 +82,7 @@ class Oduto(
         return allElements.map(::chapterFromElement)
     }
 
-    private val chapterFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.getDefault())
+    private val chapterFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
 
     private fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
@@ -103,7 +97,7 @@ class Oduto(
     }
 
     private fun parseChapterDate(date: String): Long =
-        runCatching { chapterFormat.parse(date)?.time }.getOrNull() ?: 0
+        chapterFormat.tryParse(date)
 
     // Pages
 
