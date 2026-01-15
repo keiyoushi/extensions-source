@@ -2,8 +2,8 @@ ext {
     extName = 'Elf Toon'
     extClass = '.ElfToon'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://elftoon.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://elftoon.xyz'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
