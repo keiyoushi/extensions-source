@@ -152,6 +152,8 @@ class ComicBoost : HttpSource() {
                 append("&rs=${details.rs}")
                 append("&bw=${details.blockWidth}")
                 append("&bh=${details.blockHeight}")
+                append("&cw=${details.size.width}")
+                append("&ch=${details.size.height}")
                 append("&k1=$k1Hex")
                 append("&k2=$k2Hex")
                 append("&k3=$k3Hex")

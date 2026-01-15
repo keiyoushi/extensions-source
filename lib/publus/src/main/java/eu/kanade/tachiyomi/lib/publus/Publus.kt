@@ -20,7 +20,9 @@ class PublusPageAttributes(
     val ps: Long,
     val rs: Long,
     val blockWidth: Int,
-    val blockHeight: Int
+    val blockHeight: Int,
+    val contentWidth: Int,
+    val contentHeight: Int,
 )
 
 object Publus {
@@ -29,37 +31,39 @@ object Publus {
             val request = chain.request()
             val url = request.url
 
-            if (url.fragment?.startsWith("publus?") == true) {
-                val response = chain.proceed(request.newBuilder().url(url).build())
-                val fragment = url.fragment!!
-                val params = parseFragment(fragment)
-                val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
-
-                val keys = listOf(
-                    hexToBytes(params["k1"]!!),
-                    hexToBytes(params["k2"]!!),
-                    hexToBytes(params["k3"]!!)
-                )
-
-                val attributes = PublusPageAttributes(
-                    no = params["no"]!!.toInt(),
-                    ns = params["ns"]!!.toLong(),
-                    ps = params["ps"]!!.toLong(),
-                    rs = params["rs"]!!.toLong(),
-                    blockWidth = params["bw"]!!.toInt(),
-                    blockHeight = params["bh"]!!.toInt()
-                )
-
-                val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params["pid"]!!)
-                val buffer = Buffer()
-                unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
-
-                return response.newBuilder()
-                    .body(buffer.asResponseBody("image/jpeg".toMediaType()))
-                    .build()
+            if (url.fragment.isNullOrEmpty()) {
+                return chain.proceed(request)
             }
 
-            return chain.proceed(request)
+            val response = chain.proceed(request)
+            val fragment = url.fragment!!
+            val params = parseFragment(fragment)
+            val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+
+            val keys = listOf(
+                hexToBytes(params["k1"]!!),
+                hexToBytes(params["k2"]!!),
+                hexToBytes(params["k3"]!!)
+            )
+
+            val attributes = PublusPageAttributes(
+                no = params["no"]!!.toInt(),
+                ns = params["ns"]!!.toLong(),
+                ps = params["ps"]!!.toLong(),
+                rs = params["rs"]!!.toLong(),
+                blockWidth = params["bw"]!!.toInt(),
+                blockHeight = params["bh"]!!.toInt(),
+                contentWidth = params["cw"]!!.toInt(),
+                contentHeight = params["ch"]!!.toInt(),
+            )
+
+            val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params["pid"]!!)
+            val buffer = Buffer()
+            unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+
+            return response.newBuilder()
+                .body(buffer.asResponseBody("image/jpeg".toMediaType()))
+                .build()
         }
 
         private fun parseFragment(fragment: String): Map<String, String> {
@@ -536,6 +540,12 @@ object Publus {
                 val srcRect = Rect(m.destX, m.destY, m.destX + m.width, m.destY + m.height)
                 val dstRect = Rect(m.srcX, m.srcY, m.srcX + m.width, m.srcY + m.height)
                 canvas.drawBitmap(bitmap, srcRect, dstRect, null)
+            }
+
+            if (page.contentWidth > 0 && page.contentHeight > 0 &&
+                (result.width != page.contentWidth || result.height != page.contentHeight)
+            ) {
+                return Bitmap.createBitmap(result, 0, 0, page.contentWidth, page.contentHeight)
             }
 
             return result
