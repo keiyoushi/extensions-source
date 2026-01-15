@@ -5,14 +5,47 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.Serializable
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import kotlin.math.floor
+import kotlin.math.min
+
+@Serializable
+class PublusFragment(
+    val file: String,
+    val no: Int,
+    val ns: Long,
+    val ps: Long,
+    val rs: Long,
+    val bw: Int, // Block Width
+    val bh: Int, // Block Height
+    val cw: Int, // Content Width
+    val ch: Int, // Content Height
+    val k1: List<Int>,
+    val k2: List<Int>,
+    val k3: List<Int>,
+)
+
+class PublusPage(
+    val index: Int,
+    val filename: String,
+    val no: Int,
+    val ns: Long,
+    val ps: Long,
+    val rs: Long,
+    val blockWidth: Int,
+    val blockHeight: Int,
+    val width: Int,
+    val height: Int,
+)
 
 class PublusPageAttributes(
     val no: Int,
@@ -26,6 +59,47 @@ class PublusPageAttributes(
 )
 
 object Publus {
+
+    /**
+     * @param pages The list of pages.
+     * @param keys The decryption keys (k1, k2, k3) obtained from the [Decoder].
+     * @param imageUrlPrefix The content URL for the images.
+     */
+    fun generatePages(
+        pages: List<PublusPage>,
+        keys: List<IntArray>,
+        imageUrlPrefix: String
+    ): List<Page> {
+        val k1 = keys[0].toList()
+        val k2 = keys[1].toList()
+        val k3 = keys[2].toList()
+
+        return pages.map {
+            val filename = PublusImage.generateFilename(it.filename, keys)
+            val imgUrl = imageUrlPrefix + filename
+
+            val fragmentData = PublusFragment(
+                file = it.filename,
+                no = it.no,
+                ns = it.ns,
+                ps = it.ps,
+                rs = it.rs,
+                bw = it.blockWidth,
+                bh = it.blockHeight,
+                cw = it.width,
+                ch = it.height,
+                k1 = k1,
+                k2 = k2,
+                k3 = k3
+            )
+
+            val fragmentJson = fragmentData.toJsonString()
+            val fragment = Base64.encodeToString(fragmentJson.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP)
+
+            Page(it.index, imageUrl = "$imgUrl#$fragment")
+        }
+    }
+
     class PublusInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request()
@@ -36,28 +110,33 @@ object Publus {
             }
 
             val response = chain.proceed(request)
-            val fragment = url.fragment!!
-            val params = parseFragment(fragment)
+
+            val fragmentJson = String(
+                Base64.decode(url.fragment, Base64.URL_SAFE),
+                StandardCharsets.UTF_8
+            )
+            val params = fragmentJson.parseAs<PublusFragment>()
+
             val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
 
             val keys = listOf(
-                hexToBytes(params["k1"]!!),
-                hexToBytes(params["k2"]!!),
-                hexToBytes(params["k3"]!!)
+                params.k1.toIntArray(),
+                params.k2.toIntArray(),
+                params.k3.toIntArray()
             )
 
             val attributes = PublusPageAttributes(
-                no = params["no"]!!.toInt(),
-                ns = params["ns"]!!.toLong(),
-                ps = params["ps"]!!.toLong(),
-                rs = params["rs"]!!.toLong(),
-                blockWidth = params["bw"]!!.toInt(),
-                blockHeight = params["bh"]!!.toInt(),
-                contentWidth = params["cw"]!!.toInt(),
-                contentHeight = params["ch"]!!.toInt(),
+                no = params.no,
+                ns = params.ns,
+                ps = params.ps,
+                rs = params.rs,
+                blockWidth = params.bw,
+                blockHeight = params.bh,
+                contentWidth = params.cw,
+                contentHeight = params.ch,
             )
 
-            val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params["pid"]!!)
+            val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params.file)
             bitmap.recycle()
             val buffer = Buffer()
             unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
@@ -66,24 +145,6 @@ object Publus {
             return response.newBuilder()
                 .body(buffer.asResponseBody("image/jpeg".toMediaType()))
                 .build()
-        }
-
-        private fun parseFragment(fragment: String): Map<String, String> {
-            return fragment.removePrefix("publus?").split("&").associate {
-                val parts = it.split("=")
-                parts[0] to URLDecoder.decode(parts[1], "UTF-8")
-            }
-        }
-
-        private fun hexToBytes(hex: String): IntArray {
-            val len = hex.length
-            val data = IntArray(len / 2)
-            var i = 0
-            while (i < len) {
-                data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16))
-                i += 2
-            }
-            return data
         }
     }
 
