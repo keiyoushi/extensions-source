@@ -145,7 +145,7 @@ abstract class MangaThemesia(
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.select("img").imgAttr()
-        title = element.selectFirst(searchMangaTitleSelector)!!.text()
+        title = element.selectFirst(searchMangaTitleSelector)!!.text().ifBlank { element.selectFirst("a")!!.attr("title") }
         setUrlWithoutDomain(element.select("a").attr("href"))
     }
 
