@@ -1,9 +1,8 @@
 ext {
-    extName = 'Sussy Toons'
-    extClass = '.SussyToons'
-    themePkg = 'greenshit'
-    baseUrl = 'https://www.sussytoons.wtf'
-    overrideVersionCode = 56
+    extName = 'Verdinha'
+    extClass = '.Verdinha'
+    baseUrl = 'https://verdinha.wtf'
+    overrideVersionCode = 64
     isNsfw = true
 }
 
