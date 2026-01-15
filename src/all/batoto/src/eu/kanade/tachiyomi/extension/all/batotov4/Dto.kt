@@ -114,7 +114,7 @@ class ChapterListData(
     class ChapterData(
         val comicId: String,
         val id: String,
-        val serial: Float,
+        val serial: Float? = null,
         @SerialName("dname")
         val displayName: String,
         val title: String? = null,
@@ -131,9 +131,11 @@ class ChapterListData(
         fun toSChapter(): SChapter = SChapter.create().apply {
             url = id
             name = buildString {
-                val number = serial.toString().substringBefore(".0")
-                if (!displayName.contains(number)) {
-                    append("Chapter ", number, ": ")
+                if (serial != null) {
+                    val number = serial.toString().substringBefore(".0")
+                    if (!displayName.contains(number)) {
+                        append("Chapter ", number, ": ")
+                    }
                 }
                 append(displayName)
                 if (!title.isNullOrEmpty()) {
@@ -141,7 +143,7 @@ class ChapterListData(
                     append(title)
                 }
             }
-            chapter_number = serial
+            serial?.let { chapter_number = it }
             date_upload = dateModify ?: dateCreate ?: 0L
             scanlator = groupNodes?.filter { it?.data?.name != null }?.joinToString { it!!.data!!.name!! }
                 ?: userNode?.data?.name ?: "\u200B"

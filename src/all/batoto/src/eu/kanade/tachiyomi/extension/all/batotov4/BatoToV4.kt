@@ -324,7 +324,7 @@ class BatoToV4(
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/title/${manga.url}"
+        return "$baseUrl/title/${getMangaId(manga.url)}"
     }
 
     /* Match old v2 Url */
