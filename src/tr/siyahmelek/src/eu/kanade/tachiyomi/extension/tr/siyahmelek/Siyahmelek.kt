@@ -1,26 +1,12 @@
 package eu.kanade.tachiyomi.extension.tr.siyahmelek
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 
-class Siyahmelek : Madara(
+class Siyahmelek : InitManga(
     "Siyah Melek",
-    "https://siyahmelek.pro",
+    "https://siyahmelek.lol",
     "tr",
-    SimpleDateFormat("dd MMM yyyy", Locale("tr")),
-) {
-    // Siyahmelek (tr) -> Gri Melek (tr)
-    override val id = 6419959498055001014
-
-    override val mangaSubString = "seri"
-
-    override val useNewChapterEndpoint = true
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    // Skip fake image
-    // OK: <div class="page-break no-gaps">
-    // NG: <div style="display:none" class="page-break no-gaps">
-    override val pageListParseSelector = "div.page-break:not([style*=\"display:\"])"
-}
+    latestUrlSlug = "recently-updated",
+    popularUrlSlug = "trending-manga",
+    versionId = 2,
+)
