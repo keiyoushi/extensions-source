@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -51,7 +52,6 @@ class MaidScan : HttpSource() {
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
         .set("scan-id", defaultScanId)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
     // --- POPULARES E ATUALIZAÇÕES ---
 
@@ -60,15 +60,17 @@ class MaidScan : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = json.parseToJsonElement(response.body.string()).jsonObject
+        val result = response.parseAs<JsonObject>(json)
         val obras = result["obras"]?.jsonArray ?: return MangasPage(emptyList(), false)
 
         val mangas = obras.map { element ->
             val obj = element.jsonObject
             SManga.create().apply {
-                title = obj["obr_nome"]?.jsonPrimitive?.contentOrNull ?: "Sem Título"
+                // Título obrigatório
+                title = obj["obr_nome"]?.jsonPrimitive?.contentOrNull!!
 
-                val slug = obj["obr_slug"]?.jsonPrimitive?.contentOrNull ?: ""
+                // URL/Slug obrigatório
+                val slug = obj["obr_slug"]?.jsonPrimitive?.contentOrNull!!
                 url = "/obra/$slug"
 
                 // Montagem da URL da capa DINÂMICA
@@ -138,11 +140,12 @@ class MaidScan : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val obj = json.parseToJsonElement(response.body.string()).jsonObject
+        val obj = response.parseAs<JsonObject>(json)
         val obra = if (obj.containsKey("obra")) obj["obra"]!!.jsonObject else obj
 
         return SManga.create().apply {
-            title = obra["obr_nome"]?.jsonPrimitive?.contentOrNull ?: "Sem Título"
+            // Título obrigatório
+            title = obra["obr_nome"]?.jsonPrimitive?.contentOrNull!!
             description = obra["obr_descricao"]?.jsonPrimitive?.contentOrNull ?: obra["obr_sinopse"]?.jsonPrimitive?.contentOrNull
 
             val statusName = obra["status"]?.jsonObject?.get("stt_nome")?.jsonPrimitive?.contentOrNull
@@ -180,7 +183,7 @@ class MaidScan : HttpSource() {
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val obj = json.parseToJsonElement(response.body.string()).jsonObject
+        val obj = response.parseAs<JsonObject>(json)
         val obra = if (obj.containsKey("obra")) obj["obra"]!!.jsonObject else obj
         val capitulos = obra["capitulos"]?.jsonArray ?: return emptyList()
 
@@ -196,11 +199,7 @@ class MaidScan : HttpSource() {
                 val dateStr = cap["cap_criado_em"]?.jsonPrimitive?.contentOrNull
                     ?: cap["cap_liberar_em"]?.jsonPrimitive?.contentOrNull
 
-                date_upload = try {
-                    if (dateStr != null) dateFormat.parse(dateStr)?.time ?: 0L else 0L
-                } catch (e: Exception) {
-                    0L
-                }
+                date_upload = dateFormat.tryParse(dateStr)
             }
         }.sortedWith(
             compareByDescending<SChapter> { it.chapter_number }
@@ -216,7 +215,7 @@ class MaidScan : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val obj = json.parseToJsonElement(response.body.string()).jsonObject
+        val obj = response.parseAs<JsonObject>(json)
 
         // Extração Dinâmica de IDs para Fallback
         val obrId = obj["obr_id"]?.jsonPrimitive?.contentOrNull
@@ -294,5 +293,17 @@ class MaidScan : HttpSource() {
     ) {
         val vals = arrayOf("ultima_atualizacao", "visualizacoes", "obr_nome", "criado_em")
         fun toUriPart() = vals[state!!.index]
+    }
+
+    private inline fun <reified T> Response.parseAs(json: Json): T =
+        json.decodeFromString(body.string())
+
+    private fun SimpleDateFormat.tryParse(string: String?): Long {
+        if (string == null) return 0L
+        return try {
+            parse(string)?.time ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
     }
 }

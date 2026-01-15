@@ -1,7 +1,8 @@
 /**
  * Add or remove modules to load as needed for local development here.
  */
-loadAllIndividualExtensions()
+// loadAllIndividualExtensions()
+loadIndividualExtension("pt", "maidscan")
 // loadIndividualExtension("all", "mangadex")
 
 /**
