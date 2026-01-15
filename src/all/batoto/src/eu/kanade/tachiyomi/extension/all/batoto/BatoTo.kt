@@ -16,6 +16,7 @@ import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import rx.Observable
+import java.util.concurrent.ConcurrentHashMap
 
 open class BatoTo(
     final override val lang: String,
@@ -191,5 +192,54 @@ open class BatoTo(
         )
 
         private val mirrors = mirrorsV2 + mirrorsV4
+    }
+}
+
+/**
+ * Manages image server fallback logic, including blacklisting and backoff tracking.
+ */
+class ImageServerManager() {
+    val serverPattern = Regex("https://([a-zA-Z]\\d{2})")
+
+    val fallbackServers = listOf(
+        "n03", "n00", "n01", "n02", "n04", "n05", "n06", "n07", "n08", "n09", "n10",
+    )
+    val blacklist = listOf("k00", "k01", "k03", "k04", "k05", "k06", "k07", "k08", "k09")
+
+    // Server status tracking
+    data class ServerStatus(
+        val canBackoff: Boolean,
+        val statusCode: Int = 0,
+        val timestamp: Long = System.currentTimeMillis(),
+    )
+
+    val serverStatus = ConcurrentHashMap<String, ServerStatus>()
+
+    val BACKOFF_DURATION_MS = 3_600_000L // 1 hour
+
+    fun shouldSkip(server: String): Boolean {
+        return server in blacklist || isInBackoff(server)
+    }
+
+    fun isInBackoff(server: String): Boolean {
+        val status = serverStatus[server] ?: return false
+        return status.canBackoff && System.currentTimeMillis() - status.timestamp < BACKOFF_DURATION_MS
+    }
+
+    fun recordImageServerStatus(server: String, statusCode: Int) {
+        val now = System.currentTimeMillis()
+        serverStatus[server] = ServerStatus(
+            canBackoff = statusCode in 500..599,
+            statusCode = statusCode,
+            timestamp = now,
+        )
+    }
+
+    fun extractServerFromUrl(url: String): String? {
+        return serverPattern.find(url)?.groups?.get(1)?.value
+    }
+
+    fun replaceServerInUrl(url: String, newServer: String): String {
+        return url.replace(serverPattern, "https://$newServer")
     }
 }
