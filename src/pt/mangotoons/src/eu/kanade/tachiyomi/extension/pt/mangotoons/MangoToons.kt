@@ -90,7 +90,8 @@ class MangoToons : HttpSource() {
 
     // ================= Details ===================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("/")
+        val rawId = manga.url.substringAfterLast("/")
+        val id = rawId.substringBefore("-")
         return GET("$baseUrl/api/obras/$id", headers)
     }
 
