@@ -3,7 +3,7 @@ ext {
     extClass = '.ThunderScansFactory'
     themePkg = 'mangathemesia'
     baseUrl = 'https://en-thunderscans.com'
-    overrideVersionCode = 10
+    overrideVersionCode = 11
     isNsfw = false
 }
 
