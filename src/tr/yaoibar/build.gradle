@@ -2,8 +2,8 @@ ext {
     extName = 'Yaoibar'
     extClass = '.Yaoibar'
     themePkg = 'madara'
-    baseUrl = 'https://yaoibar.gay'
-    overrideVersionCode = 0
+    baseUrl = 'https://yaoibar.lol'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

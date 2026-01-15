@@ -9,8 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -18,7 +17,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,9 +37,7 @@ class InManga : ParsedHttpSource() {
         .add("X-Requested-With", "XMLHttpRequest")
         .build()
 
-    private val json: Json by injectLazy()
-
-    private val imageCDN = "https://pack-yak.intomanga.com/"
+    private val imageCDN = "https://cdn1.intomanga.com"
 
     /**
      * Returns RequestBody to retrieve latest or populars Manga.
@@ -131,12 +127,12 @@ class InManga : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         // The server returns a JSON with data property that contains a string with the JSON,
         // so is necessary to decode twice.
-        val data = json.decodeFromString<InMangaResultDto>(response.body.string())
+        val data = response.parseAs<InMangaResultDto>()
         if (data.data.isNullOrEmpty()) {
             return emptyList()
         }
 
-        val result = json.decodeFromString<InMangaResultObjectDto<InMangaChapterDto>>(data.data)
+        val result = data.data.parseAs<InMangaResultObjectDto<InMangaChapterDto>>()
         if (!result.success) {
             return emptyList()
         }
@@ -162,11 +158,11 @@ class InManga : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        val ch = document.select("[id=\"FriendlyChapterNumberUrl\"]").attr("value")
-        val title = document.select("[id=\"FriendlyMangaName\"]").attr("value")
+        val chapterId = document.select("input#ChapterIdentification").attr("value")
+        val mangaId = document.select("input#MangaIdentification").attr("value")
 
         document.select("img.ImageContainer").forEachIndexed { i, img ->
-            add(Page(i, "", "$imageCDN/images/manga/$title/chapter/$ch/page/${i + 1}/${img.attr("id")}"))
+            add(Page(i, imageUrl = "$imageCDN/i/m/$mangaId/c/$chapterId/o/${img.attr("id")}.jpg"))
         }
     }
 
