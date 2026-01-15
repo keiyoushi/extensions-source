@@ -97,7 +97,7 @@ class ComicTop : ParsedHttpSource() {
         val chapterJson = script.substringAfter("var chapter = ").substringBefore("};") + "}"
 
         val imageUrls = imageUrlPattern.findAll(chapterJson).map {
-            it.groupValues[1].replace("""\\/""", "/")
+            it.groupValues[1].replace("\\", "")
         }.toList()
 
         return imageUrls.mapIndexed { index, url ->
