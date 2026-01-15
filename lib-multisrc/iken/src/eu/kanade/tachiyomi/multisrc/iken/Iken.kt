@@ -178,7 +178,7 @@ abstract class Iken(
         }
 
         return sortedPages.mapIndexed { idx, p ->
-            Page(idx, imageUrl = p.url)
+            Page(idx, imageUrl = p.url.replace(" ", "%20"))
         }
     }
 
