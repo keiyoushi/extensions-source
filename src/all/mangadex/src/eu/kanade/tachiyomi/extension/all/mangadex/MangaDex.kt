@@ -37,6 +37,7 @@ import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -180,9 +181,21 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     // Search manga section
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        var newQuery = query
+        val url = query.trim().toHttpUrlOrNull()
+        if (url != null && url.host.endsWith("mangadex.org")) {
+            val searchPrefix = url.pathSegments.firstOrNull()?.let { MDConstants.pathToSearchPrefix[it] }
+            if (searchPrefix != null) {
+                val match = MDConstants.uuidRegex.find(url.toString())
+                if (match != null) {
+                    newQuery = searchPrefix + match.value
+                }
+            }
+        }
+
         return when {
-            query.startsWith(MDConstants.prefixChSearch) ->
-                getMangaIdFromChapterId(query.removePrefix(MDConstants.prefixChSearch))
+            newQuery.startsWith(MDConstants.prefixChSearch) ->
+                getMangaIdFromChapterId(newQuery.removePrefix(MDConstants.prefixChSearch))
                     .flatMap { mangaId ->
                         super.fetchSearchManga(
                             page = page,
@@ -191,28 +204,28 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
                         )
                     }
 
-            query.startsWith(MDConstants.prefixUsrSearch) ->
+            newQuery.startsWith(MDConstants.prefixUsrSearch) ->
                 client
                     .newCall(
                         request = searchMangaUploaderRequest(
                             page = page,
-                            uploader = query.removePrefix(MDConstants.prefixUsrSearch),
+                            uploader = newQuery.removePrefix(MDConstants.prefixUsrSearch),
                         ),
                     )
                     .asObservableSuccess()
                     .map { latestUpdatesParse(it) }
 
-            query.startsWith(MDConstants.prefixListSearch) ->
+            newQuery.startsWith(MDConstants.prefixListSearch) ->
                 client
                     .newCall(
                         request = searchMangaListRequest(
-                            list = query.removePrefix(MDConstants.prefixListSearch),
+                            list = newQuery.removePrefix(MDConstants.prefixListSearch),
                         ),
                     )
                     .asObservableSuccess()
                     .map { searchMangaListParse(it, page, filters) }
 
-            else -> super.fetchSearchManga(page, query.trim(), filters)
+            else -> super.fetchSearchManga(page, newQuery.trim(), filters)
         }
     }
 
