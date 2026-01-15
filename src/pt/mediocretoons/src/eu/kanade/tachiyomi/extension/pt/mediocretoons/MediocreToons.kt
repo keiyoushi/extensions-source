@@ -97,7 +97,7 @@ class MediocreToons : HttpSource() {
                     }
                 }
             }
-            webView.loadUrl(baseUrl)
+            webView.loadDataWithBaseURL(baseUrl, "", "text/html", "utf-8", null)
         }
 
         latch.await(10, TimeUnit.SECONDS)
