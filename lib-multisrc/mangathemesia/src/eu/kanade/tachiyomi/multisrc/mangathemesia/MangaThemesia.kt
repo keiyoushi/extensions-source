@@ -140,11 +140,12 @@ abstract class MangaThemesia(
         return super.searchMangaParse(response)
     }
 
-    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx"
+    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx, .listupd .manga-card-v"
+    open val searchMangaTitleSelector = ".bigor .tt, h3 a"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.select("img").imgAttr()
-        title = element.select("a").attr("title")
+        title = element.selectFirst(searchMangaTitleSelector)!!.text()
         setUrlWithoutDomain(element.select("a").attr("href"))
     }
 
