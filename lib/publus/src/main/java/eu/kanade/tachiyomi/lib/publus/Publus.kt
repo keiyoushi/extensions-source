@@ -58,8 +58,10 @@ object Publus {
             )
 
             val unscrambled = PublusImage.unscramble(bitmap, attributes, keys, params["pid"]!!)
+            bitmap.recycle()
             val buffer = Buffer()
             unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+            unscrambled.recycle()
 
             return response.newBuilder()
                 .body(buffer.asResponseBody("image/jpeg".toMediaType()))
@@ -535,10 +537,12 @@ object Publus {
 
             val result = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(result)
+            val srcRect = Rect()
+            val dstRect = Rect()
 
             moves.forEach { m ->
-                val srcRect = Rect(m.destX, m.destY, m.destX + m.width, m.destY + m.height)
-                val dstRect = Rect(m.srcX, m.srcY, m.srcX + m.width, m.srcY + m.height)
+                srcRect.set(m.destX, m.destY, m.destX + m.width, m.destY + m.height)
+                dstRect.set(m.srcX, m.srcY, m.srcX + m.width, m.srcY + m.height)
                 canvas.drawBitmap(bitmap, srcRect, dstRect, null)
             }
 
