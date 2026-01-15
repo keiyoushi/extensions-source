@@ -92,7 +92,12 @@ class KissLove : HttpSource() {
         return GET(url, sigAppend())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<ListPagedManga>()
+        val mangas = result.items.map { it.toSManga() }
+        val hasNextPage = result.currentPage < result.totalPages
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
