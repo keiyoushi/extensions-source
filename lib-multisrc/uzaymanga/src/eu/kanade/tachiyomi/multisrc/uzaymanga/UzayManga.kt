@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -19,8 +21,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 
 abstract class UzayManga(
     override val name: String,
