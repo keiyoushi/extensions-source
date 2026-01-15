@@ -48,7 +48,10 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     private val mobileBaseUrl = "https://m.zaimanhua.com"
     private val apiUrl = "https://v4api.zaimanhua.com/app/v1"
     private val accountApiUrl = "https://account-api.zaimanhua.com/v1"
-    private val checkTokenRegex = Regex("""$apiUrl/comic/chapter""")
+    private val pcApiUrl = "$baseUrl/api/v1/comic2"
+    private val pcDetailUrl = "$pcApiUrl/comic/detail"
+    private val tryLoginRegex = Regex("""$apiUrl|$pcApiUrl""")
+    private val checkCanReadRegex = Regex("""$apiUrl/comic/chapter""")
 
     private val json by injectLazy<Json>()
 
@@ -67,8 +70,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         val password = preferences.getString(PASSWORD_PREF, "")!!
         var token = preferences.getString(TOKEN_PREF, "")!!
         var hasTriedLogin = false
+        val url = request.url.toString()
 
-        if (request.url.toString().startsWith(apiUrl) && request.header("authorization") == null && username.isNotBlank() && password.isNotBlank()) {
+        if (url.contains(tryLoginRegex) && request.header("authorization") == null && username.isNotBlank() && password.isNotBlank()) {
             token = getToken(username, password)
             apiHeaders = apiHeaders.newBuilder().setToken(token).build()
             hasTriedLogin = true
@@ -85,12 +89,14 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         }
         val response = chain.proceed(request)
         // Only intercept chapter api requests that need token
-        if (!request.url.toString().contains(checkTokenRegex)) return response
+        if (!url.contains(checkCanReadRegex) && !url.startsWith(pcApiUrl)) return response
 
-        // If chapter can read, return directly
-        val canRead = response.peekBody(Long.MAX_VALUE).stringCompat(response.header("Content-Encoding"))
-            .parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false
-        if (canRead) return response
+        if (url.contains(checkCanReadRegex)) {
+            // If chapter can read, return directly
+            val responseBody = response.peekBody(Long.MAX_VALUE).stringCompat(response.header("Content-Encoding"))
+            val canRead = responseBody.parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead ?: true
+            if (canRead) return response
+        }
 
         if (!isValid(token) && !hasTriedLogin) {
             token = getToken(username, password)
@@ -134,6 +140,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
             GET(
                 "$accountApiUrl/userInfo/get",
                 headersBuilder().setToken(token).build(),
+                cache = USE_CACHE,
             ),
         ).execute().parseAs<SimpleResponseDto>()
         return response.errno == 0
@@ -162,7 +169,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // path: "/comic/detail/mangaId"
-    private fun getMangaUrl(id: String): HttpUrl = "$apiUrl/comic/detail/$id?_v=2.2.5".toHttpUrl()
+    private fun getMangaUrl(id: String): HttpUrl = "$apiUrl/comic/detail/$id?_v=2.2.5#$id".toHttpUrl()
     override fun mangaDetailsRequest(manga: SManga): Request =
         GET(getMangaUrl(manga.url), apiHeaders)
 
@@ -176,14 +183,26 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // Chapter
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga.url), apiHeaders.newBuilder().apply { set("Platform", "pc") }.build())
+
+    private fun pcChapterListRequest(mangaId: String): Request =
+        GET("$pcDetailUrl?id=$mangaId", apiHeaders.newBuilder().apply { set("Platform", "pc") }.build())
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
+        val result = response.parseAs<ResponseDto<DataWrapperDto<ChapterDataDto>>>()
         if (result.errmsg.isNotBlank()) {
             throw Exception(result.errmsg)
         } else {
-            return result.data.data!!.parseChapterList()
+            val data = result.data.data!!
+            if (response.request.url.toString().startsWith(apiUrl) && data.isHideChapter == 1 && data.canRead == true) {
+                val mangaId = response.request.url.fragment!!
+                response.close()
+                return chapterListParse(client.newCall(pcChapterListRequest(mangaId)).execute())
+            }
+            if (data.chapterList.isNullOrEmpty()) {
+                throw Exception("章节列表为空，用户权限不足或漫画不存在")
+            }
+            return data.parseChapterList()
         }
     }
 
@@ -195,7 +214,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // path: "/comic/chapter/mangaId/chapterId"
     private fun pageListApiRequest(path: String): Request =
-        GET("$apiUrl/comic/chapter/$path?_v=2.2.5", apiHeaders, USE_CACHE)
+        GET("$apiUrl/comic/chapter/$path?_v=2.2.5", apiHeaders.newBuilder().apply { set("Platform", "h5") }.build(), USE_CACHE)
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 

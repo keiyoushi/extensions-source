@@ -24,6 +24,8 @@ class ComicTop : ParsedHttpSource() {
 
     override val supportsLatest = true
 
+    private val imageUrlPattern = Regex("""\"image\":\"([^\"]+)\"""")
+
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popular/page/$page", headers)
 
@@ -76,17 +78,31 @@ class ComicTop : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         with(element.selectFirst("a[title]")!!) {
-            url = "/" + attr("abs:href").toHttpUrl().queryParameter("ct")!!
+            setUrlWithoutDomain(attr("abs:href"))
             name = attr("title")
         }
         date_upload = dateFormat.tryParse(element.selectFirst(".date")?.text())
-        chapter_number = element.getElementsByTag("chapter").text().toFloatOrNull()!!
+        element.getElementsByTag("chapter").text().toFloatOrNull()?.let { chapter_number = it }
     }
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#imagech").map { it ->
-            Page(it.attr("img-id").toInt(), imageUrl = it.imgAttr()!!)
+        // images are being loaded via js:
+        // var chapter = {
+        //   "1" : { "image" : "\/\/cdn.comic-top.com\/uploads\/comic-top\/2025\/20250103\/KC_003961_S\/KC_0039610002800041_E\/39.jpg"},
+        //   "2" : { "image" : etc...
+        val script = document.selectFirst("script:containsData(var chapter)")?.data()
+            ?: throw Exception("Could not find chapter data script")
+
+        val chapterJson = script.substringAfter("var chapter = ").substringBefore("};") + "}"
+
+        val imageUrls = imageUrlPattern.findAll(chapterJson).map {
+            it.groupValues[1].replace("""\\/""", "/")
+        }.toList()
+
+        return imageUrls.mapIndexed { index, url ->
+            val fullUrl = if (url.startsWith("//")) "https:$url" else url
+            Page(index, imageUrl = fullUrl)
         }
     }
 
