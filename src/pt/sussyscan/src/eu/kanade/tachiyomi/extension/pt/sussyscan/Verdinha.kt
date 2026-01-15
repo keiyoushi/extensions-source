@@ -43,6 +43,8 @@ class Verdinha : HttpSource(), ConfigurableSource {
 
     private val apiUrl = "https://api.verdinha.wtf"
 
+    private val cdnUrl = "https://cdn.verdinha.wtf"
+
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -96,7 +98,7 @@ class Verdinha : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<MangaListDto>()
-        val mangas = dto.obras.map { it.toSManga(apiUrl) }
+        val mangas = dto.obras.map { it.toSManga(cdnUrl) }
         val hasNext = dto.pagina < dto.totalPaginas
         return MangasPage(mangas, hasNext)
     }
@@ -159,7 +161,7 @@ class Verdinha : HttpSource(), ConfigurableSource {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<MangaDetailsDto>()
-        return dto.toSManga(apiUrl)
+        return dto.toSManga(cdnUrl)
     }
 
     // ========================= Chapters ===================================
@@ -203,15 +205,15 @@ class Verdinha : HttpSource(), ConfigurableSource {
         return dto.pages.mapIndexed { index, page ->
             val imageUrl = when {
                 page.path != null && page.path.contains(".") ->
-                    "$apiUrl/cdn/${page.path}"
+                    "$cdnUrl/${page.path}"
                 page.path != null && page.src != null ->
-                    "$apiUrl/cdn/${page.path}${page.src}"
+                    "$cdnUrl/${page.path}${page.src}"
                 page.src != null && page.src.startsWith("/") ->
-                    "$apiUrl/cdn/wp-content/uploads/WP-manga/data${page.src}"
+                    "$cdnUrl/wp-content/uploads/WP-manga/data${page.src}"
                 page.src != null && page.src.contains("/") ->
-                    "$apiUrl/cdn/wp-content/uploads/WP-manga/data/${page.src}"
+                    "$cdnUrl/wp-content/uploads/WP-manga/data/${page.src}"
                 page.src != null ->
-                    "$apiUrl/cdn/scans/$scanId/obras/$obraId/capitulos/$chapterNumber/${page.src}"
+                    "$cdnUrl/scans/$scanId/obras/$obraId/capitulos/$chapterNumber/${page.src}"
                 else -> throw Exception("No image URL found")
             }
             Page(index, imageUrl = imageUrl)

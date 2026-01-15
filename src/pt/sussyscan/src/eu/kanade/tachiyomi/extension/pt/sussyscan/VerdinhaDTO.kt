@@ -27,9 +27,9 @@ data class MangaDto(
         url = "/obra/${slug ?: id}"
         thumbnail_url = image?.let {
             if (it.startsWith("wp-content/")) {
-                "$cdnUrl/cdn/$it"
+                "$cdnUrl/$it"
             } else {
-                "$cdnUrl/cdn/scans/$scanId/obras/$id/$it"
+                "$cdnUrl/scans/$scanId/obras/$id/$it"
             }
         }
     }
@@ -56,9 +56,9 @@ data class MangaDetailsDto(
         url = "/obra/${slug ?: id}"
         thumbnail_url = image?.let {
             if (it.startsWith("wp-content/")) {
-                "$cdnUrl/cdn/$it"
+                "$cdnUrl/$it"
             } else {
-                "$cdnUrl/cdn/scans/$scanId/obras/$id/$it"
+                "$cdnUrl/scans/$scanId/obras/$id/$it"
             }
         }
         description = this@MangaDetailsDto.description
