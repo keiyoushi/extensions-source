@@ -37,7 +37,7 @@ class ComicNettai : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/series/".toHttpUrl().newBuilder()
+        val url = "$baseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)

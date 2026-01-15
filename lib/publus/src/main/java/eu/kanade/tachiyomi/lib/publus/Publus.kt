@@ -16,7 +16,6 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import java.nio.charset.StandardCharsets
 import kotlin.math.floor
-import kotlin.math.min
 
 @Serializable
 class PublusFragment(

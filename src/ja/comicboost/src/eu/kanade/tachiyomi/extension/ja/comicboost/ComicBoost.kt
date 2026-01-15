@@ -58,8 +58,7 @@ class ComicBoost : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("search")
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("k", query)
             .addQueryParameter("p", page.toString())
 
