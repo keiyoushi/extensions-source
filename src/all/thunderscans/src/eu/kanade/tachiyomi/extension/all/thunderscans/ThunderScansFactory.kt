@@ -38,7 +38,7 @@ abstract class ThunderScansBase(
 
 class LavaScans : ThunderScansBase(
     "Lava Scans",
-    "https://lavatoons.com",
+    "https://lavascans.com",
     "ar",
     dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
 ) {
