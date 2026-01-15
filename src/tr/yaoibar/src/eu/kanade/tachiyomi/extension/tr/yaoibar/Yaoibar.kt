@@ -6,7 +6,7 @@ import java.util.Locale
 
 class Yaoibar : Madara(
     "Yaoibar",
-    "https://yaoibar.gay",
+    "https://yaoibar.lol",
     "tr",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 ) {
