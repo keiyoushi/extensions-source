@@ -32,7 +32,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://foxtruyen1.com"
+    private val defaultBaseUrl = "https://foxtruyen2.com"
 
     override val supportsLatest = true
 
