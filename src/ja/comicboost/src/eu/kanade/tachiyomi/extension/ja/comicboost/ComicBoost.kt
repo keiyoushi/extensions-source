@@ -74,7 +74,7 @@ class ComicBoost : HttpSource() {
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1.comic-title")!!.text()
-            author = document.select(".author-list .author").joinToString {
+            author = document.select(".comic-main-right .author-list .author").joinToString {
                 it.text().replace(Regex("^(原作|漫画|作画|キャラクター原案|原案)："), "")
             }
             description = document.selectFirst(".comic-description-text")?.text()
@@ -89,7 +89,9 @@ class ComicBoost : HttpSource() {
         while (true) {
             val pageChapters = document.select(".book-product-list-item").map { element ->
                 SChapter.create().apply {
-                    name = element.selectFirst(".title")!!.text()
+                    val title = element.selectFirst(".title")!!.text()
+                    val isPaid = element.selectFirst(".coin") != null
+                    name = if (isPaid) "🔒 $title" else title
                     setUrlWithoutDomain(element.absUrl("href"))
                     date_upload = dateFormat.tryParse(element.selectFirst(".update-date")?.text())
                 }
@@ -118,7 +120,12 @@ class ComicBoost : HttpSource() {
 
         val cRequest = GET(cUrl, headers)
         val cResponse = client.newCall(cRequest).execute()
-        val cPhp = cResponse.parseAs<CPhpResponse>().url
+        val cPhp = try {
+            cResponse.parseAs<CPhpResponse>().url
+        } catch (_: Exception) {
+            throw Exception("This chapter is locked. Log in via WebView and purchase this chapter to read.")
+        }
+
         val configRequest = GET(cPhp + "configuration_pack.json", headers)
         val configResponse = client.newCall(configRequest).execute()
         val packData = configResponse.parseAs<ConfigPack>().data
