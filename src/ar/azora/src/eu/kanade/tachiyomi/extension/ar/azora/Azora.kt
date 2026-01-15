@@ -14,6 +14,7 @@ class Azora : Iken(
     "https://azoramoon.com",
     "https://api.azoramoon.com",
 ) {
+    override val versionId = 2;
     val perPage = 18
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
@@ -24,13 +25,6 @@ class Azora : Iken(
         }.build()
 
         return GET(url, headers)
-    }
-    override fun chapterListRequest(manga: SManga): Request {
-        // Migration from old web theme to the new one(madara -> Iken)
-        if (manga.url.startsWith("/series/")) {
-            throw Exception("Migrate from $name to $name (same extension)")
-        }
-        return super.chapterListRequest(manga)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {

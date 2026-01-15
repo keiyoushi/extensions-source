@@ -3,7 +3,7 @@ ext {
     extClass = '.Azora'
     themePkg = 'iken'
     baseUrl = 'https://azoramoon.com'
-    overrideVersionCode = 9
+    overrideVersionCode = 43
     isNsfw = false
 }
 
