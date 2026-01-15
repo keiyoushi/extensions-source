@@ -14,7 +14,7 @@ import okhttp3.Response
 
 class KawaiScans : HttpSource() {
     override val name = "Kawai Scans"
-    override val baseUrl = "https://kawaiscans.site"
+    override val baseUrl = "https://kawaiscans.org"
     override val lang = "en"
     override val supportsLatest = true
 
