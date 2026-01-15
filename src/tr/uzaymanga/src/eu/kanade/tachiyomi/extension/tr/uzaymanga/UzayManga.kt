@@ -6,6 +6,6 @@ class UzayManga : UzayManga(
     name = "Uzay Manga",
     baseUrl = "https://uzaymanga.com",
     lang = "tr",
-    versionId = 2,
+    versionId = 1,
     cdnUrl = "https://uzaymangacdn3.efsaneler.can.re",
 )

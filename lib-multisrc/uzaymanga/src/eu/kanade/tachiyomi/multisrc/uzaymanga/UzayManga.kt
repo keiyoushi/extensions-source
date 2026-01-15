@@ -11,18 +11,16 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.getValue
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 
 abstract class UzayManga(
     override val name: String,
@@ -37,8 +35,6 @@ abstract class UzayManga(
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -93,7 +89,7 @@ abstract class UzayManga(
 
         if (body.contains("[]") || body.isBlank()) return MangasPage(emptyList(), false)
 
-        val dto = json.decodeFromString<List<SearchDto>>(body)
+        val dto = body.parseAs<List<SearchDto>>()
 
         val mangas = dto.map { item ->
             SManga.create().apply {
@@ -172,7 +168,7 @@ abstract class UzayManga(
         document.selectFirst("div.grid h2 + p") != null
 
     private fun String.toDate(): Long =
-        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
+        dateFormat.tryParse(this)
 
     private fun String.contains(vararg fragment: String): Boolean =
         fragment.any { trim().contains(it, ignoreCase = true) }

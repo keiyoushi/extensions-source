@@ -6,6 +6,6 @@ class TenshiManga : UzayManga(
     name = "Tenshi Manga",
     baseUrl = "https://tenshimanga.com",
     lang = "tr",
-    versionId = 2,
+    versionId = 1,
     cdnUrl = "https://tenshimangacdn4.efsaneler.can.re",
 )

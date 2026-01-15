@@ -6,6 +6,6 @@ class ElderManga : UzayManga(
     "Elder Manga",
     "https://eldermanga.com",
     lang = "tr",
-    versionId = 2,
+    versionId = 1,
     cdnUrl = "https://eldermangacdn2.efsaneler.can.re",
 )
