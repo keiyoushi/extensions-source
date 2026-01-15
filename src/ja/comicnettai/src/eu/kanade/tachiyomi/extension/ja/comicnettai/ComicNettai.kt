@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.comicnettai
 
-import eu.kanade.tachiyomi.lib.publus.Publus
 import eu.kanade.tachiyomi.lib.publus.Publus.Decoder
 import eu.kanade.tachiyomi.lib.publus.Publus.PublusInterceptor
+import eu.kanade.tachiyomi.lib.publus.Publus.generatePages
 import eu.kanade.tachiyomi.lib.publus.PublusPage
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -140,7 +140,7 @@ class ComicNettai : HttpSource() {
             )
         }
 
-        return Publus.generatePages(pageContent, result.keys, cPhp)
+        return generatePages(pageContent, result.keys, cPhp)
     }
 
     override fun imageUrlParse(response: Response): String {

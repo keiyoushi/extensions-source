@@ -562,7 +562,7 @@ object Publus {
 
             val moves = mutableListOf<Move>()
 
-            fun process(index: Int, total: Int, stepW: Int, stepH: Int): Int {
+            fun process(index: Int, total: Int, stepW: Int, stepH: Int) {
                 var idx = index
                 if (stepW != 0 && stepH != 0) {
                     while (idx < total) {
@@ -583,16 +583,22 @@ object Publus {
                         ))
                     }
                 }
-                return idx
             }
 
             var vx4j = 0
             var vy4j = blocksX * blocksY * 2
-            vx4j = process(vx4j, vy4j, page.blockWidth, page.blockHeight)
+
+            process(vx4j, vy4j, page.blockWidth, page.blockHeight)
+            vx4j = vy4j
+
             vy4j += 2
-            vx4j = process(vx4j, vy4j, lastBlockWidth, lastBlockHeight)
+            process(vx4j, vy4j, lastBlockWidth, lastBlockHeight)
+            vx4j = vy4j
+
             vy4j += blocksX * 2
-            vx4j = process(vx4j, vy4j, page.blockWidth, lastBlockHeight)
+            process(vx4j, vy4j, page.blockWidth, lastBlockHeight)
+            vx4j = vy4j
+
             vy4j += blocksY * 2
             process(vx4j, vy4j, lastBlockWidth, page.blockHeight)
 
