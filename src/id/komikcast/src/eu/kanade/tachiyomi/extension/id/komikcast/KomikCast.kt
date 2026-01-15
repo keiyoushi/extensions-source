@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
@@ -104,7 +105,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast03.com", "id", "
 
     private fun parseChapterDate2(date: String): Long {
         return if (date.endsWith("ago")) {
-            val value = date.split(' ')[0].toInt()
+            val value = date.split(' ')[0].toIntOrNull() ?: return 0L
             when {
                 "min" in date -> Calendar.getInstance().apply {
                     add(Calendar.MINUTE, -value)
@@ -130,9 +131,14 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast03.com", "id", "
             }
         } else {
             try {
-                dateFormat.parse(date)?.time ?: 0
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(date)?.time
+                    ?: dateFormat.parse(date)?.time ?: 0L
             } catch (_: Exception) {
-                0L
+                try {
+                    dateFormat.parse(date)?.time ?: 0L
+                } catch (_: Exception) {
+                    0L
+                }
             }
         }
     }
