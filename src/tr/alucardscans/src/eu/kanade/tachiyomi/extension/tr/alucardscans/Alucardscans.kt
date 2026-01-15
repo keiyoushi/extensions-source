@@ -8,7 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
@@ -20,6 +21,7 @@ class Alucardscans : HttpSource() {
     override val baseUrl = "https://alucardscans.com"
     override val lang = "tr"
     override val supportsLatest = true
+    override val versionId = 2
 
     private val alucardApi = "api/series?sort=views&order=desc&calculateTotalViews=true&page=SAYFA&limit=24"
     private val latestApi = "api/chapters/latest?page=SAYFA&limit=10"
@@ -27,13 +29,12 @@ class Alucardscans : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = java.util.TimeZone.getTimeZone("UTC")
+    }
+
     private fun parseDate(dateStr: String?): Long {
-        return runCatching {
-            val cleanDate = dateStr!!.replace("\$D", "")
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.parse(cleanDate)!!.time
-        }.getOrDefault(0L)
+        return dateFormat.tryParse(dateStr?.replace("\$D", ""))
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -46,7 +47,7 @@ class Alucardscans : HttpSource() {
 
         chaptersJson = chaptersJson.replace("""\"""", "\"").replace("""\\/""", "/")
 
-        val chapters = json.decodeFromString<List<AluChapters>>(chaptersJson)
+        val chapters = chaptersJson.parseAs<List<AluChapters>>()
 
         return chapters.map { chapter ->
             SChapter.create().apply {
@@ -61,7 +62,7 @@ class Alucardscans : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseBody = response.body.string()
-        val cevap = json.decodeFromString<AlucardResponse>(responseBody)
+        val cevap = responseBody.parseAs<AlucardResponse>()
 
         val smanga = (
             cevap.groupedChapters?.map { it.series!! }
@@ -101,7 +102,7 @@ class Alucardscans : HttpSource() {
 
         seriesJson = seriesJson.replace("""\"""", "\"").replace("""\\n""", "\n")
 
-        val item = json.decodeFromString<AluSeries>(seriesJson)
+        val item = seriesJson.parseAs<AluSeries>()
 
         return SManga.create().apply {
             title = item.title ?: ""
@@ -129,7 +130,7 @@ class Alucardscans : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val responseBody = response.body.string()
-        val cevap = json.decodeFromString<AlucardResponse>(responseBody)
+        val cevap = responseBody.parseAs<AlucardResponse>()
 
         val mangas = cevap.series?.map { series ->
             SManga.create().apply {

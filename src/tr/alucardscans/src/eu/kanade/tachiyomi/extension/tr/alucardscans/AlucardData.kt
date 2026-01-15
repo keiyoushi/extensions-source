@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.tr.alucardscans
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-
-val json: Json = Json {
-    ignoreUnknownKeys = true
-}
 
 @Serializable
 data class AlucardResponse(
