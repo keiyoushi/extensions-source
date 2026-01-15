@@ -44,6 +44,16 @@ object MDConstants {
     const val prefixUsrSearch = "usr:"
     const val prefixListSearch = "list:"
 
+    val pathToSearchPrefix = mapOf(
+        "manga" to prefixIdSearch,
+        "title" to prefixIdSearch,
+        "chapter" to prefixChSearch,
+        "group" to prefixGrpSearch,
+        "author" to prefixAuthSearch,
+        "user" to prefixUsrSearch,
+        "list" to prefixListSearch,
+    )
+
     private const val coverQualityPref = "thumbnailQuality"
 
     fun getCoverQualityPreferenceKey(dexLang: String): String {
