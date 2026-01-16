@@ -134,7 +134,12 @@ abstract class InitManga(
         val linkElement = element.selectFirst("h3 a, div.uk-overflow-hidden a")
             ?: element.selectFirst("a")
 
-        title = element.select("h3").text().trim().ifEmpty { "Bilinmeyen Seri" }
+        title = element.select("h3").text().trim().ifEmpty {
+            element.select("a").clone()
+                .apply {
+                    select("span, small").remove()
+                }.text().trim()
+        }
         setUrlWithoutDomain(linkElement!!.attr("href"))
         thumbnail_url = element.select("img").let { img ->
             img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
@@ -314,26 +319,29 @@ abstract class InitManga(
         // RagnarScans
 
         if (encryptedData.isNullOrEmpty()) {
-            val content = AesDecrypt.REGEX_ENCRYPTED_DATA.find(document.html())!!.groupValues[1]
             runCatching {
-                val encryptedObject: JsonObject = content.parseAs()
-                val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
-                val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
-                val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
-                val decryptedContent = AesDecrypt.decryptLayered(document.html(), ciphertext, ivHex, saltHex)
+                val content = AesDecrypt.REGEX_ENCRYPTED_DATA.find(document.html())?.groupValues?.get(1)
+                if (content != null) {
+                    val encryptedObject: JsonObject = content.parseAs()
+                    val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
+                    val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
+                    val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
+                    val decryptedContent = AesDecrypt.decryptLayered(document.html(), ciphertext, ivHex, saltHex)
 
-                if (!decryptedContent.isNullOrEmpty()) {
-                    return parseDecryptedPages(decryptedContent)
+                    if (!decryptedContent.isNullOrEmpty()) {
+                        return parseDecryptedPages(decryptedContent)
+                    }
                 }
-
-                return fallbackPages(document)
+            }.onFailure {
+                error(it)
             }
+
+            return fallbackPages(document)
         }
 
         // Merlin Toons
-
         val decodedBytes = Base64.decode(encryptedData, Base64.DEFAULT)
-        val decodedString = String(decodedBytes, Charsets.UTF_8) // String ismini düzelttim
+        val decodedString = String(decodedBytes, Charsets.UTF_8)
 
         runCatching {
             val regex = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})""", RegexOption.DOT_MATCHES_ALL)
