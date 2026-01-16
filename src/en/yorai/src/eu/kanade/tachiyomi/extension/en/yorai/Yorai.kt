@@ -123,6 +123,7 @@ class Yorai : HttpSource(), ConfigurableSource {
             status = when (data.status) {
                 "releasing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
+                "cancelled" -> SManga.CANCELLED
                 "hiatus" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
