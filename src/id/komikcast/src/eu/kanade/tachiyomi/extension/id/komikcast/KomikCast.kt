@@ -103,37 +103,39 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast03.com", "id", "
     }
 
     private fun parseChapterDate2(date: String): Long {
-        return if (date.endsWith("ago")) {
-            val value = date.split(' ')[0].toInt()
-            when {
-                "min" in date -> Calendar.getInstance().apply {
-                    add(Calendar.MINUTE, -value)
-                }.timeInMillis
-                "hour" in date -> Calendar.getInstance().apply {
-                    add(Calendar.HOUR_OF_DAY, -value)
-                }.timeInMillis
-                "day" in date -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value)
-                }.timeInMillis
-                "week" in date -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value * 7)
-                }.timeInMillis
-                "month" in date -> Calendar.getInstance().apply {
-                    add(Calendar.MONTH, -value)
-                }.timeInMillis
-                "year" in date -> Calendar.getInstance().apply {
-                    add(Calendar.YEAR, -value)
-                }.timeInMillis
-                else -> {
-                    0L
+        val trimmedDate = date.trim() // Always trim the input string
+
+        try {
+            if (trimmedDate.contains("T")) {
+                return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    java.time.OffsetDateTime.parse(trimmedDate).toInstant().toEpochMilli()
+                } else {
+                    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH).parse(trimmedDate)?.time ?: 0L
                 }
             }
-        } else {
-            try {
-                dateFormat.parse(date)?.time ?: 0
-            } catch (_: Exception) {
-                0L
-            }
+        } catch (_: Exception) {}
+
+        // Relative date parsing
+        if (trimmedDate.lowercase().contains("ago")) {
+            val numberPart = trimmedDate.split(' ').firstOrNull { it.any { char -> char.isDigit() } }
+            val value = numberPart?.toIntOrNull() ?: return 0L // Avoids the .toInt() crash
+
+            return Calendar.getInstance().apply {
+                when {
+                    "min" in trimmedDate -> add(Calendar.MINUTE, -value)
+                    "hour" in trimmedDate -> add(Calendar.HOUR_OF_DAY, -value)
+                    "day" in trimmedDate -> add(Calendar.DATE, -value)
+                    "week" in trimmedDate -> add(Calendar.DATE, -value * 7)
+                    "month" in trimmedDate -> add(Calendar.MONTH, -value)
+                    "year" in trimmedDate -> add(Calendar.YEAR, -value)
+                }
+            }.timeInMillis
+        }
+
+        return try {
+            dateFormat.parse(trimmedDate)?.time ?: 0L
+        } catch (_: Exception) {
+            0L
         }
     }
 
