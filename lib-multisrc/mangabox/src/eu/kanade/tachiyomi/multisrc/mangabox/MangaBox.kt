@@ -71,15 +71,11 @@ abstract class MangaBox(
             return field
         }
 
-    private var apiChapterListUrl = ""
-        get() {
-            return "$baseUrl/api/manga/__SLUG__/chapters"
-        }
+    private val apiChapterListUrl: String
+        get() = "$baseUrl/api/manga/__SLUG__/chapters"
 
-    private var apiChapterPageUrl = ""
-        get() {
-            return "$baseUrl/manga/__MANGA__/__CHAPTER__"
-        }
+    private val apiChapterPageUrl: String
+        get() = "$baseUrl/manga/__MANGA__/__CHAPTER__"
 
     private val cdnSet =
         MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
@@ -331,13 +327,13 @@ abstract class MangaBox(
                 name = apiChapter.chapter_name
                 url = apiChapterPageUrl.replace("__MANGA__", slug).replace("__CHAPTER__", apiChapter.chapter_slug)
                 chapter_number = apiChapter.chapter_num
-                scanlator = null
+                scanlator = baseUrl.replace("https://", "")
                 date_upload = dateFormat.tryParse(apiChapter.updated_at)
             }
         }
     }
 
-    override fun chapterListSelector() = "div.chapter-list div.row, ul.row-content-chapter li"
+    override fun chapterListSelector() = String()
 
     protected open val alternateChapterDateSelector = String()
 
