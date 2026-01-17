@@ -2,7 +2,7 @@ ext {
     extName = 'Uzay Manga'
     extClass = '.UzayManga'
     themePkg = 'uzaymanga'
-    overrideVersionCode = 41
+    overrideVersionCode = 42
 }
 
 apply from: "$rootDir/common.gradle"
