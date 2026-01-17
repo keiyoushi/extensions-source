@@ -139,15 +139,25 @@ class RoliaScan : ParsedHttpSource() {
         genre = document.select("a[href*=genres]")
             .joinToString { it.text() }
 
-        document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
-            status = when {
-                it.contains("publishing", true) -> SManga.ONGOING
-                it.contains("hiatus", true) -> SManga.ON_HIATUS
-                it.contains("completed", true) -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+        artist = document.selectFirst("tr:has(th:contains(Artists)) > td")?.text()
+
+        document.selectFirst("tr:has(th:contains(Status)) > td")?.let {
+            status = it.parseStatus()
         }
         setUrlWithoutDomain(document.location())
+    }
+
+    private fun Element?.parseStatus(): Int {
+        val text = this?.text()?.lowercase() ?: return SManga.UNKNOWN
+
+        return when {
+            "ongoing" in text -> SManga.ONGOING
+            "completed" in text -> SManga.COMPLETED
+            "hiatus" in text -> SManga.ON_HIATUS
+            "discontinued" in text || "cancelled" in text ->
+                SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
     }
 
     // ======================== Chapters =====================================
