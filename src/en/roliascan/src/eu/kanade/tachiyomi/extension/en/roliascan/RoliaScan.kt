@@ -60,6 +60,7 @@ class RoliaScan : ParsedHttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.parseAs<PopularWrapper>()
             .mangas.map(MangaDto::toSManga)
+            .filter { it.title.isNotEmpty() }
 
         return MangasPage(mangas, hasNextPage = false)
     }
