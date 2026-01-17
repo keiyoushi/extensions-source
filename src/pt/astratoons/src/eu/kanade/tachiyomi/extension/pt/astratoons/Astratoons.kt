@@ -126,8 +126,8 @@ class Astratoons : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("#reader-container canvas[data-src]").mapIndexed { index, element ->
-            val imageUrl = element.attr("data-src").replace("&amp;", "&")
+        return document.select("#reader-container img[src], #reader-container canvas[data-src]").mapIndexed { index, element ->
+            val imageUrl = element.attr("src").ifEmpty { element.attr("data-src") }
             Page(index, document.location(), imageUrl)
         }
     }
