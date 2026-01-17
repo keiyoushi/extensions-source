@@ -12,8 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -29,13 +29,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.regex.Pattern
+import kotlin.text.split
 
 abstract class MangaBox(
     override val name: String,
     private val mirrorEntries: Array<String>,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat(
-        "MMM-dd-yyyy HH:mm",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
         Locale.ENGLISH,
     ).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -69,6 +70,12 @@ abstract class MangaBox(
             field = preferences.getMirrorPref()
             return field
         }
+
+    private val apiChapterListUrl: String
+        get() = "$baseUrl/api/manga/__SLUG__/chapters"
+
+    private val apiChapterPageUrl: String
+        get() = "$baseUrl/manga/__MANGA__/__CHAPTER__"
 
     private val cdnSet =
         MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
@@ -280,21 +287,53 @@ abstract class MangaBox(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        if (manga.url.startsWith("http")) {
-            return GET(manga.url, headers)
-        }
-        return super.chapterListRequest(manga)
+        val slug = manga.url.split("/").last()
+        return GET("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=$CHAPTER_LIST_TAKE&offset=0", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val apiResult = response.parseAs<ApiResponse>()
 
-        return document.select(chapterListSelector())
-            .map { chapterFromElement(it) }
-            .also { if (it.isEmpty()) checkForRedirectMessage(document) }
+        val slug = response.request.url
+            .toString()
+            .trimEnd('/')
+            .split('/')
+            .let { it[it.size - 2] }
+
+        val rawChaptersList = mutableListOf<ApiChapter>()
+
+        rawChaptersList.addAll(apiResult.data.chapters)
+
+        // Iterate if chapter contains more than the initial take
+        if (apiResult.data.pagination.has_more) {
+            var offsetMultiple = 1
+            val baseChapterListUrl = apiChapterListUrl.replace("__SLUG__", slug)
+
+            while (true) {
+                val nextPageResponse = client.newCall(GET("$baseChapterListUrl?limit=$CHAPTER_LIST_TAKE&offset=${CHAPTER_LIST_TAKE * offsetMultiple}")).execute().parseAs<ApiResponse>()
+
+                rawChaptersList.addAll(nextPageResponse.data.chapters)
+
+                if (nextPageResponse.data.pagination.has_more) {
+                    offsetMultiple += 1
+                } else {
+                    break
+                }
+            }
+        }
+
+        return rawChaptersList.map { apiChapter ->
+            SChapter.create().apply {
+                name = apiChapter.chapter_name
+                url = apiChapterPageUrl.replace("__MANGA__", slug).replace("__CHAPTER__", apiChapter.chapter_slug)
+                chapter_number = apiChapter.chapter_num
+                scanlator = baseUrl.replace("https://", "")
+                date_upload = dateFormat.tryParse(apiChapter.updated_at)
+            }
+        }
     }
 
-    override fun chapterListSelector() = "div.chapter-list div.row, ul.row-content-chapter li"
+    override fun chapterListSelector() = String()
 
     protected open val alternateChapterDateSelector = String()
 
@@ -498,6 +537,7 @@ abstract class MangaBox(
 
     companion object {
         private const val PREF_USE_MIRROR = "pref_use_mirror"
+        private const val CHAPTER_LIST_TAKE = 1000
         private const val URL_PREFIX = "https://"
     }
 }
