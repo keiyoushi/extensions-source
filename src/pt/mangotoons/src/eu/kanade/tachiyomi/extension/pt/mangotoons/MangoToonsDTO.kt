@@ -100,12 +100,15 @@ class MangoPageResponse(
 
 @Serializable
 class MangoPageChapterDto(
+    @SerialName("obra_id") val obraId: Int,
+    val numero: Int,
     val paginas: List<MangoPageDto> = emptyList(),
 )
 
 @Serializable
 class MangoPageDto(
-    @SerialName("cdn_id") val url: String,
+    val numero: Int,
+    @SerialName("image_random_id") val imageRandomId: Long,
 )
 
 @Serializable
