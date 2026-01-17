@@ -8,16 +8,24 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class KomikCast : MangaThemesia("Komik Cast", "https://komikcast03.com", "id", "/daftar-komik") {
+class KomikCast : MangaThemesia(
+    name = "Komik Cast",
+    baseUrl = "https://komikcast03.com",
+    lang = "id",
+    mangaUrlDirectory = "/daftar-komik",
+    dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT),
+) {
 
     // Formerly "Komik Cast (WP Manga Stream)"
     override val id = 972717448578983812
@@ -103,25 +111,30 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast03.com", "id", "
     }
 
     private fun parseChapterDate2(date: String): Long {
+        val ts = dateFormat.tryParse(date)
+        if (ts != 0L) return ts
+
         return if (date.endsWith("ago")) {
-            val value = date.split(' ')[0].toInt()
+            val parts = date.split(' ').reversed()
+            val unit = parts.getOrNull(1) ?: return 0L
+            val value = parts.getOrNull(2)?.toIntOrNull() ?: return 0L
             when {
-                "min" in date -> Calendar.getInstance().apply {
+                "min" in unit -> Calendar.getInstance().apply {
                     add(Calendar.MINUTE, -value)
                 }.timeInMillis
-                "hour" in date -> Calendar.getInstance().apply {
+                "hour" in unit -> Calendar.getInstance().apply {
                     add(Calendar.HOUR_OF_DAY, -value)
                 }.timeInMillis
-                "day" in date -> Calendar.getInstance().apply {
+                "day" in unit -> Calendar.getInstance().apply {
                     add(Calendar.DATE, -value)
                 }.timeInMillis
-                "week" in date -> Calendar.getInstance().apply {
+                "week" in unit -> Calendar.getInstance().apply {
                     add(Calendar.DATE, -value * 7)
                 }.timeInMillis
-                "month" in date -> Calendar.getInstance().apply {
+                "month" in unit -> Calendar.getInstance().apply {
                     add(Calendar.MONTH, -value)
                 }.timeInMillis
-                "year" in date -> Calendar.getInstance().apply {
+                "year" in unit -> Calendar.getInstance().apply {
                     add(Calendar.YEAR, -value)
                 }.timeInMillis
                 else -> {
@@ -129,11 +142,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast03.com", "id", "
                 }
             }
         } else {
-            try {
-                dateFormat.parse(date)?.time ?: 0
-            } catch (_: Exception) {
-                0L
-            }
+            0L
         }
     }
 
