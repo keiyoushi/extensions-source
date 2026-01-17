@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -23,8 +24,6 @@ class ComicTop : ParsedHttpSource() {
     override val lang = "ja"
 
     override val supportsLatest = true
-
-    private val imageUrlPattern = Regex("""\"image\":\"([^\"]+)\"""")
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popular/page/$page", headers)
@@ -95,13 +94,10 @@ class ComicTop : ParsedHttpSource() {
             ?: throw Exception("Could not find chapter data script")
 
         val chapterJson = script.substringAfter("var chapter = ").substringBefore("};") + "}"
+        val chapterData = chapterJson.parseAs<ChapterDataDto>()
 
-        val imageUrls = imageUrlPattern.findAll(chapterJson).map {
-            it.groupValues[1].replace("""\\/""", "/")
-        }.toList()
-
-        return imageUrls.mapIndexed { index, url ->
-            val fullUrl = if (url.startsWith("//")) "https:$url" else url
+        return chapterData.values.mapIndexed { index, imageDto ->
+            val fullUrl = if (imageDto.image.startsWith("//")) "https:${imageDto.image}" else imageDto.image
             Page(index, imageUrl = fullUrl)
         }
     }
