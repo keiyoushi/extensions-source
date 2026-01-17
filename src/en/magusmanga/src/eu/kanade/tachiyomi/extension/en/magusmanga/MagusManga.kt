@@ -22,6 +22,8 @@ class MagusManga : Iken(
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
 
+    override val sortPagesByFilename = true
+
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
