@@ -153,6 +153,9 @@ abstract class Iken(
             .map { it.toSChapter(data.post.slug) }
     }
 
+    // some extensions need to sort image urls by filename, override this to true if so
+    protected open val sortPagesByFilename = false
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
@@ -160,8 +163,22 @@ abstract class Iken(
             throw Exception("Unlock chapter in webview")
         }
 
-        return document.getNextJson("images").parseAs<List<PageParseDto>>().mapIndexed { idx, p ->
-            Page(idx, imageUrl = p.url)
+        val pages = document.getNextJson("images").parseAs<List<PageParseDto>>()
+
+        val sortedPages = if (sortPagesByFilename) {
+            pages.sortedWith(
+                compareBy { page ->
+                    val filename = page.url.substringAfterLast('/')
+                    val number = Regex("\\d+").find(filename)?.value?.toIntOrNull() ?: Int.MAX_VALUE
+                    number
+                },
+            )
+        } else {
+            pages
+        }
+
+        return sortedPages.mapIndexed { idx, p ->
+            Page(idx, imageUrl = p.url.replace(" ", "%20"))
         }
     }
 

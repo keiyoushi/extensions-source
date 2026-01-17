@@ -3,7 +3,7 @@ ext {
     extClass = '.MagusManga'
     themePkg = 'iken'
     baseUrl = 'https://magustoon.org'
-    overrideVersionCode = 44
+    overrideVersionCode = 45
     isNsfw = false
 }
 
