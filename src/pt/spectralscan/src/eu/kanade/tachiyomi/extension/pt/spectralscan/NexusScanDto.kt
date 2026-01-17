@@ -68,6 +68,13 @@ class PageDto(
     val pageNumber: Int,
 )
 
+@Serializable
+class EncryptedResponse(
+    val d: String,
+    val k: Int = 0,
+    val v: Int,
+)
+
 // ==================== Conversion Functions ====================
 
 fun MangaListDto.toSManga() = SManga.create().apply {

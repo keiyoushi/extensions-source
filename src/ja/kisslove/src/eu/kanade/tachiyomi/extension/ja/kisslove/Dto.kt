@@ -55,6 +55,41 @@ data class Manga(
 }
 
 @Serializable
+data class ListPagedManga(
+    val currentPage: Long,
+    val items: List<MangaEntry>,
+    val totalItems: Long,
+    val totalPages: Long,
+)
+
+@Serializable
+data class MangaEntry(
+    val artists: String?,
+    val authors: String,
+    val cover: String,
+    val description: String = "",
+    val genres: List<String>?,
+    val hidden: Int?,
+    val id: Long,
+    @SerialName("m_status") val mStatus: Int,
+    val name: String,
+    @SerialName("other_name") val otherName: String,
+    val slug: String,
+    @SerialName("trans_group") val transGroup: String,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = this@MangaEntry.slug
+        title = this@MangaEntry.name
+        artist = this@MangaEntry.artists
+        author = this@MangaEntry.authors
+        description = "${Jsoup.parse(this@MangaEntry.description).text()}\n\n$otherName"
+        thumbnail_url = this@MangaEntry.cover
+        genre = this@MangaEntry.genres?.joinToString { it.trim() }
+        status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
+    }
+}
+
+@Serializable
 data class Chapter(
     val chapter: Double,
     val content: String = "",

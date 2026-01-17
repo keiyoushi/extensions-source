@@ -3,7 +3,7 @@ ext {
     extClass = '.SanaScans'
     themePkg = 'iken'
     baseUrl = 'https://sanascans.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 
