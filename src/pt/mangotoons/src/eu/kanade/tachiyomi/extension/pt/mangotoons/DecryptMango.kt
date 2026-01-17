@@ -8,7 +8,7 @@ import javax.crypto.spec.SecretKeySpec
 object DecryptMango {
 
     private const val SALT = "salt"
-    private const val KEY_STRING = "mangotoons_encryption_key_2025"
+    private const val KEY_STRING = "abmPisXlFjOLVTnYhbYQTpkWJtOGKwVttzLqstfjRBNVaEtQYF"
     private const val ALGORITHM = "AES"
     private const val TRANSFORMATION = "AES/CBC/PKCS5Padding"
 

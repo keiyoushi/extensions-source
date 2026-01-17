@@ -90,7 +90,8 @@ class MangoToons : HttpSource() {
 
     // ================= Details ===================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("/")
+        val rawId = manga.url.substringAfterLast("/")
+        val id = rawId.substringBefore("-")
         return GET("$baseUrl/api/obras/$id", headers)
     }
 
@@ -133,10 +134,12 @@ class MangoToons : HttpSource() {
 
         val result = decrypted.parseAs<MangoPageResponse>()
 
-        val pages = result.capitulo?.paginas ?: emptyList()
+        val capitulo = result.capitulo ?: return emptyList()
+        val obraId = capitulo.obraId
+        val chapterNumero = capitulo.numero
 
-        return pages.mapIndexed { index, pageDto ->
-            val imageUrl = if (pageDto.url.startsWith("http")) pageDto.url else "$cdnUrl/${pageDto.url}"
+        return capitulo.paginas.mapIndexed { index, pageDto ->
+            val imageUrl = "$baseUrl/api/cdn/obra/$obraId/capitulo/$chapterNumero/image/${pageDto.imageRandomId}"
             Page(index, imageUrl = imageUrl)
         }
     }
