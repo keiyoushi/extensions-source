@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangabat'
     themePkg = 'mangabox'
     baseUrl = 'https://www.mangabats.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
