@@ -20,11 +20,7 @@ class XkcdES : Xkcd("https://es.xkcd.com", "es") {
     override val imageSelector = "#middleContent .strip"
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val englishArchive = try {
-            getComicDateMappingFromEnglishArchive()
-        } catch (e: Exception) {
-            emptyMap()
-        }
+        val englishArchive = getComicDateMappingFromEnglishArchive()
 
         // hardcoded override for Spanish comic that maps to wrong English comic
         // Spanish "geografia" (1403) is actually English 1472 from 2015-01-12
@@ -43,29 +39,18 @@ class XkcdES : Xkcd("https://es.xkcd.com", "es") {
             val link = entry.selectFirst("a") ?: return@mapNotNull null
             val title = link.text()
 
-            // URLs are absolute, extract the path
-            val href = link.attr("href")
-            val url = if (href.startsWith("http")) {
-                href.substringAfter(baseUrl)
-            } else {
-                href
-            }
-
             val timeElement = entry.selectFirst("time") ?: return@mapNotNull null
             val datePart = timeElement.text()
 
             // check for hardcoded override first
-            val comicNumber = spanishOverrides[url] ?: dateToNumber[datePart] ?: return@mapNotNull null
+            val urlPath = link.attr("abs:href").substringAfter(baseUrl)
+            val comicNumber = spanishOverrides[urlPath] ?: dateToNumber[datePart] ?: return@mapNotNull null
 
             SChapter.create().apply {
-                this.url = url
+                setUrlWithoutDomain(link.attr("abs:href"))
                 name = chapterTitleFormatter(comicNumber, title)
                 chapter_number = comicNumber.toFloat()
-                date_upload = try {
-                    datePart.timestamp()
-                } catch (e: Exception) {
-                    0L
-                }
+                date_upload = datePart.timestamp()
             }
         }
     }

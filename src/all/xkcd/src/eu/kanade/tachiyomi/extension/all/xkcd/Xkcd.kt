@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -74,7 +75,7 @@ open class Xkcd(
         val normalized = this.split("-").let { parts ->
             "${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}"
         }
-        return dateFormat.parse(normalized)?.time ?: 0L
+        return dateFormat.tryParse(normalized)
     }
 
     val chapterTitleFormatter: (Int, String) -> String = { number, text -> "$number: $text" }
@@ -85,6 +86,7 @@ open class Xkcd(
 
     companion object {
         private const val CACHE_EXPIRY_MS = 60 * 60 * 1000L // 1 hour
+        private const val ENGLISH_BASE_URL = "https://xkcd.com"
 
         enum class OrganizationMethod(val key: String, val displayName: String) {
             SINGLE("SINGLE", "Single manga (all comics)"),
@@ -155,17 +157,20 @@ open class Xkcd(
     protected fun getComicDateMappingFromEnglishArchive(): Map<Int, String> {
         val now = System.currentTimeMillis()
         if (comicDateMapping == null || now - comicDateMappingTime > CACHE_EXPIRY_MS) {
-            // hardcode url and selector for English archive
-            val response = client.newCall(GET("https://xkcd.com/archive/", headers)).execute()
-            val doc = response.asJsoup()
-            comicDateMapping = doc.select("#middleContainer > a").associate { element ->
-                val number = element.attr("href").removeSurrounding("/").toInt()
-                val date = element.attr("title") // "2026-1-9" format
-                number to date
+            comicDateMapping = try {
+                val response = client.newCall(GET("$ENGLISH_BASE_URL/archive/", headers)).execute()
+                val doc = response.asJsoup()
+                doc.select("#middleContainer > a").associate { element ->
+                    val number = element.attr("href").removeSurrounding("/").toInt()
+                    val date = element.attr("title") // "2026-1-9" format
+                    number to date
+                }
+            } catch (e: Exception) {
+                emptyMap()
             }
             comicDateMappingTime = now
         }
-        return comicDateMapping!!
+        return comicDateMapping ?: emptyMap()
     }
 
     private fun getAllComicsAsChapters(): List<SChapter> {

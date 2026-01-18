@@ -31,11 +31,7 @@ class XkcdZH : Xkcd("https://xkcd.tw", "zh") {
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val englishDates = try {
-            getComicDateMappingFromEnglishArchive()
-        } catch (e: Exception) {
-            emptyMap()
-        }
+        val englishDates = getComicDateMappingFromEnglishArchive()
 
         return json.parseToJsonElement(response.body.string()).jsonObject.values.map {
             val obj = it.jsonObject

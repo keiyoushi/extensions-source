@@ -19,11 +19,7 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
     override val imageSelector = ".main"
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val englishDates = try {
-            getComicDateMappingFromEnglishArchive()
-        } catch (e: Exception) {
-            emptyMap()
-        }
+        val englishDates = getComicDateMappingFromEnglishArchive()
 
         return response.asJsoup().select(chapterListSelector).map {
             SChapter.create().apply {
@@ -45,20 +41,17 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
     }
 
     override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
-        return try {
-            container.child(5).child(0)
-        } catch (e: Exception) {
-            container.selectFirst("img")
-        }
+        return container.selectFirst("img[src*='/i/']")
     }
 
     override fun pageListParse(response: Response) =
-        response.asJsoup().selectFirst(imageSelector)!!.let {
+        response.asJsoup().selectFirst(imageSelector)!!.let { container ->
             // no interactive comics here
-            val img = it.child(5).child(0)
+            val img = container.selectFirst("img[src*='/i/']")!!
 
             // create a text image for the alt text
-            val text = TextInterceptorHelper.createUrl(img.attr("alt"), it.child(7).text())
+            val description = container.selectFirst(".comics_text")?.text() ?: img.attr("alt")
+            val text = TextInterceptorHelper.createUrl(img.attr("alt"), description)
 
             listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
         }

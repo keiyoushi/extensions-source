@@ -18,11 +18,7 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
     override val imageSelector = "#content .s"
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val englishDates = try {
-            getComicDateMappingFromEnglishArchive()
-        } catch (e: Exception) {
-            emptyMap()
-        }
+        val englishDates = getComicDateMappingFromEnglishArchive()
 
         val chapters = response.asJsoup().select(chapterListSelector).map {
             SChapter.create().apply {
@@ -47,34 +43,21 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
     }
 
     override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
-        return try {
-            container.child(2).child(0).child(0)
-        } catch (e: Exception) {
-            container.selectFirst("img")
-        }
+        return container.selectFirst("img[src^='strips/']")
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val container = response.asJsoup().selectFirst(imageSelector)
             ?: error(interactiveText)
 
-        // Try to find the image - French xkcd has a specific structure
-        val img = try {
-            container.child(2).child(0).child(0)
-        } catch (e: Exception) {
-            // Fallback: look for any img tag in the container
-            container.selectFirst("img") ?: error(interactiveText)
-        }
+        val img = container.selectFirst("img[src^='strips/']") ?: error(interactiveText)
 
         // Get alt text - try from first child, fallback to img alt
-        val altText = try {
-            container.child(0).text()
-        } catch (e: Exception) {
-            img.attr("alt")
-        }
+        val altText = container.selectFirst("div:not(.buttons)")?.text()?.takeIf { it.isNotBlank() }
+            ?: img.attr("alt")
 
         // create a text image for the alt text
-        val text = TextInterceptorHelper.createUrl(altText, img.attr("alt"))
+        val text = TextInterceptorHelper.createUrl(altText, img.attr("title"))
 
         return listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
     }
