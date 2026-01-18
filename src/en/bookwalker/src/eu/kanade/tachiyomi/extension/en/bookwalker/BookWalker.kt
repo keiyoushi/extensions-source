@@ -892,18 +892,17 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     }
                 }
 
-                @Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
-                if (authInfo != null) {
+                authInfo?.let {
                     val baseUrl = imageUrl.substringBefore("?")
                     val newUrl = baseUrl.toHttpUrl().newBuilder().apply {
-                        addQueryParameter("hti", authInfo!!.hti)
-                        addQueryParameter("cfg", authInfo!!.cfg.toString())
-                        addQueryParameter("bid", authInfo!!.bid)
-                        addQueryParameter("uuid", authInfo!!.uuid)
-                        addQueryParameter("pfCd", authInfo!!.pfCd)
-                        addQueryParameter("Policy", authInfo!!.policy)
-                        addQueryParameter("Signature", authInfo!!.signature)
-                        addQueryParameter("Key-Pair-Id", authInfo!!.keyPairId)
+                        addQueryParameter("hti", it.hti)
+                        addQueryParameter("cfg", it.cfg.toString())
+                        addQueryParameter("bid", it.bid)
+                        addQueryParameter("uuid", it.uuid)
+                        addQueryParameter("pfCd", it.pfCd)
+                        addQueryParameter("Policy", it.policy)
+                        addQueryParameter("Signature", it.signature)
+                        addQueryParameter("Key-Pair-Id", it.keyPairId)
                     }.build().toString()
 
                     return GET("$newUrl#$fragment", callHeaders)
