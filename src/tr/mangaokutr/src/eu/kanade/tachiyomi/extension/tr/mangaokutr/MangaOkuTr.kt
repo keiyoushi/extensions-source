@@ -9,7 +9,7 @@ import java.util.Locale
 
 class MangaOkuTr : MangaThemesia(
     "Manga Oku TR",
-    "https://mangaokutr.com",
+    "https://mangaokutr.net",
     "tr",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
 ) {
