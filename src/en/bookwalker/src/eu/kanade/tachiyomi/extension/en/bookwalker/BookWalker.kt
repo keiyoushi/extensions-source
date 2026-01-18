@@ -674,7 +674,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             }
 
             val isFreeChapter = document.selectFirst(".a-cart-btn:contains(Free)") != null
-            val initialReaderUrl = document.selectFirst("a.a-read-on-btn")?.attr("href")
+            val readerUrl = document.selectFirst("a.a-read-on-btn")?.attr("href")
                 ?: if (attemptToReadPreviews || isFreeChapter) {
                     document.selectFirst(".free-preview > a")?.attr("href")
                         ?: throw Error("No preview available")
@@ -682,7 +682,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     throw Error("You don't own this chapter, or you aren't logged in")
                 }
 
-            val chapterUrl = client.newCall(GET(initialReaderUrl, callHeaders)).await().request.url
+            val chapterUrl = client.newCall(GET(readerUrl, callHeaders)).await().request.url
             val cid = chapterUrl.queryParameter("cid")
             val cty = chapterUrl.queryParameter("cty")?.toIntOrNull()
             val isTrial = chapterUrl.host == "viewer-trial.$domain"
@@ -693,7 +693,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
             if (cid != null && !isTrial) {
                 if (cty != null && cty != 1 && cty != 2) {
-                    return@rxSingle webViewViewer(initialReaderUrl, pagesCount)
+                    return@rxSingle webViewViewer(readerUrl, pagesCount)
                 }
 
                 val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
@@ -710,7 +710,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                 val cResponse = client.newCall(GET(cApiUrl, callHeaders)).awaitSuccess()
                 val content = cResponse.parseAs<CPhpResponse>()
                 if (content.cty != 1 && content.cty != 2) {
-                    return@rxSingle webViewViewer(initialReaderUrl, pagesCount)
+                    return@rxSingle webViewViewer(readerUrl, pagesCount)
                 }
 
                 authCache[cid] = Pair(content.authInfo, System.currentTimeMillis())
@@ -778,7 +778,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
                 generatePages(pageContent, result.keys, contentUrl)
             } else {
-                webViewViewer(initialReaderUrl, pagesCount)
+                webViewViewer(readerUrl, pagesCount)
             }
         }.toObservable()
     }
@@ -892,6 +892,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     }
                 }
 
+                @Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
                 if (authInfo != null) {
                     val baseUrl = imageUrl.substringBefore("?")
                     val newUrl = baseUrl.toHttpUrl().newBuilder().apply {
