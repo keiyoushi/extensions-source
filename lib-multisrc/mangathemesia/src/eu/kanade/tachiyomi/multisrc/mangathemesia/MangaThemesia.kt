@@ -140,11 +140,12 @@ abstract class MangaThemesia(
         return super.searchMangaParse(response)
     }
 
-    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx"
+    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx, .listupd .manga-card-v"
+    open val searchMangaTitleSelector = ".bigor .tt, h3 a"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.select("img").imgAttr()
-        title = element.select("a").attr("title")
+        title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf { it.isNotBlank() } ?: element.select("a")!!.attr("title")
         setUrlWithoutDomain(element.select("a").attr("href"))
     }
 
@@ -155,9 +156,9 @@ abstract class MangaThemesia(
         return contains.joinToString(", ") { selector.replace("%s", it) }
     }
 
-    open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody"
+    open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody, div.lh-container"
 
-    open val seriesTitleSelector = "h1.entry-title, .ts-breadcrumb li:last-child span"
+    open val seriesTitleSelector = "h1.entry-title, .ts-breadcrumb li:last-child span, .lh-title"
 
     open val seriesArtistSelector = selector(
         ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)",
@@ -186,7 +187,7 @@ abstract class MangaThemesia(
         ),
     )
 
-    open val seriesDescriptionSelector = ".desc, .entry-content[itemprop=description]"
+    open val seriesDescriptionSelector = ".desc, .entry-content[itemprop=description], #manga-story"
 
     open val seriesAltNameSelector = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt, " +
         selector(
@@ -198,7 +199,7 @@ abstract class MangaThemesia(
             ),
         )
 
-    open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, " +
+    open val seriesGenreSelector = "div.gnr a, .mgen a, .seriestugenre a, .lh-genres a, " +
         selector(
             "span:contains(%s)",
             listOf(
@@ -219,7 +220,7 @@ abstract class MangaThemesia(
     ) + ", a[href*=type\\=]"
 
     open val seriesStatusSelector = selector(
-        ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s)",
+        ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span span:contains(%s), .status-badge-lux",
         listOf(
             "status",
             "Statut",
@@ -234,7 +235,7 @@ abstract class MangaThemesia(
         ),
     )
 
-    open val seriesThumbnailSelector = ".infomanga > div[itemprop=image] img, .thumb img"
+    open val seriesThumbnailSelector = ".infomanga > div[itemprop=image] img, .thumb img, .lh-poster img"
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
 
@@ -299,7 +300,7 @@ abstract class MangaThemesia(
     }
 
     // Chapter list
-    override fun chapterListSelector() = "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num)"
+    override fun chapterListSelector() = "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num), #chapters-list-container .ch-item"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -327,8 +328,8 @@ abstract class MangaThemesia(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
-        date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
+        name = element.select(".lch a, .chapternum, .ch-num").text().ifBlank { urlElements.first()!!.text() }
+        date_upload = element.selectFirst(".chapterdate, .ch-date")?.text().parseChapterDate()
     }
 
     protected open fun String?.parseChapterDate(): Long {

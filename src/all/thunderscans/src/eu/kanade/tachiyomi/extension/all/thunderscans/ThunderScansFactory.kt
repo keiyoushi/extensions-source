@@ -38,9 +38,9 @@ abstract class ThunderScansBase(
 
 class LavaScans : ThunderScansBase(
     "Lava Scans",
-    "https://lavatoons.com",
+    "https://lavascans.com",
     "ar",
-    dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
+    dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar")),
 ) {
     override val id = 3209001028102012989
 }
