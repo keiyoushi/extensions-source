@@ -114,8 +114,8 @@ object Publus {
                 k1 = k1,
                 k2 = k2,
                 k3 = k3,
-                s = p.scrambled,
                 extra = p.extra,
+                s = p.scrambled,
             )
 
             val fragmentJson = fragmentData.toJsonString()

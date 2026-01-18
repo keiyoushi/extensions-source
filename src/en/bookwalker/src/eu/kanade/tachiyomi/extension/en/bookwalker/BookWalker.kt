@@ -738,25 +738,23 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     put("cid", cid)
                     put("bid", "0")
                     put("cr", cr!!)
-                    put("base", viewerUrl)
                     if (u1 != null) put("u1", u1)
                     if (u2 != null) put("u2", u2)
                 }
 
-                val pageDefinitions = container.contents.mapIndexed { index, contentEntry ->
-                    val pageJson = rootJson[contentEntry.file]
-                        ?: throw Exception("Page config not found for ${contentEntry.file}")
+                val pageContent = container.contents.map {
+                    val pageJson = rootJson[it.file]
+                        ?: throw Exception("Page config not found for ${it.file}")
 
                     val pageConfig = pageJson.toString().parseAs<PublusPageConfig>()
                     val details = pageConfig.fileLinkInfo.pageLinkInfoList[0].page
                     val isScrambled = details.blockWidth > 0 && details.blockHeight > 0
-
                     val bw = if (details.blockWidth == 0) 32 else details.blockWidth
                     val bh = if (details.blockHeight == 0) 32 else details.blockHeight
 
                     PublusPage(
-                        index = index,
-                        filename = contentEntry.file,
+                        index = it.index,
+                        filename = it.file,
                         no = details.no,
                         ns = details.ns,
                         ps = details.ps,
@@ -778,7 +776,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     )
                 }
 
-                generatePages(pageDefinitions, result.keys, contentUrl)
+                generatePages(pageContent, result.keys, contentUrl)
             } else {
                 webViewViewer(initialReaderUrl, pagesCount)
             }
@@ -871,8 +869,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                         val currentCache = authCache[cid]
                         if (currentCache == null || System.currentTimeMillis() - currentCache.second > 45000) {
                             try {
-                                val viewerBase = extra["base"]!!
-                                val refreshUrl = "$viewerBase/browserWebApi/c".toHttpUrl().newBuilder().apply {
+                                val refreshUrl = "$viewerUrl/browserWebApi/c".toHttpUrl().newBuilder().apply {
                                     addQueryParameter("cid", cid)
                                     addQueryParameter("BID", extra["bid"])
                                     addQueryParameter("cr", extra["cr"])

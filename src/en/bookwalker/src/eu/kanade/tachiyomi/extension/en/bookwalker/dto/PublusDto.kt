@@ -35,6 +35,7 @@ class PublusConfiguration(
 @Serializable
 class PublusContentEntry(
     val file: String,
+    val index: Int,
 )
 
 @Serializable
