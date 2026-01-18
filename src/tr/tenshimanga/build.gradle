@@ -1,0 +1,8 @@
+ext {
+    extName = 'Tenshi Manga'
+    extClass = '.TenshiManga'
+    themePkg = 'uzaymanga'
+    overrideVersionCode = 2
+}
+
+apply from: "$rootDir/common.gradle"

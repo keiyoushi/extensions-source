@@ -1,7 +1,7 @@
 ext {
     extName = 'NineManga'
     extClass = '.NineMangaFactory'
-    extVersionCode = 22
+    extVersionCode = 25
 }
 
 apply from: "$rootDir/common.gradle"

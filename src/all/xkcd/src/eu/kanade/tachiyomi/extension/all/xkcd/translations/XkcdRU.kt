@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.xkcd.translations
 
 import eu.kanade.tachiyomi.extension.all.xkcd.Xkcd
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
@@ -12,8 +13,6 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
     override val creator = "Рэндел Манро"
 
     override val synopsis = "о романтике, сарказме, математике и языке"
-
-    override val altTextUrl = super.altTextUrl.replace("museo", "noto")
 
     override val chapterListSelector = ".main > a"
 
@@ -38,9 +37,9 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
             val img = it.child(5).child(0)
 
             // create a text image for the alt text
-            val text = wordWrap(img.attr("alt"), it.child(7).text())
+            val text = TextInterceptorHelper.createUrl(img.attr("alt"), it.child(7).text())
 
-            listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text.image()))
+            listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
         }
 
     override val interactiveText: String

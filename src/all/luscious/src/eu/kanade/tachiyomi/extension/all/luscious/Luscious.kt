@@ -21,14 +21,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -54,6 +55,11 @@ abstract class Luscious(
     private val apiBaseUrl: String = "$baseUrl/graphql/nobatch/"
 
     private val json: Json by injectLazy()
+
+    override fun headersBuilder(): Headers.Builder {
+        return super.headersBuilder()
+            .add("Referer", "$baseUrl/")
+    }
 
     override val client: OkHttpClient
         get() = network.cloudflareClient.newBuilder()
@@ -292,9 +298,9 @@ abstract class Luscious(
                             url.startsWith("//") -> chapter.url = "https:$url"
                             else -> chapter.url = url
                         }
-                        chapter.chapter_number = it.jsonObject["position"]!!.jsonPrimitive.int.toFloat()
+                        chapter.chapter_number = it.jsonObject["position"]!!.jsonPrimitive.double.toFloat()
                         chapter.name = chapter.chapter_number.toInt().toString() + " - " + it.jsonObject["title"]!!.jsonPrimitive.content
-                        chapter.date_upload = "${it.jsonObject["created"]!!.jsonPrimitive.long}000".toLong()
+                        chapter.date_upload = (it.jsonObject["created"]!!.jsonPrimitive.double.toLong()) * 1000
                         chapters.add(chapter)
                     }
                     if (nextPage) {
@@ -484,6 +490,12 @@ abstract class Luscious(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith("ID:")) {
             val id = query.substringAfterLast("ID:")
+            client.newCall(buildAlbumInfoRequest(id))
+                .asObservableSuccess()
+                .map { MangasPage(listOf(detailsParse(it)), false) }
+        } else if (query.startsWith("ALBUM:")) {
+            val album = query.substringAfterLast("ALBUM:")
+            val id = album.split("_").last()
             client.newCall(buildAlbumInfoRequest(id))
                 .asObservableSuccess()
                 .map { MangasPage(listOf(detailsParse(it)), false) }

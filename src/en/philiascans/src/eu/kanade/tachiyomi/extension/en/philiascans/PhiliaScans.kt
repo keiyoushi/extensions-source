@@ -1,107 +1,97 @@
 package eu.kanade.tachiyomi.extension.en.philiascans
 
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class PhiliaScans : HttpSource() {
-
-    override val name = "Philia Scans"
-    override val baseUrl = "https://philiascans.org"
-    override val lang = "en"
-    override val supportsLatest = true
+class PhiliaScans : Madara(
+    "Philia Scans",
+    "https://philiascans.org",
+    "en",
+) {
     override val versionId: Int = 3
 
-    override val client: OkHttpClient = network.cloudflareClient
-
     override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("post_type", "wp-manga")
-            addQueryParameter("s", "")
-            addQueryParameter("sort", "most_viewed")
-            addQueryParameter("paged", page.toString())
-        }.build()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("post_type", "wp-manga")
+            .addQueryParameter("s", "")
+            .addQueryParameter("sort", "most_viewed")
+            .addQueryParameter("paged", page.toString())
+            .build()
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.unit").map { popularMangaFromElement(it) }
-        val hasNextPage = document.selectFirst("li.page-item:not(.disabled) a.page-link[rel=next]") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val titleLink = element.selectFirst("a.c-title")!!
-        title = titleLink.text()
-        setUrlWithoutDomain(titleLink.attr("href"))
-        thumbnail_url = element.selectFirst("a.poster div.poster-image-wrapper > img")?.attr("abs:src")
-    }
+    override fun popularMangaSelector() = ".original .unit"
+    override val popularMangaUrlSelector = ".info a.c-title"
+    override val popularMangaUrlSelectorImg = ".poster img:not(.flag-icon)"
+    override fun popularMangaNextPageSelector() = ".pagination li:not(.disabled) .page-link[rel=next]"
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/recently-updated/?page=$page", headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
+        url.addQueryParameter("post_type", "wp-manga")
+        url.addQueryParameter("s", query)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("post_type", "wp-manga")
-            addQueryParameter("s", query)
-            addQueryParameter("paged", page.toString())
-
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortBy -> {
-                        val sort = filter.toUriPart()
-                        if (sort.isNotEmpty()) addQueryParameter("sort", sort)
+        filters.forEach { filter ->
+            when (filter) {
+                is TypeFilter -> {
+                    filter.state.filter { it.state }.forEachIndexed { index, item ->
+                        url.addQueryParameter("type[$index]", item.value)
                     }
-                    is TypeList ->
-                        filter.state
-                            .filter { it.state }
-                            .forEach { addQueryParameter("type[]", it.value) }
-                    is YearList ->
-                        filter.state
-                            .filter { it.state }
-                            .forEach { addQueryParameter("release[]", it.name) }
-                    is GenreList ->
-                        filter.state
-                            .filter { it.state }
-                            .forEach { addQueryParameter("genre[]", it.id) }
-                    is GenreInclusion -> {
-                        if (filter.state) addQueryParameter("genre_mode", "and")
-                    }
-                    else -> {}
                 }
+                is YearFilter -> {
+                    filter.state.filter { it.state }.forEachIndexed { index, item ->
+                        url.addQueryParameter("release[$index]", item.value)
+                    }
+                }
+                is OrderByFilter -> {
+                    url.addQueryParameter("sort", filter.toUriPart())
+                }
+                is GenreConditionFilter -> {
+                    if (filter.toUriPart().isNotEmpty()) {
+                        url.addQueryParameter("genre_mode", filter.toUriPart())
+                    }
+                }
+                is GenreList -> {
+                    filter.state.filter { it.state }.forEachIndexed { index, item ->
+                        url.addQueryParameter("genre[$index]", item.id)
+                    }
+                }
+                else -> {}
             }
-        }.build()
-        return GET(url, headers)
+        }
+        return GET(url.build(), headers)
     }
 
+    override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.serie-title")!!.text()
-            author = document.selectFirst(".stat-item:has(.stat-label:contains(Author)) .stat-value")?.text()
-            artist = document.selectFirst(".stat-item:has(.stat-label:contains(Artist)) .stat-value")?.text()
-            genre = document.select("div.genre-list a").joinToString { it.text() }
-            status = parseStatus(document.selectFirst(".stat-item:has(.stat-label:contains(Status)) span:not(.stat-label)")?.text())
-            description = document.selectFirst("div.description-content")?.text()
-            thumbnail_url = imageFromElement(document.selectFirst("div.main-cover img.cover"))
-        }
+    override val mangaDetailsSelectorTitle = "h1.serie-title"
+    override val mangaDetailsSelectorAuthor = ".stat-item:has(.stat-label:contains(Author)) .stat-value"
+    override val mangaDetailsSelectorArtist = ".stat-item:has(.stat-label:contains(Artist)) .stat-value"
+    override val mangaDetailsSelectorStatus = ".stat-item:has(.stat-label:contains(Status)) .manga"
+    override val mangaDetailsSelectorGenre = "div.genre-list a"
+    override val mangaDetailsSelectorDescription = "div.description-content"
+    override val mangaDetailsSelectorThumbnail = ".main-cover .cover"
+    override val altNameSelector = "h6.alternative-title"
+    override val seriesTypeSelector = ".stat-item:has(.stat-label:contains(Type)) .manga"
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        val manga = super.mangaDetailsParse(document)
+        manga.status = parseStatus(document.selectFirst(mangaDetailsSelectorStatus)?.text())
+        return manga
     }
 
     private fun parseStatus(status: String?): Int = when {
@@ -113,127 +103,113 @@ class PhiliaScans : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select("li.item")
-            .toList()
-            .filter { it.selectFirst("a")?.attr("href")?.contains("#") == false } // Filter Coin Chapters
-            .map { chapterFromElement(it) }
-    }
+    override fun chapterListSelector() = "li.item:not(:has(a[href='#'])):not(:has(.fa-coins))"
 
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val urlElement = element.selectFirst("a")!!
-        setUrlWithoutDomain(urlElement.attr("href"))
-        name = element.selectFirst("zebi")!!.text().trim()
+        setUrlWithoutDomain(urlElement.absUrl("href"))
+        name = element.selectFirst("zebi")!!.text()
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("div#ch-images img")
-            .mapIndexed { index, element ->
-                Page(index, imageUrl = imageFromElement(element))
-            }
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = if (fromSearch) {
+        url?.replace(
+            // try to resolve actual cover from thumbnail, usually has -280x400 suffix
+            "-280x400.",
+            ".",
+        )
+    } else {
+        url
     }
 
-    private fun imageFromElement(element: Element?): String? {
-        return when {
-            element == null -> null
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            else -> element.attr("abs:src")
+    override val pageListParseSelector = "div#ch-images img"
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
+        val filters = mutableListOf<Filter<*>>(
+            Filter.Header("NOTE: Filters are applied when you search."),
+            Filter.Separator(),
+            TypeFilter(),
+            Filter.Separator(),
+            OrderByFilter(
+                intl["order_by_filter_title"],
+                orderByFilterOptions.toList(),
+                0,
+            ),
+            Filter.Separator(),
+        )
+
+        if (yearsList.isNotEmpty()) {
+            filters.add(YearFilter("Year", yearsList))
+            filters.add(Filter.Separator())
+        }
+
+        if (genresList.isNotEmpty()) {
+            filters += listOf(
+                Filter.Separator(),
+                GenreConditionFilter(
+                    intl["genre_condition_filter_title"],
+                    genreConditionFilterOptions.toList(),
+                ),
+                Filter.Separator(),
+                GenreList(
+                    intl["genre_filter_title"],
+                    genresList,
+                ),
+            )
+        } else if (fetchGenres) {
+            filters += listOf(
+                Filter.Separator(),
+                Filter.Header(intl["genre_missing_warning"]),
+            )
+        }
+
+        return FilterList(filters)
+    }
+
+    override fun genresRequest(): Request = GET("$baseUrl/?post_type=wp-manga&s=", headers)
+
+    override fun parseGenres(document: Document): List<Genre> {
+        yearsList = document.select("input[name='release[]']").mapNotNull {
+            val value = it.attr("value")
+            val label = it.nextElementSibling()?.text() ?: value
+            Pair(label, value)
+        }
+
+        return document.select("ul.genres li").mapNotNull {
+            val label = it.selectFirst("label")?.text() ?: return@mapNotNull null
+            val value = it.selectFirst("input")?.attr("value") ?: return@mapNotNull null
+            Genre(label, value)
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private var yearsList: List<Pair<String, String>> = emptyList()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("NOTE: Filters are applied when you search."),
-            SortBy(),
-            TypeList(getTypeList()),
-            YearList(getYearList()),
-            Filter.Separator(),
-            GenreList(getGenreList()),
-            GenreInclusion(),
-        )
-    }
+    private class CheckBoxVal(name: String, val value: String) : Filter.CheckBox(name)
 
-    private class SortBy : UriPartFilter(
-        "Sort by",
-        arrayOf(
-            Pair("Default", ""),
-            Pair("Newest", "recently_added"),
-            Pair("Alphabetical", "title_az"),
-            Pair("Most Viewed", "most_viewed"),
-        ),
+    private class TypeFilter : Filter.Group<CheckBoxVal>(
+        "Type",
+        listOf(
+            Pair("Manga", "manga"),
+            Pair("Manhua", "manhua"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Seinen", "seinen"),
+        ).map { CheckBoxVal(it.first, it.second) },
     )
 
-    private class Type(name: String, val value: String) : Filter.CheckBox(name)
-    private class TypeList(types: List<Type>) : Filter.Group<Type>("Type", types)
-    private fun getTypeList() = listOf(
-        Type("Manga", "manga"),
-        Type("Manhua", "manhua"),
-        Type("Manhwa", "manhwa"),
-        Type("Seinen", "seinen"),
+    private class YearFilter(title: String, years: List<Pair<String, String>>) : Filter.Group<CheckBoxVal>(
+        title,
+        years.map { CheckBoxVal(it.first, it.second) },
     )
 
-    private class Year(name: String) : Filter.CheckBox(name)
-    private class YearList(years: List<Year>) : Filter.Group<Year>("Year", years)
-    private fun getYearList() = listOf(
-        Year("2025"),
-        Year("2024"),
-        Year("2023"),
-        Year("2022"),
-        Year("2021"),
-        Year("2020"),
-        Year("2019"),
+    override val orderByFilterOptions: Map<String, String> = mapOf(
+        intl["order_by_filter_relevance"] to "",
+        intl["order_by_filter_new"] to "recently_added",
+        intl["order_by_filter_az"] to "title_az",
+        intl["order_by_filter_views"] to "most_viewed",
     )
 
-    private class Genre(name: String, val id: String) : Filter.CheckBox(name)
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
-    private class GenreInclusion : Filter.CheckBox("Must include all selected genres")
-
-    private fun getGenreList() = listOf(
-        Genre("Action", "29"),
-        Genre("Adventure", "38"),
-        Genre("Comedy", "42"),
-        Genre("Crime", "30"),
-        Genre("Drama", "34"),
-        Genre("Ecchi", "39"),
-        Genre("Fantasy", "43"),
-        Genre("Gore", "157"),
-        Genre("Gourmet", "188"),
-        Genre("Harem", "46"),
-        Genre("Historical", "40"),
-        Genre("Horror", "44"),
-        Genre("Isekai", "31"),
-        Genre("Josei", "173"),
-        Genre("Josei-None", "302"),
-        Genre("Josei-Seinen", "174"),
-        Genre("Magic", "87"),
-        Genre("Martial Arts", "61"),
-        Genre("Medical", "32"),
-        Genre("Monsters", "99"),
-        Genre("Music", "303"),
-        Genre("Mystery", "35"),
-        Genre("Psychological", "62"),
-        Genre("Regression", "122"),
-        Genre("Romance", "33"),
-        Genre("School Life", "47"),
-        Genre("Sci-Fi", "36"),
-        Genre("Seinen", "48"),
-        Genre("Shoujo", "69"),
-        Genre("Shounen", "55"),
-        Genre("Slice of Life", "37"),
-        Genre("Sports", "45"),
-        Genre("Supernatural", "49"),
-        Genre("Survival", "121"),
-        Genre("Tragedy", "41"),
-        Genre("Villainess", "253"),
-        Genre("War", "120"),
-        Genre("Yuri", "195"),
+    override val genreConditionFilterOptions: Map<String, String> = mapOf(
+        intl["genre_condition_filter_or"] to "",
+        intl["genre_condition_filter_and"] to "and",
     )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
 }

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.roliascan
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,9 +10,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -22,6 +25,9 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Locale.getDefault
 
 // Theme: AnimaCEWP
 class RoliaScan : ParsedHttpSource() {
@@ -41,23 +47,22 @@ class RoliaScan : ParsedHttpSource() {
         .build()
 
     // ======================== Popular ======================================
-    private val popularFilter by lazy {
-        FilterList(SelectionList("", listOf(ratingList.maxBy { it.value })))
-    }
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilter)
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/wp-content/themes/animacewp/most_viewed_series.json", headers)
 
-    override fun popularMangaSelector() = searchMangaSelector()
+    override fun popularMangaSelector() = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage {
-        if (genreList.isEmpty()) {
-            getFilters(response)
-        }
-        return super.popularMangaParse(response)
+        val mangas = response.parseAs<PopularWrapper>()
+            .mangas.map(MangaDto::toSManga)
+            .filter { it.title.isNotEmpty() }
+
+        return MangasPage(mangas, hasNextPage = false)
     }
 
     // ======================== Latest =======================================
@@ -91,17 +96,6 @@ class RoliaScan : ParsedHttpSource() {
                         return@forEach
                     }
                     url.addQueryParameter(selected.query, selected.value)
-                }
-                is GenreList -> {
-                    val genres = filter.state
-                        .filter { it.state }
-                        .joinToString(",") { it.id }
-
-                    if (genres.isBlank()) {
-                        return@forEach
-                    }
-
-                    url.addQueryParameter("_genres", genres)
                 }
                 else -> {}
             }
@@ -146,9 +140,13 @@ class RoliaScan : ParsedHttpSource() {
         genre = document.select("a[href*=genres]")
             .joinToString { it.text() }
 
+        artist = document.selectFirst("tr:has(th:contains(Artist)) > td")?.text()
+
         document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
             status = when {
                 it.contains("publishing", true) -> SManga.ONGOING
+                it.contains("ongoing", true) -> SManga.ONGOING
+                it.contains("hiatus", true) -> SManga.ON_HIATUS
                 it.contains("completed", true) -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
@@ -160,48 +158,42 @@ class RoliaScan : ParsedHttpSource() {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = mutableListOf<SChapter>()
-        val url = "$baseUrl/wp-admin/admin-ajax.php"
 
-        val document = client.newCall(chapterListRequest(manga)).execute()
-            .asJsoup()
-
-        val postId = document
-            .select("input[name=current_page_id]")
-            .attr("value")
-
-        chapters += document.select(chapterListSelector()).map(::chapterFromElement)
-        val step = 20
-        var offset = step
+        var page = 1
 
         do {
-            val formBuilder = FormBody.Builder()
-                .add("action", "load_more_chapters")
-                .add("post_id", postId)
-                .add("offset", offset.toString())
-
-            val chapterPage = client.newCall(POST(url, headers, formBuilder.build())).execute().asJsoup()
+            val document = client.newCall(chapterListRequest(page++, manga)).execute().asJsoup()
+            chapters += document
                 .select(chapterListSelector())
                 .map(::chapterFromElement)
-
-            chapters += chapterPage
-            offset += step
-        } while (chapterPage.isNotEmpty())
+        } while (document.selectFirst(chapterListNextPageSelector) != null)
 
         return Observable.just(chapters)
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    private fun chapterListRequest(page: Int, manga: SManga): Request {
         val url = super.chapterListRequest(manga).url.newBuilder()
-            .addPathSegment("chapterlist")
+            .addEncodedPathSegments("chapterlist/")
+            .addQueryParameter("chap_page", page.toString())
             .build()
         return GET(url, headers)
     }
 
-    override fun chapterListSelector() = "a.seenchapter"
+    override fun chapterListRequest(manga: SManga): Request =
+        throw UnsupportedOperationException()
+
+    override fun chapterListSelector() = ".chapter-list-row:has(.chapter-cell)"
+
+    private val chapterListNextPageSelector = "a[class=page-link]:contains(Next)"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.text()
-        setUrlWithoutDomain(element.absUrl("href"))
+        with(element.selectFirst("a.seenchapter")!!) {
+            name = text()
+            setUrlWithoutDomain(absUrl("href"))
+        }
+        element.selectFirst(".chapter-date")?.text()?.let {
+            date_upload = DATE_FORMAT.tryParse(it)
+        }
     }
 
     // ======================== Pages ========================================
@@ -216,36 +208,23 @@ class RoliaScan : ParsedHttpSource() {
 
     // ======================== Filters ======================================
 
-    private var genreList = emptyList<Genre>()
-
-    private val ratingList = listOf(
-        Option("Any"),
-        Option("★★★★★ (5)", "5"),
-        Option("★★★★☆ (4)", "4"),
-        Option("★★★☆☆ (3)", "3"),
-        Option("★★☆☆☆ (2)", "2"),
-        Option("★☆☆☆☆ (1)", "1"),
-    ).map { it.copy(query = "_rating") }
-
     private var optionList = emptyList<Pair<String, List<Option>>>()
 
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            SelectionList("Rating", ratingList),
-        )
+    private val scope = CoroutineScope(Dispatchers.IO)
 
-        filters += optionList.flatMap {
-            listOf(
-                Filter.Separator(),
-                SelectionList(it.first, it.second),
-            )
+    override fun getFilterList(): FilterList {
+        if (optionList.isEmpty()) {
+            scope.launch { getFilters() }
         }
 
-        filters += if (genreList.isNotEmpty()) {
-            listOf(
-                Filter.Separator(),
-                GenreList(title = "Genres", genres = genreList),
-            )
+        val filters = mutableListOf<Filter<*>>()
+
+        filters += if (optionList.isNotEmpty()) {
+            optionList.flatMap {
+                listOf(
+                    SelectionList(it.first, it.second),
+                )
+            }
         } else {
             listOf(
                 Filter.Separator(),
@@ -255,30 +234,30 @@ class RoliaScan : ParsedHttpSource() {
         return FilterList(filters)
     }
 
-    private fun getFilters(response: Response) {
+    private fun getFilters() {
+        try {
+            parseFilters(client.newCall(searchMangaRequest(0, "", FilterList())).execute())
+        } catch (_: Exception) { }
+    }
+
+    private fun parseFilters(response: Response) {
         val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
 
         val script = document.selectFirst("script:containsData(FWP_JSON)")?.data()
             ?: return
 
-        script.getDocumentFragmentFilter(buildRegex("genres"))?.let {
-            genreList = it.select(".facetwp-checkbox").map { element ->
-                Genre(
-                    name = element.selectFirst(".facetwp-display-value")!!.text(),
-                    id = element.attr("data-value"),
-                )
-            }
-        }
-
         val queries = listOf(
+            "Type" to "mtype",
+            "Genres" to "genres",
+            "Status" to "status",
             "Sort" to "sort_posts",
             "Year" to "movies_series_year",
-            "Author" to "movies_series_staff",
+            "Publisher" to "movies_series_year",
         )
 
         optionList = queries.map {
             it.first to getOptionList(buildRegex(it.second), script)
-        }
+        }.filter { it.second.isNotEmpty() }
     }
 
     private fun getOptionList(pattern: Regex, content: String, cssQuery: String = "option"): List<Option> {
@@ -287,7 +266,8 @@ class RoliaScan : ParsedHttpSource() {
             ?.select(cssQuery)
             ?.map { element ->
                 Option(
-                    name = element.text(),
+                    name = element.text().replace(SUFFIX_REGEX, "")
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
                     value = element.attr("value"),
                     query = "_$query",
                 )
@@ -310,14 +290,9 @@ class RoliaScan : ParsedHttpSource() {
         fun selected() = vals[state]
     }
 
-    private class GenreList(title: String, genres: List<Genre>) :
-        Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
-
-    class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
-
-    class Genre(val name: String, val id: String = name.lowercase().replace(" ", "-"))
-
     companion object {
+        private val SUFFIX_REGEX = """\(\d+\)""".toRegex()
+        private val DATE_FORMAT = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
         const val PREFIX_SEARCH = "id:"
     }
 }

@@ -19,8 +19,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class TeamX : ParsedHttpSource(), ConfigurableSource {
@@ -114,14 +112,13 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
         return GET("$baseUrl/ajax/search?keyword=$query", headers)
     }
 
-    override fun searchMangaSelector() = "li.list-group-item"
+    override fun searchMangaSelector() = "a.items-center"
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            val urlAndText = element.select("div.ms-2 a")
-            title = urlAndText.text()
-            setUrlWithoutDomain(urlAndText.first()!!.absUrl("href"))
-            thumbnail_url = element.select("a img").first()!!.absUrl("src")
+            title = element.selectFirst("h4")!!.text()
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            setUrlWithoutDomain(element.absUrl("href"))
         }
     }
 
@@ -178,30 +175,26 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
         return allElements.map { chapterFromElement(it) }
     }
 
-    private val chapterFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.getDefault())
-
-    override fun chapterListSelector() = "div.eplister ul a"
+    override fun chapterListSelector() = "div.chapter-card"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            val chpNum = element.select("div.epl-num").text()
-            val chpTitle = element.select("div.epl-title").text()
+            val chpNum = element.select("div.chapter-info div.chapter-number").text()
+            val chpTitle = element.select("div.chapter-info div.chapter-title").text()
 
             name = when (chpNum.isNullOrBlank()) {
                 true -> chpTitle
                 false -> "$chpNum - $chpTitle"
             }
 
-            date_upload = parseChapterDate(element.select("div.epl-date").text())
+            // data-date is Unix timestamp (seconds)
+            date_upload = element.attr("data-date")
+                .toLongOrNull()
+                ?.times(1000)
+                ?: 0L
 
-            setUrlWithoutDomain(element.attr("href"))
+            setUrlWithoutDomain(element.select("a").attr("href"))
         }
-    }
-
-    private fun parseChapterDate(date: String): Long {
-        return runCatching {
-            chapterFormat.parse(date)?.time
-        }.getOrNull() ?: 0
     }
 
     private fun String?.toStatus() = when (this) {

@@ -23,7 +23,7 @@ class Shinigami : HttpSource() {
 
     override val name = "Shinigami"
 
-    override val baseUrl = "https://app.shinigami.asia"
+    override val baseUrl = "https://08.shinigami.asia"
 
     private val apiUrl = "https://api.shngm.io"
 
@@ -107,12 +107,70 @@ class Shinigami : HttpSource() {
             url.addQueryParameter("q", query)
         }
 
-        // TODO: search by tag/genre/status/etc
+        filters.filterIsInstance<UriFilter>().forEach {
+            it.addToUri(url)
+        }
 
         return GET(url.build(), apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            SortFilter(),
+            SortOrderFilter(),
+            StatusFilter(),
+            FormatFilter(),
+            TypeFilter(),
+            GenreFilter(getGenres()),
+        )
+    }
+
+    private fun getGenres(): Array<Pair<String, String>> = arrayOf(
+        Pair("Action", "action"),
+        Pair("Adaptation", "adaptation"),
+        Pair("Adult", "adult"),
+        Pair("Adventure", "adventure"),
+        Pair("Comedy", "comedy"),
+        Pair("Cooking", "cooking"),
+        Pair("Crime", "crime"),
+        Pair("Demon", "demon"),
+        Pair("Demons", "demons"),
+        Pair("Drama", "drama"),
+        Pair("Ecchi", "ecchi"),
+        Pair("Fantasy", "fantasy"),
+        Pair("Fight", "fight"),
+        Pair("Game", "game"),
+        Pair("Gender Bender", "gender-bender"),
+        Pair("Harem", "harem"),
+        Pair("Historical", "historical"),
+        Pair("Horror", "horror"),
+        Pair("Isekai", "isekai"),
+        Pair("Magic", "magic"),
+        Pair("Martial Arts", "martial-arts"),
+        Pair("Mature", "mature"),
+        Pair("Mecha", "mecha"),
+        Pair("Medical", "medical"),
+        Pair("Murim", "murim"),
+        Pair("Mystery", "mystery"),
+        Pair("Philosophical", "philosophical"),
+        Pair("Psychological", "psychological"),
+        Pair("Regression", "regression"),
+        Pair("Revenge", "revenge"),
+        Pair("Romance", "romance"),
+        Pair("School Life", "school-life"),
+        Pair("Sci-fi", "sci-fi"),
+        Pair("Seinen", "seinen"),
+        Pair("Shoujo", "shoujo"),
+        Pair("Shounen", "shounen"),
+        Pair("Slice of Life", "slice-of-life"),
+        Pair("Smut", "smut"),
+        Pair("Sports", "sports"),
+        Pair("Supernatural", "supernatural"),
+        Pair("Thriller", "thriller"),
+        Pair("Tragedy", "tragedy"),
+    )
 
     override fun getMangaUrl(manga: SManga): String {
         return "$baseUrl/series/${manga.url}"

@@ -1,7 +1,7 @@
 ext {
     extName = 'Tapas'
     extClass = '.Tapastic'
-    extVersionCode = 22
+    extVersionCode = 24
     isNsfw = true
 }
 

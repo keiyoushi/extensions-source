@@ -1,7 +1,8 @@
 ext {
     extName = 'Rolia Scan'
     extClass = '.RoliaScan'
-    extVersionCode = 2
+    extVersionCode = 7
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

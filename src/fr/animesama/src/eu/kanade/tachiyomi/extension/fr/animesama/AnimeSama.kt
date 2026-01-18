@@ -30,15 +30,17 @@ class AnimeSama : ParsedHttpSource() {
 
     override val name = "AnimeSama"
 
-    override val baseUrl = "https://anime-sama.fr"
+    override val baseUrl = "https://anime-sama.pw"
 
     private val cdn = "$baseUrl/s2/scans/"
 
     override val lang = "fr"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
+    private val interceptor = AnimeSamaInterceptor(network.cloudflareClient, baseUrl, headers)
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(interceptor)
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
@@ -62,9 +64,9 @@ class AnimeSama : ParsedHttpSource() {
     private fun filtersRequest() = GET("$baseUrl/catalogue", headers)
 
     private fun parseFilters(document: Document) {
-        genreList = document.select("#list_genres label").mapNotNull { labelElement ->
+        genreList = document.select("#list_genres #genreList label").mapNotNull { labelElement ->
             val input = labelElement.selectFirst("input[name=genre[]]") ?: return@mapNotNull null
-            val labelText = labelElement.ownText()
+            val labelText = labelElement.selectFirst("span")?.text() ?: return@mapNotNull null
             val value = input.attr("value")
             labelText to value
         }
@@ -99,7 +101,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h1").text()
+            title = element.select(".card-title").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
@@ -116,7 +118,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h1").text()
+            title = element.select(".card-title").text()
             setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
             thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
@@ -341,5 +343,17 @@ class AnimeSama : ParsedHttpSource() {
             .build()
 
         return GET(page.imageUrl!!, imgHeaders)
+    }
+
+    fun convertUrlToLatestDomain(url: String): String {
+        return "${interceptor.getBaseUrl()!!}$url"
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        return convertUrlToLatestDomain(manga.url)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return convertUrlToLatestDomain(chapter.url)
     }
 }

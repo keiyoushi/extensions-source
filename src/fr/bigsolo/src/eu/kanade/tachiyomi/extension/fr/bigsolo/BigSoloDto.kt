@@ -9,91 +9,69 @@ import kotlinx.serialization.Serializable
  */
 
 @Serializable
-data class ConfigResponse(
-    @SerialName("LOCAL_SERIES_FILES")
-    val localSeriesFiles: List<String>,
+class SeriesResponse(
+    val series: List<Serie>,
+    val os: List<Serie>,
+    val reco: List<Serie>,
 )
 
 @Serializable
-data class SeriesData(
+class Serie(
+    val slug: String = "",
     val title: String,
-    val description: String?,
-    val artist: String?,
-    val author: String?,
-    @SerialName("cover_low")
-    val coverLow: String?,
-    @SerialName("cover_hq")
-    val coverHq: String?,
-    val tags: List<String>?,
-    @SerialName("release_status")
-    val releaseStatus: String?,
-    val chapters: Map<String, ChapterData>?,
+    val description: String,
+    val artist: String,
+    val author: String,
+    val tags: List<String>,
+    @SerialName("ja_title")
+    val jaTitle: String,
+    @SerialName("alternative_titles")
+    val alternativeTitles: List<String>,
+    val status: String,
+    val cover: Cover? = null,
+    val chapters: Map<String, Chapter>,
+    @SerialName("last_chapter")
+    val lastChapter: lastChapter? = null,
 )
 
 @Serializable
-data class ReaderData(
-    val series: SeriesData,
+class lastChapter(
+    val timestamp: Int,
 )
 
 @Serializable
-data class ChapterData(
-    val title: String?,
-    val volume: String?,
-    @SerialName("last_updated")
-    val lastUpdated: Long?,
+class Chapter(
+    val title: String,
+    val volume: String = "",
+    val timestamp: Int,
+    val teams: List<String>,
+    @SerialName("licensed")
     val licencied: Boolean = false,
-    val groups: Map<String, String>?,
 )
 
 @Serializable
-data class PageData(
-    val link: String,
+class ChapterDetails(
+    val images: List<String>,
+)
+
+@Serializable
+class Cover(
+    @SerialName("url_hq")
+    val urlHq: String,
 )
 
 // DTO to SManga extension functions
-fun SeriesData.toSManga(): SManga = SManga.create().apply {
-    title = this@toSManga.title
-    artist = this@toSManga.artist
-    author = this@toSManga.author
-    thumbnail_url = this@toSManga.coverLow
-    url = "/${toSlug(this@toSManga.title)}"
-}
-
-fun SeriesData.toDetailedSManga(): SManga = SManga.create().apply {
+fun Serie.toDetailedSManga(): SManga = SManga.create().apply {
     title = this@toDetailedSManga.title
     description = this@toDetailedSManga.description
     artist = this@toDetailedSManga.artist
     author = this@toDetailedSManga.author
-    genre = this@toDetailedSManga.tags?.joinToString(", ") ?: ""
-    status = when (this@toDetailedSManga.releaseStatus) {
+    genre = this@toDetailedSManga.tags.joinToString()
+    status = when (this@toDetailedSManga.status) {
         "En cours" -> SManga.ONGOING
         "Finis", "Fini" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
-    thumbnail_url = this@toDetailedSManga.coverHq
-    url = "/${toSlug(this@toDetailedSManga.title)}"
-}
-
-// Utility function for slug generation
-// URLs are manually calculated using a slugify function
-fun toSlug(input: String?): String {
-    if (input == null) return ""
-
-    val accentsMap = mapOf(
-        'à' to 'a', 'á' to 'a', 'â' to 'a', 'ä' to 'a', 'ã' to 'a',
-        'è' to 'e', 'é' to 'e', 'ê' to 'e', 'ë' to 'e',
-        'ì' to 'i', 'í' to 'i', 'î' to 'i', 'ï' to 'i',
-        'ò' to 'o', 'ó' to 'o', 'ô' to 'o', 'ö' to 'o', 'õ' to 'o',
-        'ù' to 'u', 'ú' to 'u', 'û' to 'u', 'ü' to 'u',
-        'ç' to 'c', 'ñ' to 'n',
-    )
-
-    return input
-        .lowercase()
-        .map { accentsMap[it] ?: it }
-        .joinToString("")
-        .replace("[^a-z0-9\\s-]".toRegex(), "")
-        .replace("\\s+".toRegex(), "-")
-        .replace("-+".toRegex(), "-")
-        .trim('-')
+    thumbnail_url = this@toDetailedSManga.cover?.urlHq
+    url = "/${this@toDetailedSManga.slug}"
 }

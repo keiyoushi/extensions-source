@@ -166,7 +166,7 @@ class Tappytoon(override val lang: String) : HttpSource() {
                 name = it.toString()
                 url = it.id.toString()
                 chapter_number = it.order + 1f
-                date_upload = dateFormat.parse(it.createdAt)?.time ?: 0L
+                date_upload = dateFormat.parse(it.willAccessibleAt)?.time ?: 0L
             }
         }
 

@@ -1,14 +1,15 @@
 package eu.kanade.tachiyomi.extension.all.foamgirl
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -25,6 +26,10 @@ class FoamGirl() : ParsedHttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
 
     // Popular
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
@@ -67,43 +72,21 @@ class FoamGirl() : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun pageListParse(document: Document): List<Page> {
-        val imageCount = document.select(".post_title_topimg").text().substringAfter("(").substringBefore("P").toInt()
-        val imageUrl = document.select(".imageclick-imgbox").attr("href").toHttpUrl()
-        val baseIndex = imageUrl.pathSegments.last().substringBefore(".")
+        val pages = document.select(".imageclick-imgbox")
+            .mapIndexed { index, element ->
+                Page(index, imageUrl = element.absUrl("href"))
+            }
 
-        return if (baseIndex.isNumber()) {
-            getPagesListByNumber(imageCount, imageUrl, baseIndex)
-        } else {
-            getPageListByDocument(document)
-        }
-    }
-
-    private fun getPagesListByNumber(imageCount: Int, imageUrl: HttpUrl, baseIndex: String): List<Page> {
-        val imagePrefix = baseIndex.toLong() / 10
-        return (0 until imageCount).map { index ->
-            Page(
-                index,
-                imageUrl = imageUrl.newBuilder().apply {
-                    removePathSegment(imageUrl.pathSize - 1)
-                    addPathSegment("${imagePrefix}${index + 2}.jpg")
-                }.build().toString(),
-            )
-        }
-    }
-
-    private fun getPageListByDocument(document: Document): List<Page> {
-        val pages = document.select("#image_div img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
-        }.toList()
-
-        val nextPageUrl = document.selectFirst(".page-numbers[title=Next]")
+        val nextPageUrl = document.selectFirst(".page-numbers[title=Next page]")
             ?.absUrl("href")
             ?.takeIf { HAS_NEXT_PAGE_REGEX in it }
             ?: return pages
 
-        return client.newCall(GET(nextPageUrl, headers)).execute().asJsoup().let {
-            pages + getPageListByDocument(it)
-        }
+        val nextDoc = client.newCall(GET(nextPageUrl, headers))
+            .execute()
+            .asJsoup()
+
+        return pages + pageListParse(nextDoc)
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
@@ -122,7 +105,7 @@ class FoamGirl() : ParsedHttpSource() {
         throw UnsupportedOperationException()
     }
 
-    override fun latestUpdatesNextPageSelector(): String? {
+    override fun latestUpdatesNextPageSelector(): String {
         throw UnsupportedOperationException()
     }
 
@@ -137,12 +120,10 @@ class FoamGirl() : ParsedHttpSource() {
     private fun getDate(str: String): Long {
         return try {
             DATE_FORMAT.parse(str)?.time ?: 0L
-        } catch (e: ParseException) {
+        } catch (_: ParseException) {
             0L
         }
     }
-
-    private fun String.isNumber() = isNotEmpty() && all { it.isDigit() }
 
     companion object {
         val HAS_NEXT_PAGE_REGEX = """(\d+_\d+)""".toRegex()

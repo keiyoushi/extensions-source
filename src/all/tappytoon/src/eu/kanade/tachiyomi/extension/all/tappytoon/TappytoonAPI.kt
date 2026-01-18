@@ -41,7 +41,7 @@ class Chapter(
     private val isFree: Boolean,
     private val isUserUnlocked: Boolean,
     private val isUserRented: Boolean,
-    val createdAt: String,
+    val willAccessibleAt: String,
 ) : Accessible {
     override fun toString() = buildString {
         append(title)

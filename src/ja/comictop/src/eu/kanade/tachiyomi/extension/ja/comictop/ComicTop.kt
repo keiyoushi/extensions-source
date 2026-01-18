@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -76,17 +77,28 @@ class ComicTop : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         with(element.selectFirst("a[title]")!!) {
-            url = "/" + attr("abs:href").toHttpUrl().queryParameter("ct")!!
+            setUrlWithoutDomain(attr("abs:href"))
             name = attr("title")
         }
         date_upload = dateFormat.tryParse(element.selectFirst(".date")?.text())
-        chapter_number = element.getElementsByTag("chapter").text().toFloatOrNull()!!
+        element.getElementsByTag("chapter").text().toFloatOrNull()?.let { chapter_number = it }
     }
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#imagech").map { it ->
-            Page(it.attr("img-id").toInt(), imageUrl = it.imgAttr()!!)
+        // images are being loaded via js:
+        // var chapter = {
+        //   "1" : { "image" : "\/\/cdn.comic-top.com\/uploads\/comic-top\/2025\/20250103\/KC_003961_S\/KC_0039610002800041_E\/39.jpg"},
+        //   "2" : { "image" : etc...
+        val script = document.selectFirst("script:containsData(var chapter)")?.data()
+            ?: throw Exception("Could not find chapter data script")
+
+        val chapterJson = script.substringAfter("var chapter = ").substringBefore("};") + "}"
+        val chapterData = chapterJson.parseAs<ChapterDataDto>()
+
+        return chapterData.values.mapIndexed { index, imageDto ->
+            val fullUrl = if (imageDto.image.startsWith("//")) "https:${imageDto.image}" else imageDto.image
+            Page(index, imageUrl = fullUrl)
         }
     }
 

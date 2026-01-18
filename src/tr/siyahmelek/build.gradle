@@ -1,9 +1,9 @@
 ext {
-    extName = 'Gri Melek'
+    extName = 'Siyah Melek'
     extClass = '.Siyahmelek'
-    themePkg = 'madara'
-    baseUrl = 'https://siyahmelek.org'
-    overrideVersionCode = 13
+    themePkg = 'initmanga'
+    baseUrl = 'https://siyahmelek.lol'
+    overrideVersionCode = 58
     isNsfw = true
 }
 

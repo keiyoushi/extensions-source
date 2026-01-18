@@ -34,6 +34,7 @@ class SuccessResult(
     val mangaViewer: MangaViewer? = null,
     val allTitlesViewV2: AllTitlesViewV2? = null,
     val webHomeViewV4: WebHomeViewV4? = null,
+    val homeViewV3: HomeViewV3? = null,
 )
 
 @Serializable
@@ -60,6 +61,11 @@ class WebHomeViewV4(
     val groups: List<UpdatedTitleV2Group> = emptyList(),
     val rankedTitles: List<RankedTitle> = emptyList(),
     val featuredTitleLists: List<FeaturedTitleList> = emptyList(),
+)
+
+@Serializable
+class HomeViewV3(
+    val groups: List<UpdatedTitleV2Group> = emptyList(),
 )
 
 @Serializable

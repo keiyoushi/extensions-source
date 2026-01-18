@@ -32,6 +32,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.text.Regex
 
 class MangaPark(
     override val lang: String,
@@ -59,8 +60,7 @@ class MangaPark(
             addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         }
         rateLimitHost(apiUrl.toHttpUrl(), 1)
-        // intentionally after rate limit interceptor so thumbnails are not rate limited
-        addInterceptor(::thumbnailDomainInterceptor)
+        addInterceptor(::imageFallbackInterceptor)
     }.build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -268,6 +268,19 @@ class MangaPark(
     private val cookiesNotSet = AtomicBoolean(true)
     private val latch = CountDownLatch(1)
 
+    private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+        val fixedUrl = url.newBuilder()
+            .host(baseUrl.toHttpUrl().host)
+            .build()
+        val newRequest = request.newBuilder()
+            .url(fixedUrl)
+            .build()
+
+        return chain.proceed(newRequest)
+    }
+
     // sets necessary cookies to not block genres like `Hentai`
     private fun siteSettingsInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -294,30 +307,13 @@ class MangaPark(
         return chain.proceed(request)
     }
 
-    private fun thumbnailDomainInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url
-
-        return if (url.host == THUMBNAIL_LOOPBACK_HOST) {
-            val newUrl = url.newBuilder()
-                .host(domain)
-                .build()
-
-            val newRequest = request.newBuilder()
-                .url(newUrl)
-                .build()
-
-            chain.proceed(newRequest)
-        } else {
-            chain.proceed(request)
-        }
-    }
-
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
 
     companion object {
+        private val SERVER_PATTERN = Regex("https://s\\d{2}")
+
         private const val size = 24
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
 

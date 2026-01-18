@@ -3,8 +3,12 @@ ext {
     extClass = '.Bakamh'
     themePkg = 'madara'
     baseUrl = 'https://bakamh.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 5
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:randomua"))
+}

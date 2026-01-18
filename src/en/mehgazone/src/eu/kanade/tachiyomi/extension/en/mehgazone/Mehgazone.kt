@@ -14,6 +14,8 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.en.mehgazone.interceptors.BasicAuthInterceptor
 import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.ChapterListDto
 import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.PageListDto
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -55,6 +57,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     override val client: OkHttpClient by lazy {
         network.cloudflareClient
             .newBuilder()
+            .addInterceptor(TextInterceptor())
             .addInterceptor(authInterceptor)
             .build()
     }
@@ -62,10 +65,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     private val uploadDateFormat: SimpleDateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
     }
-
-    private val textToImageURL = "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42".toHttpUrl()
-
-    private fun String.image() = textToImageURL.newBuilder().setQueryParameter("text", this).build().toString()
 
     private fun String.unescape() = unescapeEntities(this, false)
 
@@ -172,19 +171,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
             }.reversed()
     }
 
-    // Adapted from the xkcd source's wordWrap function
-    private fun wordWrap(text: String) = buildString {
-        var charCount = 0
-        text.replace('\n', ' ').split(' ').forEach { w ->
-            if (charCount > 25) {
-                append("\n")
-                charCount = 0
-            }
-            append(w).append(' ')
-            charCount += w.length + 1
-        }
-    }
-
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.toHttpUrl()
         val pageListUrl = chapterUrl
@@ -208,7 +194,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 Page(
                     images.size,
                     "",
-                    wordWrap(Jsoup.parseBodyFragment(apiResponse.excerpt.rendered.unescape()).text()).image(),
+                    TextInterceptorHelper.createUrl("", Jsoup.parseBodyFragment(apiResponse.excerpt.rendered.unescape()).text()),
                 ),
             )
         }

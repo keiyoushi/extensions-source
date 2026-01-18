@@ -89,7 +89,7 @@ class MangaPoisk : ParsedHttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = if (document.location().contains("search?q")) {
+        val mangas = if (document.location().toHttpUrl().queryParameter("q") != null) {
             document.select(searchMangaSelector()).map { element ->
                 searchMangaFromElement(element)
             }

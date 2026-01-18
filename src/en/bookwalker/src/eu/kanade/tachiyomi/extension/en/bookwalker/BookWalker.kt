@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
-import android.app.Application
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -8,7 +7,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.en.bookwalker.dto.HoldBookEntityDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.BookUpdateDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.HoldBooksInfoDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SingleDto
@@ -31,11 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.plus
-import kotlinx.serialization.modules.polymorphic
-import kotlinx.serialization.modules.subclass
+import kotlinx.coroutines.runBlocking
 import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -46,18 +41,23 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import rx.Single
-import uy.kohesive.injekt.injectLazy
 import java.util.regex.PatternSyntaxException
+import kotlin.collections.component1
 
 class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences {
 
     override val name = "BookWalker Global"
+    private val domain = "bookwalker.jp"
 
-    override val baseUrl = "https://global.bookwalker.jp"
+    override val baseUrl = "https://global.$domain"
 
     override val lang = "en"
 
     override val supportsLatest = true
+
+    private val rimgUrl = "https://rimg.$domain"
+    private val cUrl = "https://c.$domain"
+    private val memberApiUrl = "https://member-app.$domain/api"
 
     override val client = network.client.newBuilder()
         .addInterceptor(BookWalkerImageRequestInterceptor(this))
@@ -71,18 +71,6 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     val callHeaders = headers.newBuilder()
         .set("User-Agent", USER_AGENT_DESKTOP)
         .build()
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        serializersModule += SerializersModule {
-            polymorphic(HoldBookEntityDto::class) {
-                subclass(SingleDto::class)
-                subclass(SeriesDto::class)
-            }
-        }
-    }
-
-    val app by injectLazy<Application>()
 
     private val preferences by getPreferencesLazy()
 
@@ -107,6 +95,9 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
     override val attemptToReadPreviews
         get() = preferences.getBoolean(PREF_ATTEMPT_READ_PREVIEWS, false)
+
+    override val useEarliestThumbnail: Boolean
+        get() = preferences.getBoolean(PREF_USE_EARLIEST_THUMBNAIL, false)
 
     override val excludeCategoryFilters
         get() = Regex(
@@ -193,6 +184,15 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             key = PREF_SHOW_LIBRARY_IN_POPULAR
             title = "Show My Library in Popular"
             summary = "Show your library instead of popular manga when browsing \"Popular\"."
+
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_EARLIEST_THUMBNAIL
+            title = "Use First Volume Cover For Thumbnail"
+            summary = "This does not affect browsing, and may not work properly for chapter " +
+                "releases or for series with a very large number of volumes."
 
             setDefaultValue(false)
         }.also(screen::addPreference)
@@ -318,22 +318,31 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
     override fun popularMangaParse(response: Response): MangasPage {
         if (showLibraryInPopular) {
-            val manga = response.parseAs<HoldBooksInfoDto>().holdBookList.entities
-                .map {
-                    when (it) {
-                        is SeriesDto -> SManga.create().apply {
-                            url = "/series/${it.seriesId}/"
-                            title = it.seriesName.cleanTitle()
-                            thumbnail_url = it.imageUrl
-                        }
-                        is SingleDto -> SManga.create().apply {
-                            url = it.detailUrl.substring(baseUrl.length)
-                            title = it.title.cleanTitle()
-                            thumbnail_url = it.imageUrl
-                            author = it.authors.joinToString { a -> a.authorName }
+            val manga = runBlocking(Dispatchers.IO) {
+                response.parseAs<HoldBooksInfoDto>().holdBookList.entities
+                    .mapNotNull { entity ->
+                        when (entity) {
+                            is SeriesDto -> {
+                                SManga.create().apply {
+                                    url = "/series/${entity.seriesId}/"
+                                    title = entity.seriesName.cleanTitle()
+                                    thumbnail_url = getHiResCoverFromLegacyUrl(entity.imageUrl)
+                                }
+                            }
+                            is SingleDto -> {
+                                val bookUpdate = fetchBookUpdate(entity.uuid)
+                                bookUpdate?.let { bookUpdate ->
+                                    SManga.create().apply {
+                                        url = "/de${entity.uuid}/"
+                                        title = bookUpdate.seriesName?.cleanTitle() ?: bookUpdate.productName.cleanTitle()
+                                        thumbnail_url = bookUpdate.coverImageUrl
+                                        author = bookUpdate.authors.joinToString { it.authorName }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
+            }
             return MangasPage(manga, false)
         }
         return super.popularMangaParse(response)
@@ -351,8 +360,9 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         return SManga.create().apply {
             url = titleElt.attr("href").substring(baseUrl.length)
             title = titleElt.attr("title").cleanTitle()
-            thumbnail_url = element.select(".a-tile-thumb-img > img")
-                .attr("data-srcset").getHighestQualitySrcset()
+            thumbnail_url = getHiResCoverFromLegacyUrl(
+                element.selectFirst(".a-tile-thumb-img > img")?.attr("data-srcset")?.getHighestQualitySrcset(),
+            )
         }
     }
 
@@ -417,43 +427,69 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                 .asJsoup()
                 .let { validateLogin(it) }
 
-            val mangaDetails = SManga.create().apply {
-                updateDetailsFromSeriesPage(seriesPage)
+            val validChapters = seriesPage.select(".o-tile:not(:has($TILE_PREORDER_SELECTOR)) .a-tile-ttl a")
+
+            suspend fun linkElementToBookUpdate(link: Element): BookUpdateDto {
+                return link
+                    .absUrl("href")
+                    .substringAfter("/de")
+                    .substringBefore("/")
+                    .let { fetchBookUpdate(it)!! }
             }
 
-            // It generally doesn't matter which chapter we take the description from, but for
-            // series that release in volumes we want the earliest one, which will _usually_ be the
-            // last one on the page. With that said, it's not worth it to paginate in order to find
-            // the earliest volume, and volume releases don't usually have 60+ volumes anyways.
-            val chapterUrl = seriesPage
-                .select(".o-tile .a-tile-ttl a").last()
-                ?.attr("href")
-                ?: return@rxSingle mangaDetails
+            // We want to get series descriptions from the earliest chapter/volume, but we want the
+            // thumbnail from the most recent release. Technically a series could have over 60
+            // entries causing the last tile on the page to not actually be the earliest entry, but
+            // most series don't have 60+ volumes, and chapter releases tend to have the same
+            // description for every chapter. For the very few exceptions, it's not worth the effort
+            // to address that edge case right now.
+            val (latestChapter, earliestChapter) =
+                if (validChapters.size == 1 || useEarliestThumbnail) {
+                    async { linkElementToBookUpdate(validChapters.last()!!) }
+                        .let { listOf(it, it) }
+                } else {
+                    listOf(
+                        async { linkElementToBookUpdate(validChapters.first()!!) },
+                        async { linkElementToBookUpdate(validChapters.last()!!) },
+                    )
+                }.awaitAll()
 
-            val chapterPage = client.newCall(GET(chapterUrl, callHeaders)).await().asJsoup()
-
-            mangaDetails.apply {
-                description = getDescriptionFromChapterPage(chapterPage)
+            SManga.create().apply {
+                title = earliestChapter.seriesName?.cleanTitle() ?: earliestChapter.productName.cleanTitle()
+                // In some cases different chapters have different authors, so we grab this from the
+                // list of available author filters rather than from the BookUpdateDto.
+                author = getAvailableFilterNames(seriesPage, "side-author").joinToString()
+                description = listOfNotNull(earliestChapter.productExplanationShort, earliestChapter.productExplanationDetails)
+                    .joinToString("\n\n")
+                    .trim()
+                thumbnail_url = latestChapter.coverImageUrl
+                genre = getAvailableFilterNames(seriesPage, "side-genre").joinToString()
+                val statusIndicators = seriesPage.select("ul.side-others > li > a").map { it.ownText() }
+                status = parseStatus(statusIndicators)
             }
         }.toObservable()
     }
 
     private fun fetchSingleMangaDetails(manga: SManga): Observable<SManga> {
         return rxSingle {
-            val document = client.newCall(GET(baseUrl + manga.url, callHeaders))
-                .awaitSuccess()
-                .asJsoup()
+            val uuid = manga.url.substringAfter("/de").substringBefore("/")
+            val bookUpdate = fetchBookUpdate(uuid)
 
             SManga.create().apply {
-                title = getTitleFromChapterPage(document)?.cleanTitle().orEmpty()
+                title = bookUpdate!!.seriesName?.cleanTitle() ?: bookUpdate.productName.cleanTitle()
+                author = bookUpdate.authors.joinToString { it.authorName }
+                description = listOfNotNull(bookUpdate.productExplanationShort, bookUpdate.productExplanationDetails)
+                    .joinToString("\n\n")
+                    .trim()
+                thumbnail_url = bookUpdate.coverImageUrl
 
-                description = getDescriptionFromChapterPage(document)
                 // From the browse pages we can't distinguish between a true one-shot and a
                 // serial manga with only one chapter, but we can detect if there's a series
                 // reference in the chapter page. If there is, we should let the user know that
                 // they may need to take some action in the future to correct the error.
+                val document = client.newCall(GET(baseUrl + manga.url, callHeaders)).awaitSuccess().asJsoup()
                 if (document.selectFirst(".product-detail th:contains(Series Title)") != null) {
-                    description = (
+                    this.description = (
                         "WARNING: This entry is being treated as a one-shot but appears to " +
                             "have an associated series. If another chapter is released in " +
                             "the future, you will likely need to migrate this to itself." +
@@ -464,42 +500,20 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         }.toObservable()
     }
 
-    private fun SManga.updateDetailsFromSeriesPage(document: Document) = run {
-        // Take the thumbnail from the first chapter that is not on pre-order.
-        // Pre-order chapters often just have a gray rectangle with "NOW PRINTING" as their
-        // thumbnail, which doesn't look very pretty for the catalog.
-        thumbnail_url = document
-            .select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-thumb-img > img")
-            .attr("data-srcset")
-            .getHighestQualitySrcset()
-        title = document.selectFirst(".title-main-inner")!!.ownText().cleanTitle()
-        author = getAvailableFilterNames(document, "side-author").joinToString()
-        genre = getAvailableFilterNames(document, "side-genre").joinToString()
-
-        val statusIndicators = document.select("ul.side-others > li > a").map { it.ownText() }
-
-        status =
-            if (statusIndicators.any { it.startsWith("Completed") }) {
-                if (statusIndicators.any { it.startsWith("Pre-Order") }) {
-                    SManga.PUBLISHING_FINISHED
-                } else {
-                    SManga.COMPLETED
-                }
+    private fun parseStatus(statusIndicators: List<String>): Int {
+        return if (statusIndicators.any { it.startsWith("Completed") }) {
+            if (statusIndicators.any { it.startsWith("Pre-Order") }) {
+                SManga.PUBLISHING_FINISHED
             } else {
-                SManga.ONGOING
+                SManga.COMPLETED
             }
+        } else {
+            SManga.ONGOING
+        }
     }
 
     private fun getTitleFromChapterPage(document: Document): String? {
         return document.selectFirst(".detail-book-title-box h1[itemprop='name']")?.ownText()
-    }
-
-    private fun getDescriptionFromChapterPage(document: Document): String {
-        return buildString {
-            append(document.select(".synopsis-lead").text())
-            append("\n\n")
-            append(document.select(".synopsis-text").text())
-        }.trim()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -546,23 +560,23 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     override fun chapterListSelector(): String {
         return when (filterChapters) {
             FilterChaptersPref.OWNED ->
-                ".book-list-area .o-tile:has(.a-read-btn-s, .a-free-btn-s)"
+                ".book-list-area .o-tile:has($TILE_READ_SELECTOR, $TILE_FREE_SELECTOR)"
             FilterChaptersPref.OBTAINABLE ->
-                ".book-list-area .o-tile:not(:has(.a-ribbon-bundle, .a-ribbon-pre-order))"
+                ".book-list-area .o-tile:not(:has($TILE_BUNDLE_SELECTOR, $TILE_PREORDER_SELECTOR))"
             else -> // preorders shown, still not showing bundles since those aren't chapters
-                ".book-list-area .o-tile:not(:has(.a-ribbon-bundle))"
+                ".book-list-area .o-tile:not(:has($TILE_BUNDLE_SELECTOR))"
         }
     }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val statusSuffix =
-            if (element.selectFirst("[data-action-label='Read']") != null) {
+            if (element.selectFirst(TILE_READ_SELECTOR) != null) {
                 "" // user is currently able to read the chapter
-            } else if (element.selectFirst(".a-label-free") != null) {
+            } else if (element.selectFirst(TILE_FREE_SELECTOR) != null) {
                 " $FREE_ICON" // it's free to read but the user technically doesn't "own" it
-            } else if (element.selectFirst(".a-cart-btn-s, .a-cart-btn-s--on") != null) {
+            } else if (element.selectFirst(TILE_BUY_SELECTOR) != null) {
                 " $PURCHASE_ICON"
-            } else if (element.selectFirst(".a-ribbon-pre-order") != null) {
+            } else if (element.selectFirst(TILE_PREORDER_SELECTOR) != null) {
                 " $PREORDER_ICON"
             } else {
                 // Some content does not fall into any of the above bins. It seems to mostly be
@@ -750,6 +764,41 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         return srcsetPairs.maxByOrNull { it.first ?: 0 }?.second
     }
 
+    // This function works if the cover is from before mid-dec'23 (non-hexadecimal).
+    // If it's a newer cover, it will fall back to the low-res version.
+    private fun getHiResCoverFromLegacyUrl(url: String?): String? {
+        if (url.isNullOrEmpty()) return url
+        return try {
+            val extension = url.substringAfterLast(".")
+            val numericId = when {
+                url.startsWith(rimgUrl) -> {
+                    val id = url.substringAfter("$rimgUrl/").substringBefore('/')
+                    id.reversed().toLongOrNull()
+                }
+                // For legacy covers of "series" from the user's library.
+                url.contains("thumbnailImage_") -> {
+                    val id = url.substringAfter("thumbnailImage_").substringBefore(".$extension")
+                    id.toLongOrNull()
+                }
+                else -> null
+            }
+            numericId?.let { "$cUrl/coverImage_${it - 1}.$extension" } ?: url
+        } catch (e: Exception) {
+            url
+        }
+    }
+
+    // Fetch manga details form api.
+    private suspend fun fetchBookUpdate(uuid: String): BookUpdateDto? {
+        val apiUrl = "$memberApiUrl/books/updates".toHttpUrl().newBuilder()
+            .addQueryParameter("fileType", "EPUB")
+            .addQueryParameter(uuid, "0")
+            .build()
+
+        return client.newCall(GET(apiUrl, headers)).awaitSuccess()
+            .parseAs<List<BookUpdateDto>>().firstOrNull()
+    }
+
     private fun String.parseChapterNumber(): Pair<String, Float>? {
         for (pattern in CHAPTER_NUMBER_PATTERNS) {
             val match = pattern.find(this)
@@ -799,6 +848,12 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             ).joinToString("|", transform = Regex::escape),
             RegexOption.IGNORE_CASE,
         )
+
+        private const val TILE_READ_SELECTOR = ".a-read-btn-s"
+        private const val TILE_FREE_SELECTOR = ".a-label-free"
+        private const val TILE_BUY_SELECTOR = ".a-cart-btn-s, .a-cart-btn-s--on"
+        private const val TILE_PREORDER_SELECTOR = ".a-order-btn-s, .a-order-btn-s--on"
+        private const val TILE_BUNDLE_SELECTOR = ".a-ribbon-bundle"
 
         private val CHAPTER_NUMBER_PATTERNS = listOf(
             // All must have exactly one capture group for the chapter number

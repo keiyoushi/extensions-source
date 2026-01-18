@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.baobua
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -10,33 +12,51 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class BaoBua() : SimpleParsedHttpSource() {
 
-    override val baseUrl = "https://www.baobua.net"
+    override val baseUrl = "https://baobua.net"
     override val lang = "all"
     override val name = "BaoBua"
     override val supportsLatest = false
 
-    override fun simpleMangaSelector() = "article.post"
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
+    private fun normalizeImageUrl(url: String): String {
+        return if (WP_COM_REGEX.containsMatchIn(url)) {
+            url.replace(WP_COM_REPLACE_REGEX, "https://")
+                .replace("?w=640", "")
+        } else {
+            url
+        }
+    }
+
+    override fun simpleMangaSelector() = ".product-item"
 
     override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a.popunder")!!.absUrl("href"))
-        title = element.selectFirst("div.read-title")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".product-title")!!.text()
+        thumbnail_url = element.selectFirst("img.product-imgreal")?.absUrl("src")
+            ?.let { normalizeImageUrl(it) }
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    override fun simpleNextPageSelector(): String = "nav.pagination a.next"
+    override fun simpleNextPageSelector(): String = ".pagination-custom .nextPage"
 
     // region popular
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl?page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
     // endregion
 
     // region latest
@@ -44,25 +64,26 @@ class BaoBua() : SimpleParsedHttpSource() {
     // endregion
 
     // region Search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return if (query.isBlank()) {
+            super.fetchSearchManga(page, query, filters)
+        } else {
+            throw UnsupportedOperationException("Full-text search is not supported")
+        }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filter = filters.firstInstance<SourceCategorySelector>()
         return filter.selectedCategory?.let {
-            GET(it.buildUrl(baseUrl), headers)
-        } ?: run {
-            baseUrl.toHttpUrl().newBuilder()
-                .addEncodedQueryParameter("q", query)
-                .addEncodedQueryParameter("page", page.toString())
-                .build()
-                .let { GET(it, headers) }
-        }
+            GET(it.buildUrl(baseUrl, page), headers)
+        } ?: popularMangaRequest(page)
     }
 
     // region Details
     override fun mangaDetailsParse(document: Document): SManga {
-        val trailItemsEl = document.selectFirst("div.breadcrumb-trail > ul.trail-items")!!
         return SManga.create().apply {
-            title = trailItemsEl.selectFirst("li.trail-end")!!.text()
-            genre = trailItemsEl.select("li:not(.trail-end):not(.trail-begin)").joinToString { it.text() }
+            genre = document.select(".article-tags a").joinToString { it.text() }
+            status = 2
         }
     }
 
@@ -70,40 +91,40 @@ class BaoBua() : SimpleParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         chapter_number = 0F
-        setUrlWithoutDomain(element.selectFirst("div.breadcrumb-trail li.trail-end > a")!!.absUrl("href"))
-        date_upload = POST_DATE_FORMAT.tryParse(element.selectFirst("span.item-metadata.posts-date")?.text())
+        setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.absUrl("href"))
+        date_upload = POST_DATE_FORMAT.tryParse(element.selectFirst(".article-date-comment .date")?.text())
         name = "Gallery"
     }
     // endregion
 
     // region Pages
     override fun pageListParse(document: Document): List<Page> {
-        val basePageUrl = document.selectFirst("div.breadcrumb-trail li.trail-end > a")!!.absUrl("href")
-
-        val maxPage: Int = document.selectFirst("div.nav-links > a.next.page-numbers")?.text()?.toInt() ?: 1
-
-        var pageIndex = 0
-        return (1..maxPage).flatMap { pageNum ->
-            val doc = if (pageNum == 1) {
-                document
-            } else {
-                client.newCall(GET("$basePageUrl?p=$pageNum", headers)).execute().asJsoup()
+        val pages = document.select(".article-body img")
+            .mapIndexed { index, element ->
+                Page(index, imageUrl = normalizeImageUrl(element.absUrl("src")))
             }
 
-            doc.select("div.entry-content.read-details img.wp-image")
-                .map { Page(pageIndex++, imageUrl = it.absUrl("src")) }
-        }
+        val nextPageUrl = document.selectFirst("a.page-numbers:contains(Next)")
+            ?.absUrl("href")
+            ?: return pages
+
+        val nextDoc = client.newCall(GET(nextPageUrl, headers))
+            .execute()
+            .asJsoup()
+
+        return pages + pageListParse(nextDoc)
     }
     // endregion
 
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Unable to further search in the category!"),
+        Filter.Header("Searching is not supported"),
         Filter.Separator(),
-        SourceCategorySelector.create(baseUrl),
+        SourceCategorySelector.create(),
     )
 
     companion object {
-
+        private val WP_COM_REGEX = Regex("^https://i\\d+\\.wp\\.com/")
+        private val WP_COM_REPLACE_REGEX = Regex("https://i\\d+\\.wp\\.com/")
         private val POST_DATE_FORMAT = SimpleDateFormat("EEE MMM dd yyyy", Locale.US)
     }
 }

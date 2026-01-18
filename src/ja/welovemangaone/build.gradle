@@ -1,9 +1,9 @@
 ext {
-    extName = 'WeLoveMangaOne'
-    extClass = '.WeLoveMangaOne'
+    extName = 'Love4u'
+    extClass = '.Love4u'
     themePkg = 'fmreader'
-    baseUrl = 'https://welovemanga.one'
-    overrideVersionCode = 1
+    baseUrl = 'https://love4u.net'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

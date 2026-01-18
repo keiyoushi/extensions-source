@@ -104,7 +104,7 @@ class Hentai2Read : ParsedHttpSource() {
                         is ReleaseYear -> add("txt_wpm_pag_mng_sch_rls_yer", filter.state)
                         is ReleaseYearSelect -> add("cbo_wpm_pag_mng_sch_rls_yer", filter.state.toString())
                         is Status -> add("rad_wpm_pag_mng_sch_sts", filter.state.toString())
-                        is TagSearchMode -> add("rad_wpm_pag_mng_sch_tag_mde", arrayOf("and", "or")[filter.state])
+                        is TagSearchMode -> add("rad_wpm_pag_mng_sch_tag_mde", arrayOf("and", "or").getOrElse(filter.state) { "and" })
                         is TagList -> filter.state.forEach { tag ->
                             when (tag.state) {
                                 Filter.TriState.STATE_INCLUDE -> add("chk_wpm_pag_mng_sch_mng_tag_inc[]", tag.id.toString())
@@ -278,7 +278,7 @@ class Hentai2Read : ParsedHttpSource() {
     private class SortOrder(values: Array<Pair<String, String?>>) : UriPartFilter("Order", values)
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String?>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
+        fun toUriPart() = vals.getOrNull(state)?.second
     }
 
     override fun getFilterList() = FilterList(

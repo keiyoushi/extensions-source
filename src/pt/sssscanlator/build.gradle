@@ -1,13 +1,8 @@
 ext {
     extName = 'Yomu Comics'
     extClass = '.YomuComics'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://yomucomics.com'
-    overrideVersionCode = 7
+    baseUrl = 'https://yomu.com.br'
+    extVersionCode = 40
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation project(':lib:randomua')
-}

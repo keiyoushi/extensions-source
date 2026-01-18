@@ -39,7 +39,7 @@ class Atsumaru : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/infinite/trending?page=${page - 1}", apiHeaders)
+        return GET("$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -51,7 +51,7 @@ class Atsumaru : HttpSource() {
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}", apiHeaders)
+        return GET("$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {

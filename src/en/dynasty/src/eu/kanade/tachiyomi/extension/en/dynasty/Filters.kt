@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 class SortFilter : Filter.Select<String>(
     name = "Sort",
     values = selectOptions.map { it.first }.toTypedArray(),
-    state = 3,
 ) {
     val sort get() = selectOptions[state].second
 }

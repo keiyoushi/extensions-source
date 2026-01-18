@@ -1,12 +1,10 @@
 ext {
     extName = 'Manga Online'
     extClass = '.MangaOnline'
-    extVersionCode = 3
-    isNsfw = true
+    themePkg = 'madara'
+    baseUrl = 'https://mangaonline.app'
+    overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:randomua'))
-}

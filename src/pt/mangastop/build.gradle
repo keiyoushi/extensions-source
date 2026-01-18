@@ -3,8 +3,13 @@ ext {
     extClass = '.MangaStop'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangastop.net'
-    overrideVersionCode = 0
+    overrideVersionCode = 8
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    api(project(":lib:cookieinterceptor"))
+    implementation(project(":lib:randomua"))
+}

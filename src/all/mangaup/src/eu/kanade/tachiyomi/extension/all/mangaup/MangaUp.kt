@@ -1,189 +1,399 @@
 package eu.kanade.tachiyomi.extension.all.mangaup
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import okhttp3.Headers
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
-class MangaUp(override val lang: String) : HttpSource() {
-
+class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     override val name = "Manga UP!"
+    private val domain = "manga-up.com"
+    override val baseUrl = "https://global.$domain"
+    override val supportsLatest = true
 
-    override val baseUrl = "https://global.manga-up.com"
+    private val apiUrl = "https://global-api.$domain/api"
+    private val imgUrl = "https://global-img.$domain"
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val supportsLatest = false
+    private var secret: String? = null
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
-        .add("User-Agent", USER_AGENT)
+    @SuppressLint("SetJavaScriptEnabled")
+    @Synchronized
+    private fun fetchSecret(): String? {
+        val useSession = preferences.getBoolean(LOGGED_IN_SESSION_PREF, true)
+        if (!useSession) return null
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(::thumbnailIntercept)
-        .rateLimitHost(API_URL.toHttpUrl(), 1)
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        if (secret != null) return secret
+
+        val latch = CountDownLatch(1)
+        var token: String? = null
+
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    view.evaluateJavascript("window.localStorage.getItem('secret')") { value ->
+                        token = value?.trim('"')
+                        if (token == "null" || token.isNullOrBlank()) token = null
+
+                        latch.countDown()
+                        view.stopLoading()
+                        view.destroy()
+                    }
+                }
+            }
+            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
+        }
+
+        latch.await(10, TimeUnit.SECONDS)
+
+        secret = token
+        return secret
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    @Synchronized
+    private fun flushSecret(target: String) {
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    val script = "if(window.localStorage.getItem('secret')==='$target'){window.localStorage.removeItem('secret');}"
+                    view.evaluateJavascript(script) {
+                        view.stopLoading()
+                        view.destroy()
+                    }
+                }
+            }
+            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
+        }
+    }
+
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(ImageInterceptor())
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            // 410: expired secret -> device got removed OR more than 3 secrets/devices active, oldest one expires
+            // 401: invalid secret -> login was aborted; UA mismatch from previous login
+            if (response.code == 410 || response.code == 401) {
+                response.close()
+
+                val failedSecret = request.url.queryParameter("secret")
+
+                if (failedSecret != null) {
+                    flushSecret(failedSecret)
+
+                    synchronized(this) {
+                        if (secret == failedSecret) {
+                            secret = null
+                        }
+                    }
+                }
+
+                val newSecret = fetchSecret()
+                val isMyPage = request.url.pathSegments.lastOrNull() == "my_page"
+                val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
+
+                if (!isSecretValid && isMyPage) {
+                    val target = request.url.fragment
+                    throw IOException("Log in via WebView to access your $target")
+                }
+
+                val newUrl = request.url.newBuilder()
+
+                if (isSecretValid) {
+                    newUrl.setQueryParameter("secret", newSecret)
+                } else {
+                    newUrl.removeAllQueryParameters("secret")
+
+                    synchronized(this) {
+                        if (secret == newSecret) {
+                            secret = null
+                        }
+                    }
+                }
+
+                val newRequest = request.newBuilder()
+                    .url(newUrl.build())
+                    .build()
+
+                return@addInterceptor chain.proceed(newRequest)
+            }
+            response
+        }
         .build()
 
-    private val json: Json by injectLazy()
-
-    private var titleList: List<MangaUpTitle>? = null
-
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$API_URL/search?format=json", headers)
+        val url = "$apiUrl/search".toHttpUrl().newBuilder()
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
+            .addQueryParameter("app_ver", "0")
+            .addQueryParameter("os_ver", "0")
+            .addQueryParameter("lang", lang)
+            .build()
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        titleList = response.parseAs<MangaUpSearch>().titles
-
-        val titles = titleList!!
-            .sortedByDescending { it.bookmarkCount ?: 0 }
-            .map(MangaUpTitle::toSManga)
-
-        return MangasPage(titles, hasNextPage = false)
+        val result = response.parseAsProto<PopularResponse>()
+        val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
+        return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/home_v2".toHttpUrl().newBuilder()
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
+            .addQueryParameter("app_ver", "0")
+            .addQueryParameter("os_ver", "0")
+            .addQueryParameter("lang", lang)
+            .build()
+        return GET(url, headers)
+    }
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAsProto<HomeResponse>()
+        val list = if (result.type == "Updates for you") {
+            result.updates
+        } else {
+            result.newSeries
+        }
+        val mangas = list?.map { it.toSManga(imgUrl) } ?: emptyList()
+        return MangasPage(mangas, false)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.startsWith(PREFIX_ID_SEARCH) && query.matches(ID_SEARCH_PATTERN)) {
-            return mangaDetailsRequest(query.removePrefix(PREFIX_ID_SEARCH))
+            return mangaDetailsRequest(SManga.create().apply { url = "/manga/${query.removePrefix(PREFIX_ID_SEARCH)}" })
         }
 
-        val apiUrl = "$API_URL/manga/search".toHttpUrl().newBuilder()
-            .addQueryParameter("word", query)
-            .addQueryParameter("format", "json")
-            .toString()
+        val currentSecret = fetchSecret()
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .apply {
+                currentSecret?.let { addQueryParameter("secret", it) }
+            }
+            .addQueryParameter("app_ver", "0")
+            .addQueryParameter("os_ver", "0")
+            .addQueryParameter("lang", lang)
 
-        return GET(apiUrl, headers)
+        val genreFilter = filters.firstInstance<SelectFilter>()
+
+        if (query.isNotEmpty()) {
+            url.addPathSegments("manga/search")
+            url.addQueryParameter("word", query)
+        } else if (genreFilter.selectedValue.isNotEmpty()) {
+            if (genreFilter.selectedValue == "favorites" || genreFilter.selectedValue == "history") {
+                if (currentSecret == null) {
+                    throw Exception("Log in via WebView to access your ${genreFilter.selectedValue}")
+                }
+                url.addPathSegment("my_page")
+                url.fragment(genreFilter.selectedValue)
+            } else {
+                url.addPathSegments("manga/tag")
+                url.addQueryParameter("tag_id", genreFilter.selectedValue)
+            }
+        } else {
+            return popularMangaRequest(page)
+        }
+
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("manga/detail")) {
-            val titleId = response.request.url.queryParameter("title_id")!!
-
-            val title = response.parseAs<MangaUpTitle>().toSManga().apply {
-                url = "/manga/$titleId"
-            }
-
-            return MangasPage(listOf(title), hasNextPage = false)
+        if (response.request.url.pathSegments.last() == "detail_v2") {
+            val result = response.parseAsProto<MangaDetailResponse>()
+            val mangaId = response.request.url.queryParameter("title_id")!!
+            return MangasPage(listOf(result.toSManga(mangaId, imgUrl)), false)
         }
 
-        val titles = response.parseAs<MangaUpSearch>().titles
-
-        val query = response.request.url.queryParameter("word")
-
-        if (query.isNullOrEmpty()) {
-            fetchAllTitles()
-        } else {
-            titleList = titles
+        val fragment = response.request.url.fragment
+        if (fragment == "favorites" || fragment == "history") {
+            val result = response.parseAsProto<MyPageResponse>()
+            val list = if (fragment == "favorites") result.favorites else result.history
+            val mangas = list?.map { it.toSManga(imgUrl) } ?: emptyList()
+            return MangasPage(mangas, false)
         }
 
-        return MangasPage(titles.map(MangaUpTitle::toSManga), hasNextPage = false)
+        if (response.request.url.pathSegments.contains("manga") && response.request.url.pathSegments.last() != "detail_v2") {
+            val result = response.parseAsProto<SearchResponse>()
+            val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
+            return MangasPage(mangas, false)
+        }
+
+        return popularMangaParse(response)
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
-
-    private fun mangaDetailsRequest(mangaUrl: String): Request {
-        val titleId = mangaUrl.substringAfterLast("/")
-
-        val apiUrl = "$API_URL/manga/detail".toHttpUrl().newBuilder()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val titleId = manga.url.substringAfterLast("/")
+        val url = "$apiUrl/manga/detail_v2".toHttpUrl().newBuilder()
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
+            .addQueryParameter("app_ver", "0")
+            .addQueryParameter("os_ver", "0")
             .addQueryParameter("title_id", titleId)
+            .addQueryParameter("quality", "high")
             .addQueryParameter("ui_lang", lang)
-            .addQueryParameter("format", "json")
-            .toString()
-
-        return GET(apiUrl, headers)
+            .build()
+        return GET(url, headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaUpTitle>().toSManga()
+        val result = response.parseAsProto<MangaDetailResponse>()
+        val mangaId = response.request.url.queryParameter("title_id")!!
+        return result.toSManga(mangaId, imgUrl)
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
+    override fun getMangaUrl(manga: SManga): String {
+        return baseUrl + manga.url
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        return mangaDetailsRequest(manga)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val titleId = response.request.url.queryParameter("title_id")!!.toInt()
-
-        return response.parseAs<MangaUpTitle>().readableChapters
-            .map { it.toSChapter(titleId) }
+        val result = response.parseAsProto<MangaDetailResponse>()
+        val mangaId = response.request.url.queryParameter("title_id")!!
+        val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
+        return result.chapters
+            .filter { !hidePaid || it.price == null }
+            .map { it.toSChapter(mangaId) }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
+        val url = "$apiUrl/manga/viewer_v2".toHttpUrl().newBuilder()
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
+            .addQueryParameter("app_ver", "0")
+            .addQueryParameter("os_ver", "0")
+            .addQueryParameter("chapter_id", chapterId)
+            .addQueryParameter("quality", "high")
+            .addQueryParameter("lang", lang)
+            .build()
+            .toString()
 
-        return GET("$API_URL/manga/viewer?chapter_id=$chapterId&format=json", headers)
+        return POST(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<MangaUpViewer>().pages
-            .mapIndexed { i, page -> Page(i, "", page.imageUrl) }
-    }
+        val result = response.parseAsProto<ViewerResponse>()
+        val pages = result.pageBlocks.flatMap { it.pages }
+            .filter { !it.url.contains("tutorial") }
 
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
-
-    override fun imageUrlParse(response: Response): String = ""
-
-    // Fetch all titles to get newer thumbnail URLs in the interceptor.
-    private fun fetchAllTitles() = runCatching {
-        val popularResponse = client.newCall(popularMangaRequest(1)).execute()
-        titleList = popularResponse.parseAs<MangaUpSearch>().titles
-    }
-
-    private fun thumbnailIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-
-        if (response.code == 410 && request.url.toString().contains(TITLE_THUMBNAIL_PATH)) {
-            val titleId = request.url.toString()
-                .substringAfter("/$TITLE_THUMBNAIL_PATH/")
-                .substringBefore(".webp")
-                .toInt()
-            val title = titleList?.find { it.id == titleId } ?: return response
-
-            val thumbnailUrl = title.mainThumbnailUrl
-                ?: title.thumbnailUrl
-                ?: return response
-
-            response.close()
-            val thumbnailRequest = GET(thumbnailUrl, request.headers)
-            return chain.proceed(thumbnailRequest)
+        if (pages.isEmpty()) {
+            throw Exception("Log in via WebView and purchase this chapter")
         }
 
-        return response
+        return pages.mapIndexed { i, page ->
+            val img = imgUrl + page.url + "#key=${page.key}#iv=${page.iv}"
+            Page(i, imageUrl = img)
+        }
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(body.string())
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // Helpers
+    private inline fun <reified T> Response.parseAsProto(): T {
+        return ProtoBuf.decodeFromByteArray(body.bytes())
+    }
+
+    override fun getFilterList() = FilterList(
+        SelectFilter(
+            "Genres",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Action", "13"),
+                Pair("Adventure", "14"),
+                Pair("Comedy", "15"),
+                Pair("School Life", "16"),
+                Pair("Dark Fantasy", "17"),
+                Pair("Suspense", "18"),
+                Pair("Historical", "19"),
+                Pair("Game", "20"),
+                Pair("Media Tie-ins", "21"),
+                Pair("LGBTQ+", "253"),
+                Pair("Completed", "256"),
+                Pair("History", "history"),
+                Pair("Favorites", "favorites"),
+            ),
+        ),
+    )
+
+    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
+        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+        val selectedValue: String get() = vals[state].second
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_PAID_PREF
+            title = "Hide paid chapters"
+            summary = "Hide chapters that require points to unlock."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOGGED_IN_SESSION_PREF
+            title = "Logged-in Session"
+            summary = "If enabled, uses the session from the WebView to access your content.\nDisable to browse as a guest."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
 
     companion object {
-        private const val API_URL = "https://global-web-api.manga-up.com/api"
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
-
-        private const val TITLE_THUMBNAIL_PATH = "manga_list"
-
         const val PREFIX_ID_SEARCH = "id:"
         private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
+        private const val HIDE_PAID_PREF = "hide_paid_chapters"
+        private const val LOGGED_IN_SESSION_PREF = "logged_in_session"
     }
 }

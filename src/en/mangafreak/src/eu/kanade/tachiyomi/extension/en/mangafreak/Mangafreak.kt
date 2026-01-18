@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -57,15 +58,48 @@ class Mangafreak : ParsedHttpSource() {
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/Latest_Releases/$page", headers)
+        val url = if (page == 1) {
+            baseUrl
+        } else {
+            // Page 2 on Latest_Releases is actually /Latest_Releases/2
+            // But since we use Home for page 1, we might miss some items or have duplicates
+            // if we jump straight to page 2 of Latest_Releases.
+            // However, typically users just want the latest stuff.
+            "$baseUrl/Latest_Releases/$page"
+        }
+        return GET(url, headers)
     }
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
-    override fun latestUpdatesSelector(): String = "div.latest_releases_item"
+    override fun latestUpdatesSelector(): String = "div.latest_item, div.latest_releases_item"
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.select("img").attr("abs:src").replace("mini", "manga").substringBeforeLast("/") + ".jpg"
-        element.select("a").apply {
-            title = first()!!.text()
-            url = attr("href")
+        // Fix thumbnail URL: replace "mini_images" with "manga_images" and remove dimensions (e.g. /175x245)
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")?.let {
+            val url = it.toHttpUrlOrNull()
+            if (url != null && url.pathSegments.firstOrNull() == "mini_images" && url.pathSegments.size >= 2) {
+                val slug = url.pathSegments[1]
+                url.newBuilder()
+                    .encodedPath("/")
+                    .addPathSegment("manga_images")
+                    .addPathSegment("$slug.jpg")
+                    .build()
+                    .toString()
+            } else {
+                it
+            }
+        }
+
+        if (element.hasClass("latest_item")) {
+            // Home page structure
+            element.select("a.name").apply {
+                title = text()
+                url = attr("href")
+            }
+        } else {
+            // Latest_Releases page structure
+            element.select("a").apply {
+                title = first()!!.text()
+                url = attr("href")
+            }
         }
     }
 

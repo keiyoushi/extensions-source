@@ -1,8 +1,8 @@
 ext {
-    extName = 'Spectral Scan'
-    extClass = '.SpectralScan'
-    extVersionCode = 48
-    isNsfw = false
+    extName = 'Nexus Scan'
+    extClass = '.NexusScan'
+    extVersionCode = 58
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

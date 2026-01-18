@@ -4,10 +4,12 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.CloudflareWarmupInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
@@ -16,19 +18,23 @@ import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
-import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -38,7 +44,7 @@ class Manhuarm(
     private val language: Language,
 ) : Madara(
     "Manhuarm",
-    "https://manhuarm.com",
+    "https://manhuarmmtl.com",
     language.lang,
 ),
     ConfigurableSource {
@@ -80,6 +86,10 @@ class Manhuarm(
         get() = preferences.getBoolean(DISABLE_TRANSLATOR_PREF, language.disableTranslator)
         set(value) = preferences.edit().putBoolean(DISABLE_TRANSLATOR_PREF, value).apply()
 
+    private var customUserAgent: String
+        get() = preferences.getString(CUSTOM_UA_PREF, "")!!
+        set(value) = preferences.edit().putString(CUSTOM_UA_PREF, value).apply()
+
     private val i18n = Intl(
         language = language.lang,
         baseLanguage = "en",
@@ -107,6 +117,8 @@ class Manhuarm(
     private val provider: String get() =
         preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
+    private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
+
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
      * when there are configuration changes to ensure that the client uses the most up-to-date settings.
@@ -114,10 +126,12 @@ class Manhuarm(
     private var clientInstance: OkHttpClient? = null
         get() {
             if (field == null || isSettingsChanged) {
+                warmupInterceptor.reset()
                 field = clientBuilder().build()
             }
             return field
         }
+
     private val clientUtils = network.cloudflareClient.newBuilder()
         .rateLimit(3, 2, TimeUnit.SECONDS)
         .build()
@@ -133,12 +147,35 @@ class Manhuarm(
         return network.cloudflareClient.newBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
-            .rateLimit(3)
+            .rateLimit(2, 1)
+            // Fix disk cache / decompression issues
+            .apply {
+                val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
+                if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
+            }
+            .addInterceptor(warmupInterceptor)
             .addInterceptorIf(
                 !disableTranslator && language.lang != language.origin,
                 TranslationInterceptor(settings, translator),
             )
             .addInterceptor(ComposedImageInterceptor(settings))
+    }
+
+    override fun headersBuilder(): Headers.Builder {
+        val builder = super.headersBuilder()
+        val ua = customUserAgent.trim()
+        if (ua.isNotEmpty()) {
+            builder.set("User-Agent", ua)
+        }
+        builder.set("Accept-Language", "en-US,en;q=0.9")
+        builder.set("Upgrade-Insecure-Requests", "1")
+        builder.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+        builder.set("Sec-Fetch-Site", "none")
+        builder.set("Sec-Fetch-Mode", "navigate")
+        builder.set("Sec-Fetch-User", "?1")
+        builder.set("Sec-Fetch-Dest", "document")
+        builder.set("Priority", "u=0, i")
+        return builder
     }
 
     private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder {
@@ -159,21 +196,35 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
-        val nonce = document.selectFirst("#manga-ocr-display-script-js-extra")!!.data().let {
-            NONCE_REGEX.find(it)!!.groupValues.last()
-        }
-
-        val form = FormBody.Builder()
-            .add("action", "get_ocr_data")
-            .add("chapter_id", chapterId)
-            .add("nonce", nonce)
+        val chapterUrl = document.location().toHttpUrl().newBuilder()
+            .removeAllQueryParameters("style")
             .build()
 
-        val dialogDto = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, form))
-            .execute()
-            .parseAs<DialogDto>()
+        // Use minimal headers for JSON request - Cloudflare may be blocking complex requests
+        val jsonHeaders = Headers.Builder()
+            .add("Referer", chapterUrl.toString())
+            .add("Accept", "*/*")
+            .build()
 
-        val dialog = dialogDto.content.parseAs<List<PageDto>>()
+        val dialog = try {
+            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", jsonHeaders))
+                .execute()
+
+            // If server returns error (403, etc), skip translations
+            if (!response.isSuccessful) {
+                response.close()
+                emptyList()
+            } else {
+                response.parseAs<List<PageDto>>()
+            }
+        } catch (e: Exception) {
+            // If JSON parsing fails, skip translations
+            emptyList()
+        }
+
+        if (dialog.isEmpty()) {
+            return pages
+        }
 
         return dialog.mapIndexed { index, dto ->
             val page = pages.first { it.imageUrl?.contains(dto.imageUrl, true)!! }
@@ -188,12 +239,99 @@ class Manhuarm(
         }
     }
 
-    private fun String.fixJsonFormat(): String {
-        return JSON_FORMAT_REGEX.replace(this) { matchResult ->
-            val content = matchResult.groupValues.last()
-            val modifiedContent = content.replace("\"", "'")
-            """"text": "${modifiedContent.trimIndent()}", "box""""
+    override fun popularMangaRequest(page: Int): okhttp3.Request {
+        val url = if (page == 1) {
+            "$baseUrl/manga/?m_orderby=trending"
+        } else {
+            "$baseUrl/manga/page/$page/?m_orderby=trending"
         }
+        return GET(url, headers)
+    }
+
+    override fun popularMangaSelector(): String = ".page-item-detail, .manga-card"
+
+    override fun popularMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        val titleEl = element.selectFirst(".post-title a, .manga-title a")
+        val thumbEl = element.selectFirst(".item-thumb img, .manga-thumb img, img")
+        manga.setUrlWithoutDomain(titleEl!!.attr("href"))
+        manga.title = titleEl.text()
+        manga.thumbnail_url = thumbEl?.extractCoverUrl()
+        return manga
+    }
+
+    override fun popularMangaNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+
+    override fun latestUpdatesRequest(page: Int): okhttp3.Request {
+        val url = if (page == 1) {
+            "$baseUrl/manga/?m_orderby=latest"
+        } else {
+            "$baseUrl/manga/page/$page/?m_orderby=latest"
+        }
+        return GET(url, headers)
+    }
+
+    override fun latestUpdatesSelector(): String = ".page-item-detail, .manga-card"
+
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        val titleEl = element.selectFirst(".manga-title a")
+            ?: element.selectFirst(".post-title a, h3.h5 a, .post-title h3 a")
+        val thumbEl = element.selectFirst(".manga-thumb img")
+            ?: element.selectFirst(".item-thumb img, img")
+        manga.setUrlWithoutDomain(titleEl!!.attr("href"))
+        manga.title = titleEl.text()
+        manga.thumbnail_url = thumbEl?.extractCoverUrl()
+        return manga
+    }
+
+    override fun latestUpdatesNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+
+    /**
+     * Extracts the cover image URL from an image element, checking multiple attributes
+     * to handle lazy loading and different image formats.
+     */
+    private fun Element?.extractCoverUrl(): String? {
+        if (this == null) return null
+
+        // Try data-src first (lazy loading)
+        absUrl("data-src").takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
+
+        // Try src attribute
+        absUrl("src").takeIf { it.isNotBlank() && !it.contains("data:image") && !it.contains("placeholder") }?.let { return it }
+
+        // Try srcset attribute (parse first URL)
+        attr("srcset").takeIf { it.isNotBlank() }?.let { srcset ->
+            srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.let { url ->
+                if (url.startsWith("http")) {
+                    return url
+                } else {
+                    absUrl(url).takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
+                }
+            }
+        }
+
+        return null
+    }
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        val manga = super.mangaDetailsParse(document)
+
+        // Ensure cover is always set from detail page if it wasn't set from listing
+        if (manga.thumbnail_url.isNullOrBlank()) {
+            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
+            manga.thumbnail_url = coverEl?.extractCoverUrl()
+        } else {
+            // Even if cover was set, try to get a better quality version from detail page
+            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
+            coverEl?.extractCoverUrl()?.let {
+                if (it.isNotBlank() && !it.contains("placeholder")) {
+                    manga.thumbnail_url = it
+                }
+            }
+        }
+
+        return manga
     }
 
     // Prevent bad fragments
@@ -329,6 +467,17 @@ class Manhuarm(
             }
         }.also(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = CUSTOM_UA_PREF
+            title = "Custom User-Agent"
+            summary = "Set a custom User-Agent for requests. Leave blank to use the default."
+            setDefaultValue(customUserAgent)
+            setOnPreferenceChange { _, newValue ->
+                customUserAgent = (newValue as String).trim()
+                true
+            }
+        }.also(screen::addPreference)
+
         if (language.target == language.origin) {
             return
         }
@@ -391,8 +540,7 @@ class Manhuarm(
 
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
-        val JSON_FORMAT_REGEX = """(?:"text":\s+?".*?)([\s\S]*?)(?:",\s+?"box")""".toRegex()
-        val NONCE_REGEX = """(?:nonce":")([^"]+)""".toRegex()
+        val NONCE_REGEX = """(?:const\s+nonce\s*=\s*'|\"nonce\"\s*:\s*\")(.*?)['\"]""".toRegex()
 
         const val DEVICE_FONT = "device:"
         private const val FONT_SIZE_PREF = "fontSizePref"
@@ -401,6 +549,7 @@ class Manhuarm(
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
         private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
+        private const val CUSTOM_UA_PREF = "customUserAgentPref"
         private const val DEFAULT_FONT_SIZE = "28"
     }
 }

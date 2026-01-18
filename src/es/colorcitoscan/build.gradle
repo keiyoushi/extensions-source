@@ -1,0 +1,10 @@
+ext {
+    extName = 'Colorcito Scan'
+    extClass = '.ColorcitoScan'
+    themePkg = 'spicytheme'
+    baseUrl = 'https://colorcitoscan.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

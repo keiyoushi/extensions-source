@@ -1,7 +1,8 @@
 ext {
     extName = 'Elder Manga'
     extClass = '.ElderManga'
-    extVersionCode = 2
+    themePkg = 'uzaymanga'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

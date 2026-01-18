@@ -8,6 +8,7 @@ import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -23,9 +24,13 @@ class LeitorDeManga : Madara(
     override val mangaSubString = "ler-manga"
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(3, 2, TimeUnit.SECONDS)
         .addInterceptor(::jsChallengeInterceptor)
         .build()
+
+    override fun imageFromElement(element: Element): String? {
+        return super.imageFromElement(element)?.replace("http://", "https://")
+    }
 
     // Linked to src/en/yakshascans
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {

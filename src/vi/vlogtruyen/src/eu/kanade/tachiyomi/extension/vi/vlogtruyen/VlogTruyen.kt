@@ -6,7 +6,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -15,7 +14,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -27,7 +25,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -41,7 +38,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://vlogtruyen54.com"
+    private val defaultBaseUrl = "https://vlogtruyen61.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -53,14 +50,19 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "XMLHttpRequest")
+
+    private val xhrHeaders by lazy {
+        headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/the-loai/moi-cap-nhap/?page=$page", headers)
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.select("h3.title-commic-tab").text()
-        thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.attr("data-src")
+        thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.absUrl("data-src")
     }
 
     override fun latestUpdatesNextPageSelector() = ".pagination > li.active + li"
@@ -78,59 +80,50 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.select("h1.title-commic-detail").text()
         genre = document.select(".categories-list-detail-commic > li > a").joinToString { it.text().trim(',', ' ') }
-        description = document.select("div.top-detail-manga > div.top-detail-manga-content > span.desc-commic-detail").text()
-        thumbnail_url = document.select("div.image-commic-detail > a > img").attr("data-src")
+        description = document.select("span.desc-commic-detail")
+            .joinToString { it.wholeText().trim() }
+        thumbnail_url = document.selectFirst("div.image-commic-detail > a > img")?.absUrl("data-src")
         status = parseStatus(document.selectFirst("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p")?.text())
         author = document.select(".h5-drawer:contains(Tác Giả) + ul li a").joinToString { it.text() }
     }
 
     private fun parseStatus(status: String?) = when {
         status == null -> SManga.UNKNOWN
-        status.contains("Đang tiến hành") -> SManga.ONGOING
-        status.contains("Đã hoàn thành") -> SManga.COMPLETED
-        status.contains("Tạm ngưng") -> SManga.ON_HIATUS
+        status.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
+        status.contains("Đã hoàn thành", ignoreCase = true) -> SManga.COMPLETED
+        status.contains("Tạm ngưng", ignoreCase = true) -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast("/").substringBeforeLast(".")
+        return GET("$baseUrl/thong-tin-ca-nhan?manga_slug=$slug", xhrHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val json = response.parseAs<ChapterDTO>()
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
-        return document.select("li").filterNot {
-            if (hidePaidChapters) {
-                it.select("li > b").isNotEmpty()
-            } else {
-                false
-            }
-        }
-            .mapNotNull {
-                SChapter.create().apply {
-                    setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
-                    name = it.select("h3").first()!!.text().trim()
-                    if (it.select("li > b").text().isNotBlank()) {
-                        name += " " + it.select("li > b").text() + " 🔒"
-                    }
-                    date_upload = dateFormat.tryParse(it.select("li:not(:has(> span.chapter-view)) > span, li > span:last-child").text())
+        return document.select(chapterListSelector()).filterNot {
+            hidePaidChapters && it.select("li > b").isNotEmpty()
+        }.map { element -> chapterFromElement(element) }
+    }
+
+    override fun chapterListSelector() = "li"
+
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        name = element.select("h3").text()
+        if (element.select("li > b").text().isNotBlank()) {
+            name += " " + element.select("li > b").text() +
+                when (element.select("li > b > i").attr("class")) {
+                    "fa fa-lock" -> " 🔒"
+                    "fa fa-unlock" -> " 🔓"
+                    else -> {}
                 }
-            }
-    }
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
-        if (checkChapterLists(url).isNotEmpty()) {
-            val mangaId = checkChapterLists(url)
-            return client.newCall(GET("$baseUrl/thong-tin-ca-nhan?manga_id=$mangaId", headers))
-                .asObservableSuccess()
-                .map { response -> chapterListParse(response) }
         }
-        return super.fetchChapterList(manga)
+        date_upload = dateFormat.tryParse(element.select("li:not(:has(> span.chapter-view)) > span, li > span:last-child").text())
     }
-
-    private fun checkChapterLists(document: Document) = document.selectFirst("input[name=manga_id]")!!.attr("value")
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {

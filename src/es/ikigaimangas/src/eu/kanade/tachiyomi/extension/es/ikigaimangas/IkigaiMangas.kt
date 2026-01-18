@@ -5,8 +5,9 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -18,11 +19,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -38,7 +43,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://visualikigai.eurofiyati.online"
+    private val defaultBaseUrl: String = "https://viralikigai.melauroral.com"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
@@ -61,34 +66,54 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
 
+    private val imageCdnUrl: String = "https://image.ikigaimangas.cloud"
+
     override val lang: String = "es"
 
     override val name: String = "Ikigai Mangas"
 
     override val supportsLatest: Boolean = true
 
-    private val cookieInterceptor = CookieInterceptor(
-        "",
-        listOf(
-            "nsfw-mode" to "true",
-        ),
-    )
-
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
-            .addNetworkInterceptor(cookieInterceptor)
+            .addNetworkInterceptor(::nsfwCookieInterceptor)
             .build()
+    }
+
+    private fun nsfwCookieInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        return request.header("X-Add-Nsfw-Cookie")?.let {
+            val newRequest = request.newBuilder()
+                .removeHeader("X-Add-Nsfw-Cookie")
+                .setCookie("nsfw-mode", "true")
+                .build()
+            chain.proceed(newRequest)
+        } ?: chain.proceed(request)
+    }
+
+    private fun Request.Builder.setCookie(name: String, value: String): Request.Builder {
+        val existingHeader = this.build().header("Cookie") ?: ""
+
+        val cookies = existingHeader
+            .split(";")
+            .mapNotNull {
+                val parts = it.trim().split("=", limit = 2)
+                if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
+            }.toMap().toMutableMap()
+
+        cookies[name] = value
+
+        val mergedHeader = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+
+        return this.header("Cookie", mergedHeader)
     }
 
     private val preferences: SharedPreferences = getPreferences()
 
-    private val lazyHeaders by lazy {
-        headersBuilder()
-            .set("Referer", fetchedDomainUrl)
-            .build()
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$fetchedDomainUrl/")
 
     private val json: Json by injectLazy()
 
@@ -102,7 +127,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .addQueryParameter("series_type", "comic")
             .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
 
-        return GET(apiUrl.build(), lazyHeaders)
+        return GET(apiUrl.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -116,7 +141,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
             .addQueryParameter("page", page.toString())
 
-        return GET(apiUrl.build(), lazyHeaders)
+        return GET(apiUrl.build(), headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -125,12 +150,30 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
+    private var seriesCache: List<QwikSeriesDto>? = null
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        if (query.isNotEmpty()) {
+            if (seriesCache != null) {
+                return Observable.just(qwikDataParse(query, seriesCache!!, page))
+            }
+            val series = getQuerySeriesList()
+            return Observable.just(qwikDataParse(query, series, page))
+        }
+
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response -> searchMangaParse(response) }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sortByFilter = filters.firstInstanceOrNull<SortByFilter>()
 
         val apiUrl = "$apiBaseUrl/api/swf/series".toHttpUrl().newBuilder()
-
-        if (query.isNotEmpty()) apiUrl.addQueryParameter("search", query)
 
         apiUrl.addQueryParameter("page", page.toString())
         apiUrl.addQueryParameter("type", "comic")
@@ -152,13 +195,68 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         apiUrl.addQueryParameter("column", sortByFilter?.selected ?: "name")
         apiUrl.addQueryParameter("direction", if (sortByFilter?.state?.ascending == true) "asc" else "desc")
 
-        return GET(apiUrl.build(), lazyHeaders)
+        return GET(apiUrl.build(), headers)
+    }
+
+    val scriptUrlRegex = """from"(.*?\.js)"""".toRegex()
+    val seriesChunkRegex = """PUBLIC_BACKEND_API.*?"s_(.*?)"""".toRegex()
+
+    private fun getQuerySeriesList(): List<QwikSeriesDto> {
+        val baseUrl = preferences.prefBaseUrl
+        val homeDocument = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+        val mainScript =
+            homeDocument.selectFirst("input[type=search][on:input]")?.attr("on:input")
+                ?: throw Exception("No se pudo encontrar la lista de series.")
+
+        val mainScriptData =
+            client.newCall(GET("$baseUrl/build/$mainScript", headers)).execute().body.string()
+
+        val scriptsUrls = scriptUrlRegex.findAll(mainScriptData).map { it.groupValues[1] }.toList()
+
+        scriptsUrls.forEach {
+            val scriptData =
+                client.newCall(GET("$baseUrl/build/$it", headers)).execute().body.string()
+            val seriesChunkMatch = seriesChunkRegex.find(scriptData)
+            if (seriesChunkMatch != null) {
+                val chunkId = seriesChunkMatch.groupValues[1]
+                val url = "$baseUrl/series".toHttpUrl().newBuilder()
+                    .addQueryParameter("qfunc", chunkId)
+                    .build()
+                val payload = """{"_entry":"1","_objs":["\u0002_#s_$chunkId",["0"]]}"""
+                val body = payload.toRequestBody()
+                val headers = headersBuilder()
+                    .set("X-QRL", chunkId)
+                    .set("Content-Type", "application/qwik-json")
+                    .build()
+                val response = client.newCall(POST(url.toString(), headers, body)).execute()
+                return response.parseAs<QwikData>().parseAsList<QwikSeriesDto>()
+                    .also { series -> seriesCache = series }
+            }
+        }
+
+        throw Exception("No se pudo encontrar la lista de series.")
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
         val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
         return MangasPage(mangaList, result.hasNextPage())
+    }
+
+    private fun qwikDataParse(query: String, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
+        val nsfwEnabled = preferences.showNsfwPref
+
+        val filteredSeries = seriesList
+            .filter { it.type == "comic" }
+            .filter { nsfwEnabled || !it.isMature }
+            .filter { it.name.contains(query, ignoreCase = true) }
+
+        val pagedSeries = filteredSeries
+            .drop((page - 1) * PAGE_SIZE)
+            .take(PAGE_SIZE)
+            .map { it.toSManga(imageCdnUrl) }
+
+        return MangasPage(pagedSeries, filteredSeries.size > page * PAGE_SIZE)
     }
 
     override fun getMangaUrl(manga: SManga) = preferences.prefBaseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
@@ -168,7 +266,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .substringAfter("/series/comic-")
             .substringBefore("#")
 
-        return GET("$apiBaseUrl/api/swf/series/$slug", lazyHeaders)
+        return GET("$apiBaseUrl/api/swf/series/$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -180,7 +278,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/series/comic-").substringBefore("#")
-        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", lazyHeaders)
+        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -192,7 +290,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
         var page = 2
         while (result.meta.hasNextPage()) {
-            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", lazyHeaders)).execute()
+            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", headers)).execute()
             result = json.decodeFromString<PayloadChaptersDto>(newResponse.body.string())
             mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
             page++
@@ -201,10 +299,17 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET(fetchedDomainUrl + chapter.url.substringBefore("#"), lazyHeaders)
+        GET(fetchedDomainUrl + chapter.url.substringBefore("#"), headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val request = response.request
+        var document = response.asJsoup()
+        document.selectFirst("button > span:contains(permitir nsfw)")?.let {
+            val newRequest = request.newBuilder()
+                .header("X-Add-Nsfw-Cookie", "1")
+                .build()
+            document = client.newCall(newRequest).execute().asJsoup()
+        }
         return document.select("section div.img > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
@@ -216,6 +321,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         fetchFilters()
 
         val filters = mutableListOf<Filter<*>>(
+            Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
+            Filter.Separator(),
             SortByFilter("Ordenar por", getSortProperties()),
         )
 
@@ -256,7 +363,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         fetchFiltersAttempts++
         thread {
             try {
-                val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", lazyHeaders)).execute()
+                val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", headers)).execute()
                 val filters = json.decodeFromString<PayloadFiltersDto>(response.body.string())
 
                 genresList = filters.data.genres.map { it.name.trim() to it.id }
@@ -349,6 +456,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         private const val FETCH_DOMAIN_PREF_TITLE = "Buscar dominio automáticamente"
         private const val FETCH_DOMAIN_PREF_SUMMARY = "Intenta buscar el dominio automáticamente al abrir la fuente."
         private const val FETCH_DOMAIN_PREF_DEFAULT = true
+
+        private const val PAGE_SIZE = 20
     }
 
     init {

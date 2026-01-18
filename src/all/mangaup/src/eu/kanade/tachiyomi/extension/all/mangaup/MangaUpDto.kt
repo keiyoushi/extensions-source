@@ -2,96 +2,119 @@ package eu.kanade.tachiyomi.extension.all.mangaup
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.SerialName
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.util.Date
+import kotlinx.serialization.protobuf.ProtoNumber
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
-data class MangaUpSearch(
-    val titles: List<MangaUpTitle> = emptyList(),
+class PopularResponse(
+    @ProtoNumber(2) val titles: List<MangaTitle>?,
 )
 
 @Serializable
-data class MangaUpViewer(
-    val pages: List<MangaUpPage> = emptyList(),
+class SearchResponse(
+    @ProtoNumber(1) val titles: List<MangaTitle>?,
 )
 
 @Serializable
-data class MangaUpTitle(
-    @SerialName("titleId") val id: Int? = null,
-    @SerialName("titleName") val name: String,
-    val authorName: String? = null,
-    val description: String? = null,
-    val copyright: String? = null,
-    val thumbnailUrl: String? = null,
-    val mainThumbnailUrl: String? = null,
-    val bookmarkCount: Int? = null,
-    val genres: List<MangaUpGenre> = emptyList(),
-    val chapters: List<MangaUpChapter> = emptyList(),
+class HomeResponse(
+    @ProtoNumber(6) val type: String,
+    @ProtoNumber(7) val updates: List<MangaTitle>?,
+    @ProtoNumber(11) val newSeries: List<MangaTitle>?,
+)
+
+@Serializable
+class MyPageResponse(
+    @ProtoNumber(1) val favorites: List<MangaTitle>?,
+    @ProtoNumber(2) val history: List<MangaTitle>?,
+)
+
+@Serializable
+class MangaTitle(
+    @ProtoNumber(1) private val id: Int,
+    @ProtoNumber(2) private val name: String,
+    @ProtoNumber(3) private val thumbnail: String?,
 ) {
-
-    private val fullDescription: String
-        get() = buildString {
-            description?.let { append(it) }
-            copyright?.let { append("\n\n" + it.replace("(C)", "© ")) }
-        }
-
-    private val isFinished: Boolean
-        get() = chapters.any { it.mainName.contains("final chapter", ignoreCase = true) }
-
-    val readableChapters: List<MangaUpChapter>
-        get() = chapters.filter(MangaUpChapter::isReadable).reversed()
-
-    fun toSManga(): SManga = SManga.create().apply {
-        title = name
-        author = authorName
-        description = fullDescription.trim()
-        genre = genres.joinToString { it.name }
-        status = if (isFinished) SManga.COMPLETED else SManga.ONGOING
-        thumbnail_url = mainThumbnailUrl ?: thumbnailUrl
+    fun toSManga(imgUrl: String) = SManga.create().apply {
         url = "/manga/$id"
+        title = name
+        thumbnail_url = imgUrl + thumbnail
     }
 }
 
 @Serializable
-data class MangaUpGenre(
-    val id: Int,
-    val name: String,
+class MangaDetailResponse(
+    @ProtoNumber(3) private val title: String,
+    @ProtoNumber(4) private val author: String?,
+    @ProtoNumber(5) private val copyright: String?,
+    @ProtoNumber(6) private val schedule: String?,
+    @ProtoNumber(7) private val warning: String?,
+    @ProtoNumber(8) private val description: String?,
+    @ProtoNumber(10) private val tags: List<GenreDto>?,
+    @ProtoNumber(11) private val thumbnail: String?,
+    @ProtoNumber(13) val chapters: List<MangaChapter>,
+) {
+    fun toSManga(mangaId: String, imgUrl: String) = SManga.create().apply {
+        url = "/manga/$mangaId"
+        title = this@MangaDetailResponse.title
+        author = this@MangaDetailResponse.author
+        description = buildString {
+            this@MangaDetailResponse.description?.let { append(it); append("\n\n") }
+            copyright?.let { append(it); append("\n\n") }
+            schedule?.let { append(it); append("\n\n") }
+            warning?.let { append(it) }
+        }.trim()
+        genre = tags?.joinToString { it.name }
+        thumbnail_url = imgUrl + thumbnail
+        status = if (chapters.any { it.status == 1 }) SManga.COMPLETED else SManga.ONGOING
+    }
+}
+
+@Serializable
+class GenreDto(
+    @ProtoNumber(2) val name: String,
 )
 
 @Serializable
-data class MangaUpChapter(
-    val id: Int,
-    val mainName: String,
-    val subName: String? = null,
-    val price: Int? = null,
-    val published: Int,
-    val badge: MangaUpBadge = MangaUpBadge.FREE,
-    val available: Boolean = false,
+class MangaChapter(
+    @ProtoNumber(1) private val id: Int,
+    @ProtoNumber(2) private val name: String,
+    @ProtoNumber(3) private val subtitle: String?,
+    @ProtoNumber(6) val price: Int?,
+    @ProtoNumber(9) private val dateStr: String?,
+    @ProtoNumber(12) val status: Int?,
 ) {
-
-    val isReadable: Boolean
-        get() = badge == MangaUpBadge.FREE && available
-
-    fun toSChapter(titleId: Int): SChapter = SChapter.create().apply {
-        name = mainName.replace(WRONG_SPACING_REGEX, "-$1") +
-            if (!subName.isNullOrEmpty()) ": $subName" else ""
-        date_upload = (published * 1000L).takeIf { it <= Date().time } ?: 0L
-        url = "/manga/$titleId/$id"
-    }
-
-    companion object {
-        private val WRONG_SPACING_REGEX = "\\s+-(\\d+)$".toRegex()
+    fun toSChapter(mangaId: String) = SChapter.create().apply {
+        url = "/manga/$mangaId/$id"
+        var title = this@MangaChapter.name + (if (subtitle != null) " - $subtitle" else "")
+        if (status == 1) {
+            title += " [Final]"
+        }
+        name = if (price != null) "🔒 $title" else title
+        date_upload = dateFormat.tryParse(dateStr)
     }
 }
 
-enum class MangaUpBadge {
-    FREE,
-    ADVANCE,
-    UPDATE,
+private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US).apply {
+    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
 }
 
 @Serializable
-data class MangaUpPage(
-    val imageUrl: String,
+class ViewerResponse(
+    @ProtoNumber(3) val pageBlocks: List<PageBlock>,
+)
+
+@Serializable
+class PageBlock(
+    @ProtoNumber(3) val pages: List<MangaPage>,
+)
+
+@Serializable
+class MangaPage(
+    @ProtoNumber(1) val url: String,
+    @ProtoNumber(5) val key: String?,
+    @ProtoNumber(6) val iv: String?,
 )
