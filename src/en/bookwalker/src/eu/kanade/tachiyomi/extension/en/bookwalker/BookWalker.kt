@@ -83,6 +83,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     private val cUrl = "https://c.$domain"
     private val memberApiUrl = "https://member-app.$domain/api"
     private val viewerUrl = "https://viewer.$domain"
+    private val trialUrl = "https://viewer-trial.$domain"
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(PublusInterceptor())
@@ -691,20 +692,29 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             val u1 = cookies.find { it.name == "u1" }?.value
             val u2 = cookies.find { it.name == "u2" }?.value
 
-            if (cid != null && !isTrial) {
+            if (cid != null) {
                 if (cty != null && cty != 1 && cty != 2) {
                     return@rxSingle webViewViewer(readerUrl, pagesCount)
                 }
 
-                val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
-                val loaderScript = client.newCall(GET(loaderUrl, callHeaders)).awaitSuccess().body.string()
-                val cr = fetchCr(loaderScript, chapterUrl.toString())
-                val cApiUrl = "$viewerUrl/browserWebApi/c".toHttpUrl().newBuilder().apply {
+                var cr: String? = null
+
+                if (!isTrial) {
+                    val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
+                    val loaderScript =
+                        client.newCall(GET(loaderUrl, callHeaders)).awaitSuccess().body.string()
+                    cr = fetchCr(loaderScript, chapterUrl.toString())
+                }
+
+                val cApiBase = if (isTrial) "$trialUrl/trial-page/c" else "$viewerUrl/browserWebApi/c"
+                val cApiUrl = cApiBase.toHttpUrl().newBuilder().apply {
                     addQueryParameter("cid", cid)
-                    if (u1 != null) addQueryParameter("u1", u1)
-                    if (u2 != null) addQueryParameter("u2", u2)
+                    if (!isTrial) {
+                        if (u1 != null) addQueryParameter("u1", u1)
+                        if (u2 != null) addQueryParameter("u2", u2)
+                        addQueryParameter("cr", cr)
+                    }
                     addQueryParameter("BID", "0") // universal
-                    addQueryParameter("cr", cr)
                 }.build()
 
                 val cResponse = client.newCall(GET(cApiUrl, callHeaders)).awaitSuccess()
@@ -713,31 +723,47 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     return@rxSingle webViewViewer(readerUrl, pagesCount)
                 }
 
-                authCache[cid] = Pair(content.authInfo, System.currentTimeMillis())
+                // For trail pages, auth data is valid for 1 hour.
+                // For normal pages, auth data is valid for 60 seconds.
+                if (!isTrial) {
+                    authCache[cid] = Pair(content.authInfo, System.currentTimeMillis())
+                }
+
                 val contentUrl = content.url
-                val configPack = "configuration_pack.json"
-                val configUrl = "$contentUrl$configPack".toHttpUrl().newBuilder()
-                    .addQueryParameter("hti", content.authInfo.hti)
-                    .addQueryParameter("cfg", content.authInfo.cfg.toString())
-                    .addQueryParameter("bid", content.authInfo.bid)
-                    .addQueryParameter("uuid", content.authInfo.uuid)
-                    .addQueryParameter("pfCd", content.authInfo.pfCd)
-                    .addQueryParameter("Policy", content.authInfo.policy)
-                    .addQueryParameter("Signature", content.authInfo.signature)
-                    .addQueryParameter("Key-Pair-Id", content.authInfo.keyPairId)
-                    .build()
+                val configUrl = (contentUrl + "configuration_pack.json").toHttpUrl().newBuilder().apply {
+                    if (!isTrial) {
+                        addQueryParameter("hti", content.authInfo.hti)
+                        addQueryParameter("cfg", content.authInfo.cfg.toString())
+                        addQueryParameter("BID", "0")
+                        addQueryParameter("uuid", content.authInfo.uuid)
+                    }
+                    addQueryParameter("pfCd", content.authInfo.pfCd)
+                    addQueryParameter("Policy", content.authInfo.policy)
+                    addQueryParameter("Signature", content.authInfo.signature)
+                    addQueryParameter("Key-Pair-Id", content.authInfo.keyPairId)
+                }.build()
+
+                val keys: List<IntArray>
+                val rootJson: Map<String, JsonElement>
 
                 val configResponse = client.newCall(GET(configUrl, callHeaders)).awaitSuccess()
-                val packData = configResponse.parseAs<ConfigPack>().data
-                val result = Decoder(packData).decode()
-                val rootJson = result.json.parseAs<Map<String, JsonElement>>()
+                if (isTrial) {
+                    rootJson = configResponse.parseAs()
+                    keys = listOf(IntArray(0), IntArray(0), IntArray(0))
+                } else {
+                    val packData = configResponse.parseAs<ConfigPack>().data
+                    val result = Decoder(packData).decode()
+                    rootJson = result.json.parseAs()
+                    keys = result.keys
+                }
+
                 val configElement = rootJson["configuration"] ?: throw Exception("Configuration not found in decrypted JSON")
                 val container = configElement.parseAs<PublusConfiguration>()
 
                 val sessionData = mutableMapOf<String, String>().apply {
                     put("cid", cid)
-                    put("bid", "0")
-                    put("cr", cr!!)
+                    put("isTrial", isTrial.toString())
+                    if (cr != null) put("cr", cr)
                     if (u1 != null) put("u1", u1)
                     if (u2 != null) put("u2", u2)
                 }
@@ -748,7 +774,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
                     val pageConfig = pageJson.toString().parseAs<PublusPageConfig>()
                     val details = pageConfig.fileLinkInfo.pageLinkInfoList[0].page
-                    val isScrambled = details.blockWidth > 0 && details.blockHeight > 0
+                    val isScrambled = !isTrial && details.blockWidth > 0 && details.blockHeight > 0
                     val bw = if (details.blockWidth == 0) 32 else details.blockWidth
                     val bh = if (details.blockHeight == 0) 32 else details.blockHeight
 
@@ -764,8 +790,8 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                         width = details.size.width,
                         height = details.size.height,
                         hti = content.authInfo.hti,
-                        cfg = content.authInfo.cfg.toString(),
-                        bid = content.authInfo.bid,
+                        cfg = content.authInfo.cfg?.toString(),
+                        bid = "0",
                         uuid = content.authInfo.uuid,
                         pfCd = content.authInfo.pfCd,
                         policy = content.authInfo.policy,
@@ -776,7 +802,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     )
                 }
 
-                generatePages(pageContent, result.keys, contentUrl)
+                generatePages(pageContent, keys, contentUrl)
             } else {
                 webViewViewer(readerUrl, pagesCount)
             }
@@ -857,6 +883,10 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             val fragmentJson = String(Base64.decode(fragment, Base64.URL_SAFE), StandardCharsets.UTF_8)
             val params = fragmentJson.parseAs<PublusFragment>()
             val extra = params.extra
+            if (extra?.get("isTrial") == "true") {
+                return GET(imageUrl, callHeaders)
+            }
+
             if (extra != null && extra.containsKey("cid")) {
                 val cid = extra["cid"]!!
                 val cached = authCache[cid]
@@ -871,7 +901,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                             try {
                                 val refreshUrl = "$viewerUrl/browserWebApi/c".toHttpUrl().newBuilder().apply {
                                     addQueryParameter("cid", cid)
-                                    addQueryParameter("BID", extra["bid"])
+                                    addQueryParameter("BID", "0")
                                     addQueryParameter("cr", extra["cr"])
                                     extra["u1"]?.let { addQueryParameter("u1", it) }
                                     extra["u2"]?.let { addQueryParameter("u2", it) }
@@ -897,7 +927,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     val newUrl = baseUrl.toHttpUrl().newBuilder().apply {
                         addQueryParameter("hti", it.hti)
                         addQueryParameter("cfg", it.cfg.toString())
-                        addQueryParameter("bid", it.bid)
+                        addQueryParameter("BID", "0")
                         addQueryParameter("uuid", it.uuid)
                         addQueryParameter("pfCd", it.pfCd)
                         addQueryParameter("Policy", it.policy)

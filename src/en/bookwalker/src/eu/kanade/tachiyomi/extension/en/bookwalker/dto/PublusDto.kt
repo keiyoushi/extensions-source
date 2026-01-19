@@ -12,10 +12,9 @@ class CPhpResponse(
 
 @Serializable
 class AuthInfo(
-    val hti: String,
-    val cfg: Int,
-    val bid: String,
-    val uuid: String,
+    val hti: String?,
+    val cfg: Int?,
+    val uuid: String?,
     val pfCd: String,
     @SerialName("Policy") val policy: String,
     @SerialName("Signature") val signature: String,

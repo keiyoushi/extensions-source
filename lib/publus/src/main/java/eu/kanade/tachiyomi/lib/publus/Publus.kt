@@ -468,6 +468,10 @@ object Publus {
 
     object PublusImage {
         fun generateFilename(pageId: String, keys: List<IntArray>): String {
+            if (keys.isEmpty() || keys[0].isEmpty()) {
+                return "$pageId/0.jpeg"
+            }
+
             val k1 = keys[0]; val k2 = keys[1]; val k3 = keys[2]
             val fileName = "0"
             val parentFolder = "$pageId/"
