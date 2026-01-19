@@ -3,7 +3,7 @@ ext {
     extClass = '.greedscans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://greedscans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = false
 }
 
