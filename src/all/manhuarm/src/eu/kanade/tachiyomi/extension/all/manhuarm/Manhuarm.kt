@@ -491,8 +491,8 @@ class Manhuarm(
 
         EditTextPreference(screen.context).apply {
             key = CUSTOM_UA_PREF
-            title = "Custom User-Agent"
-            summary = "Set a custom User-Agent for requests. Leave blank to use the default."
+            title = i18n["custom_user_agent_title"]
+            summary = i18n["custom_user_agent_message"]
             setDefaultValue(customUserAgent)
             setOnPreferenceChange { _, newValue ->
                 customUserAgent = (newValue as String).trim()
