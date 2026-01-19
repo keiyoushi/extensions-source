@@ -723,7 +723,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     return@rxSingle webViewViewer(readerUrl, pagesCount)
                 }
 
-                // For trail pages, auth data is valid for 1 hour.
+                // For trial pages, auth data is valid for 1 hour.
                 // For normal pages, auth data is valid for 60 seconds.
                 if (!isTrial) {
                     authCache[cid] = Pair(content.authInfo, System.currentTimeMillis())
