@@ -216,7 +216,7 @@ class Manhuarm(
         return GET(url, headers)
     }
 
-    override fun latestUpdatesSelector(): String = ".page-item-detail, .manga-card"
+    override fun latestUpdatesSelector(): String = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -230,7 +230,7 @@ class Manhuarm(
         return manga
     }
 
-    override fun latestUpdatesNextPageSelector(): String = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // =========================== Details ==========================================
     /**
