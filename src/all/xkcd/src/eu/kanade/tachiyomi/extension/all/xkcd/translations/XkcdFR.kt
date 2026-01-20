@@ -17,30 +17,50 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
 
     override val imageSelector = "#content .s"
 
-    override fun String.numbered(number: Any) = "$number. $this"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val englishDates = getComicDateMappingFromEnglishArchive()
 
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(chapterListSelector).map {
+        val chapters = response.asJsoup().select(chapterListSelector).map {
             SChapter.create().apply {
                 url = "/" + it.attr("href")
-                val number = url.substringAfter('=')
-                name = it.text().numbered(number)
-                chapter_number = number.toFloat()
-                // no dates available
-                date_upload = 0L
+                val comicNumber = url.substringAfter('=').toIntOrNull()
+
+                name = chapterTitleFormatter(comicNumber ?: 0, it.text())
+                chapter_number = comicNumber?.toFloat() ?: 0f
+
+                // use English publication date instead of translation date
+                date_upload = if (comicNumber != null && englishDates.containsKey(comicNumber)) {
+                    val dateStr = englishDates[comicNumber]!!
+                    dateStr.timestamp()
+                } else {
+                    0L
+                }
             }
         }
 
-    override fun pageListParse(response: Response) =
-        response.asJsoup().selectFirst(imageSelector)!!.let {
-            // no interactive comics here
-            val img = it.child(2).child(0).child(0)
+        // French archive lists oldest first
+        return chapters.reversed()
+    }
 
-            // create a text image for the alt text
-            val text = TextInterceptorHelper.createUrl(it.child(0).text(), img.attr("alt"))
+    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
+        return container.selectFirst("img[src^='strips/']")
+    }
 
-            listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
-        }
+    override fun pageListParse(response: Response): List<Page> {
+        val container = response.asJsoup().selectFirst(imageSelector)
+            ?: error(interactiveText)
+
+        val img = container.selectFirst("img[src^='strips/']") ?: error(interactiveText)
+
+        // Get alt text - try from first child, fallback to img alt
+        val altText = container.selectFirst("div:not(.buttons)")?.text()?.takeIf { it.isNotBlank() }
+            ?: img.attr("alt")
+
+        // create a text image for the alt text
+        val text = TextInterceptorHelper.createUrl(altText, img.attr("title"))
+
+        return listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
+    }
 
     override val interactiveText: String
         get() = throw UnsupportedOperationException()

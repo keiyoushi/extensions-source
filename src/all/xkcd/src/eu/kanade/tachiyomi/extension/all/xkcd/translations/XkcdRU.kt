@@ -18,26 +18,40 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
 
     override val imageSelector = ".main"
 
-    override fun String.numbered(number: Any) = "$number: $this"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val englishDates = getComicDateMappingFromEnglishArchive()
 
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(chapterListSelector).map {
+        return response.asJsoup().select(chapterListSelector).map {
             SChapter.create().apply {
                 url = it.attr("href")
-                name = it.child(0).attr("title")
-                chapter_number = url.removeSurrounding("/").toFloat()
-                // no dates available
-                date_upload = 0L
+                val comicNumber = url.removeSurrounding("/").toIntOrNull()
+                val title = it.child(0).attr("alt")
+
+                name = chapterTitleFormatter(comicNumber ?: 0, title)
+                chapter_number = comicNumber?.toFloat() ?: 0f
+
+                // use English publication date instead of translation date
+                date_upload = if (comicNumber != null && englishDates.containsKey(comicNumber)) {
+                    englishDates[comicNumber]!!.timestamp()
+                } else {
+                    0L
+                }
             }
         }
+    }
+
+    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
+        return container.selectFirst("img[src*='/i/']")
+    }
 
     override fun pageListParse(response: Response) =
-        response.asJsoup().selectFirst(imageSelector)!!.let {
+        response.asJsoup().selectFirst(imageSelector)!!.let { container ->
             // no interactive comics here
-            val img = it.child(5).child(0)
+            val img = container.selectFirst("img[src*='/i/']")!!
 
             // create a text image for the alt text
-            val text = TextInterceptorHelper.createUrl(img.attr("alt"), it.child(7).text())
+            val description = container.selectFirst(".comics_text")?.text() ?: img.attr("alt")
+            val text = TextInterceptorHelper.createUrl(img.attr("alt"), description)
 
             listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
         }
