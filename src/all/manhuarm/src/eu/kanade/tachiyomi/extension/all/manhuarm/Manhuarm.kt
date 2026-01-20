@@ -44,7 +44,7 @@ class Manhuarm(
     private val language: Language,
 ) : Madara(
     "Manhuarm",
-    "https://manhuarmmtl.com",
+    "https://manhuarmtl.com",
     language.lang,
 ),
     ConfigurableSource {
