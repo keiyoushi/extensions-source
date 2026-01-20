@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.id.komikcast
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.DecimalFormat
@@ -116,13 +117,5 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale
 
 private fun parseChapterDate(dateString: String): Long {
     if (dateString.isBlank()) return 0L
-    return try {
-        dateFormat.parse(dateString)?.time ?: 0L
-    } catch (e: Exception) {
-        try {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT).parse(dateString)?.time ?: 0L
-        } catch (e2: Exception) {
-            0L
-        }
-    }
+    return dateFormat.tryParse(dateString) ?: 0L
 }

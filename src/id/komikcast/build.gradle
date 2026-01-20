@@ -1,7 +1,7 @@
 ext {
     extName = 'Komik Cast'
     extClass = '.KomikCast'
-    extVersionCode = 40
+    extVersionCode = 70
     isNsfw = false
 }
 

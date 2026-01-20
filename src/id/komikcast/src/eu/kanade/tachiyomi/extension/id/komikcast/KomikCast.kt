@@ -17,7 +17,7 @@ import okhttp3.Response
 
 class KomikCast : HttpSource() {
 
-    override val id = 972717448578983812
+    override val versionId = 2
 
     override val name = "Komik Cast"
 
@@ -80,7 +80,8 @@ class KomikCast : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = parseSeriesListResponse(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfter("/series/").substringBefore("/")
+        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val slug = path[1]
         return GET("$apiUrl/series/$slug", headers)
     }
 
@@ -90,20 +91,21 @@ class KomikCast : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfter("/series/").substringBefore("/")
+        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val slug = path[1]
         return GET("$apiUrl/series/$slug/chapters", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ChapterListResponse>()
-        val slug = response.request.url.pathSegments.getOrNull(1) ?: ""
+        val slug = response.request.url.pathSegments[1]
         return result.data.map { it.toSChapter(slug) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val urlParts = chapter.url.substringAfter("/series/").split("/")
-        val slug = urlParts.getOrNull(0) ?: ""
-        val chapterIndex = urlParts.getOrNull(2) ?: ""
+        val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        val slug = path[1]
+        val chapterIndex = path[3]
         return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
     }
 
@@ -133,56 +135,6 @@ class KomikCast : HttpSource() {
             GenreFilter(getGenres()),
         )
     }
-
-    private fun getGenres(): Array<Pair<String, String>> = arrayOf(
-        Pair("4-Koma", "4-Koma"),
-        Pair("Adventure", "Adventure"),
-        Pair("Cooking", "Cooking"),
-        Pair("Game", "Game"),
-        Pair("Gore", "Gore"),
-        Pair("Harem", "Harem"),
-        Pair("Historical", "Historical"),
-        Pair("Horror", "Horror"),
-        Pair("Isekai", "Isekai"),
-        Pair("Josei", "Josei"),
-        Pair("Magic", "Magic"),
-        Pair("Martial Arts", "Martial Arts"),
-        Pair("Mature", "Mature"),
-        Pair("Mecha", "Mecha"),
-        Pair("Medical", "Medical"),
-        Pair("Military", "Military"),
-        Pair("Music", "Music"),
-        Pair("Mystery", "Mystery"),
-        Pair("One-Shot", "One-Shot"),
-        Pair("Police", "Police"),
-        Pair("Psychological", "Psychological"),
-        Pair("Reincarnation", "Reincarnation"),
-        Pair("Romance", "Romance"),
-        Pair("School", "School"),
-        Pair("School Life", "School Life"),
-        Pair("Sci-Fi", "Sci-Fi"),
-        Pair("Seinen", "Seinen"),
-        Pair("Shoujo", "Shoujo"),
-        Pair("Shoujo Ai", "Shoujo Ai"),
-        Pair("Action", "Action"),
-        Pair("Comedy", "Comedy"),
-        Pair("Demons", "Demons"),
-        Pair("Drama", "Drama"),
-        Pair("Ecchi", "Ecchi"),
-        Pair("Fantasy", "Fantasy"),
-        Pair("Gender Bender", "Gender Bender"),
-        Pair("Shounen", "Shounen"),
-        Pair("Shounen Ai", "Shounen Ai"),
-        Pair("Slice of Life", "Slice of Life"),
-        Pair("Sports", "Sports"),
-        Pair("Super Power", "Super Power"),
-        Pair("Supernatural", "Supernatural"),
-        Pair("Thriller", "Thriller"),
-        Pair("Tragedy", "Tragedy"),
-        Pair("Vampire", "Vampire"),
-        Pair("Webtoons", "Webtoons"),
-        Pair("Yuri", "Yuri"),
-    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
