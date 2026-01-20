@@ -31,6 +31,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
@@ -44,7 +45,7 @@ class Manhuarm(
     private val language: Language,
 ) : Madara(
     "Manhuarm",
-    "https://manhuarmmtl.com",
+    "https://manhuarmtl.com",
     language.lang,
 ),
     ConfigurableSource {
@@ -165,16 +166,8 @@ class Manhuarm(
         val builder = super.headersBuilder()
         val ua = customUserAgent.trim()
         if (ua.isNotEmpty()) {
-            builder.set("User-Agent", ua)
+            builder["User-Agent"] = ua
         }
-        builder.set("Accept-Language", "en-US,en;q=0.9")
-        builder.set("Upgrade-Insecure-Requests", "1")
-        builder.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
-        builder.set("Sec-Fetch-Site", "none")
-        builder.set("Sec-Fetch-Mode", "navigate")
-        builder.set("Sec-Fetch-User", "?1")
-        builder.set("Sec-Fetch-Dest", "document")
-        builder.set("Priority", "u=0, i")
         return builder
     }
 
@@ -187,59 +180,9 @@ class Manhuarm(
         set(Calendar.MILLISECOND, 0)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).filter {
-            language.target == language.origin || Date(it.date_upload).after(translationAvailability.time)
-        }
-    }
+    // =========================== Popular ==========================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = super.pageListParse(document)
-        val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
-        val chapterUrl = document.location().toHttpUrl().newBuilder()
-            .removeAllQueryParameters("style")
-            .build()
-
-        // Use minimal headers for JSON request - Cloudflare may be blocking complex requests
-        val jsonHeaders = Headers.Builder()
-            .add("Referer", chapterUrl.toString())
-            .add("Accept", "*/*")
-            .build()
-
-        val dialog = try {
-            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", jsonHeaders))
-                .execute()
-
-            // If server returns error (403, etc), skip translations
-            if (!response.isSuccessful) {
-                response.close()
-                emptyList()
-            } else {
-                response.parseAs<List<PageDto>>()
-            }
-        } catch (e: Exception) {
-            // If JSON parsing fails, skip translations
-            emptyList()
-        }
-
-        if (dialog.isEmpty()) {
-            return pages
-        }
-
-        return dialog.mapIndexed { index, dto ->
-            val page = pages.first { it.imageUrl?.contains(dto.imageUrl, true)!! }
-            val fragment = json.encodeToString<List<Dialog>>(
-                dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
-            )
-            if (dto.dialogues.isEmpty()) {
-                return@mapIndexed page
-            }
-
-            Page(index, imageUrl = "${page.imageUrl}${fragment.toFragment()}")
-        }
-    }
-
-    override fun popularMangaRequest(page: Int): okhttp3.Request {
+    override fun popularMangaRequest(page: Int): Request {
         val url = if (page == 1) {
             "$baseUrl/manga/?m_orderby=trending"
         } else {
@@ -260,9 +203,11 @@ class Manhuarm(
         return manga
     }
 
-    override fun popularMangaNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+    override fun popularMangaNextPageSelector(): String = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
 
-    override fun latestUpdatesRequest(page: Int): okhttp3.Request {
+    // =========================== Latest ==========================================
+
+    override fun latestUpdatesRequest(page: Int): Request {
         val url = if (page == 1) {
             "$baseUrl/manga/?m_orderby=latest"
         } else {
@@ -271,7 +216,7 @@ class Manhuarm(
         return GET(url, headers)
     }
 
-    override fun latestUpdatesSelector(): String = ".page-item-detail, .manga-card"
+    override fun latestUpdatesSelector(): String = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -285,8 +230,9 @@ class Manhuarm(
         return manga
     }
 
-    override fun latestUpdatesNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
+    // =========================== Details ==========================================
     /**
      * Extracts the cover image URL from an image element, checking multiple attributes
      * to handle lazy loading and different image formats.
@@ -333,6 +279,82 @@ class Manhuarm(
 
         return manga
     }
+
+    // =========================== Chapters =======================================
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return super.chapterListParse(response).filter {
+            language.target == language.origin || Date(it.date_upload).after(translationAvailability.time)
+        }
+    }
+
+    // =========================== Pages ==========================================
+
+    override fun pageListParse(document: Document): List<Page> {
+        val pages = super.pageListParse(document)
+        val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
+        val chapterUrl = document.location().toHttpUrl().newBuilder()
+            .removeAllQueryParameters("style")
+            .build()
+
+        // Use minimal headers for JSON request - Cloudflare may be blocking complex requests
+        val jsonHeaders = Headers.Builder()
+            .add("Referer", chapterUrl.toString())
+            .add("Accept", "*/*")
+            .build()
+
+        val dialog = try {
+            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", jsonHeaders))
+                .execute()
+
+            // If server returns error (403, etc), skip translations
+            if (!response.isSuccessful) {
+                response.close()
+                emptyList()
+            } else {
+                response.parseAs<List<PageDto>>()
+            }
+        } catch (_: Exception) {
+            // If JSON parsing fails, skip translations
+            emptyList()
+        }
+
+        if (dialog.isEmpty()) {
+            return pages
+        }
+
+        return dialog.mapIndexed { index, dto ->
+            val page = pages.first { it.imageUrl?.contains(dto.imageUrl, true)!! }
+            val fragment = json.encodeToString<List<Dialog>>(
+                dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
+            )
+            if (dto.dialogues.isEmpty()) {
+                return@mapIndexed page
+            }
+
+            Page(index, imageUrl = "${page.imageUrl}${fragment.toFragment()}")
+        }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val imageHeaders = headersBuilder()
+            .set("Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
+            .set("Referer", "$baseUrl/")
+            .set("Connection", "keep-alive")
+            .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+            .set("Accept-Encoding:", "gzip, deflate, br, zstd")
+            .set("Sec-Fetch-Dest", "image")
+            .set("Sec-Fetch-Mode", "no-cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .set("Sec-Fetch-Storage-Access", "none")
+            .set("Priority", "u=5, i")
+            .set("TE", "trailers")
+            .build()
+
+        return GET(page.imageUrl!!, imageHeaders)
+    }
+
+    // ================================ Utils ============================================
 
     // Prevent bad fragments
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
@@ -469,8 +491,8 @@ class Manhuarm(
 
         EditTextPreference(screen.context).apply {
             key = CUSTOM_UA_PREF
-            title = "Custom User-Agent"
-            summary = "Set a custom User-Agent for requests. Leave blank to use the default."
+            title = i18n["custom_user_agent_title"]
+            summary = i18n["custom_user_agent_message"]
             setDefaultValue(customUserAgent)
             setOnPreferenceChange { _, newValue ->
                 customUserAgent = (newValue as String).trim()
@@ -540,7 +562,6 @@ class Manhuarm(
 
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
-        val NONCE_REGEX = """(?:const\s+nonce\s*=\s*'|\"nonce\"\s*:\s*\")(.*?)['\"]""".toRegex()
 
         const val DEVICE_FONT = "device:"
         private const val FONT_SIZE_PREF = "fontSizePref"
