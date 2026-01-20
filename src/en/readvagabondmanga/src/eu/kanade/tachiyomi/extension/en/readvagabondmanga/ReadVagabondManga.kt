@@ -89,8 +89,7 @@ class ReadVagabondManga : HttpSource() {
         return (1..chapter.pageCount).map { page ->
             Page(
                 index = page - 1,
-                imageUrl =
-                    "https://manga.readbagabondo.com/volume-${chapter.volume}/chapter-${chapter.number}/page-$page",
+                imageUrl = "https://manga.readbagabondo.com/volume-${chapter.volume}/chapter-${chapter.number}/page-$page",
             )
         }
     }
