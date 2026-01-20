@@ -15,7 +15,7 @@ class gafeland : MangaThemesia(
 ) {
 
     override fun pageListParse(document: Document): List<Page> {
-        // "ts_reader.run({" in base64
+        // dHNfcmVhZGVyLnJ1bih7 is "ts_reader.run({" in base64
         val script = document.selectFirst("script[src^=data:text/javascript;base64,dHNfcmVhZGVyLnJ1bih7]")
             ?: return super.pageListParse(document)
         val data = Base64.decode(script.attr("src").substringAfter("base64,"), Base64.DEFAULT).toString(Charsets.UTF_8)
@@ -30,27 +30,4 @@ class gafeland : MangaThemesia(
             Page(i, imageUrl = jsonEl.jsonPrimitive.content)
         }
     }
-    override val seriesArtistSelector: String
-        get() {
-            val base = super.seriesArtistSelector
-            selector(
-                ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)",
-                listOf(
-                    "artist",
-                    "Artiste",
-                    "Artista",
-                    "الرسام",
-                    "الناشر",
-                    "İllüstratör",
-                       "Çizer",
-                )
-            // your custom logic here
-            return "$base AND is_active = 1"
-        }
-
-    override val seriesArtistSelector = ,
-    )
-    override val seriesArtistSelector: String
-        get() = super.seriesArtistSelector
-
 }
