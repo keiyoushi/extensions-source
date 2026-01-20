@@ -263,7 +263,7 @@ abstract class ComiciViewer(
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val apiHeaders = super.headersBuilder()
+        val newHeaders = super.headersBuilder()
             .set("Referer", response.request.url.toString())
             .build()
 
@@ -274,7 +274,7 @@ abstract class ComiciViewer(
             val episodeId = response.request.url.pathSegments.last()
             try {
                 val episodeApiUrl = "$apiUrl/episodes/$episodeId"
-                val accessRequest = GET(episodeApiUrl, apiHeaders, CacheControl.FORCE_NETWORK)
+                val accessRequest = GET(episodeApiUrl, newHeaders, CacheControl.FORCE_NETWORK)
                 val apiResponse = client.newCall(accessRequest).execute()
                 if (apiResponse.isSuccessful) {
                     comiciViewerId = apiResponse.parseAs<EpisodeDetailsApiResponse>()
@@ -297,7 +297,7 @@ abstract class ComiciViewer(
 
         val userId = if (apiUrl != null) {
             try {
-                val userInfoResponse = client.newCall(GET("$apiUrl/user/info", apiHeaders)).execute()
+                val userInfoResponse = client.newCall(GET("$apiUrl/user/info", newHeaders)).execute()
                 userInfoResponse.parseAs<UserInfoApiResponse>().user?.id
             } catch (_: Exception) {
                 memberJwt
@@ -312,10 +312,10 @@ abstract class ComiciViewer(
             .addQueryParameter("user-id", userId)
             .addQueryParameter("page-from", "0")
 
-        val pageTo = client.newCall(GET(requestUrl.addQueryParameter("page-to", "1").build(), apiHeaders)).execute()
+        val pageTo = client.newCall(GET(requestUrl.addQueryParameter("page-to", "1").build(), newHeaders)).execute()
         val pageToResponse = pageTo.parseAs<ViewerResponse>().totalPages.toString()
         val getAllPagesUrl = requestUrl.setQueryParameter("page-to", pageToResponse).build()
-        val getAllPagesRequest = client.newCall(GET(getAllPagesUrl, apiHeaders)).execute()
+        val getAllPagesRequest = client.newCall(GET(getAllPagesUrl, newHeaders)).execute()
         return getAllPagesRequest.parseAs<ViewerResponse>().result.map {
             val urlBuilder = it.imageUrl.toHttpUrl().newBuilder()
             if (it.scramble.isNotEmpty()) {
