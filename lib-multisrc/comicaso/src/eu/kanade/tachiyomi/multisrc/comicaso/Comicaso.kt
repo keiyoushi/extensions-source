@@ -7,17 +7,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -28,19 +24,18 @@ abstract class Comicaso(
     override val lang: String,
     private val pageSize: Int = 16,
     private val excludedGenres: Set<String> = emptySet(),
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
-
-    private val json: Json by injectLazy()
 
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    // Popular
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/wp-json/neoglass/v1/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("paged", page.toString())
@@ -51,11 +46,12 @@ abstract class Comicaso(
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = json.decodeFromString<MangaListResponse>(response.body.string())
+        val result = response.parseAs<MangaListResponse>()
         val mangas = result.items.map { it.toSManga() }
         return MangasPage(mangas, result.items.size == pageSize)
     }
 
+    // Latest
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/v2/?page=$page"
         return GET(url, headers)
@@ -63,26 +59,22 @@ abstract class Comicaso(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
-            latestUpdatesFromElement(element)
+        val mangas = document.select("div.ng-list div.ng-list-item").map { element ->
+            SManga.create().apply {
+                val thumb = element.selectFirst("div.ng-list-thumb")!!
+                val link = thumb.selectFirst("a")!!.absUrl("href")
+                title = element.selectFirst("div.ng-list-info a h3")!!.text()
+                thumbnail_url = thumb.selectFirst("img")?.let { img ->
+                    img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
+                } ?: ""
+                setUrlWithoutDomain(link)
+            }
         }
-        return MangasPage(mangas, document.select(latestUpdatesNextPageSelector()).isNotEmpty())
+        val hasNextPage = document.selectFirst("div.ng-pagination a.ng-page-btn.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesSelector() = "div.ng-list div.ng-list-item"
-
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        val thumb = element.selectFirst("div.ng-list-thumb")!!
-        val link = thumb.selectFirst("a")!!.absUrl("href")
-        title = element.selectFirst("div.ng-list-info a h3")!!.text()
-        thumbnail_url = thumb.selectFirst("img")?.let { img ->
-            img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-        } ?: ""
-        setUrlWithoutDomain(link)
-    }
-
-    override fun latestUpdatesNextPageSelector() = "div.pagination a.next:not(.disabled)"
-
+    // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/wp-json/neoglass/v1/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("paged", page.toString())
@@ -112,6 +104,9 @@ abstract class Comicaso(
 
         return GET(url.build(), headers)
     }
+
+    override fun searchMangaParse(response: Response): MangasPage =
+        popularMangaParse(response)
 
     protected open fun genreToSlug(genre: String): String {
         return when (genre) {
@@ -227,59 +222,60 @@ abstract class Comicaso(
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    // Details
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1.ng-detail-title")!!.text()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.ng-detail-title")!!.text()
+            description = buildString {
+                document.selectFirst("p.ng-desc")?.text()?.let { append(it) }
 
-        description = buildString {
-            document.selectFirst("p.ng-desc")?.text()?.let { append(it) }
+                document.selectFirst(".ng-meta-info p:contains(Alternative:)")
+                    ?.ownText()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let {
+                        if (isNotEmpty()) append("\n\n")
+                        append("Alternative: ")
+                        append(it)
+                    }
+            }
 
-            document.selectFirst(".ng-meta-info p:contains(Alternative:)")
+            status = document.selectFirst(".ng-meta-info p:contains(Status:)")
                 ?.ownText()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let {
-                    if (isNotEmpty()) append("\n\n")
-                    append("Alternative: ")
-                    append(it)
-                }
+                ?.let { statusText ->
+                    when {
+                        statusText.contains("On-going", ignoreCase = true) -> SManga.ONGOING
+                        statusText.contains("End", ignoreCase = true) -> SManga.COMPLETED
+                        else -> SManga.UNKNOWN
+                    }
+                } ?: SManga.UNKNOWN
+
+            genre = document.select(".ng-meta-row:contains(Genres:)")
+                .text()
+                .substringAfter("Genres:")
+                .split(",")
+                .mapNotNull { it.trim().takeIf { s -> s.isNotEmpty() } }
+                .joinToString()
+
+            thumbnail_url = document.selectFirst(".ng-detail-cover")
+                ?.attr("style")
+                ?.substringAfter("url('")
+                ?.substringBefore("')") ?: thumbnail_url
         }
-
-        status = document.selectFirst(".ng-meta-info p:contains(Status:)")
-            ?.ownText()
-            ?.let { statusText ->
-                when {
-                    statusText.contains("On-going", ignoreCase = true) -> SManga.ONGOING
-                    statusText.contains("End", ignoreCase = true) -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            } ?: SManga.UNKNOWN
-
-        genre = document.select(".ng-meta-row:contains(Genres:)")
-            .text()
-            .substringAfter("Genres:")
-            .split(",")
-            .mapNotNull { it.trim().takeIf { s -> s.isNotEmpty() } }
-            .joinToString()
-
-        thumbnail_url = document.selectFirst(".ng-detail-cover")
-            ?.attr("style")
-            ?.substringAfter("url('")
-            ?.substringBefore("')") ?: thumbnail_url
     }
 
-    override fun chapterListSelector() = "ul.ng-chapter-list li.ng-chapter-item"
-
+    // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val link = element.selectFirst("a.ng-btn.ng-read-small")!!
-        setUrlWithoutDomain(link.attr("href"))
-        name = element.selectFirst(".ng-chapter-title")?.text() ?: "Chapter"
-        date_upload = element.selectFirst(".ng-chapter-date")?.text()?.let { parseChapterDate(it) } ?: 0L
+        val document = response.asJsoup()
+        return document.select("ul.ng-chapter-list li.ng-chapter-item").map { element ->
+            SChapter.create().apply {
+                val link = element.selectFirst("a.ng-btn.ng-read-small")!!
+                setUrlWithoutDomain(link.attr("href"))
+                name = element.selectFirst(".ng-chapter-title")?.text() ?: "Chapter"
+                date_upload = element.selectFirst(".ng-chapter-date")?.text()?.let { parseChapterDate(it) } ?: 0L
+            }
+        }.reversed()
     }
 
     private fun parseChapterDate(dateStr: String): Long {
@@ -307,15 +303,18 @@ abstract class Comicaso(
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    // Pages
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         return document.select("div.ng-chapter-images div.ng-chapter-image img").mapIndexed { index, img ->
             val imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
             Page(index, document.location(), imageUrl)
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // Filter
     override fun getFilterList(): FilterList {
         val genres = ALL_GENRES.filterNot { it in excludedGenres }.toTypedArray()
         return FilterList(
@@ -451,16 +450,4 @@ abstract class Comicaso(
         "Status",
         arrayOf("All", "Completed"),
     )
-
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 }
