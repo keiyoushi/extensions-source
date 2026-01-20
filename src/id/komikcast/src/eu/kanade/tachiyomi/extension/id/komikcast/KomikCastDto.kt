@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -61,7 +62,7 @@ data class ChapterItem(
 
 @Serializable
 data class ChapterData(
-    val index: Int,
+    val index: Float,
     val title: String? = null,
 )
 
@@ -94,14 +95,21 @@ fun SeriesItem.toSManga(): SManga = SManga.create().apply {
 
 fun ChapterItem.toSChapter(seriesSlug: String?): SChapter = SChapter.create().apply {
     val chapterIndex = data.index
+    val formattedIndex = formatChapterNumber(chapterIndex)
     url = "/series/$seriesSlug/chapters/$chapterIndex"
     name = if (data.title.isNullOrBlank()) {
-        "Chapter $chapterIndex"
+        "Chapter $formattedIndex"
     } else {
-        "Chapter $chapterIndex: ${data.title}"
+        "Chapter $formattedIndex: ${data.title}"
     }
     date_upload = parseChapterDate(createdAt ?: updatedAt ?: "")
-    chapter_number = chapterIndex.toFloat()
+    chapter_number = chapterIndex
+}
+
+private val chapterNumberFormatter = DecimalFormat("#.##")
+
+private fun formatChapterNumber(number: Float): String {
+    return chapterNumberFormatter.format(number)
 }
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
