@@ -6,10 +6,8 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
-import okhttp3.Response
 
 class FairyScans :
     MangaThemesia("Fairy Scans", "https://fairyscans.com", "en"),
@@ -28,13 +26,6 @@ class FairyScans :
             super.chapterListSelector(),
             preferences,
         )
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).filterNot { chapter ->
-            // Additional filter: skip chapters without valid URLs (locked chapters have no href)
-            chapter.url.isBlank() || chapter.url == "#"
-        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
