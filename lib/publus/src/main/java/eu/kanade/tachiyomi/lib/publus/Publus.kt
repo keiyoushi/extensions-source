@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -31,6 +32,8 @@ class PublusFragment(
     val k1: List<Int>,
     val k2: List<Int>,
     val k3: List<Int>,
+    val extra: Map<String, String>? = null,
+    val s: Boolean = true,
 )
 
 class PublusPage(
@@ -44,6 +47,16 @@ class PublusPage(
     val blockHeight: Int,
     val width: Int,
     val height: Int,
+    val hti: String? = null,
+    val cfg: String? = null,
+    val bid: String? = null,
+    val uuid: String? = null,
+    val pfCd: String? = null,
+    val policy: String? = null,
+    val signature: String? = null,
+    val keyPairId: String? = null,
+    val extra: Map<String, String>? = null,
+    val scrambled: Boolean = true,
 )
 
 class PublusPageAttributes(
@@ -73,29 +86,42 @@ object Publus {
         val k2 = keys[1].toList()
         val k3 = keys[2].toList()
 
-        return pages.map {
-            val filename = PublusImage.generateFilename(it.filename, keys)
-            val imgUrl = imageUrlPrefix + filename
+        return pages.map { p ->
+            val filename = PublusImage.generateFilename(p.filename, keys)
+            val urlBuilder = (imageUrlPrefix + filename).toHttpUrl().newBuilder()
+
+            p.hti?.let { urlBuilder.addQueryParameter("hti", it) }
+            p.cfg?.let { urlBuilder.addQueryParameter("cfg", it) }
+            p.bid?.let { urlBuilder.addQueryParameter("bid", it) }
+            p.uuid?.let { urlBuilder.addQueryParameter("uuid", it) }
+            p.pfCd?.let { urlBuilder.addQueryParameter("pfCd", it) }
+            p.policy?.let { urlBuilder.addQueryParameter("Policy", it) }
+            p.signature?.let { urlBuilder.addQueryParameter("Signature", it) }
+            p.keyPairId?.let { urlBuilder.addQueryParameter("Key-Pair-Id", it) }
+
+            val imgUrl = urlBuilder.build().toString()
 
             val fragmentData = PublusFragment(
-                file = it.filename,
-                no = it.no,
-                ns = it.ns,
-                ps = it.ps,
-                rs = it.rs,
-                bw = it.blockWidth,
-                bh = it.blockHeight,
-                cw = it.width,
-                ch = it.height,
+                file = p.filename,
+                no = p.no,
+                ns = p.ns,
+                ps = p.ps,
+                rs = p.rs,
+                bw = p.blockWidth,
+                bh = p.blockHeight,
+                cw = p.width,
+                ch = p.height,
                 k1 = k1,
                 k2 = k2,
-                k3 = k3
+                k3 = k3,
+                extra = p.extra,
+                s = p.scrambled,
             )
 
             val fragmentJson = fragmentData.toJsonString()
             val fragment = Base64.encodeToString(fragmentJson.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP)
 
-            Page(it.index, imageUrl = "$imgUrl#$fragment")
+            Page(p.index, imageUrl = "$imgUrl#$fragment")
         }
     }
 
@@ -109,14 +135,20 @@ object Publus {
             }
 
             val response = chain.proceed(request)
+            if (!response.isSuccessful) {
+                return response
+            }
 
             val fragmentJson = String(
                 Base64.decode(url.fragment, Base64.URL_SAFE),
                 StandardCharsets.UTF_8
             )
             val params = fragmentJson.parseAs<PublusFragment>()
+            if (!params.s) {
+                return response
+            }
 
-            val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+            val bitmap = BitmapFactory.decodeStream(response.body.byteStream()) ?: return response
 
             val keys = listOf(
                 params.k1.toIntArray(),
@@ -436,6 +468,10 @@ object Publus {
 
     object PublusImage {
         fun generateFilename(pageId: String, keys: List<IntArray>): String {
+            if (keys.isEmpty() || keys[0].isEmpty()) {
+                return "$pageId/0.jpeg"
+            }
+
             val k1 = keys[0]; val k2 = keys[1]; val k3 = keys[2]
             val fileName = "0"
             val parentFolder = "$pageId/"

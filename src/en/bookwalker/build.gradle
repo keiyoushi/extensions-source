@@ -1,8 +1,12 @@
 ext {
     extName = 'BookWalker Global'
     extClass = '.BookWalker'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:publus"))
+}
