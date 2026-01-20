@@ -1,0 +1,10 @@
+ext {
+    extName = 'Fairy Scans'
+    extClass = '.FairyScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://fairyscans.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
