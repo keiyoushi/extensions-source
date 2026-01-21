@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
@@ -78,5 +79,11 @@ class ReadVagabondManga : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request = GET("$baseUrl/api/mihon/mangas?q=$query&page=$page", headers)
+    ): Request {
+        val url = "$baseUrl/api/mihon/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, headers)
+    }
 }
