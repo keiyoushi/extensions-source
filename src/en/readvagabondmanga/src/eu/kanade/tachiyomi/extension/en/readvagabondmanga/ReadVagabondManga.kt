@@ -13,7 +13,6 @@ import okhttp3.Request
 import okhttp3.Response
 
 class ReadVagabondManga : HttpSource() {
-
     override val name = "Read Vagabond Manga"
     override val baseUrl = "https://readbagabondo.com"
     override val lang = "en"
@@ -21,17 +20,13 @@ class ReadVagabondManga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = response.parseAs<List<ChapterDto>>()
-        val mangaId = response.request.url
-            .pathSegments
-            .last { it != "chapters" }
         return chapters.map { chapter ->
-            chapter.toSChapter(mangaId)
+            chapter.toSChapter()
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}/chapters", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request =
+        GET("$baseUrl${manga.url}/api/mihon/mangas/1/chapters", headers)
 
     override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
@@ -44,6 +39,9 @@ class ReadVagabondManga : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga =
         response.parseAs<MangaDto>().toSManga()
+
+    override fun mangaDetailsRequest(manga: SManga): Request =
+        GET("$baseUrl/api/mihon/mangas/1", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.parseAs<ChapterDto>()
@@ -60,7 +58,7 @@ class ReadVagabondManga : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET(baseUrl + chapter.url, headers)
+        GET("$baseUrl/api/mihon/mangas/1/chapters/${chapter.chapter_number.toInt()}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.parseAs<List<MangaDto>>()
@@ -86,4 +84,8 @@ class ReadVagabondManga : HttpSource() {
             .build()
         return GET(url, headers)
     }
+
+    override fun getMangaUrl(manga: SManga): String = baseUrl
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
 }
