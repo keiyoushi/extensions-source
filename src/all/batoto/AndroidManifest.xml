@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <application>
     <activity
-        android:name=".all.xbatcat.UrlActivity"
+        android:name=".all.batoto.UrlActivity"
         android:excludeFromRecents="true"
         android:exported="true"
         android:theme="@android:style/Theme.NoDisplay">
@@ -19,9 +19,6 @@
             <data android:host="xbat.tv" />
             <data android:host="xbat.la" />
 
-            <data
-                android:pathPattern="/series/..*"
-                android:scheme="https" />
             <data
                 android:pathPattern="/title/..*"
                 android:scheme="https" />

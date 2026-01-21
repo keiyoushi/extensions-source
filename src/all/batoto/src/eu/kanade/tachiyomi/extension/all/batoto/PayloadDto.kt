@@ -1,6 +1,6 @@
 @file:Suppress("unused")
 
-package eu.kanade.tachiyomi.extension.all.xbatcatv4
+package eu.kanade.tachiyomi.extension.all.batoto
 
 import kotlinx.serialization.Serializable
 

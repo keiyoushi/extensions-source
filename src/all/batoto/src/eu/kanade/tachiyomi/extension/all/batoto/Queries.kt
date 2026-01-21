@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.xbatcatv4
+package eu.kanade.tachiyomi.extension.all.batoto
 
 private fun buildQuery(queryAction: () -> String): String {
     return queryAction()

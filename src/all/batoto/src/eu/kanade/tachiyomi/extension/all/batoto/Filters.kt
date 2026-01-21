@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.xbatcatv4
+package eu.kanade.tachiyomi.extension.all.batoto
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

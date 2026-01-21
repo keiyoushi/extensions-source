@@ -1,14 +1,13 @@
-package eu.kanade.tachiyomi.extension.all.xbatcatv4
+package eu.kanade.tachiyomi.extension.all.batoto
 
-import android.content.SharedPreferences
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.all.xbatcat.ImageServerManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -22,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Call
@@ -35,16 +35,32 @@ import okhttp3.Response
 import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-class XBatCatV4(
-    override val baseUrl: String,
-    override val lang: String,
+class XBatCat(
+    final override val lang: String,
     private val siteLang: String = lang,
-    private val preferences: SharedPreferences,
 ) : ConfigurableSource, HttpSource() {
 
+    private val preferences by getPreferencesLazy()
+
     override val name: String = "XBatCat"
+
+    override val baseUrl: String
+        get() {
+            val index = preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()
+                .coerceAtMost(mirrors.size - 1)
+
+            return mirrors[index]
+        }
+
+    override val id: Long = when (lang) {
+        "zh-Hans" -> 2818874445640189582
+        "zh-Hant" -> 38886079663327225
+        "ro-MD" -> 8871355786189601023
+        else -> LANGUAGE_IDS[lang] ?: super.id
+    }
 
     override val supportsLatest = true
 
@@ -78,7 +94,15 @@ class XBatCatV4(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val idMatch = idQueryRegex.matchEntire(query.trim())
+        // Handle URL and ID search
+        val idMatch = when {
+            query.startsWith("https://") -> {
+                val id = urlIdRegex.find(query)?.groupValues?.get(1)
+                    ?: return Observable.error(Exception("Unknown url"))
+                idQueryRegex.matchEntire("id:$id")
+            }
+            else -> idQueryRegex.matchEntire(query.trim())
+        }
         if (idMatch != null) {
             val id = idMatch.groupValues[1]
 
@@ -95,10 +119,12 @@ class XBatCatV4(
                 }
         }
 
+        // Handle user comic list search
         filters.firstInstanceOrNull<UserComicFilter>()?.takeIf { it.state != 0 }?.also {
             return userComicListSearch(page, it.selected)
         }
 
+        // Handle personal list search
         filters.firstInstanceOrNull<PersonalListFilter>()?.takeIf { it.state != 0 }?.also {
             return when (it.selected) {
                 "updates" -> {
@@ -123,6 +149,7 @@ class XBatCatV4(
             }
         }
 
+        // Handle normal search
         var sort: String? = null
         var letterMode = false
         var incGenres = emptyList<String>()
@@ -313,7 +340,7 @@ class XBatCatV4(
 
     // ************ Manga Details ************ //
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val apiVariables = ApiComicNodeVariables(id = manga.url)
+        val apiVariables = ApiComicNodeVariables(id = getMangaId(manga.url))
 
         return graphQLRequest(apiVariables, COMIC_NODE_QUERY)
     }
@@ -326,13 +353,18 @@ class XBatCatV4(
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/title/${manga.url}"
+        return "$baseUrl/title/${getMangaId(manga.url)}"
+    }
+
+    private fun getMangaId(url: String): String {
+        val matchResult = urlIdRegex.find(url)
+        return matchResult?.groups?.get(1)?.value ?: url
     }
 
     // ************ Chapter List ************ //
     override fun chapterListRequest(manga: SManga): Request {
         val apiVariables = ApiChapterListVariables(
-            comicId = manga.url,
+            comicId = getMangaId(manga.url),
             start = -1,
         )
 
@@ -503,6 +535,20 @@ class XBatCatV4(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = "Preferred Mirror"
+            entries = mirrors
+            entryValues = Array(mirrors.size) { it.toString() }
+            summary = "%s"
+            setDefaultValue("0")
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also { screen.addPreference(it) }
+
         CheckBoxPreference(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
@@ -568,18 +614,187 @@ class XBatCatV4(
     private fun isIgnoreGenreBlocklist(): Boolean {
         return preferences.getBoolean(IGNORE_GENRE_BLOCKLIST_PREF, false)
     }
+
+    companion object {
+        private val jsonMediaType = "application/json".toMediaType()
+
+        private const val MIRROR_PREF_KEY = "MIRROR"
+        private val mirrors = arrayOf(
+            "https://xbat.app",
+            "https://xbat.si",
+            "https://xbat.io",
+            "https://xbat.me",
+            "https://xbat.tv",
+            "https://xbat.la",
+        )
+
+        private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
+        private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
+
+        private val idQueryRegex = Regex("^id\\s*:?\\s*(\\d+)\\s*$", RegexOption.IGNORE_CASE)
+        private val userIdRegex = Regex("""/u/(\d+)""")
+        private val urlIdRegex = Regex("""(?:series|title)/(\d+)""") // match both old v2 or v4 url
+
+        private const val BROWSE_PAGE_SIZE = 36
+
+        private val titleRegex: Regex =
+            Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
+
+        private val LANGUAGE_IDS: Map<String, Long> = mapOf(
+            "all" to 4531444389842992129L,
+            "en" to 7890050626002177109L,
+            "ar" to 5096384382752696500L,
+            "bg" to 6495955027968241042L,
+            "zh" to 3158884414181268012L,
+            "cs" to 7576440018916883094L,
+            "da" to 5316229865560945519L,
+            "nl" to 2451829407813501910L,
+            "fil" to 313424729392609270L,
+            "fi" to 1251974539278082369L,
+            "fr" to 5836611700806032846L,
+            "de" to 139923318887989403L,
+            "el" to 8473797648002215114L,
+            "he" to 2408078218204857839L,
+            "hi" to 7084618587403216116L,
+            "hu" to 4530528320166985351L,
+            "id" to 1720762928205210073L,
+            "it" to 2160637426591463299L,
+            "ja" to 5203173367987472935L,
+            "ko" to 8427126052180576160L,
+            "ms" to 5990851390838920547L,
+            "pl" to 3394902802486008664L,
+            "pt" to 6179954312892676695L,
+            "pt-BR" to 3484603489360202582L,
+            "ro" to 5145326243818977877L,
+            "ru" to 5188408707919914484L,
+            "es" to 6204540321264480489L,
+            "es-419" to 7185350469868201379L,
+            "sv" to 8913559243351013088L,
+            "tr" to 6468780937168595917L,
+            "uk" to 1782621454240367603L,
+            "vi" to 3164440079022386695L,
+            "af" to 9193031427501250739L,
+            "sq" to 6847493053848422645L,
+            "am" to 2526577153570564673L,
+            "hy" to 1586739058301487676L,
+            "az" to 713056016405537102L,
+            "be" to 7232505995053152192L,
+            "bn" to 3402500071662542228L,
+            "bs" to 6908072148468152785L,
+            "my" to 5762198617335159887L,
+            "km" to 6796421298740947063L,
+            "ca" to 1392737883785118332L,
+            "ceb" to 5837595011776494775L,
+            "zh-Hans" to 2818874445640189582L,
+            "zh-Hant" to 38886079663327225L,
+            "hr" to 7668596971407381245L,
+            "et" to 3006949234613526276L,
+            "fo" to 7703342981951715697L,
+            "ka" to 5905178459829728484L,
+            "gn" to 4894494172631551657L,
+            "gu" to 4891408516910497422L,
+            "ht" to 8773112916243804182L,
+            "ha" to 8106799273220933842L,
+            "is" to 2566480683201153375L,
+            "ig" to 3424308522705464084L,
+            "ga" to 3707936942181329862L,
+            "jv" to 6913455010116693655L,
+            "kn" to 1088655658033412867L,
+            "kk" to 4920750007190577961L,
+            "ku" to 5924797894030210791L,
+            "ky" to 191250206471387059L,
+            "lo" to 374730826849442838L,
+            "lv" to 7483906778681041617L,
+            "lt" to 2909322037877472903L,
+            "lb" to 7998953198185983599L,
+            "mk" to 4493782214399724320L,
+            "mg" to 7844022624810291146L,
+            "ml" to 3443092856670936701L,
+            "mt" to 7404477799743142598L,
+            "mi" to 8225972509362693639L,
+            "mr" to 6030352007472109485L,
+            "mo" to 8871355786189601023L,
+            "mn" to 1683078263344915307L,
+            "ne" to 128549604427027000L,
+            "no" to 3907280050995528877L,
+            "ny" to 5715855562377571991L,
+            "ps" to 6105060607877949219L,
+            "fa" to 1302226087224798096L,
+            "rm" to 8327243820444225063L,
+            "sm" to 2859258045373504715L,
+            "sr" to 6589258274800936036L,
+            "sh" to 2675056792049767704L,
+            "st" to 7963579117812866356L,
+            "sn" to 2403628417982139515L,
+            "sd" to 7126242426383705161L,
+            "si" to 2913942844788726362L,
+            "sk" to 7182321933689697136L,
+            "sl" to 8410771330361157651L,
+            "so" to 2909968758031724143L,
+            "sw" to 1981693893234457639L,
+            "tg" to 8403246223033985015L,
+            "ta" to 8440188015298648289L,
+            "te" to 6410585353225177292L,
+            "th" to 2706040171335467974L,
+            "ti" to 5554111601105349413L,
+            "to" to 2410241309695200602L,
+            "tk" to 3635004776434724843L,
+            "ur" to 7602124517732860619L,
+            "uz" to 4555523281386098571L,
+            "yo" to 727983903143794104L,
+            "zu" to 3786926370127246407L,
+            "other" to 1897863245819012494L,
+        )
+    }
 }
 
-private val jsonMediaType = "application/json".toMediaType()
+/**
+ * Manages image server fallback logic, including blacklisting and backoff tracking.
+ */
+class ImageServerManager() {
+    val serverPattern = Regex("https://([a-zA-Z]\\d{2})")
 
-private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
-private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
-private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
+    val fallbackServers = listOf(
+        "i00", "i01", "i02", "i03", "i04", "i05", "i06", "i07", "i08", "i09", "i10", "i11", "i12",
+        "i50", "i51", "i52", "i53", "i54", "i55", "i56", "i57", "i58",
+    )
+    val blacklist = emptyList<String>()
 
-private val idQueryRegex = Regex("^id\\s*:?\\s*(\\d+)\\s*$", RegexOption.IGNORE_CASE)
-private val userIdRegex = Regex("""/u/(\d+)""")
+    // Server status tracking
+    data class ServerStatus(
+        val canBackoff: Boolean,
+        val statusCode: Int = 0,
+        val timestamp: Long = System.currentTimeMillis(),
+    )
 
-private const val BROWSE_PAGE_SIZE = 36
+    val serverStatus = ConcurrentHashMap<String, ServerStatus>()
 
-private val titleRegex: Regex =
-    Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
+    val BACKOFF_DURATION_MS = 3_600_000L // 1 hour
+
+    fun shouldSkip(server: String): Boolean {
+        return server in blacklist || isInBackoff(server)
+    }
+
+    fun isInBackoff(server: String): Boolean {
+        val status = serverStatus[server] ?: return false
+        return status.canBackoff && System.currentTimeMillis() - status.timestamp < BACKOFF_DURATION_MS
+    }
+
+    fun recordImageServerStatus(server: String, statusCode: Int) {
+        val now = System.currentTimeMillis()
+        serverStatus[server] = ServerStatus(
+            canBackoff = statusCode in 500..599,
+            statusCode = statusCode,
+            timestamp = now,
+        )
+    }
+
+    fun extractServerFromUrl(url: String): String? {
+        return serverPattern.find(url)?.groups?.get(1)?.value
+    }
+
+    fun replaceServerInUrl(url: String, newServer: String): String {
+        return url.replace(serverPattern, "https://$newServer")
+    }
+}

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.xbatcat
+package eu.kanade.tachiyomi.extension.all.batoto
 
 import eu.kanade.tachiyomi.source.SourceFactory
 
