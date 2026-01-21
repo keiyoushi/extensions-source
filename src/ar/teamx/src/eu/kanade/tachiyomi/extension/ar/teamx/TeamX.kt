@@ -147,7 +147,7 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        return if (response.request.url.encodedPath.contains("/series")) {
+        return if ("series" in response.request.url.pathSegments) {
             super.popularMangaParse(response)
         } else {
             super.searchMangaParse(response)
