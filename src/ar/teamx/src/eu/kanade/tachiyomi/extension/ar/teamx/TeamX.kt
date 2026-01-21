@@ -129,7 +129,9 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/ajax/search?keyword=$query", headers)
+            val url = "$baseUrl/ajax/search".toHttpUrl().newBuilder()
+            url.addQueryParameter("keyword", query)
+            GET(url.build(), headers)
         } else {
             val url = "$baseUrl/series".toHttpUrl().newBuilder()
             url.addQueryParameter("page", page.toString())
