@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
 class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
     override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui17.com"
+    override val baseUrl = "https://goctruyentranhvui19.com"
 
     override val name = "Goc Truyen Tranh Vui"
 

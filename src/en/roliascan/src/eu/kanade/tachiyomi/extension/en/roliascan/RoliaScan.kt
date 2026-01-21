@@ -60,6 +60,7 @@ class RoliaScan : ParsedHttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.parseAs<PopularWrapper>()
             .mangas.map(MangaDto::toSManga)
+            .filter { it.title.isNotEmpty() }
 
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -139,9 +140,12 @@ class RoliaScan : ParsedHttpSource() {
         genre = document.select("a[href*=genres]")
             .joinToString { it.text() }
 
+        artist = document.selectFirst("tr:has(th:contains(Artist)) > td")?.text()
+
         document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
             status = when {
                 it.contains("publishing", true) -> SManga.ONGOING
+                it.contains("ongoing", true) -> SManga.ONGOING
                 it.contains("hiatus", true) -> SManga.ON_HIATUS
                 it.contains("completed", true) -> SManga.COMPLETED
                 else -> SManga.UNKNOWN

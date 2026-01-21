@@ -13,7 +13,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -59,7 +58,7 @@ class BacaKomik : ParsedHttpSource() {
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.select("div.animposx > a").first()!!.attr("href"))
         manga.title = element.select(".animposx .tt h4").text()
-        manga.thumbnail_url = element.select("div.limit img").imgAttr()
+        manga.thumbnail_url = element.selectFirst("div.limit img")?.imgAttr()
 
         return manga
     }
@@ -115,7 +114,7 @@ class BacaKomik : ParsedHttpSource() {
         manga.genre = genres.joinToString(", ")
         manga.status = parseStatus(document.select(".infox .spe span:contains(Status)").text())
         manga.description = descElement.select("p").text().substringAfter("bercerita tentang ")
-        manga.thumbnail_url = document.select(".thumb > img:nth-child(1)").imgAttr()
+        manga.thumbnail_url = document.selectFirst(".thumb > img:nth-child(1)")?.imgAttr()
         return manga
     }
 
@@ -329,8 +328,6 @@ class BacaKomik : ParsedHttpSource() {
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
     }
-
-    private fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
