@@ -30,4 +30,11 @@ class WeebDexHelper {
     fun parseDate(dateStr: String): Long {
         return dateFormat.tryParse(dateStr)
     }
+
+    fun parseChapterNumber(chapter: String?): Float {
+        if (chapter.isNullOrBlank()) return -2F
+        val regex = Regex("""\d+(\.?\d+)?""")
+        val match = regex.find(chapter)
+        return match?.value?.toFloatOrNull() ?: -2F
+    }
 }
