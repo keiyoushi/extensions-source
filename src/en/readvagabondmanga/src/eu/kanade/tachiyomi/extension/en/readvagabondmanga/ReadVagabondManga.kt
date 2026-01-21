@@ -86,10 +86,13 @@ class ReadVagabondManga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = json.decodeFromString<ChapterDto>(response.body.string())
+        val chapterVolume = chapter.volume.toString().padStart(2, '0')
+        val chapterNumber = chapter.number.toString().padStart(3, '0')
         return (1..chapter.pageCount).map { page ->
+            val pagePadded = page.toString().padStart(3, '0')
             Page(
                 index = page - 1,
-                imageUrl = "https://manga.readbagabondo.com/volume-${chapter.volume}/chapter-${chapter.number}/page-$page",
+                imageUrl = "https://bucket.readbagabondo.com/volume-$chapterVolume/chapter-$chapterNumber/page-$pagePadded.png",
             )
         }
     }
