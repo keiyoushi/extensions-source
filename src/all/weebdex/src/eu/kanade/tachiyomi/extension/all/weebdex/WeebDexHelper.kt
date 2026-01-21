@@ -21,9 +21,13 @@ class WeebDexHelper {
         }
     }
 
-    fun buildCoverUrl(mangaId: String, cover: CoverDto?): String? {
+    fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String): String? {
         if (cover == null) return null
-        val ext = cover.ext
+        val ext = when (coverQuality) {
+            "256" -> ".256.webp"
+            "512" -> ".512.webp"
+            else -> cover.ext
+        }
         return "${WeebDexConstants.CDN_COVER_URL}/$mangaId/${cover.id}$ext"
     }
 

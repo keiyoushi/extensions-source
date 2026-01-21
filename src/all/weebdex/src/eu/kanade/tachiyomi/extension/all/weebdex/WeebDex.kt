@@ -1,17 +1,21 @@
 package eu.kanade.tachiyomi.extension.all.weebdex
 
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,10 +25,11 @@ import okhttp3.Response
 open class WeebDex(
     override val lang: String,
     private val weebdexLang: String = lang,
-) : HttpSource() {
+) : HttpSource(), ConfigurableSource {
     override val name = "WeebDex"
     override val baseUrl = "https://weebdex.org"
     override val supportsLatest = true
+    private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(WeebDexConstants.RATE_LIMIT)
@@ -52,7 +57,7 @@ open class WeebDex(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
-        val mangas = mangaListDto.toSMangaList()
+        val mangas = mangaListDto.toSMangaList(coverQuality)
         return MangasPage(mangas, mangaListDto.hasNextPage)
     }
 
@@ -153,7 +158,7 @@ open class WeebDex(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
-        return manga.toSManga()
+        return manga.toSManga(coverQuality)
     }
 
     // -------------------- Chapters --------------------
@@ -204,5 +209,24 @@ open class WeebDex(
         return chapter.toPageList()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // -------------------- Peferences ----------------
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = COVER_QUALITY_PREFERENCE
+            title = "Cover Quality"
+            entries = arrayOf("Original", "Medium", "Low")
+            entryValues = arrayOf(COVER_QUALITY_ORIGINAL, "512", "256")
+            setDefaultValue(COVER_QUALITY_ORIGINAL)
+            summary = "%s"
+        }.also(screen::addPreference)
+    }
+
+    private val coverQuality: String
+        get() = preferences.getString(COVER_QUALITY_PREFERENCE, COVER_QUALITY_ORIGINAL) ?: COVER_QUALITY_ORIGINAL
 }
+
+private const val COVER_QUALITY_PREFERENCE = "cover_quality"
+private const val COVER_QUALITY_ORIGINAL = ""
