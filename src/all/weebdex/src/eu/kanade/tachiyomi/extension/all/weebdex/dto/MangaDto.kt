@@ -14,8 +14,8 @@ class MangaListDto(
 ) {
     val hasNextPage: Boolean
         get() = page * limit < total
-    fun toSMangaList(): List<SManga> {
-        return data.map { it.toSManga() }
+    fun toSMangaList(coverQuality: String): List<SManga> {
+        return data.map { it.toSManga(coverQuality) }
     }
 }
 
@@ -29,12 +29,12 @@ class MangaDto(
 ) {
     @Contextual
     private val helper = WeebDexHelper()
-    fun toSManga(): SManga {
+    fun toSManga(coverQuality: String): SManga {
         return SManga.create().apply {
             title = this@MangaDto.title
             description = this@MangaDto.description
             status = helper.parseStatus(this@MangaDto.status)
-            thumbnail_url = helper.buildCoverUrl(id, relationships?.cover)
+            thumbnail_url = helper.buildCoverUrl(id, relationships?.cover, coverQuality)
             url = "/manga/$id"
             relationships?.let { rel ->
                 author = rel.authors.joinToString(", ") { it.name }
