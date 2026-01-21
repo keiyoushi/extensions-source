@@ -115,3 +115,15 @@ class MangoPageDto(
 class MangoLatestChapterDto(
     val obra: MangoMangaDto? = null,
 )
+
+@Serializable
+class LoginResponseDto(
+    val sucesso: Boolean = false,
+    val token: String? = null,
+)
+
+@Serializable
+class AuthRequestDto(
+    val email: String,
+    val senha: String,
+)
