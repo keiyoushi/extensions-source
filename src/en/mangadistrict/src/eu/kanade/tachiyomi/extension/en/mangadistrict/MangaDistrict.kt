@@ -106,6 +106,8 @@ class MangaDistrict :
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
+    override val pageListParseSelector = "div.page-break img:not(#image-99999)"
+
     override fun pageListParse(document: Document): List<Page> {
         try {
             pageListDate.parse(
