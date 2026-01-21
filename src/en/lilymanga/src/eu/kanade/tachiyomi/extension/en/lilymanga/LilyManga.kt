@@ -18,6 +18,8 @@ class LilyManga : Madara(
 
     override val mangaSubString = "ys"
 
+    override fun searchMangaSelector() = popularMangaSelector()
+
     override val useNewChapterEndpoint = true
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
