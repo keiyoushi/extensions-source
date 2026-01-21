@@ -23,7 +23,7 @@ abstract class LectorMoe(
     override val baseUrl: String,
     override val lang: String,
     private val organizationDomain: String = baseUrl.substringAfter("://"),
-    private val apiBaseUrl: String = "https://api.lector.moe",
+    private val apiBaseUrl: String = "https://capibaratraductor.com",
 ) : HttpSource() {
 
     override val supportsLatest = true
@@ -39,7 +39,7 @@ abstract class LectorMoe(
         .add("Referer", "$baseUrl/")
 
     private val apiHeaders: Headers = headersBuilder()
-        .add("Organization-Domain", organizationDomain)
+        .add("x-organization", organizationDomain)
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
