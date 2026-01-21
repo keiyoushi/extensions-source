@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.takecomic
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
-import kotlin.getValue
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
 
-class TakeComic : ComiciViewer(
+class TakeComic : ComiciViewerAlt(
     "TakeComic",
     "https://takecomic.jp",
     "ja",

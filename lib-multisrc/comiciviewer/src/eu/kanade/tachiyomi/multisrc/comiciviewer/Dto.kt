@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.comiciviewer
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer.Companion.LOGIN_SUFFIX
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt.Companion.LOGIN_SUFFIX
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
@@ -189,11 +189,11 @@ class EpisodeDetailsApiResponse(
 
 @Serializable
 class EpisodeDetails(
-    val content: List<EpisodeContent> = emptyList(),
+    val content: List<EpisodeContent>,
 )
 
 @Serializable
 class EpisodeContent(
     val type: String,
-    val viewerId: String? = null,
+    val viewerId: String,
 )
