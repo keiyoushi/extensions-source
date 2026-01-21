@@ -56,7 +56,7 @@ class XBatCat(
             return mirrors[index]
         }
 
-   override val id: Long = idOverride ?: super.id
+    override val id: Long = idOverride ?: super.id
 
     override val supportsLatest = true
 
