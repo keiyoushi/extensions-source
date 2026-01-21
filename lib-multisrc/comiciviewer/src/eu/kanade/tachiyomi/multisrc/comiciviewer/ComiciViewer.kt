@@ -167,6 +167,10 @@ abstract class ComiciViewer(
     }
 
     override fun pageListParse(response: Response): List<Page> {
+        val newHeaders = super.headersBuilder()
+            .set("Referer", response.request.url.toString())
+            .build()
+
         val document = response.asJsoup()
         val viewer = document.selectFirst("#comici-viewer") ?: throw Exception("You need to log in via WebView to read this chapter or purchase this chapter.")
         val comiciViewerId = viewer.attr("comici-viewer-id")
@@ -177,10 +181,10 @@ abstract class ComiciViewer(
             .addQueryParameter("page-from", "0")
 
         val getPages = requestUrl.addQueryParameter("page-to", "1").build()
-        val pageTo = client.newCall(GET(getPages, headers)).execute()
+        val pageTo = client.newCall(GET(getPages, newHeaders)).execute()
         val pageToParse = pageTo.parseAs<ViewerResponse>().totalPages.toString()
         val getAllPages = requestUrl.setQueryParameter("page-to", pageToParse).build()
-        val pages = client.newCall(GET(getAllPages, headers)).execute()
+        val pages = client.newCall(GET(getAllPages, newHeaders)).execute()
 
         return pages.parseAs<ViewerResponse>().result.map {
             val url = it.imageUrl.toHttpUrl().newBuilder()
