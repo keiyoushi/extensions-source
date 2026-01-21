@@ -924,7 +924,7 @@ abstract class Madara(
             WordSet("ago", "atrás", "önce", "قبل", "trước").endsWith(date) -> {
                 parseRelativeDate(date)
             }
-            WordSet("hace","năm", "tháng", "tuần", "ngày", "giờ", "phút", "giây").startsWith(date) -> {
+            WordSet("hace", "năm", "tháng", "tuần", "ngày", "giờ", "phút", "giây").startsWith(date) -> {
                 parseRelativeDate(date)
             }
             // Handle "jour" with a number before it
