@@ -15,7 +15,7 @@ class MadaraScans : MangaThemesia(
     "en",
     mangaUrlDirectory = "/series",
     dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US),
-    ) {
+) {
     // support for both popular/latest tabs and search
     override fun searchMangaSelector() = "div.listupd>div, div.legend-inner"
 
