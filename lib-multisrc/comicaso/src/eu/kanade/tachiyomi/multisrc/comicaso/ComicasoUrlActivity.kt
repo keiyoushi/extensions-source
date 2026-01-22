@@ -13,12 +13,11 @@ class ComicasoUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 2) {
-            val slug = pathSegments[2]
+        val data = intent?.data
+        if (data != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${javaClass.`package`!!.name}:$slug")
+                putExtra("query", "${Comicaso.URL_SEARCH_PREFIX}$data")
                 putExtra("filter", packageName)
             }
 

@@ -14,6 +14,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -107,6 +108,32 @@ abstract class Comicaso(
 
     override fun searchMangaParse(response: Response): MangasPage =
         popularMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return when {
+            query.startsWith(URL_SEARCH_PREFIX) -> {
+                val url = query.removePrefix(URL_SEARCH_PREFIX).trim().replace(baseUrl, "")
+                val mangaUrl = if (url.startsWith("/")) url else "/$url"
+                fetchMangaDetails(
+                    SManga.create().apply {
+                        this.url = mangaUrl
+                    },
+                )
+                    .map { MangasPage(listOf(it), false) }
+            }
+            query.startsWith("http://") || query.startsWith("https://") -> {
+                val url = query.trim().replace(baseUrl, "")
+                val mangaUrl = if (url.startsWith("/")) url else "/$url"
+                fetchMangaDetails(
+                    SManga.create().apply {
+                        this.url = mangaUrl
+                    },
+                )
+                    .map { MangasPage(listOf(it), false) }
+            }
+            else -> super.fetchSearchManga(page, query, filters)
+        }
+    }
 
     protected open fun genreToSlug(genre: String): String {
         return when (genre) {
@@ -223,9 +250,16 @@ abstract class Comicaso(
     }
 
     // Details
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET("$baseUrl${manga.url}", headers)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
+        val requestUrl = response.request.url.toString()
+        val mangaUrl = requestUrl.replace(baseUrl, "").let { if (it.startsWith("/")) it else "/$it" }
         return SManga.create().apply {
+            url = mangaUrl
             title = document.selectFirst("h1.ng-detail-title")!!.text()
 
             description = buildString {
@@ -261,7 +295,7 @@ abstract class Comicaso(
             thumbnail_url = document.selectFirst(".ng-detail-cover")
                 ?.attr("style")
                 ?.substringAfter("url('")
-                ?.substringBefore("')") ?: thumbnail_url
+                ?.substringBefore("')") ?: ""
         }
     }
 
@@ -272,7 +306,7 @@ abstract class Comicaso(
             SChapter.create().apply {
                 val link = element.selectFirst("a.ng-btn.ng-read-small")!!
                 setUrlWithoutDomain(link.attr("href"))
-                name = element.selectFirst(".ng-chapter-title")?.text() ?: "Chapter"
+                name = element.selectFirst(".ng-chapter-title")!!.text()
                 date_upload = element.selectFirst(".ng-chapter-date")?.text()?.let { parseChapterDate(it) } ?: 0L
             }
         }.reversed()
@@ -331,6 +365,8 @@ abstract class Comicaso(
     )
 
     companion object {
+        const val URL_SEARCH_PREFIX = "url:"
+
         private val ALL_GENRES = arrayOf(
             "All",
             "Action",
