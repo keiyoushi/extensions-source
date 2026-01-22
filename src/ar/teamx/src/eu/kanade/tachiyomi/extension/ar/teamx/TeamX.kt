@@ -6,6 +6,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -41,7 +43,24 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    /**
+     * Whether filters have been fetched
+     */
+    private var filtersFetched: Boolean = false
+
     // Popular
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val entries = document.select(popularMangaSelector())
+            .map(::popularMangaFromElement)
+        val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
+
+        fetchFiltersIfNeeded(document)
+
+        return MangasPage(entries, hasNextPage)
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/series/" + if (page > 1) "?page=$page" else "", headers)
@@ -109,10 +128,35 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/ajax/search?keyword=$query", headers)
+        return if (query.isNotBlank()) {
+            val url = "$baseUrl/ajax/search".toHttpUrl().newBuilder()
+            url.addQueryParameter("keyword", query)
+            GET(url.build(), headers)
+        } else {
+            val url = "$baseUrl/series".toHttpUrl().newBuilder()
+            url.addQueryParameter("page", page.toString())
+            filters.forEach { filter ->
+                when (filter) {
+                    is TypeFilter -> url.addQueryParameter("type", filter.toUriPart())
+                    is StatusFilter -> url.addQueryParameter("status", filter.toUriPart())
+                    is GenreFilter -> url.addQueryParameter("genre", filter.toUriPart())
+                    else -> {}
+                }
+            }
+
+            GET(url.build(), headers)
+        }
     }
 
-    override fun searchMangaSelector() = "a.items-center"
+    override fun searchMangaParse(response: Response): MangasPage {
+        return if ("series" in response.request.url.pathSegments) {
+            super.popularMangaParse(response)
+        } else {
+            super.searchMangaParse(response)
+        }
+    }
+
+    override fun searchMangaSelector() = "a.items-center, " + popularMangaSelector()
 
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
@@ -124,6 +168,53 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     // doesnt matter as there is no next page
     override fun searchMangaNextPageSelector(): String? = null
+
+    private fun fetchFiltersIfNeeded(document: Document) {
+        if (filtersFetched) return
+
+        fun load(selector: String, target: MutableList<Pair<String?, String>>) {
+            document.select(selector).forEach {
+                target.add(it.attr("value") to it.text())
+            }
+        }
+
+        load("select#select_genre option", genreFilters)
+        load("select#select_type option", typeFilters)
+        load("select#select_state option", statusFilters)
+
+        filtersFetched = true
+    }
+
+    override fun getFilterList() = FilterList(
+        if (filtersFetched) {
+            listOf(
+                Filter.Header("NOTE: Filters are ignored when using text search."),
+                Filter.Separator(),
+                TypeFilter(typeFilters),
+                StatusFilter(statusFilters),
+                GenreFilter(genreFilters),
+            )
+        } else {
+            listOf(
+                Filter.Header(
+                    "Filters are not loaded yet.\n" +
+                        "Open Popular Manga and press 'Reset' to load filters.",
+                ),
+            )
+        },
+    )
+    private class TypeFilter(vals: List<Pair<String?, String>>) : UriPartFilter("Type", vals)
+    private class StatusFilter(vals: List<Pair<String?, String>>) : UriPartFilter("Status", vals)
+    private class GenreFilter(vals: List<Pair<String?, String>>) : UriPartFilter("Category", vals)
+
+    private val typeFilters: MutableList<Pair<String?, String>> = mutableListOf()
+    private val statusFilters: MutableList<Pair<String?, String>> = mutableListOf()
+    private val genreFilters: MutableList<Pair<String?, String>> = mutableListOf()
+
+    open class UriPartFilter(displayName: String, private val vals: List<Pair<String?, String>>) :
+        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
+        fun toUriPart() = vals[state].first
+    }
 
     // Details
 
