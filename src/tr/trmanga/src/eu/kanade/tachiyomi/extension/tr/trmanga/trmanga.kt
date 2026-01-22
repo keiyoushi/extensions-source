@@ -89,30 +89,31 @@ class trmanga : ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // manga details
     override fun mangaDetailsParse(document: Document): SManga {
+        val authorArtistLabel = "Yazar & Çizer İsim(ler) : "
         return SManga.create().apply {
-            title = document.selectFirst(".title")!!.text()
-            author = document.select(".author > span:nth-child(2)").text()
+            title = document.selectFirst(".movie__title")!!.text()
+            author = document.select("p:contains($authorArtistLabel)").text().substringAfter(authorArtistLabel)
             artist = author
             status = document.select(".status > span:nth-child(2)").text().parseStatus()
-            description = document.select(".summary p").text()
-            thumbnail_url = document.select("div.series-image img").attr("abs:src")
+            description = document.select(".movie__plot").text()
+            thumbnail_url = document.select("img[alt=$title]").attr("abs:src")
         }
     }
 
     // chapter list
-    override fun chapterListSelector() = "tbody tr"
+    override fun chapterListSelector() = "tbody>tr"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.selectFirst("a")!!.let {
             setUrlWithoutDomain(it.absUrl("href"))
             name = it.text()
         }
-        date_upload = parseDate(element.select("div > div > span:nth-child(2)").text())
+
+//        date_upload = parseDate(element.select("div > div > span:nth-child(2)").text())
     }
 
     private val json: Json by injectLazy()
@@ -130,7 +131,7 @@ class trmanga : ParsedHttpSource() {
     }
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private val statusOngoing = listOf("ongoing", "devam ediyor")
+    private val statusOngoing = listOf("ongoing", "devam ediyor", "Güncel")
     private val statusCompleted = listOf("complete", "tamamlandı", "bitti")
 
     private fun String.parseStatus(): Int {
