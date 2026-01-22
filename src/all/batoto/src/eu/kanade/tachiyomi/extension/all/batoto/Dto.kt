@@ -38,8 +38,11 @@ class ComicNode(
     private val urlCoverOri: String? = null,
 ) {
     fun toSManga(baseUrl: String, cleanTitle: (String) -> String): SManga = SManga.create().apply {
+        var titleCleaned = false
         url = id
-        title = cleanTitle(name)
+        title = cleanTitle(name).also {
+            titleCleaned = it != name
+        }
         author = authors?.joinToString()
         artist = artists?.joinToString()
         genre = genres?.joinToString { genre ->
@@ -68,6 +71,10 @@ class ComicNode(
             if (!extraInfo.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\nExtra Info:\n")
                 append(extraInfo)
+            }
+            if (titleCleaned) {
+                if (isNotEmpty()) append("\n\nTitle: ")
+                append(name)
             }
             if (!altNames.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n")

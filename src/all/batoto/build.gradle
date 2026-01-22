@@ -1,12 +1,8 @@
 ext {
     extName = 'XBatCat'
     extClass = '.XBatCatFactory'
-    extVersionCode = 61
+    extVersionCode = 62
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:cryptoaes'))
-}

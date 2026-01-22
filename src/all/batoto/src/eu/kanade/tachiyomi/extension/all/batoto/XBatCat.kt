@@ -91,16 +91,13 @@ class XBatCat(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         // Handle URL and ID search
-        val idMatch = when {
-            query.startsWith("https://") -> {
-                val id = urlIdRegex.find(query)?.groupValues?.get(1)
-                    ?: return Observable.error(Exception("Unknown url"))
-                idQueryRegex.matchEntire("id:$id")
-            }
-            else -> idQueryRegex.matchEntire(query.trim())
-        }
-        if (idMatch != null) {
-            val id = idMatch.groupValues[1]
+        if (query.startsWith("https://") || query.startsWith("id:")) {
+            val id = when {
+                query.startsWith("https://") -> {
+                    urlIdRegex.find(query)?.groupValues?.get(1)
+                }
+                else -> idQueryRegex.matchEntire(query.trim())?.groupValues?.get(1)
+            } ?: return Observable.error(Exception("Unknown url or id"))
 
             if (id.toIntOrNull() == null) {
                 return Observable.error(Exception("comic id must be integer"))
@@ -377,6 +374,10 @@ class XBatCat(
 
     // ************ Page List ************ //
     override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.toIntOrNull() == null) {
+            throw Exception("Refresh Chapter List")
+        }
+
         val apiVariables = ApiChapterNodeVariables(id = chapter.url)
 
         return graphQLRequest(apiVariables, CHAPTER_NODE_QUERY)
@@ -538,11 +539,6 @@ class XBatCat(
             entryValues = Array(mirrors.size) { it.toString() }
             summary = "%s"
             setDefaultValue("0")
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
-                true
-            }
         }.also { screen.addPreference(it) }
 
         CheckBoxPreference(screen.context).apply {
