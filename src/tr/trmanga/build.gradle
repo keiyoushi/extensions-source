@@ -1,0 +1,18 @@
+ext {
+    extName = 'trmanga'
+    extClass = '.trmanga'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+//dependencies {
+//    api(project(":lib:dataimage"))
+//}
+//android {
+//    defaultConfig {
+//        versionCode = 1
+//        versionName = "1.0"
+//    }
+//}
