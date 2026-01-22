@@ -320,11 +320,8 @@ abstract class MangaThemesia(
         return chapters
     }
 
-    // added to support Madara Scans & Eva Scans
-    open val dateFormatSelector = "yyyy-MM-dd"
-
     private fun parseUpdatedOnDate(date: String): Long {
-        return SimpleDateFormat(dateFormatSelector, Locale.ENGLISH).parse(date)?.time ?: 0L
+        return SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).parse(date)?.time ?: 0L
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
