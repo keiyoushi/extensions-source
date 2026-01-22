@@ -18,6 +18,5 @@ class MagKan : ComiciViewer(
 
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(
         Pair("読み切り", "/category/manga?type=読み切り"),
-        Pair("連載", "/category/manga?type=連載中"),
     )
 }
