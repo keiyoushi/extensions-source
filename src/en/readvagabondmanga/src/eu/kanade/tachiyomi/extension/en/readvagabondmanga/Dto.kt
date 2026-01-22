@@ -21,6 +21,8 @@ data class ChapterDto(
     val number: Int,
     val title: String,
     val volume: Int?,
+    @SerialName("manga_id")
+    val mangaId: String,
     @SerialName("release_date")
     val releaseDate: String,
     @SerialName("page_count")

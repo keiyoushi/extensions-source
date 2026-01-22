@@ -9,7 +9,7 @@ import java.util.Locale
 fun MangaDto.toSManga(): SManga {
     return SManga.create().apply {
         title = this@toSManga.title
-        url = "/"
+        url = "/#${this@toSManga.id}"
         thumbnail_url = this@toSManga.cover
         author = this@toSManga.author
         artist = this@toSManga.artist
@@ -26,7 +26,7 @@ fun ChapterDto.toSChapter(): SChapter {
     return SChapter.create().apply {
         name = this@toSChapter.title
         chapter_number = this@toSChapter.number.toFloat()
-        url = "/volume-$volume/chapter-$number"
+        url = "/volume-$volume/chapter-$number/#${this@toSChapter.mangaId}"
         date_upload = dateFormat.tryParse(this@toSChapter.releaseDate)
         scanlator = "Read Vagabond Manga"
     }
