@@ -1,0 +1,10 @@
+ext {
+    extName = 'Murim'
+    extClass = '.Murim'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.murim.site'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
