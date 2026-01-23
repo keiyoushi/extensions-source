@@ -1,7 +1,8 @@
+import com.android.build.gradle.tasks.PackageAndroidArtifact
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
-apply plugin: 'org.jmailen.kotlinter'
 
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
@@ -15,14 +16,6 @@ android {
     compileSdk AndroidConfig.compileSdk
 
     namespace "eu.kanade.tachiyomi.extension"
-    sourceSets {
-        main {
-            manifest.srcFile layout.buildDirectory.file('tempAndroidManifest.xml')
-            java.srcDirs = ['src']
-            res.srcDirs = ['res']
-            assets.srcDirs = ['assets']
-        }
-    }
 
     defaultConfig {
         minSdk AndroidConfig.minSdk
@@ -85,17 +78,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
-    }
+//    kotlinter {
+//        experimentalRules = true
+//        disabledRules = [
+//            "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
+//            "experimental:comment-wrapping",
+//        ]
+//    }
+}
 
-    kotlinter {
-        experimentalRules = true
-        disabledRules = [
-            "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-            "experimental:comment-wrapping",
-        ]
+androidComponents {
+    onVariants(selector().all(), { variant ->
+        variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
+        variant.sources.java.addStaticSourceDirectory("src")
+        variant.sources.res.addStaticSourceDirectory("res")
+        variant.sources.assets.addStaticSourceDirectory("assets")
+    })
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
+        jvmTarget = JvmTarget.JVM_1_8
     }
 }
 
@@ -122,7 +126,7 @@ tasks.register("writeManifestFile") {
 }
 
 afterEvaluate {
-    tasks.withType(com.android.build.gradle.tasks.PackageAndroidArtifact).configureEach {
+    tasks.withType(PackageAndroidArtifact).configureEach {
         // need to be in afterEvaluate to overwrite default value
         createdBy = ""
         // https://stackoverflow.com/a/77745844
@@ -130,7 +134,7 @@ afterEvaluate {
     }
 }
 
-preBuild.dependsOn(writeManifestFile, lintKotlin)
-if (System.getenv("CI") != "true") {
-    lintKotlin.dependsOn(formatKotlin)
-}
+//preBuild.dependsOn(writeManifestFile, lintKotlin)
+//if (System.getenv("CI") != "true") {
+//    lintKotlin.dependsOn(formatKotlin)
+//}
