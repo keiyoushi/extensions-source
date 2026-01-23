@@ -21,6 +21,8 @@ android {
             manifest.srcFile layout.buildDirectory.file('tempAndroidManifest.xml')
             java.directories.clear()
             java.directories.add("src")
+            kotlin.directories.clear()
+            kotlin.directories.add("src")
             res.directories.clear()
             res.directories.add("res")
             assets.directories.clear()
@@ -102,7 +104,8 @@ kotlin {
 dependencies {
     if (theme != null) implementation(theme) // Overrides core launcher icons
     implementation(project(":core"))
-    compileOnly(libs.bundles.common)
+    implementation(libs.bundles.common.impl)
+    compileOnly(libs.bundles.common.compile)
 }
 
 tasks.register("copyManifestFile", Copy) {

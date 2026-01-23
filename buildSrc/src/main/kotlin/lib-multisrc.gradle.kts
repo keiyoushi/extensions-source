@@ -17,6 +17,8 @@ android {
             manifest.srcFile("AndroidManifest.xml")
             java.directories.clear()
             java.directories.add("src")
+            kotlin.directories.clear()
+            kotlin.directories.add("src")
             res.directories.clear()
             res.directories.add("res")
             assets.directories.clear()
@@ -40,7 +42,8 @@ kotlin {
 //}
 
 dependencies {
-    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    implementation(versionCatalogs.named("libs").findBundle("common-impl").get())
+    compileOnly(versionCatalogs.named("libs").findBundle("common-compile").get())
     implementation(project(":core"))
 }
 

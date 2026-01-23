@@ -25,4 +25,5 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.3.2" }
 quickjs = { module = "app.cash.quickjs:quickjs-android", version = "0.9.2" }
 
 [bundles]
-common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "jsoup", "okhttp", "tachiyomi-lib", "quickjs"]
+common-impl = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "kotlin-protobuf", "kotlin-json" ]
+common-compile = ["injekt-core", "rxjava", "jsoup", "okhttp", "quickjs", "tachiyomi-lib"]
