@@ -3,7 +3,7 @@ ext {
     extClass = '.Sixianfranc9'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/6ianfranc9'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = false
 }
 
