@@ -6,6 +6,4 @@ class Doujinclub : LectorMoe(
     "Doujinclub",
     "https://capibaratraductor.com/doujinclub",
     "es",
-    organizationDomain = "doujinclub",
-    apiBaseUrl = "https://capibaratraductor.com",
 )

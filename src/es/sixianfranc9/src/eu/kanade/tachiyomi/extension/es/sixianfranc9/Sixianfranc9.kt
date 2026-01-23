@@ -6,6 +6,4 @@ class Sixianfranc9 : LectorMoe(
     "6ianfranc9",
     "https://capibaratraductor.com/6ianfranc9",
     "es",
-    organizationDomain = "6ianfranc9",
-    apiBaseUrl = "https://capibaratraductor.com",
 )

@@ -6,6 +6,4 @@ class SenshiManga : LectorMoe(
     "Senshi Manga",
     "https://capibaratraductor.com/senshimanga",
     "es",
-    organizationDomain = "senshimanga",
-    apiBaseUrl = "https://capibaratraductor.com",
 )
