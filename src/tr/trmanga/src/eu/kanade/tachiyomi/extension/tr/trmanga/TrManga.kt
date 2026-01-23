@@ -15,9 +15,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class trmanga : ParsedHttpSource() {
+class TrManga : ParsedHttpSource() {
 
-    override val name = "trmanga"
+    override val name = "TrManga"
 
     override val baseUrl = "https://www.trmanga.com"
 
