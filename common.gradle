@@ -1,5 +1,4 @@
 import com.android.build.gradle.tasks.PackageAndroidArtifact
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 apply plugin: 'com.android.application'
 apply plugin: 'kotlinx-serialization'
@@ -16,6 +15,18 @@ android {
     compileSdk AndroidConfig.compileSdk
 
     namespace "eu.kanade.tachiyomi.extension"
+
+    sourceSets {
+        main {
+            manifest.srcFile layout.buildDirectory.file('tempAndroidManifest.xml')
+            java.directories.clear()
+            java.directories.add("src")
+            res.directories.clear()
+            res.directories.add("res")
+            assets.directories.clear()
+            assets.directories.add("assets")
+        }
+    }
 
     defaultConfig {
         minSdk AndroidConfig.minSdk
@@ -73,11 +84,6 @@ android {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
 //    kotlinter {
 //        experimentalRules = true
 //        disabledRules = [
@@ -87,19 +93,9 @@ android {
 //    }
 }
 
-androidComponents {
-    onVariants(selector().all(), { variant ->
-        variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
-        variant.sources.java.addStaticSourceDirectory("src")
-        variant.sources.res.addStaticSourceDirectory("res")
-        variant.sources.assets.addStaticSourceDirectory("assets")
-    })
-}
-
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
-        jvmTarget = JvmTarget.JVM_1_8
     }
 }
 
@@ -120,6 +116,7 @@ tasks.register("writeManifestFile") {
     doLast {
         File tempFile = android.sourceSets.getByName('main').manifest.srcFile
         if (!tempFile.exists()) {
+            tempFile.parentFile.mkdirs()
             tempFile.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
         }
     }
@@ -134,7 +131,9 @@ afterEvaluate {
     }
 }
 
-//preBuild.dependsOn(writeManifestFile, lintKotlin)
+preBuild.dependsOn(writeManifestFile)
+
+//preBuild.dependsOn(lintKotlin)
 //if (System.getenv("CI") != "true") {
 //    lintKotlin.dependsOn(formatKotlin)
 //}

@@ -11,13 +11,18 @@ android {
     }
 
     namespace = "eu.kanade.tachiyomi.multisrc.${project.name}"
-}
 
-androidComponents.onVariants { variant ->
-    variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
-    variant.sources.java!!.addStaticSourceDirectory("src")
-    variant.sources.res!!.addStaticSourceDirectory("res")
-    variant.sources.assets!!.addStaticSourceDirectory("assets")
+    sourceSets {
+        named("main") {
+            manifest.srcFile("AndroidManifest.xml")
+            java.directories.clear()
+            java.directories.add("src")
+            res.directories.clear()
+            res.directories.add("res")
+            assets.directories.clear()
+            assets.directories.add("assets")
+        }
+    }
 }
 
 kotlin {
