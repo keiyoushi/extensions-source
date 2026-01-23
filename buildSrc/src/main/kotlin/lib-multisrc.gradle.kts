@@ -33,31 +33,11 @@ kotlin {
     }
 }
 
-//kotlinter {
-//    experimentalRules = true
-//    disabledRules = arrayOf(
-//        "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-//        "experimental:comment-wrapping",
-//    )
-//}
-
 dependencies {
     implementation(versionCatalogs.named("libs").findBundle("common-impl").get())
     compileOnly(versionCatalogs.named("libs").findBundle("common-compile").get())
     implementation(project(":core"))
 }
-
-//tasks {
-//    preBuild {
-//        dependsOn(lintKotlin)
-//    }
-//
-//    if (System.getenv("CI") != "true") {
-//        lintKotlin {
-//            dependsOn(formatKotlin)
-//        }
-//    }
-//}
 
 tasks.register("printDependentExtensions") {
     doLast {
