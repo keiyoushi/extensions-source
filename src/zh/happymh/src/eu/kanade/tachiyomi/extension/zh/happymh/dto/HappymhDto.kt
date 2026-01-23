@@ -25,7 +25,6 @@ class ChapterByPageResponseDataItem(
     val id: Long,
     val chapterName: String,
     val order: Int,
-    val codes: String,
 )
 
 @Serializable

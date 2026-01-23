@@ -41,7 +41,6 @@ class Happymh : HttpSource(), ConfigurableSource {
 
     override val baseUrl: String = "https://m.happymh.com"
     private val json: Json by injectLazy()
-    private val chapterUrlToCode = hashMapOf<String, String>()
 
     private val preferences = getPreferences()
 
@@ -225,42 +224,28 @@ class Happymh : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + (chapterUrlToCode[chapter.url]?.let { "/mangaread/$it" } ?: chapter.url)
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val comicId = url.pathSegments[0]
+        val chapterId = url.pathSegments[2]
+        return "$baseUrl/mangaread/$comicId/$chapterId"
     }
 
     // Pages
-
-    private fun fetchChapterCode(chapter: SChapter): String? {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
-        val expectPage = url.fragment?.toIntOrNull() ?: 1
-        val comicId = url.pathSegments[0]
-        val chapterId = url.pathSegments[2].toLong()
-        var code = fetchChapterByPage(comicId, expectPage).items.find { it.id == chapterId }?.codes
-        if (code == null) {
-            // Do full search for find target code
-            var page = 1
-            var end = false
-            while (!end && code == null) {
-                val resp = fetchChapterByPage(comicId, page)
-                code = resp.items.find { it.id == chapterId }?.codes
-                end = resp.isPageEnd()
-                page += 1
-            }
-        }
-        return code?.also { chapterUrlToCode[chapter.url] = it }
-    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (!chapter.url.contains(DUMMY_CHAPTER_MARK)) {
             // Old format is detected
             throw Exception("请刷新章节列表")
         }
-        val code = fetchChapterCode(chapter) ?: throw Exception("找不到章节地址，请尝试刷新章节列表")
-        val url = "$baseUrl/v2.0/apis/manga/reading?code=$code&v=v3.1818134"
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val comicId = chapterUrl.pathSegments[0]
+        val chapterId = chapterUrl.pathSegments[2]
+
+        val url = "$baseUrl/v2.0/apis/manga/reading?code=$comicId&cid=$chapterId&v=v3.1919111"
         // Some chapters return 403 without this header
         val headers = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", baseUrl + chapter.url)
+            .set("Referer", "$baseUrl/mangaread/$comicId/$chapterId")
             .build()
         return GET(url, headers)
     }
