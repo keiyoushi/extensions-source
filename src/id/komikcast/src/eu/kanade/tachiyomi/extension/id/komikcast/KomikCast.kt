@@ -21,7 +21,7 @@ import java.util.Locale
 
 class KomikCast : MangaThemesia(
     name = "Komik Cast",
-    baseUrl = "https://komikcast03.com",
+    baseUrl = "https://komikcast05.com",
     lang = "id",
     mangaUrlDirectory = "/daftar-komik",
     dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT),

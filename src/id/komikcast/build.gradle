@@ -2,8 +2,8 @@ ext {
     extName = 'Komik Cast'
     extClass = '.KomikCast'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komikcast03.com'
-    overrideVersionCode = 39
+    baseUrl = 'https://komikcast05.com'
+    overrideVersionCode = 41
     isNsfw = false
 }
 
