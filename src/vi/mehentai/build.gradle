@@ -2,8 +2,8 @@ ext {
     extName = "MeHentai"
     extClass = ".MeHentai"
     themePkg = "manhwaz"
-    baseUrl = "https://mehentai.tv"
-    overrideVersionCode = 1
+    baseUrl = "https://mehentai.pro"
+    overrideVersionCode = 2
     isNsfw = true
 }
 

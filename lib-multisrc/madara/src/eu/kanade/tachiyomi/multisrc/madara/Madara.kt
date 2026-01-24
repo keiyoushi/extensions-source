@@ -921,10 +921,10 @@ abstract class Madara(
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
             }
-            WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
+            WordSet("ago", "atrás", "önce", "قبل", "trước").endsWith(date) -> {
                 parseRelativeDate(date)
             }
-            WordSet("hace", "giờ", "phút", "giây").startsWith(date) -> {
+            WordSet("hace", "năm", "tháng", "tuần", "ngày", "giờ", "phút", "giây").startsWith(date) -> {
                 parseRelativeDate(date)
             }
             // Handle "jour" with a number before it

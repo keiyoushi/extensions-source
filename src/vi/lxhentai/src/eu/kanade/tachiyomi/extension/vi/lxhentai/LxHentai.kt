@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.lxhentai
 
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -24,6 +25,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.collections.map
 
 class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
@@ -31,7 +33,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val id = 6495630445796108150
 
-    private val defaultBaseUrl = "https://lxmanga.my"
+    private val defaultBaseUrl = "https://lxmanga.space"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -45,7 +47,6 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
 
     override fun popularMangaRequest(page: Int) =
         searchMangaRequest(page, "", FilterList(SortBy(3)))
@@ -166,7 +167,23 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override fun pageListParse(document: Document): List<Page> = document
         .select("div.text-center div.lazy")
-        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
+        .mapIndexed { idx, element -> Page(idx, imageUrl = element.absUrl("data-src")) }
+
+    override fun imageRequest(page: Page): Request {
+        val rawUrl = page.imageUrl!!
+        val imageUrl = when {
+            rawUrl.startsWith("//") -> "https:$rawUrl"
+            else -> rawUrl
+        }
+        return GET(imageUrl, imageHeaders)
+    }
+
+    private val imageHeaders by lazy {
+        headersBuilder()
+            .set("Origin", baseUrl)
+            .set("Token", "364b9dccc5ef526587f108c4d4fd63ee35286e19e36ec55b93bd4d79410dbbf6")
+            .build()
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -342,7 +359,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+        val baseUrlPref = EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
             summary = BASE_URL_PREF_SUMMARY
