@@ -4,6 +4,8 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.SourceFactory
+import eu.kanade.tachiyomi.source.model.SManga
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -22,6 +24,14 @@ abstract class ThunderScansBase(
     dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
 ) : MangaThemesiaAlt(name, baseUrl, lang, mangaUrlDirectory, dateFormat) {
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
+
+    open val searchMangaTitleSelector = ".bigor .tt, h3 a"
+
+    override fun searchMangaFromElement(element: Element): SManga {
+        return super.searchMangaFromElement(element).apply {
+            title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf { it.isNotBlank() } ?: element.select("a")!!.attr("title")
+        }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
@@ -43,6 +53,7 @@ class LavaScans : ThunderScansBase(
     dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar")),
 ) {
     override val id = 3209001028102012989
+    override fun searchMangaSelector() = ".listupd .manga-card-v"
 }
 
 class ThunderScans : ThunderScansBase(
