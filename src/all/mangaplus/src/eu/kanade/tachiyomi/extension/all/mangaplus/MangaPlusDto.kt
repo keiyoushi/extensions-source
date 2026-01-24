@@ -211,6 +211,7 @@ class Label(val label: LabelCode? = LabelCode.WEEKLY_SHOUNEN_JUMP) {
             LabelCode.SAIKYOU_JUMP -> "Saikyou Jump"
             LabelCode.ULTRA_JUMP -> "Ultra Jump"
             LabelCode.DX -> "Dash X Comic"
+            LabelCode.MANGA_MEE -> "Manga Mee"
             else -> null
         }
 }
@@ -253,6 +254,9 @@ enum class LabelCode {
 
     @SerialName("DX")
     DX,
+
+    @SerialName("MEE")
+    MANGA_MEE,
 }
 
 @Serializable
