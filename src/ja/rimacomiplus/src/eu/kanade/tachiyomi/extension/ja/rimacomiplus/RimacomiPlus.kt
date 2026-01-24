@@ -12,8 +12,13 @@ class RimacomiPlus : ComiciViewer(
     "ja",
 ) {
     override fun chapterListRequest(manga: SManga): Request {
-        val temp = client.newCall(GET(baseUrl + manga.url, headers)).execute()
-        val url = temp.request.url.toString().toHttpUrl().newBuilder()
+        val newClient = super.client.newBuilder()
+            .followRedirects(false)
+            .build()
+
+        val temp = newClient.newCall(GET(baseUrl + manga.url, headers)).execute()
+        val redirect = temp.header("Location")
+        val url = redirect.toString().toHttpUrl().newBuilder()
             .setQueryParameter("s", "1")
             .addPathSegment("list")
             .build()
