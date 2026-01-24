@@ -1,23 +1,23 @@
 package eu.kanade.tachiyomi.extension.id.siimanga
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Page
-import okhttp3.Request
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.SChapter
+import org.jsoup.nodes.Element
 
-class Siikomik : MangaThemesia(
+class Siikomik : Madara(
     "Siikomik",
-    "https://web.siikomik.org",
+    "https://siikomik.net",
     "id",
 ) {
-    override val versionId = 2
+    override val versionId = 3
 
-    override val hasProjectPage = true
+    override val mangaSubString = "komik"
 
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .removeAll("Referer")
-            .build()
-        return GET(page.imageUrl!!, imageHeaders)
+    override fun chapterFromElement(element: Element): SChapter {
+        return super.chapterFromElement(element).apply {
+            if (element.hasClass("premium") || element.hasClass("premium-block")) {
+                name = "🔒 $name"
+            }
+        }
     }
 }
