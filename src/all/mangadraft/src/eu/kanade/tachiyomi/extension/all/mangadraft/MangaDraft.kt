@@ -36,7 +36,7 @@ class MangaDraft() : HttpSource() {
 
     override val supportsLatest = true
 
-    //make client follow redirects
+    // make client follow redirects
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .followRedirects(true)
         .build()
@@ -44,7 +44,7 @@ class MangaDraft() : HttpSource() {
     private val json: Json by injectLazy()
 
     // Popular
-    override fun popularMangaRequest(page: Int) : Request {
+    override fun popularMangaRequest(page: Int): Request {
         return GET(
             baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("api")
@@ -55,7 +55,7 @@ class MangaDraft() : HttpSource() {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("number", "20")
             }.build(),
-            headers
+            headers,
         )
     }
     override fun popularMangaParse(response: Response): MangasPage {
@@ -80,7 +80,7 @@ class MangaDraft() : HttpSource() {
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int) : Request {
+    override fun latestUpdatesRequest(page: Int): Request {
         return GET(
             baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("api")
@@ -91,7 +91,7 @@ class MangaDraft() : HttpSource() {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("number", "20")
             }.build(),
-            headers
+            headers,
         )
     }
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
@@ -134,6 +134,7 @@ class MangaDraft() : HttpSource() {
 
     // filters
     override fun getFilterList() = FilterList(
+        SortFilter(),
         TypeFilter(),
         OrderFilter(),
         SectionFilter(),
@@ -141,9 +142,7 @@ class MangaDraft() : HttpSource() {
         FormatFilter(),
         LanguageFilter(),
         StatusFilter(),
-        SortFilter(),
     )
-
 
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
@@ -176,7 +175,7 @@ class MangaDraft() : HttpSource() {
         }
     }
 
-    fun parseStatus(status: Int?) = when (status){
+    fun parseStatus(status: Int?) = when (status) {
         0 -> SManga.ONGOING
         1 -> SManga.COMPLETED
         2 -> SManga.ON_HIATUS
