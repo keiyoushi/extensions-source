@@ -11,8 +11,19 @@ open class UriPartFilter(
     fun toUriPart() = vals[state].second
 }
 
-class TypeFilter(state: Int = 0) : UriPartFilter(
+// sort is only applied when all has been selected in order
+class SortFilter(state: Int = 0) : UriPartFilter(
     "Sort",
+    arrayOf(
+        Pair("Likes", "likes"),
+        Pair("Comments", "comments"),
+        Pair("Views", "views"),
+        Pair("Name", "name"),
+    ),
+    state,
+)
+class TypeFilter(state: Int = 0) : UriPartFilter(
+    "Type",
     arrayOf(
         Pair("All", "all"),
         Pair("Manga-Comics", "bd.manga"),
@@ -23,7 +34,7 @@ class TypeFilter(state: Int = 0) : UriPartFilter(
     state,
 )
 class OrderFilter(state: Int = 0) : UriPartFilter(
-    "Sort",
+    "Order",
     arrayOf(
         Pair("All", "all"),
         Pair("Popularity", "popular"),
@@ -33,8 +44,9 @@ class OrderFilter(state: Int = 0) : UriPartFilter(
     state,
 )
 class SectionFilter(state: Int = 0) : UriPartFilter(
-    "Sort",
+    "Section",
     arrayOf(
+        Pair("All", ""),
         Pair("Neoville", "neoville"),
         Pair("Original", "original"),
         Pair("Indepolis", "indepolis"),
@@ -45,6 +57,7 @@ class SectionFilter(state: Int = 0) : UriPartFilter(
 class StatusFilter(state: Int = 0) : UriPartFilter(
     "Status",
     arrayOf(
+        Pair("All", ""),
         Pair("In Progress", "0"),
         Pair("Completed", "1"),
         Pair("On Break", "2"),
@@ -54,6 +67,7 @@ class StatusFilter(state: Int = 0) : UriPartFilter(
 class GenreFilter(state: Int = 0) : UriPartFilter(
     "Genre",
     arrayOf(
+        Pair("All", ""),
         Pair("Action", "action"),
         Pair("Adventure", "Adventure"),
         Pair("BL", "boys-love-yaoi"),
@@ -76,16 +90,18 @@ class GenreFilter(state: Int = 0) : UriPartFilter(
     state,
 )
 class FormatFilter(state: Int = 0) : UriPartFilter(
-    "Status",
+    "Format",
     arrayOf(
+        Pair("All", ""),
         Pair("Series", "serie"),
         Pair("One-Shot", "oneshot"),
     ),
     state,
 )
 class LanguageFilter(state: Int = 0) : UriPartFilter(
-    "Status",
+    "Language",
     arrayOf(
+        Pair("All", ""),
         Pair("Deutsch", "de"),
         Pair("English", "en"),
         Pair("Spanish", "es"),
@@ -94,18 +110,7 @@ class LanguageFilter(state: Int = 0) : UriPartFilter(
         Pair("Polski", "pl"),
         Pair("Portuguese", "pt"),
         Pair("Suomen kieli", "fi"),
-        Pair("Japanese", "jp")
-    ),
-    state,
-)
-
-class SortFilter(state: Int = 0) : UriPartFilter(
-    "Order",
-    arrayOf(
-        Pair("Likes", "likes"),
-        Pair("Comments", "comments"),
-        Pair("Views", "views"),
-        Pair("Name", "name"),
+        Pair("Japanese", "jp"),
     ),
     state,
 )
