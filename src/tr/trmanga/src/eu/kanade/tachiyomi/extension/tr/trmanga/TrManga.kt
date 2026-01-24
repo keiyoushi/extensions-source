@@ -1,16 +1,16 @@
 package eu.kanade.tachiyomi.extension.tr.trmanga
+
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -82,83 +82,6 @@ class TrManga : ParsedHttpSource() {
         StatusFilter(),
         genreFilter(),
     )
-    class sortFilter(state: Int = 0) : UriPartFilter(
-        "Sort",
-        arrayOf(
-            Pair("Popularity", "views"),
-            Pair("Date Updated", "released"),
-            Pair("Alphabetical Order", "name"),
-        ),
-        state,
-    )
-    class OrderFilter(state: Int = 0) : UriPartFilter(
-        "Order",
-        arrayOf(
-            Pair("Descending", "DESC"),
-            Pair("Ascending", "ASC"),
-        ),
-        state,
-    )
-    class StatusFilter(state: Int = 0) : UriPartFilter(
-        "Status",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Ongoing", "continues"),
-            Pair("Completed", "complated"),
-        ),
-        state,
-    )
-    class genreFilter(state: Int = 0) : UriPartFilter(
-        "Genre",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Aksiyon", "aksiyon"),
-            Pair("Bilim Kurgu", "bilim-kurgu"),
-            Pair("BL", "bl"),
-            Pair("Büyü", "büyü"),
-            Pair("Doğaüstü", "dogaustu"),
-            Pair("Dövüş Sanatları", "dovus-sanatlari"),
-            Pair("Fantastik", "fantastik"),
-            Pair("Gerilim", "gerilim"),
-            Pair("Isekai", "isekai"),
-            Pair("Josei", "josei"),
-            Pair("Komedi", "komedi"),
-            Pair("Korku", "korku"),
-            Pair("Macera", "macera"),
-            Pair("Manga", "manga"),
-            Pair("Okul", "okul"),
-            Pair("One-shot", "one-shot"),
-            Pair("Oyun", "oyun"),
-            Pair("Psikolojik", "psikolojik"),
-            Pair("Reenkarnasyon", "reenkarnasyon"),
-            Pair("Romantik", "romantik"),
-            Pair("Seinen", "seinen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Shounen", "shounen"),
-            Pair("Shounen Ai", "shounen-ai"),
-            Pair("Slice of Life", "slice-of-life"),
-            Pair("Spor", "spor"),
-            Pair("Suç", "suc"),
-            Pair("Süper Kahraman", "süper-kahraman"),
-            Pair("Tarih", "tarih"),
-            Pair("Trajedi", "trajedi"),
-            Pair("Vampir", "vampir"),
-            Pair("Yaoi", "yaoi"),
-            Pair("Yetişkin", "yetişkin"),
-            Pair("Yuri", "yuri"),
-            Pair("Zaman Yolculuğu", "zaman-yolculuğu"),
-        ),
-        state,
-    )
-
-    open class UriPartFilter(
-        displayName: String,
-        private val vals: Array<Pair<String, String>>,
-        state: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
-        fun toUriPart() = vals[state].second
-    }
 
     // manga details
     override fun mangaDetailsParse(document: Document): SManga {
@@ -201,14 +124,6 @@ class TrManga : ParsedHttpSource() {
     // Date logic lifted from Madara
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
-
-        fun SimpleDateFormat.tryParse(string: String): Long {
-            return try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
-        }
 
         return when {
             " önce" in date -> {
