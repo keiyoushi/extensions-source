@@ -1,7 +1,7 @@
 ext {
     extName = 'LectorJPG'
     extClass = '.LectorJpg'
-    extVersionCode = 44
+    extVersionCode = 45
     isNsfw = true
 }
 
