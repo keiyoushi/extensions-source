@@ -12,7 +12,7 @@ import java.util.Locale
 class Mangalink :
     Madara(
         "مانجا لينك",
-        "https://link-manga.com",
+        "https://link-manga.net",
         "ar",
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
