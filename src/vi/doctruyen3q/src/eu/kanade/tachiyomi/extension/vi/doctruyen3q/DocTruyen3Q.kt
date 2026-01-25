@@ -33,10 +33,9 @@ class DocTruyen3Q :
     ConfigurableSource {
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.chapter-img").mapIndexed { index, element ->
-            val rawUrl = when { element.hasClass("lazy-load") -> element.attr("data-src") else -> element.attr("src") }
-            val fixedUrl = when { rawUrl.startsWith("//") -> "https:$rawUrl" else -> rawUrl }
-            Page(index, imageUrl = fixedUrl)
+        return document.select("div.page-chapter[id] img").mapIndexed { index, element ->
+            val rawUrl = element.attr("abs:src").ifEmpty { element.attr("abs:data-src") }
+            Page(index, imageUrl = rawUrl)
         }.distinctBy { it.imageUrl }
     }
 
