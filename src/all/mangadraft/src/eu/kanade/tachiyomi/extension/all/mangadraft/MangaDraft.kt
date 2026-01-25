@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.mangadraft
-import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangadraftCatalogResponseDto
-import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangadraftPageDTO
+import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftCatalogResponseDto
+import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftPageDTO
+import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftProjectDto
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.PagesByCategory
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,24 +11,20 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.collections.joinToString
 import kotlin.getValue
 
-class MangaDraft() : HttpSource() {
+class MangaDraft : HttpSource() {
     override val name = "MangaDraft"
     override val baseUrl = "https://mangadraft.com"
     override val lang = "all"
@@ -35,13 +32,6 @@ class MangaDraft() : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override val supportsLatest = true
-
-    // make client follow redirects
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .followRedirects(true)
-        .build()
-
-    private val json: Json by injectLazy()
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -59,11 +49,8 @@ class MangaDraft() : HttpSource() {
         )
     }
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = try {
-            json.decodeFromString<MangadraftCatalogResponseDto>(response.body.string())
-        } catch (e: Exception) {
-            throw Exception("Failed to parse server response.")
-        }
+        val result = response.parseAs<MangaDraftCatalogResponseDto>()
+
         val mangas = result.data
         return MangasPage(
             mangas.map {
@@ -75,7 +62,8 @@ class MangaDraft() : HttpSource() {
                     genre = it.genres
                 }
             },
-            true,
+            // if there is less than 20 received there won't be a next page
+            mangas.count() >= 20,
         )
     }
 
@@ -97,18 +85,17 @@ class MangaDraft() : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
-    protected inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
-        val typeFilter = filterList.findInstance<TypeFilter>()!!
-        val orderFilter = filterList.findInstance<OrderFilter>()!!
-        val sectionFilter = filterList.findInstance<SectionFilter>()!!
-        val genreFilter = filterList.findInstance<GenreFilter>()!!
-        val formatFilter = filterList.findInstance<FormatFilter>()!!
-        val languageFilter = filterList.findInstance<LanguageFilter>()!!
-        val statusFilter = filterList.findInstance<StatusFilter>()!!
-        val sortFilter = filterList.findInstance<SortFilter>()!!
+        val typeFilter = filterList.firstInstance<TypeFilter>()
+        val orderFilter = filterList.firstInstance<OrderFilter>()
+        val sectionFilter = filterList.firstInstance<SectionFilter>()!!
+        val genreFilter = filterList.firstInstance<GenreFilter>()!!
+        val formatFilter = filterList.firstInstance<FormatFilter>()!!
+        val languageFilter = filterList.firstInstance<LanguageFilter>()!!
+        val statusFilter = filterList.firstInstance<StatusFilter>()!!
+        val sortFilter = filterList.firstInstance<SortFilter>()!!
 
         return GET(
             baseUrl.toHttpUrl().newBuilder().apply {
@@ -144,34 +131,33 @@ class MangaDraft() : HttpSource() {
         StatusFilter(),
     )
 
+    protected val regexWindowProject = Regex("""window\.project\s*=\s*(\{.*?\})\s*;""", RegexOption.DOT_MATCHES_ALL)
+
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
 
         // Find the <script> containing window.project
-        val scriptContent = doc.select("script")
-            .firstOrNull { it.data().contains("window.project") }
-            ?.data()
-            ?: return SManga.create() // fallback if script not found
+        val scriptContent = doc.selectFirst("script:containsData(window.project)")?.data()
+            ?: throw Exception("Unable to find project script")
 
         // get the project part in the script
-        val projectJson =
-            Regex("""window\.project\s*=\s*(\{.*?\})\s*;""", RegexOption.DOT_MATCHES_ALL)
-                .find(scriptContent)
-                ?.groups?.get(1)?.value
-                ?: "{}"
+        val projectJson = regexWindowProject
+            .find(scriptContent)
+            ?.groups?.get(1)?.value
+            ?: throw IllegalStateException("window.project not found")
 
-        val project = json.parseToJsonElement(projectJson).jsonObject
+        val project = projectJson.parseAs<MangaDraftProjectDto>()
 
         return SManga.create().apply {
-            title = project["name"]?.jsonPrimitive?.content.orEmpty()
-            description = project["description"]?.jsonPrimitive?.content.orEmpty()
+            title = project.name
+            description = project.description
             author = doc.select("[title=Auteur]").text()
             artist = doc.select("[title=créateur]").text()
             genre =
-                project["genres"]?.jsonArray?.joinToString(", ") { it.jsonObject["name"]?.jsonPrimitive?.content.orEmpty() }
+                project.genres.joinToString(", ") { it.name }
                     .orEmpty()
-            status = parseStatus(project["project_status"]?.jsonPrimitive?.content?.toInt())
+            status = parseStatus(project.projectStatusId)
         }
     }
 
@@ -188,41 +174,58 @@ class MangaDraft() : HttpSource() {
         val document = response.asJsoup()
 
         val chapterElements = document.select(chapterListSelector())
-        return chapterElements.mapIndexed { i, it ->
-            chapterFromElement(it, i)
-        }.reversed()
+
+        val isOneShot = chapterElements[0].attr("href").contains("c.")
+        var chapterList: List<SChapter>
+        if (isOneShot) {
+            chapterList = chapterElements.mapIndexed { i, it ->
+                chapterFromElement(it, i)
+            }.reversed()
+        } else {
+            chapterList = listOf<SChapter>(chapterFromElement(chapterElements[0], 0))
+        }
+
+        return chapterList
     }
 
     private fun chapterFromElement(element: Element, index: Int): SChapter =
         SChapter.create().apply {
-            chapter_number = index.toFloat() + 1
-            try {
-                name = "$chapter_number. ${
-                element.selectFirst(".group-hover\\:text-secondary")?.text()
-                }" ?: "Chapter $chapter_number"
+            chapter_number = index.toFloat()
+            name = "$chapter_number. ${element.selectFirst(".group-hover\\:text-secondary")?.text() ?: ""}"
 
-                val request = Request.Builder()
-                    .url("$baseUrl${element.attr("href")}")
-                    .build()
+            url = "$baseUrl${element.attr("href")}"
 
-                client.newCall(request).execute().use { response -> // final URL after redirects
-                    // get this api request with the id of the first page of the chapter after redirect
-                    setUrlWithoutDomain("$baseUrl/api/reader/listPages?first_page=${response.request.url.toString().substringAfterLast('/')}&grouped_by_category=true")
-                }
-
-                val dateText = element.selectFirst("div>span")?.text()
-                if (!dateText.isNullOrBlank()) {
-                    name = name.substringBefore(dateText)
-                    date_upload = dateFormat.tryParse(dateText)
-                }
-            } catch (e: Exception) {
-                throw Exception("One-Shots are not yet supported, please read in browser.")
+            val dateText = element.selectFirst("div>span")?.text()
+            if (!dateText.isNullOrBlank()) {
+                name = name.substringBefore(dateText)
+                date_upload = dateFormat.tryParse(dateText)
             }
         }
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        if (chapter.url.contains("c.")) {
+            val request = Request.Builder()
+                .url(chapter.url)
+                .build()
+
+            // switch base url with actual url once we try to get the pages
+            client.newCall(request).execute().use { response -> // final URL after redirects
+                // get this api request with the id of the first page of the chapter after redirect
+                val responseChapterNum =
+                    response.request.url.toString().substringAfterLast('/').filter { it.isDigit() }
+                chapter.setUrlWithoutDomain("$baseUrl/api/reader/listPages?first_page=$responseChapterNum&grouped_by_category=true")
+            }
+        } else {
+            val chapterNum = chapter.url.substringAfterLast('/').filter { it.isDigit() }
+            chapter.setUrlWithoutDomain("$baseUrl/api/reader/listPages?first_page=$chapterNum&grouped_by_category=true")
+        }
+
+        return super.fetchPageList(chapter)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val result = try {
-            json.decodeFromString<PagesByCategory>(response.body.string())
+            response.parseAs<PagesByCategory>()
         } catch (e: Exception) {
             throw Exception("Error parsing pages ${e.stackTrace}.")
         }
@@ -232,7 +235,7 @@ class MangaDraft() : HttpSource() {
             Page(it.number, "${it.url}?size=full", "${it.url}?size=full")
         }
     }
-    fun findCategoryByPageId(pagesByCategory: PagesByCategory, pageId: Long): List<MangadraftPageDTO> {
+    fun findCategoryByPageId(pagesByCategory: PagesByCategory, pageId: Long): List<MangaDraftPageDTO> {
         return pagesByCategory.values
             .first { pageList -> pageList.any { it.id == pageId } }
     }
