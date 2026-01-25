@@ -4,6 +4,9 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.SourceFactory
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -23,6 +26,14 @@ abstract class ThunderScansBase(
 ) : MangaThemesiaAlt(name, baseUrl, lang, mangaUrlDirectory, dateFormat) {
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 
+    open val searchMangaTitleSelector = ".bigor .tt, h3 a"
+
+    override fun searchMangaFromElement(element: Element): SManga {
+        return super.searchMangaFromElement(element).apply {
+            title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf(String::isNotEmpty) ?: element.selectFirst("a")!!.attr("title")
+        }
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
@@ -38,11 +49,33 @@ abstract class ThunderScansBase(
 
 class LavaScans : ThunderScansBase(
     "Lava Scans",
-    "https://lavatoons.com",
+    "https://lavascans.com",
     "ar",
-    dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
+    dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar")),
 ) {
     override val id = 3209001028102012989
+
+    override fun chapterFromElement(element: Element): SChapter {
+        return super.chapterFromElement(element).apply {
+            name = element.selectFirst(".ch-num")!!.text().ifEmpty { name }
+            date_upload = element.selectFirst(".ch-date")?.text()?.parseChapterDate() ?: date_upload
+        }
+    }
+    override fun searchMangaSelector() = ".listupd .manga-card-v"
+
+    override val seriesDetailsSelector = "div.lh-container"
+
+    override val seriesTitleSelector = ".lh-title"
+
+    override val seriesDescriptionSelector = "#manga-story"
+
+    override val seriesGenreSelector = ".lh-genres a"
+
+    override val seriesStatusSelector = ".status-badge-lux"
+
+    override val seriesThumbnailSelector = ".lh-poster img"
+
+    override fun chapterListSelector() = "#chapters-list-container .ch-item"
 }
 
 class ThunderScans : ThunderScansBase(
