@@ -17,8 +17,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class PhenixScans : HttpSource() {
-    override val baseUrl = "https://phenix-scans.com"
-    private val apiBaseUrl = "https://phenix-scans.com/api"
+    override val baseUrl = "https://phenix-scans.co"
+    private val apiBaseUrl = "https://api.phenix-scans.co/api"
     override val lang = "fr"
     override val name = "Phenix Scans"
     override val supportsLatest = true
@@ -35,7 +35,7 @@ class PhenixScans : HttpSource() {
         val mangas = data.top.map {
             SManga.create().apply {
                 title = it.title
-                thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75 and cdn.[...]/?url=
+                thumbnail_url = "${apiBaseUrl.substringBeforeLast("/api")}/${it.coverImage}" // Possibility of using ?width=75 and cdn.[...]/?url=
                 url = it.slug
             }
         }
@@ -54,7 +54,7 @@ class PhenixScans : HttpSource() {
         return mangaList.map {
             SManga.create().apply {
                 title = it.title
-                thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75
+                thumbnail_url = "${apiBaseUrl.substringBeforeLast("/api")}/${it.coverImage}" // Possibility of using ?width=75
                 url = it.slug
             }
         }
@@ -134,7 +134,7 @@ class PhenixScans : HttpSource() {
 
         return SManga.create().apply {
             title = data.manga.title
-            thumbnail_url = "$apiBaseUrl/${data.manga.coverImage}"
+            thumbnail_url = "${apiBaseUrl.substringBeforeLast("/api")}/${data.manga.coverImage}"
             url = data.manga.slug
             description = data.manga.synopsis
             status = when (data.manga.status) {
@@ -194,7 +194,7 @@ class PhenixScans : HttpSource() {
         val data = response.parseAs<ChapterContentDto>()
 
         return data.chapter.images.mapIndexed { index, url ->
-            Page(index, imageUrl = "$apiBaseUrl/$url")
+            Page(index, imageUrl = "${apiBaseUrl.substringBeforeLast("/api")}/$url")
         }
     }
 }
