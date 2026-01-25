@@ -1,7 +1,7 @@
 ext {
-    extName = 'Bato.to'
-    extClass = '.BatoToFactory'
-    extVersionCode = 60
+    extName = 'XBatCat'
+    extClass = '.XBatCatFactory'
+    extVersionCode = 61
     isNsfw = true
 }
 

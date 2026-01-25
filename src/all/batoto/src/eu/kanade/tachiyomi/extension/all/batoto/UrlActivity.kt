@@ -20,7 +20,7 @@ class UrlActivity : Activity() {
         try {
             startActivity(mainIntent)
         } catch (e: ActivityNotFoundException) {
-            Log.e("BatoTo", "Unable to launch activity", e)
+            Log.e("XBatCat", "Unable to launch activity", e)
         }
 
         finish()

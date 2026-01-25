@@ -7,14 +7,14 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 
 class ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val scrambleData = request.url.queryParameter("scramble")
+        val scrambleData = request.url.fragment
 
         if (scrambleData.isNullOrEmpty()) {
             return chain.proceed(request)
@@ -41,11 +41,11 @@ class ImageInterceptor : Interceptor {
         val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
         val descrambledImg =
             unscrambleImage(scrambledImg, scrambledImg.width, scrambledImg.height, tiles)
-
-        val output = ByteArrayOutputStream()
-        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, output)
-
-        val body = output.toByteArray().toResponseBody("image/jpeg".toMediaType())
+        scrambledImg.recycle()
+        val buffer = Buffer()
+        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        descrambledImg.recycle()
+        val body = buffer.asResponseBody("image/jpeg".toMediaType())
 
         return response.newBuilder().body(body).build()
     }
