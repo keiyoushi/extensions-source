@@ -30,7 +30,7 @@ abstract class ThunderScansBase(
 
     override fun searchMangaFromElement(element: Element): SManga {
         return super.searchMangaFromElement(element).apply {
-            title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf { it.isNotBlank() } ?: element.select("a")!!.attr("title")
+            title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf(String::isNotEmpty) ?: element.selectFirst("a")!!.attr("title")
         }
     }
 
@@ -57,7 +57,7 @@ class LavaScans : ThunderScansBase(
 
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
-            name = element.select(".ch-num").text().ifBlank { name }
+            name = element.selectFirst(".ch-num")!!.text().ifEmpty { name }
             date_upload = element.selectFirst(".ch-date")?.text()?.parseChapterDate() ?: date_upload
         }
     }
