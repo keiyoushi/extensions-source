@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -54,22 +55,20 @@ class TrManga : ParsedHttpSource() {
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    protected inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
-        val genreFilter = filterList.findInstance<genreFilter>()!!
-        val sortFilter = filterList.findInstance<sortFilter>()!!
-        val short_typeFilter = filterList.findInstance<OrderFilter>()!!
-        val statusFilter = filterList.findInstance<StatusFilter>()!!
+        val genreFilter = filterList.firstInstance<genreFilter>()
+        val sortFilter = filterList.firstInstance<sortFilter>()
+        val shortTypeFilter = filterList.firstInstance<OrderFilter>()
+        val statusFilter = filterList.firstInstance<StatusFilter>()
 
         val url = "$baseUrl/webtoon-listesi".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("q", query)
             .addQueryParameter("genre", genreFilter.toUriPart())
             .addQueryParameter("sort", sortFilter.toUriPart())
-            .addQueryParameter("short_type", short_typeFilter.toUriPart())
+            .addQueryParameter("short_type", shortTypeFilter.toUriPart())
             .addQueryParameter("status", statusFilter.toUriPart())
             .build()
         return GET(url, headers)
