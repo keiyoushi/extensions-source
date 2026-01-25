@@ -12,7 +12,7 @@ import java.util.Locale
 class Doujinku :
     MangaThemesia(
         "Doujinku",
-        "https://doujinku.xyz",
+        "https://doujinku.org",
         "id",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
     ),
