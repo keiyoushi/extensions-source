@@ -6,6 +6,7 @@ class MangaPro : Iken(
     "Pro chan",
     "ar",
     "https://prochan.net/",
+    "https://api.prochan.net",
 ) {
     override val versionId = 4
 }
