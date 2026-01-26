@@ -1,0 +1,10 @@
+ext {
+    extName = 'RawJX'
+    extClass = '.RawJX'
+    themePkg = 'madara'
+    baseUrl = 'https://rawjx.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
