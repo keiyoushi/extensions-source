@@ -1,0 +1,96 @@
+package eu.kanade.tachiyomi.extension.fr.rimuscans
+
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+@Serializable
+data class MangaListDto(
+    val mangas: List<MangaDto>,
+    val pagination: PaginationDto,
+)
+
+@Serializable
+data class MangaDetailsWrapperDto(
+    val manga: MangaDto,
+)
+
+@Serializable
+data class MangaDto(
+    val id: String,
+    val slug: String,
+    val title: String,
+    val alternativeTitles: List<String> = emptyList(),
+    val description: String? = null,
+    val cover: String,
+    val status: String? = null,
+    val author: String? = null,
+    val artist: String? = null,
+    val type: String? = null,
+    val genres: List<String> = emptyList(),
+    val chapters: List<ChapterDto> = emptyList(),
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = "/manga/$slug"
+        title = this@MangaDto.title
+        thumbnail_url = if (cover.startsWith("http")) cover else baseUrl + cover
+        description = this@MangaDto.description
+        author = this@MangaDto.author
+        artist = this@MangaDto.artist
+        status = when (this@MangaDto.status?.lowercase()) {
+            "ongoing", "en cours" -> SManga.ONGOING
+            "completed", "terminé", "termine" -> SManga.COMPLETED
+            "on hiatus", "hiatus", "en pause" -> SManga.ON_HIATUS
+            "cancelled", "annulé", "annule" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+        genre = (listOfNotNull(type) + genres).joinToString()
+    }
+}
+
+@Serializable
+data class ChapterDto(
+    val id: String,
+    val number: Double,
+    val title: String? = null,
+    val releaseDate: String? = null,
+    val type: String? = null,
+    val images: List<ImageDto> = emptyList(),
+) {
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        url = "/read/$mangaSlug/${if (number % 1.0 == 0.0) number.toInt() else number}"
+        val numberString = if (number % 1.0 == 0.0) number.toInt().toString() else number.toString()
+        name = when {
+            title == null || title.isBlank() -> "Chapitre $numberString"
+            title.contains("Chapitre", ignoreCase = true) || title.contains("Chapter", ignoreCase = true) -> title.trim()
+            else -> "Chapitre $numberString : ${title.trim()}"
+        }
+        if (type == "PREMIUM") {
+            name = "✨ $name"
+        }
+        chapter_number = number.toFloat()
+        scanlator = "Rimu Scans"
+        date_upload = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.tryParse(releaseDate)
+    }
+}
+
+@Serializable
+data class ImageDto(
+    val id: String,
+    val order: Int,
+    val url: String,
+)
+
+@Serializable
+data class PaginationDto(
+    val page: Int,
+    val limit: Int,
+    val hasNextPage: Boolean,
+    val hasPrevPage: Boolean,
+)
