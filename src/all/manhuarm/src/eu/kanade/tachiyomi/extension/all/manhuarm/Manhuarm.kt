@@ -342,7 +342,7 @@ class Manhuarm(
             .set("Referer", "$baseUrl/")
             .set("Connection", "keep-alive")
             .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
-            .set("Accept-Encoding:", "gzip, deflate, br, zstd")
+            .set("Accept-Encoding", "gzip, deflate, br, zstd")
             .set("Sec-Fetch-Dest", "image")
             .set("Sec-Fetch-Mode", "no-cors")
             .set("Sec-Fetch-Site", "cross-site")
