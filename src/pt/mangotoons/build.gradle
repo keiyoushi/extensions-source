@@ -2,7 +2,7 @@ ext {
     extName = 'Mango Toons'
     extClass = '.MangoToons'
     baseUrl = 'https://mangotoons.com'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = false
 }
 
