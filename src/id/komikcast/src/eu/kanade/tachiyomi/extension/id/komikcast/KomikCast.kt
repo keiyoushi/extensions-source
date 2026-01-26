@@ -21,6 +21,9 @@ class KomikCast : HttpSource() {
 
     override val name = "Komik Cast"
 
+    // Formerly "Komik Cast (WP Manga Stream)"
+    override val id = 972717448578983812
+
     override val baseUrl = "https://v1.komikcast.fit"
 
     private val apiUrl = "https://be.komikcast.fit"
