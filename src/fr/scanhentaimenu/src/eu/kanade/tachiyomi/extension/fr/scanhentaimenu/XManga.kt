@@ -9,4 +9,6 @@ class XManga : Madara("X-Manga", "https://x-manga.org", "fr", dateFormat = Simpl
     override val id = 4153742697148883998
 
     override val useNewChapterEndpoint = true
+
+    override val pageListParseSelector = "div.reading-content img"
 }
