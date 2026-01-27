@@ -19,7 +19,7 @@ class ShinigamiBrowseDataDto(
 @Serializable
 class MetaDto(
     val page: Int,
-    @SerialName("total_page") val totalPage: Int,
+    @SerialName("total_page") val totalPage: Int? = null,
 )
 
 @Serializable
