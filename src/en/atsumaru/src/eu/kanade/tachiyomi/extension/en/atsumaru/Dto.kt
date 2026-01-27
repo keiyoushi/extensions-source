@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -122,7 +123,7 @@ class ChapterDto(
     private val id: String,
     private val number: Float,
     private val title: String,
-    @SerialName("createdAt") private val date: String? = null,
+    @SerialName("createdAt") private val date: JsonElement? = null,
 ) {
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         url = "$slug/$id"
@@ -133,11 +134,20 @@ class ChapterDto(
         }
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            DATE_FORMAT.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
+    private fun parseDate(dateElement: JsonElement): Long {
+        return when (dateElement) {
+            is JsonPrimitive -> {
+                dateElement.longOrNull ?: run {
+                    val content = dateElement.content
+                    val normalizedContent = content.replace("T ", "T")
+                    try {
+                        DATE_FORMAT.parse(normalizedContent)?.time ?: 0L
+                    } catch (_: ParseException) {
+                        0L
+                    }
+                }
+            }
+            else -> 0L
         }
     }
 
