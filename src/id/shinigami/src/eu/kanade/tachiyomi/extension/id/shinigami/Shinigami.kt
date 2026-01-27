@@ -75,7 +75,7 @@ class Shinigami : HttpSource() {
         val rootObject = response.parseAs<ShinigamiBrowseDto>()
         val projectList = rootObject.data.map(::popularMangaFromObject)
 
-        val hasNextPage = rootObject.meta.page < rootObject.meta.totalPage
+        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
 
         return MangasPage(projectList, hasNextPage)
     }
