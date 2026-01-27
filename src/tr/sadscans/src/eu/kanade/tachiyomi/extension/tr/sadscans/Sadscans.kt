@@ -21,7 +21,7 @@ class Sadscans : ParsedHttpSource() {
 
     override val name = "Sadscans"
 
-    override val baseUrl = "https://sadscans.com"
+    override val baseUrl = "https://sadscans.net"
 
     override val lang = "tr"
 
