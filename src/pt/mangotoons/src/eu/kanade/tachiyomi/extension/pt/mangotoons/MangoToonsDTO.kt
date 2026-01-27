@@ -108,7 +108,7 @@ class MangoPageChapterDto(
 @Serializable
 class MangoPageDto(
     val numero: Int,
-    @SerialName("image_random_id") val imageRandomId: Long,
+    val url: String,
 )
 
 @Serializable
