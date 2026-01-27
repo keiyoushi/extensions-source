@@ -20,7 +20,7 @@ class TrManga : ParsedHttpSource() {
 
     override val name = "TrManga"
 
-    override val baseUrl = "https://www.trmanga.com"
+    override val baseUrl = "https://trmanga.com"
 
     override val lang = "tr"
 
@@ -88,11 +88,11 @@ class TrManga : ParsedHttpSource() {
         val statusLabel = "Durum :"
         return SManga.create().apply {
             title = document.selectFirst(".movie__title")!!.text()
-            author = document.select("p:contains($authorArtistLabel)").text().substringAfter(authorArtistLabel)
+            author = document.selectFirst("p:contains($authorArtistLabel)")?.text()?.substringAfter(authorArtistLabel)
             artist = author
-            status = document.select("p:contains($statusLabel)>span").text().parseStatus()
-            description = document.select(".movie__plot").text()
-            thumbnail_url = document.select("img[alt=\"$title\"]").attr("abs:src")
+            status = document.selectFirst("p:contains($statusLabel)>span")?.text()!!.parseStatus()
+            description = document.selectFirst(".movie__plot")?.text()
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
         }
     }
 
@@ -114,9 +114,9 @@ class TrManga : ParsedHttpSource() {
         element.selectFirst("a")!!.let {
             setUrlWithoutDomain(it.absUrl("href"))
             name = it.text()
-            date_upload = parseChapterDate(element.select("td").last()?.selectFirst("span")?.text())
+            date_upload = parseChapterDate(element.selectFirst("td:last-child span:first-child")?.text())
             chapter_number = it.text().filter { it.isDigit() }.toFloat()
-            scanlator = element.select("td")[1].selectFirst("a")?.text()
+            scanlator = element.selectFirst("td:nth-child(2) a:first-child")?.text()
         }
     }
 
@@ -151,7 +151,7 @@ class TrManga : ParsedHttpSource() {
     // page list
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img[data-src]").mapIndexed { i, img ->
-            Page(i, document.location(), img.attr("data-src"))
+            Page(i, document.location(), img.absUrl("data-src"))
         }
     }
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
