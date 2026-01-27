@@ -20,7 +20,7 @@ class TrManga : ParsedHttpSource() {
 
     override val name = "TrManga"
 
-    override val baseUrl = "https://www.trmanga.com"
+    override val baseUrl = "https://trmanga.com"
 
     override val lang = "tr"
 
