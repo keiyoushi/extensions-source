@@ -75,7 +75,14 @@ class LavaScans : ThunderScansBase(
 
     override val seriesThumbnailSelector = ".lh-poster img"
 
-    override fun chapterListSelector() = "#chapters-list-container .ch-item"
+    override fun chapterListSelector(): String {
+        val base = "#chapters-list-container .ch-item"
+        return if (preferences.getBoolean("pref_hide_paid_chapters", true)) {
+            "$base:not(.locked)"
+        } else {
+            base
+        }
+    }
 }
 
 class ThunderScans : ThunderScansBase(
