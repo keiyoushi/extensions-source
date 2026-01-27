@@ -9,19 +9,18 @@ import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
-data class MangaListDto(
+class MangaListDto(
     val mangas: List<MangaDto>,
     val pagination: PaginationDto,
 )
 
 @Serializable
-data class MangaDetailsWrapperDto(
+class MangaDetailsWrapperDto(
     val manga: MangaDto,
 )
 
 @Serializable
-data class MangaDto(
-    val id: String,
+class MangaDto(
     val slug: String,
     val title: String,
     val alternativeTitles: List<String> = emptyList(),
@@ -38,7 +37,11 @@ data class MangaDto(
         url = "/manga/$slug"
         title = this@MangaDto.title
         thumbnail_url = if (cover.startsWith("http")) cover else baseUrl + cover
-        description = this@MangaDto.description
+        description = when {
+            this@MangaDto.alternativeTitles.isEmpty() -> this@MangaDto.description
+            this@MangaDto.description.isNullOrEmpty() -> "Alternative Titles:\n" + this@MangaDto.alternativeTitles.joinToString("\n")
+            else -> this@MangaDto.description + "\n\nAlternative Titles:\n" + this@MangaDto.alternativeTitles.joinToString("\n")
+        }
         author = this@MangaDto.author
         artist = this@MangaDto.artist
         status = when (this@MangaDto.status?.lowercase()) {
@@ -53,8 +56,7 @@ data class MangaDto(
 }
 
 @Serializable
-data class ChapterDto(
-    val id: String,
+class ChapterDto(
     val number: Double,
     val title: String? = null,
     val releaseDate: String? = null,
@@ -81,16 +83,12 @@ data class ChapterDto(
 }
 
 @Serializable
-data class ImageDto(
-    val id: String,
+class ImageDto(
     val order: Int,
     val url: String,
 )
 
 @Serializable
-data class PaginationDto(
-    val page: Int,
-    val limit: Int,
+class PaginationDto(
     val hasNextPage: Boolean,
-    val hasPrevPage: Boolean,
 )
