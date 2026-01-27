@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.atsumaru
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -10,9 +11,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class BrowseMangaDto(
@@ -137,15 +138,7 @@ class ChapterDto(
     private fun parseDate(dateElement: JsonElement): Long {
         return when (dateElement) {
             is JsonPrimitive -> {
-                dateElement.longOrNull ?: run {
-                    val content = dateElement.content
-                    val normalizedContent = content.replace("T ", "T")
-                    try {
-                        DATE_FORMAT.parse(normalizedContent)?.time ?: 0L
-                    } catch (_: ParseException) {
-                        0L
-                    }
-                }
+                dateElement.longOrNull ?: DATE_FORMAT.tryParse(dateElement.content.replace("T ", "T"))
             }
             else -> 0L
         }
@@ -153,7 +146,9 @@ class ChapterDto(
 
     companion object {
         private val DATE_FORMAT by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
         }
     }
 }
