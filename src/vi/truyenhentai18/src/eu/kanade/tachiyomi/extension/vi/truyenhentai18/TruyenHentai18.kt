@@ -12,8 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.util.Calendar
 
 class TruyenHentai18 : HttpSource() {
 
@@ -75,7 +74,6 @@ class TruyenHentai18 : HttpSource() {
     // ============================== Search ======================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Check if genre filter is selected
         val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
         val selectedGenre = genreFilter?.toUriPart()
 
@@ -169,10 +167,41 @@ class TruyenHentai18 : HttpSource() {
         name = linkElement.text()
         chapter_number = index.toFloat()
 
-        // Try to parse date from text content
-        val dateText = element.text()
-        val dateMatch = DATE_REGEX.find(dateText)
-        date_upload = dateMatch?.value?.let { dateFormat.parse(it)?.time } ?: 0L
+        val dateText = element.selectFirst("div.chapter-date")?.text()
+        date_upload = dateText.toDate()
+    }
+
+    private fun String?.toDate(): Long {
+        this ?: return 0L
+
+        if (!this.contains("trước", ignoreCase = true)) {
+            return 0L
+        }
+
+        return try {
+            val calendar = Calendar.getInstance()
+
+            val patterns = listOf(
+                Regex("""(\d+)\s*giờ""", RegexOption.IGNORE_CASE) to Calendar.HOUR_OF_DAY,
+                Regex("""(\d+)\s*ngày""", RegexOption.IGNORE_CASE) to Calendar.DAY_OF_MONTH,
+                Regex("""(\d+)\s*tuần""", RegexOption.IGNORE_CASE) to Calendar.WEEK_OF_YEAR,
+                Regex("""(\d+)\s*tháng""", RegexOption.IGNORE_CASE) to Calendar.MONTH,
+                Regex("""(\d+)\s*năm""", RegexOption.IGNORE_CASE) to Calendar.YEAR,
+                Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to Calendar.MINUTE,
+                Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to Calendar.SECOND,
+            )
+
+            for ((pattern, field) in patterns) {
+                pattern.find(this)?.groupValues?.get(1)?.toIntOrNull()?.let { number ->
+                    calendar.add(field, -number)
+                    return calendar.timeInMillis
+                }
+            }
+
+            0L
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     // ============================== Pages ======================================
@@ -191,10 +220,5 @@ class TruyenHentai18 : HttpSource() {
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
-    }
-
-    companion object {
-        private val DATE_REGEX = """(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})""".toRegex()
-        private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
     }
 }
