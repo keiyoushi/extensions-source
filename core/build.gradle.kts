@@ -1,6 +1,5 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
 }
 
 android {
@@ -16,12 +15,15 @@ android {
         resValues = false
         shaders = false
     }
+}
 
-    kotlinOptions {
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
     }
 }
 
 dependencies {
-    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    implementation(versionCatalogs.named("libs").findBundle("common-impl").get())
+    compileOnly(versionCatalogs.named("libs").findBundle("common-compile").get())
 }
