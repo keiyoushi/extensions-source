@@ -22,7 +22,7 @@ class NewTruyenTranh : HttpSource() {
     private val apiUrl = "https://newtruyenhot.4share.me"
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
     // ============================== Popular ===============================
