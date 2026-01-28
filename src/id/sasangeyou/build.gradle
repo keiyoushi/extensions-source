@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sasangeyou'
+    extClass = '.Sasangeyou'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://sasangeyou.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
