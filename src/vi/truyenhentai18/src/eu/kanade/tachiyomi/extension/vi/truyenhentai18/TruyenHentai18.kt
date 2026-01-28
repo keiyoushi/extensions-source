@@ -52,7 +52,7 @@ class TruyenHentai18 : HttpSource() {
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("a")!!
         setUrlWithoutDomain(linkElement.absUrl("href"))
-        title = element.selectFirst("h2")?.text() ?: ""
+        title = element.selectFirst("h2")!!.text()
         thumbnail_url = element.selectFirst("img")?.let { img ->
             img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
@@ -116,7 +116,7 @@ class TruyenHentai18 : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
 
-        title = document.selectFirst("h1")?.text() ?: ""
+        title = document.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst("img.manga-cover")?.absUrl("src")
             ?: document.selectFirst(".card img.img-fluid")?.absUrl("src")
 
