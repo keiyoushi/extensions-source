@@ -5,7 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class DreamTeamsScans : MangaThemesia(
-    "Dream Teams Scans",
+    "DreamTeams Scans",
     "https://dreamteams.space",
     "id",
     "/manga",

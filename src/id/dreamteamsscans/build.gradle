@@ -1,5 +1,5 @@
 ext {
-    extName = 'Dream Teams Scans'
+    extName = 'DreamTeams Scans'
     extClass = '.DreamTeamsScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://dreamteams.space'
