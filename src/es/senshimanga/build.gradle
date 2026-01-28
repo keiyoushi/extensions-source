@@ -2,7 +2,7 @@ ext {
     extName = 'Senshi Manga'
     extClass = '.SenshiManga'
     themePkg = 'lectormoe'
-    baseUrl = 'https://senshimanga.capibaratraductor.com'
+    baseUrl = 'https://capibaratraductor.com/senshimanga'
     overrideVersionCode = 6
     isNsfw = false
 }

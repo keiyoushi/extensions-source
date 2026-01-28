@@ -61,8 +61,6 @@ class MangaPark(
         }
         rateLimitHost(apiUrl.toHttpUrl(), 1)
         addInterceptor(::imageFallbackInterceptor)
-        // intentionally after rate limit interceptor so thumbnails are not rate limited
-        addInterceptor(::thumbnailDomainInterceptor)
     }.build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -272,49 +270,15 @@ class MangaPark(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
+        val url = request.url
+        val fixedUrl = url.newBuilder()
+            .host(baseUrl.toHttpUrl().host)
+            .build()
+        val newRequest = request.newBuilder()
+            .url(fixedUrl)
+            .build()
 
-        if (response.isSuccessful) return response
-
-        val urlString = request.url.toString()
-
-        response.close()
-
-        if (SERVER_PATTERN.containsMatchIn(urlString)) {
-            // Sorted list: Most reliable servers FIRST
-            val servers = listOf("s01", "s03", "s04", "s00", "s05", "s06", "s07", "s08", "s09", "s10", "s02")
-
-            for (server in servers) {
-                val newUrl = urlString.replace(SERVER_PATTERN, "https://$server")
-
-                // Skip if we are about to try the exact same URL that just failed
-                if (newUrl == urlString) continue
-
-                val newRequest = request.newBuilder()
-                    .url(newUrl)
-                    .build()
-
-                try {
-                    // FORCE SHORT TIMEOUTS FOR FALLBACKS
-                    // If a fallback server doesn't answer in 5 seconds, kill it and move to next.
-                    val newResponse = chain
-                        .withConnectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                        .withReadTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                        .proceed(newRequest)
-
-                    if (newResponse.isSuccessful) {
-                        return newResponse
-                    }
-                    // If this server also failed, close and loop to the next one
-                    newResponse.close()
-                } catch (e: Exception) {
-                    // Connection error on this mirror, ignore and loop to next
-                }
-            }
-        }
-
-        // If everything failed, re-run original request to return the standard error
-        return chain.proceed(request)
+        return chain.proceed(newRequest)
     }
 
     // sets necessary cookies to not block genres like `Hentai`
@@ -341,25 +305,6 @@ class MangaPark(
         }
 
         return chain.proceed(request)
-    }
-
-    private fun thumbnailDomainInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url
-
-        return if (url.host == THUMBNAIL_LOOPBACK_HOST) {
-            val newUrl = url.newBuilder()
-                .host(domain)
-                .build()
-
-            val newRequest = request.newBuilder()
-                .url(newUrl)
-                .build()
-
-            chain.proceed(newRequest)
-        } else {
-            chain.proceed(request)
-        }
     }
 
     override fun imageUrlParse(response: Response): String {

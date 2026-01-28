@@ -123,7 +123,7 @@ abstract class WPComics(
                 status = info.select("li.status p.col-xs-8").text().toStatus()
                 genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
                 val otherName = info.select("h2.other-name").text()
-                description = info.select("div.detail-content p").text() +
+                description = info.select("div.detail-content p").joinToString { it.wholeText().trim() } +
                     if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
                 thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
             }
@@ -165,6 +165,7 @@ abstract class WPComics(
         val minuteWords = listOf("minute", "phút")
         val hourWords = listOf("hour", "giờ")
         val dayWords = listOf("day", "ngày")
+        val weekWords = listOf("week", "tuần")
         val monthWords = listOf("month", "tháng")
         val yearWords = listOf("year", "năm")
         val agoWords = listOf("ago", "trước")
@@ -178,6 +179,7 @@ abstract class WPComics(
                     yearWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
                     monthWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
                     dayWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
+                    weekWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.WEEK_OF_YEAR, -trimmedDate[0].toInt()) }
                     hourWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
                     minuteWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
                     secondWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
