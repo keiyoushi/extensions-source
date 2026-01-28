@@ -72,8 +72,9 @@ class MiMiHentai : HttpSource() {
             filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> {
-                        filter.state.filter { it.state }.forEach { genre ->
-                            addQueryParameter("genres[${genre.id}]", "1")
+                        val selectedGenres = filter.state.filter { it.state }.joinToString(",") { it.id }
+                        if (selectedGenres.isNotEmpty()) {
+                            addQueryParameter("filter[accept_genres]", selectedGenres)
                         }
                     }
                     is StatusFilter -> {
