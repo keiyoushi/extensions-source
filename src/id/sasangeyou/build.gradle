@@ -3,7 +3,7 @@ ext {
     extClass = '.Sasangeyou'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sasangeyou.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
 }
 

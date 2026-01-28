@@ -3,7 +3,7 @@ ext {
     extClass = '.FloraScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://florascans.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
 }
 
