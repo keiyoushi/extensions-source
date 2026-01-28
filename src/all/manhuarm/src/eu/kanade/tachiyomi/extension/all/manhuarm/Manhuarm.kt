@@ -36,8 +36,11 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.security.MessageDigest
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -304,7 +307,8 @@ class Manhuarm(
             .build()
 
         val dialog = try {
-            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", jsonHeaders))
+            val ocrUrl = buildSecureOcrUrl(chapterId)
+            val response = client.newCall(GET(ocrUrl, jsonHeaders))
                 .execute()
 
             // If server returns error (403, etc), skip translations
@@ -334,6 +338,21 @@ class Manhuarm(
 
             Page(index, imageUrl = "${page.imageUrl}${fragment.toFragment()}")
         }
+    }
+
+    private fun buildSecureOcrUrl(chapterId: String): String {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        val hour = "%04d-%02d-%02d-%02d".format(
+            Locale.US,
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.DAY_OF_MONTH),
+            cal.get(Calendar.HOUR_OF_DAY),
+        )
+        val msg = chapterId + "ChangeMeToSomethingRandom123!" + hour
+        val token = MessageDigest.getInstance("SHA-256").digest(msg.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt().and(0xff)) }
+        return "$baseUrl/fetch-secure-ocr/$chapterId/$token"
     }
 
     override fun imageRequest(page: Page): Request {
@@ -562,7 +581,6 @@ class Manhuarm(
 
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
-
         const val DEVICE_FONT = "device:"
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val FONT_NAME_PREF = "fontNamePref"
