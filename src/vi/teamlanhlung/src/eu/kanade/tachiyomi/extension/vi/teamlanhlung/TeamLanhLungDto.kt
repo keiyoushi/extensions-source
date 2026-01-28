@@ -9,7 +9,7 @@ data class SearchResponseDto(
 )
 
 @Serializable
-data class SearchEntryDto(
+class SearchEntryDto(
     val cstatus: String = "",
     val img: String = "",
     val isocm: Int = 0,

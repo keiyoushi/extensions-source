@@ -7,14 +7,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -47,10 +46,10 @@ class TeamLanhLung : HttpSource() {
 
         val mangaList = document.select(".comic-item").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a[href]")?.attr("href") ?: "")
-                title = element.selectFirst("h3.comic-title, .comic-title")?.text()?.trim() ?: ""
+                setUrlWithoutDomain(element.selectFirst("a[href]")!!.absUrl("href"))
+                title = element.selectFirst("h3.comic-title, .comic-title")!!.text()
                 thumbnail_url = element.selectFirst("img")?.let {
-                    it.attr("data-src").ifEmpty { it.attr("src") }
+                    it.absUrl("data-src").ifEmpty { it.absUrl("src") }
                 }
             }
         }
@@ -111,8 +110,8 @@ class TeamLanhLung : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h2.info-title, .info-title")?.text()?.trim() ?: ""
-            author = document.selectFirst(".comic-info strong:contains(Tác giả) + span")?.text()?.trim()
+            title = document.selectFirst("h2.info-title, .info-title")!!.text()
+            author = document.selectFirst(".comic-info strong:contains(Tác giả) + span")?.text()
             description = document.selectFirst(".intro-container .text-justify, .intro-container")?.text()
                 ?.substringBefore("— Xem Thêm —")
                 ?.trim()
@@ -122,7 +121,7 @@ class TeamLanhLung : HttpSource() {
                 }
             }
             thumbnail_url = document.selectFirst(".img-thumbnail")?.let {
-                it.attr("data-src").ifEmpty { it.attr("src") }
+                it.absUrl("data-src").ifEmpty { it.absUrl("src") }
             }
 
             val statusString = document.selectFirst(".comic-info strong:contains(Tình trạng) + span")?.text()
@@ -136,10 +135,6 @@ class TeamLanhLung : HttpSource() {
     }
 
     // ============================== Chapters ===============================
-
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -156,8 +151,8 @@ class TeamLanhLung : HttpSource() {
 
         return SChapter.create().apply {
             setUrlWithoutDomain(url)
-            val fullText = linkElement.selectFirst("span")?.text()?.trim()
-                ?: linkElement.text().trim()
+            val fullText = linkElement.selectFirst("span")?.text()
+                ?: linkElement.text()
             name = fullText.split("-", "–").lastOrNull()?.trim() ?: fullText
 
             date_upload = element.selectFirst("td:last-child")?.text()?.let {
@@ -168,21 +163,14 @@ class TeamLanhLung : HttpSource() {
 
     // ============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, headers)
-    }
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        var images = document.select("#view-chapter img")
-
-        if (images.isEmpty()) {
-            images = document.select(".chapter-content img, .reading-content img, .content-chapter img")
-        }
+        val images = document.select("#view-chapter img")
+            .ifEmpty { document.select(".chapter-content img, .reading-content img, .content-chapter img") }
 
         return images.mapIndexed { idx, element ->
-            val imageUrl = element.attr("data-src").ifEmpty { element.attr("src") }
+            val imageUrl = element.absUrl("data-src").ifEmpty { element.absUrl("src") }
             Page(idx, imageUrl = imageUrl)
         }
     }
@@ -191,21 +179,10 @@ class TeamLanhLung : HttpSource() {
         throw UnsupportedOperationException()
     }
 
-    override fun imageRequest(page: Page): Request {
-        val headers = headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .build()
-        return GET(page.imageUrl!!, headers)
-    }
-
-    private fun Response.asJsoup(): Document {
-        return Jsoup.parse(body.string(), request.url.toString())
-    }
-
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
 
-        private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US).apply {
+        private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
     }
