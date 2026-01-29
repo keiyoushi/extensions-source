@@ -54,12 +54,12 @@ class MangaCrab :
 
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
 
-    private val imageKeyRegex = """'X-Img-Key'\s*:\s*'(.*?)'""".toRegex()
+    private val imageKeyRegex = """'Img-Key'\s*:\s*'(.*?)'""".toRegex()
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        val imageKey = document.selectFirst("script:containsData('X-Img-Key')")?.data()
+        val imageKey = document.selectFirst("script:containsData('Img-Key')")?.data()
             ?.let { script ->
                 imageKeyRegex.find(script)?.groups?.get(1)?.value
             }
@@ -94,7 +94,7 @@ class MangaCrab :
         val imageKey = page.imageUrl!!.substringAfterLast("#")
         val headers = headers.newBuilder()
             .set("Referer", page.url)
-            .set("X-Img-Key", imageKey)
+            .set("Img-Key", imageKey)
             .build()
 
         return GET(imageUrl, headers)
