@@ -1,8 +1,8 @@
 ext {
     extName = 'TruyenTranh3Q'
     extClass = '.TruyenTranh3Q'
-    baseUrl = 'https://truyentranh3qk.com'
-    extVersionCode = 5
+    baseUrl = 'https://manhua3q.com'
+    extVersionCode = 6
     isNsfw = true
 }
 
