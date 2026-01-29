@@ -1,0 +1,10 @@
+ext {
+    extName = 'DreamTeams Scans'
+    extClass = '.DreamTeamsScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://dreamteams.space'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
