@@ -7,20 +7,17 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-/*
-    Springboard that accepts https://<domain>/truyen-tranh/$id/ intents
- */
 class TeamLanhLungUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val id = pathSegments[1]
+        if (pathSegments != null && pathSegments.isNotEmpty()) {
+            val slug = pathSegments[0]
             try {
                 startActivity(
                     Intent().apply {
                         action = "eu.kanade.tachiyomi.SEARCH"
-                        putExtra("query", "id:$id")
+                        putExtra("query", "id:$slug")
                         putExtra("filter", packageName)
                     },
                 )
