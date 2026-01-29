@@ -38,7 +38,7 @@ class MiMiHentai : HttpSource() {
         val mangaList = document.select("a.group").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
-                title = element.selectFirst("h1")?.text() ?: ""
+                title = element.selectFirst("h1")!!.text()
                 thumbnail_url = element.selectFirst("img")?.let {
                     it.absUrl("data-src")
                         .ifEmpty { it.absUrl("src") }
@@ -103,7 +103,7 @@ class MiMiHentai : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("div.title p")?.text() ?: ""
+            title = document.selectFirst("div.title p")!!.text()
             thumbnail_url = document.selectFirst("img.rounded.shadow-md.w-full")?.let {
                 it.absUrl("data-src")
                     .ifEmpty { it.absUrl("src") }
