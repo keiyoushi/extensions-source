@@ -1,0 +1,10 @@
+ext {
+    extName = 'Aarlas'
+    extClass = '.Aarlas'
+    themePkg = 'zeistmanga'
+    baseUrl = 'http://www.arlas.my.id'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
