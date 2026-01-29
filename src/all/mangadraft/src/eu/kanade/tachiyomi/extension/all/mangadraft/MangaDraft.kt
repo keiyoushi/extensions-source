@@ -90,12 +90,12 @@ class MangaDraft : HttpSource() {
 
         val typeFilter = filterList.firstInstance<TypeFilter>()
         val orderFilter = filterList.firstInstance<OrderFilter>()
-        val sectionFilter = filterList.firstInstance<SectionFilter>()!!
-        val genreFilter = filterList.firstInstance<GenreFilter>()!!
-        val formatFilter = filterList.firstInstance<FormatFilter>()!!
-        val languageFilter = filterList.firstInstance<LanguageFilter>()!!
-        val statusFilter = filterList.firstInstance<StatusFilter>()!!
-        val sortFilter = filterList.firstInstance<SortFilter>()!!
+        val sectionFilter = filterList.firstInstance<SectionFilter>()
+        val genreFilter = filterList.firstInstance<GenreFilter>()
+        val formatFilter = filterList.firstInstance<FormatFilter>()
+        val languageFilter = filterList.firstInstance<LanguageFilter>()
+        val statusFilter = filterList.firstInstance<StatusFilter>()
+        val sortFilter = filterList.firstInstance<SortFilter>()
 
         return GET(
             baseUrl.toHttpUrl().newBuilder().apply {
@@ -175,9 +175,9 @@ class MangaDraft : HttpSource() {
 
         val chapterElements = document.select(chapterListSelector())
 
-        val isOneShot = chapterElements[0].attr("href").contains("c.")
+        val isNotOneShot = chapterElements[0].attr("href").contains("c.")
         var chapterList: List<SChapter>
-        if (isOneShot) {
+        if (isNotOneShot) {
             chapterList = chapterElements.mapIndexed { i, it ->
                 chapterFromElement(it, i)
             }.reversed()
@@ -193,7 +193,7 @@ class MangaDraft : HttpSource() {
             chapter_number = index.toFloat()
             name = "$chapter_number. ${element.selectFirst(".group-hover\\:text-secondary")?.text() ?: ""}"
 
-            url = "$baseUrl${element.attr("href")}"
+            url = "${element.absUrl("href")}"
 
             val dateText = element.selectFirst("div>span")?.text()
             if (!dateText.isNullOrBlank()) {
@@ -204,9 +204,7 @@ class MangaDraft : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.contains("c.")) {
-            val request = Request.Builder()
-                .url(chapter.url)
-                .build()
+            val request = GET(chapter.url, headers)
 
             // switch base url with actual url once we try to get the pages
             client.newCall(request).execute().use { response -> // final URL after redirects
@@ -224,11 +222,7 @@ class MangaDraft : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = try {
-            response.parseAs<PagesByCategory>()
-        } catch (e: Exception) {
-            throw Exception("Error parsing pages ${e.stackTrace}.")
-        }
+        val result = response.parseAs<PagesByCategory>()
 
         val pageList = findCategoryByPageId(result, response.request.url.toString().filter { it.isDigit() }.toLong())
         return pageList.map {
