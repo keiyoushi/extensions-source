@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -105,7 +104,7 @@ class RimuScans : HttpSource(), ConfigurableSource {
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removeSuffix("/").substringAfterLast("/")
+        val slug = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
         val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("slug", slug)
             .build()
@@ -134,9 +133,13 @@ class RimuScans : HttpSource(), ConfigurableSource {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val mangaSlug = chapter.url.removeSuffix("/").substringAfter("/read/").substringBefore("/")
+        val segments = (baseUrl + chapter.url).toHttpUrl().pathSegments
+        val mangaSlug = segments[1]
+        val chapterNumber = segments.last()
+
         val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("slug", mangaSlug)
+            .fragment(chapterNumber)
             .build()
         return GET(url, headers)
     }
@@ -162,25 +165,9 @@ class RimuScans : HttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#")
-
-    override fun fetchPageList(chapter: SChapter): rx.Observable<List<Page>> {
-        val mangaSlug = chapter.url.removeSuffix("/").substringAfter("/read/").substringBefore("/")
-        val chapterNumber = chapter.url.removeSuffix("/").substringAfterLast("/")
-
-        val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("slug", mangaSlug)
-            .fragment(chapterNumber)
-            .build()
-
-        return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
-            pageListParse(response)
-        }
-    }
-
     // Filters
 
-    override fun getFilterList() = eu.kanade.tachiyomi.extension.fr.rimuscans.getFilterList()
+    override fun getFilterList() = getFilters()
 
     // Preferences
 
@@ -188,7 +175,7 @@ class RimuScans : HttpSource(), ConfigurableSource {
         CheckBoxPreference(screen.context).apply {
             key = SHOW_PREMIUM_KEY
             title = "Show premium chapters"
-            summary = "Show paid chapters (identified by ✨) in the list."
+            summary = "Show paid chapters (identified by 🔒) in the list."
             setDefaultValue(SHOW_PREMIUM_DEFAULT)
         }.also(screen::addPreference)
     }

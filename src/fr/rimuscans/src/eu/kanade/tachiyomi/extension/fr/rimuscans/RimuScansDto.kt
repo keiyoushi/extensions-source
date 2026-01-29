@@ -8,6 +8,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
+
 @Serializable
 class MangaListDto(
     val mangas: List<MangaDto>,
@@ -64,21 +68,19 @@ class ChapterDto(
     val images: List<ImageDto> = emptyList(),
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        url = "/read/$mangaSlug/${if (number % 1.0 == 0.0) number.toInt() else number}"
-        val numberString = if (number % 1.0 == 0.0) number.toInt().toString() else number.toString()
+        val numberString = number.toString().substringBefore(".0")
+        url = "/read/$mangaSlug/$numberString"
         name = when {
             title == null || title.isBlank() -> "Chapitre $numberString"
             title.contains("Chapitre", ignoreCase = true) || title.contains("Chapter", ignoreCase = true) -> title.trim()
             else -> "Chapitre $numberString : ${title.trim()}"
         }
         if (type == "PREMIUM") {
-            name = "✨ $name"
+            name = "🔒 $name"
         }
         chapter_number = number.toFloat()
         scanlator = "Rimu Scans"
-        date_upload = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }.tryParse(releaseDate)
+        date_upload = dateFormat.tryParse(releaseDate)
     }
 }
 

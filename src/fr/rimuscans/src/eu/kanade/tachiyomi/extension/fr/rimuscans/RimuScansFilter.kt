@@ -14,7 +14,7 @@ open class UriPartFilter(displayName: String, val vals: Array<Pair<String, Strin
     fun toUriPart() = vals[state].second
 }
 
-fun getFilterList() = FilterList(
+fun getFilters() = FilterList(
     OrderByFilter("Trier par", getSortList()),
     Filter.Separator(),
     StatusFilter("Statut", getStatusList()),
