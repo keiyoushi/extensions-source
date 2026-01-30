@@ -130,7 +130,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
             }
             description = document.select(".book_detail > .story-detail-info").joinToString { it.wholeText().trim() }
             thumbnail_url = document.selectFirst(".book_detail > .book_info > .book_avatar > img")
-                ?.absUrl("abs:src")?.let { url ->
+                ?.absUrl("src")?.let { url ->
                     url.toHttpUrlOrNull()
                         ?.queryParameter("url")
                         ?: url
