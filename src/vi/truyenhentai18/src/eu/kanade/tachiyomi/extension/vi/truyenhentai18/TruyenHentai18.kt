@@ -106,7 +106,7 @@ class TruyenHentai18 : ParsedHttpSource() {
             }
         }
 
-        description = document.select(".description").joinToString { it.wholeText().trim() }
+        description = document.select(".description").joinToString("\n") { it.wholeText().trim() }
     }
 
     // ============================== Chapters ======================================
@@ -115,7 +115,7 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a.fw-bold")!!.absUrl("href"))
-        name = element.select("a.fw-bold").text()
+        name = element.selectFirst("a.fw-bold")!!.text()
         val dateText = element.selectFirst("div.chapter-date")?.text()
         date_upload = dateText.toDate()
     }
