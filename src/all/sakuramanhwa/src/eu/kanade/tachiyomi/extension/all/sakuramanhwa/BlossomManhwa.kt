@@ -161,8 +161,8 @@ class BlossomManhwa(
         val data = response.parseAs<ApiChapterInfo>()
 
         val lis = mutableListOf<Page>()
-        data.chapter.images.forEachIndexed { index, it ->
-            lis.add(Page(index, imageUrl = "$tag/chapter$it"))
+        data.chapter.images.flatten().forEachIndexed { index, path ->
+            lis.add(Page(index, imageUrl = "$tag/chapter$path"))
         }
 
         return Observable.just(lis)
