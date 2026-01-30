@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.com", "id") {
+class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
 
     // ============================== Popular ===============================
     override val popularMangaSelector = "div.PopularPosts article"
