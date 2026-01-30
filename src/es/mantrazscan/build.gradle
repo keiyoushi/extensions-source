@@ -1,5 +1,5 @@
 ext {
-    extName = 'Mantraz Scan'
+    extName = 'Manhwa Scan'
     extClass = '.MantrazScan'
     themePkg = 'madara'
     baseUrl = 'https://manhwascan.lat'
