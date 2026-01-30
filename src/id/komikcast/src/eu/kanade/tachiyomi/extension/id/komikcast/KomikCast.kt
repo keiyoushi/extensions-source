@@ -40,7 +40,7 @@ class KomikCast : HttpSource() {
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("includeMeta", "true")
-            .addQueryParameter("sort", "popular")
+            .addQueryParameter("sort", "popularity")
             .addQueryParameter("sortOrder", "desc")
             .addQueryParameter("take", "12")
             .addQueryParameter("page", page.toString())
