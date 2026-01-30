@@ -31,7 +31,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
     override val supportsLatest = true
-    private val apiUrl = "https://api.mediocretoons.site"
+    private val apiUrl = "https://api2.mediocretoons.site"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
