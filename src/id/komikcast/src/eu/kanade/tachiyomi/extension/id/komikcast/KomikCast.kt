@@ -39,6 +39,7 @@ class KomikCast : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("includeMeta", "true")
             .addQueryParameter("sort", "popular")
             .addQueryParameter("sortOrder", "desc")
             .addQueryParameter("take", "12")
@@ -51,6 +52,7 @@ class KomikCast : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("includeMeta", "true")
             .addQueryParameter("sort", "latest")
             .addQueryParameter("sortOrder", "desc")
             .addQueryParameter("take", "12")
@@ -63,6 +65,7 @@ class KomikCast : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("includeMeta", "true")
             .addQueryParameter("take", "12")
             .addQueryParameter("page", page.toString())
 
