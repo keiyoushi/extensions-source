@@ -37,7 +37,7 @@ class MiMiHentai : HttpSource() {
 
         val mangaList = document.select("a.group").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst("h1")!!.text()
                 thumbnail_url = element.selectFirst("img")?.let {
                     it.absUrl("data-src")
@@ -129,7 +129,7 @@ class MiMiHentai : HttpSource() {
 
         return document.select("div.chapter-list a").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst("h1")?.text()
                     ?: element.attr("title")
                     ?: element.text()
@@ -145,7 +145,7 @@ class MiMiHentai : HttpSource() {
         if (dateStr.isNullOrBlank()) return 0L
 
         val calendar = Calendar.getInstance()
-        val number = Regex("\\d+").find(dateStr)?.value?.toIntOrNull() ?: return 0L
+        val number = NUMBER_REGEX.find(dateStr)?.value?.toIntOrNull() ?: return 0L
 
         when {
             dateStr.contains("giây") -> calendar.add(Calendar.SECOND, -number)
@@ -161,14 +161,18 @@ class MiMiHentai : HttpSource() {
         return calendar.timeInMillis
     }
 
+    companion object {
+        private val NUMBER_REGEX = Regex("\\d+")
+    }
+
     // =============================== Pages ================================
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
         return document.select("img.lazy").mapIndexed { index, element ->
-            val imageUrl = element.attr("src").ifEmpty {
-                element.attr("data-src")
+            val imageUrl = element.absUrl("src").ifEmpty {
+                element.absUrl("data-src")
             }
             Page(index, imageUrl = imageUrl)
         }
