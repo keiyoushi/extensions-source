@@ -82,8 +82,8 @@ data class PageListResponse(
 )
 
 @Serializable
-data class PageFile(
+class PageFile(
     val id: String,
-    val name: String = "",
+    val name: String? = null,
     val url: String,
 )

@@ -25,13 +25,7 @@ class NewTruyenTranh : HttpSource() {
         .add("Origin", baseUrl)
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "10")
-            .addQueryParameter("p", page.toString())
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int) = buildSearchRequest(page, "", FilterList(), "10") // Top all
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<MangaListResponse>()
@@ -43,25 +37,12 @@ class NewTruyenTranh : HttpSource() {
     }
 
     // ============================== Latest ================================
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/page/newest".toHttpUrl().newBuilder()
-            .addQueryParameter("p", page.toString())
-            .build()
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int) = buildSearchRequest(page, "", FilterList(), "0") // Newest
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // ============================== Search ================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = "$apiUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("p", page.toString())
-                .build()
-            return GET(url, headers)
-        }
-
+    private fun buildSearchRequest(page: Int, query: String, filters: FilterList, defaultSort: String): Request {
         var genreSlug: String? = null
         var sortValue: String? = null
         var statusValue: String? = null
@@ -87,7 +68,7 @@ class NewTruyenTranh : HttpSource() {
             }
         }
 
-        if (genreSlug != null) {
+        if (genreSlug != null && query.isBlank()) {
             val url = "$apiUrl/page/$genreSlug".toHttpUrl().newBuilder()
                 .addQueryParameter("p", page.toString())
                 .build()
@@ -95,9 +76,10 @@ class NewTruyenTranh : HttpSource() {
         }
 
         val url = "$apiUrl/search".toHttpUrl().newBuilder().apply {
-            if (sortValue != null) {
-                addQueryParameter("sort", sortValue)
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
             }
+            addQueryParameter("sort", sortValue ?: defaultSort)
             if (statusValue != null) {
                 addQueryParameter("status", statusValue)
             }
@@ -106,6 +88,9 @@ class NewTruyenTranh : HttpSource() {
 
         return GET(url, headers)
     }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        buildSearchRequest(page, query, filters, "0")
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 

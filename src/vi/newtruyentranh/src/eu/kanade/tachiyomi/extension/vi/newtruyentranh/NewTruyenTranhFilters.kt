@@ -4,8 +4,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getFilterList(): FilterList = FilterList(
-    Filter.Header("Lưu ý: Bộ lọc không dùng chung được với tìm kiếm"),
-    Filter.Separator(),
     GenreFilter(),
     SortFilter(),
     StatusFilter(),
