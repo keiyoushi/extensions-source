@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yuri-Online'
+    extClass = '.YuriOnline'
+    themePkg = 'madara'
+    baseUrl = 'https://yuri-online.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
