@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.mediocretoons
-
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -36,6 +36,21 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private fun customAllRequestsEnabled(): Boolean =
+        preferences.getBoolean(PREF_CUSTOM_ALL_REQUESTS, false)
+
+    /** Retorna a URL do request: usa preferência customizada se Custom ALL REQUEST estiver ativo, senão defaultPath. Substitui $apiUrl pelo valor da API. */
+    private fun getRequestUrl(defaultPath: String, prefKey: String, vararg formatArgs: String): String {
+        val path = if (customAllRequestsEnabled()) {
+            preferences.getString(prefKey, defaultPath) ?: defaultPath
+        } else {
+            defaultPath
+        }
+        val withIds = if (formatArgs.isNotEmpty()) path.replace("%s", formatArgs[0]) else path
+        val resolved = withIds.replace("\$apiUrl", apiUrl)
+        return if (resolved.startsWith("http")) resolved else "$apiUrl/$resolved".replace(Regex("(?<!:)//+"), "/")
+    }
 
     private var cachedToken: String? = null
     private var tokenExpiryTime: Long = 0L
@@ -116,7 +131,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             val body = json.toRequestBody("application/json".toMediaType())
 
             val request = Request.Builder()
-                .url("$apiUrl/usuarios/login")
+                .url(getRequestUrl("\$apiUrl/auth/login", PREF_URL_LOGIN))
                 .post(body)
                 .header("x-app-key", "toons-mediocre-app")
                 .header("Accept", "application/json")
@@ -160,7 +175,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     // ============================== Popular ================================
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/obras/ranking".toHttpUrl().newBuilder()
+        val url = getRequestUrl("\$apiUrl/obras/ranking", PREF_URL_POPULAR).toHttpUrl().newBuilder()
             .addQueryParameter("ordenarPor", "view_geral")
             .addQueryParameter("limite", "100")
             .build()
@@ -191,10 +206,9 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     // ============================= Latest Updates ==========================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/recentes".toHttpUrl().newBuilder()
+        val url = getRequestUrl("\$apiUrl/obras", PREF_URL_LATEST).toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
-            .addQueryParameter("formato", "5")
             .build()
         return GET(url, headers)
     }
@@ -210,7 +224,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     // =============================== Search ================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+        val url = getRequestUrl("\$apiUrl/obras", PREF_URL_SEARCH).toHttpUrl().newBuilder()
             .addQueryParameter("limite", "20")
             .addQueryParameter("pagina", page.toString())
 
@@ -369,13 +383,13 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     override fun getMangaUrl(manga: SManga): String {
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
         val slug = manga.title.toSlug()
-        val finalUrl = "$baseUrl/obra/$id/$slug"
+        val finalUrl = "$baseUrl/obra/$id"
         return finalUrl
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfter("/obra/")
-        val url = "$apiUrl/obras/$id"
+        val id = manga.url.substringAfter("/obra/").substringBefore('/')
+        val url = getRequestUrl("\$apiUrl/obras/%s", PREF_URL_MANGA_DETAILS, id)
         return GET(url, headers)
     }
 
@@ -408,7 +422,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     // =============================== Pages =================================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
-        val url = "$apiUrl/capitulos/$chapterId"
+        val url = getRequestUrl("\$apiUrl/capitulos/%s", PREF_URL_CHAPTER, chapterId)
         return GET(url, headers)
     }
 
@@ -447,15 +461,46 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             key = API_URL_PREF
             title = "URL da API"
             summary = "URL base da API para acesso aos recursos da fonte. O padrão é https://api.mediocretoons.site, mas, dependendo da disponibilidade, a API pode alternar entre api2, api3, etc."
-            setDefaultValue("https://api3.mediocretoons.site")
+            setDefaultValue("https://api.mediocretoons.site")
         }.also(screen::addPreference)
-    }
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_CUSTOM_ALL_REQUESTS
+            title = "Custom ALL REQUEST"
+            summary = "Habilitar para customizar a URL de cada request da API. Quando ativo, as opções abaixo ficam disponíveis."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        if (preferences.getBoolean(PREF_CUSTOM_ALL_REQUESTS, false)) {
+            listOf(
+                Triple(PREF_URL_LOGIN, "URL Login", "\$apiUrl/auth/login"),
+                Triple(PREF_URL_POPULAR, "URL Popular (ranking)", "\$apiUrl/obras/ranking"),
+                Triple(PREF_URL_LATEST, "URL Latest (recentes)", "\$apiUrl/obras"),
+                Triple(PREF_URL_SEARCH, "URL Search (obras)", "\$apiUrl/obras"),
+                Triple(PREF_URL_MANGA_DETAILS, "URL Detalhes da obra", "\$apiUrl/obras/%s"),
+                Triple(PREF_URL_CHAPTER, "URL Capítulo (páginas)", "\$apiUrl/capitulos/%s"),
+            ).forEach { (prefKey, title, defaultUrl) ->
+                EditTextPreference(screen.context).apply {
+                    key = prefKey
+                    this.title = title
+                    summary = "Padrão: $defaultUrl. Use \$apiUrl para a URL da API ou informe URL completa."
+                    setDefaultValue(defaultUrl)
+                }.also(screen::addPreference)
+            }
+        }
+    }
     companion object {
         const val CDN_URL = "https://cdn.mediocretoons.site"
         private const val EMAIL_PREF = "email"
         private const val PASSWORD_PREF = "password"
         private const val API_URL_PREF = "api_url"
+        private const val PREF_CUSTOM_ALL_REQUESTS = "custom_all_requests"
+        private const val PREF_URL_LOGIN = "custom_url_login"
+        private const val PREF_URL_POPULAR = "custom_url_popular"
+        private const val PREF_URL_LATEST = "custom_url_latest"
+        private const val PREF_URL_SEARCH = "custom_url_search"
+        private const val PREF_URL_MANGA_DETAILS = "custom_url_manga_details"
+        private const val PREF_URL_CHAPTER = "custom_url_chapter"
     }
 }
 
