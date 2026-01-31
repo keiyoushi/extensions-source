@@ -1,6 +1,5 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
     id("kotlinx-serialization")
 }
 
@@ -17,7 +16,8 @@ android {
 }
 
 dependencies {
-    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    implementation(versionCatalogs.named("libs").findBundle("common-impl").get())
+    compileOnly(versionCatalogs.named("libs").findBundle("common-compile").get())
     implementation(project(":core"))
 }
 
