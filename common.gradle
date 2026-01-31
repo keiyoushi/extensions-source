@@ -96,8 +96,7 @@ kotlin {
 dependencies {
     if (theme != null) implementation(theme) // Overrides core launcher icons
     implementation(project(":core"))
-    implementation(libs.bundles.common.impl)
-    compileOnly(libs.bundles.common.compile)
+    compileOnly(libs.bundles.common)
 }
 
 tasks.register("copyManifestFile", Copy) {

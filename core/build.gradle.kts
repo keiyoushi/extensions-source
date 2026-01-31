@@ -24,6 +24,5 @@ kotlin {
 }
 
 dependencies {
-    implementation(versionCatalogs.named("libs").findBundle("common-impl").get())
-    compileOnly(versionCatalogs.named("libs").findBundle("common-compile").get())
+    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
 }
