@@ -31,7 +31,9 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
     override val supportsLatest = true
-    private val apiUrl = "https://api2.mediocretoons.site"
+    private val apiUrl by lazy {
+        preferences.getString(API_URL_PREF, "https://api.mediocretoons.site")!!
+    }
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -440,12 +442,20 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             summary = "Senha para login automático"
             setDefaultValue("")
         }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = API_URL_PREF
+            title = "URL da API"
+            summary = "URL base da API para acesso aos recursos da fonte. O padrão é https://api.mediocretoons.site, mas, dependendo da disponibilidade, a API pode alternar entre api2, api3, etc."
+            setDefaultValue("https://api3.mediocretoons.site")
+        }.also(screen::addPreference)
     }
 
     companion object {
         const val CDN_URL = "https://cdn.mediocretoons.site"
         private const val EMAIL_PREF = "email"
         private const val PASSWORD_PREF = "password"
+        private const val API_URL_PREF = "api_url"
     }
 }
 
