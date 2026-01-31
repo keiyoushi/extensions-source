@@ -4,14 +4,14 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaListResponse(
+class MangaListResponse(
     val channels: List<MangaChannel> = emptyList(),
     @SerialName("load_more")
     val loadMore: LoadMore? = null,
 )
 
 @Serializable
-data class MangaChannel(
+class MangaChannel(
     val id: String,
     val name: String,
     val description: String = "",
@@ -21,23 +21,23 @@ data class MangaChannel(
 )
 
 @Serializable
-data class ImageData(
+class ImageData(
     val url: String,
 )
 
 @Serializable
-data class RemoteData(
+class RemoteData(
     val url: String,
 )
 
 @Serializable
-data class LoadMore(
+class LoadMore(
     @SerialName("pageInfo")
     val pageInfo: PageInfo? = null,
 )
 
 @Serializable
-data class PageInfo(
+class PageInfo(
     @SerialName("current_page")
     val currentPage: Int = 1,
     val total: Int = 0,
@@ -48,27 +48,27 @@ data class PageInfo(
 )
 
 @Serializable
-data class MangaDetailResponse(
+class MangaDetailResponse(
     val channel: MangaChannel? = null,
     val sources: List<Source> = emptyList(),
 )
 
 @Serializable
-data class Source(
+class Source(
     val id: String,
     val name: String,
     val contents: List<Content> = emptyList(),
 )
 
 @Serializable
-data class Content(
+class Content(
     val id: String,
-    val name: String = "",
+    val name: String? = null,
     val streams: List<Stream> = emptyList(),
 )
 
 @Serializable
-data class Stream(
+class Stream(
     val id: String,
     val index: Int,
     val name: String,
@@ -77,7 +77,7 @@ data class Stream(
 )
 
 @Serializable
-data class PageListResponse(
+class PageListResponse(
     val files: List<PageFile> = emptyList(),
 )
 
