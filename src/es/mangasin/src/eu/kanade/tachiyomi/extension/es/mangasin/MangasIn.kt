@@ -9,14 +9,17 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.net.URLDecoder
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -140,6 +143,17 @@ class MangasIn : MMRCMS(
 
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }
+        }
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select("#all > img.img-responsive").mapIndexed { i, it ->
+            var url = it.imgAttr()
+            if (url.toHttpUrlOrNull() == null) {
+                val decodedB64 = String(Base64.decode(url.substringAfter("://"), Base64.DEFAULT))
+                url = URLDecoder.decode(decodedB64, "UTF-8")
+            }
+            Page(i, imageUrl = url)
         }
     }
 
