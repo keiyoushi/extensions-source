@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhwa Scan'
+    extClass = '.MantrazScan'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwascan.lat'
+    overrideVersionCode = 4
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
