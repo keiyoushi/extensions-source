@@ -1,10 +1,10 @@
 ext {
     extName = 'Siikomik'
     extClass = '.Siikomik'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://web.siikomik.org'
-    overrideVersionCode = 13
-    isNsfw = false
+    themePkg = 'madara'
+    baseUrl = 'https://siikomik.net'
+    overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

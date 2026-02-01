@@ -1,7 +1,0 @@
-ext {
-    extName = 'RE Manga (Arabic)'
-    extClass = '.REManga'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

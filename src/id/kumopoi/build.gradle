@@ -1,0 +1,10 @@
+ext {
+    extName = 'KumoPoi'
+    extClass = '.KumoPoi'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://kumopoi.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

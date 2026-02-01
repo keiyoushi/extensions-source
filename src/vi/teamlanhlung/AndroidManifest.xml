@@ -13,8 +13,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="teamlanhlung11.shop"
-                    android:pathPattern="/truyen-tranh/..*"
+                    android:host="lanhlungteam.com"
+                    android:pathPattern="/..*"
                     android:scheme="https"
                 />
             </intent-filter>

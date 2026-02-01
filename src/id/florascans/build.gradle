@@ -1,0 +1,10 @@
+ext {
+    extName = 'FloraScans'
+    extClass = '.FloraScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://florascans.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

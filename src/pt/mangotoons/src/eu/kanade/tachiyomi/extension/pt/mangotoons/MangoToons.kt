@@ -236,12 +236,9 @@ class MangoToons : HttpSource(), ConfigurableSource {
         val result = decrypted.parseAs<MangoPageResponse>()
 
         val capitulo = result.capitulo ?: return emptyList()
-        val obraId = capitulo.obraId
-        val chapterNumero = capitulo.numero
 
         return capitulo.paginas.mapIndexed { index, pageDto ->
-            val imageUrl = "$baseUrl/api/cdn/obra/$obraId/capitulo/$chapterNumero/image/${pageDto.imageRandomId}"
-            Page(index, imageUrl = imageUrl)
+            Page(index, imageUrl = pageDto.url)
         }
     }
 
