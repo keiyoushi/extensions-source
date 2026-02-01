@@ -1,11 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.cerisescans
 
-import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -27,17 +25,15 @@ class CeriseScan : Madara(
     override val useNewChapterEndpoint = true
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.selectFirst(".page-break a")!!.attr("href")
-            .substringAfter("auth=")
-            .let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) }
-            .parseAs<PageDto>()
-            .toPageList()
+        val pages = document.selectFirst(".page-break script")?.data()
+            ?.let { PAGE_REGEX.find(it)?.groupValues?.last() }
+            ?: return emptyList()
+        return pages.parseAs<List<String>>().mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
     }
 
-    @Serializable
-    private class PageDto(private val url: String) {
-        fun toPageList(): List<Page> = url.split(";").mapIndexed { index, image ->
-            Page(index, imageUrl = image)
-        }
+    companion object {
+        private val PAGE_REGEX = """content:\s+(\[[\s\S*]+\])""".toRegex()
     }
 }

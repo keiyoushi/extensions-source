@@ -151,7 +151,7 @@ class HattoriManga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         return response.asJsoup().select(".image-wrapper img").mapIndexed { index, element ->
-            Page(index, imageUrl = "$baseUrl${element.attr("data-src")}")
+            Page(index, imageUrl = element.absUrl("data-src"))
         }.takeIf { it.isNotEmpty() } ?: throw Exception("Oturum açmanız, WebView'ı açmanız ve oturum açmanız gerekir")
     }
 

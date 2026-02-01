@@ -147,7 +147,7 @@ class LectorJpg : HttpSource() {
         return document.select("div.grid > a.group").map { element ->
             SChapter.create().apply {
                 name = element.selectFirst("span.truncate")!!.text()
-                url = element.selectFirst("a")!!.attr("href")
+                setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
                 date_upload = element.selectFirst("span.w-fit")?.text()?.let { parseChapterDate(it) } ?: 0L
             }
         }

@@ -2,7 +2,7 @@ ext {
     extName = 'Manga Oku TR'
     extClass = '.MangaOkuTr'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://mangaokutr.com'
+    baseUrl = 'https://mangaokutr.net'
     overrideVersionCode = 0
     isNsfw = false
 }

@@ -108,10 +108,22 @@ class MangoPageChapterDto(
 @Serializable
 class MangoPageDto(
     val numero: Int,
-    @SerialName("image_random_id") val imageRandomId: Long,
+    val url: String,
 )
 
 @Serializable
 class MangoLatestChapterDto(
     val obra: MangoMangaDto? = null,
+)
+
+@Serializable
+class LoginResponseDto(
+    val sucesso: Boolean = false,
+    val token: String? = null,
+)
+
+@Serializable
+class AuthRequestDto(
+    val email: String,
+    val senha: String,
 )

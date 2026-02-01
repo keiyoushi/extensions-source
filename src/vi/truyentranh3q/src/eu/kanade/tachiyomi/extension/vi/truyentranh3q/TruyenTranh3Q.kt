@@ -27,7 +27,7 @@ import java.util.Locale
 class TruyenTranh3Q : ParsedHttpSource() {
     override val name: String = "TruyenTranh3Q"
     override val lang: String = "vi"
-    override val baseUrl: String = "https://truyentranh3qk.com"
+    override val baseUrl: String = "https://manhua3q.com"
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -129,7 +129,12 @@ class TruyenTranh3Q : ParsedHttpSource() {
                 genre = info.select(".list01 li a").joinToString { it.text() }
             }
             description = document.select(".book_detail > .story-detail-info").joinToString { it.wholeText().trim() }
-            thumbnail_url = document.selectFirst(".book_detail > .book_info > .book_avatar > img")?.absUrl("abs:src")
+            thumbnail_url = document.selectFirst(".book_detail > .book_info > .book_avatar > img")
+                ?.absUrl("src")?.let { url ->
+                    url.toHttpUrlOrNull()
+                        ?.queryParameter("url")
+                        ?: url
+                }
         }
     }
 

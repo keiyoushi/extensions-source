@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
 class Sixianfranc9 : LectorMoe(
     "6ianfranc9",
-    "https://6ianfranc9.capibaratraductor.com",
+    "https://capibaratraductor.com/6ianfranc9",
     "es",
-    apiBaseUrl = "https://api.capibaratraductor.com",
 )

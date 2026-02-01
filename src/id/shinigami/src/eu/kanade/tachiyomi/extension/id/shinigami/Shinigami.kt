@@ -23,7 +23,7 @@ class Shinigami : HttpSource() {
 
     override val name = "Shinigami"
 
-    override val baseUrl = "https://08.shinigami.asia"
+    override val baseUrl = "https://09.shinigami.asia"
 
     private val apiUrl = "https://api.shngm.io"
 
@@ -75,7 +75,7 @@ class Shinigami : HttpSource() {
         val rootObject = response.parseAs<ShinigamiBrowseDto>()
         val projectList = rootObject.data.map(::popularMangaFromObject)
 
-        val hasNextPage = rootObject.meta.page < rootObject.meta.totalPage
+        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
 
         return MangasPage(projectList, hasNextPage)
     }

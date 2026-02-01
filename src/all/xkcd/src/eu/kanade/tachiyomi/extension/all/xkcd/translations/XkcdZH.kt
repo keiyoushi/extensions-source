@@ -13,7 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class XkcdZH : Xkcd("https://xkcd.tw", "zh", "yyyy-MM-dd HH:mm:ss") {
+class XkcdZH : Xkcd("https://xkcd.tw", "zh") {
     override val archive = "/api/strips.json"
 
     override val creator = "兰德尔·门罗"
@@ -28,23 +28,29 @@ class XkcdZH : Xkcd("https://xkcd.tw", "zh", "yyyy-MM-dd HH:mm:ss") {
 
     private val json by injectLazy<Json>()
 
-    override fun String.numbered(number: Any) = "[$number] $this"
-
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
-    override fun chapterListParse(response: Response) =
-        json.parseToJsonElement(response.body.string()).jsonObject.values.map {
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val englishDates = getComicDateMappingFromEnglishArchive()
+
+        return json.parseToJsonElement(response.body.string()).jsonObject.values.map {
             val obj = it.jsonObject
-            val number = obj["id"]!!.jsonPrimitive.content
+            val comicNumber = obj["id"]!!.jsonPrimitive.content.toInt()
             val title = obj["title"]!!.jsonPrimitive.content
-            val date = obj["translate_time"]!!.jsonPrimitive.content
             SChapter.create().apply {
-                url = "/$number"
-                name = title.numbered(number)
-                chapter_number = number.toFloat()
-                date_upload = date.timestamp()
+                url = "/$comicNumber"
+                name = chapterTitleFormatter(comicNumber, title)
+                chapter_number = comicNumber.toFloat()
+
+                // use English publication date instead of translation date
+                date_upload = if (englishDates.containsKey(comicNumber)) {
+                    englishDates[comicNumber]!!.timestamp()
+                } else {
+                    0L
+                }
             }
         }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         // if img tag is empty then it is an interactive comic
