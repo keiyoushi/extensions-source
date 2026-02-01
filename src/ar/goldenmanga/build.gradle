@@ -1,0 +1,10 @@
+ext {
+    extName = 'Golden Manga'
+    extClass = '.GoldenManga'
+    themePkg = 'madara'
+    baseUrl = 'https://goldenmanga.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
