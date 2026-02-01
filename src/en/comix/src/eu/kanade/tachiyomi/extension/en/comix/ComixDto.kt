@@ -2,8 +2,18 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -186,6 +196,7 @@ class Chapter(
     @SerialName("scanlation_group")
     private val scanlationGroup: ScanlationGroup?,
     @SerialName("is_official")
+    @Serializable(with = SafeIntBooleanDeserializer::class)
     val isOfficial: Int,
 ) {
     @Serializable
@@ -208,6 +219,44 @@ class Chapter(
             "Official"
         } else {
             "Unknown"
+        }
+    }
+}
+
+object SafeIntBooleanDeserializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("SafeIntBoolean", PrimitiveKind.INT)
+
+    override fun serialize(encoder: Encoder, value: Int) {
+        encoder.encodeInt(value)
+    }
+
+    override fun deserialize(decoder: Decoder): Int {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeInt()
+        } catch (_: Exception) {
+            try {
+                if (decoder.decodeBoolean()) 1 else 0
+            } catch (_: Exception) {
+                0
+            }
+        }
+
+        return try {
+            val element = jsonDecoder.decodeJsonElement()
+            when (element) {
+                is JsonPrimitive -> when {
+                    element.booleanOrNull != null ->
+                        if (element.booleanOrNull == true) 1 else 0
+                    element.intOrNull != null -> element.intOrNull ?: 0
+                    else -> element.content.toIntOrNull()
+                        ?: if (element.content.equals("true", ignoreCase = true)) 1 else 0
+                }
+
+                else -> 0
+            }
+        } catch (_: Exception) {
+            0
         }
     }
 }
