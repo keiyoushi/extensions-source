@@ -18,6 +18,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class ZetTruyen : HttpSource() {
     override val name = "ZetTruyen"
@@ -33,7 +34,9 @@ class ZetTruyen : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     private val apiDateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+        }
     }
 
     // ============================== Popular ===============================
@@ -114,19 +117,18 @@ class ZetTruyen : HttpSource() {
             status = parseStatus(document.getInfoValue("Trạng thái"))
             genre = document.getGenres()
             description = document.selectFirst("p.comic-content")?.text()
-            initialized = true
         }
     }
 
     private fun Document.getInfoValue(label: String): String? {
-        val element = select("div, span, p").firstOrNull { it.ownText().trim() == label }
+        val element = select("div, span, p").firstOrNull { it.ownText() == label }
             ?: return null
-        return element.nextElementSibling()?.text()?.trim()
+        return element.nextElementSibling()?.text()
     }
 
     private fun Document.getGenres(): String? {
         val genreLabel = select("div, span").firstOrNull {
-            it.ownText().trim() == "Thể loại" && it.closest("header") == null
+            it.ownText() == "Thể loại" && it.closest("header") == null
         } ?: return null
         return genreLabel.nextElementSibling()
             ?.select("a")
@@ -144,11 +146,7 @@ class ZetTruyen : HttpSource() {
     override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> {
         return rx.Observable.fromCallable {
             val allChapters = mutableListOf<SChapter>()
-            val slug = manga.url
-                .removePrefix("/truyen-tranh/")
-                .removePrefix("truyen-tranh/")
-                .trimEnd('/')
-                .substringBefore("/")
+            val slug = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
 
             var currentPage = 1
             var lastPage = 1
@@ -221,7 +219,6 @@ class ZetTruyen : HttpSource() {
 
     override fun imageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl/")
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
         return GET(page.imageUrl!!, imageHeaders)
