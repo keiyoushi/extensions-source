@@ -64,7 +64,7 @@ class Toonily : Madara(
         val url = request.url
 
         return if (
-            url.pathSegments.firstOrNull() == "wp-content" &&
+            url.host.startsWith("static") && // covers are hosted on the static cdn, panels on data cdn
             url.pathSegments.lastOrNull()?.contains(sdCoverRegex) == true
         ) {
             try {
