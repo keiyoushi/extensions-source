@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.broccolisoup
 
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,7 +24,9 @@ class BroccoliSoup : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().build()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
+
+    // Popular
 
     private fun createManga(): SManga {
         return SManga.create().apply {
@@ -34,8 +38,6 @@ class BroccoliSoup : HttpSource() {
             thumbnail_url = "https://politeandgood.com/assets/images/static/Bocki%20(correct%20size).png"
         }
     }
-
-    // Popular
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return Observable.just(MangasPage(listOf(createManga()), false))
@@ -69,12 +71,25 @@ class BroccoliSoup : HttpSource() {
 
     // Chapters
 
+    private val characterSummaryPathSlug = "comic-characters"
+
+    private fun createCharacterSummaryChapter(): SChapter {
+        return SChapter.create().apply {
+            url = "/$characterSummaryPathSlug"
+            name = "Characters"
+            chapter_number = 0f
+        }
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         // Keep track of the last-used chapter number in each "arc" of chapters
         val arcIndexMap = mutableMapOf<String, Int>()
 
-        return response.asJsoup().select("li.archive-marker")
-            .flatMap { groupElement ->
+        // Add the character summary page as a chapter
+        val chaptersList = mutableListOf(createCharacterSummaryChapter())
+
+        response.asJsoup().select("li.archive-marker")
+            .flatMapTo(chaptersList) { groupElement ->
                 val arcTitle = groupElement.selectFirst(".archive-header .marker-title")?.text()
                 groupElement.select("li.archive-page")
                     .mapNotNull { chapterElement ->
@@ -112,14 +127,47 @@ class BroccoliSoup : HttpSource() {
                         }
                     }
             }
-            .reversed()
         // Reverse the list since "source" ordering is expected to have the latest
         // chapter first in the list.
+        chaptersList.reverse()
+
+        return chaptersList
     }
 
     // Pages
 
+    private fun characterSummaryPageListParse(response: Response): List<Page> {
+        return response.asJsoup().select("section.static-block:has(figure, .block-content)")
+            .flatMap { sectionElement ->
+                val headerText = sectionElement
+                    .selectFirst("section > :is(h1, h2, h3, h4)")
+                    ?.text()?.trim()
+
+                val bodyText = sectionElement.selectFirst("div.block-content")
+                    ?.text()?.trim()
+
+                val imageUrl = sectionElement.selectFirst("figure img")
+                    ?.attr("abs:src")
+
+                var pageIndex = 0
+                listOfNotNull<Page>(
+                    // The character's name and summary
+                    if (headerText != null || bodyText != null) {
+                        val textUrl = TextInterceptorHelper.createUrl(headerText ?: "", bodyText ?: "")
+                        Page(pageIndex++, "", textUrl)
+                    } else { null },
+                    // The character's image
+                    imageUrl?.let { Page(pageIndex++, "", imageUrl) },
+                )
+            }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
+        if (response.request.url.pathSegments.lastOrNull() == characterSummaryPathSlug) {
+            // The character summary page needs special parsing
+            return characterSummaryPageListParse(response)
+        }
+
         return response.asJsoup().select("#comic img")
             .mapIndexed { index, element ->
                 Page(index, "", element.attr("abs:src"))
