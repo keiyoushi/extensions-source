@@ -26,7 +26,6 @@ import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
 class MediocreToons : HttpSource(), ConfigurableSource {
-
     override val name = "Mediocre Toons"
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
@@ -49,7 +48,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         }
         val withIds = if (formatArgs.isNotEmpty()) path.replace("%s", formatArgs[0]) else path
         val resolved = withIds.replace("\$apiUrl", apiUrl)
-        return if (resolved.startsWith("http")) resolved else "$apiUrl/$resolved".replace(Regex("(?<!:)//+"), "/")
+        return if (resolved.startsWith("http")) resolved else "$apiUrl/$resolved".replace(DOUBLE_SLASH_REGEX, "/")
     }
 
     private var cachedToken: String? = null
@@ -206,7 +205,8 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     // ============================= Latest Updates ==========================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = getRequestUrl("\$apiUrl/obras", PREF_URL_LATEST).toHttpUrl().newBuilder()
+        val url = getRequestUrl("\$apiUrl/obras/novos", PREF_URL_LATEST).toHttpUrl().newBuilder()
+            .addQueryParameter("formato", "5")
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
             .build()
@@ -475,7 +475,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             listOf(
                 Triple(PREF_URL_LOGIN, "URL Login", "\$apiUrl/auth/login"),
                 Triple(PREF_URL_POPULAR, "URL Popular (ranking)", "\$apiUrl/obras/ranking"),
-                Triple(PREF_URL_LATEST, "URL Latest (recentes)", "\$apiUrl/obras"),
+                Triple(PREF_URL_LATEST, "URL Latest (recentes)", "\$apiUrl/obras/novos"),
                 Triple(PREF_URL_SEARCH, "URL Search (obras)", "\$apiUrl/obras"),
                 Triple(PREF_URL_MANGA_DETAILS, "URL Detalhes da obra", "\$apiUrl/obras/%s"),
                 Triple(PREF_URL_CHAPTER, "URL Capítulo (páginas)", "\$apiUrl/capitulos/%s"),
@@ -501,6 +501,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         private const val PREF_URL_SEARCH = "custom_url_search"
         private const val PREF_URL_MANGA_DETAILS = "custom_url_manga_details"
         private const val PREF_URL_CHAPTER = "custom_url_chapter"
+        private val DOUBLE_SLASH_REGEX = Regex("(?<!:)//+")
     }
 }
 
