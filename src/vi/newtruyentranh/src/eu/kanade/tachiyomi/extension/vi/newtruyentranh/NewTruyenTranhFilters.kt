@@ -1,13 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.newtruyentranh
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-
-fun getFilterList(): FilterList = FilterList(
-    GenreFilter(),
-    SortFilter(),
-    StatusFilter(),
-)
 
 class GenreFilter : UriPartFilter(
     "Thể loại",
