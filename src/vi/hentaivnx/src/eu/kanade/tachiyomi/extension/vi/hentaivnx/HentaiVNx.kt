@@ -1,21 +1,24 @@
 package eu.kanade.tachiyomi.extension.vi.hentaivnx
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class HentaiVNx : HttpSource() {
+class HentaiVNx : ParsedHttpSource() {
 
     override val name = "HentaiVNx"
 
@@ -25,36 +28,32 @@ class HentaiVNx : HttpSource() {
 
     override val supportsLatest = true
 
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/tim-truyen-nang-cao?genres=&notgenres=&minchapter=0&sort=10&contain=&page=$page", headers)
+        return searchMangaRequest(page, "", FilterList(SortByList(1)))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override fun popularMangaSelector(): String = ".items .item"
 
-        val mangaList = document.select(".items .item").map { element ->
-            SManga.create().apply {
-                val linkElement = element.selectFirst("h3 a")
-                    ?: element.selectFirst("a.jtip")
-                    ?: element.selectFirst(".image a")!!
-                setUrlWithoutDomain(linkElement.absUrl("href"))
-                title = linkElement.attr("title").ifEmpty { linkElement.text() }
-                thumbnail_url = element.selectFirst("img")?.let {
-                    it.absUrl("data-original")
-                        .ifEmpty { it.absUrl("data-src") }
-                        .ifEmpty { it.absUrl("src") }
-                }
-            }
+    override fun popularMangaNextPageSelector(): String = "ul.pagination li:last-child:not(.disabled) a"
+
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val linkElement = element.selectFirst("h3 a")
+            ?: element.selectFirst("a.jtip")
+            ?: element.selectFirst(".image a")!!
+        setUrlWithoutDomain(linkElement.absUrl("href"))
+        title = linkElement.attr("title").ifEmpty { linkElement.text() }
+        thumbnail_url = element.selectFirst("img")?.let { element ->
+            imageElement(element)
         }
-
-        val hasNextPage = document.selectFirst("ul.pagination li:last-child:not(.disabled) a") != null
-
-        return MangasPage(mangaList, hasNextPage)
     }
 
     // ============================== Latest ===============================
@@ -63,49 +62,59 @@ class HentaiVNx : HttpSource() {
         return GET("$baseUrl/?page=$page", headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun latestUpdatesSelector(): String = popularMangaSelector()
+
+    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // ============================== Search ===============================
+
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun searchMangaSelector(): String = popularMangaSelector()
+
+    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
             query.startsWith(PREFIX_ID_SEARCH) -> {
                 val slug = query.removePrefix(PREFIX_ID_SEARCH).trim()
+                val mangaUrl = "/truyen-hentai/$slug"
                 fetchMangaDetails(
-                    SManga.create().apply {
-                        url = "/truyen-hentai/$slug"
-                    },
-                ).map {
-                    it.url = "/truyen-hentai/$slug"
-                    MangasPage(listOf(it), false)
-                }
+                    SManga.create().apply { url = mangaUrl },
+                ).map { MangasPage(listOf(it), false) }
             }
             else -> super.fetchSearchManga(page, query, filters)
         }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotBlank()) {
-            "$baseUrl/tim-truyen".toHttpUrl().newBuilder()
-                .addQueryParameter("keyword", query)
-                .addQueryParameter("page", page.toString())
-                .build()
-        } else {
-            var genreSlug = ""
-            filters.forEach { filter ->
-                if (filter is GenreFilter) {
-                    val genres = getGenreList()
-                    genreSlug = genres[filter.state].second
-                }
-            }
-            if (genreSlug.isNotEmpty()) {
-                "$baseUrl/tim-truyen/$genreSlug?page=$page".toHttpUrl()
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) {
+                addPathSegments("tim-truyen")
+                addQueryParameter("keyword", query)
+                addQueryParameter("page", page.toString())
             } else {
-                "$baseUrl/tim-truyen?page=$page".toHttpUrl()
+                addPathSegment("tim-truyen-nang-cao")
+                (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                    when (filter) {
+                        is GenreFilter -> filter.state.forEach { genre ->
+                            when (genre.state) {
+                                Filter.TriState.STATE_INCLUDE -> addQueryParameter("genres", genre.genre)
+                                Filter.TriState.STATE_EXCLUDE -> addQueryParameter("notgenres", genre.genre)
+                            }
+                        }
+                        is ChapterCountList -> addQueryParameter("minchapter", filter.values[filter.state].genre)
+                        is SortByList -> addQueryParameter("sort", filter.values[filter.state].genre)
+                        is TextField -> addQueryParameter("contain", filter.state)
+                        else -> {}
+                    }
+                }
+                addQueryParameter("page", page.toString())
             }
-        }
+        }.build()
+
         return GET(url, headers)
     }
 
@@ -115,53 +124,39 @@ class HentaiVNx : HttpSource() {
 
     override fun getFilterList(): FilterList = FilterList(
         GenreFilter(getGenreList()),
+        SortByList(0),
+        ChapterCountList(),
+        TextField(),
     )
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.title-detail")!!.text()
+        author = document.selectFirst("li.author .col-xs-8")?.text()?.trim()
+        description = document.select(".detail-content").joinToString { it.wholeText().trim() }
+        genre = document.select("li.kind .col-xs-8 a").joinToString { it.text().trim() }
+        thumbnail_url = document.selectFirst(".detail-info .col-image img")?.let { element ->
+            imageElement(element)
+        }
 
-        return SManga.create().apply {
-            title = document.selectFirst("h1.title-detail")!!.text()
-            author = document.selectFirst("li.author .col-xs-8")?.text()?.trim()
-            description = document.selectFirst(".detail-content")?.text()?.trim()
-            genre = document.select("li.kind .col-xs-8 a").joinToString { it.text().trim() }
-            thumbnail_url = document.selectFirst(".detail-info .col-image img")?.let {
-                it.absUrl("data-original")
-                    .ifEmpty { it.absUrl("data-src") }
-                    .ifEmpty { it.absUrl("src") }
-            }
-
-            val statusText = document.selectFirst("li.status .col-xs-8")?.text()
-            status = when {
-                statusText?.contains("Đang tiến hành", ignoreCase = true) == true -> SManga.ONGOING
-                statusText?.contains("Hoàn thành", ignoreCase = true) == true -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+        val statusText = document.selectFirst("li.status .col-xs-8")?.text()
+        status = when {
+            statusText == null -> SManga.UNKNOWN
+            statusText.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
+            statusText.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
     }
 
     // ============================== Chapters ===============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override fun chapterListSelector(): String = "#nt_listchapter.list-chapter ul li.row"
 
-        return document.select("#nt_listchapter ul li.row, .list-chapter ul li.row").mapNotNull { element ->
-            parseChapterElement(element)
-        }
-    }
-
-    private fun parseChapterElement(element: Element): SChapter? {
-        val linkElement = element.selectFirst("div.chapter a") ?: return null
-        val url = linkElement.attr("href")
-        if (url.isBlank()) return null
-
-        return SChapter.create().apply {
-            setUrlWithoutDomain(url)
-            name = linkElement.text().trim()
-            date_upload = element.selectFirst("div.col-xs-4")?.text().toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("div.chapter a")!!.absUrl("href"))
+        name = element.selectFirst("div.chapter a")!!.text()
+        date_upload = element.selectFirst("div.col-xs-4")?.text().toDate()
     }
 
     private fun String?.toDate(): Long {
@@ -199,23 +194,24 @@ class HentaiVNx : HttpSource() {
 
     // ============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    private fun imageElement(element: Element): String? {
+        return when {
+            element.hasAttr("data-original") -> element.attr("abs:data-original")
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            else -> element.attr("abs:src")
+        }
+    }
 
+    override fun pageListParse(document: Document): List<Page> {
         val images = document.select(".reading-detail img, .page-chapter img")
             .ifEmpty { document.select(".chapter-content img") }
 
         return images.mapIndexed { idx, element ->
-            val imageUrl = element.attr("data-src").ifEmpty {
-                element.attr("data-original").ifEmpty {
-                    element.attr("src")
-                }
-            }
-            Page(idx, imageUrl = imageUrl)
+            Page(idx, imageUrl = imageElement(element))
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
+    override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException()
     }
 
