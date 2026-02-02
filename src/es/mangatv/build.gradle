@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaTV'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangatv.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
