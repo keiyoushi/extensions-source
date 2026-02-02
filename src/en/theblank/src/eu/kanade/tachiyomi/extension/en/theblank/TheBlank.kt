@@ -352,10 +352,10 @@ class TheBlank : HttpSource(), ConfigurableSource {
     }
 
     private fun fetchSessionId(publicKeyBase64: String): String {
-        val url = "$baseUrl/api/v1/session".toHttpUrl()
+        val url = "$baseUrl/checksum".toHttpUrl()
         val body = buildJsonObject {
-            put("clientPublicKey", publicKeyBase64)
-            put("nonce", generateNonce())
+            put("checksum", publicKeyBase64)
+            put("timestamp", generateNonce())
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
         val request = apiRequest(url, body, includeXSRFToken = false, includeCSRFToken = true, includeVersion = false)
