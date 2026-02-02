@@ -84,7 +84,9 @@ class KomikCast : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = parseSeriesListResponse(response)
 
     override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url.replace("komik", "series")
+        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val slug = path[1]
+        return "$baseUrl/series/$slug"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
