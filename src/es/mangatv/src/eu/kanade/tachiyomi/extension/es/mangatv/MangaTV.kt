@@ -37,7 +37,7 @@ class MangaTV : MangaThemesia(
         return imageList.mapIndexed { i, jsonEl ->
             val encodedLink = jsonEl.jsonPrimitive.content
             val decodedLink = String(Base64.decode(encodedLink, Base64.DEFAULT))
-            Page(i, imageUrl = "https:$decodedLink")
+            Page(i, document.location(), "https:$decodedLink")
         }
     }
 
