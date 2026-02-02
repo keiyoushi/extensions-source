@@ -11,6 +11,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -37,7 +41,7 @@ class SanaScans : Iken(
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val popularHeading = document.selectFirst("h1:matchesOwn(?i)Popular Today")
+        val popularHeading = document.selectFirst("h1:matchesOwn((?i)Popular Today)")
         val popularContainer = popularHeading?.parent()
         var sibling = popularContainer?.nextElementSibling()
         var popularSection: org.jsoup.nodes.Element? = null
@@ -60,10 +64,10 @@ class SanaScans : Iken(
     }
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/rss.xml?page=$page", headers)
+        GET("$baseUrl/rss.xml", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = response.asJsoupXml()
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
 
         val entries = document.select("channel > item").mapNotNull(::parseRssItem)
@@ -128,13 +132,24 @@ class SanaScans : Iken(
 
         val description = document.selectFirst("[itemprop=description]")?.text()
             ?.takeIf(String::isNotEmpty)
-            ?: listOf("postContent", "description", "summary", "synopsis")
-                .flatMap { extractJsonStrings(body, it) }
-                .filter { it.length > 80 }
-                .maxByOrNull { it.length }
-                ?.let { Jsoup.parse(it).text() }
+            ?: document.selectFirst("meta[property=og:description]")?.attr("content")
+                ?.takeIf(String::isNotEmpty)
+            ?: document.selectFirst("meta[name=twitter:description]")?.attr("content")
+                ?.takeIf(String::isNotEmpty)
             ?: document.selectFirst("meta[name=description]")?.attr("content")
                 ?.takeIf(String::isNotEmpty)
+            ?: run {
+                val jsonLdDescriptions = extractJsonLdDescriptions(document)
+                val jsonLdCandidate = jsonLdDescriptions
+                    .map { Jsoup.parse(it).text().trim() }
+                    .firstOrNull { it.isNotEmpty() && looksLikeDescription(it) }
+
+                if (!jsonLdCandidate.isNullOrEmpty()) {
+                    return@run jsonLdCandidate
+                }
+
+                extractPostContent(body)
+            }
         val thumbnailUrl = document.selectFirst("meta[property=og:image]")?.attr("content")
 
         val genres = runCatching { extractJsonArray(body, "genres").parseAs<List<GenreDto>>() }
@@ -145,7 +160,7 @@ class SanaScans : Iken(
 
         return SManga.create().apply {
             this.title = title
-            this.description = description
+            this.description = description ?: ""
             this.thumbnail_url = thumbnailUrl
             this.genre = genres
             this.status = status
@@ -239,7 +254,7 @@ class SanaScans : Iken(
     }
 
     private fun parseStatus(document: Document): Int {
-        val statusText = document.selectFirst("div:has(> h1:matchesOwn(?i)Status) p")
+        val statusText = document.selectFirst("div:has(> h1:matchesOwn((?i)Status)) p")
             ?.text()
             ?.lowercase(Locale.ROOT)
 
@@ -260,29 +275,40 @@ class SanaScans : Iken(
             pattern.find(body)?.groupValues?.getOrNull(1)
         }
 
-        return match ?: throw Exception("Unable to find $key data")
-    }
-
-    private fun extractJsonStrings(body: String, key: String): List<String> {
-        val patterns = listOf(
-            Regex(""""$key"\s*:\s*("(?:\\.|[^"\\])*")"""),
-            Regex("""\\\"$key\\\"\s*:\s*(\\\"(?:\\.|[^\\"])*\\\")"""),
-        )
-
-        return patterns.flatMap { pattern ->
-            pattern.findAll(body).mapNotNull { match ->
-                parseJsonStringLiteral(match.groupValues[1])
-            }
-        }
-    }
-
-    private fun parseJsonStringLiteral(raw: String): String? {
-        val candidate = if (raw.startsWith("\\\"") && raw.endsWith("\\\"")) {
-            "\"$raw\""
+        val raw = match ?: throw Exception("Unable to find $key data")
+        return if (raw.contains("\\\"")) {
+            "\"$raw\"".parseAs<String>()
         } else {
             raw
         }
+    }
 
+    private fun extractPostContent(body: String): String? {
+        val patterns = listOf(
+            Regex(""""postContent"\s*:\s*"((?:\\.|[^"])*)""""),
+            Regex("""\\\"postContent\\\"\s*:\s*\\\"((?:\\\\.|[^\\"])*)\\\""""),
+        )
+
+        var best: String? = null
+        for (pattern in patterns) {
+            val matches = pattern.findAll(body)
+            for (match in matches) {
+                val raw = match.groupValues.getOrNull(1) ?: continue
+                val decoded = parseJsonStringLiteral(raw) ?: raw
+                val text = Jsoup.parse(decoded).text().trim()
+                if (text.isNotEmpty() && looksLikeDescription(text)) {
+                    if (best == null || text.length > best.length) {
+                        best = text
+                    }
+                }
+            }
+        }
+
+        return best
+    }
+
+    private fun parseJsonStringLiteral(raw: String): String? {
+        val candidate = "\"$raw\""
         return runCatching { candidate.parseAs<String>() }.getOrNull()
     }
 
@@ -323,6 +349,53 @@ class SanaScans : Iken(
         private val nonAlphanumericRegex = Regex("[^a-z0-9]+")
         private val multiSpaceRegex = Regex("\\s+")
     }
+}
+
+private fun extractJsonLdDescriptions(document: Document): List<String> {
+    val scripts = document.select("script[type=\"application/ld+json\"]")
+    if (scripts.isEmpty()) return emptyList()
+
+    return scripts.flatMap { script ->
+        val raw = script.data().takeIf(String::isNotEmpty) ?: return@flatMap emptyList()
+        val element = runCatching { raw.parseAs<JsonElement>() }.getOrNull() ?: return@flatMap emptyList()
+        collectJsonLdDescriptions(element)
+    }.distinct()
+}
+
+private fun collectJsonLdDescriptions(element: JsonElement): List<String> {
+    return when (element) {
+        is JsonObject -> {
+            val current = element["description"]?.asString()
+            val nested = element.values.flatMap(::collectJsonLdDescriptions)
+            if (current == null) nested else listOf(current) + nested
+        }
+        is JsonArray -> element.flatMap(::collectJsonLdDescriptions)
+        else -> emptyList()
+    }
+}
+
+private fun JsonElement.asString(): String? {
+    val primitive = this as? JsonPrimitive ?: return null
+    return if (primitive.isString) primitive.content else null
+}
+
+private fun looksLikeDescription(text: String): Boolean {
+    val trimmed = text.trim()
+    if (trimmed.length < 20) return false
+    if (trimmed.contains("\"@id\"") || trimmed.contains("\"@type\"")) return false
+    if (trimmed.contains("mainEntityOfPage") || trimmed.contains("chaptersPricing")) return false
+
+    val letterCount = trimmed.count { it.isLetter() }
+    if (letterCount < 20) return false
+
+    val colonCount = trimmed.count { it == ':' }
+    val quoteCount = trimmed.count { it == '"' || it == '\'' }
+    val braceCount = trimmed.count { it == '{' || it == '}' || it == '[' || it == ']' }
+    val commaCount = trimmed.count { it == ',' }
+    val punctCount = colonCount + quoteCount + braceCount + commaCount
+    val ratio = punctCount.toDouble() / trimmed.length
+
+    return ratio <= 0.12
 }
 private fun Response.asJsoupXml(): Document {
     return Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())

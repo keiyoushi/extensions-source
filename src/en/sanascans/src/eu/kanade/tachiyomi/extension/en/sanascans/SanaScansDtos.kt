@@ -21,7 +21,10 @@ class ChapterDto(
 ) {
     fun toSChapter(seriesSlug: String, locked: Boolean): SChapter {
         val numberText = number.content
-        val chapterTitle = if (!title.isNullOrBlank()) ": $title" else ""
+        val cleanedTitle = title?.trim()?.trimStart(':')?.trim()
+        val hasMeaningfulTitle = !cleanedTitle.isNullOrEmpty() &&
+            cleanedTitle.any { it.isLetterOrDigit() }
+        val chapterTitle = if (hasMeaningfulTitle) ": $cleanedTitle" else ""
         val prefix = if (locked) "🔒 " else ""
 
         return SChapter.create().apply {
