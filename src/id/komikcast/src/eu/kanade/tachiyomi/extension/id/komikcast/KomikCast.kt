@@ -112,13 +112,8 @@ class KomikCast : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.startsWith("/chapter/")) {
-            val path = chapter.url
-                .substringAfter("/chapter/")
-
-            val slug = path.substringBefore("-chapter-")
-            val chapterIndex = path
-                .substringAfter("-chapter-")
-                .substringBefore("-bahasa-")
+            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
+            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
 
             return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
         }
