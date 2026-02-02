@@ -17,7 +17,8 @@ import okhttp3.Response
 
 class KomikCast : HttpSource() {
 
-    override val versionId = 2
+    // Formerly "Komik Cast (WP Manga Stream)"
+    override val id = 972717448578983812
 
     override val name = "Komik Cast"
 
@@ -82,6 +83,12 @@ class KomikCast : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = parseSeriesListResponse(response)
 
+    override fun getMangaUrl(manga: SManga): String {
+        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val slug = path[1]
+        return "$baseUrl/series/$slug"
+    }
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
         val slug = path[1]
@@ -106,6 +113,13 @@ class KomikCast : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.startsWith("/chapter/")) {
+            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
+            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
+
+            return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
+        }
+
         val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
         val slug = path[1]
         val chapterIndex = path[3]
