@@ -243,9 +243,11 @@ class MangaFire(
         }
     }
 
+    // MangaFire marks manga as "completed" when their original publication is completed,
+    // even if their translation is not complete, so we use the "PUBLISHING_FINISHED" status.
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "releasing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
+        "completed" -> SManga.PUBLISHING_FINISHED
         "on_hiatus" -> SManga.ON_HIATUS
         "discontinued" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
