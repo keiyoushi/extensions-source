@@ -110,6 +110,8 @@ class NewTruyenTranh : HttpSource() {
 
     // ============================== Details ===============================
     override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = manga.url
+        if (url.startsWith("/detail/")) throw Exception("Old URL structure detected. Please migrate or re-add this source.")
         val id = manga.url.substringBefore(":")
         val slug = manga.url.substringAfter(":")
         return GET("$baseUrl/truyen-tranh/$slug-$id", headers)
