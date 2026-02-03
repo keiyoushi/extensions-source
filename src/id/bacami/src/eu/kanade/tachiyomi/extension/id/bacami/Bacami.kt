@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Request
@@ -294,8 +295,4 @@ class Bacami : ParsedHttpSource() {
             Pair("Zombies", "zombies"),
         ),
     )
-
-    // Inline function to simplify filter handling
-    private inline fun <reified T : Filter<*>> FilterList.firstInstanceOrNull(): T? =
-        filterIsInstance<T>().firstOrNull()
 }
