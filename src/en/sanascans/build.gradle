@@ -1,9 +1,7 @@
 ext {
     extName = 'Sana Scans'
     extClass = '.SanaScans'
-    themePkg = 'iken'
-    baseUrl = 'https://sanascans.com'
-    overrideVersionCode = 3
+    extVersionCode = 16
     isNsfw = false
 }
 
