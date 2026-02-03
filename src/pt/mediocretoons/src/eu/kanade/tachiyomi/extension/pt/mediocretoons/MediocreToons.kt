@@ -365,7 +365,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     // ============================ Manga Details ============================
     override fun getMangaUrl(manga: SManga): String {
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
-        val slug = manga.title.toSlug()
         val finalUrl = "$baseUrl/obra/$id"
         return finalUrl
     }
