@@ -87,13 +87,27 @@ class SanaScans : HttpSource(), ConfigurableSource {
         return MangasPage(paged, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/series-sitemap.xml?page=$page&searchTerm=${encodeQuery(query)}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val fragment = HttpUrl.Builder()
+            .scheme("https")
+            .host("localhost")
+            .addQueryParameter("searchTerm", query)
+            .build()
+            .query
+            .orEmpty()
+
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("series-sitemap.xml")
+            .fragment(fragment)
+            .build()
+
+        return GET(url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val rawQuery = response.request.url.queryParameter("searchTerm")
-        val normalizedQuery = if (rawQuery == null) "" else rawQuery.normalizeForSearch()
+        val rawQuery = response.request.url.fragment
+            ?.toFragmentQueryParameter("searchTerm")
+        val normalizedQuery = if (rawQuery.isNullOrBlank()) "" else rawQuery.normalizeForSearch()
 
         val sitemapEntries = parseSitemapSeries(response)
         val entries = if (normalizedQuery.isBlank()) {
@@ -106,10 +120,7 @@ class SanaScans : HttpSource(), ConfigurableSource {
             }
         }.map { it.toSManga() }
 
-        val paged = entries.drop((page - 1) * searchPageSize).take(searchPageSize)
-        val hasNextPage = entries.size > page * searchPageSize
-
-        return MangasPage(paged, hasNextPage)
+        return MangasPage(entries, false)
     }
 
     override fun getFilterList() = FilterList()
@@ -295,9 +306,6 @@ class SanaScans : HttpSource(), ConfigurableSource {
         return httpUrl.newBuilder().fragment(null).query(null).build()
     }
 
-    private fun encodeQuery(query: String): String =
-        java.net.URLEncoder.encode(query, "UTF-8")
-
     private fun slugToTitle(slug: String): String {
         val decoded = java.net.URLDecoder.decode(slug, "UTF-8")
         return decoded.replace('-', ' ')
@@ -458,6 +466,11 @@ private fun Response.asJsoupXml(): Document {
     return Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 }
 
+private fun String.toFragmentQueryParameter(name: String): String? {
+    val url = "https://localhost/?$this".toHttpUrlOrNull() ?: return null
+    return url.queryParameter(name)
+}
+
 private fun Document.getNextJson(key: String): String {
     val data = selectFirst("script:containsData($key)")
         ?.data()
@@ -488,5 +501,4 @@ private fun seriesSlug(url: HttpUrl): String? {
 }
 
 private const val latestPageSize = 20
-private const val searchPageSize = 30
 private const val showLockedChapterPrefKey = "pref_show_locked_chapters"
