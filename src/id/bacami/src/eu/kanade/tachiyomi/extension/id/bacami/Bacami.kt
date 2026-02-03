@@ -7,12 +7,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -24,8 +23,6 @@ class Bacami : ParsedHttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
-
-    private val json: Json by injectLazy()
 
     private val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale.ENGLISH)
 
@@ -133,13 +130,7 @@ class Bacami : ParsedHttpSource() {
         date_upload = parseChapterDate(element.select("span.ch-date").text())
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (e: Exception) {
-            0L
-        }
-    }
+    private fun parseChapterDate(date: String): Long = dateFormat.tryParse(date)
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
@@ -147,14 +138,9 @@ class Bacami : ParsedHttpSource() {
             ?: return emptyList()
 
         val jsonString = scriptContent.substringAfter("imageUrls:").substringBefore("],").plus("]")
-
-        return try {
-            val imageUrls = json.decodeFromString<List<String>>(jsonString)
-            imageUrls.mapIndexed { index, url ->
-                Page(index, imageUrl = url)
-            }
-        } catch (e: Exception) {
-            emptyList()
+        val imageUrls = jsonString.parseAs<List<String>>()
+        return imageUrls.mapIndexed { index, url ->
+            Page(index, imageUrl = url)
         }
     }
 
