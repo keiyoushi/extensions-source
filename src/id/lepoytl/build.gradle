@@ -1,0 +1,10 @@
+ext {
+    extName = 'LepoyTL'
+    extClass = '.LepoyTL'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.lepoytl.my.id'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
