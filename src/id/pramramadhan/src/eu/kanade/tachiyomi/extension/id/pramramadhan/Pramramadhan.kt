@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -135,11 +136,7 @@ class Pramramadhan : ParsedHttpSource() {
                 else -> 0L
             }
         } catch (e: Exception) {
-            try {
-                simpleDateFormat.parse(dateString)?.time ?: 0L
-            } catch (e: Exception) {
-                0L
-            }
+            simpleDateFormat.tryParse(dateString)
         }
     }
 
