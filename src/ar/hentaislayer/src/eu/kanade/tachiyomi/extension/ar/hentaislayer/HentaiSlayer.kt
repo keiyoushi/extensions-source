@@ -9,7 +9,9 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferencesLazy
 
-class HentaiSlayer : FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.net", "ar"), ConfigurableSource {
+class HentaiSlayer :
+    FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.net", "ar"),
+    ConfigurableSource {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)

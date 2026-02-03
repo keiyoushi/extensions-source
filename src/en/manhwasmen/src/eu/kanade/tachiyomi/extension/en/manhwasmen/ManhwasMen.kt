@@ -24,9 +24,7 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
     override fun popularMangaSelector() = "ul > li > article.anime"
     override fun popularMangaNextPageSelector() = "div nav ul.pagination li.page-item.active + li a"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga-list?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga-list?page=$page", headers)
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
@@ -37,9 +35,7 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
     // latest
     override fun latestUpdatesNextPageSelector() = null
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -50,12 +46,10 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
         return MangasPage(mangas, false)
     }
 
-    private fun latestMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element).apply {
-            setUrlWithoutDomain(
-                element.selectFirst("a")!!.attr("abs:href").replaceAfterLast("/", ""),
-            )
-        }
+    private fun latestMangaFromElement(element: Element): SManga = popularMangaFromElement(element).apply {
+        setUrlWithoutDomain(
+            element.selectFirst("a")!!.attr("abs:href").replaceAfterLast("/", ""),
+        )
     }
 
     // search
@@ -71,6 +65,7 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
                         is GenreFilter -> {
                             addQueryParameter("genero", filter.values[filter.state])
                         }
+
                         else -> {}
                     }
                 }
@@ -256,13 +251,10 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
         "sexual-fantasy",
     )
 
-    private class GenreFilter(title: String, genreList: Array<String>) :
-        Filter.Select<String>(title, genreList)
+    private class GenreFilter(title: String, genreList: Array<String>) : Filter.Select<String>(title, genreList)
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Note: Ignored if using text search"),
-            GenreFilter("Genre", getGenreList),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Ignored if using text search"),
+        GenreFilter("Genre", getGenreList),
+    )
 }

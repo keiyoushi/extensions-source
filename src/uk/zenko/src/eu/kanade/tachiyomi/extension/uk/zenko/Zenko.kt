@@ -32,13 +32,9 @@ class Zenko : HttpSource() {
         .rateLimitHost(API_URL.toHttpUrl(), 10)
         .build()
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
@@ -150,12 +146,10 @@ class Zenko : HttpSource() {
     private fun makeMangasPage(
         mangaList: List<MangaDetailsResponse>,
         hasNextPage: Boolean = false,
-    ): MangasPage {
-        return MangasPage(
-            mangaList.map(::makeSManga),
-            hasNextPage,
-        )
-    }
+    ): MangasPage = MangasPage(
+        mangaList.map(::makeSManga),
+        hasNextPage,
+    )
 
     private fun makeSManga(mangaDto: MangaDetailsResponse) = SManga.create().apply {
         setUrlWithoutDomain("/titles/${mangaDto.id}")
@@ -174,9 +168,7 @@ class Zenko : HttpSource() {
         }
     }
 
-    private fun Long.secToMs(): Long {
-        return this * 1000
-    }
+    private fun Long.secToMs(): Long = this * 1000
 
     private fun buildImageUrl(imageId: String): String {
         val url = "$IMAGE_STORAGE_URL/$imageId".toHttpUrl().newBuilder()

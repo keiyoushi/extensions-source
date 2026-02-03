@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class ApenasUmaFa : ZeistManga(
-    "Apenas Uma Fã",
-    "https://apenasuma-fa.blogspot.com",
-    "pt-BR",
-) {
+class ApenasUmaFa :
+    ZeistManga(
+        "Apenas Uma Fã",
+        "https://apenasuma-fa.blogspot.com",
+        "pt-BR",
+    ) {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int) = fetchLatestUpdates(page)

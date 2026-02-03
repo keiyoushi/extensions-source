@@ -37,14 +37,11 @@ class DigitalTeam : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/reader/series", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/reader/series", headers)
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("La ricerca è momentaneamente disabilitata.")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("La ricerca è momentaneamente disabilitata.")
 
     // LIST SELECTOR
     override fun popularMangaSelector() = "ul li.manga_block"

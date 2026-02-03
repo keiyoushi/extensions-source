@@ -70,17 +70,15 @@ abstract class GreenShit(
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int): Request =
-        mangasRequest(page, "$apiUrl/obras/ranking", "15", popularGenreId) {
-            addQueryParameter(popularType, popularTypeValue)
-        }
+    override fun popularMangaRequest(page: Int): Request = mangasRequest(page, "$apiUrl/obras/ranking", "15", popularGenreId) {
+        addQueryParameter(popularType, popularTypeValue)
+    }
 
     override fun popularMangaParse(response: Response) = mangasParse(response)
 
     // ============================= Latest ===================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        mangasRequest(page, "$apiUrl/obras/$latestEndpoint", "24", latestGenreId)
+    override fun latestUpdatesRequest(page: Int): Request = mangasRequest(page, "$apiUrl/obras/$latestEndpoint", "24", latestGenreId)
 
     override fun latestUpdatesParse(response: Response) = mangasParse(response)
 
@@ -99,11 +97,15 @@ abstract class GreenShit(
         filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> url.addQueryParameterIfNotEmpty(genreFilterKey, filter.selected)
+
                 is FormatFilter -> url.addQueryParameterIfNotEmpty(formatFilterKey, filter.selected)
+
                 is StatusFilter -> url.addQueryParameterIfNotEmpty(statusFilterKey, filter.selected)
+
                 is TagsFilter -> filter.state.filter { it.state }.forEach { tag ->
                     url.addQueryParameter(tagFilterKey, tag.id)
                 }
+
                 else -> {}
             }
         }
@@ -235,48 +237,54 @@ abstract class GreenShit(
         val selected get() = options[state].second
     }
 
-    protected class OrderByFilter : SelectFilter(
-        "Ordenar por",
-        arrayOf(
-            Pair("Padrão", ""),
-            Pair("Última atualização", "ultima_atualizacao"),
-            Pair("Data", "data"),
-            Pair("Nome A-Z", "nome_az"),
-            Pair("Nome Z-A", "nome_za"),
-            Pair("Mais Visualizações", "visualizacoes_geral"),
-            Pair("Lançamentos", "criacao"),
-            Pair("Melhor Avaliação", "rating"),
-            Pair("Nome", "nome"),
-        ),
-    )
+    protected class OrderByFilter :
+        SelectFilter(
+            "Ordenar por",
+            arrayOf(
+                Pair("Padrão", ""),
+                Pair("Última atualização", "ultima_atualizacao"),
+                Pair("Data", "data"),
+                Pair("Nome A-Z", "nome_az"),
+                Pair("Nome Z-A", "nome_za"),
+                Pair("Mais Visualizações", "visualizacoes_geral"),
+                Pair("Lançamentos", "criacao"),
+                Pair("Melhor Avaliação", "rating"),
+                Pair("Nome", "nome"),
+            ),
+        )
 
-    protected class OrderDirectionFilter : SelectFilter(
-        "Direção",
-        arrayOf(
-            Pair("Decrescente", "DESC"),
-            Pair("Crescente", "ASC"),
-        ),
-    )
+    protected class OrderDirectionFilter :
+        SelectFilter(
+            "Direção",
+            arrayOf(
+                Pair("Decrescente", "DESC"),
+                Pair("Crescente", "ASC"),
+            ),
+        )
 
-    protected class GenreFilter(genres: List<Genre>) : SelectFilter(
-        "Gênero",
-        arrayOf(Pair("Todos", "")) + genres.map { Pair(it.name, it.id.toString()) }.toTypedArray(),
-    )
+    protected class GenreFilter(genres: List<Genre>) :
+        SelectFilter(
+            "Gênero",
+            arrayOf(Pair("Todos", "")) + genres.map { Pair(it.name, it.id.toString()) }.toTypedArray(),
+        )
 
-    protected class FormatFilter(formats: List<Format>) : SelectFilter(
-        "Formato",
-        arrayOf(Pair("Todos", "")) + formats.map { Pair(it.name, it.id.toString()) }.toTypedArray(),
-    )
+    protected class FormatFilter(formats: List<Format>) :
+        SelectFilter(
+            "Formato",
+            arrayOf(Pair("Todos", "")) + formats.map { Pair(it.name, it.id.toString()) }.toTypedArray(),
+        )
 
-    protected class StatusFilter(statuses: List<Status>) : SelectFilter(
-        "Status",
-        arrayOf(Pair("Todos", "")) + statuses.map { Pair(it.name, it.id.toString()) }.toTypedArray(),
-    )
+    protected class StatusFilter(statuses: List<Status>) :
+        SelectFilter(
+            "Status",
+            arrayOf(Pair("Todos", "")) + statuses.map { Pair(it.name, it.id.toString()) }.toTypedArray(),
+        )
 
-    protected class TagsFilter(tags: List<TagCheckBox>) : Filter.Group<TagCheckBox>(
-        "Tags",
-        tags,
-    )
+    protected class TagsFilter(tags: List<TagCheckBox>) :
+        Filter.Group<TagCheckBox>(
+            "Tags",
+            tags,
+        )
 
     protected class TagCheckBox(
         name: String,

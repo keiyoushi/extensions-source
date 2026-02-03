@@ -15,13 +15,14 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NhatTruyen : WPComics(
-    "NhatTruyen",
-    "https://nhattruyenqq.com",
-    "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
-    gmtOffset = null,
-) {
+class NhatTruyen :
+    WPComics(
+        "NhatTruyen",
+        "https://nhattruyenqq.com",
+        "vi",
+        dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+        gmtOffset = null,
+    ) {
     override val searchPath = "tim-truyen"
 
     override val popularPath = "truyen-tranh-hot"
@@ -30,17 +31,15 @@ class NhatTruyen : WPComics(
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.
      */
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            document.select("article#item-detail").let { info ->
-                author = info.select("li.author p.col-xs-8").text()
-                status = info.select("li.status p.col-xs-8").text().toStatus()
-                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                val otherName = info.select("h2.other-name").text()
-                description = info.select("div.detail-content div.shortened").flatMap { it.children() }.joinToString("\n\n") { it.wholeText().trim() } +
-                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
-                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select("article#item-detail").let { info ->
+            author = info.select("li.author p.col-xs-8").text()
+            status = info.select("li.status p.col-xs-8").text().toStatus()
+            genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+            val otherName = info.select("h2.other-name").text()
+            description = info.select("div.detail-content div.shortened").flatMap { it.children() }.joinToString("\n\n") { it.wholeText().trim() } +
+                if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
+            thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
         }
     }
 
@@ -63,20 +62,21 @@ class NhatTruyen : WPComics(
 
         return GET(url.toString(), headers)
     }
-    private class OrderByFilter : UriPartFilter(
-        "Sắp xếp theo",
-        listOf(
-            Pair("0", "Ngày cập nhật"),
-            Pair("15", "Truyện mới"),
-            Pair("10", "Top all"),
-            Pair("11", "Top tháng"),
-            Pair("12", "Top tuần"),
-            Pair("13", "Top ngày"),
-            Pair("20", "Top theo dõi"),
-            Pair("25", "Bình luận"),
-            Pair("30", "Số chapter"),
-        ),
-    )
+    private class OrderByFilter :
+        UriPartFilter(
+            "Sắp xếp theo",
+            listOf(
+                Pair("0", "Ngày cập nhật"),
+                Pair("15", "Truyện mới"),
+                Pair("10", "Top all"),
+                Pair("11", "Top tháng"),
+                Pair("12", "Top tuần"),
+                Pair("13", "Top ngày"),
+                Pair("20", "Top theo dõi"),
+                Pair("25", "Bình luận"),
+                Pair("30", "Số chapter"),
+            ),
+        )
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
         return FilterList(

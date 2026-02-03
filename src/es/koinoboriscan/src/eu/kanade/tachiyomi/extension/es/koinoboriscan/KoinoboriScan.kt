@@ -49,8 +49,7 @@ class KoinoboriScan : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$apiBaseUrl/api/topSeries", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/api/topSeries", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<TopSeriesDto>(response.body.string())
@@ -61,8 +60,7 @@ class KoinoboriScan : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$apiBaseUrl/api/lastupdates", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/api/lastupdates", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangas = json.decodeFromString<List<SeriesDto>>(response.body.string())
@@ -77,18 +75,15 @@ class KoinoboriScan : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (seriesList.isEmpty()) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, page, query) }
-        } else {
-            Observable.just(parseSeriesList(page, query))
-        }
+    ): Observable<MangasPage> = if (seriesList.isEmpty()) {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, page, query) }
+    } else {
+        Observable.just(parseSeriesList(page, query))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$apiBaseUrl/api/allComics", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$apiBaseUrl/api/allComics", headers)
 
     private fun searchMangaParse(response: Response, page: Int, query: String): MangasPage {
         val result = json.decodeFromString<List<SeriesDto>>(response.body.string())
@@ -117,8 +112,7 @@ class KoinoboriScan : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comic/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$baseUrl/comic/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/comic/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -157,8 +151,7 @@ class KoinoboriScan : HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET("$baseUrl/comic/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/comic/${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -170,9 +163,7 @@ class KoinoboriScan : HttpSource() {
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     companion object {
         const val SERIES_PER_PAGE = 24

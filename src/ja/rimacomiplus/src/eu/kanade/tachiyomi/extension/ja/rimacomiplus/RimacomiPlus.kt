@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class RimacomiPlus : ComiciViewer(
-    "RimacomiPlus",
-    "https://rimacomiplus.jp",
-    "ja",
-) {
+class RimacomiPlus :
+    ComiciViewer(
+        "RimacomiPlus",
+        "https://rimacomiplus.jp",
+        "ja",
+    ) {
     override fun chapterListRequest(manga: SManga): Request {
         val newClient = super.client.newBuilder()
             .followRedirects(false)

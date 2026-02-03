@@ -144,16 +144,14 @@ class KomikCast : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-            SortOrderFilter(),
-            StatusFilter(),
-            FormatFilter(),
-            TypeFilter(),
-            GenreFilter(getGenres()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        SortOrderFilter(),
+        StatusFilter(),
+        FormatFilter(),
+        TypeFilter(),
+        GenreFilter(getGenres()),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

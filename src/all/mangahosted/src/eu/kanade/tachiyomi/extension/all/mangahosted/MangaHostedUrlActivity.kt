@@ -31,6 +31,5 @@ class MangaHostedUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun slug(pathSegments: List<String>) =
-        "${MangaHosted.SEARCH_PREFIX}${pathSegments[1]}"
+    private fun slug(pathSegments: List<String>) = "${MangaHosted.SEARCH_PREFIX}${pathSegments[1]}"
 }

@@ -62,10 +62,9 @@ abstract class CommitStrip(
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        fetchPopularManga(1).map { mangaList ->
-            mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1).map { mangaList ->
+        mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
+    }
 
     // Details
 
@@ -77,9 +76,7 @@ abstract class CommitStrip(
 
     // Open in WebView
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("${manga.url}/?", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("${manga.url}/?", headers)
 
     // Chapters
 
@@ -98,19 +95,16 @@ abstract class CommitStrip(
         }.let { Observable.just(it.flatten()) }
     }
 
-    private fun chapterListRequest(manga: SManga, page: Int): Response =
-        client.newCall(GET("${manga.url}/page/$page", headers)).execute().run {
-            if (!isSuccessful) {
-                close()
-                throw Exception("HTTP error $code")
-            }
-            this
+    private fun chapterListRequest(manga: SManga, page: Int): Response = client.newCall(GET("${manga.url}/page/$page", headers)).execute().run {
+        if (!isSuccessful) {
+            close()
+            throw Exception("HTTP error $code")
         }
+        this
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed().distinct().mapIndexed { index, chapter ->
-            chapter.apply { chapter_number = index.toFloat() }
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed().distinct().mapIndexed { index, chapter ->
+        chapter.apply { chapter_number = index.toFloat() }
     }
 
     override fun chapterListSelector() = ".excerpt a"
@@ -128,12 +122,10 @@ abstract class CommitStrip(
 
     // Page
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(GET(chapter.url, headers)).execute().run {
-            asJsoup().select(".entry-content p img").attr("src")
-        }.let {
-            Observable.just(listOf(Page(0, "", it)))
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(chapter.url, headers)).execute().run {
+        asJsoup().select(".entry-content p img").attr("src")
+    }.let {
+        Observable.just(listOf(Page(0, "", it)))
     }
 
     // Unsupported

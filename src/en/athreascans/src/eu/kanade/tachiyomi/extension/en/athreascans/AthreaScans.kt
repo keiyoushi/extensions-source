@@ -23,18 +23,14 @@ class AthreaScans :
 
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        super.chapterListSelector(),
+        preferences,
+    )
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).filterNot { chapter ->
-            // Additional filter: skip chapters without valid URLs (locked chapters have no href)
-            chapter.url.isBlank() || chapter.url == "#"
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).filterNot { chapter ->
+        // Additional filter: skip chapters without valid URLs (locked chapters have no href)
+        chapter.url.isBlank() || chapter.url == "#"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

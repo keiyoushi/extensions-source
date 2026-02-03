@@ -43,9 +43,7 @@ class NineMangaEn : NineManga("NineMangaEn", "https://www.ninemanga.com", "en") 
 
 class NineMangaEs : NineManga("NineMangaEs", "https://es.ninemanga.com", "es") {
     // ES, FR, RU don't return results for searches with an apostrophe
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return super.searchMangaRequest(page, query.substringBefore("\'"), filters)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = super.searchMangaRequest(page, query.substringBefore("\'"), filters)
 
     override fun parseStatus(status: String) = when {
         status.contains("En curso") -> SManga.ONGOING
@@ -331,13 +329,12 @@ class NineMangaBr : NineManga("NineMangaBr", "https://br.ninemanga.com", "pt-BR"
 
 class NineMangaRu : NineManga("NineMangaRu", "https://ru.ninemanga.com", "ru") {
     // ES, FR, RU don't return results for searches with an apostrophe
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return super.searchMangaRequest(page, query.substringBefore("\'"), filters)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = super.searchMangaRequest(page, query.substringBefore("\'"), filters)
 
     override fun parseStatus(status: String) = when {
         // No Ongoing status
         status.contains("завершенный") -> SManga.COMPLETED
+
         else -> SManga.UNKNOWN
     }
 
@@ -518,9 +515,7 @@ class NineMangaIt : NineManga("NineMangaIt", "https://it.ninemanga.com", "it") {
 
 class NineMangaFr : NineManga("NineMangaFr", "https://fr.ninemanga.com", "fr") {
     // ES, FR, RU don't return results for searches with an apostrophe
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return super.searchMangaRequest(page, query.substringBefore("\'"), filters)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = super.searchMangaRequest(page, query.substringBefore("\'"), filters)
 
     override fun parseStatus(status: String) = when {
         status.contains("En cours") -> SManga.ONGOING
@@ -833,22 +828,33 @@ fun parseChapterDateByLang(date: String): Long {
             val timeAgo = Integer.parseInt(dateWords[0])
             return Calendar.getInstance().apply {
                 when (dateWords[1]) {
-                    "minutos" -> Calendar.MINUTE // ES
+                    "minutos" -> Calendar.MINUTE
+
+                    // ES
                     "horas" -> Calendar.HOUR
 
                     // "minutos" -> Calendar.MINUTE // BR
                     "hora" -> Calendar.HOUR
 
-                    "минут" -> Calendar.MINUTE // RU
+                    "минут" -> Calendar.MINUTE
+
+                    // RU
                     "часа" -> Calendar.HOUR
 
-                    "Stunden" -> Calendar.HOUR // DE
+                    "Stunden" -> Calendar.HOUR
 
-                    "minuti" -> Calendar.MINUTE // IT
+                    // DE
+
+                    "minuti" -> Calendar.MINUTE
+
+                    // IT
                     "ore" -> Calendar.HOUR
 
-                    "minutes" -> Calendar.MINUTE // FR
+                    "minutes" -> Calendar.MINUTE
+
+                    // FR
                     "heures" -> Calendar.HOUR
+
                     else -> null
                 }?.let {
                     add(it, -timeAgo)

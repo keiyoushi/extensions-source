@@ -31,12 +31,10 @@ class HeanCmsUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun createQuery(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 2) {
-            val slug = pathSegments[1]
-            "${HeanCms.SEARCH_PREFIX}$slug"
-        } else {
-            null
-        }
+    private fun createQuery(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 2) {
+        val slug = pathSegments[1]
+        "${HeanCms.SEARCH_PREFIX}$slug"
+    } else {
+        null
     }
 }

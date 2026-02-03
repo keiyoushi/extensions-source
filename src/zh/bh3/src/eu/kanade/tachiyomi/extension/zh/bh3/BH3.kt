@@ -92,9 +92,7 @@ class BH3 : ParsedHttpSource() {
         chapter_number = jsonObj["chapterid"]!!.jsonPrimitive.float
     }
 
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0L
-    }
+    private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0L
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         thumbnail_url = document.select("img.cover").attr("abs:src")
@@ -102,10 +100,8 @@ class BH3 : ParsedHttpSource() {
         title = document.select("div.title").text().trim()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.lazy.comic_img").mapIndexed { i, el ->
-            Page(i, "", el.attr("data-original"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img.lazy.comic_img").mapIndexed { i, el ->
+        Page(i, "", el.attr("data-original"))
     }
 
     override fun imageUrlParse(document: Document) = ""

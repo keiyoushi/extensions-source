@@ -10,13 +10,14 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class ComicYours : GigaViewer(
-    "Comic Y-OURs",
-    "https://comic-y-ours.com",
-    "ja",
-    "https://cdn-img.comic-y-ours.com/public/page",
-    true,
-) {
+class ComicYours :
+    GigaViewer(
+        "Comic Y-OURs",
+        "https://comic-y-ours.com",
+        "ja",
+        "https://cdn-img.comic-y-ours.com/public/page",
+        true,
+    ) {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()

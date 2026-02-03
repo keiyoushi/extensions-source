@@ -14,12 +14,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaLatino : Madara(
-    "Manhwa-Latino",
-    "https://manhwa-latino.com",
-    "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-) {
+class ManhwaLatino :
+    Madara(
+        "Manhwa-Latino",
+        "https://manhwa-latino.com",
+        "es",
+        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
@@ -67,7 +68,9 @@ class ManhwaLatino : Madara(
                 page++
                 val nextPageUrl = mangaUrl.newBuilder().setQueryParameter("t", page.toString()).build()
                 document = client.newCall(GET(nextPageUrl, headers)).execute().asJsoup()
-            } else { break }
+            } else {
+                break
+            }
         } while (true)
 
         return chapterList

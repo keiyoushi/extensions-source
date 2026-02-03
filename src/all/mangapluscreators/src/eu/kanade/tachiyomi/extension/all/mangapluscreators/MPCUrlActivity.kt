@@ -28,12 +28,15 @@ class MPCUrlActivity : Activity() {
                 pathSegments[pathIndex].equals("episodes") -> {
                     MangaPlusCreators.PREFIX_EPISODE_ID_SEARCH + pathSegments[idIndex]
                 }
+
                 pathSegments[pathIndex].equals("authors") -> {
                     MangaPlusCreators.PREFIX_AUTHOR_ID_SEARCH + pathSegments[idIndex]
                 }
+
                 pathSegments[pathIndex].equals("titles") -> {
                     MangaPlusCreators.PREFIX_TITLE_ID_SEARCH + pathSegments[idIndex]
                 }
+
                 else -> null // TODO: is this required?
             }
 

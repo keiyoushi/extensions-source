@@ -44,15 +44,11 @@ class ComicDto(
         author = this@ComicDto.author
     }
 
-    fun getChapters(): List<SChapter> {
-        return chapters.map { it.toSChapter(slug) }
-    }
+    fun getChapters(): List<SChapter> = chapters.map { it.toSChapter(slug) }
 
-    private fun String?.parseStatus(): Int {
-        return when (this?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    private fun String?.parseStatus(): Int = when (this?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        else -> SManga.UNKNOWN
     }
 }
 

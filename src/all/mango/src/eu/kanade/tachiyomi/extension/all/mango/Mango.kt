@@ -37,10 +37,12 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
-class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
+class Mango :
+    HttpSource(),
+    ConfigurableSource,
+    UnmeteredSource {
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/library?depth=0", headersBuilder().build())
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/library?depth=0", headersBuilder().build())
 
     // Our popular manga are just our library of manga
     override fun popularMangaParse(response: Response): MangasPage {
@@ -63,23 +65,19 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         )
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Default is to just return the whole library for searching
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
 
     // Overridden fetch so that we use our overloaded method instead
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     // Here the best we can do is just match manga based on their titles
     private fun searchMangaParse(response: Response, query: String): MangasPage {
@@ -111,11 +109,9 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     // Stub
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(baseUrl + "/api" + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/api" + manga.url, headers)
 
     // This will just return the same thing as the main library endpoint
     override fun mangaDetailsParse(response: Response): SManga {
@@ -132,8 +128,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET(baseUrl + "/api" + manga.url + "?sort=auto", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + "/api" + manga.url + "?sort=auto", headers)
 
     // The chapter url will contain how many pages the chapter contains for our page list endpoint
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -170,8 +165,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     // Stub
-    override fun pageListRequest(chapter: SChapter): Request =
-        throw UnsupportedOperationException()
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
     // Overridden fetch so that we use our overloaded method instead
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -191,8 +185,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     // Stub
-    override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = ""
     override fun getFilterList(): FilterList = FilterList()
@@ -208,9 +201,8 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     private val password by lazy { getPrefPassword() }
     private var apiCookies: String = ""
 
-    override fun headersBuilder(): Headers.Builder =
-        Headers.Builder()
-            .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -266,30 +258,28 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         screen.addPreference(screen.editTextPreference(PASSWORD_TITLE, PASSWORD_DEFAULT, "Your login password", true))
     }
 
-    private fun androidx.preference.PreferenceScreen.editTextPreference(title: String, default: String, summary: String, isPassword: Boolean = false): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            val input = preferences.getString(title, null)
-            this.summary = if (input == null || input.isEmpty()) summary else input
-            this.setDefaultValue(default)
-            dialogTitle = title
+    private fun androidx.preference.PreferenceScreen.editTextPreference(title: String, default: String, summary: String, isPassword: Boolean = false): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        val input = preferences.getString(title, null)
+        this.summary = if (input == null || input.isEmpty()) summary else input
+        this.setDefaultValue(default)
+        dialogTitle = title
 
-            if (isPassword) {
-                setOnBindEditTextListener {
-                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
+        if (isPassword) {
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    apiCookies = ""
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+        }
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                val res = preferences.edit().putString(title, newValue as String).commit()
+                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                apiCookies = ""
+                res
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
             }
         }
     }

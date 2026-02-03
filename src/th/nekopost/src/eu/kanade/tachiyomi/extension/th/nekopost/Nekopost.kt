@@ -51,33 +51,28 @@ class Nekopost : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private fun getStatus(status: String) =
-        when (status) {
-            "1" -> SManga.ONGOING
-            "2" -> SManga.COMPLETED
-            "3" -> SManga.LICENSED
-            else -> SManga.UNKNOWN
-        }
-
-    override fun latestUpdatesRequest(page: Int) =
-        projectRequest(
-            "latest",
-            LatestRequest("m", PagingInfo(page, LATEST_PAGE_SIZE)),
-        )
-
-    override fun popularMangaRequest(page: Int) =
-        projectRequest(
-            "list/popular",
-            PopularRequest("mc", PagingInfo(1, POPULAR_PAGE_SIZE)),
-        )
-
-    private inline fun <reified T> projectRequest(endpoint: String, body: T): Request {
-        return POST(
-            "$baseUrl/api/project/$endpoint",
-            apiHeaders,
-            Json.encodeToString(body).toRequestBody(),
-        )
+    private fun getStatus(status: String) = when (status) {
+        "1" -> SManga.ONGOING
+        "2" -> SManga.COMPLETED
+        "3" -> SManga.LICENSED
+        else -> SManga.UNKNOWN
     }
+
+    override fun latestUpdatesRequest(page: Int) = projectRequest(
+        "latest",
+        LatestRequest("m", PagingInfo(page, LATEST_PAGE_SIZE)),
+    )
+
+    override fun popularMangaRequest(page: Int) = projectRequest(
+        "list/popular",
+        PopularRequest("mc", PagingInfo(1, POPULAR_PAGE_SIZE)),
+    )
+
+    private inline fun <reified T> projectRequest(endpoint: String, body: T): Request = POST(
+        "$baseUrl/api/project/$endpoint",
+        apiHeaders,
+        Json.encodeToString(body).toRequestBody(),
+    )
 
     override fun fetchSearchManga(
         page: Int,
@@ -97,8 +92,8 @@ class Nekopost : HttpSource() {
                     .asObservableSuccess()
                     .map { response ->
                         if (response.peekBody(1024)
-                            .string()
-                            .contains("\"projectInfo\":null")
+                                .string()
+                                .contains("\"projectInfo\":null")
                         ) {
                             MangasPage(emptyList(), false)
                         } else {
@@ -115,6 +110,7 @@ class Nekopost : HttpSource() {
                         }
                     }
             }
+
             editorMatch != null -> {
                 val editorId = editorMatch.groupValues[1]
 
@@ -127,26 +123,25 @@ class Nekopost : HttpSource() {
                     .asObservableSuccess()
                     .map { response -> parseEditorProjectList(response) }
             }
+
             else -> super.fetchSearchManga(page, query, filters)
         }
     }
 
-    private fun mangaFromProjectInfo(info: RawProjectInfo): SManga {
-        return SManga.create().apply {
-            val p = info.projectInfo
-            url = p.projectId
-            title = p.projectName
-            artist = p.artistName
-            author = p.authorName
-            description = p.info
-            status = getStatus(p.status)
-            thumbnail_url = buildCoverUrl(p.projectId)
-            genre =
-                info.projectCategoryUsed
-                    ?.joinToString(", ") { it.categoryName }
-                    .orEmpty()
-            initialized = true
-        }
+    private fun mangaFromProjectInfo(info: RawProjectInfo): SManga = SManga.create().apply {
+        val p = info.projectInfo
+        url = p.projectId
+        title = p.projectName
+        artist = p.artistName
+        author = p.authorName
+        description = p.info
+        status = getStatus(p.status)
+        thumbnail_url = buildCoverUrl(p.projectId)
+        genre =
+            info.projectCategoryUsed
+                ?.joinToString(", ") { it.categoryName }
+                .orEmpty()
+        initialized = true
     }
 
     private fun parseEditorProjectList(response: Response): MangasPage {
@@ -197,11 +192,9 @@ class Nekopost : HttpSource() {
         )
     }
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        parseProjectList(response, null, false)
+    override fun popularMangaParse(response: Response): MangasPage = parseProjectList(response, null, false)
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        parseProjectList(response, setOf("m"), true)
+    override fun searchMangaParse(response: Response): MangasPage = parseProjectList(response, setOf("m"), true)
 
     private fun parseProjectList(
         response: Response,
@@ -242,16 +235,13 @@ class Nekopost : HttpSource() {
         return if (coverVersion != null) "$base?ver=$coverVersion" else base
     }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        mangaFromProjectInfo(response.parseAs())
+    override fun mangaDetailsParse(response: Response): SManga = mangaFromProjectInfo(response.parseAs())
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val projectInfo = response.parseAs<RawProjectInfo>()
@@ -273,11 +263,9 @@ class Nekopost : HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$fileHost/collectManga/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("$fileHost/collectManga/${chapter.url}", headers)
 
-    override fun getChapterUrl(chapter: SChapter) =
-        "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
 
     override fun pageListParse(response: Response): List<Page> {
         val info = response.parseAs<RawChapterInfo>()
@@ -310,8 +298,7 @@ class Nekopost : HttpSource() {
         )
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 

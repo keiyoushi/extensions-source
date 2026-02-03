@@ -9,11 +9,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class TraducoesDoLipe : ZeistManga(
-    "Traduções do Lipe",
-    "https://traducoesdolipe.blogspot.com",
-    "pt-BR",
-) {
+class TraducoesDoLipe :
+    ZeistManga(
+        "Traduções do Lipe",
+        "https://traducoesdolipe.blogspot.com",
+        "pt-BR",
+    ) {
     override val supportsLatest = false
     override val mangaCategory = "Projeto"
     override val chapterCategory = "Capítulo"

@@ -56,11 +56,9 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
     // WebView interaction _must_ occur on the UI thread, but everything else should happen on an
     // IO thread to avoid stalling the application.
 
-    private fun <T> evaluateOnUiThread(block: suspend CoroutineScope.() -> T): Deferred<T> =
-        CoroutineScope(Dispatchers.Main.immediate).async { block() }
+    private fun <T> evaluateOnUiThread(block: suspend CoroutineScope.() -> T): Deferred<T> = CoroutineScope(Dispatchers.Main.immediate).async { block() }
 
-    private fun <T> evaluateOnIOThread(block: suspend CoroutineScope.() -> T): Deferred<T> =
-        CoroutineScope(Dispatchers.IO).async { block() }
+    private fun <T> evaluateOnIOThread(block: suspend CoroutineScope.() -> T): Deferred<T> = CoroutineScope(Dispatchers.IO).async { block() }
 
     private val isDestroyed = MutableStateFlow(false)
 
@@ -103,10 +101,12 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
                         app.resources.displayMetrics.heightPixels,
                         app.resources.displayMetrics.widthPixels,
                     )
+
                     // "Medium" doesn't necessarily mean we'll use the 1/2x variant, just that we'll
                     // use the variant that BookWalker thinks is appropriate for a 1000px screen
                     // (which typically is the 1/2x variant for manga with high native resolutions).
                     ImageQualityPref.MEDIUM -> 1000
+
                     // A 2000x2000px WebView consistently captured the largest variant in testing,
                     // but just in case some series can have a higher max resolution, 3000px is used
                     // for the "high" image quality option. In theory we could go higher (like 10k)
@@ -184,12 +184,10 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
         }
     }
 
-    private suspend fun evaluateJavascript(script: String): String? {
-        return usingWebView { webview ->
-            suspendCoroutine { cont ->
-                webview.evaluateJavascript(script) {
-                    cont.resume(it)
-                }
+    private suspend fun evaluateJavascript(script: String): String? = usingWebView { webview ->
+        suspendCoroutine { cont ->
+            webview.evaluateJavascript(script) {
+                cont.resume(it)
             }
         }
     }
@@ -216,18 +214,16 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
      * original flow is immediately received, it is not deterministic whether it will return the
      * data or throw.
      */
-    private fun <T> Flow<T>.throwOnDestroyed(): Flow<T> {
-        return merge(
-            this.map { false to it },
-            isDestroyed.filter { it }.map { true to null },
-        ).map {
-            if (it.first) {
-                throw Exception("Reader was destroyed")
-            }
-            // Can't use !! here because T might be nullable
-            @Suppress("UNCHECKED_CAST")
-            it.second as T
+    private fun <T> Flow<T>.throwOnDestroyed(): Flow<T> = merge(
+        this.map { false to it },
+        isDestroyed.filter { it }.map { true to null },
+    ).map {
+        if (it.first) {
+            throw Exception("Reader was destroyed")
         }
+        // Can't use !! here because T might be nullable
+        @Suppress("UNCHECKED_CAST")
+        it.second as T
     }
 
     private val isViewerReady = MutableStateFlow(false)

@@ -117,8 +117,6 @@ class ImageInterceptor : Interceptor {
             return num
         }
 
-        override fun available(): Int {
-            return minOf(super.available().toLong(), limit - bytesRead).toInt()
-        }
+        override fun available(): Int = minOf(super.available().toLong(), limit - bytesRead).toInt()
     }
 }

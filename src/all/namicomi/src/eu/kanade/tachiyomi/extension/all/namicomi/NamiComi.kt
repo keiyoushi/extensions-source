@@ -33,7 +33,8 @@ import okhttp3.Response
 import okio.IOException
 
 abstract class NamiComi(final override val lang: String, private val extLang: String = lang) :
-    ConfigurableSource, HttpSource() {
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "NamiComi"
     override val baseUrl = NamiComiConstants.webUrl
@@ -76,19 +77,15 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
     // Popular manga section
 
-    override fun popularMangaRequest(page: Int): Request =
-        sortedMangaRequest(page, "views")
+    override fun popularMangaRequest(page: Int): Request = sortedMangaRequest(page, "views")
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        mangaListParse(response)
+    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     // Latest manga section
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        sortedMangaRequest(page, "publishedAt")
+    override fun latestUpdatesRequest(page: Int): Request = sortedMangaRequest(page, "publishedAt")
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        mangaListParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
 
     private fun mangaListParse(response: Response): MangasPage {
         if (response.code == 204) {
@@ -149,8 +146,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
     // Manga Details section
 
-    override fun getMangaUrl(manga: SManga): String =
-        "$baseUrl/$extLang/title/${manga.url}/${helper.titleToSlug(manga.title)}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/$extLang/title/${manga.url}/${helper.titleToSlug(manga.title)}"
 
     /**
      * Get the API endpoint URL for the entry details.
@@ -178,9 +174,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     /**
      * Get the API endpoint URL for the first page of chapter list.
      */
-    override fun chapterListRequest(manga: SManga): Request {
-        return paginatedChapterListRequest(manga.url, 0)
-    }
+    override fun chapterListRequest(manga: SManga): Request = paginatedChapterListRequest(manga.url, 0)
 
     /**
      * Required because the chapter list API endpoint is paginated.
@@ -202,17 +196,15 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     /**
      * Requests information about gated chapters (requiring payment & login).
      */
-    private fun accessibleChapterListRequest(chapterIds: List<String>): Request {
-        return POST(
-            NamiComiConstants.apiGatingCheckUrl,
-            headers,
-            chapterIds
-                .map { EntityAccessRequestItemDto(it, NamiComiConstants.chapter) }
-                .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
-                .toRequestBody(),
-            CacheControl.FORCE_NETWORK,
-        )
-    }
+    private fun accessibleChapterListRequest(chapterIds: List<String>): Request = POST(
+        NamiComiConstants.apiGatingCheckUrl,
+        headers,
+        chapterIds
+            .map { EntityAccessRequestItemDto(it, NamiComiConstants.chapter) }
+            .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
+            .toRequestBody(),
+        CacheControl.FORCE_NETWORK,
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         if (response.code == 204) {
@@ -260,20 +252,21 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
             when {
                 // Chapter can be viewed
                 isAccessible -> helper.createChapter(it)
+
                 // Chapter cannot be viewed and user wants to see locked chapters
                 preferences.showLockedChapters -> {
                     helper.createChapter(it).apply {
                         name = "${NamiComiConstants.lockSymbol} $name"
                     }
                 }
+
                 // Ignore locked chapters otherwise
                 else -> null
             }
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String =
-        "$baseUrl/$extLang/chapter/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$extLang/chapter/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url
@@ -330,15 +323,13 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         screen.addPreference(showLockedChaptersPref)
     }
 
-    override fun getFilterList(): FilterList =
-        helper.filters.getFilterList(helper.intl)
+    override fun getFilterList(): FilterList = helper.filters.getFilterList(helper.intl)
 
-    private fun HttpUrl.Builder.addCommonIncludeParameters() =
-        this.addQueryParameter("includes[]", NamiComiConstants.coverArt)
-            .addQueryParameter("includes[]", NamiComiConstants.organization)
-            .addQueryParameter("includes[]", NamiComiConstants.tag)
-            .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-            .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+    private fun HttpUrl.Builder.addCommonIncludeParameters() = this.addQueryParameter("includes[]", NamiComiConstants.coverArt)
+        .addQueryParameter("includes[]", NamiComiConstants.organization)
+        .addQueryParameter("includes[]", NamiComiConstants.tag)
+        .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
+        .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
 
     private inline fun <reified T> Response.parseAs(): T = use {
         helper.json.decodeFromString(body.string())

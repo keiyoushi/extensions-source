@@ -26,7 +26,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class KuroMangas : HttpSource(), ConfigurableSource {
+class KuroMangas :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "KuroMangas"
 
@@ -207,9 +209,7 @@ class KuroMangas : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()

@@ -27,9 +27,7 @@ class MultiManga : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = baseUrl + if (page > 1) {
@@ -52,12 +50,10 @@ class MultiManga : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = "a.next"
     override fun searchMangaNextPageSelector() = "a#nextlink, a.next"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-            title = element.select("a.cover div.caption").text()
-            thumbnail_url = element.select("a.cover img").imgAttr()
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.select("a.cover div.caption").text()
+        thumbnail_url = element.select("a.cover img").imgAttr()
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -81,40 +77,32 @@ class MultiManga : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.select("#info h1").text()
-            author = document.select("a.tag[href*=/autor/]").eachText().joinToString()
-            genre = document.select("a.tag[href*=/tags/]").eachText().joinToString()
-            thumbnail_url = document.select("#cover img").imgAttr()
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("#info h1").text()
+        author = document.select("a.tag[href*=/autor/]").eachText().joinToString()
+        genre = document.select("a.tag[href*=/tags/]").eachText().joinToString()
+        thumbnail_url = document.select("#cover img").imgAttr()
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     override fun chapterListSelector() = "#content"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.ownerDocument()!!.location())
-            name = "Chapter"
-            date_upload = element.select("div:contains(Загружено) time")
-                .attr("datetime").let { parseChapterDate(it) }
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.ownerDocument()!!.location())
+        name = "Chapter"
+        date_upload = element.select("div:contains(Загружено) time")
+            .attr("datetime").let { parseChapterDate(it) }
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseChapterDate(date: String): Long = try {
+        dateFormat.parse(date)!!.time
+    } catch (_: ParseException) {
+        0L
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("a.gallerythumb img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("a.gallerythumb img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.imgAttr())
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

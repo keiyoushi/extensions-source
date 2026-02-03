@@ -49,19 +49,15 @@ class Alandal : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(SortFilter("popular")))
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter("popular")))
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(SortFilter("new")))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter("new")))
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // =============================== Search ===============================
 
@@ -101,8 +97,7 @@ class Alandal : HttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun getMangaUrl(manga: SManga): String =
-        baseUrl + manga.url.replace("series/", "series/comic-")
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.replace("series/", "series/comic-")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -113,16 +108,13 @@ class Alandal : HttpSource() {
         return GET(url, apiHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<ResponseDto<MangaDetailsDto>>().data.series.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<ResponseDto<MangaDetailsDto>>().data.series.toSManga()
 
     // ============================== Chapters ==============================
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-            .replace("series/", "chapter/comic-")
-            .replace("chapters/", "")
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+        .replace("series/", "chapter/comic-")
+        .replace("chapters/", "")
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$apiUrl${manga.url}".toHttpUrl().newBuilder().apply {

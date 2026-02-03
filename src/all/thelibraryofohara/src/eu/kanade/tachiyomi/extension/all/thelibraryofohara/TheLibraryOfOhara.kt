@@ -30,9 +30,7 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     // only show entries which contain pictures only.
     override fun popularMangaSelector() = when (lang) {
@@ -45,11 +43,21 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
                 "#categories-7 ul li.cat-item-699200615, " + // Return to the Reverie
                 "#categories-7 ul li.cat-item-139757, " + // SBS
                 "#categories-7 ul li.cat-item-22695, " + // Timeline
-                "#categories-7 ul li.cat-item-648324575" // Vivre Card Databook
-        "id" -> "#categories-7 ul li.cat-item-702404482, #categories-7 ul li.cat-item-699200615" // Chapter Secrets Bahasa Indonesia, Return to the Reverie
-        "fr" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
-        "ar" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
-        "it" -> "#categories-7 ul li.cat-item-699200615" // Return to the Reverie
+                "#categories-7 ul li.cat-item-648324575"
+
+        // Vivre Card Databook
+        "id" -> "#categories-7 ul li.cat-item-702404482, #categories-7 ul li.cat-item-699200615"
+
+        // Chapter Secrets Bahasa Indonesia, Return to the Reverie
+        "fr" -> "#categories-7 ul li.cat-item-699200615"
+
+        // Return to the Reverie
+        "ar" -> "#categories-7 ul li.cat-item-699200615"
+
+        // Return to the Reverie
+        "it" -> "#categories-7 ul li.cat-item-699200615"
+
+        // Return to the Reverie
         else -> "#categories-7 ul li.cat-item-693784776, #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
     }
 
@@ -72,19 +80,15 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
-        return MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
-    }
+    private fun searchMangaParse(response: Response, query: String): MangasPage = MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
@@ -174,11 +178,17 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
         if (allChapters.isNotEmpty() && allChapters[0].name.contains("Reverie")) {
             return when (lang) {
                 "fr" -> allChapters.filter { it.name.contains("French") }.toMutableList()
+
                 "ar" -> allChapters.filter { it.name.contains("Arabic") }.toMutableList()
+
                 "it" -> allChapters.filter { it.name.contains("Italian") }.toMutableList()
+
                 "id" -> allChapters.filter { it.name.contains("Indonesia") }.toMutableList()
+
                 "es" -> allChapters.filter { it.name.contains("Spanish") }.toMutableList()
-                else -> allChapters.filter { // english
+
+                else -> allChapters.filter {
+                    // english
                     !it.name.contains("French") &&
                         !it.name.contains("Arabic") &&
                         !it.name.contains("Italian") &&

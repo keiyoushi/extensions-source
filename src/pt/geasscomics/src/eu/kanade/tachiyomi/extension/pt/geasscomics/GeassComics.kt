@@ -35,7 +35,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class GeassComics : HttpSource(), ConfigurableSource {
+class GeassComics :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Geass Comics"
 
@@ -79,9 +81,7 @@ class GeassComics : HttpSource(), ConfigurableSource {
 
     // ========================= Popular ====================================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/leaderboard?criteria=global&withHentai=${isAdultActive()}", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/leaderboard?criteria=global&withHentai=${isAdultActive()}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list = response.parseAs<List<MangaDto>>()
@@ -134,11 +134,13 @@ class GeassComics : HttpSource(), ConfigurableSource {
                         urlBuilder.addQueryParameter("genres", it.name)
                     }
                 }
+
                 is TagList -> {
                     filter.state.filter { it.state }.forEach {
                         urlBuilder.addQueryParameter("tags", it.name)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -157,8 +159,7 @@ class GeassComics : HttpSource(), ConfigurableSource {
         return GET("$apiUrl$apiPath", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
     // ========================= Chapters ===================================
 
@@ -185,9 +186,7 @@ class GeassComics : HttpSource(), ConfigurableSource {
         }
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return dateFormat.tryParse(dateStr)
-    }
+    private fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
 
     // ========================= Pages ======================================
 
@@ -216,8 +215,7 @@ class GeassComics : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val urls = response.parseAs<List<String>>()
-        return urls.mapIndexed {
-                index, url ->
+        return urls.mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
     }
@@ -245,23 +243,21 @@ class GeassComics : HttpSource(), ConfigurableSource {
         return login(email, password)
     }
 
-    private fun login(email: String, password: String): String {
-        return try {
-            val payload = AuthRequestDto(email, password)
-            val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
-            val request = POST("$apiUrl/visitor/auth/login", headers, body)
-            val response = network.client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val authResponse = response.parseAs<AuthResponseDto>()
-                preferences.edit().putString(PREF_TOKEN, authResponse.jwt.token).apply()
-                authResponse.jwt.token
-            } else {
-                response.close()
-                ""
-            }
-        } catch (e: Exception) {
+    private fun login(email: String, password: String): String = try {
+        val payload = AuthRequestDto(email, password)
+        val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
+        val request = POST("$apiUrl/visitor/auth/login", headers, body)
+        val response = network.client.newCall(request).execute()
+        if (response.isSuccessful) {
+            val authResponse = response.parseAs<AuthResponseDto>()
+            preferences.edit().putString(PREF_TOKEN, authResponse.jwt.token).apply()
+            authResponse.jwt.token
+        } else {
+            response.close()
             ""
         }
+    } catch (e: Exception) {
+        ""
     }
 
     private fun checkLogin(email: String, password: String) {

@@ -15,7 +15,9 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import kotlin.random.Random
 
-class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
+class MangaRaw :
+    MangaRawTheme("MangaRaw", ""),
+    ConfigurableSource {
     // See https://github.com/tachiyomiorg/tachiyomi-extensions/commits/master/src/ja/mangaraw
     override val versionId = 2
     override val id = 4572869149806246133
@@ -58,15 +60,13 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
         if (needUrlSanitize) url = mangaSlugRegex.replaceFirst(url, "/")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/?s=$query&page=$page", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/?s=$query&page=$page", headers)
 
-    override fun Document.getSanitizedDetails(): Element =
-        selectFirst(selectors.detailsSelector)!!.apply {
-            val recommendClass = selectors.recommendClass
-            children().find { it.hasClass(recommendClass) }?.remove()
-            selectFirst(Evaluator.Class("list-scoll"))!!.remove()
-        }
+    override fun Document.getSanitizedDetails(): Element = selectFirst(selectors.detailsSelector)!!.apply {
+        val recommendClass = selectors.recommendClass
+        children().find { it.hasClass(recommendClass) }?.remove()
+        selectFirst(Evaluator.Class("list-scoll"))!!.remove()
+    }
 
     override fun chapterListSelector() = ".list-scoll a"
     override fun String.sanitizeChapter() = substring(lastIndexOf('【') + 1, length - 1)

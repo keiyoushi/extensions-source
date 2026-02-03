@@ -35,7 +35,8 @@ open class MCCMS(
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
-            .addInterceptor { chain -> // for thumbnail requests
+            .addInterceptor { chain ->
+                // for thumbnail requests
                 var request = chain.request()
                 val referer = request.header("Referer")
                 if (referer != null && !request.url.toString().startsWith(referer)) {
@@ -52,16 +53,14 @@ open class MCCMS(
 
     protected open fun SManga.cleanup(): SManga = this
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list: List<MangaDto> = response.parseAs()
         return MangasPage(list.map { it.toSManga().cleanup() }, list.size >= PAGE_SIZE)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=addtime", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=addtime", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -71,10 +70,12 @@ open class MCCMS(
             add("size=$PAGE_SIZE")
             val isTextSearch = query.isNotBlank()
             if (isTextSearch) add("key=" + URLEncoder.encode(query, "UTF-8"))
-            for (filter in filters) if (filter is MCCMSFilter) {
-                if (isTextSearch && filter.isTypeQuery) continue
-                val part = filter.query
-                if (part.isNotEmpty()) add(part)
+            for (filter in filters) {
+                if (filter is MCCMSFilter) {
+                    if (isTextSearch && filter.isTypeQuery) continue
+                    val part = filter.query
+                    if (part.isNotEmpty()) add(part)
+                }
             }
         }
         val url = buildString {
@@ -116,14 +117,11 @@ open class MCCMS(
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders)
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        return config.pageListParse(response)
-    }
+    override fun pageListParse(response: Response): List<Page> = config.pageListParse(response)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 

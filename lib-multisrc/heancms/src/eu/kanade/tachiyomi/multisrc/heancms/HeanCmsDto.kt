@@ -166,9 +166,7 @@ class HeanCmsGenreDto(
     val name: String,
 )
 
-private fun String.toAbsoluteThumbnailUrl(cdnUrl: String, coverPath: String): String {
-    return if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
-}
+private fun String.toAbsoluteThumbnailUrl(cdnUrl: String, coverPath: String): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 
 fun String.toStatus(): Int = when (this) {
     "Ongoing" -> SManga.ONGOING

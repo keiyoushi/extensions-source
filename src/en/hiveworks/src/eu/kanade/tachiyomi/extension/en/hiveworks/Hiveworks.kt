@@ -117,9 +117,11 @@ class Hiveworks : ParsedHttpSource() {
             url.endsWith("localSearch") -> {
                 selectManga.filter { it.text().contains(searchQuery, true) }.map { element -> searchMangaFromElement(element) }
             }
+
             url.contains("originals") -> {
                 selectManga.map { element -> searchOriginalMangaFromElement(element) }
             }
+
             else -> {
                 selectManga.map { element -> searchMangaFromElement(element) }
             }
@@ -180,25 +182,27 @@ class Hiveworks : ParsedHttpSource() {
     // Chapters
 
     // Included to call custom error codes
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return if (manga.status != SManga.LICENSED) {
-            client.newCall(chapterListRequest(manga))
-                .asObservableSuccess()
-                .map { response ->
-                    chapterListParse(response)
-                }
-        } else {
-            Observable.error(Exception("Licensed - No chapters to show"))
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.status != SManga.LICENSED) {
+        client.newCall(chapterListRequest(manga))
+            .asObservableSuccess()
+            .map { response ->
+                chapterListParse(response)
+            }
+    } else {
+        Observable.error(Exception("Licensed - No chapters to show"))
     }
 
     override fun chapterListSelector() = "select[name=comic] option"
     override fun chapterListRequest(manga: SManga): Request {
         val uri = Uri.parse(manga.url).buildUpon()
         when {
-            "sssscomic" in uri.toString() -> uri.appendQueryParameter("id", "archive") // sssscomic uses query string in url
+            "sssscomic" in uri.toString() -> uri.appendQueryParameter("id", "archive")
+
+            // sssscomic uses query string in url
             "awkwardzombie" in uri.toString() -> uri.appendPath("awkward-zombie").appendPath("archive")
+
             "smbc-comics" in uri.toString() -> throw Exception("Migrate to the Saturday Morning Breakfast Comics extension to read this comic")
+
             else -> {
                 uri.appendPath("comic")
                 uri.appendPath("archive")
@@ -256,6 +260,7 @@ class Hiveworks : ParsedHttpSource() {
                 val urlimg = response.request.url.resolve("../../$urlPath").toString()
                 pages.add(Page(pages.size, "", urlimg))
             }
+
             else -> { /*Do Nothing*/ }
         }
 
@@ -295,8 +300,8 @@ class Hiveworks : ParsedHttpSource() {
         val vals: Array<Pair<String, String>>,
         val firstIsUnspecified: Boolean = true,
         defaultValue: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue), UriFilter {
+    ) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
+        UriFilter {
         override fun addToUri(uri: Uri.Builder) {
             if (state != 0 || !firstIsUnspecified) {
                 uri.appendPath(uriParam)
@@ -309,104 +314,109 @@ class Hiveworks : ParsedHttpSource() {
         fun addToUri(uri: Uri.Builder)
     }
 
-    private class UpdateDay : UriSelectFilter(
-        "Update Day",
-        "update-day",
-        arrayOf(
-            Pair("all", "All"),
-            Pair("monday", "Monday"),
-            Pair("tuesday", "Tuesday"),
-            Pair("wednesday", "Wednesday"),
-            Pair("thursday", "Thursday"),
-            Pair("friday", "Friday"),
-            Pair("saturday", "Saturday"),
-            Pair("sunday", "Sunday"),
-        ),
-    )
+    private class UpdateDay :
+        UriSelectFilter(
+            "Update Day",
+            "update-day",
+            arrayOf(
+                Pair("all", "All"),
+                Pair("monday", "Monday"),
+                Pair("tuesday", "Tuesday"),
+                Pair("wednesday", "Wednesday"),
+                Pair("thursday", "Thursday"),
+                Pair("friday", "Friday"),
+                Pair("saturday", "Saturday"),
+                Pair("sunday", "Sunday"),
+            ),
+        )
 
-    private class RatingFilter : UriSelectFilter(
-        "Rating",
-        "age",
-        arrayOf(
-            Pair("all", "All"),
-            Pair("everyone", "Everyone"),
-            Pair("teen", "Teen"),
-            Pair("young-adult", "Young Adult"),
-            Pair("mature", "Mature"),
-        ),
-    )
+    private class RatingFilter :
+        UriSelectFilter(
+            "Rating",
+            "age",
+            arrayOf(
+                Pair("all", "All"),
+                Pair("everyone", "Everyone"),
+                Pair("teen", "Teen"),
+                Pair("young-adult", "Young Adult"),
+                Pair("mature", "Mature"),
+            ),
+        )
 
-    private class GenreFilter : UriSelectFilter(
-        "Genre",
-        "genre",
-        arrayOf(
-            Pair("all", "All"),
-            Pair("action/adventure", "Action/Adventure"),
-            Pair("animated", "Animated"),
-            Pair("autobio", "Autobio"),
-            Pair("comedy", "Comedy"),
-            Pair("drama", "Drama"),
-            Pair("dystopian", "Dystopian"),
-            Pair("fairytale", "Fairytale"),
-            Pair("fantasy", "Fantasy"),
-            Pair("finished", "Finished"),
-            Pair("historical-fiction", "Historical Fiction"),
-            Pair("horror", "Horror"),
-            Pair("lgbt", "LGBT"),
-            Pair("mystery", "Mystery"),
-            Pair("romance", "Romance"),
-            Pair("sci-fi", "Science Fiction"),
-            Pair("slice-of-life", "Slice of Life"),
-            Pair("steampunk", "Steampunk"),
-            Pair("superhero", "Superhero"),
-            Pair("urban-fantasy", "Urban Fantasy"),
-        ),
-    )
+    private class GenreFilter :
+        UriSelectFilter(
+            "Genre",
+            "genre",
+            arrayOf(
+                Pair("all", "All"),
+                Pair("action/adventure", "Action/Adventure"),
+                Pair("animated", "Animated"),
+                Pair("autobio", "Autobio"),
+                Pair("comedy", "Comedy"),
+                Pair("drama", "Drama"),
+                Pair("dystopian", "Dystopian"),
+                Pair("fairytale", "Fairytale"),
+                Pair("fantasy", "Fantasy"),
+                Pair("finished", "Finished"),
+                Pair("historical-fiction", "Historical Fiction"),
+                Pair("horror", "Horror"),
+                Pair("lgbt", "LGBT"),
+                Pair("mystery", "Mystery"),
+                Pair("romance", "Romance"),
+                Pair("sci-fi", "Science Fiction"),
+                Pair("slice-of-life", "Slice of Life"),
+                Pair("steampunk", "Steampunk"),
+                Pair("superhero", "Superhero"),
+                Pair("urban-fantasy", "Urban Fantasy"),
+            ),
+        )
 
-    private class TitleFilter : UriSelectFilter(
-        "Title",
-        "alpha",
-        arrayOf(
-            Pair("all", "All"),
-            Pair("a", "A"),
-            Pair("b", "B"),
-            Pair("c", "C"),
-            Pair("d", "D"),
-            Pair("e", "E"),
-            Pair("f", "F"),
-            Pair("g", "G"),
-            Pair("h", "H"),
-            Pair("i", "I"),
-            Pair("j", "J"),
-            Pair("k", "K"),
-            Pair("l", "L"),
-            Pair("m", "M"),
-            Pair("n", "N"),
-            Pair("o", "O"),
-            Pair("p", "P"),
-            Pair("q", "Q"),
-            Pair("r", "R"),
-            Pair("s", "S"),
-            Pair("t", "T"),
-            Pair("u", "U"),
-            Pair("v", "V"),
-            Pair("w", "W"),
-            Pair("x", "X"),
-            Pair("y", "Y"),
-            Pair("z", "Z"),
-            Pair("numbers-symbols", "Numbers / Symbols"),
-        ),
-    )
+    private class TitleFilter :
+        UriSelectFilter(
+            "Title",
+            "alpha",
+            arrayOf(
+                Pair("all", "All"),
+                Pair("a", "A"),
+                Pair("b", "B"),
+                Pair("c", "C"),
+                Pair("d", "D"),
+                Pair("e", "E"),
+                Pair("f", "F"),
+                Pair("g", "G"),
+                Pair("h", "H"),
+                Pair("i", "I"),
+                Pair("j", "J"),
+                Pair("k", "K"),
+                Pair("l", "L"),
+                Pair("m", "M"),
+                Pair("n", "N"),
+                Pair("o", "O"),
+                Pair("p", "P"),
+                Pair("q", "Q"),
+                Pair("r", "R"),
+                Pair("s", "S"),
+                Pair("t", "T"),
+                Pair("u", "U"),
+                Pair("v", "V"),
+                Pair("w", "W"),
+                Pair("x", "X"),
+                Pair("y", "Y"),
+                Pair("z", "Z"),
+                Pair("numbers-symbols", "Numbers / Symbols"),
+            ),
+        )
 
-    private class SortFilter : UriSelectFilter(
-        "Sort By",
-        "sortby",
-        arrayOf(
-            Pair("none", "None"),
-            Pair("a-z", "A-Z"),
-            Pair("z-a", "Z-A"),
-        ),
-    )
+    private class SortFilter :
+        UriSelectFilter(
+            "Sort By",
+            "sortby",
+            arrayOf(
+                Pair("none", "None"),
+                Pair("a-z", "A-Z"),
+                Pair("z-a", "Z-A"),
+            ),
+        )
 
     // Other Code
 
@@ -477,22 +487,18 @@ class Hiveworks : ParsedHttpSource() {
     }
 
     // Used to throw custom error codes for http codes
-    private fun Call.asObservableSuccess(): Observable<Response> {
-        return asObservable().doOnNext { response ->
-            if (!response.isSuccessful) {
-                response.close()
-                when (response.code) {
-                    404 -> throw Exception("This comic has a unsupported chapter list")
-                    else -> throw Exception("HiveWorks Comics HTTP Error ${response.code}")
-                }
+    private fun Call.asObservableSuccess(): Observable<Response> = asObservable().doOnNext { response ->
+        if (!response.isSuccessful) {
+            response.close()
+            when (response.code) {
+                404 -> throw Exception("This comic has a unsupported chapter list")
+                else -> throw Exception("HiveWorks Comics HTTP Error ${response.code}")
             }
         }
     }
 
-    private fun parseDate(dateStr: String, format: SimpleDateFormat): Long {
-        return runCatching { format.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun parseDate(dateStr: String, format: SimpleDateFormat): Long = runCatching { format.parse(dateStr)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMM dd, yyyy", Locale.US) }

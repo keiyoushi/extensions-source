@@ -45,7 +45,9 @@ import javax.crypto.Cipher
 import kotlin.random.Random
 import kotlin.random.nextUBytes
 
-class Manhuaren : HttpSource(), ConfigurableSource {
+class Manhuaren :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "漫画人"
@@ -71,15 +73,11 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         .addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))
         .build()
 
-    private fun randomString(length: Int, pool: String): String {
-        return (1..length)
-            .map { Random.nextInt(0, pool.length).let { pool[it] } }
-            .joinToString("")
-    }
+    private fun randomString(length: Int, pool: String): String = (1..length)
+        .map { Random.nextInt(0, pool.length).let { pool[it] } }
+        .joinToString("")
 
-    private fun randomNumber(length: Int): String {
-        return randomString(length, "0123456789")
-    }
+    private fun randomNumber(length: Int): String = randomString(length, "0123456789")
 
     private fun addLuhnCheckDigit(str: String): String {
         var sum = 0
@@ -104,9 +102,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         return "$str$checkDigit"
     }
 
-    private fun generateIMEI(): String {
-        return addLuhnCheckDigit(randomNumber(14))
-    }
+    private fun generateIMEI(): String = addLuhnCheckDigit(randomNumber(14))
 
     // private fun generateSimSerialNumber(): String {
     //     return addLuhnCheckDigit("891253${randomNumber(12)}")
@@ -152,9 +148,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         return token
     }
 
-    private fun generateLastUsedTime(): String {
-        return ((Date().time / 1000) * 1000).toString()
-    }
+    private fun generateLastUsedTime(): String = ((Date().time / 1000) * 1000).toString()
 
     private fun encrypt(message: String): String {
         val x509EncodedKeySpec = X509EncodedKeySpec(Base64.decode(encodedPublicKey, Base64.DEFAULT))
@@ -301,11 +295,9 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         )
     }
 
-    private fun myPost(url: HttpUrl, body: RequestBody?): Request {
-        return myRequest(url, "POST", body).newBuilder()
-            .cacheControl(CacheControl.Builder().noCache().noStore().build())
-            .build()
-    }
+    private fun myPost(url: HttpUrl, body: RequestBody?): Request = myRequest(url, "POST", body).newBuilder()
+        .cacheControl(CacheControl.Builder().noCache().noStore().build())
+        .build()
 
     private fun myGet(url: HttpUrl): Request {
         val authorization = fetchToken()
@@ -381,12 +373,10 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         return result.toString()
     }
 
-    private fun urlEncode(str: String?): String {
-        return URLEncoder.encode(str ?: "", "UTF-8")
-            .replace("+", "%20")
-            .replace("%7E", "~")
-            .replace("*", "%2A")
-    }
+    private fun urlEncode(str: String?): String = URLEncoder.encode(str ?: "", "UTF-8")
+        .replace("+", "%20")
+        .replace("%7E", "~")
+        .replace("*", "%2A")
 
     private fun mangasFromJSONArray(arr: JSONArray): MangasPage {
         val ret = ArrayList<SManga>(arr.length())
@@ -440,13 +430,9 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         return myGet(url)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return mangasPageParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = mangasPageParse(response)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return mangasPageParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = mangasPageParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var url = baseHttpUrl.newBuilder()
@@ -461,10 +447,12 @@ class Manhuaren : HttpSource(), ConfigurableSource {
                     is SortFilter -> {
                         url = url.setQueryParameter("sort", filter.getId())
                     }
+
                     is CategoryFilter -> {
                         url = url.setQueryParameter("subCategoryId", filter.getId())
                             .setQueryParameter("subCategoryType", filter.getType())
                     }
+
                     else -> {}
                 }
             }
@@ -489,16 +477,22 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         title = obj.getString("mangaName")
         thumbnail_url = ""
         obj.optString("mangaCoverimageUrl").let {
-            if (it != "") { thumbnail_url = it }
+            if (it != "") {
+                thumbnail_url = it
+            }
         }
         if (thumbnail_url == "" || thumbnail_url == "http://mhfm5.tel.cdndm5.com/tag/category/nopic.jpg") {
             obj.optString("mangaPicimageUrl").let {
-                if (it != "") { thumbnail_url = it }
+                if (it != "") {
+                    thumbnail_url = it
+                }
             }
         }
         if (thumbnail_url == "") {
             obj.optString("shareIcon").let {
-                if (it != "") { thumbnail_url = it }
+                if (it != "") {
+                    thumbnail_url = it
+                }
             }
         }
 
@@ -520,15 +514,11 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         description = obj.getString("mangaIntro")
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return myGet((baseUrl + manga.url).toHttpUrl())
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = myGet((baseUrl + manga.url).toHttpUrl())
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    private fun getChapterName(type: String, name: String, title: String): String {
-        return (if (type == "mangaEpisode") "[番外] " else "") + name + (if (title == "") "" else ": $title")
-    }
+    private fun getChapterName(type: String, name: String, title: String): String = (if (type == "mangaEpisode") "[番外] " else "") + name + (if (title == "") "" else ": $title")
 
     private fun chaptersFromJSONArray(type: String, arr: JSONArray): List<SChapter> {
         val ret = ArrayList<SChapter>()
@@ -537,7 +527,11 @@ class Manhuaren : HttpSource(), ConfigurableSource {
             ret.add(
                 SChapter.create().apply {
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    name = if (obj.getInt("isMustPay") == 1) { "(锁) " } else { "" } + getChapterName(type, obj.getString("sectionName"), obj.getString("sectionTitle"))
+                    name = if (obj.getInt("isMustPay") == 1) {
+                        "(锁) "
+                    } else {
+                        ""
+                    } + getChapterName(type, obj.getString("sectionName"), obj.getString("sectionTitle"))
                     date_upload = dateFormat.parse(obj.getString("releaseTime"))?.time ?: 0L
                     chapter_number = obj.getInt("sectionSort").toFloat()
                     url = "/v1/manga/getRead?mangaSectionId=${obj.getInt("sectionId")}"

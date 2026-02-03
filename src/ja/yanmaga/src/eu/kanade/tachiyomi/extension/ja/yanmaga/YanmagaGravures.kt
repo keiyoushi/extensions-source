@@ -41,12 +41,10 @@ class YanmagaGravures : Yanmaga("search-item-category--gravures", true) {
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return if (manga.url.contains("/series/")) {
-            super.fetchMangaDetails(manga)
-        } else {
-            Observable.just(manga)
-        }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = if (manga.url.contains("/series/")) {
+        super.fetchMangaDetails(manga)
+    } else {
+        Observable.just(manga)
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -55,18 +53,16 @@ class YanmagaGravures : Yanmaga("search-item-category--gravures", true) {
         thumbnail_url = document.selectFirst(".detail-header-image img")?.absUrl("src")
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return if (manga.url.contains("/series/")) {
-            super.fetchChapterList(manga)
-        } else {
-            Observable.just(
-                listOf(
-                    SChapter.create().apply {
-                        url = manga.url
-                        name = "作品"
-                    },
-                ),
-            )
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.url.contains("/series/")) {
+        super.fetchChapterList(manga)
+    } else {
+        Observable.just(
+            listOf(
+                SChapter.create().apply {
+                    url = manga.url
+                    name = "作品"
+                },
+            ),
+        )
     }
 }

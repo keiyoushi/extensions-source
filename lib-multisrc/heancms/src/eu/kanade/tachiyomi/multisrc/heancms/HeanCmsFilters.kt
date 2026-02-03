@@ -15,18 +15,18 @@ data class Status(val name: String, val value: String) {
     override fun toString(): String = name
 }
 
-class StatusFilter(title: String, statuses: List<Status>) :
-    EnhancedSelect<Status>(title, statuses.toTypedArray())
+class StatusFilter(title: String, statuses: List<Status>) : EnhancedSelect<Status>(title, statuses.toTypedArray())
 
 data class SortProperty(val name: String, val value: String) {
     override fun toString(): String = name
 }
 
-class SortByFilter(title: String, private val sortProperties: List<SortProperty>) : Filter.Sort(
-    title,
-    sortProperties.map { it.name }.toTypedArray(),
-    Selection(1, ascending = false),
-) {
+class SortByFilter(title: String, private val sortProperties: List<SortProperty>) :
+    Filter.Sort(
+        title,
+        sortProperties.map { it.name }.toTypedArray(),
+        Selection(1, ascending = false),
+    ) {
     val selected: String
         get() = sortProperties[state!!.index].value
 }

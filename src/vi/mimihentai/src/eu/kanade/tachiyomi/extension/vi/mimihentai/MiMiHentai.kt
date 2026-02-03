@@ -28,9 +28,7 @@ class MiMiHentai : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/danh-sach?sort=-views&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/danh-sach?sort=-views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -54,13 +52,9 @@ class MiMiHentai : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/danh-sach?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/danh-sach?page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Search ===============================
 
@@ -77,14 +71,17 @@ class MiMiHentai : HttpSource() {
                             addQueryParameter("filter[accept_genres]", selectedGenres)
                         }
                     }
+
                     is StatusFilter -> {
                         if (filter.state > 0) {
                             addQueryParameter("filter[status]", filter.toUriPart())
                         }
                     }
+
                     is SortFilter -> {
                         addQueryParameter("sort", filter.toUriPart())
                     }
+
                     else -> {}
                 }
             }
@@ -93,9 +90,7 @@ class MiMiHentai : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Details ==============================
 
@@ -178,9 +173,7 @@ class MiMiHentai : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters ===============================
 

@@ -54,11 +54,9 @@ class ProjectSukiPreferences(internal val shared: SharedPreferences) {
 
     val whitelistedLanguages = object : PSPreference<String, Set<String>>("$SHORT_FORM_ID-languages-whitelist", "") {
         override val rawGet: SharedPreferences.(identifier: String, default: String) -> String = { id, def -> getString(id, def)!! }
-        override fun String.transform(): Set<String> {
-            return split(',')
-                .filter { it.isNotBlank() }
-                .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
-        }
+        override fun String.transform(): Set<String> = split(',')
+            .filter { it.isNotBlank() }
+            .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
 
         override fun PreferenceScreen.constructPreference() = EditTextPreference(context).apply {
             key = preferenceIdentifier
@@ -79,11 +77,9 @@ class ProjectSukiPreferences(internal val shared: SharedPreferences) {
 
     val blacklistedLanguages = object : PSPreference<String, Set<String>>("$SHORT_FORM_ID-languages-blacklist", "") {
         override val rawGet: SharedPreferences.(identifier: String, default: String) -> String = { id, def -> getString(id, def)!! }
-        override fun String.transform(): Set<String> {
-            return split(",")
-                .filter { it.isNotBlank() }
-                .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
-        }
+        override fun String.transform(): Set<String> = split(",")
+            .filter { it.isNotBlank() }
+            .mapTo(HashSet()) { it.trim().lowercase(Locale.US) }
 
         override fun PreferenceScreen.constructPreference() = EditTextPreference(context).apply {
             key = preferenceIdentifier

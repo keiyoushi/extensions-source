@@ -15,13 +15,14 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NetTruyenCO : WPComics(
-    "NetTruyenCO (unoriginal)",
-    "https://nettruyenar.com",
-    "vi",
-    dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
-    gmtOffset = null,
-) {
+class NetTruyenCO :
+    WPComics(
+        "NetTruyenCO (unoriginal)",
+        "https://nettruyenar.com",
+        "vi",
+        dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
+        gmtOffset = null,
+    ) {
     override val popularPath = "truyen-tranh-hot"
 
     // Override chapters
@@ -74,17 +75,15 @@ class NetTruyenCO : WPComics(
     override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            document.select("article#item-detail").let { info ->
-                author = info.select("li.author p.col-xs-8").text()
-                status = info.select("li.status p.col-xs-8").text().toStatus()
-                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-                val otherName = info.select("h2.other-name").text()
-                description = info.select("div.detail-content div.shortened").flatMap { it.children() }.joinToString("\n\n") { it.wholeText().trim() } +
-                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
-                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select("article#item-detail").let { info ->
+            author = info.select("li.author p.col-xs-8").text()
+            status = info.select("li.status p.col-xs-8").text().toStatus()
+            genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+            val otherName = info.select("h2.other-name").text()
+            description = info.select("div.detail-content div.shortened").flatMap { it.children() }.joinToString("\n\n") { it.wholeText().trim() } +
+                if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
+            thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
         }
     }
 }

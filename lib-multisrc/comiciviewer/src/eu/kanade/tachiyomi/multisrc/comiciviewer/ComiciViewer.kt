@@ -27,7 +27,8 @@ abstract class ComiciViewer(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
     protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
@@ -90,6 +91,7 @@ abstract class ComiciViewer(
 
         return when {
             url.contains("ranking") -> popularMangaParse(response)
+
             url.contains("category") -> latestUpdatesParse(response)
 
             else -> {

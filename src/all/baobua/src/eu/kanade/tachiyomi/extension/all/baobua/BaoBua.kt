@@ -20,7 +20,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BaoBua() : SimpleParsedHttpSource() {
+class BaoBua : SimpleParsedHttpSource() {
 
     override val baseUrl = "https://baobua.net"
     override val lang = "all"
@@ -34,13 +34,11 @@ class BaoBua() : SimpleParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    private fun normalizeImageUrl(url: String): String {
-        return if (WP_COM_REGEX.containsMatchIn(url)) {
-            url.replace(WP_COM_REPLACE_REGEX, "https://")
-                .replace("?w=640", "")
-        } else {
-            url
-        }
+    private fun normalizeImageUrl(url: String): String = if (WP_COM_REGEX.containsMatchIn(url)) {
+        url.replace(WP_COM_REPLACE_REGEX, "https://")
+            .replace("?w=640", "")
+    } else {
+        url
     }
 
     override fun simpleMangaSelector() = ".product-item"
@@ -64,12 +62,10 @@ class BaoBua() : SimpleParsedHttpSource() {
     // endregion
 
     // region Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.isBlank()) {
-            super.fetchSearchManga(page, query, filters)
-        } else {
-            throw UnsupportedOperationException("Full-text search is not supported")
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.isBlank()) {
+        super.fetchSearchManga(page, query, filters)
+    } else {
+        throw UnsupportedOperationException("Full-text search is not supported")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -80,11 +76,9 @@ class BaoBua() : SimpleParsedHttpSource() {
     }
 
     // region Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            genre = document.select(".article-tags a").joinToString { it.text() }
-            status = 2
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        genre = document.select(".article-tags a").joinToString { it.text() }
+        status = 2
     }
 
     override fun chapterListSelector() = "html"

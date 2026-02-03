@@ -10,12 +10,13 @@ import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SkyMangas : MangaThemesia(
-    "SkyMangas",
-    "https://skymangas.com",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class SkyMangas :
+    MangaThemesia(
+        "SkyMangas",
+        "https://skymangas.com",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     override fun pageListParse(document: Document): List<Page> {
         val script = document.selectFirst("div.readercontent > div.wrapper > script")
             ?: return super.pageListParse(document)

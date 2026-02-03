@@ -4,16 +4,15 @@ import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 
-class MangaMura : MangaReader(
-    "Manga Mura",
-    "https://mangamura.net",
-    "ja",
-) {
+class MangaMura :
+    MangaReader(
+        "Manga Mura",
+        "https://mangamura.net",
+        "ja",
+    ) {
     override val chapterIdSelect = "ja-chaps"
 
-    override fun getAjaxUrl(id: String): String {
-        return "$baseUrl/json/chapter?mode=vertical&id=$id"
-    }
+    override fun getAjaxUrl(id: String): String = "$baseUrl/json/chapter?mode=vertical&id=$id"
 
     override val searchPathSegment = ""
     override val searchKeyword = "q"
@@ -31,13 +30,11 @@ class MangaMura : MangaReader(
             .build()
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Note,
-            TypeFilter(),
-            StatusFilter(),
-            LanguageFilter(),
-            SortFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Note,
+        TypeFilter(),
+        StatusFilter(),
+        LanguageFilter(),
+        SortFilter(),
+    )
 }

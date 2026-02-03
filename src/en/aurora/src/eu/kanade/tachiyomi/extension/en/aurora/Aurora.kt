@@ -28,9 +28,7 @@ class Aurora : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(fetchChapterListTR(baseUrl + manga.url, mutableListOf()).reversed())
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(fetchChapterListTR(baseUrl + manga.url, mutableListOf()).reversed())
 
     private tailrec fun fetchChapterListTR(
         currentUrl: String,
@@ -66,9 +64,7 @@ class Aurora : HttpSource() {
         }
     }
 
-    override fun fetchImageUrl(page: Page): Observable<String> {
-        return Observable.just(page.imageUrl)
-    }
+    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -176,13 +172,9 @@ class Aurora : HttpSource() {
      * Turn the list of chapters as mangas into the mangas page that can be returned for every
      * request.
      */
-    private fun generateAuroraMangasPage(): MangasPage {
-        return MangasPage(fetchChaptersAsMangas(), false)
-    }
+    private fun generateAuroraMangasPage(): MangasPage = MangasPage(fetchChaptersAsMangas(), false)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(generateAuroraMangasPage())
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(generateAuroraMangasPage())
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 

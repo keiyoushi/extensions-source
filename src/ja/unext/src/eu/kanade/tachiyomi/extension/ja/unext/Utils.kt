@@ -72,9 +72,7 @@ class Zip(
         }
     }
 
-    fun getEntry(path: String): CentralDirectoryRecord? {
-        return centralDirectoryRecords.find { it.filename == path }
-    }
+    fun getEntry(path: String): CentralDirectoryRecord? = centralDirectoryRecords.find { it.filename == path }
 }
 
 class ZipHandler(

@@ -153,9 +153,7 @@ class MagazinePocket : HttpSource() {
     }
 
     // Details
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val titleId = manga.url.substringAfter("/title/")
@@ -191,9 +189,7 @@ class MagazinePocket : HttpSource() {
     }
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val resultIds = response.parseAs<DetailResponse>()
@@ -230,24 +226,20 @@ class MagazinePocket : HttpSource() {
             .reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // Pages
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservable()
-            .map { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 400) {
-                        throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
-                    }
-                    throw Exception("HTTP error ${response.code}")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservable()
+        .map { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 400) {
+                    throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
                 }
-                pageListParse(response)
+                throw Exception("HTTP error ${response.code}")
             }
-    }
+            pageListParse(response)
+        }
 
     override fun pageListParse(response: Response): List<Page> {
         val apiResponse = response.parseAs<ViewerApiResponse>()
@@ -297,8 +289,7 @@ class MagazinePocket : HttpSource() {
         GenreFilter(getGenreList()),
     )
 
-    private class GenreFilter(private val genres: Array<Pair<String, String>>) :
-        Filter.Select<String>("Filter by", genres.map { it.first }.toTypedArray()) {
+    private class GenreFilter(private val genres: Array<Pair<String, String>>) : Filter.Select<String>("Filter by", genres.map { it.first }.toTypedArray()) {
         fun toUriPart() = genres[state].second
     }
 

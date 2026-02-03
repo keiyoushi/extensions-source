@@ -30,17 +30,13 @@ class ReadVagabondManga : HttpSource() {
         return GET("$baseUrl/api/mihon/mangas/$mangaId/chapters", headers)
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val mangaId = "$baseUrl${manga.url}".toHttpUrl().fragment
@@ -74,8 +70,7 @@ class ReadVagabondManga : HttpSource() {
         return MangasPage(mangas.map { manga -> manga.toSManga() }, false)
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/mihon/mangas", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/mihon/mangas", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val mangas = response.parseAs<List<MangaDto>>()

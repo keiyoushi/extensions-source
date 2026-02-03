@@ -134,42 +134,40 @@ internal class UAParser {
         )
     }
 
-    private fun detectPlatform(ua: String): Triple<String, Boolean, String?> {
-        return when {
-            ua.contains("Windows NT 10.0") ->
-                Triple("\"Windows\"", false, "10.0")
+    private fun detectPlatform(ua: String): Triple<String, Boolean, String?> = when {
+        ua.contains("Windows NT 10.0") ->
+            Triple("\"Windows\"", false, "10.0")
 
-            ua.contains("Windows NT 6.3") ->
-                Triple("\"Windows\"", false, "8.1")
+        ua.contains("Windows NT 6.3") ->
+            Triple("\"Windows\"", false, "8.1")
 
-            ua.contains("Windows NT 6.2") ->
-                Triple("\"Windows\"", false, "8")
+        ua.contains("Windows NT 6.2") ->
+            Triple("\"Windows\"", false, "8")
 
-            ua.contains("Windows NT 6.1") ->
-                Triple("\"Windows\"", false, "7")
+        ua.contains("Windows NT 6.1") ->
+            Triple("\"Windows\"", false, "7")
 
-            ua.contains("Macintosh") || ua.contains("Mac OS X") -> {
-                val version = extractVersion(ua, MAC_OS_VERSION_PATTERN)?.replace("_", ".")
-                Triple("\"macOS\"", false, version)
-            }
-
-            ua.contains("Android") -> {
-                val version = extractVersion(ua, ANDROID_VERSION_PATTERN)
-                Triple("\"Android\"", true, version)
-            }
-
-            ua.contains("iPhone") || ua.contains("iPad") -> {
-                val version = extractVersion(ua, IOS_VERSION_PATTERN)?.replace("_", ".")
-                val isMobile = ua.contains("iPhone") || ua.contains("Mobile")
-                Triple("\"iOS\"", isMobile, version)
-            }
-
-            ua.contains("Linux") ->
-                Triple("\"Linux\"", ua.contains("Mobile"), null)
-
-            else ->
-                Triple("\"Windows\"", ua.contains("Mobile"), null)
+        ua.contains("Macintosh") || ua.contains("Mac OS X") -> {
+            val version = extractVersion(ua, MAC_OS_VERSION_PATTERN)?.replace("_", ".")
+            Triple("\"macOS\"", false, version)
         }
+
+        ua.contains("Android") -> {
+            val version = extractVersion(ua, ANDROID_VERSION_PATTERN)
+            Triple("\"Android\"", true, version)
+        }
+
+        ua.contains("iPhone") || ua.contains("iPad") -> {
+            val version = extractVersion(ua, IOS_VERSION_PATTERN)?.replace("_", ".")
+            val isMobile = ua.contains("iPhone") || ua.contains("Mobile")
+            Triple("\"iOS\"", isMobile, version)
+        }
+
+        ua.contains("Linux") ->
+            Triple("\"Linux\"", ua.contains("Mobile"), null)
+
+        else ->
+            Triple("\"Windows\"", ua.contains("Mobile"), null)
     }
 
     private fun detectBrowserBrands(ua: String, brands: MutableList<String>) {
@@ -217,9 +215,7 @@ internal class UAParser {
         }
     }
 
-    private fun extractVersion(ua: String, pattern: Pattern): String? {
-        return pattern.matcher(ua)
-            .takeIf { it.find() }
-            ?.group(1)
-    }
+    private fun extractVersion(ua: String, pattern: Pattern): String? = pattern.matcher(ua)
+        .takeIf { it.find() }
+        ?.group(1)
 }

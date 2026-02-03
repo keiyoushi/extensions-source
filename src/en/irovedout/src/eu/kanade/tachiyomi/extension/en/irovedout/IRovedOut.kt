@@ -71,9 +71,7 @@ class IRovedOut : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 

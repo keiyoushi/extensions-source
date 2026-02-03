@@ -26,19 +26,17 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = true)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = true)
+    } else {
+        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
+    }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/home/${searchPage(page)}", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = false)
+    } else {
+        GET("$baseUrl/home/${searchPage(page)}", headers)
+    }
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -54,21 +52,25 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
                             alr = true
                         }
                     }
+
                     is ArtistFilter -> {
                         if (filter.state.isNotBlank() && !alr) {
                             addQueryParameter("artist", filter.state.replace(" ", "-"))
                             alr = true
                         }
                     }
+
                     is YearFilter -> {
                         if (filter.state.isNotBlank() && !alr) {
                             addPathSegments("comic-release/${filter.state}")
                             alr = true
                         }
                     }
+
                     is OrderByFilter -> {
                         addQueryParameter("m_orderby", filter.toUriPart())
                     }
+
                     is GenreConditionFilter -> {
                         val name = filter.toUriPart()
                         if (name != "all" && !alr) {
@@ -76,6 +78,7 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
                             alr = true
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -93,19 +96,17 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
         intl["order_by_filter_new"] to "new-manga",
     )
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return document.selectFirst("div.genres")
-            ?.select("a")
-            .orEmpty()
-            .map { a ->
-                Genre(
-                    a.ownText(),
-                    a.attr("href").substringBeforeLast("/").substringAfterLast("/"),
-                )
-            }.let {
-                listOf(Genre("All", "all")) + it
-            }
-    }
+    override fun parseGenres(document: Document): List<Genre> = document.selectFirst("div.genres")
+        ?.select("a")
+        .orEmpty()
+        .map { a ->
+            Genre(
+                a.ownText(),
+                a.attr("href").substringBeforeLast("/").substringAfterLast("/"),
+            )
+        }.let {
+            listOf(Genre("All", "all")) + it
+        }
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }

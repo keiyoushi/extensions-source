@@ -36,9 +36,7 @@ class ScanManga : HttpSource() {
         .set("X-Requested-With", "XMLHttpRequest")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
@@ -91,7 +89,9 @@ class ScanManga : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val json = response.body.string()
-        if (json == "[]") { return MangasPage(emptyList(), false) }
+        if (json == "[]") {
+            return MangasPage(emptyList(), false)
+        }
 
         return MangasPage(
             json.parseAs<MangaSearchDto>().title?.map {
@@ -229,7 +229,9 @@ class ScanManga : HttpSource() {
 
         val lelResponse = client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
             .newCall(pageListRequest).execute().use { response ->
-                if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
+                if (!response.isSuccessful) {
+                    error("Unexpected error while fetching lel.")
+                }
                 dataAPI(response.body.string(), chapterId.toInt())
             }
 

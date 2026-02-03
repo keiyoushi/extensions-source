@@ -30,7 +30,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Madokami : ConfigurableSource, ParsedHttpSource() {
+class Madokami :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Madokami"
     override val baseUrl = "https://manga.madokami.al"
     override val lang = "en"
@@ -66,7 +68,10 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         val pathSegments = element.attr("href").split("/")
         var i = pathSegments.size
         manga.description = URLDecoder.decode(pathSegments[i - 1], "UTF-8")
-        do { i--; manga.title = URLDecoder.decode(pathSegments[i], "UTF-8") } while (URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!"))
+        do {
+            i--
+            manga.title = URLDecoder.decode(pathSegments[i], "UTF-8")
+        } while (URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!"))
         return manga
     }
 
@@ -92,7 +97,9 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         val url = (baseUrl + manga.url).toHttpUrl()
         if (url.pathSize > 5 && url.pathSegments[0] == "Manga" && url.pathSegments[1].length == 1) {
             val builder = url.newBuilder()
-            for (i in 5 until url.pathSize) { builder.removePathSegment(5) }
+            for (i in 5 until url.pathSize) {
+                builder.removePathSegment(5)
+            }
             return authenticate(GET(builder.build().toUrl().toExternalForm(), headers))
         }
         if (url.pathSize > 2 && url.pathSegments[0] == "Raws") {
@@ -100,7 +107,10 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
             // to accomodate path pattern of /Raws/Magz/Series, this will remove all latter path segments that starts with !
             // will fails if there's ever manga with ! prefix, but for now it works
             var i = url.pathSize - 1
-            while (url.pathSegments[i].startsWith("!") && i >= 2) { builder.removePathSegment(i); i--; }
+            while (url.pathSegments[i].startsWith("!") && i >= 2) {
+                builder.removePathSegment(i)
+                i--
+            }
             return authenticate(GET(builder.build().toUrl().toExternalForm(), headers))
         }
         return authenticate(GET(url.toUrl().toExternalForm(), headers))
@@ -151,9 +161,11 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
                 splitDate[1].startsWith("min") -> {
                     newDate.add(Calendar.MINUTE, -amount)
                 }
+
                 splitDate[1].startsWith("sec") -> {
                     newDate.add(Calendar.SECOND, -amount)
                 }
+
                 splitDate[1].startsWith("hour") -> {
                     newDate.add(Calendar.HOUR, -amount)
                 }

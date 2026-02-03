@@ -42,15 +42,13 @@ class AnimeXNovel : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas")
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        response.mangaParse(".eael-post-grid-container article")
+    override fun popularMangaParse(response: Response): MangasPage = response.mangaParse(".eael-post-grid-container article")
 
     // ========================== Latest ====================================
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        response.mangaParse("div:contains(Últimos Mangás) + div .manga-card")
+    override fun latestUpdatesParse(response: Response): MangasPage = response.mangaParse("div:contains(Últimos Mangás) + div .manga-card")
 
     // ========================== Search ====================================
 
@@ -88,38 +86,35 @@ class AnimeXNovel : HttpSource() {
 
     // ========================== Chapters ==================================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.fromCallable {
-            val document = client.newCall(mangaDetailsRequest(manga))
-                .execute().asJsoup()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val document = client.newCall(mangaDetailsRequest(manga))
+            .execute().asJsoup()
 
-            val category = document.selectFirst("#container-capitulos")!!
-                .attr("data-categoria")
+        val category = document.selectFirst("#container-capitulos")!!
+            .attr("data-categoria")
 
-            val url = "$baseUrl/wp-json/wp/v2/posts".toHttpUrl().newBuilder()
-                .addQueryParameter("categories", category.toString())
-                .addQueryParameter("orderby", "date")
-                .addQueryParameter("order", "desc")
-                .addQueryParameter("per_page", "100")
+        val url = "$baseUrl/wp-json/wp/v2/posts".toHttpUrl().newBuilder()
+            .addQueryParameter("categories", category.toString())
+            .addQueryParameter("orderby", "date")
+            .addQueryParameter("order", "desc")
+            .addQueryParameter("per_page", "100")
 
-            val chapterList = mutableListOf<SChapter>()
-            var page = 1
-            while (true) {
-                url.setQueryParameter("page", page.toString())
-                val response = client.newCall(GET(url.build(), headers)).execute()
-                if (!response.isSuccessful) {
-                    break
-                }
-                chapterList += chapterListParse(response)
-                page++
+        val chapterList = mutableListOf<SChapter>()
+        var page = 1
+        while (true) {
+            url.setQueryParameter("page", page.toString())
+            val response = client.newCall(GET(url.build(), headers)).execute()
+            if (!response.isSuccessful) {
+                break
             }
-            chapterList
+            chapterList += chapterListParse(response)
+            page++
         }
+        chapterList
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<List<ChapterDto>>().map(ChapterDto::toSChapter)
-            .filter { it.url.contains("capitulo") }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<ChapterDto>>().map(ChapterDto::toSChapter)
+        .filter { it.url.contains("capitulo") }
 
     // ========================== Pages =====================================
 

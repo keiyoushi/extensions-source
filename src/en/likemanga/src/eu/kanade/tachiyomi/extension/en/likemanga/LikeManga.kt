@@ -45,18 +45,14 @@ class LikeManga : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(SortFilter("top-manga")))
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter("top-manga")))
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
     override fun popularMangaSelector() = searchMangaSelector()
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(SortFilter("lastest-chap")))
-    }
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter("lastest-chap")))
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
     override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
@@ -86,21 +82,25 @@ class LikeManga : ParsedHttpSource() {
                             addQueryParameter("f[genres][]", it)
                         }
                     }
+
                     is ChapterCountFilter -> {
                         filter.selected?.let {
                             addQueryParameter("f[min_num_chapter]", it)
                         }
                     }
+
                     is StatusFilter -> {
                         filter.selected?.let {
                             addQueryParameter("f[status]", it)
                         }
                     }
+
                     is SortFilter -> {
                         filter.selected?.let {
                             addQueryParameter("f[sortby]", it)
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -280,18 +280,19 @@ class LikeManga : ParsedHttpSource() {
             .mapIndexed { i, img -> Page(i, "", img.imgAttr()) }
     }
 
-    private fun Element.imgAttr(): String? {
-        return when {
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String? = when {
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> attr("abs:src")
     }
 
-    private fun String?.parseDate(): Long =
-        try { dateFormat.parse(this!!)!!.time } catch (_: Exception) { 0L }
+    private fun String?.parseDate(): Long = try {
+        dateFormat.parse(this!!)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

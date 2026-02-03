@@ -2,8 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.sakuramangas
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class GenreList(title: String, genres: Array<Genre>) :
-    Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
+class GenreList(title: String, genres: Array<Genre>) : Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
 
 class GenreCheckBox(name: String, val id: String = name) : Filter.TriState(name)
 

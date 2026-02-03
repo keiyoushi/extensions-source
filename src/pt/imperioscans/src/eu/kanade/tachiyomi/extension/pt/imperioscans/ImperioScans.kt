@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class ImperioScans : Madara(
-    "Neroxus",
-    "https://neroxus.com.br",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class ImperioScans :
+    Madara(
+        "Neroxus",
+        "https://neroxus.com.br",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
     // Source renamed from Império Scans to Neroxus
     override val id = 1369117541868504584
 

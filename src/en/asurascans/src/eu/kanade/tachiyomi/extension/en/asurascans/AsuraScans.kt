@@ -35,7 +35,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
 
-class AsuraScans : ParsedHttpSource(), ConfigurableSource {
+class AsuraScans :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Asura Scans"
 
@@ -115,8 +117,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -124,8 +125,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/page/$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page", headers)
 
     override fun latestUpdatesSelector() = "div.grid.grid-rows-1.grid-cols-1 > div.w-full"
 
@@ -289,8 +289,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListSelector() =
-        if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
+    override fun chapterListSelector() = if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
@@ -394,17 +393,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return mediaResponse.parseAs<MediaResponseDto>("Failed to get image URL").data
     }
 
-    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request {
-        return Request.Builder()
-            .url(url)
-            .headers(headers)
-            .post(jsonPayload.toRequestBody("application/json".toMediaType()))
-            .header("X-XSRF-TOKEN", xsrfToken)
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-    }
+    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request = Request.Builder()
+        .url(url)
+        .headers(headers)
+        .post(jsonPayload.toRequestBody("application/json".toMediaType()))
+        .header("X-XSRF-TOKEN", xsrfToken)
+        .header("Accept", "application/json")
+        .header("Content-Type", "application/json")
+        .header("X-Requested-With", "XMLHttpRequest")
+        .build()
 
     private inline fun <reified T> Response.parseAs(errorPrefix: String): T {
         if (!isSuccessful) {
@@ -475,8 +472,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 
-    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -537,9 +533,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return this.replace(slug, absSlug)
     }
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()

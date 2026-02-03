@@ -34,26 +34,20 @@ abstract class Pururin(
     private val json: Json by injectLazy()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/browse$langPath?sort=most-popular&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/browse$langPath?sort=most-popular&page=$page", headers)
 
     override fun popularMangaSelector(): String = "a.card"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.attr("title")
-            setUrlWithoutDomain(element.attr("abs:href"))
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.attr("title")
+        setUrlWithoutDomain(element.attr("abs:href"))
+        thumbnail_url = element.select("img").attr("abs:src")
     }
 
     override fun popularMangaNextPageSelector(): String = ".page-item [rel=next]"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/browse$langPath?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/browse$langPath?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
 
@@ -63,9 +57,7 @@ abstract class Pururin(
 
     // Search
 
-    private fun List<Pair<String, String>>.toValue(): String {
-        return "[${this.joinToString(",") { "{\"id\":${it.first},\"name\":\"${it.second}\"}" }}]"
-    }
+    private fun List<Pair<String, String>>.toValue(): String = "[${this.joinToString(",") { "{\"id\":${it.first},\"name\":\"${it.second}\"}" }}]"
 
     private fun parsePageRange(query: String, minPages: Int = 1, maxPages: Int = 9999): Pair<Int, Int> {
         val num = query.filter(Char::isDigit).toIntOrNull() ?: -1
@@ -74,12 +66,15 @@ abstract class Pururin(
         if (num < 0) return minPages to maxPages
         return when (query.firstOrNull()) {
             '<' -> 1 to if (query[1] == '=') limitedNum() else limitedNum(num + 1)
+
             '>' -> limitedNum(if (query[1] == '=') num else num + 1) to maxPages
+
             '=' -> when (query[1]) {
                 '>' -> limitedNum() to maxPages
                 '<' -> 1 to limitedNum(maxPages)
                 else -> limitedNum() to limitedNum()
             }
+
             else -> limitedNum() to limitedNum()
         }
     }
@@ -152,6 +147,7 @@ abstract class Pururin(
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -160,6 +156,7 @@ abstract class Pururin(
         if (query.isEmpty()) {
             when {
                 excludeTags.size == 1 && includeTags.isEmpty() -> excludeTags.addAll(excludeTags)
+
                 includeTags.size == 1 && excludeTags.isEmpty() -> {
                     val url = baseUrl.toHttpUrl().newBuilder().apply {
                         addPathSegment("browse")
@@ -198,31 +195,29 @@ abstract class Pururin(
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            document.select(".box-gallery").let { e ->
-                initialized = true
-                title = e.select(".title").text()
-                author = e.select("a[href*=/circle/]").eachText().joinToString().ifEmpty { e.select("[itemprop=author]").text() }
-                artist = e.select("[itemprop=author]").eachText().joinToString()
-                genre = e.select("a[href*=/content/]").eachText().joinToString()
-                description = e.select(".box-gallery .table-info tr")
-                    .filter { tr ->
-                        tr.select("td").let { td ->
-                            td.isNotEmpty() &&
-                                td.none { it.text().contains("content", ignoreCase = true) || it.text().contains("ratings", ignoreCase = true) }
-                        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select(".box-gallery").let { e ->
+            initialized = true
+            title = e.select(".title").text()
+            author = e.select("a[href*=/circle/]").eachText().joinToString().ifEmpty { e.select("[itemprop=author]").text() }
+            artist = e.select("[itemprop=author]").eachText().joinToString()
+            genre = e.select("a[href*=/content/]").eachText().joinToString()
+            description = e.select(".box-gallery .table-info tr")
+                .filter { tr ->
+                    tr.select("td").let { td ->
+                        td.isNotEmpty() &&
+                            td.none { it.text().contains("content", ignoreCase = true) || it.text().contains("ratings", ignoreCase = true) }
                     }
-                    .joinToString("\n") { tr ->
-                        tr.select("td").let { td ->
-                            var a = td.select("a").toList()
-                            if (a.isEmpty()) a = td.drop(1)
-                            td.first()!!.text() + ": " + a.joinToString { it.text() }
-                        }
+                }
+                .joinToString("\n") { tr ->
+                    tr.select("td").let { td ->
+                        var a = td.select("a").toList()
+                        if (a.isEmpty()) a = td.drop(1)
+                        td.first()!!.text() + ": " + a.joinToString { it.text() }
                     }
-                status = SManga.COMPLETED
-                thumbnail_url = e.select("img").attr("abs:src")
-            }
+                }
+            status = SManga.COMPLETED
+            thumbnail_url = e.select("img").attr("abs:src")
         }
     }
 
@@ -230,42 +225,34 @@ abstract class Pururin(
 
     override fun chapterListSelector(): String = ".table-collection tbody tr a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.attr("abs:href"))
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text()
+        setUrlWithoutDomain(element.attr("abs:href"))
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select(chapterListSelector())
-            .map { chapterFromElement(it) }
-            .reversed()
-            .let { list ->
-                list.ifEmpty {
-                    listOf(
-                        SChapter.create().apply {
-                            setUrlWithoutDomain(response.request.url.toString())
-                            name = "Chapter"
-                        },
-                    )
-                }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(chapterListSelector())
+        .map { chapterFromElement(it) }
+        .reversed()
+        .let { list ->
+            list.ifEmpty {
+                listOf(
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(response.request.url.toString())
+                        name = "Chapter"
+                    },
+                )
             }
-    }
+        }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".gallery-preview a img")
-            .mapIndexed { i, img ->
-                Page(i, "", (if (img.hasAttr("abs:src")) img.attr("abs:src") else img.attr("abs:data-src")).replace("t.", "."))
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".gallery-preview a img")
+        .mapIndexed { i, img ->
+            Page(i, "", (if (img.hasAttr("abs:src")) img.attr("abs:src") else img.attr("abs:data-src")).replace("t.", "."))
+        }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
     override fun getFilterList() = getFilters()
 }

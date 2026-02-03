@@ -337,9 +337,7 @@ class MangaDexFilters {
     }
 
     // to get all tags from dex https://api.mangadex.org/manga/tag
-    internal fun getTags(intl: Intl): List<Tag> {
-        return getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
-    }
+    internal fun getTags(intl: Intl): List<Tag> = getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
 
     private data class TagMode(val title: String, val value: String) {
         override fun toString(): String = title

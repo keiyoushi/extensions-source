@@ -43,15 +43,9 @@ object LanguageUtils {
         }
     }
 
-    fun getSubdomainByLanguage(lang: String): String? {
-        return languageToSubdomainMap[lang]
-    }
+    fun getSubdomainByLanguage(lang: String): String? = languageToSubdomainMap[lang]
 
-    fun getSupportedLanguageKeys(): Array<String> {
-        return languageToDisplayNameMap.keys.toTypedArray()
-    }
+    fun getSupportedLanguageKeys(): Array<String> = languageToDisplayNameMap.keys.toTypedArray()
 
-    fun getSupportedLanguageDisplayNames(): Array<String> {
-        return languageToDisplayNameMap.values.toTypedArray()
-    }
+    fun getSupportedLanguageDisplayNames(): Array<String> = languageToDisplayNameMap.values.toTypedArray()
 }

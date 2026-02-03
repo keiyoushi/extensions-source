@@ -37,8 +37,7 @@ class Holonometria(
         thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/${langPath}alt/holonometria/manga/#${query.trim()}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/${langPath}alt/holonometria/manga/#${query.trim()}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -76,8 +75,7 @@ class Holonometria(
 
     override fun chapterListSelector() = ".manga-detail__list .manga-detail__list-item"
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        super.chapterListParse(response).reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
@@ -85,11 +83,9 @@ class Holonometria(
         date_upload = dateFormat.tryParse(element.selectFirst(".manga-detail__list-date")?.text())
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".manga-detail__swiper-wrapper img").mapIndexed { idx, img ->
-            Page(idx, "", img.attr("abs:src"))
-        }.reversed()
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".manga-detail__swiper-wrapper img").mapIndexed { idx, img ->
+        Page(idx, "", img.attr("abs:src"))
+    }.reversed()
 
     companion object {
         private val manga = listOf("manga", "gambar", "漫画")

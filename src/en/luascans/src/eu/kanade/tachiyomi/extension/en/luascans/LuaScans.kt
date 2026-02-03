@@ -5,11 +5,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class LuaScans : HeanCms(
-    "Lua Scans",
-    "https://luacomic.org",
-    "en",
-) {
+class LuaScans :
+    HeanCms(
+        "Lua Scans",
+        "https://luacomic.org",
+        "en",
+    ) {
     // Moved from Keyoapp to HeanCms
     override val versionId = 3
 

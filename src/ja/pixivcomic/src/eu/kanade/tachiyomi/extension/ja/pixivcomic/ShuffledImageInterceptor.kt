@@ -206,8 +206,6 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
             return e
         }
 
-        private fun shiftOr(value: UInt, by: Int): UInt {
-            return (((value shl (by % 32))) or (value.toInt() ushr (32 - by)).toUInt())
-        }
+        private fun shiftOr(value: UInt, by: Int): UInt = (((value shl (by % 32))) or (value.toInt() ushr (32 - by)).toUInt())
     }
 }

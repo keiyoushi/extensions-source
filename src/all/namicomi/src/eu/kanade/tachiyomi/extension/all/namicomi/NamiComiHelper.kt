@@ -45,18 +45,15 @@ class NamiComiHelper(lang: String) {
      */
     fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
 
-    private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int {
-        return when (mangaDataDto.attributes!!.publicationStatus) {
-            StatusDto.ONGOING -> SManga.ONGOING
-            StatusDto.CANCELLED -> SManga.CANCELLED
-            StatusDto.COMPLETED -> SManga.COMPLETED
-            StatusDto.HIATUS -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int = when (mangaDataDto.attributes!!.publicationStatus) {
+        StatusDto.ONGOING -> SManga.ONGOING
+        StatusDto.CANCELLED -> SManga.CANCELLED
+        StatusDto.COMPLETED -> SManga.COMPLETED
+        StatusDto.HIATUS -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 
-    private fun parseDate(dateAsString: String): Long =
-        NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
+    private fun parseDate(dateAsString: String): Long = NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
     /**
      * Create an [SManga] from the JSON element with all attributes filled.

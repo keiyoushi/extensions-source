@@ -34,6 +34,5 @@ class TerraScanUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun slug(pathSegments: List<String>) =
-        "${TerraScan.URL_SEARCH_PREFIX}${pathSegments[pathSegments.size - 1]}"
+    private fun slug(pathSegments: List<String>) = "${TerraScan.URL_SEARCH_PREFIX}${pathSegments[pathSegments.size - 1]}"
 }

@@ -56,29 +56,23 @@ open class MangaTaro(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.popular)
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.popular)
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.latest)
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith("https://")) {
-            deeplinkHandler(query)
-        } else if (
-            query.isNotBlank() &&
-            filters.firstInstanceOrNull<SearchWithFilters>()?.state == false
-        ) {
-            querySearch(query)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
+        deeplinkHandler(query)
+    } else if (
+        query.isNotBlank() &&
+        filters.firstInstanceOrNull<SearchWithFilters>()?.state == false
+    ) {
+        querySearch(query)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun querySearch(query: String): Observable<MangasPage> {
@@ -377,13 +371,13 @@ open class MangaTaro(
             )
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 // Map groups by language
-class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), ConfigurableSource {
+class MangaTaroGroup(lang: String, val groups: List<Long>) :
+    MangaTaro(lang),
+    ConfigurableSource {
 
     override val supportsLatest: Boolean = false
 
@@ -404,8 +398,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
 
     val groupsMapped: List<Long> by lazy { (groups + userGroups).distinct() }
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")!!.toLong()
@@ -414,23 +407,19 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
             .let { MangasPage(it, hasNextPage = page < groupsMapped.size) }
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return libraryCached.takeIf(List<SManga>::isNotEmpty)?.let {
-            Observable.just(MangasPage(libraryCached, hasNextPage = false))
-        } ?: super.fetchPopularManga(page)
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = libraryCached.takeIf(List<SManga>::isNotEmpty)?.let {
+        Observable.just(MangasPage(libraryCached, hasNextPage = false))
+    } ?: super.fetchPopularManga(page)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return Observable.fromCallable {
-            if (libraryCached.isEmpty()) {
-                do {
-                    val mangasPage = fetchPopularManga(page)
-                        .toBlocking().first()
-                    libraryCached += mangasPage.mangas
-                } while (mangasPage.hasNextPage)
-            }
-            MangasPage(libraryCached.filter { it.title.contains(query, ignoreCase = true) }, false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+        if (libraryCached.isEmpty()) {
+            do {
+                val mangasPage = fetchPopularManga(page)
+                    .toBlocking().first()
+                libraryCached += mangasPage.mangas
+            } while (mangasPage.hasNextPage)
         }
+        MangasPage(libraryCached.filter { it.title.contains(query, ignoreCase = true) }, false)
     }
 
     override fun getFilterList(): FilterList = FilterList()

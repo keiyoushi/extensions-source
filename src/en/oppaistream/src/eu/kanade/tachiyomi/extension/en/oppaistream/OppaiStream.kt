@@ -37,9 +37,7 @@ class OppaiStream : ParsedHttpSource() {
         .add("Referer", "$baseUrl/")
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(OrderByFilter("views")))
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderByFilter("views")))
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -50,9 +48,7 @@ class OppaiStream : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(OrderByFilter("uploaded")))
-    }
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderByFilter("uploaded")))
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
@@ -83,10 +79,12 @@ class OppaiStream : ParsedHttpSource() {
                     is OrderByFilter -> {
                         addQueryParameter("order", filter.selectedValue())
                     }
+
                     is GenreListFilter -> {
                         addQueryParameter("genres", filter.state.filter { it.isIncluded() }.joinToString(",") { it.value })
                         addQueryParameter("blacklist", filter.state.filter { it.isExcluded() }.joinToString(",") { it.value })
                     }
+
                     else -> {}
                 }
             }
@@ -112,52 +110,44 @@ class OppaiStream : ParsedHttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            thumbnail_url = element.select("img.read-cover").attr("src")
-            title = element.select("h3.man-title").text()
-            val rawUrl = element.absUrl("href")
-            val url = if (rawUrl.contains("/fw?to=")) {
-                URLDecoder.decode(rawUrl.substringAfter("/fw?to="), "UTF-8")
-            } else {
-                rawUrl
-            }
-            setUrlWithoutDomain(url)
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.select("img.read-cover").attr("src")
+        title = element.select("h3.man-title").text()
+        val rawUrl = element.absUrl("href")
+        val url = if (rawUrl.contains("/fw?to=")) {
+            URLDecoder.decode(rawUrl.substringAfter("/fw?to="), "UTF-8")
+        } else {
+            rawUrl
         }
+        setUrlWithoutDomain(url)
     }
 
     override fun searchMangaNextPageSelector() = null
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            thumbnail_url = document.select(".cover-img").attr("src")
-            document.select(".manhwa-info-in").let { it ->
-                it.select("h1").run {
-                    title = text().substringBeforeLast("By").trim()
-                    author = select("a.red").text().trim()
-                    artist = author
-                }
-                genre = it.select(".genres h5").joinToString { it.text() }
-                description = it.select(".description").text()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select(".cover-img").attr("src")
+        document.select(".manhwa-info-in").let { it ->
+            it.select("h1").run {
+                title = text().substringBeforeLast("By").trim()
+                author = select("a.red").text().trim()
+                artist = author
             }
+            genre = it.select(".genres h5").joinToString { it.text() }
+            description = it.select(".description").text()
         }
     }
 
     // chapter list
     override fun chapterListSelector() = ".sort-chapters > a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.select("div > h4").text()
-            date_upload = element.select("div > h6").text().parseRelativeDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.select("div > h4").text()
+        date_upload = element.select("div > h6").text().parseRelativeDate()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
@@ -168,10 +158,8 @@ class OppaiStream : ParsedHttpSource() {
         return GET("$cdnUrl/manhwa/im.php?f-m=$slug&c=$chapNo", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img").mapIndexed { index, img ->
-            Page(index = index, imageUrl = img.attr("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img").mapIndexed { index, img ->
+        Page(index = index, imageUrl = img.attr("src"))
     }
 
     // filters
@@ -187,20 +175,21 @@ class OppaiStream : ParsedHttpSource() {
         fun selectedValue() = vals[state].second
     }
 
-    private class OrderByFilter(defaultOrder: String? = null) : SelectFilter(
-        "Sort By",
-        arrayOf(
-            Pair("", ""),
-            Pair("A-Z", "az"),
-            Pair("Z-A", "za"),
-            Pair("Recently Released", "recent"),
-            Pair("Oldest Releases", "old"),
-            Pair("Most Views", "views"),
-            Pair("Highest Rated", "rating"),
-            Pair("Recently Uploaded", "uploaded"),
-        ),
-        defaultOrder,
-    )
+    private class OrderByFilter(defaultOrder: String? = null) :
+        SelectFilter(
+            "Sort By",
+            arrayOf(
+                Pair("", ""),
+                Pair("A-Z", "az"),
+                Pair("Z-A", "za"),
+                Pair("Recently Released", "recent"),
+                Pair("Oldest Releases", "old"),
+                Pair("Most Views", "views"),
+                Pair("Highest Rated", "rating"),
+                Pair("Recently Uploaded", "uploaded"),
+            ),
+            defaultOrder,
+        )
 
     internal class TriState(name: String, val value: String) : Filter.TriState(name)
 
@@ -284,9 +273,7 @@ class OppaiStream : ParsedHttpSource() {
     )
 
     // Unused
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // helpers
     private fun String.parseRelativeDate(): Long {
@@ -310,26 +297,32 @@ class OppaiStream : ParsedHttpSource() {
             "second" in this -> {
                 parsedDate = now.apply { add(Calendar.SECOND, -relativeDate) }.timeInMillis
             }
+
             // parses: "42 minutes ago"
             "minute" in this -> {
                 parsedDate = now.apply { add(Calendar.MINUTE, -relativeDate) }.timeInMillis
             }
+
             // parses: "1 hour ago" and "2 hours ago"
             "hour" in this -> {
                 parsedDate = now.apply { add(Calendar.HOUR, -relativeDate) }.timeInMillis
             }
+
             // parses: "2 days ago"
             "day" in this -> {
                 parsedDate = now.apply { add(Calendar.DAY_OF_YEAR, -relativeDate) }.timeInMillis
             }
+
             // parses: "2 weeks ago"
             "week" in this -> {
                 parsedDate = now.apply { add(Calendar.WEEK_OF_YEAR, -relativeDate) }.timeInMillis
             }
+
             // parses: "2 months ago"
             "month" in this -> {
                 parsedDate = now.apply { add(Calendar.MONTH, -relativeDate) }.timeInMillis
             }
+
             // parse: "2 years ago"
             "year" in this -> {
                 parsedDate = now.apply { add(Calendar.YEAR, -relativeDate) }.timeInMillis

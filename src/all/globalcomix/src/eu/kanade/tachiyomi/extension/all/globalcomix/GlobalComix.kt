@@ -35,7 +35,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 abstract class GlobalComix(final override val lang: String, private val extLang: String = lang) :
-    ConfigurableSource, HttpSource() {
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "GlobalComix"
     override val baseUrl = webUrl
@@ -83,17 +84,13 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         return GET(url.build(), headers)
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        simpleQueryRequest(page, orderBy = null, query = null)
+    override fun popularMangaRequest(page: Int): Request = simpleQueryRequest(page, orderBy = null, query = null)
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        mangaListParse(response)
+    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        simpleQueryRequest(page, "recent", query = null)
+    override fun latestUpdatesRequest(page: Int): Request = simpleQueryRequest(page, "recent", query = null)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        mangaListParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
 
     private fun mangaListParse(response: Response): MangasPage {
         val isSingleItemLookup = response.request.url.toString().startsWith(apiMangaUrl)
@@ -151,10 +148,9 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().payload!!
-            .results
-            .createManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().payload!!
+        .results
+        .createManga()
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = apiSearchUrl.toHttpUrl().newBuilder()
@@ -167,13 +163,11 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         return GET(url, headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
-            dto.isPremium && !preferences.showLockedChapters
-        }.map { it.createChapter() }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
+        dto.isPremium && !preferences.showLockedChapters
+    }.map { it.createChapter() }
 
-    override fun getChapterUrl(chapter: SChapter): String =
-        "$baseUrl/read/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterKey = chapter.url

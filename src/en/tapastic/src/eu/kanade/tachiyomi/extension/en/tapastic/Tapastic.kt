@@ -24,7 +24,9 @@ import okhttp3.Response
 import okio.IOException
 import rx.Observable
 
-class Tapastic : HttpSource(), ConfigurableSource {
+class Tapastic :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Tapas"
 
@@ -162,17 +164,13 @@ class Tapastic : HttpSource(), ConfigurableSource {
         return Observable.just(chapters)
     }
 
-    private fun ChapterDto.isPaywalledVisible() =
-        showLockedChapterPref || unlocked || free
+    private fun ChapterDto.isPaywalledVisible() = showLockedChapterPref || unlocked || free
 
-    private fun ChapterDto.isScheduledVisible() =
-        showScheduledChapterPrefer || !scheduled
+    private fun ChapterDto.isScheduledVisible() = showScheduledChapterPrefer || !scheduled
 
-    override fun chapterListRequest(manga: SManga): Request =
-        throw UnsupportedOperationException()
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // ============================== Pages =====================================
 

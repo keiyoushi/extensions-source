@@ -19,12 +19,13 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaIsekaiThai : Madara(
-    "MangaIsekaiThai",
-    "https://www.mangaisekaithai.com",
-    "th",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
-) {
+class MangaIsekaiThai :
+    Madara(
+        "MangaIsekaiThai",
+        "https://www.mangaisekaithai.com",
+        "th",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
+    ) {
     override val supportsLatest = false
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

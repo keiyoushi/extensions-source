@@ -32,37 +32,37 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
 
     override fun translate(from: String, to: String, text: String): String {
         val request = translateRequest(text, from, to)
-        return try { fetchTranslatedText(request) } catch (_: Exception) { text }
+        return try {
+            fetchTranslatedText(request)
+        } catch (_: Exception) {
+            text
+        }
     }
 
-    private fun translateRequest(text: String, from: String, to: String): Request {
-        return GET(clientUrlBuilder(text, from, to).build(), headersBuilder().build())
-    }
+    private fun translateRequest(text: String, from: String, to: String): Request = GET(clientUrlBuilder(text, from, to).build(), headersBuilder().build())
 
     private fun headersBuilder(): Headers.Builder = headers.newBuilder()
         .set("Origin", webpage)
         .set("Alt-Used", webpage.substringAfterLast("/"))
         .set("Referer", "$webpage/")
 
-    private fun clientUrlBuilder(text: String, src: String, dest: String, token: String = "xxxx"): HttpUrl.Builder {
-        return translatorUrl.toHttpUrl().newBuilder()
-            .setQueryParameter("client", "gtx")
-            .setQueryParameter("sl", src)
-            .setQueryParameter("tl", dest)
-            .setQueryParameter("hl", dest)
-            .setQueryParameter("ie", Charsets.UTF_8.toString())
-            .setQueryParameter("oe", Charsets.UTF_8.toString())
-            .setQueryParameter("otf", "1")
-            .setQueryParameter("ssel", "0")
-            .setQueryParameter("tsel", "0")
-            .setQueryParameter("tk", token)
-            .setQueryParameter("q", text)
-            .apply {
-                arrayOf("at", "bd", "ex", "ld", "md", "qca", "rw", "rm", "ss", "t").forEach {
-                    addQueryParameter("dt", it)
-                }
+    private fun clientUrlBuilder(text: String, src: String, dest: String, token: String = "xxxx"): HttpUrl.Builder = translatorUrl.toHttpUrl().newBuilder()
+        .setQueryParameter("client", "gtx")
+        .setQueryParameter("sl", src)
+        .setQueryParameter("tl", dest)
+        .setQueryParameter("hl", dest)
+        .setQueryParameter("ie", Charsets.UTF_8.toString())
+        .setQueryParameter("oe", Charsets.UTF_8.toString())
+        .setQueryParameter("otf", "1")
+        .setQueryParameter("ssel", "0")
+        .setQueryParameter("tsel", "0")
+        .setQueryParameter("tk", token)
+        .setQueryParameter("q", text)
+        .apply {
+            arrayOf("at", "bd", "ex", "ld", "md", "qca", "rw", "rm", "ss", "t").forEach {
+                addQueryParameter("dt", it)
             }
-    }
+        }
 
     private fun fetchTranslatedText(request: Request): String {
         val response = client.newCall(request).execute()
@@ -76,9 +76,7 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
 
     private fun Response.parseJson(): JsonElement = json.parseToJsonElement(this.body.string())
 
-    private fun extractTranslatedText(data: JsonElement): String {
-        return data.jsonArray[0].jsonArray.joinToString("") {
-            it.jsonArray[0].jsonPrimitive.content
-        }
+    private fun extractTranslatedText(data: JsonElement): String = data.jsonArray[0].jsonArray.joinToString("") {
+        it.jsonArray[0].jsonPrimitive.content
     }
 }

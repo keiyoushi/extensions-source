@@ -13,11 +13,12 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
-class LeerManga : Madara(
-    "LeerManga",
-    "https://leermanga.net",
-    "es",
-) {
+class LeerManga :
+    Madara(
+        "LeerManga",
+        "https://leermanga.net",
+        "es",
+    ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()
@@ -28,8 +29,7 @@ class LeerManga : Madara(
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/$mangaSubString?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$mangaSubString?page=$page", headers)
 
     override val popularMangaUrlSelector = ".page-item-detail a"
 
@@ -63,6 +63,7 @@ class LeerManga : Madara(
                     }
                     url = selected.toHttpUrl().newBuilder()
                 }
+
                 else -> {}
             }
         }
@@ -95,21 +96,18 @@ class LeerManga : Madara(
         return FilterList(filters)
     }
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return mutableListOf<Genre>().apply {
-            this += Genre("Todos", "")
-            this += document.select(".genres__collapse li a")
-                .map { a ->
-                    Genre(
-                        a.text(),
-                        a.absUrl("href"),
-                    )
-                }
-        }
+    override fun parseGenres(document: Document): List<Genre> = mutableListOf<Genre>().apply {
+        this += Genre("Todos", "")
+        this += document.select(".genres__collapse li a")
+            .map { a ->
+                Genre(
+                    a.text(),
+                    a.absUrl("href"),
+                )
+            }
     }
 
-    class GenreGroup(displayName: String, private val genres: List<Genre>, state: Int = 0) :
-        Filter.Select<String>(displayName, genres.map { it.name }.toTypedArray(), state) {
+    class GenreGroup(displayName: String, private val genres: List<Genre>, state: Int = 0) : Filter.Select<String>(displayName, genres.map { it.name }.toTypedArray(), state) {
         fun selected() = genres[state].id
     }
 }

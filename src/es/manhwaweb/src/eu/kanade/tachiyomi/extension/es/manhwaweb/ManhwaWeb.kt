@@ -70,9 +70,13 @@ class ManhwaWeb : HttpSource() {
         filters.forEach { filter ->
             when (filter) {
                 is TypeFilter -> url.addQueryParameter("tipo", filter.toUriPart())
+
                 is DemographyFilter -> url.addQueryParameter("demografia", filter.toUriPart())
+
                 is StatusFilter -> url.addQueryParameter("estado", filter.toUriPart())
+
                 is EroticFilter -> url.addQueryParameter("erotico", filter.toUriPart())
+
                 is GenreFilter -> {
                     val genres = filter.state
                         .filter { it.state }
@@ -97,18 +101,16 @@ class ManhwaWeb : HttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            TypeFilter(),
-            DemographyFilter(),
-            StatusFilter(),
-            EroticFilter(),
-            Filter.Separator(),
-            GenreFilter("Géneros", getGenres()),
-            Filter.Separator(),
-            SortByFilter("Ordenar por", getSortProperties()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        TypeFilter(),
+        DemographyFilter(),
+        StatusFilter(),
+        EroticFilter(),
+        Filter.Separator(),
+        GenreFilter("Géneros", getGenres()),
+        Filter.Separator(),
+        SortByFilter("Ordenar por", getSortProperties()),
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadSearchDto>(response.body.string())
@@ -123,8 +125,7 @@ class ManhwaWeb : HttpSource() {
         return GET("$apiUrl/manhwa/see/$slug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        json.decodeFromString<ComicDetailsDto>(response.body.string()).toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = json.decodeFromString<ComicDetailsDto>(response.body.string()).toSManga()
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 

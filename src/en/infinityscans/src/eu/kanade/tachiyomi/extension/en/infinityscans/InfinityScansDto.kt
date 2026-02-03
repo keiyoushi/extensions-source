@@ -40,9 +40,7 @@ data class SearchEntryDto(
         url = "/comic/$id/$slug"
     }
 
-    private fun getImageParameter(): Long {
-        return updated?.toLong() ?: 0L
-    }
+    private fun getImageParameter(): Long = updated?.toLong() ?: 0L
 }
 
 @Serializable

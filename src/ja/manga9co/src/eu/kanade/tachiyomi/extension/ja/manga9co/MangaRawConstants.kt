@@ -17,6 +17,7 @@ internal fun getSelectors(mirrorIndex: Int) = when (mirrorIndex) {
         detailsSelector = "div:has(> main)",
         recommendClass = "container",
     )
+
     else -> Selectors(
         listMangaSelector = ".post-list:not(.last-hidden) > .item",
         detailsSelector = "#post-data",

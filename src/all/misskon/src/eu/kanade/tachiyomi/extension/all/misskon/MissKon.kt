@@ -20,7 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MissKon() : SimpleParsedHttpSource() {
+class MissKon : SimpleParsedHttpSource() {
 
     override val baseUrl = "https://misskon.com"
     override val lang = "all"
@@ -104,10 +104,8 @@ class MissKon() : SimpleParsedHttpSource() {
     // endregion
 
     // region Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.post-inner > div.entry > p > img")
-            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("data-src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.post-inner > div.entry > p > img")
+        .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("data-src")) }
     // endregion
 
     override fun getFilterList(): FilterList = FilterList(

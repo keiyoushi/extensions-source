@@ -84,62 +84,63 @@ class InfinityScans : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return client.newCall(fetchJson("api/comics"))
-            .asObservableSuccess()
-            .map { response ->
-                val data = response.parseAs<ResponseDto<SearchResultDto>>().result
-                runCatching { updateFilters(data) }
-                var titles = data.titles
+    ): Observable<MangasPage> = client.newCall(fetchJson("api/comics"))
+        .asObservableSuccess()
+        .map { response ->
+            val data = response.parseAs<ResponseDto<SearchResultDto>>().result
+            runCatching { updateFilters(data) }
+            var titles = data.titles
 
-                if (query.isNotBlank()) {
-                    titles = titles.filter { it.title.contains(query, ignoreCase = true) }
-                }
+            if (query.isNotBlank()) {
+                titles = titles.filter { it.title.contains(query, ignoreCase = true) }
+            }
 
-                filters.forEach { filter ->
-                    when (filter) {
-                        is SortFilter -> {
-                            when (filter.selected) {
-                                "title" -> {
-                                    titles = titles.sortedBy { it.title }
-                                }
-                                "popularity" -> {
-                                    titles = titles.sortedByDescending { it.all_views }
-                                }
-                                "latest" -> {
-                                    titles = titles.sortedByDescending { it.updated }
-                                }
+            filters.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> {
+                        when (filter.selected) {
+                            "title" -> {
+                                titles = titles.sortedBy { it.title }
                             }
-                        }
 
-                        is GenreFilter -> {
-                            filter.checked?.also {
-                                titles = titles.filter { it.genres?.split(",")?.any { genre -> genre in filter.checked!! } ?: true }
+                            "popularity" -> {
+                                titles = titles.sortedByDescending { it.all_views }
                             }
-                        }
 
-                        is AuthorFilter -> {
-                            filter.checked?.also {
-                                titles = titles.filter { it.authors?.split(",")?.any { author -> author in filter.checked!! } ?: true }
+                            "latest" -> {
+                                titles = titles.sortedByDescending { it.updated }
                             }
-                        }
-
-                        is StatusFilter -> {
-                            filter.checked?.also {
-                                titles = titles.filter { filter.checked!!.any { status -> status == it.status } }
-                            }
-                        }
-
-                        else -> { /* Do Nothing */
                         }
                     }
+
+                    is GenreFilter -> {
+                        filter.checked?.also {
+                            titles = titles.filter { it.genres?.split(",")?.any { genre -> genre in filter.checked!! } ?: true }
+                        }
+                    }
+
+                    is AuthorFilter -> {
+                        filter.checked?.also {
+                            titles = titles.filter { it.authors?.split(",")?.any { author -> author in filter.checked!! } ?: true }
+                        }
+                    }
+
+                    is StatusFilter -> {
+                        filter.checked?.also {
+                            titles = titles.filter { filter.checked!!.any { status -> status == it.status } }
+                        }
+                    }
+
+                    else -> {
+                        /* Do Nothing */
+                    }
                 }
-
-                val entries = titles.map { it.toSManga(cdnHost) }
-
-                MangasPage(entries, false)
             }
-    }
+
+            val entries = titles.map { it.toSManga(cdnHost) }
+
+            MangasPage(entries, false)
+        }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
@@ -229,13 +230,11 @@ class InfinityScans : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    private fun Element.getInfo(name: String): String? =
-        selectFirst("div:has(>span:matches($name:))")?.ownText()
+    private fun Element.getInfo(name: String): String? = selectFirst("div:has(>span:matches($name:))")?.ownText()
 
-    private fun Element.getLinks(name: String): String? =
-        select("div:has(>span:matches($name:)) a")
-            .joinToString(", ", transform = Element::text).trim()
-            .takeIf { it.isNotBlank() }
+    private fun Element.getLinks(name: String): String? = select("div:has(>span:matches($name:)) a")
+        .joinToString(", ", transform = Element::text).trim()
+        .takeIf { it.isNotBlank() }
 
     // Chapters
 

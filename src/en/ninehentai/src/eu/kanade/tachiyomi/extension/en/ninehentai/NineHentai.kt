@@ -70,22 +70,20 @@ class NineHentai : HttpSource() {
         return POST("$baseUrl$SEARCH_URL", headers, jsonString.toRequestBody(MEDIA_TYPE))
     }
 
-    private fun parseSearchResponse(response: Response): MangasPage {
-        return response.use {
-            val page = json.decodeFromString<SearchRequestPayload>(it.request.bodyString).search.page
-            json.decodeFromString<SearchResponse>(it.body.string()).let { searchResponse ->
-                MangasPage(
-                    searchResponse.results.map {
-                        SManga.create().apply {
-                            url = "/g/${it.id}"
-                            title = it.title
-                            // Cover is the compressed first page (cover might change if page count changes)
-                            thumbnail_url = "${it.image_server}${it.id}/1.jpg?${it.total_page}"
-                        }
-                    },
-                    searchResponse.totalCount - 1 > page,
-                )
-            }
+    private fun parseSearchResponse(response: Response): MangasPage = response.use {
+        val page = json.decodeFromString<SearchRequestPayload>(it.request.bodyString).search.page
+        json.decodeFromString<SearchResponse>(it.body.string()).let { searchResponse ->
+            MangasPage(
+                searchResponse.results.map {
+                    SManga.create().apply {
+                        url = "/g/${it.id}"
+                        title = it.title
+                        // Cover is the compressed first page (cover might change if page count changes)
+                        thumbnail_url = "${it.image_server}${it.id}/1.jpg?${it.total_page}"
+                    }
+                },
+                searchResponse.totalCount - 1 > page,
+            )
         }
     }
 
@@ -130,6 +128,7 @@ class NineHentai : HttpSource() {
                 is SortFilter -> {
                     sort = filter.state
                 }
+
                 is MinPagesFilter -> {
                     try {
                         range[0] = filter.state.toInt()
@@ -137,6 +136,7 @@ class NineHentai : HttpSource() {
                         // Suppress and retain default value
                     }
                 }
+
                 is MaxPagesFilter -> {
                     try {
                         range[1] = filter.state.toInt()
@@ -144,27 +144,35 @@ class NineHentai : HttpSource() {
                         // Suppress and retain default value
                     }
                 }
+
                 is IncludedFilter -> {
                     includedTags += getTags(filter.state, 1)
                 }
+
                 is ExcludedFilter -> {
                     excludedTags += getTags(filter.state, 1)
                 }
+
                 is GroupFilter -> {
                     includedTags += getTags(filter.state, 2)
                 }
+
                 is ParodyFilter -> {
                     includedTags += getTags(filter.state, 3)
                 }
+
                 is ArtistFilter -> {
                     includedTags += getTags(filter.state, 4)
                 }
+
                 is CharacterFilter -> {
                     includedTags += getTags(filter.state, 5)
                 }
+
                 is CategoryFilter -> {
                     includedTags += getTags(filter.state, 6)
                 }
+
                 else -> { /* Do nothing */ }
             }
         }
@@ -182,24 +190,22 @@ class NineHentai : HttpSource() {
 
     // Manga Details
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return SManga.create().apply {
-            response.asJsoup().selectFirst("div#bigcontainer")!!.let { info ->
-                title = info.select("h1").text()
-                thumbnail_url = info.selectFirst("div#cover v-lazy-image")!!.attr("abs:src")
-                status = SManga.COMPLETED
-                artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
-                author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
-                genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
-                // Additional details
-                description = listOf(
-                    Pair("Alternative Title", info.selectTextOrNull("h2")),
-                    Pair("Pages", info.selectTextOrNull("div#info > div:contains(pages)")),
-                    Pair("Parody", info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")),
-                    Pair("Category", info.selectTextOrNull("div.field-name:contains(Category:) a.tag")),
-                    Pair("Language", info.selectTextOrNull("div.field-name:contains(Language:) a.tag")),
-                ).filterNot { it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
-            }
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        response.asJsoup().selectFirst("div#bigcontainer")!!.let { info ->
+            title = info.select("h1").text()
+            thumbnail_url = info.selectFirst("div#cover v-lazy-image")!!.attr("abs:src")
+            status = SManga.COMPLETED
+            artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
+            author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
+            genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
+            // Additional details
+            description = listOf(
+                Pair("Alternative Title", info.selectTextOrNull("h2")),
+                Pair("Pages", info.selectTextOrNull("div#info > div:contains(pages)")),
+                Pair("Parody", info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")),
+                Pair("Category", info.selectTextOrNull("div.field-name:contains(Category:) a.tag")),
+                Pair("Language", info.selectTextOrNull("div.field-name:contains(Language:) a.tag")),
+            ).filterNot { it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
         }
     }
 
@@ -234,24 +240,31 @@ class NineHentai : HttpSource() {
             "sec" -> Calendar.getInstance().apply {
                 add(Calendar.SECOND, -value)
             }.timeInMillis
+
             "min" -> Calendar.getInstance().apply {
                 add(Calendar.MINUTE, -value)
             }.timeInMillis
+
             "hour" -> Calendar.getInstance().apply {
                 add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
+
             "day" -> Calendar.getInstance().apply {
                 add(Calendar.DATE, -value)
             }.timeInMillis
+
             "week" -> Calendar.getInstance().apply {
                 add(Calendar.DATE, -value * 7)
             }.timeInMillis
+
             "month" -> Calendar.getInstance().apply {
                 add(Calendar.MONTH, -value)
             }.timeInMillis
+
             "year" -> Calendar.getInstance().apply {
                 add(Calendar.YEAR, -value)
             }.timeInMillis
+
             else -> {
                 return 0
             }
@@ -285,16 +298,14 @@ class NineHentai : HttpSource() {
         }
     }
 
-    private fun getTags(queries: String, type: Int): List<Tag> {
-        return queries.split(",").map(String::trim)
-            .filterNot(String::isBlank).mapNotNull { query ->
-                val jsonString = buildJsonObject {
-                    put("tag_name", query)
-                    put("tag_type", type)
-                }.toString()
-                lookupTags(jsonString)
-            }
-    }
+    private fun getTags(queries: String, type: Int): List<Tag> = queries.split(",").map(String::trim)
+        .filterNot(String::isBlank).mapNotNull { query ->
+            val jsonString = buildJsonObject {
+                put("tag_name", query)
+                put("tag_type", type)
+            }.toString()
+            lookupTags(jsonString)
+        }
 
     // Based on HentaiHand ext
     private fun lookupTags(request: String): Tag? {
@@ -329,10 +340,11 @@ class NineHentai : HttpSource() {
 
     // Filters
 
-    private class SortFilter : Filter.Select<String>(
-        "Sort by",
-        arrayOf("Newest", "Popular Right now", "Most Fapped", "Most Viewed", "By Title"),
-    )
+    private class SortFilter :
+        Filter.Select<String>(
+            "Sort by",
+            arrayOf("Newest", "Popular Right now", "Most Fapped", "Most Viewed", "By Title"),
+        )
 
     private class MinPagesFilter : Filter.Text("Minimum Pages")
     private class MaxPagesFilter : Filter.Text("Maximum Pages")

@@ -26,24 +26,20 @@ class PatchFriday : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private fun createManga(): SManga {
-        return SManga.create().apply {
-            initialized = true
-            title = "Patch Friday"
-            status = SManga.ONGOING
-            url = ""
-            author = "Patch Friday"
-            artist = author
-            thumbnail_url = "https://patchfriday.com/patches/68.png"
-            description = "The IT security webcomic"
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        initialized = true
+        title = "Patch Friday"
+        status = SManga.ONGOING
+        url = ""
+        author = "Patch Friday"
+        artist = author
+        thumbnail_url = "https://patchfriday.com/patches/68.png"
+        description = "The IT security webcomic"
     }
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(createManga()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -65,19 +61,15 @@ class PatchFriday : HttpSource() {
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(createManga())
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga())
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(GET("$baseUrl/search/?search=;", headers))
-            .asObservableSuccess()
-            .map { parseChapters(it) }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(GET("$baseUrl/search/?search=;", headers))
+        .asObservableSuccess()
+        .map { parseChapters(it) }
 
     private fun parseChapters(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -112,15 +104,11 @@ class PatchFriday : HttpSource() {
 
     // Pages
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.just(listOf(Page(0, baseUrl + chapter.url)))
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, baseUrl + chapter.url)))
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String {
-        return response.asJsoup().select("div#strip_image img").attr("abs:src")
-    }
+    override fun imageUrlParse(response: Response): String = response.asJsoup().select("div#strip_image img").attr("abs:src")
 
     override fun getFilterList() = FilterList()
 }

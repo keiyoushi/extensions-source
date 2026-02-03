@@ -19,7 +19,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Comix : HttpSource(), ConfigurableSource {
+class Comix :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Comix"
     override val baseUrl = "https://comix.to"
@@ -34,8 +36,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     /******************************* POPULAR MANGA ************************************/
     override fun popularMangaRequest(page: Int): Request {
@@ -55,8 +56,7 @@ class Comix : HttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     /******************************* LATEST MANGA ************************************/
     override fun latestUpdatesRequest(page: Int): Request {
@@ -76,8 +76,7 @@ class Comix : HttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     /******************************* SEARCHING ***************************************/
     override fun getFilterList() = ComixFilters().getFilterList()
@@ -144,16 +143,12 @@ class Comix : HttpSource(), ConfigurableSource {
         )
     }
 
-    override fun getMangaUrl(manga: SManga): String =
-        "$baseUrl/title${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/title${manga.url}"
 
     /******************************* Chapters List *******************************/
-    override fun getChapterUrl(chapter: SChapter) =
-        "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return chapterListRequest(manga.url.removePrefix("/"), 1)
-    }
+    override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url.removePrefix("/"), 1)
 
     private fun chapterListRequest(mangaHash: String, page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
@@ -229,7 +224,9 @@ class Comix : HttpSource(), ConfigurableSource {
                 val officialCurrent = (current.scanlationGroupId == 9275 || current.isOfficial == 1)
                 val better = when {
                     officialNew && !officialCurrent -> true
+
                     !officialNew && officialCurrent -> false
+
                     // compare votes then updatedAt
                     else -> when {
                         ch.votes > current.votes -> true
@@ -307,20 +304,15 @@ class Comix : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
     }
 
-    private fun SharedPreferences.posterQuality() =
-        getString(PREF_POSTER_QUALITY, "large")
+    private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "large")
 
-    private fun SharedPreferences.deduplicateChapters() =
-        getBoolean(DEDUPLICATE_CHAPTERS, false)
+    private fun SharedPreferences.deduplicateChapters() = getBoolean(DEDUPLICATE_CHAPTERS, false)
 
-    private fun SharedPreferences.alternativeNamesInDescription() =
-        getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
+    private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
-    private fun SharedPreferences.scorePosition() =
-        getString(PREF_SCORE_POSITION, "top") ?: "top"
+    private fun SharedPreferences.scorePosition() = getString(PREF_SCORE_POSITION, "top") ?: "top"
 
-    private fun SharedPreferences.hideNsfw() =
-        getBoolean(NSFW_PREF, true)
+    private fun SharedPreferences.hideNsfw() = getBoolean(NSFW_PREF, true)
 
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"

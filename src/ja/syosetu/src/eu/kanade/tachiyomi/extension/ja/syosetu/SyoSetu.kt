@@ -43,10 +43,9 @@ class SyoSetu : MangaRawTheme("SyoSetu", "https://syosetu.gs") {
         return GET(url, headers)
     }
 
-    override fun Document.getSanitizedDetails(): Element =
-        selectFirst(Evaluator.Tag("article"))!!.selectFirst(Evaluator.Class("content-wrap-inner"))!!.apply {
-            selectFirst(Evaluator.Class("chaplist"))!!.remove()
-        }
+    override fun Document.getSanitizedDetails(): Element = selectFirst(Evaluator.Tag("article"))!!.selectFirst(Evaluator.Class("content-wrap-inner"))!!.apply {
+        selectFirst(Evaluator.Class("chaplist"))!!.remove()
+    }
 
     override fun chapterListSelector() = ".chaplist a"
     override fun String.sanitizeChapter() = substringAfterLast(" - ")

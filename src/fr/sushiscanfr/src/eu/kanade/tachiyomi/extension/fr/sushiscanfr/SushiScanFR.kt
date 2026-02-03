@@ -17,8 +17,7 @@ class SushiScanFR : MangaThemesia("Sushiscan.fr", "https://sushiscan.fr", "fr", 
         else -> SManga.UNKNOWN
     }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            status = document.select(seriesStatusSelector).text().parseStatus()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        status = document.select(seriesStatusSelector).text().parseStatus()
+    }
 }

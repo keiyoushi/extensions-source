@@ -43,26 +43,22 @@ class SolarAndSundry : HttpSource() {
         val published_at: String,
     )
 
-    private fun createManga(): SManga {
-        return SManga.create().apply {
-            title = "Solar and Sundry"
-            url = "/page"
-            author = "Ewan Breakey"
-            artist = author
-            status = SManga.ONGOING
-            description = "a sci-fi horror webcomic about life blooming against all odds"
-            thumbnail_url = "https://imagedelivery.net/zthi1l8fKrUGB5ig08mq-Q/de292ba7-f164-4f43-ec17-1876a7a44600/public"
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        title = "Solar and Sundry"
+        url = "/page"
+        author = "Ewan Breakey"
+        artist = author
+        status = SManga.ONGOING
+        description = "a sci-fi horror webcomic about life blooming against all odds"
+        thumbnail_url = "https://imagedelivery.net/zthi1l8fKrUGB5ig08mq-Q/de292ba7-f164-4f43-ec17-1876a7a44600/public"
     }
 
     private val imgHeaders by lazy {
         headersBuilder().set("Accept", ACCEPT_IMAGE).build()
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return runCatching { DATE_FORMATTER.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy {
@@ -72,9 +68,7 @@ class SolarAndSundry : HttpSource() {
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(createManga()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -96,15 +90,11 @@ class SolarAndSundry : HttpSource() {
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(createManga().apply { initialized = true })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun getMangaUrl(manga: SManga): String {
-        return ARCHIVE_URL
-    }
+    override fun getMangaUrl(manga: SManga): String = ARCHIVE_URL
 
     // Chapters
 
@@ -120,9 +110,7 @@ class SolarAndSundry : HttpSource() {
         }.reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return ARCHIVE_URL + "/comic/" + chapter.chapter_number
-    }
+    override fun getChapterUrl(chapter: SChapter): String = ARCHIVE_URL + "/comic/" + chapter.chapter_number
 
     // Pages
 

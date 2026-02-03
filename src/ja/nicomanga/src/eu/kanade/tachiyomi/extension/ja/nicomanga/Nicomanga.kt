@@ -61,17 +61,16 @@ class Nicomanga : FMReader("Nicomanga", "https://nicomanga.com", "ja") {
 
     // ============================= Utilities ==============================
 
-    override fun getImgAttr(element: Element?): String? {
-        return when {
-            element?.attr("style")?.contains("background-image") == true -> {
-                val url = thumbnailURLRegex.find(element.attr("style"))?.groupValues?.get(1)
-                when {
-                    url?.startsWith("/") == true -> baseUrl + url
-                    else -> url
-                }
+    override fun getImgAttr(element: Element?): String? = when {
+        element?.attr("style")?.contains("background-image") == true -> {
+            val url = thumbnailURLRegex.find(element.attr("style"))?.groupValues?.get(1)
+            when {
+                url?.startsWith("/") == true -> baseUrl + url
+                else -> url
             }
-            else -> super.getImgAttr(element)
         }
+
+        else -> super.getImgAttr(element)
     }
 
     companion object {

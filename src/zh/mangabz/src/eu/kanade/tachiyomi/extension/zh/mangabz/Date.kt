@@ -34,5 +34,4 @@ private val timeFormat = cstFormat("yyyy-MM-dd hh:mm")
 private val shortDateFormat = cstFormat("yyyy MM月dd")
 private val fullDateFormat = cstFormat("yyyy-MM-dd")
 
-private fun cstFormat(pattern: String) =
-    SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("GMT+8") }
+private fun cstFormat(pattern: String) = SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("GMT+8") }

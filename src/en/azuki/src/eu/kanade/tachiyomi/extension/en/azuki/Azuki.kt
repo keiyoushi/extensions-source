@@ -42,9 +42,7 @@ class Azuki : HttpSource() {
         .set("Referer", "$baseUrl/")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/discover?sort=popular&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/discover?sort=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -54,9 +52,7 @@ class Azuki : HttpSource() {
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/discover?sort=recent_series&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/discover?sort=recent_series&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -69,12 +65,16 @@ class Azuki : HttpSource() {
         filters.forEach { filter ->
             when (filter) {
                 is SortFilter -> url.addQueryParameter("sort", filter.toUriPart())
+
                 is AccessTypeFilter -> filter.toUriPart().takeIf { it.isNotEmpty() }?.let { url.addQueryParameter("access_type", it) }
+
                 is GenreFilter ->
                     filter.state
                         .filter { it.state }
                         .forEach { url.addQueryParameter("tags[]", it.value) }
+
                 is PublisherFilter -> filter.toUriPart().takeIf { it.isNotEmpty() }?.let { url.addQueryParameter("publisher_slug", it) }
+
                 else -> {}
             }
         }
@@ -152,19 +152,17 @@ class Azuki : HttpSource() {
         return GET(apiUrl, apiHeaders())
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservable()
-            .map { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 401 || response.code == 403) {
-                        throw Exception("This chapter is locked. Log in via WebView and unlock the chapter to read.")
-                    }
-                    throw Exception("HTTP error ${response.code}")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservable()
+        .map { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 401 || response.code == 403) {
+                    throw Exception("This chapter is locked. Log in via WebView and unlock the chapter to read.")
                 }
-                pageListParse(response)
+                throw Exception("HTTP error ${response.code}")
             }
-    }
+            pageListParse(response)
+        }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PageListDto>()
@@ -197,22 +195,18 @@ class Azuki : HttpSource() {
     }
 
     // Filters
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-            AccessTypeFilter(),
-            PublisherFilter(),
-            GenreFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        AccessTypeFilter(),
+        PublisherFilter(),
+        GenreFilter(),
+    )
 
-    private fun mangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            val link = element.selectFirst("a.a-card-link")!!
-            setUrlWithoutDomain(link.attr("href"))
-            title = link.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        val link = element.selectFirst("a.a-card-link")!!
+        setUrlWithoutDomain(link.attr("href"))
+        title = link.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     // Unsupported

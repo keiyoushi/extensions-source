@@ -25,7 +25,8 @@ import okhttp3.Response
 open class WeebDex(
     override val lang: String,
     private val weebdexLang: String = lang,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "WeebDex"
     override val baseUrl = "https://weebdex.org"
     override val supportsLatest = true
@@ -105,6 +106,7 @@ open class WeebDex(
                             }
                         }
                     }
+
                     is TagsExcludeFilter -> {
                         filter.state.forEach { tag ->
                             if (tag.state) {
@@ -114,8 +116,11 @@ open class WeebDex(
                             }
                         }
                     }
+
                     is TagModeFilter -> urlBuilder.addQueryParameter("tmod", filter.state.toString())
+
                     is TagExcludeModeFilter -> urlBuilder.addQueryParameter("txmod", filter.state.toString())
+
                     else -> { /* Do Nothing */ }
                 }
             }
@@ -144,17 +149,13 @@ open class WeebDex(
 
     // -------------------- Manga details --------------------
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl.toHttpUrl().newBuilder()
-            .addEncodedPathSegments(manga.url)
-            .removePathSegment(0)
-            .setPathSegment(0, "title")
-            .build().toString()
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
+        .addEncodedPathSegments(manga.url)
+        .removePathSegment(0)
+        .setPathSegment(0, "title")
+        .build().toString()
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("${WeebDexConstants.API_URL}${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("${WeebDexConstants.API_URL}${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
@@ -200,9 +201,7 @@ open class WeebDex(
 
     // -------------------- Pages --------------------
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("${WeebDexConstants.API_URL}${chapter.url}", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("${WeebDexConstants.API_URL}${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.parseAs<ChapterDto>()

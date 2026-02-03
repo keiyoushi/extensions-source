@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-class MaidScan : GreenShit(
-    "Maid Scan",
-    "https://empreguetes.xyz",
-    "pt-BR",
-) {
+class MaidScan :
+    GreenShit(
+        "Maid Scan",
+        "https://empreguetes.xyz",
+        "pt-BR",
+    ) {
     override val useWidthInThumbnail = false
     override val defaultOrderBy = "data"
     override val targetAudience = TargetAudience.Shoujo

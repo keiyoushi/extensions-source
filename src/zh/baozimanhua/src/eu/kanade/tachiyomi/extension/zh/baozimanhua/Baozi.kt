@@ -27,7 +27,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Baozi : ParsedHttpSource(), ConfigurableSource {
+class Baozi :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val id = 5724751873601868259
 
@@ -91,21 +93,17 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href").trim())
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href").trim())
+        name = element.text()
     }
 
     override fun popularMangaSelector(): String = "div.pure-g div a.comics-card__poster"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href").trim())
-            title = element.attr("title").trim()
-            thumbnail_url = element.select("> amp-img").attr("src").trim()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href").trim())
+        title = element.attr("title").trim()
+        thumbnail_url = element.select("> amp-img").attr("src").trim()
     }
 
     override fun popularMangaNextPageSelector(): String? = null
@@ -119,25 +117,21 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesSelector(): String = "div.pure-g div a.comics-card__poster"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list/new", headers)
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.select("h1.comics-detail__title").text()
-            thumbnail_url = document.select("div.pure-g div > amp-img").attr("src").trim()
-            author = document.select("h2.comics-detail__author").text()
-            description = document.select("p.comics-detail__desc").text()
-            status = when (document.selectFirst("div.tag-list > span.tag")!!.text()) {
-                "连载中", "連載中" -> SManga.ONGOING
-                "已完结", "已完結" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h1.comics-detail__title").text()
+        thumbnail_url = document.select("div.pure-g div > amp-img").attr("src").trim()
+        author = document.select("h2.comics-detail__author").text()
+        description = document.select("p.comics-detail__desc").text()
+        status = when (document.selectFirst("div.tag-list > span.tag")!!.text()) {
+            "连载中", "連載中" -> SManga.ONGOING
+            "已完结", "已完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
     }
 
@@ -167,13 +161,12 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
         urls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private fun quickPageUrl(url: String): String =
-        baseUrl.toHttpUrl().newBuilder().apply {
-            val chapUrl = url.toHttpUrl()
-            addPathSegments("/comic/chapter")
-            chapUrl.queryParameter("comic_id")?.let { addPathSegment(it) }
-            addPathSegment("${chapUrl.queryParameter("section_slot")}_${chapUrl.queryParameter("chapter_slot")}.html")
-        }.build().toString()
+    private fun quickPageUrl(url: String): String = baseUrl.toHttpUrl().newBuilder().apply {
+        val chapUrl = url.toHttpUrl()
+        addPathSegments("/comic/chapter")
+        chapUrl.queryParameter("comic_id")?.let { addPathSegment(it) }
+        addPathSegment("${chapUrl.queryParameter("section_slot")}_${chapUrl.queryParameter("chapter_slot")}.html")
+    }.build().toString()
 
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!.replace(".baozicdn.com", ".baozimh.com")
@@ -190,15 +183,13 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(ID_SEARCH_PREFIX)) {
-            val id = query.removePrefix(ID_SEARCH_PREFIX)
-            client.newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(ID_SEARCH_PREFIX)) {
+        val id = query.removePrefix(ID_SEARCH_PREFIX)
+        client.newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/$id", headers)

@@ -19,12 +19,13 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaBreakup : Madara(
-    "ManhwaBreakup",
-    "https://www.manhwabreakup.com",
-    "th",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("th")),
-) {
+class ManhwaBreakup :
+    Madara(
+        "ManhwaBreakup",
+        "https://www.manhwabreakup.com",
+        "th",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("th")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 

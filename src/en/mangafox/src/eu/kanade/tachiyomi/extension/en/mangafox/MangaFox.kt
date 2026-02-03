@@ -109,6 +109,7 @@ class MangaFox : ParsedHttpSource() {
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
                     is UriPartFilter -> addQueryParameter(filter.query, filter.toUriPart())
+
                     is GenreFilter -> filter.state.forEach {
                         when (it.state) {
                             Filter.TriState.STATE_INCLUDE -> genres.add(it.id)
@@ -116,16 +117,20 @@ class MangaFox : ParsedHttpSource() {
                             else -> {}
                         }
                     }
+
                     is FilterWithMethodAndText -> {
                         val method = filter.state[0] as UriPartFilter
                         val text = filter.state[1] as TextSearchFilter
                         addQueryParameter(method.query, method.toUriPart())
                         addQueryParameter(text.query, text.state)
                     }
+
                     is RatingFilter -> filter.state.forEach {
                         addQueryParameter(it.query, it.toUriPart())
                     }
+
                     is TextSearchFilter -> addQueryParameter(filter.query, filter.state)
+
                     else -> {}
                 }
             }
@@ -161,27 +166,25 @@ class MangaFox : ParsedHttpSource() {
         date_upload = element.select(".detail-main-list-main p").last()?.text()?.let { parseChapterDate(it) } ?: 0
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return if ("Today" in date || " ago" in date) {
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        } else if ("Yesterday" in date) {
-            Calendar.getInstance().apply {
-                add(Calendar.DATE, -1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        } else {
-            runCatching {
-                SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH).parse(date)?.time
-            }.getOrNull() ?: 0L
-        }
+    private fun parseChapterDate(date: String): Long = if ("Today" in date || " ago" in date) {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    } else if ("Yesterday" in date) {
+        Calendar.getInstance().apply {
+            add(Calendar.DATE, -1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    } else {
+        runCatching {
+            SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH).parse(date)?.time
+        }.getOrNull() ?: 0L
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -192,10 +195,9 @@ class MangaFox : ParsedHttpSource() {
         return GET("$mobileUrl$mobilePath", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#viewer img").mapIndexed { idx, it ->
-            Page(idx, imageUrl = it.attr("abs:data-original"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#viewer img").mapIndexed { idx, it ->
+        Page(idx, imageUrl = it.attr("abs:data-original"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -225,30 +227,29 @@ class MangaFox : ParsedHttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    open class TextSearchMethodFilter(name: String, query: String) :
-        UriPartFilter(name, query, arrayOf(Pair("contain", "cw"), Pair("begin", "bw"), Pair("end", "ew")))
+    open class TextSearchMethodFilter(name: String, query: String) : UriPartFilter(name, query, arrayOf(Pair("contain", "cw"), Pair("begin", "bw"), Pair("end", "ew")))
 
     open class TextSearchFilter(name: String, val query: String) : Filter.Text(name)
 
-    open class FilterWithMethodAndText(name: String, state: List<Filter<*>>) :
-        Filter.Group<Filter<*>>(name, state)
+    open class FilterWithMethodAndText(name: String, state: List<Filter<*>>) : Filter.Group<Filter<*>>(name, state)
 
     private class NameFilter : TextSearchFilter("Name", "name")
 
-    private class EntryTypeFilter : UriPartFilter(
-        "Type",
-        "type",
-        arrayOf(
-            Pair("Any", "0"),
-            Pair("Japanese Manga", "1"),
-            Pair("Korean Manhwa", "2"),
-            Pair("Chinese Manhua", "3"),
-            Pair("European Manga", "4"),
-            Pair("American Manga", "5"),
-            Pair("HongKong Manga", "6"),
-            Pair("Other Manga", "7"),
-        ),
-    )
+    private class EntryTypeFilter :
+        UriPartFilter(
+            "Type",
+            "type",
+            arrayOf(
+                Pair("Any", "0"),
+                Pair("Japanese Manga", "1"),
+                Pair("Korean Manhwa", "2"),
+                Pair("Chinese Manhua", "3"),
+                Pair("European Manga", "4"),
+                Pair("American Manga", "5"),
+                Pair("HongKong Manga", "6"),
+                Pair("Other Manga", "7"),
+            ),
+        )
 
     private class AuthorMethodFilter : TextSearchMethodFilter("Method", "author_method")
 
@@ -262,55 +263,59 @@ class MangaFox : ParsedHttpSource() {
 
     private class ArtistFilter : FilterWithMethodAndText("Artist", listOf(ArtistMethodFilter(), ArtistTextFilter()))
 
-    private class RatingMethodFilter : UriPartFilter(
-        "Method",
-        "rating_method",
-        arrayOf(
-            Pair("is", "eq"),
-            Pair("less than", "lt"),
-            Pair("more than", "gt"),
-        ),
-    )
+    private class RatingMethodFilter :
+        UriPartFilter(
+            "Method",
+            "rating_method",
+            arrayOf(
+                Pair("is", "eq"),
+                Pair("less than", "lt"),
+                Pair("more than", "gt"),
+            ),
+        )
 
-    private class RatingValueFilter : UriPartFilter(
-        "Rating",
-        "rating",
-        arrayOf(
-            Pair("any star", ""),
-            Pair("no star", "0"),
-            Pair("1 star", "1"),
-            Pair("2 stars", "2"),
-            Pair("3 stars", "3"),
-            Pair("4 stars", "4"),
-            Pair("5 stars", "5"),
-        ),
-    )
+    private class RatingValueFilter :
+        UriPartFilter(
+            "Rating",
+            "rating",
+            arrayOf(
+                Pair("any star", ""),
+                Pair("no star", "0"),
+                Pair("1 star", "1"),
+                Pair("2 stars", "2"),
+                Pair("3 stars", "3"),
+                Pair("4 stars", "4"),
+                Pair("5 stars", "5"),
+            ),
+        )
 
     private class RatingFilter : Filter.Group<UriPartFilter>("Rating", listOf(RatingMethodFilter(), RatingValueFilter()))
 
-    private class YearMethodFilter : UriPartFilter(
-        "Method",
-        "released_method",
-        arrayOf(
-            Pair("on", "eq"),
-            Pair("before", "lt"),
-            Pair("after", "gt"),
-        ),
-    )
+    private class YearMethodFilter :
+        UriPartFilter(
+            "Method",
+            "released_method",
+            arrayOf(
+                Pair("on", "eq"),
+                Pair("before", "lt"),
+                Pair("after", "gt"),
+            ),
+        )
 
     private class YearTextFilter : TextSearchFilter("Release year", "released")
 
     private class YearFilter : FilterWithMethodAndText("Release year", listOf(YearMethodFilter(), YearTextFilter()))
 
-    private class CompletedFilter : UriPartFilter(
-        "Completed Series",
-        "st",
-        arrayOf(
-            Pair("Either", "0"),
-            Pair("Yes", "2"),
-            Pair("No", "1"),
-        ),
-    )
+    private class CompletedFilter :
+        UriPartFilter(
+            "Completed Series",
+            "st",
+            arrayOf(
+                Pair("Either", "0"),
+                Pair("Yes", "2"),
+                Pair("No", "1"),
+            ),
+        )
 
     private class Genre(name: String, val id: Int) : Filter.TriState(name)
     private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)

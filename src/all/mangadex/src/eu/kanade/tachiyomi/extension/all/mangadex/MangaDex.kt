@@ -44,7 +44,8 @@ import rx.Observable
 import java.util.Date
 
 abstract class MangaDex(final override val lang: String, private val dexLang: String = lang) :
-    ConfigurableSource, HttpSource() {
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = MangaDexIntl.MANGADEX_NAME
 
@@ -229,18 +230,16 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         }
     }
 
-    private fun getMangaIdFromChapterId(id: String): Observable<String> {
-        return client.newCall(GET("${MDConstants.apiChapterUrl}/$id", headers))
-            .asObservable()
-            .map { response ->
-                if (response.isSuccessful.not()) {
-                    throw Exception(helper.intl.format("unable_to_process_chapter_request", response.code))
-                }
-
-                response.parseAs<ChapterDto>().data!!.relationships
-                    .firstInstanceOrNull<MangaDataDto>()!!.id
+    private fun getMangaIdFromChapterId(id: String): Observable<String> = client.newCall(GET("${MDConstants.apiChapterUrl}/$id", headers))
+        .asObservable()
+        .map { response ->
+            if (response.isSuccessful.not()) {
+                throw Exception(helper.intl.format("unable_to_process_chapter_request", response.code))
             }
-    }
+
+            response.parseAs<ChapterDto>().data!!.relationships
+                .firstInstanceOrNull<MangaDataDto>()!!.id
+        }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.startsWith(MDConstants.prefixIdSearch)) {
@@ -305,9 +304,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    private fun searchMangaListRequest(list: String): Request {
-        return GET("${MDConstants.apiListUrl}/$list", headers, CacheControl.FORCE_NETWORK)
-    }
+    private fun searchMangaListRequest(list: String): Request = GET("${MDConstants.apiListUrl}/$list", headers, CacheControl.FORCE_NETWORK)
 
     private fun searchMangaListParse(response: Response, page: Int, filters: FilterList): MangasPage {
         val listDto = response.parseAs<ListDto>()
@@ -397,9 +394,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     // Manga Details section
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url.replace("/manga/", "/title/") + "/" + helper.titleToSlug(manga.title)
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.replace("/manga/", "/title/") + "/" + helper.titleToSlug(manga.title)
 
     /**
      * Get the API endpoint URL for the entry details.
@@ -456,9 +451,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
      *
      * @see CoverArtListDto
      */
-    private fun fetchFirstVolumeCover(manga: MangaDto): String? {
-        return fetchFirstVolumeCovers(listOf(manga.data!!))?.get(manga.data.id)
-    }
+    private fun fetchFirstVolumeCover(manga: MangaDto): String? = fetchFirstVolumeCovers(listOf(manga.data!!))?.get(manga.data.id)
 
     /**
      * Attempt to get the first volume cover if the setting is enabled.
@@ -600,9 +593,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        return helper.getValidImageUrlForPage(page, headers, client)
-    }
+    override fun imageRequest(page: Page): Request = helper.getValidImageUrlForPage(page, headers, client)
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -826,8 +817,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         screen.addPreference(blockedUploaderPref)
     }
 
-    override fun getFilterList(): FilterList =
-        helper.mdFilters.getMDFilterList(preferences, dexLang, helper.intl)
+    override fun getFilterList(): FilterList = helper.mdFilters.getMDFilterList(preferences, dexLang, helper.intl)
 
     private fun HttpUrl.Builder.addQueryParameter(name: String, value: Set<String>?) = apply {
         value?.forEach { addQueryParameter(name, it) }
@@ -837,8 +827,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         helper.json.decodeFromString(body.string())
     }
 
-    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? =
-        firstOrNull { it is T } as? T?
+    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? = firstOrNull { it is T } as? T?
 
     private val SharedPreferences.contentRating
         get() = getStringSet(

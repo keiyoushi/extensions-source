@@ -31,8 +31,7 @@ class YSKComics(
 
     // ---
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/home/best-comics", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/home/best-comics", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<PopularDto>().data
@@ -44,8 +43,7 @@ class YSKComics(
 
     // ---
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/api/home/latest-comics?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/home/latest-comics?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<LatestDto>().data
@@ -104,9 +102,7 @@ class YSKComics(
 
     // ---
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = extractSlug(manga.url)
@@ -121,29 +117,24 @@ class YSKComics(
 
     // ---
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            buildList {
-                var page = 1
-                do {
-                    val request = chapterListRequestPaged(manga, page)
-                    val response = client.newCall(request).execute()
-                    val chaptersPage = chapterListParsePaged(response)
-                    addAll(chaptersPage.chapters)
-                    page++
-                } while (chaptersPage.hasNextPage)
-            }.asReversed(),
-        )
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        buildList {
+            var page = 1
+            do {
+                val request = chapterListRequestPaged(manga, page)
+                val response = client.newCall(request).execute()
+                val chaptersPage = chapterListParsePaged(response)
+                addAll(chaptersPage.chapters)
+                page++
+            } while (chaptersPage.hasNextPage)
+        }.asReversed(),
+    )
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     private fun chapterListRequestPaged(manga: SManga, page: Int): Request {
         val slug = extractSlug(manga.url)

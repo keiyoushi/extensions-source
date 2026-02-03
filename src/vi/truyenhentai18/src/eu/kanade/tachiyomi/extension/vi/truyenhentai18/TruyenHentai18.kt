@@ -100,6 +100,7 @@ class TruyenHentai18 : ParsedHttpSource() {
                         else -> SManga.UNKNOWN
                     }
                 }
+
                 text.contains("Tác giả:", ignoreCase = true) -> {
                     author = text.substringAfter(":").trim()
                 }
@@ -155,20 +156,14 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     // ============================== Pages ======================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#viewer.chapter-container img").mapIndexed { index, element ->
-            Page(index, imageUrl = imageElement(element))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#viewer.chapter-container img").mapIndexed { index, element ->
+        Page(index, imageUrl = imageElement(element))
     }
 
-    private fun imageElement(element: Element): String? {
-        return when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            else -> element.attr("abs:src")
-        }
+    private fun imageElement(element: Element): String? = when {
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        else -> element.attr("abs:src")
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

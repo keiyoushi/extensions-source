@@ -9,12 +9,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HaremDeKira : Madara(
-    "Harem de Kira",
-    "https://kiraproject.lat",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class HaremDeKira :
+    Madara(
+        "Harem de Kira",
+        "https://kiraproject.lat",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     override val versionId = 2
 
     override val mangaSubString = "serie"
@@ -54,7 +55,5 @@ class HaremDeKira : Madara(
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
-    private fun Element.imageFromStyle(): String {
-        return this.attr("style").substringAfter("url(").substringBefore(")")
-    }
+    private fun Element.imageFromStyle(): String = this.attr("style").substringAfter("url(").substringBefore(")")
 }

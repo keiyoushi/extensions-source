@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 4
 
 dependencies {
-  api(project(":lib:i18n"))
+    api(project(":lib:i18n"))
 }

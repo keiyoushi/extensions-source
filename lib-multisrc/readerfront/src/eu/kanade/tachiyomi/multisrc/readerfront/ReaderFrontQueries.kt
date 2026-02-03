@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.readerfront
 
-private fun String.encodeUri() =
-    android.net.Uri.encode(trimMargin())!!
+private fun String.encodeUri() = android.net.Uri.encode(trimMargin())!!
 
 internal const val STUB_QUERY = "stub:"
 

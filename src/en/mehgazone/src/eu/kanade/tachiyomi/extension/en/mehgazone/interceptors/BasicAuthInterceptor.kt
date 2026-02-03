@@ -19,12 +19,11 @@ class BasicAuthInterceptor(private var user: String?, private var password: Stri
         credentials = getCredentials()
     }
 
-    private fun getCredentials(): String? =
-        if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
-            Credentials.basic(user!!, password!!)
-        } else {
-            null
-        }
+    private fun getCredentials(): String? = if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
+        Credentials.basic(user!!, password!!)
+    } else {
+        null
+    }
 
     private var credentials: String? = getCredentials()
 

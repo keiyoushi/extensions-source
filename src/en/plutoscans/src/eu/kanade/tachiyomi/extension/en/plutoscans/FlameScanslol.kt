@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.en.plutoscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class FlameScanslol : Madara(
-    "FlameScans.lol",
-    "https://flamescans.lol",
-    "en",
-) {
+class FlameScanslol :
+    Madara(
+        "FlameScans.lol",
+        "https://flamescans.lol",
+        "en",
+    ) {
     override val id = 1001157238479601077
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always

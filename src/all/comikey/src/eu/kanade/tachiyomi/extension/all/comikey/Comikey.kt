@@ -46,7 +46,8 @@ open class Comikey(
     override val name: String = "Comikey",
     override val baseUrl: String = "https://comikey.com",
     private val defaultLanguage: String = "en",
-) : ParsedHttpSource(), ConfigurableSource {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     private val gundamUrl: String = "https://gundam.comikey.net"
 
@@ -98,16 +99,14 @@ open class Comikey(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val url = "/comics/$slug/"
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+        val url = "/comics/$slug/"
 
-            fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map { MangasPage(listOf(it), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        fetchMangaDetails(SManga.create().apply { this.url = url })
+            .map { MangasPage(listOf(it), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -164,9 +163,14 @@ open class Comikey(
                     listOf("em pausa", "hiato").any { data.updateText.startsWith(it, true) } -> SManga.ON_HIATUS
                     else -> SManga.UNKNOWN
                 }
+
                 1 -> SManga.COMPLETED
+
                 3 -> SManga.ON_HIATUS
-                in (4..14) -> SManga.ONGOING // daily, weekly, bi-weekly, monthly, every day of the week
+
+                in (4..14) -> SManga.ONGOING
+
+                // daily, weekly, bi-weekly, monthly, every day of the week
                 else -> SManga.UNKNOWN
             }
             genre = buildList(data.tags.size + 1) {
@@ -245,10 +249,8 @@ open class Comikey(
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.fromCallable {
-            pageListParse(chapter)
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        pageListParse(chapter)
     }
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
@@ -456,9 +458,7 @@ open class Comikey(
 
         @JavascriptInterface
         @Suppress("UNUSED")
-        fun gettext(key: String): String {
-            return intl[key]
-        }
+        fun gettext(key: String): String = intl[key]
 
         @JavascriptInterface
         @Suppress("UNUSED")

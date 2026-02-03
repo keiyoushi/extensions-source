@@ -112,16 +112,13 @@ abstract class Gattsu(
         setUrlWithoutDomain(element.ownerDocument()!!.location())
     }
 
-    protected open fun pageListSelector(): String =
-        "div.meio div.post-box ul.post-fotos li a > img, " +
-            "div.meio div.post-box.listaImagens div.galeriaHtml img"
+    protected open fun pageListSelector(): String = "div.meio div.post-box ul.post-fotos li a > img, " +
+        "div.meio div.post-box.listaImagens div.galeriaHtml img"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListSelector())
-            .mapIndexed { i, el ->
-                Page(i, document.location(), el.imgAttr().withoutSize())
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector())
+        .mapIndexed { i, el ->
+            Page(i, document.location(), el.imgAttr().withoutSize())
+        }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -134,19 +131,16 @@ abstract class Gattsu(
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    protected fun Element.imgAttr(): String =
-        if (hasAttr("data-src")) {
-            attr("abs:data-src")
-        } else {
-            attr("abs:src")
-        }
+    protected fun Element.imgAttr(): String = if (hasAttr("data-src")) {
+        attr("abs:data-src")
+    } else {
+        attr("abs:src")
+    }
 
-    protected fun String.toDate(): Long {
-        return try {
-            DATE_FORMATTER.parse(this.substringBefore("T"))?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    protected fun String.toDate(): Long = try {
+        DATE_FORMATTER.parse(this.substringBefore("T"))?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
     }
 
     protected fun String.withoutSize(): String = this.replace(THUMB_SIZE_REGEX, ".")

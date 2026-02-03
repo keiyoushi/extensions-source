@@ -14,9 +14,7 @@ class FilterData(
     val value: String?,
     private val valueDisplayName: String,
 ) {
-    override fun toString(): String {
-        return "$typeDisplayName: $valueDisplayName"
-    }
+    override fun toString(): String = "$typeDisplayName: $valueDisplayName"
 }
 
 class SearchFilter(

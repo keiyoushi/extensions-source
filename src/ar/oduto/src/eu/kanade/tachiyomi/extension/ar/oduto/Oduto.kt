@@ -84,20 +84,17 @@ class Oduto : HttpSource() {
 
     private val chapterFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
 
-    private fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            val anchor = element.select("div.iPostInfoWrap > h3 > a")
-            val timeElement = element.select("div.iPostInfoWrap time")
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val anchor = element.select("div.iPostInfoWrap > h3 > a")
+        val timeElement = element.select("div.iPostInfoWrap time")
 
-            name = anchor.text().trim()
-            setUrlWithoutDomain(anchor.attr("href"))
+        name = anchor.text().trim()
+        setUrlWithoutDomain(anchor.attr("href"))
 
-            timeElement.attr("datetime").let { rawDate -> date_upload = parseChapterDate(rawDate) }
-        }
+        timeElement.attr("datetime").let { rawDate -> date_upload = parseChapterDate(rawDate) }
     }
 
-    private fun parseChapterDate(date: String): Long =
-        chapterFormat.tryParse(date)
+    private fun parseChapterDate(date: String): Long = chapterFormat.tryParse(date)
 
     // Pages
 
@@ -119,20 +116,12 @@ class Oduto : HttpSource() {
         }
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("No search")
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("No search")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }

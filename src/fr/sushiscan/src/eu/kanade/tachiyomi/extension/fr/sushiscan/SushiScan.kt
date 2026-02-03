@@ -75,10 +75,9 @@ class SushiScan :
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            status = document.select(seriesStatusSelector).text().parseStatus()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        status = document.select(seriesStatusSelector).text().parseStatus()
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val scriptContent = document.selectFirst("script:containsData(ts_reader)")?.data()

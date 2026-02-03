@@ -12,12 +12,11 @@ class PornPicsFilters {
         override fun toString() = this.name
     }
 
-    class SortSelector(name: String, private val vals: Array<SortOption>) :
-        Filter.Select<SortOption>(name, vals) {
+    class SortSelector(name: String, private val vals: Array<SortOption>) : Filter.Select<SortOption>(name, vals) {
         fun toUriPart() = vals[state].urlPart
     }
 
-    enum class CategoryType() {
+    enum class CategoryType {
         RECOMMEND,
         CATEGORY,
         TAG,
@@ -42,8 +41,7 @@ class PornPicsFilters {
         override fun toString() = this.name
     }
 
-    class ActiveCategoryTypeSelector(name: String, values: Array<ActiveCategoryOption>) :
-        Filter.Select<ActiveCategoryOption>(name, values) {
+    class ActiveCategoryTypeSelector(name: String, values: Array<ActiveCategoryOption>) : Filter.Select<ActiveCategoryOption>(name, values) {
         fun selected() = values[state].categoryType!!
         fun selectedCategoryOption(filters: FilterList): CategoryOption {
             val selectors = filters.filterIsInstance<CategorySelector>()

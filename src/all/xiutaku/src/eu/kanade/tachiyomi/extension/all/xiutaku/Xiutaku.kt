@@ -21,7 +21,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
-class Xiutaku() : ParsedHttpSource() {
+class Xiutaku : ParsedHttpSource() {
     override val baseUrl = "https://xiutaku.com"
     override val lang = "all"
     override val name = "Xiutaku"
@@ -43,18 +43,14 @@ class Xiutaku() : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = ".pagination-next:not([disabled])"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?start=${20 * (page - 1)}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}", headers)
 
     override fun latestUpdatesSelector() = ".blog > div"
 
     // Popular
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/hot?start=${20 * (page - 1)}", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}", headers)
 
     override fun popularMangaSelector() = latestUpdatesSelector()
 
@@ -99,10 +95,8 @@ class Xiutaku() : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".article-fulltext img")
-            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.attr("abs:src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".article-fulltext img")
+        .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.attr("abs:src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

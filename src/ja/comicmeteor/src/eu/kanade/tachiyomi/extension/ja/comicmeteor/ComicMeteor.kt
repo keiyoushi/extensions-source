@@ -52,13 +52,9 @@ class ComicMeteor : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList())
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -194,9 +190,7 @@ class ComicMeteor : HttpSource() {
 
     private val reader by lazy { SpeedBinbReader(client, headers, json) }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return reader.pageListParse(response)
-    }
+    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response)
 
     private class FilterOption(val name: String, val key: String, val value: String)
     private class AllFilter(options: Array<String>) : Filter.Select<String>("Filter by", options)

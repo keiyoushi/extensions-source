@@ -208,13 +208,11 @@ class CanReadDto(
 class CommentDataDto(
     val list: List<JsonArray>?,
 ) {
-    fun toCommentList(): List<String> {
-        return if (list.isNullOrEmpty()) {
-            listOf("没有吐槽")
-        } else {
-            list.map { item ->
-                item.last().jsonPrimitive.content
-            }
+    fun toCommentList(): List<String> = if (list.isNullOrEmpty()) {
+        listOf("没有吐槽")
+    } else {
+        list.map { item ->
+            item.last().jsonPrimitive.content
         }
     }
 }

@@ -21,9 +21,7 @@ class CloneManga : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/viewer_landing.php")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/viewer_landing.php")
 
     override fun popularMangaParse(response: Response): MangasPage {
         // Gets every manga on landing page
@@ -34,9 +32,7 @@ class CloneManga : ParsedHttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun popularMangaSelector(): String {
-        return "comicPreviewContainer"
-    }
+    override fun popularMangaSelector(): String = "comicPreviewContainer"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val attr = element.getElementsByClass("comicPreview").attr("style")
@@ -87,9 +83,7 @@ class CloneManga : ParsedHttpSource() {
         return chapters.reversed() // Reverse to correct ordering
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -99,29 +93,29 @@ class CloneManga : ParsedHttpSource() {
         return listOf(Page(1, "", imgAbsoluteUrl))
     }
 
-    override fun imageUrlParse(document: Document): String { throw UnsupportedOperationException() }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> { throw Exception("Not used") }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
-    override fun chapterListSelector(): String { throw Exception("Not used") }
+    override fun chapterListSelector(): String = throw Exception("Not used")
 
-    override fun chapterFromElement(element: Element): SChapter { throw UnsupportedOperationException() }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga { throw UnsupportedOperationException() }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? { throw Exception("Not used") }
+    override fun latestUpdatesNextPageSelector(): String? = throw Exception("Not used")
 
-    override fun latestUpdatesRequest(page: Int): Request { throw UnsupportedOperationException() }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String { throw Exception("Not used") }
+    override fun latestUpdatesSelector(): String = throw Exception("Not used")
 
-    override fun popularMangaNextPageSelector(): String? { throw Exception("Not used") }
+    override fun popularMangaNextPageSelector(): String? = throw Exception("Not used")
 
-    override fun searchMangaFromElement(element: Element): SManga { throw UnsupportedOperationException() }
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String? { throw Exception("Not used") }
+    override fun searchMangaNextPageSelector(): String? = throw Exception("Not used")
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request { throw UnsupportedOperationException() }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector(): String { throw Exception("Not used") }
+    override fun searchMangaSelector(): String = throw Exception("Not used")
 }

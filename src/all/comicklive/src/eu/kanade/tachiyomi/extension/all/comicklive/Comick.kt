@@ -38,7 +38,8 @@ import java.util.Locale
 class Comick(
     override val lang: String,
     private val siteLang: String = lang,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "Comick (Unoriginal)"
 
@@ -101,8 +102,7 @@ class Comick(
         )
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/api/chapters/latest?order=new&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/chapters/latest?order=new&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<Data<List<BrowseComic>>>()
@@ -313,8 +313,7 @@ class Comick(
         return@runBlocking FilterList(filters)
     }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/comic/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/comic/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.asJsoup()
@@ -361,8 +360,7 @@ class Comick(
         }
     }
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$siteLang", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$siteLang", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var data = response.parseAs<ChapterList>()
@@ -412,9 +410,7 @@ class Comick(
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {

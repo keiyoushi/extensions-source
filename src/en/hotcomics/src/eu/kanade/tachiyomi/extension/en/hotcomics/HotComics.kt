@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.en.hotcomics
 
 import eu.kanade.tachiyomi.multisrc.hotcomics.HotComics
 
-class HotComics : HotComics(
-    "HotComics",
-    "en",
-    "https://hotcomics.me",
-) {
+class HotComics :
+    HotComics(
+        "HotComics",
+        "en",
+        "https://hotcomics.me",
+    ) {
     override val browseList = listOf(
         Pair("Home", "en"),
         Pair("Weekly", "en/weekly"),

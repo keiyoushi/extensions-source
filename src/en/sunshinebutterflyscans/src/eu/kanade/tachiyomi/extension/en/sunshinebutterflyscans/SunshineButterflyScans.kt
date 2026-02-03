@@ -69,11 +69,9 @@ class SunshineButterflyScans : HttpSource() {
         return Observable.just(MangasPage(mangaList, false))
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Latest ===============================
 
@@ -87,11 +85,9 @@ class SunshineButterflyScans : HttpSource() {
         return Observable.just(MangasPage(mangaList, false))
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
@@ -124,11 +120,9 @@ class SunshineButterflyScans : HttpSource() {
         return Observable.just(MangasPage(mangaList, false))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
@@ -137,27 +131,28 @@ class SunshineButterflyScans : HttpSource() {
         SortFilter(),
     )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    class StatusFilter : UriPartFilter(
-        "Status",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Current", "current"),
-            Pair("Complete", "complete"),
-            Pair("Dropped", "dropped"),
-            Pair("Licensed", "licensed"),
-        ),
-    )
+    class StatusFilter :
+        UriPartFilter(
+            "Status",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Current", "current"),
+                Pair("Complete", "complete"),
+                Pair("Dropped", "dropped"),
+                Pair("Licensed", "licensed"),
+            ),
+        )
 
-    class SortFilter : Filter.Sort(
-        "Sort by",
-        VALUES,
-        Selection(0, false),
-    ) {
+    class SortFilter :
+        Filter.Sort(
+            "Sort by",
+            VALUES,
+            Selection(0, false),
+        ) {
         fun getSelection() = Pair(VALUES[state!!.index], state!!.ascending)
 
         companion object {
@@ -177,11 +172,9 @@ class SunshineButterflyScans : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // ============================== Chapters ==============================
 
@@ -196,11 +189,9 @@ class SunshineButterflyScans : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun chapterListRequest(manga: SManga): Request =
-        throw UnsupportedOperationException()
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
 
@@ -226,17 +217,15 @@ class SunshineButterflyScans : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return if (response.request.url.host.contains("googleapis")) {
-            response.parseAs<GoogleDriveResponseDto>().files.sortedBy {
-                it.name
-            }.mapIndexed { index, file ->
-                Page(index, imageUrl = "https://lh3.googleusercontent.com/d/${file.id}=w${file.metadata.width}")
-            }
-        } else {
-            response.parseAs<ImgurResponseDto>().data.mapIndexed { index, data ->
-                Page(index, imageUrl = data.link)
-            }
+    override fun pageListParse(response: Response): List<Page> = if (response.request.url.host.contains("googleapis")) {
+        response.parseAs<GoogleDriveResponseDto>().files.sortedBy {
+            it.name
+        }.mapIndexed { index, file ->
+            Page(index, imageUrl = "https://lh3.googleusercontent.com/d/${file.id}=w${file.metadata.width}")
+        }
+    } else {
+        response.parseAs<ImgurResponseDto>().data.mapIndexed { index, data ->
+            Page(index, imageUrl = data.link)
         }
     }
 
@@ -249,14 +238,11 @@ class SunshineButterflyScans : HttpSource() {
         return GET(page.imageUrl!!, imgHeaders)
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     companion object {
         private const val GOOGLE_DRIVE_FIRST = "https://www.googleapis.com/drive/v3/files?q=\""

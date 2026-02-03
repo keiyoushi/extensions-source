@@ -27,7 +27,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.collections.map
 
-class LxHentai : ParsedHttpSource(), ConfigurableSource {
+class LxHentai :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "LXManga"
 
@@ -48,38 +50,31 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(SortBy(3)))
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortBy(3)))
 
     override fun popularMangaSelector() = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element) =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(SortBy(0)))
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortBy(0)))
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element) =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val slug = query.substringAfter(PREFIX_ID_SEARCH)
-                val mangaUrl = "/truyen/$slug"
-                fetchMangaDetails(SManga.create().apply { url = mangaUrl })
-                    .map { MangasPage(listOf(it), false) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val slug = query.substringAfter(PREFIX_ID_SEARCH)
+            val mangaUrl = "/truyen/$slug"
+            fetchMangaDetails(SManga.create().apply { url = mangaUrl })
+                .map { MangasPage(listOf(it), false) }
         }
+
+        else -> super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -102,16 +97,21 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
                             Filter.TriState.STATE_EXCLUDE -> addQueryParameter("filter[reject_genres]", genre.id)
                         }
                     }
+
                     is Author -> if (canAddTextFilter && it.state.isNotEmpty()) {
                         addQueryParameter("filter[artist]", it.state)
                         canAddTextFilter = false
                     }
+
                     is Doujinshi -> if (canAddTextFilter && it.state.isNotEmpty()) {
                         addQueryParameter("filter[doujinshi]", it.state)
                         canAddTextFilter = false
                     }
+
                     is Status -> addQueryParameter("filter[status]", it.toUriPart())
+
                     is SortBy -> addQueryParameter("sort", it.toUriPart())
+
                     else -> return@forEach
                 }
             }
@@ -189,33 +189,34 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, state: Int = 0) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
 
-    private class SortBy(state: Int = 0) : UriPartFilter(
-        "Sắp xếp theo",
-        arrayOf(
-            Pair("Mới cập nhật", "-updated_at"),
-            Pair("Mới nhất", "-created_at"),
-            Pair("Cũ nhất", "created_at"),
-            Pair("Xem nhiều", "-views"),
-            Pair("A-Z", "name"),
-            Pair("Z-A", "-name"),
-        ),
-        state,
-    )
+    private class SortBy(state: Int = 0) :
+        UriPartFilter(
+            "Sắp xếp theo",
+            arrayOf(
+                Pair("Mới cập nhật", "-updated_at"),
+                Pair("Mới nhất", "-created_at"),
+                Pair("Cũ nhất", "created_at"),
+                Pair("Xem nhiều", "-views"),
+                Pair("A-Z", "name"),
+                Pair("Z-A", "-name"),
+            ),
+            state,
+        )
 
-    private class Status() : UriPartFilter(
-        "Trạng thái",
-        arrayOf(
-            Pair("Tất cả", "ongoing,completed,paused"),
-            Pair("Đang tiến hành", "ongoing"),
-            Pair("Đã hoàn thành", "completed"),
-            Pair("Tạm ngưng", "paused"),
-        ),
-    )
+    private class Status :
+        UriPartFilter(
+            "Trạng thái",
+            arrayOf(
+                Pair("Tất cả", "ongoing,completed,paused"),
+                Pair("Đang tiến hành", "ongoing"),
+                Pair("Đã hoàn thành", "completed"),
+                Pair("Tạm ngưng", "paused"),
+            ),
+        )
 
     private class Genre(name: String, val id: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)

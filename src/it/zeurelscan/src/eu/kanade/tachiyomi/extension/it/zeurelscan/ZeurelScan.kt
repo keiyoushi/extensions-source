@@ -114,17 +114,15 @@ class ZeurelScan : HttpSource() {
         }
     }
 
-    private fun parseChapterDate(date: String): Long =
-        try {
-            SimpleDateFormat("d MMM yyyy", Locale.ITALIAN).parse(date)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseChapterDate(date: String): Long = try {
+        SimpleDateFormat("d MMM yyyy", Locale.ITALIAN).parse(date)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
+    }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.asJsoup().select("div.Immag img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.Immag img").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

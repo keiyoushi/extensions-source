@@ -9,23 +9,25 @@ fun getFilters(): FilterList = FilterList(
     GenreFilter(getGenreList()),
 )
 
-class SortFilter : UriPartFilter(
-    "Sắp xếp",
-    arrayOf(
-        Pair("Mới cập nhật", "-updated_at"),
-        Pair("Xem nhiều", "-views"),
-        Pair("A-Z", "name"),
-    ),
-)
+class SortFilter :
+    UriPartFilter(
+        "Sắp xếp",
+        arrayOf(
+            Pair("Mới cập nhật", "-updated_at"),
+            Pair("Xem nhiều", "-views"),
+            Pair("A-Z", "name"),
+        ),
+    )
 
-class StatusFilter : UriPartFilter(
-    "Trạng thái",
-    arrayOf(
-        Pair("Tất cả", ""),
-        Pair("Đang tiến hành", "1"),
-        Pair("Đã hoàn thành", "2"),
-    ),
-)
+class StatusFilter :
+    UriPartFilter(
+        "Trạng thái",
+        arrayOf(
+            Pair("Tất cả", ""),
+            Pair("Đang tiến hành", "1"),
+            Pair("Đã hoàn thành", "2"),
+        ),
+    )
 
 class Genre(name: String, val id: String) : Filter.CheckBox(name)
 

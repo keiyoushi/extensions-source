@@ -3,10 +3,11 @@ package eu.kanade.tachiyomi.extension.en.dynasty
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.Serializable
 
-class SortFilter : Filter.Select<String>(
-    name = "Sort",
-    values = selectOptions.map { it.first }.toTypedArray(),
-) {
+class SortFilter :
+    Filter.Select<String>(
+        name = "Sort",
+        values = selectOptions.map { it.first }.toTypedArray(),
+    ) {
     val sort get() = selectOptions[state].second
 }
 
@@ -19,10 +20,11 @@ private val selectOptions = listOf(
 
 class TypeOption(name: String) : Filter.CheckBox(name, true)
 
-class TypeFilter : Filter.Group<TypeOption>(
-    name = "Type",
-    state = typeOptions.map { TypeOption(it) },
-) {
+class TypeFilter :
+    Filter.Group<TypeOption>(
+        name = "Type",
+        state = typeOptions.map { TypeOption(it) },
+    ) {
     val checked get() = state.filter { it.state }.map { it.name }
 }
 

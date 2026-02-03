@@ -48,8 +48,7 @@ class RoliaScan : ParsedHttpSource() {
 
     // ======================== Popular ======================================
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/wp-content/themes/animacewp/most_viewed_series.json", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/wp-content/themes/animacewp/most_viewed_series.json", headers)
 
     override fun popularMangaSelector() = throw UnsupportedOperationException()
 
@@ -97,6 +96,7 @@ class RoliaScan : ParsedHttpSource() {
                     }
                     url.addQueryParameter(selected.query, selected.value)
                 }
+
                 else -> {}
             }
         }
@@ -179,8 +179,7 @@ class RoliaScan : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        throw UnsupportedOperationException()
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
     override fun chapterListSelector() = ".chapter-list-row:has(.chapter-cell)"
 
@@ -198,10 +197,8 @@ class RoliaScan : ParsedHttpSource() {
 
     // ======================== Pages ========================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".manga-child-the-content img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".manga-child-the-content img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.absUrl("src"))
     }
 
     override fun imageUrlParse(document: Document) = ""
@@ -274,19 +271,16 @@ class RoliaScan : ParsedHttpSource() {
             } ?: emptyList()
     }
 
-    private fun String.getDocumentFragmentFilter(pattern: Regex): Document? {
-        return pattern.find(this)?.groups?.get(2)?.value?.let {
-            val fragment = json.decodeFromString<String>(it)
-            Jsoup.parseBodyFragment(fragment)
-        }
+    private fun String.getDocumentFragmentFilter(pattern: Regex): Document? = pattern.find(this)?.groups?.get(2)?.value?.let {
+        val fragment = json.decodeFromString<String>(it)
+        Jsoup.parseBodyFragment(fragment)
     }
 
     private fun buildRegex(field: String) = """"($field)":("<[^,]+)""".toRegex()
 
     private data class Option(val name: String = "", val value: String = "", val query: String = "")
 
-    private open class SelectionList(displayName: String, private val vals: List<Option>, state: Int = 0) :
-        Filter.Select<String>(displayName, vals.map { it.name }.toTypedArray(), state) {
+    private open class SelectionList(displayName: String, private val vals: List<Option>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.name }.toTypedArray(), state) {
         fun selected() = vals[state]
     }
 

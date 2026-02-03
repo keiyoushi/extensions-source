@@ -11,7 +11,6 @@ class TypeFilter(title: String, types: List<Pair<String, String>>) : UriPartFilt
 
 class OrderFilter(title: String, orders: List<Pair<String, String>>) : UriPartFilter(title, orders)
 
-open class UriPartFilter(displayName: String, val vals: List<Pair<String, String>>) :
-    Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+open class UriPartFilter(displayName: String, val vals: List<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart() = vals[state].second
 }

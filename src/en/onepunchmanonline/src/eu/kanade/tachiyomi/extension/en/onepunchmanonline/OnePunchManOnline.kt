@@ -23,9 +23,7 @@ class OnePunchManOnline : ParsedHttpSource() {
     // =========================================================================
     //  Popular Manga (Hardcoded Single Entry)
     // =========================================================================
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(createManga()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun popularMangaSelector(): String = throw UnsupportedOperationException()
@@ -44,15 +42,13 @@ class OnePunchManOnline : ParsedHttpSource() {
     // =========================================================================
     //  Search (Client-Side Safe Filtering)
     // =========================================================================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return Observable.fromCallable {
-            val manga = createManga()
-            // If query matches title, return the manga. Otherwise return empty list.
-            if (query.isBlank() || manga.title.contains(query, ignoreCase = true)) {
-                MangasPage(listOf(manga), false)
-            } else {
-                MangasPage(emptyList(), false)
-            }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+        val manga = createManga()
+        // If query matches title, return the manga. Otherwise return empty list.
+        if (query.isBlank() || manga.title.contains(query, ignoreCase = true)) {
+            MangasPage(listOf(manga), false)
+        } else {
+            MangasPage(emptyList(), false)
         }
     }
 
@@ -65,40 +61,32 @@ class OnePunchManOnline : ParsedHttpSource() {
     // =========================================================================
     //  Manga Details
     // =========================================================================
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(createManga().apply { initialized = true })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
 
     override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
-    private fun createManga(): SManga {
-        return SManga.create().apply {
-            title = "One Punch Man"
-            url = "/"
-            thumbnail_url = "https://comicvine.gamespot.com/a/uploads/original/11111/111114608/3458824-8589005300-YICcI.jpg"
-            author = "ONE"
-            artist = "Murata Yusuke"
-            status = SManga.ONGOING
-            genre = "Action, Comedy, Superhero, Seinen"
-            description = "One-Punch Man is a superhero who has trained so hard that his hair has fallen out, and who can overcome any enemy with one punch."
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        title = "One Punch Man"
+        url = "/"
+        thumbnail_url = "https://comicvine.gamespot.com/a/uploads/original/11111/111114608/3458824-8589005300-YICcI.jpg"
+        author = "ONE"
+        artist = "Murata Yusuke"
+        status = SManga.ONGOING
+        genre = "Action, Comedy, Superhero, Seinen"
+        description = "One-Punch Man is a superhero who has trained so hard that his hair has fallen out, and who can overcome any enemy with one punch."
     }
 
     // =========================================================================
     //  Chapter List
     // =========================================================================
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl, headers)
 
     // Catches ALL links containing "/manga/" to get both "punch" and "chapter" URLs
     override fun chapterListSelector() = "ul li a[href*='/manga/']"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.text()
     }
 
     // =========================================================================

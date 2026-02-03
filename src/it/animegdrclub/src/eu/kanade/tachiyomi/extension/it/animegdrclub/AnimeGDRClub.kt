@@ -45,11 +45,13 @@ class AnimeGDRClub : ParsedHttpSource() {
                     is SelezType -> {
                         filtertype = filter.values[filter.state]
                     }
+
                     is GenreSelez -> {
                         if (filtertype == "Genere") {
                             url.addQueryParameter("genere", filter.values[filter.state])
                         }
                     }
+
                     is StatusList -> {
                         if (filtertype == "Stato") {
                             var i = 0
@@ -61,6 +63,7 @@ class AnimeGDRClub : ParsedHttpSource() {
                             }
                         }
                     }
+
                     else -> {}
                 }
             }

@@ -197,9 +197,7 @@ class MangaLivreBlog : HttpSource() {
     override fun imageUrlParse(response: Response) = ""
 
     // ============================== Helpers ================================
-    private fun cleanThumbnailUrl(url: String): String {
-        return url.replace("-150x150", "")
-    }
+    private fun cleanThumbnailUrl(url: String): String = url.replace("-150x150", "")
 
     private fun parseRelativeDate(date: String?): Long {
         if (date.isNullOrEmpty()) return 0L

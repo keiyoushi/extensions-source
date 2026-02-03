@@ -49,9 +49,7 @@ class Alphapolis : HttpSource() {
         }
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga/official/ranking?category=total", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/official/ranking?category=total", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -66,9 +64,7 @@ class Alphapolis : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga/official/search?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/official/search?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -87,26 +83,31 @@ class Alphapolis : HttpSource() {
                         url.addQueryParameter("category[$index]", option.value)
                     }
                 }
+
                 is LabelFilter -> {
                     filter.state.filter { it.state }.forEachIndexed { index, option ->
                         url.addQueryParameter("label[$index]", option.value)
                     }
                 }
+
                 is StatusFilter -> {
                     filter.state.filter { it.state }.forEachIndexed { index, option ->
                         url.addQueryParameter("complete[$index]", option.value)
                     }
                 }
+
                 is RentalFilter -> {
                     filter.state.filter { it.state }.forEachIndexed { index, option ->
                         url.addQueryParameter("rental[$index]", option.value)
                     }
                 }
+
                 is DailyFreeFilter -> {
                     if (filter.state) {
                         url.addQueryParameter("is_free_daily", "enable")
                     }
                 }
+
                 else -> {}
             }
         }
@@ -209,9 +210,7 @@ class Alphapolis : HttpSource() {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
@@ -227,44 +226,48 @@ class Alphapolis : HttpSource() {
         DailyFreeFilter(),
     )
 
-    private class CategoryFilter : Filter.Group<FilterTag>(
-        "カテゴリ",
-        listOf(
-            FilterTag("男性向け", "men"),
-            FilterTag("女性向け", "women"),
-            FilterTag("TL", "tl"),
-            FilterTag("BL", "bl"),
-        ),
-    )
+    private class CategoryFilter :
+        Filter.Group<FilterTag>(
+            "カテゴリ",
+            listOf(
+                FilterTag("男性向け", "men"),
+                FilterTag("女性向け", "women"),
+                FilterTag("TL", "tl"),
+                FilterTag("BL", "bl"),
+            ),
+        )
 
-    private class LabelFilter : Filter.Group<FilterTag>(
-        "レーベル",
-        listOf(
-            FilterTag("アルファポリス", "alphapolis"),
-            FilterTag("レジーナ", "regina"),
-            FilterTag("アルファノルン", "alphanorn"),
-            FilterTag("エタニティ", "eternity"),
-            FilterTag("ノーチェ", "noche"),
-            FilterTag("アンダルシュ", "andarche"),
-        ),
-    )
+    private class LabelFilter :
+        Filter.Group<FilterTag>(
+            "レーベル",
+            listOf(
+                FilterTag("アルファポリス", "alphapolis"),
+                FilterTag("レジーナ", "regina"),
+                FilterTag("アルファノルン", "alphanorn"),
+                FilterTag("エタニティ", "eternity"),
+                FilterTag("ノーチェ", "noche"),
+                FilterTag("アンダルシュ", "andarche"),
+            ),
+        )
 
-    private class StatusFilter : Filter.Group<FilterTag>(
-        "進行状況",
-        listOf(
-            FilterTag("連載中", "running"),
-            FilterTag("完結", "finished"),
-            FilterTag("休載中", "sleeping"),
-        ),
-    )
+    private class StatusFilter :
+        Filter.Group<FilterTag>(
+            "進行状況",
+            listOf(
+                FilterTag("連載中", "running"),
+                FilterTag("完結", "finished"),
+                FilterTag("休載中", "sleeping"),
+            ),
+        )
 
-    private class RentalFilter : Filter.Group<FilterTag>(
-        "レンタル",
-        listOf(
-            FilterTag("レンタルあり", "enable"),
-            FilterTag("全話無料", "disable"),
-        ),
-    )
+    private class RentalFilter :
+        Filter.Group<FilterTag>(
+            "レンタル",
+            listOf(
+                FilterTag("レンタルあり", "enable"),
+                FilterTag("全話無料", "disable"),
+            ),
+        )
 
     private class DailyFreeFilter : Filter.CheckBox("毎日¥0")
 

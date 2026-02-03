@@ -57,6 +57,7 @@ class GenreData(hasCategoryPage: Boolean) {
                 val request = when (source) {
                     // Web sources parse listings whenever possible. They call this function for mobile pages.
                     is MCCMSWeb -> GET("${source.baseUrl.mobileUrl()}/category/", source.headers)
+
                     else -> GET("${source.baseUrl}/category/", pcHeaders)
                 }
                 val response = source.client.newCall(request).execute()

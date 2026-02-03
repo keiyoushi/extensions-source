@@ -83,7 +83,11 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
             val url = "$baseUrl/${query.substringAfter(SEARCH_PREFIX)}"
             return client.newCall(GET(url, headers))
                 .asObservableSuccess().map { response ->
-                    val mangas = try { listOf(mangaDetailsParse(response)) } catch (_: Exception) { emptyList() }
+                    val mangas = try {
+                        listOf(mangaDetailsParse(response))
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
                     MangasPage(mangas, false)
                 }
         }
@@ -112,9 +116,7 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
         return mangaParse(dto.details)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url.replace(langOption.infix, langOption.mangaSubstring)
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.replace(langOption.infix, langOption.mangaSubstring)
 
     // ================================= Chapter ==========================================
 
@@ -173,25 +175,24 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
 
     // ================================= Utilities =======================================
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     private fun SManga.slug() = this.url.split("/").last()
 
-    private fun mangaParse(dto: MangaDto): SManga {
-        return SManga.create().apply {
-            title = dto.title
-            thumbnail_url = dto.thumbnailUrl
-            status = dto.status
-            url = "/${dto.slug}"
-            genre = dto.genres
-            initialized = true
-        }
+    private fun mangaParse(dto: MangaDto): SManga = SManga.create().apply {
+        title = dto.title
+        thumbnail_url = dto.thumbnailUrl
+        status = dto.status
+        url = "/${dto.slug}"
+        genre = dto.genres
+        initialized = true
     }
 
-    private fun String.toDate(): Long =
-        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     companion object {
         const val SEARCH_PREFIX = "slug:"

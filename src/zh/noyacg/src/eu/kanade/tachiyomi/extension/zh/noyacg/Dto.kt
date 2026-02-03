@@ -34,8 +34,7 @@ class MangaDto(
     }
 }
 
-fun SManga.field(index: Int): String =
-    description!!.split("\n")[index].substringAfter('：')
+fun SManga.field(index: Int): String = description!!.split("\n")[index].substringAfter('：')
 
 val SManga.timestamp: Long get() = dateFormat.parse(field(0))!!.time
 val SManga.pageCount: Int get() = field(1).toInt()

@@ -113,9 +113,7 @@ class RemoteStorageUtils {
            tag();
         """
 
-        override fun urlModifier(originalUrl: String): String {
-            return originalUrl.replace("/api/", "/").replace("/series/", "/")
-        }
+        override fun urlModifier(originalUrl: String): String = originalUrl.replace("/api/", "/").replace("/series/", "/")
     }
 
     class HomeInterceptor : GenericInterceptor(false) {
@@ -133,9 +131,7 @@ class RemoteStorageUtils {
            })();
         """
 
-        override fun urlModifier(originalUrl: String): String {
-            return originalUrl
-        }
+        override fun urlModifier(originalUrl: String): String = originalUrl
     }
 
     companion object {

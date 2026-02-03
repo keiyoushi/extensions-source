@@ -43,9 +43,7 @@ class ZeroScans : HttpSource() {
         return super.fetchLatestUpdates(page)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/$API_PATH/new-chapters")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$API_PATH/new-chapters")
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val newChapters = response.parseAs<NewChaptersResponseDto>()
@@ -57,9 +55,7 @@ class ZeroScans : HttpSource() {
         return MangasPage(titlesList, false)
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, query = "", filters = getFilterList())
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, query = "", filters = getFilterList())
 
     override fun fetchSearchManga(
         page: Int,
@@ -87,9 +83,11 @@ class ZeroScans : HttpSource() {
                 is StatusFilter -> {
                     filteredComics = filteredComics.filter { zsHelper.checkStatusFilter(filter, it) }
                 }
+
                 is GenreFilter -> {
                     filteredComics = filteredComics.filter { zsHelper.checkGenreFilter(filter, it) }
                 }
+
                 is SortFilter -> {
                     filter.state?.let {
                         val type = sortList[it.index].type
@@ -97,6 +95,7 @@ class ZeroScans : HttpSource() {
                         filteredComics = zsHelper.applySortFilter(type, ascending, filteredComics)
                     }
                 }
+
                 else -> { /* Do Nothing */ }
             }
         }
@@ -124,6 +123,7 @@ class ZeroScans : HttpSource() {
                     rankings.weekly
                 }
             }
+
             "monthly" -> {
                 if (!ascending) {
                     rankings.monthly.reversed()
@@ -131,6 +131,7 @@ class ZeroScans : HttpSource() {
                     rankings.monthly
                 }
             }
+
             else -> {
                 if (!ascending) {
                     rankings.allTime.reversed()
@@ -190,15 +191,13 @@ class ZeroScans : HttpSource() {
         return GET("$baseUrl/$API_PATH/comic/$mangaId/chapters?sort=desc&page=$page")
     }
 
-    private fun zsChapterListParse(response: Response): ZeroScansChapterPage {
-        return response.parseAs<ZeroScansResponseDto<ZeroScansChaptersResponseDto>>()
-            .data.let {
-                ZeroScansChapterPage(
-                    it.data,
-                    it.currentPage < it.lastPage,
-                )
-            }
-    }
+    private fun zsChapterListParse(response: Response): ZeroScansChapterPage = response.parseAs<ZeroScansResponseDto<ZeroScansChaptersResponseDto>>()
+        .data.let {
+            ZeroScansChapterPage(
+                it.data,
+                it.currentPage < it.lastPage,
+            )
+        }
 
     class ZeroScansChapterPage(
         val chapters: List<ZeroScansChapterDto>,
@@ -273,8 +272,7 @@ class ZeroScans : HttpSource() {
 
     private var statusList: List<Status> = emptyList()
 
-    class SortFilter(sorts: List<ZeroScans.Sort>) :
-        Filter.Sort("Sort by", sorts.map { it.name }.toTypedArray(), Selection(3, false))
+    class SortFilter(sorts: List<ZeroScans.Sort>) : Filter.Sort("Sort by", sorts.map { it.name }.toTypedArray(), Selection(3, false))
 
     class Sort(val name: String, val type: String)
 
@@ -286,13 +284,10 @@ class ZeroScans : HttpSource() {
         Sort("View Count", "view_count"),
     )
 
-    class RankingsHeader :
-        Filter.Header("Note: Genre, Sort, Status filter and Search query")
-    class RankingsHeader2 :
-        Filter.Header("are not applied to rankings")
+    class RankingsHeader : Filter.Header("Note: Genre, Sort, Status filter and Search query")
+    class RankingsHeader2 : Filter.Header("are not applied to rankings")
 
-    class RankingsFilter(rankings: List<Ranking>) :
-        Filter.Sort("Rankings", rankings.map { it.name }.toTypedArray(), Selection(0, false))
+    class RankingsFilter(rankings: List<Ranking>) : Filter.Sort("Rankings", rankings.map { it.name }.toTypedArray(), Selection(0, false))
 
     class Ranking(val name: String, val type: String? = null)
 
@@ -308,13 +303,9 @@ class ZeroScans : HttpSource() {
         json.decodeFromString(it.body.string())
     }
 
-    private fun comicsDataRequest(): Request {
-        return GET("$baseUrl/$API_PATH/comics")
-    }
+    private fun comicsDataRequest(): Request = GET("$baseUrl/$API_PATH/comics")
 
-    private fun comicsDataParse(response: Response): ZeroScansComicsDataDto {
-        return response.parseAs<ZeroScansResponseDto<ZeroScansComicsDataDto>>().data
-    }
+    private fun comicsDataParse(response: Response): ZeroScansComicsDataDto = response.parseAs<ZeroScansResponseDto<ZeroScansComicsDataDto>>().data
 
     private fun updateComicsData() {
         val response = client.newCall(comicsDataRequest()).execute()
@@ -337,8 +328,7 @@ class ZeroScans : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 

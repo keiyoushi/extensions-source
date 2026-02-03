@@ -38,9 +38,7 @@ class Atsumaru : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<BrowseMangaDto>().items
@@ -50,13 +48,9 @@ class Atsumaru : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Search ===============================
 
@@ -83,27 +77,17 @@ class Atsumaru : HttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/manga/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/manga/page?id=${manga.url}", apiHeaders)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/manga/page?id=${manga.url}", apiHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaObjectDto>().mangaPage.toSManga(baseUrl)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaObjectDto>().mangaPage.toSManga(baseUrl)
 
     // ============================== Chapters ==============================
 
-    private fun fetchChaptersRequest(mangaId: String, page: Int): Request {
-        return GET("$baseUrl/api/manga/chapters?id=$mangaId&filter=all&sort=desc&page=$page", apiHeaders)
-    }
+    private fun fetchChaptersRequest(mangaId: String, page: Int): Request = GET("$baseUrl/api/manga/chapters?id=$mangaId&filter=all&sort=desc&page=$page", apiHeaders)
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return fetchChaptersRequest(manga.url, 0)
-    }
+    override fun chapterListRequest(manga: SManga): Request = fetchChaptersRequest(manga.url, 0)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaId = response.request.url.queryParameter("id")!!
@@ -136,10 +120,8 @@ class Atsumaru : HttpSource() {
         return GET(url.build(), apiHeaders)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
-            Page(index, imageUrl = baseUrl + page.image)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
+        Page(index, imageUrl = baseUrl + page.image)
     }
 
     override fun imageRequest(page: Page): Request {
@@ -151,7 +133,5 @@ class Atsumaru : HttpSource() {
         return GET(page.imageUrl!!, imgHeaders)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

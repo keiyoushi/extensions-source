@@ -109,9 +109,7 @@ fun ChapterItem.toSChapter(seriesSlug: String?): SChapter = SChapter.create().ap
 
 private val chapterNumberFormatter = DecimalFormat("#.##")
 
-private fun formatChapterNumber(number: Float): String {
-    return chapterNumberFormatter.format(number)
-}
+private fun formatChapterNumber(number: Float): String = chapterNumberFormatter.format(number)
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
 

@@ -50,32 +50,22 @@ class CutieComics : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = ".navigation > a > i.fa-angle-right"
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client.newCall(GET("$baseUrl/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
@@ -125,24 +115,16 @@ class CutieComics : ParsedHttpSource() {
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.galery > img").mapIndexed { index, item ->
-            Page(index, imageUrl = item.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.galery > img").mapIndexed { index, item ->
+        Page(index, imageUrl = item.absUrl("src"))
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {
         const val PREFIX_SEARCH = "id:"

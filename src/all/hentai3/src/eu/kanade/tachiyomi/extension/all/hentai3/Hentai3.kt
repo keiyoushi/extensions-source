@@ -36,9 +36,7 @@ class Hentai3(
         .set("origin", baseUrl)
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -49,18 +47,14 @@ class Hentai3(
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.selectFirst("div")!!.ownText()
-            setUrlWithoutDomain(element.absUrl("href"))
-            thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
-        }
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div")!!.ownText()
+        setUrlWithoutDomain(element.absUrl("href"))
+        thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&pages=$page"}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&pages=$page"}", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -95,6 +89,7 @@ class Hentai3(
                         }
                     }
                 }
+
                 else -> {}
             }
         }

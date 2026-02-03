@@ -41,8 +41,7 @@ class ResultDto<T>(
     }
 }
 
-fun ResultDto<List<MangaDto>>.toSMangaList(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = true, defaultScanId: Int? = null): List<SManga> =
-    results.filter { it.type != "TEXTO" }.map { it.toSManga(cdnUrl, useWidth, includeSlug, defaultScanId) }
+fun ResultDto<List<MangaDto>>.toSMangaList(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = true, defaultScanId: Int? = null): List<SManga> = results.filter { it.type != "TEXTO" }.map { it.toSManga(cdnUrl, useWidth, includeSlug, defaultScanId) }
 
 @Serializable
 class MangaDto(
@@ -84,7 +83,9 @@ class MangaDto(
     private fun buildThumbnailUrl(cdnUrl: String, useWidth: Boolean, defaultScanId: Int?): String? = thumbnail?.let {
         when {
             it.startsWith("http") -> it
+
             it.contains("/") -> "$cdnUrl/$it"
+
             else -> {
                 val width = if (useWidth) "?width=300" else ""
                 val scanId = scanId ?: defaultScanId
@@ -94,8 +95,7 @@ class MangaDto(
         }
     }
 
-    fun toSChapterList(): List<SChapter> =
-        chapters?.map { it.toSChapter() }?.sortedByDescending { it.chapter_number } ?: emptyList()
+    fun toSChapterList(): List<SChapter> = chapters?.map { it.toSChapter() }?.sortedByDescending { it.chapter_number } ?: emptyList()
 
     @Serializable
     class Genre(@JsonNames("tag_nome", "name") val value: String) {
@@ -121,8 +121,10 @@ class MangaDto(
 
                 val value = when (element) {
                     is JsonPrimitive -> element.content
+
                     is JsonObject -> listOf("stt_nome", "value", "name")
                         .firstNotNullOfOrNull { key -> element[key]?.jsonPrimitive?.content }
+
                     else -> null
                 }
                 return MangaStatus(value)
@@ -239,6 +241,7 @@ class PageDto(
 
         val imageUrl = when {
             mime != null -> "$cdnUrl/wp-content/uploads/WP-manga/data/$normalizedSrc"
+
             path != null -> {
                 val cleanPath = path!!.trim()
                 val absolutePath = if (cleanPath.startsWith("/")) cleanPath else "/$cleanPath"
@@ -249,6 +252,7 @@ class PageDto(
                     "$cdnUrl$pathWithoutTrailing/$normalizedSrc"
                 }
             }
+
             else -> "$cdnUrl/scans/1/obras/${mangaId ?: 0}/capitulos/$chapterNumber/$normalizedSrc"
         }
 

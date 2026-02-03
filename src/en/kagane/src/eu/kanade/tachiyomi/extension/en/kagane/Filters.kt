@@ -117,7 +117,8 @@ internal open class JsonMultiSelectFilter(
     name: String,
     private val param: String,
     genres: List<MultiSelectOption>,
-) : Filter.Group<MultiSelectOption>(name, genres), JsonFilter {
+) : Filter.Group<MultiSelectOption>(name, genres),
+    JsonFilter {
     override fun addToJsonObject(builder: JsonObjectBuilder, additionExcludeList: List<String>) {
         val whatToInclude = state.filter { it.state }.map { it.id }
 
@@ -135,7 +136,8 @@ internal open class JsonMultiSelectTriFilter(
     name: String,
     private val param: String,
     genres: List<MultiSelectTriOption>,
-) : Filter.Group<MultiSelectTriOption>(name, genres), JsonFilter {
+) : Filter.Group<MultiSelectTriOption>(name, genres),
+    JsonFilter {
     override fun addToJsonObject(builder: JsonObjectBuilder, additionExcludeList: List<String>) {
         val whatToInclude = state.filter { it.state == TriState.STATE_INCLUDE }.map { it.id }
         val whatToExclude = state.filter { it.state == TriState.STATE_EXCLUDE }.map { it.id } + additionExcludeList

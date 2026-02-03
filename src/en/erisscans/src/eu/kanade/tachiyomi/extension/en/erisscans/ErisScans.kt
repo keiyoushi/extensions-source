@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.en.erisscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
-class ErisScans : Keyoapp(
-    "Eris Scans",
-    "https://erisscans.com",
-    "en",
-) {
+class ErisScans :
+    Keyoapp(
+        "Eris Scans",
+        "https://erisscans.com",
+        "en",
+    ) {
     override val descriptionSelector: String = "div.grid > div.overflow-hidden > p"
     override val statusSelector: String = "div[alt=Status]"
     override val authorSelector: String = "div[alt=Author]"

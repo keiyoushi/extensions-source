@@ -32,7 +32,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
+class ManhuaRock :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     // Site changed from FMReader to some Madara copycat
     override val versionId = 2
@@ -119,7 +121,9 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
             // I have zero idea what the strings for Ongoing and Completed are, these are educated guesses
             // All the metadata on this page is basically "Unknown".
             "Đang Tiến Hành" -> SManga.ONGOING
+
             "Hoàn Thành" -> SManga.COMPLETED
+
             else -> SManga.UNKNOWN
         }
         thumbnail_url = document.selectFirst("div.summary_image img")?.attr("abs:data-src")
@@ -155,10 +159,8 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         return pageListParse(Jsoup.parse(data.html, baseUrl))
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -196,17 +198,18 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         override fun toString() = name
     }
 
-    private class OrderByFilter : Filter.Select<Slug>(
-        "Sắp xếp theo",
-        arrayOf(
-            Slug("Mới cập nhật", "latest-updated"),
-            Slug("Điểm", "score"),
-            Slug("Tên A-Z", "name-az"),
-            Slug("Ngày phát hành", "release-date"),
-            Slug("Xem nhiều", "most-viewd"),
-        ),
-        4,
-    )
+    private class OrderByFilter :
+        Filter.Select<Slug>(
+            "Sắp xếp theo",
+            arrayOf(
+                Slug("Mới cập nhật", "latest-updated"),
+                Slug("Điểm", "score"),
+                Slug("Tên A-Z", "name-az"),
+                Slug("Ngày phát hành", "release-date"),
+                Slug("Xem nhiều", "most-viewd"),
+            ),
+            4,
+        )
 
     private class GenreList(slugs: Array<Slug>) : Filter.Select<Slug>("Thể loại", slugs)
 
