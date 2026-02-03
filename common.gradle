@@ -2,6 +2,7 @@ import com.android.build.gradle.tasks.PackageAndroidArtifact
 
 apply plugin: 'com.android.application'
 apply plugin: 'kotlinx-serialization'
+apply plugin: 'keiyoushi.lint'
 
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
