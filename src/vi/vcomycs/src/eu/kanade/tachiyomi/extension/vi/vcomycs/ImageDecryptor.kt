@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.vi.vcomycs
 
 import android.util.Base64
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import org.jsoup.Jsoup
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -26,8 +26,6 @@ object ImageDecryptor {
         """var\s+htmlContent\s*=\s*"(.*?)"\s*;""",
         RegexOption.DOT_MATCHES_ALL,
     )
-
-    private val json = Json { ignoreUnknownKeys = true }
 
     @Serializable
     private data class EncryptedData(
@@ -61,7 +59,7 @@ object ImageDecryptor {
      * Decrypt the AES-encrypted content using CryptoJS format with PBKDF2.
      */
     private fun decryptContent(encryptedJsonString: String): String {
-        val encryptedData = json.decodeFromString(EncryptedData.serializer(), encryptedJsonString)
+        val encryptedData = encryptedJsonString.parseAs<EncryptedData>()
 
         val passphrase = KEY_PART_1 + KEY_PART_2 + KEY_PART_3
 

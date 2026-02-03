@@ -10,13 +10,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -30,8 +28,6 @@ class Vcomycs : HttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(5)
         .build()
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -103,9 +99,7 @@ class Vcomycs : HttpSource() {
     }
 
     private fun parseSearchApiResponse(response: Response): MangasPage {
-        val searchResponse: SearchResponse = response.body.byteStream().use {
-            json.decodeFromStream(it)
-        }
+        val searchResponse = response.parseAs<SearchResponse>()
 
         val mangas = searchResponse.data
             .filter { it.link.contains("/truyen-tranh/") } // Only manga, exclude news
