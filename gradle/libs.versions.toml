@@ -2,7 +2,7 @@
 kotlin = "2.3.0"
 coroutines = "1.10.2"
 
-# 1.8 and beond switched to `all-compatibility` mode
+# 1.8 and beyond switched to `all-compatibility` mode
 # https://github.com/Kotlin/kotlinx.serialization/blob/master/CHANGELOG.md#generate-java-8s-default-method-implementations-in-interfaces
 # this causes issues for extensions as some required generated classes are not in the final apk due to the library being compile only
 # more info: https://github.com/keiyoushi/extensions-source/pull/12962#issuecomment-3828458599
