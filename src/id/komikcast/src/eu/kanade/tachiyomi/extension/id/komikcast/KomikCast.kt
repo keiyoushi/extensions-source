@@ -35,6 +35,8 @@ class KomikCast : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
         .add("Accept", "application/json")
         .add("Accept-language", "en-US,en;q=0.9,id;q=0.8")
 
