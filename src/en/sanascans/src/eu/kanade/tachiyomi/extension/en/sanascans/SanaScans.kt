@@ -1,13 +1,17 @@
 package eu.kanade.tachiyomi.extension.en.sanascans
 
 import android.content.SharedPreferences
-import eu.kanade.tachiyomi.multisrc.iken.Iken
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -18,6 +22,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -26,14 +31,19 @@ import rx.Observable
 import java.text.Normalizer
 import java.util.Locale
 
-class SanaScans : Iken(
-    "Sana Scans",
-    "en",
-    "https://sanascans.com",
-    "https://sanascans.com",
-) {
+class SanaScans : HttpSource(), ConfigurableSource {
 
-    override val sortPagesByFilename = true
+    override val name = "Sana Scans"
+    override val lang = "en"
+    override val baseUrl = "https://sanascans.com"
+    override val supportsLatest = true
+
+    override val client = network.cloudflareClient
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
+    private val sortPagesByFilename = true
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
@@ -112,6 +122,9 @@ class SanaScans : Iken(
         headers,
     )
 
+    override fun mangaDetailsParse(response: Response): SManga =
+        throw UnsupportedOperationException()
+
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return client.newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
@@ -167,6 +180,8 @@ class SanaScans : Iken(
         }
     }
 
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val body = response.body.string()
         val seriesSlug = seriesSlug(response.request.url) ?: ""
@@ -185,6 +200,48 @@ class SanaScans : Iken(
 
             chapter.toSChapter(seriesSlug, isLocked)
         }
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        if (document.selectFirst("svg.lucide-lock") != null) {
+            throw Exception("Unlock chapter in webview")
+        }
+
+        val pages = document.getNextJson("images").parseAs<List<PageParseDto>>()
+
+        val sortedPages = if (sortPagesByFilename) {
+            pages.sortedWith(
+                compareBy { page ->
+                    val filename = page.url.substringAfterLast('/')
+                    val number = Regex("\\d+").find(filename)?.value?.toIntOrNull() ?: Int.MAX_VALUE
+                    number
+                },
+            )
+        } else {
+            pages
+        }
+
+        return sortedPages.mapIndexed { idx, p ->
+            Page(idx, imageUrl = p.url.replace(" ", "%20"))
+        }
+    }
+
+    @kotlinx.serialization.Serializable
+    class PageParseDto(
+        val url: String,
+    )
+
+    override fun imageUrlParse(response: Response) =
+        throw UnsupportedOperationException()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = showLockedChapterPrefKey
+            title = "Show inaccessible chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     private fun parseSeriesAnchor(element: org.jsoup.nodes.Element): SManga? {
@@ -399,6 +456,28 @@ private fun looksLikeDescription(text: String): Boolean {
 }
 private fun Response.asJsoupXml(): Document {
     return Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
+}
+
+private fun Document.getNextJson(key: String): String {
+    val data = selectFirst("script:containsData($key)")
+        ?.data()
+        ?: throw Exception("Unable to retrieve NEXT data")
+
+    val keyIndex = data.indexOf(key)
+    val start = data.indexOf('[', keyIndex)
+
+    var depth = 1
+    var i = start + 1
+
+    while (i < data.length && depth > 0) {
+        when (data[i]) {
+            '[' -> depth++
+            ']' -> depth--
+        }
+        i++
+    }
+
+    return "\"${data.substring(start, i)}\"".parseAs<String>()
 }
 
 private fun seriesSlug(url: HttpUrl): String? {
