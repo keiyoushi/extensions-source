@@ -50,7 +50,9 @@ import javax.crypto.Cipher
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 
-class TheBlank : HttpSource(), ConfigurableSource {
+class TheBlank :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "The Blank"
     override val lang = "en"
     override val baseUrl = "https://theblank.net"
@@ -139,17 +141,13 @@ class TheBlank : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.popular)
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.popular)
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.latest)
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -158,7 +156,12 @@ class TheBlank : HttpSource(), ConfigurableSource {
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
+            return apiRequest(
+                url,
+                includeXSRFToken = true,
+                includeCSRFToken = false,
+                includeVersion = false,
+            )
         }
 
         val url = baseHttpUrl.newBuilder().apply {
@@ -203,7 +206,12 @@ class TheBlank : HttpSource(), ConfigurableSource {
             }
         }.build()
 
-        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
+        return apiRequest(
+            url,
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = false,
+        )
     }
 
     override fun getFilterList() = FilterList(
@@ -239,12 +247,15 @@ class TheBlank : HttpSource(), ConfigurableSource {
             .addPathSegment(manga.url)
             .build()
 
-        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true)
+        return apiRequest(
+            url,
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = true,
+        )
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/serie/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<MangaResponse>().props.serie
@@ -287,8 +298,7 @@ class TheBlank : HttpSource(), ConfigurableSource {
             .toString()
     }
 
-    override fun chapterListRequest(manga: SManga) =
-        mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<MangaResponse>().props.serie
@@ -328,7 +338,12 @@ class TheBlank : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
 
-        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true)
+        return apiRequest(
+            url,
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = true,
+        )
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -364,7 +379,13 @@ class TheBlank : HttpSource(), ConfigurableSource {
             put("timestamp", generateNonce())
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
-        val request = apiRequest(url, body, includeXSRFToken = false, includeCSRFToken = true, includeVersion = false)
+        val request = apiRequest(
+            url,
+            body,
+            includeXSRFToken = false,
+            includeCSRFToken = true,
+            includeVersion = false,
+        )
 
         return client.newCall(request).execute()
             .parseAs<SessionResponse>().sid
@@ -484,9 +505,7 @@ class TheBlank : HttpSource(), ConfigurableSource {
             .build()
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
