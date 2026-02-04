@@ -1,8 +1,7 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
     id("kotlinx-serialization")
-    id("org.jmailen.kotlinter")
+    id("keiyoushi.lint")
 }
 
 android {
@@ -17,40 +16,27 @@ android {
     sourceSets {
         named("main") {
             manifest.srcFile("AndroidManifest.xml")
-            java.setSrcDirs(listOf("src"))
-            res.setSrcDirs(listOf("res"))
-            assets.setSrcDirs(listOf("assets"))
+            java.directories.clear()
+            java.directories.add("src")
+            kotlin.directories.clear()
+            kotlin.directories.add("src")
+            res.directories.clear()
+            res.directories.add("res")
+            assets.directories.clear()
+            assets.directories.add("assets")
         }
-    }
-
-    kotlinOptions {
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
     }
 }
 
-kotlinter {
-    experimentalRules = true
-    disabledRules = arrayOf(
-        "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-        "experimental:comment-wrapping",
-    )
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
+    }
 }
 
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
     implementation(project(":core"))
-}
-
-tasks {
-    preBuild {
-        dependsOn(lintKotlin)
-    }
-
-    if (System.getenv("CI") != "true") {
-        lintKotlin {
-            dependsOn(formatKotlin)
-        }
-    }
 }
 
 tasks.register("printDependentExtensions") {
