@@ -1,9 +1,9 @@
 ext {
-    extName = 'Novel24h'
+    extName = '24HNovel'
     extClass = '.Novel24h'
     themePkg = 'madara'
     baseUrl = 'https://24hnovel.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
