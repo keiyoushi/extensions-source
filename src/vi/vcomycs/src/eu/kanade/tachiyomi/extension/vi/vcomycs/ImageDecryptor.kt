@@ -118,12 +118,10 @@ object ImageDecryptor {
      * SJkhMV -> :
      * uUPzrw -> /
      */
-    private fun deobfuscateUrl(url: String): String {
-        return url
-            .replace(KEY_PART_1, ".")
-            .replace(KEY_PART_2, ":")
-            .replace(KEY_PART_3, "/")
-    }
+    private fun deobfuscateUrl(url: String): String = url
+        .replace(KEY_PART_1, ".")
+        .replace(KEY_PART_2, ":")
+        .replace(KEY_PART_3, "/")
 
     /**
      * Fallback: extract images directly from HTML if decryption is not needed or fails.

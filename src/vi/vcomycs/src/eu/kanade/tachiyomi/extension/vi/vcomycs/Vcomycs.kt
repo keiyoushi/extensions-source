@@ -162,9 +162,7 @@ class Vcomycs : HttpSource() {
         return match?.value?.trim() ?: rawName.substringAfterLast("–").substringAfterLast("-").trim()
     }
 
-    private fun parseChapterDate(dateStr: String): Long {
-        return DATE_FORMAT_SHORT.tryParse(dateStr)
-    }
+    private fun parseChapterDate(dateStr: String): Long = DATE_FORMAT_SHORT.tryParse(dateStr)
 
     // ========================= Pages =============================
 
@@ -181,9 +179,7 @@ class Vcomycs : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = getFilters()
 
