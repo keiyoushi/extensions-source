@@ -61,16 +61,19 @@ class NewTruyenTranh : HttpSource() {
                         genreSlug = filter.toUriPart()
                     }
                 }
+
                 is SortFilter -> {
                     if (filter.state != 0) {
                         sortValue = filter.toUriPart()
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.state != 0) {
                         statusValue = filter.toUriPart()
                     }
                 }
+
                 else -> {}
             }
         }
@@ -96,8 +99,7 @@ class NewTruyenTranh : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        buildSearchRequest(page, query, filters, "0")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = buildSearchRequest(page, query, filters, "0")
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
@@ -182,7 +184,5 @@ class NewTruyenTranh : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
