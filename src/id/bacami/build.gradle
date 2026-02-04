@@ -1,0 +1,8 @@
+ext {
+    extName = 'Bacami'
+    extClass = '.Bacami'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,7 +1,8 @@
+import com.android.build.gradle.tasks.PackageAndroidArtifact
+
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
-apply plugin: 'org.jmailen.kotlinter'
+apply plugin: 'keiyoushi.lint'
 
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
@@ -12,24 +13,30 @@ Project theme = ext.has("themePkg") ? project(":lib-multisrc:$themePkg") : null
 if (theme != null) evaluationDependsOn(theme.path)
 
 android {
-    compileSdk AndroidConfig.compileSdk
+    compileSdk = AndroidConfig.compileSdk
 
-    namespace "eu.kanade.tachiyomi.extension"
+    namespace = "eu.kanade.tachiyomi.extension"
+
     sourceSets {
         main {
             manifest.srcFile layout.buildDirectory.file('tempAndroidManifest.xml')
-            java.srcDirs = ['src']
-            res.srcDirs = ['res']
-            assets.srcDirs = ['assets']
+            java.directories.clear()
+            java.directories.add("src")
+            kotlin.directories.clear()
+            kotlin.directories.add("src")
+            res.directories.clear()
+            res.directories.add("res")
+            assets.directories.clear()
+            assets.directories.add("assets")
         }
     }
 
     defaultConfig {
-        minSdk AndroidConfig.minSdk
-        targetSdk AndroidConfig.targetSdk
-        applicationIdSuffix project.parent.name + "." + project.name
-        versionCode theme == null ? extVersionCode : theme.baseVersionCode + overrideVersionCode
-        versionName "1.4.$versionCode"
+        minSdk = AndroidConfig.minSdk
+        targetSdk = AndroidConfig.targetSdk
+        applicationIdSuffix = project.parent.name + "." + project.name
+        versionCode = theme == null ? extVersionCode : theme.baseVersionCode + overrideVersionCode
+        versionName = "1.4.$versionCode"
         base {
             archivesName = "tachiyomi-$applicationIdSuffix-v$versionName"
         }
@@ -53,18 +60,18 @@ android {
 
     signingConfigs {
         release {
-            storeFile rootProject.file("signingkey.jks")
-            storePassword System.getenv("KEY_STORE_PASSWORD")
-            keyAlias System.getenv("ALIAS")
-            keyPassword System.getenv("KEY_PASSWORD")
+            storeFile = rootProject.file("signingkey.jks")
+            storePassword = System.getenv("KEY_STORE_PASSWORD")
+            keyAlias = System.getenv("ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
-            vcsInfo.include false
+            signingConfig = signingConfigs.release
+            minifyEnabled = false
+            vcsInfo.include = false
         }
     }
 
@@ -73,29 +80,17 @@ android {
     }
 
     buildFeatures {
-        buildConfig true
+        buildConfig = true
     }
 
     packaging {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
+}
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
-    }
-
-    kotlinter {
-        experimentalRules = true
-        disabledRules = [
-            "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-            "experimental:comment-wrapping",
-        ]
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
     }
 }
 
@@ -116,13 +111,14 @@ tasks.register("writeManifestFile") {
     doLast {
         File tempFile = android.sourceSets.getByName('main').manifest.srcFile
         if (!tempFile.exists()) {
+            tempFile.parentFile.mkdirs()
             tempFile.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
         }
     }
 }
 
 afterEvaluate {
-    tasks.withType(com.android.build.gradle.tasks.PackageAndroidArtifact).configureEach {
+    tasks.withType(PackageAndroidArtifact).configureEach {
         // need to be in afterEvaluate to overwrite default value
         createdBy = ""
         // https://stackoverflow.com/a/77745844
@@ -130,7 +126,4 @@ afterEvaluate {
     }
 }
 
-preBuild.dependsOn(writeManifestFile, lintKotlin)
-if (System.getenv("CI") != "true") {
-    lintKotlin.dependsOn(formatKotlin)
-}
+preBuild.dependsOn(writeManifestFile)

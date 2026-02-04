@@ -26,7 +26,6 @@ import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
 class MediocreToons : HttpSource(), ConfigurableSource {
-
     override val name = "Mediocre Toons"
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
@@ -114,7 +113,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             val body = json.toRequestBody("application/json".toMediaType())
 
             val request = Request.Builder()
-                .url("$apiUrl/usuarios/login")
+                .url("$apiUrl/auth/login")
                 .post(body)
                 .header("x-app-key", "toons-mediocre-app")
                 .header("Accept", "application/json")
@@ -189,7 +188,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     // ============================= Latest Updates ==========================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/recentes".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/novos".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
             .addQueryParameter("formato", "5")
@@ -366,8 +365,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     // ============================ Manga Details ============================
     override fun getMangaUrl(manga: SManga): String {
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
-        val slug = manga.title.toSlug()
-        val finalUrl = "$baseUrl/obra/$id/$slug"
+        val finalUrl = "$baseUrl/obra/$id"
         return finalUrl
     }
 

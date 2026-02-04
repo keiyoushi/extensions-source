@@ -1,13 +1,19 @@
 [versions]
-kotlin = "1.7.21"
-coroutines = "1.6.4"
-serialization = "1.4.0"
+kotlin = "2.3.0"
+coroutines = "1.10.2"
+
+# 1.8 and beyond switched to `all-compatibility` mode
+# https://github.com/Kotlin/kotlinx.serialization/blob/master/CHANGELOG.md#generate-java-8s-default-method-implementations-in-interfaces
+# this causes issues for extensions as some required generated classes are not in the final apk due to the library being compile only
+# more info: https://github.com/keiyoushi/extensions-source/pull/12962#issuecomment-3828458599
+serialization = "1.7.3"
 
 [libraries]
-gradle-agp = { module = "com.android.tools.build:gradle", version = "8.13.0" }
+gradle-agp = { module = "com.android.tools.build:gradle", version = "9.0.0" }
 gradle-kotlin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 gradle-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
-gradle-kotlinter = { module = "org.jmailen.gradle:kotlinter-gradle", version = "3.13.0" }
+
+spotless-gradle = { group = "com.diffplug.spotless", name = "spotless-plugin-gradle", version = "8.2.1" }
 
 tachiyomi-lib = { module = "com.github.keiyoushi:extensions-lib", version = "v1.4.2.1" }
 
@@ -20,8 +26,8 @@ coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-androi
 
 injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "4135455a2a" }
 rxjava = { module = "io.reactivex:rxjava", version = "1.3.8" }
-jsoup = { module = "org.jsoup:jsoup", version = "1.15.1" }
-okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.0.0-alpha.11" }
+jsoup = { module = "org.jsoup:jsoup", version = "1.22.1" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.3.2" }
 quickjs = { module = "app.cash.quickjs:quickjs-android", version = "0.9.2" }
 
 [bundles]
