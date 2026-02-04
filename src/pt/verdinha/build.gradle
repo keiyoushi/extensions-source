@@ -1,8 +1,8 @@
 ext {
-    extName = 'Maid Scan'
-    extClass = '.MaidScan'
+    extName = 'Verdinha'
+    extClass = '.Verdinha'
+    baseUrl = 'https://verdinha.wtf'
     themePkg = 'greenshit'
-    baseUrl = 'https://empreguetes.xyz'
     overrideVersionCode = 50
     isNsfw = true
 }
