@@ -1,0 +1,10 @@
+ext {
+    extName = 'TheManga'
+    extClass = '.TheManga'
+    themePkg = 'madara'
+    baseUrl = 'https://themanga.my.id'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
