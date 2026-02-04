@@ -341,10 +341,16 @@ class TheBlank : HttpSource(), ConfigurableSource {
         val key = rsaDecrypt(keyPair.keyPair.private, sid)
 
         return signedUrls.mapIndexed { idx, img ->
+            val httpUrl = img.toHttpUrl()
+
+            val fileName = httpUrl.queryParameter("path")
+                ?.substringAfterLast('/')
+                ?: throw IllegalStateException("Image URL missing 'path' parameter: $img")
+
             Page(
                 index = idx,
-                imageUrl = img.toHttpUrl().newBuilder()
-                    .fragment(key)
+                imageUrl = httpUrl.newBuilder()
+                    .fragment(key + fileName)
                     .build()
                     .toString(),
             )
@@ -422,14 +428,14 @@ class TheBlank : HttpSource(), ConfigurableSource {
         val fragment = request.url.fragment
             ?.takeIf { it != THUMBNAIL_FRAGMENT }
             ?: return response
-        val headerNonce = response.header("x-stream-header")
-            ?: return response
 
-        val nonce = decodeUrlSafeBase64(headerNonce)
+        val networkSource = response.body.source()
+        networkSource.skip(PREFIX_LENGTH.toLong())
+
+        val nonce = networkSource.readByteArray(IMAGE_HEADER_LENGTH.toLong())
         val key = MessageDigest.getInstance("SHA-256")
             .digest(fragment.toByteArray(Charsets.UTF_8))
 
-        val networkSource = response.body.source()
         val decryptedSource = object : okio.Source {
             private val secretStream = SecretStream()
             private val state = State().apply {
@@ -486,3 +492,5 @@ class TheBlank : HttpSource(), ConfigurableSource {
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // Data size + ABYTES
+private const val PREFIX_LENGTH = 128
+private const val IMAGE_HEADER_LENGTH = 24
