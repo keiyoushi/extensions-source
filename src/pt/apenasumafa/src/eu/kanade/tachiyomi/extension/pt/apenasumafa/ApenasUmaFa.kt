@@ -37,7 +37,7 @@ class ApenasUmaFa :
         val feed = doc.selectFirst(".chapter_get")!!.attr("data-labelchapter")
         return apiUrl(feed)
             .addQueryParameter("start-index", "1")
-            .addQueryParameter("max-results", maxChapterResults.toString())
+            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
             .build().toString()
     }
 

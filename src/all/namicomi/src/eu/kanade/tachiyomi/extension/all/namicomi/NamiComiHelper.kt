@@ -34,8 +34,8 @@ class NamiComiHelper(lang: String) {
 
     val intl = Intl(
         language = lang,
-        baseLanguage = NamiComiConstants.english,
-        availableLanguages = setOf(NamiComiConstants.english),
+        baseLanguage = NamiComiConstants.ENGLISH,
+        availableLanguages = setOf(NamiComiConstants.ENGLISH),
         classLoader = this::class.java.classLoader!!,
         createMessageFileName = { lang -> Intl.createDefaultMessageFileName(lang) },
     )
@@ -43,7 +43,7 @@ class NamiComiHelper(lang: String) {
     /**
      * Get the manga offset pages are 1 based, so subtract 1
      */
-    fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
+    fun getMangaListOffset(page: Int): String = (NamiComiConstants.MANGA_LIMIT * (page - 1)).toString()
 
     private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int = when (mangaDataDto.attributes!!.publicationStatus) {
         StatusDto.ONGOING -> SManga.ONGOING
@@ -116,8 +116,8 @@ class NamiComiHelper(lang: String) {
 
             coverFileName?.let {
                 thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
-                    true -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                    else -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                    true -> "${NamiComiConstants.CDN_URL}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                    else -> "${NamiComiConstants.CDN_URL}/covers/${mangaDataDto.id}/$coverFileName"
                 }
             }
         }

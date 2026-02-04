@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -46,7 +45,7 @@ class TraducoesDoLipe :
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
-            .addQueryParameter("max-results", maxChapterResults.toString())
+            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
             .build().toString()
     }
 

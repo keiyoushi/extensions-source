@@ -24,7 +24,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
+class MangaRawClub :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val id = 734865402529567092
     override val name = "MangaGeko"
@@ -39,21 +41,17 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
     private fun nsfw() = preferences.getBoolean(PREF_HIDE_NSFW, false)
 
     companion object {
-        private const val altName = "Alternative Name:"
+        private const val ALT_NAME = "Alternative Name:"
         private const val PREF_HIDE_NSFW = "pref_hide_nsfw"
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMMMM dd, yyyy, h:mm a", Locale.ENGLISH) }
         private val DATE_FORMATTER_2 by lazy { SimpleDateFormat("MMMMM dd, yyyy, h a", Locale.ENGLISH) }
     }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/browse-comics/data/?page=$page&sort=popular_all_time&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/browse-comics/data/?page=$page&sort=popular_all_time&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
 
     // Search
     override fun getFilterList(): FilterList = getFilters()
@@ -69,6 +67,7 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
                     is SortFilter -> {
                         addQueryParameter("sort", filter.selected)
                     }
+
                     is GenreFilter -> {
                         filter.state.forEach {
                             when {
@@ -77,24 +76,29 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
                             }
                         }
                     }
+
                     is StatusFilter -> {
                         addQueryParameter("status", filter.selected)
                     }
+
                     is TypeFilter -> {
                         addQueryParameter("type", filter.selected)
                     }
+
                     is ChapterMinFilter -> {
                         val trimmed = filter.state.trim()
                         if (trimmed.isNotBlank()) {
                             addQueryParameter("min_chapters", trimmed)
                         }
                     }
+
                     is ChapterMaxFilter -> {
                         val trimmed = filter.state.trim()
                         if (trimmed.isNotBlank()) {
                             addQueryParameter("max_chapters", trimmed)
                         }
                     }
+
                     is RatingFilter -> {
                         val trimmed = filter.state.trim()
                         if (trimmed.isNotBlank()) {
@@ -102,6 +106,7 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
                             addQueryParameter("min_rating", (value * 10).toInt().toString())
                         }
                     }
+
                     is TextFilter -> {
                         if (filter.state.isNotEmpty()) {
                             filter.state.split(",").filter(String::isNotBlank).map { tag ->
@@ -109,12 +114,14 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
                             }
                         }
                     }
+
                     is ExtraFilter -> {
                         val (activeFilters, _) = filter.state.partition { stIt -> stIt.state }
                         activeFilters.forEach {
                             addQueryParameter(it.value, "1")
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -170,7 +177,7 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
             }
             document.selectFirst(".alternative-title")?.let {
                 if (it.ownText().isNotBlank()) {
-                    append("\n\n", altName)
+                    append("\n\n", ALT_NAME)
                     it.ownText().split(",").filter { t -> t.isNotBlank() && t.trim().lowercase() != "updating" }.forEach { name ->
                         append("\n", "- ${name.trim()}")
                     }
@@ -221,10 +228,8 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".page-in img[onerror]").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".page-in img[onerror]").mapIndexed { i, it ->
+        Page(i, imageUrl = it.attr("src"))
     }
 
     // Settings

@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.all.sakuramanhwa
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl.Builder
 
-internal const val GroupTypeNone = -1
-internal const val GroupTypeSearch = 0
-internal const val GroupTypeLatesUpdates = 1
+internal const val GROUP_TYPE_NONE = -1
+internal const val GROUP_TYPE_SEARCH = 0
+internal const val GROUP_TYPE_LATES_UPDATES = 1
 
 internal class GroupFilter(
     i18n: I18nDictionary,
@@ -18,8 +18,10 @@ internal class GroupFilter(
 ) {
     fun setUrlPath(builder: Builder): Int {
         val path = when (state) {
-            GroupTypeSearch -> "/v1/manga"
-            GroupTypeLatesUpdates -> "/v1/manga/search/latesUpdates"
+            GROUP_TYPE_SEARCH -> "/v1/manga"
+
+            GROUP_TYPE_LATES_UPDATES -> "/v1/manga/search/latesUpdates"
+
             else -> {
                 throw UnsupportedOperationException()
             }
@@ -38,7 +40,7 @@ internal open class UrlFilter(
     lis.map { it[0] }.toTypedArray(),
 ) {
     fun checkGroupState(groupState: Int): Boolean {
-        if (state != 0 && (requireState == GroupTypeNone || requireState == groupState)) {
+        if (state != 0 && (requireState == GROUP_TYPE_NONE || requireState == groupState)) {
             return true
         }
         state = 0
@@ -55,14 +57,14 @@ internal class CategoryFilter(
     ),
 ) : UrlFilter(
     i18n.library.filter["category"]!!,
-    GroupTypeNone,
+    GROUP_TYPE_NONE,
     lis,
 ) {
     fun setUrlParam(builder: Builder, groupState: Int) {
         if (!checkGroupState(groupState)) {
             return
         }
-        if (groupState == GroupTypeSearch) {
+        if (groupState == GROUP_TYPE_SEARCH) {
             builder.setQueryParameter("${lis[state][1]}[]", lis[state][2])
         } else {
             builder.setQueryParameter(lis[state][1], lis[state][2])
@@ -85,7 +87,7 @@ internal class SortFilter(
     ),
 ) : UrlFilter(
     i18n.library.filter["sortBy"]!!,
-    GroupTypeSearch,
+    GROUP_TYPE_SEARCH,
     lis,
 ) {
     fun setUrlParam(builder: Builder, groupState: Int) {
@@ -98,9 +100,7 @@ internal class SortFilter(
 }
 
 internal class LanguageCheckBoxFilter(name: String, val key: String) : Filter.CheckBox(name) {
-    override fun toString(): String {
-        return key
-    }
+    override fun toString(): String = key
 }
 
 internal class LanguageCheckBoxFilterGroup(
@@ -127,7 +127,7 @@ internal class LanguageCheckBoxFilterGroup(
         var langParam = false
         state.forEach {
             if (it.state) {
-                if (groupState == GroupTypeSearch) {
+                if (groupState == GROUP_TYPE_SEARCH) {
                     builder.addQueryParameter("language[]", it.toString())
                 } else {
                     if (langParam) {

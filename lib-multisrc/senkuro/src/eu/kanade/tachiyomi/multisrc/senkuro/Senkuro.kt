@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -36,7 +35,8 @@ abstract class Senkuro(
     override val name: String,
     _baseUrl: String,
     final override val lang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = false
 
@@ -45,33 +45,36 @@ abstract class Senkuro(
         .add("Content-Type", "application/json")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-    private val API_URL: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString() + "/graphql"
-    override val baseUrl = if (!API_URL.contains(API_DOMAIN_DEFAULT)) _baseUrl else "https://senkuro.me"
+    private val apiUrl: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString() + "/graphql"
+    override val baseUrl = if (!apiUrl.contains(API_DOMAIN_DEFAULT)) _baseUrl else "https://senkuro.me"
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder()
             .rateLimit(3)
             .build()
 
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json.encodeToString(this)
-            .toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json.encodeToString(this)
+        .toRequestBody(JSON_MEDIA_TYPE)
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         val requestBody = GraphQL(
             SEARCH_QUERY,
             SearchVariables(
-                offset = offsetCount * (page - 1),
+                offset = OFFSET_COUNT * (page - 1),
                 label = SearchVariables.FiltersDto(
                     // Senkuro eternal built-in exclude 18+ filter
-                    exclude = if (name == "Senkuro") { senkuroExcludeGenres } else { listOf() },
+                    exclude = if (name == "Senkuro") {
+                        senkuroExcludeGenres
+                    } else {
+                        listOf()
+                    },
                 ),
             ),
         ).toJsonRequestBody()
 
         fetchTachiyomiSearchFilters(page)
 
-        return POST(API_URL, headers, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
@@ -111,51 +114,61 @@ abstract class Senkuro(
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
+
                 is WorldsList -> filter.state.forEach { label ->
                     if (label.state != Filter.TriState.STATE_IGNORE) {
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
+
                 is ElementsList -> filter.state.forEach { label ->
                     if (label.state != Filter.TriState.STATE_IGNORE) {
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
+
                 is ChartsList -> filter.state.forEach { label ->
                     if (label.state != Filter.TriState.STATE_IGNORE) {
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
+
                 is AgeDemoList -> filter.state.forEach { label ->
                     if (label.state != Filter.TriState.STATE_IGNORE) {
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
+
                 is TypeList -> filter.state.forEach { type ->
                     if (type.state != Filter.TriState.STATE_IGNORE) {
                         if (type.isIncluded()) includeTypes.add(type.slug) else excludeTypes.add(type.slug)
                     }
                 }
+
                 is FormatList -> filter.state.forEach { format ->
                     if (format.state != Filter.TriState.STATE_IGNORE) {
                         if (format.isIncluded()) includeFormats.add(format.slug) else excludeFormats.add(format.slug)
                     }
                 }
+
                 is StatList -> filter.state.forEach { stat ->
                     if (stat.state != Filter.TriState.STATE_IGNORE) {
                         if (stat.isIncluded()) includeStatus.add(stat.slug) else excludeStatus.add(stat.slug)
                     }
                 }
+
                 is StatTranslateList -> filter.state.forEach { tstat ->
                     if (tstat.state != Filter.TriState.STATE_IGNORE) {
                         if (tstat.isIncluded()) includeTStatus.add(tstat.slug) else excludeTStatus.add(tstat.slug)
                     }
                 }
+
                 is AgeList -> filter.state.forEach { age ->
                     if (age.state != Filter.TriState.STATE_IGNORE) {
                         if (age.isIncluded()) includeAges.add(age.slug) else excludeAges.add(age.slug)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -169,7 +182,7 @@ abstract class Senkuro(
             SEARCH_QUERY,
             SearchVariables(
                 query = query,
-                offset = offsetCount * (page - 1),
+                offset = OFFSET_COUNT * (page - 1),
                 label = SearchVariables.FiltersDto(
                     includeGenres,
                     excludeGenres,
@@ -197,7 +210,7 @@ abstract class Senkuro(
             ),
         ).toJsonRequestBody()
 
-        return POST(API_URL, headers, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
     override fun searchMangaParse(response: Response): MangasPage {
         val page = json.decodeFromString<PageWrapperDto<MangaTachiyomiSearchDto<MangaTachiyomiInfoDto>>>(response.body.string())
@@ -209,15 +222,13 @@ abstract class Senkuro(
     }
 
     // Details
-    private fun parseStatus(status: String?): Int {
-        return when (status) {
-            "FINISHED" -> SManga.COMPLETED
-            "ONGOING" -> SManga.ONGOING
-            "HIATUS" -> SManga.ON_HIATUS
-            "ANNOUNCE" -> SManga.ONGOING
-            "CANCELLED" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when (status) {
+        "FINISHED" -> SManga.COMPLETED
+        "ONGOING" -> SManga.ONGOING
+        "HIATUS" -> SManga.ON_HIATUS
+        "ANNOUNCE" -> SManga.ONGOING
+        "CANCELLED" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     private fun MangaTachiyomiInfoDto.toSManga(): SManga {
@@ -249,7 +260,7 @@ abstract class Senkuro(
             FetchDetailsVariables(mangaId = manga.url.split(",,")[0]),
         ).toJsonRequestBody()
 
-        return POST(API_URL, headers, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -271,13 +282,11 @@ abstract class Senkuro(
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response, manga)
+        }
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val chaptersList = json.decodeFromString<PageWrapperDto<MangaTachiyomiChaptersDto>>(response.body.string())
@@ -298,7 +307,7 @@ abstract class Senkuro(
             FetchDetailsVariables(mangaId = manga.url.split(",,")[0]),
         ).toJsonRequestBody()
 
-        return POST(API_URL, headers, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     // Pages
@@ -309,7 +318,7 @@ abstract class Senkuro(
             FetchChapterPagesVariables(mangaId = mangaChapterId[0], chapterId = mangaChapterId[2]),
         ).toJsonRequestBody()
 
-        return POST(API_URL, headers, requestBody)
+        return POST(apiUrl, headers, requestBody)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -328,9 +337,7 @@ abstract class Senkuro(
 
     override fun imageUrlParse(response: Response): String = throw NotImplementedError("Unused")
 
-    override fun fetchImageUrl(page: Page): Observable<String> {
-        return Observable.just(page.url)
-    }
+    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.url)
 
     // Filters
     // Filters are fetched immediately once an extension loads
@@ -341,7 +348,7 @@ abstract class Senkuro(
         if (pageRequest == 1) {
             val responseBody = client.newCall(
                 POST(
-                    API_URL,
+                    apiUrl,
                     headers,
                     GraphQL(
                         FILTERS_QUERY,
@@ -462,7 +469,7 @@ abstract class Senkuro(
     }
 
     companion object {
-        private const val offsetCount = 20
+        private const val OFFSET_COUNT = 20
 
         private const val API_DOMAIN_PREF = "MangaApiDomain"
         private const val API_DOMAIN_TITLE = "Домен"

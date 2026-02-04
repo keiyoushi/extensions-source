@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 typealias CoverArtListDto = PaginatedResponseDto<CoverArtDto>
 
 @Serializable
-@SerialName(MDConstants.coverArt)
+@SerialName(MDConstants.COVER_ART)
 data class CoverArtDto(override val attributes: CoverArtAttributesDto? = null) : EntityDto()
 
 @Serializable

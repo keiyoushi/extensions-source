@@ -1,6 +1,6 @@
 ext {
     extName = 'gafeland'
-    extClass = '.gafeland'
+    extClass = '.Gafeland'
     themePkg = 'mangathemesia'
     baseUrl = 'https://gafeland.com'
     overrideVersionCode = 0

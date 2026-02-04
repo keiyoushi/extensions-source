@@ -278,7 +278,7 @@ class NamiComiFilters {
     }
 
     private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
-        if (intl.chosenLanguage == NamiComiConstants.english) {
+        if (intl.chosenLanguage == NamiComiConstants.ENGLISH) {
             return this
         }
 

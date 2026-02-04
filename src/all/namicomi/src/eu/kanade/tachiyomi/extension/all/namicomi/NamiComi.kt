@@ -22,7 +22,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.CacheControl
 import okhttp3.HttpUrl
@@ -37,7 +36,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     ConfigurableSource {
 
     override val name = "NamiComi"
-    override val baseUrl = NamiComiConstants.webUrl
+    override val baseUrl = NamiComiConstants.WEB_URL
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -64,10 +63,10 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         .build()
 
     private fun sortedMangaRequest(page: Int, orderBy: String): Request {
-        val url = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
+        val url = NamiComiConstants.API_SEARCH_URL.toHttpUrl().newBuilder()
             .addQueryParameter("order[$orderBy]", "desc")
             .addQueryParameter("availableTranslatedLanguages[]", extLang)
-            .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
+            .addQueryParameter("limit", NamiComiConstants.MANGA_LIMIT.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
             .addCommonIncludeParameters()
             .build()
@@ -107,24 +106,24 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     // Search manga section
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(NamiComiConstants.prefixIdSearch)) {
-            val mangaId = query.removePrefix(NamiComiConstants.prefixIdSearch)
+        if (query.startsWith(NamiComiConstants.PREFIX_ID_SEARCH)) {
+            val mangaId = query.removePrefix(NamiComiConstants.PREFIX_ID_SEARCH)
 
             if (mangaId.isEmpty()) {
                 throw Exception(helper.intl["invalid_manga_id"])
             }
 
             // If the query is an ID, return the manga directly
-            val url = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
-                .addQueryParameter("ids[]", query.removePrefix(NamiComiConstants.prefixIdSearch))
+            val url = NamiComiConstants.API_SEARCH_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("ids[]", query.removePrefix(NamiComiConstants.PREFIX_ID_SEARCH))
                 .addCommonIncludeParameters()
                 .build()
 
             return GET(url, headers, CacheControl.FORCE_NETWORK)
         }
 
-        val tempUrl = NamiComiConstants.apiSearchUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("limit", NamiComiConstants.mangaLimit.toString())
+        val tempUrl = NamiComiConstants.API_SEARCH_URL.toHttpUrl().newBuilder()
+            .addQueryParameter("limit", NamiComiConstants.MANGA_LIMIT.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
             .addCommonIncludeParameters()
 
@@ -152,7 +151,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      * Get the API endpoint URL for the entry details.
      */
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = ("${NamiComiConstants.apiMangaUrl}/${manga.url}").toHttpUrl().newBuilder()
+        val url = ("${NamiComiConstants.API_MANGA_URL}/${manga.url}").toHttpUrl().newBuilder()
             .addCommonIncludeParameters()
             .build()
 
@@ -180,9 +179,9 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      * Required because the chapter list API endpoint is paginated.
      */
     private fun paginatedChapterListRequest(mangaId: String, offset: Int): Request {
-        val url = NamiComiConstants.apiChapterUrl.toHttpUrl().newBuilder()
+        val url = NamiComiConstants.API_CHAPTER_URL.toHttpUrl().newBuilder()
             .addQueryParameter("titleId", mangaId)
-            .addQueryParameter("includes[]", NamiComiConstants.organization)
+            .addQueryParameter("includes[]", NamiComiConstants.ORGANIZATION)
             .addQueryParameter("limit", "200")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("translatedLanguages[]", extLang)
@@ -197,10 +196,10 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
      * Requests information about gated chapters (requiring payment & login).
      */
     private fun accessibleChapterListRequest(chapterIds: List<String>): Request = POST(
-        NamiComiConstants.apiGatingCheckUrl,
+        NamiComiConstants.API_GATING_CHECK_URL,
         headers,
         chapterIds
-            .map { EntityAccessRequestItemDto(it, NamiComiConstants.chapter) }
+            .map { EntityAccessRequestItemDto(it, NamiComiConstants.CHAPTER) }
             .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
             .toRequestBody(),
         CacheControl.FORCE_NETWORK,
@@ -256,7 +255,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
                 // Chapter cannot be viewed and user wants to see locked chapters
                 preferences.showLockedChapters -> {
                     helper.createChapter(it).apply {
-                        name = "${NamiComiConstants.lockSymbol} $name"
+                        name = "${NamiComiConstants.LOCK_SYMBOL} $name"
                     }
                 }
 
@@ -270,7 +269,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url
-        val url = "${NamiComiConstants.apiUrl}/images/chapter/$chapterId?newQualities=true"
+        val url = "${NamiComiConstants.API_URL}/images/chapter/$chapterId?newQualities=true"
         return GET(url, headers, CacheControl.FORCE_NETWORK)
     }
 
@@ -325,11 +324,11 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
     override fun getFilterList(): FilterList = helper.filters.getFilterList(helper.intl)
 
-    private fun HttpUrl.Builder.addCommonIncludeParameters() = this.addQueryParameter("includes[]", NamiComiConstants.coverArt)
-        .addQueryParameter("includes[]", NamiComiConstants.organization)
-        .addQueryParameter("includes[]", NamiComiConstants.tag)
-        .addQueryParameter("includes[]", NamiComiConstants.primaryTag)
-        .addQueryParameter("includes[]", NamiComiConstants.secondaryTag)
+    private fun HttpUrl.Builder.addCommonIncludeParameters() = this.addQueryParameter("includes[]", NamiComiConstants.COVER_ART)
+        .addQueryParameter("includes[]", NamiComiConstants.ORGANIZATION)
+        .addQueryParameter("includes[]", NamiComiConstants.TAG)
+        .addQueryParameter("includes[]", NamiComiConstants.PRIMARY_TAG)
+        .addQueryParameter("includes[]", NamiComiConstants.SECONDARY_TAG)
 
     private inline fun <reified T> Response.parseAs(): T = use {
         helper.json.decodeFromString(body.string())

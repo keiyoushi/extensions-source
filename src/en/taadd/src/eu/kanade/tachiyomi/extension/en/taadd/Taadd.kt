@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
@@ -155,13 +154,9 @@ class Taadd : HttpSource() {
         )
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}#mobile", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}#mobile", headers)
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
@@ -191,9 +186,7 @@ class Taadd : HttpSource() {
         artist = author
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}?waring=1#desktop", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}?waring=1#desktop", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -218,9 +211,9 @@ class Taadd : HttpSource() {
                                     rawTitle[idx].equals('v', true) ||
                                     rawTitle[idx].equals('s', true)
                                 ) {
-                                    val _idx = rawTitle.indexOf('c', idx, true)
-                                    if (_idx != -1) {
-                                        idx = _idx
+                                    val idxTmp = rawTitle.indexOf('c', idx, true)
+                                    if (idxTmp != -1) {
+                                        idx = idxTmp
                                     } else {
                                         idx++
                                     }
@@ -262,23 +255,17 @@ class Taadd : HttpSource() {
         }
     }
 
-    private fun String.simplify(): String {
-        return lowercase()
-            .replace(specialChar) {
-                " ".repeat(it.value.length)
-            }
-    }
+    private fun String.simplify(): String = lowercase()
+        .replace(specialChar) {
+            " ".repeat(it.value.length)
+        }
 
     private val specialChar = Regex("""[^a-z0-9]+""")
     private val dateFormat = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.ENGLISH)
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}#desktop", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}#desktop", headers)
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun pageListParse(response: Response): List<Page> {
         var document = response.asJsoup()
@@ -318,14 +305,9 @@ class Taadd : HttpSource() {
 
     private val imgRegex = Regex("""all_imgs_url\s*:\s*\[\s*([^]]*)\s*,\s*]""")
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromStream(body.byteStream())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromStream(body.byteStream())
 
-    private inline fun <reified T : Filter<*>> FilterList.get(): T {
-        return filterIsInstance<T>().first()
-    }
+    private inline fun <reified T : Filter<*>> FilterList.get(): T = filterIsInstance<T>().first()
 }

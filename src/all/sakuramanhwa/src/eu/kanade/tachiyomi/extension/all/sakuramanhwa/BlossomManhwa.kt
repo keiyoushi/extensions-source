@@ -254,7 +254,7 @@ class BlossomManhwa(
                 }
             }
 
-            if (groupState == GroupTypeSearch && query.isNotBlank()) {
+            if (groupState == GROUP_TYPE_SEARCH && query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
             addQueryParameter("limit", "72")

@@ -102,7 +102,7 @@ class Danbooru :
             ?.substringBeforeLast(' ')?.trimStart()
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(FilterOrder("created_at")))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(filterOrder("created_at")))
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 

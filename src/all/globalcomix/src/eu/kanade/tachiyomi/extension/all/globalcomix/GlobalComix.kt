@@ -39,7 +39,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     ConfigurableSource {
 
     override val name = "GlobalComix"
-    override val baseUrl = webUrl
+    override val baseUrl = WEB_URL
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -56,8 +56,8 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     private val intl = Intl(
         language = lang,
-        baseLanguage = english,
-        availableLanguages = setOf(english),
+        baseLanguage = ENGLISH,
+        availableLanguages = setOf(ENGLISH),
         classLoader = this::class.java.classLoader!!,
         createMessageFileName = { lang -> Intl.createDefaultMessageFileName(lang) },
     )
@@ -65,7 +65,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     final override fun headersBuilder() = super.headersBuilder().apply {
         set("Referer", "$baseUrl/")
         set("Origin", baseUrl)
-        set("x-gc-client", clientId)
+        set("x-gc-client", CLIENT_ID)
         set("x-gc-identmode", "cookie")
     }
 
@@ -74,7 +74,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         .build()
 
     private fun simpleQueryRequest(page: Int, orderBy: String?, query: String?): Request {
-        val url = apiSearchUrl.toHttpUrl().newBuilder()
+        val url = API_SEARCH_URL.toHttpUrl().newBuilder()
             .addQueryParameter("lang_id[]", extLang)
             .addQueryParameter("p", page.toString())
 
@@ -93,7 +93,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
 
     private fun mangaListParse(response: Response): MangasPage {
-        val isSingleItemLookup = response.request.url.toString().startsWith(apiMangaUrl)
+        val isSingleItemLookup = response.request.url.toString().startsWith(API_MANGA_URL)
         return if (!isSingleItemLookup) {
             // Normally, the response is a paginated list of mangas
             // The results property will be a JSON array
@@ -119,14 +119,14 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // If the query is a slug ID, return the manga directly
-        if (query.startsWith(prefixIdSearch)) {
-            val mangaSlugId = query.removePrefix(prefixIdSearch)
+        if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val mangaSlugId = query.removePrefix(PREFIX_ID_SEARCH)
 
             if (mangaSlugId.isEmpty()) {
                 throw Exception(intl["invalid_manga_id"])
             }
 
-            val url = apiMangaUrl.toHttpUrl().newBuilder()
+            val url = API_MANGA_URL.toHttpUrl().newBuilder()
                 .addPathSegment(mangaSlugId)
                 .build()
 
@@ -138,10 +138,10 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun getMangaUrl(manga: SManga): String = "$webComicUrl/${titleToSlug(manga.title)}"
+    override fun getMangaUrl(manga: SManga): String = "$WEB_COMIC_URL/${titleToSlug(manga.title)}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiMangaUrl.toHttpUrl().newBuilder()
+        val url = API_MANGA_URL.toHttpUrl().newBuilder()
             .addPathSegment(titleToSlug(manga.title))
             .build()
 
@@ -153,7 +153,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         .createManga()
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = apiSearchUrl.toHttpUrl().newBuilder()
+        val url = API_SEARCH_URL.toHttpUrl().newBuilder()
             .addPathSegment(manga.url) // manga.url contains the the comic id
             .addPathSegment("releases")
             .addQueryParameter("lang_id", extLang)
@@ -171,13 +171,13 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterKey = chapter.url
-        val url = "$apiChapterUrl/$chapterKey"
+        val url = "$API_CHAPTER_URL/$chapterKey"
         return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterKey = response.request.url.pathSegments.last()
-        val chapterWebUrl = "$webChapterUrl/$chapterKey"
+        val chapterWebUrl = "$WEB_CHAPTER_URL/$chapterKey"
 
         return response.parseAs<ChapterDto>()
             .payload!!

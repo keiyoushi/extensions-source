@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 typealias PageListDto = ResponseDto<PageListDataDto>
 
 @Serializable
-@SerialName(NamiComiConstants.imageData)
+@SerialName(NamiComiConstants.IMAGE_DATA)
 class PageListDataDto(
     override val attributes: AttributesDto? = null,
     val baseUrl: String,

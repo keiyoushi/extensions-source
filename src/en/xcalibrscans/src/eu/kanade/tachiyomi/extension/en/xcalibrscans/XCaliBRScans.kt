@@ -9,7 +9,7 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class xCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", "en") {
+class XCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", "en") {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor(AntiScrapInterceptor())
@@ -31,9 +31,11 @@ class xCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", 
                         val imgUrl = element.selectFirst("img")!!.imgAttr()
                         imgUrls.add(imgUrl)
                     }
+
                     element.tagName() == "div" && element.hasClass("kage") -> {
                         parseAntiScrapScramble(element, imgUrls)
                     }
+
                     else -> {
                         Log.d("xCaliBR Scans", "Unknown element for page parsing $element")
                     }
