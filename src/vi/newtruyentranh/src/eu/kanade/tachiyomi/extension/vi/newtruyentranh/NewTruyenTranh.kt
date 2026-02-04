@@ -113,7 +113,7 @@ class NewTruyenTranh : HttpSource() {
     // ============================== Details ===============================
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = manga.url
-        if (url.startsWith("/detail/")) throw Exception("Old URL structure detected. Please migrate or re-add this source.")
+        if (url.startsWith("/detail/")) throw Exception("Migrate from $name to $name")
         val id = manga.url.substringBefore(":")
         val slug = manga.url.substringAfter(":")
         return GET("$baseUrl/truyen-tranh/$slug-$id", headers)
@@ -149,6 +149,8 @@ class NewTruyenTranh : HttpSource() {
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
+        val url = manga.url
+        if (url.startsWith("/detail/")) throw Exception("Migrate from $name to $name")
         val id = manga.url.substringBefore(":")
         val slug = manga.url.substringAfter(":")
         return GET("$apiUrl/detail/$id#$slug", headers)
@@ -173,6 +175,8 @@ class NewTruyenTranh : HttpSource() {
 
     // ============================== Pages =================================
     override fun pageListRequest(chapter: SChapter): Request {
+        val url = chapter.url
+        if (url.startsWith("/detail/")) throw Exception("Migrate from $name to $name")
         val chapterId = chapter.url.substringBefore(":")
         return GET("$apiUrl/chapter/$chapterId", headers)
     }
