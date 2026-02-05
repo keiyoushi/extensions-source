@@ -1,14 +1,17 @@
 package eu.kanade.tachiyomi.extension.vi.newtruyentranh
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
@@ -23,6 +26,10 @@ class NewTruyenTranh : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = buildSearchRequest(page, "", FilterList(), "10") // Top all
@@ -54,16 +61,19 @@ class NewTruyenTranh : HttpSource() {
                         genreSlug = filter.toUriPart()
                     }
                 }
+
                 is SortFilter -> {
                     if (filter.state != 0) {
                         sortValue = filter.toUriPart()
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.state != 0) {
                         statusValue = filter.toUriPart()
                     }
                 }
+
                 else -> {}
             }
         }
@@ -89,77 +99,86 @@ class NewTruyenTranh : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        buildSearchRequest(page, query, filters, "0")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = buildSearchRequest(page, query, filters, "0")
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ============================== Filters ===============================
-    override fun getFilterList() = eu.kanade.tachiyomi.extension.vi.newtruyentranh.getFilterList()
+    override fun getFilterList(): FilterList = FilterList(
+        GenreFilter(),
+        SortFilter(),
+        StatusFilter(),
+    )
 
     // ============================== Details ===============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfter("/detail/").substringBefore("?")
-        return GET("$apiUrl/detail/$id", headers)
+        val url = manga.url
+        if (url.startsWith("/detail/")) throw Exception("Migrate from $name to $name")
+        val id = manga.url.substringBefore(":")
+        val slug = manga.url.substringAfter(":")
+        return GET("$baseUrl/truyen-tranh/$slug-$id", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<MangaDetailResponse>()
+        val document = response.asJsoup()
         return SManga.create().apply {
-            result.channel?.let { channel ->
-                title = channel.name
-                thumbnail_url = channel.image.url
-                description = channel.description.takeIf { it.isNotBlank() }
-            }
-            initialized = true
+            genre = document.select(".tr-theloai").joinToString { it.text() }
+            author = document.select("p:contains(Tác giả) + p").text()
+            status = parseStatus(document.select("p:contains(Tình trạng) + p").text())
+        }
+    }
+
+    private fun parseStatus(status: String?): Int {
+        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành")
+        val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành")
+        val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn")
+        return when {
+            status == null -> SManga.UNKNOWN
+            ongoingWords.any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING
+            completedWords.any { status.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+            hiatusWords.any { status.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
         }
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url.replace("/detail/", "/truyen/")
+        val id = manga.url.substringBefore(":")
+        val slug = manga.url.substringAfter(":")
+        return "$baseUrl/truyen-tranh/$slug-$id"
     }
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringAfter("/detail/").substringBefore("?")
-        return GET("$apiUrl/detail/$id", headers)
+        val url = manga.url
+        if (url.startsWith("/detail/")) throw Exception("Migrate from $name to $name")
+        val id = manga.url.substringBefore(":")
+        val slug = manga.url.substringAfter(":")
+        return GET("$apiUrl/detail/$id#$slug", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<MangaDetailResponse>()
-        val chapters = mutableListOf<SChapter>()
+        val slug = response.request.url.toString().substringAfterLast("#")
+        val chapters = result.sources.first().contents.flatMap { scm ->
+            scm.streams.map { it.toSChapter(slug) }
+        }.sortedByDescending { it.chapter_number }
 
-        result.sources.forEach { source ->
-            source.contents.forEach { content ->
-                content.streams.forEach { stream ->
-                    chapters.add(
-                        SChapter.create().apply {
-                            setUrlWithoutDomain(stream.remoteData.url)
-                            name = stream.name
-                            chapter_number = stream.index.toFloat()
-                        },
-                    )
-                }
-            }
-        }
-
-        return chapters.sortedByDescending { it.chapter_number }
+        return chapters
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val chapterId = chapter.url.substringAfter("/chapter/")
-        return "$baseUrl/truyen-tranh/$chapterId"
+        val chapterId = chapter.url.substringBefore(":")
+        val slug = chapter.url.substringAfter(":").substringBefore("#")
+        val index = chapter.url.substringAfter("#")
+        return "$baseUrl/truyen-tranh/$slug/chapter-$index/$chapterId"
     }
 
     // ============================== Pages =================================
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = chapter.url
-        val url = if (chapterUrl.startsWith("http")) {
-            chapterUrl
-        } else {
-            "$apiUrl$chapterUrl"
-        }
-        return GET(url, headers)
+        val url = chapter.url
+        if (url.startsWith("/detail/")) throw Exception("Migrate from $name to $name")
+        val chapterId = chapter.url.substringBefore(":")
+        return GET("$apiUrl/chapter/$chapterId", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -169,14 +188,5 @@ class NewTruyenTranh : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
-
-    // ============================== Utilities =============================
-    private fun MangaChannel.toSManga(): SManga = SManga.create().apply {
-        setUrlWithoutDomain(remoteData.url)
-        title = name
-        thumbnail_url = image.url
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
