@@ -103,7 +103,7 @@ fun buildImageUrl(
         }
     }
     val query = width?.let { "?width=$it" } ?: ""
-    val safePath = if (path.isNotBlank()) path.replace("//", "/").trimEnd('/') else ""
+    val safePath = if (path.isNotBlank()) path.replace("//", "/").trimStart('/').trimEnd('/') else ""
     val safeSrc = src.replace("//", "/").trimStart('/').trimEnd('/')
     return normalizeSlashes("$base/$safePath/$safeSrc$query")
 }
