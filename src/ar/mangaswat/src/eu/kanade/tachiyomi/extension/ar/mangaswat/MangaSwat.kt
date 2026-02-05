@@ -104,7 +104,8 @@ class MangaSwat : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addQueryParameter("status", "79")
+            .addQueryParameter("page_size", "12")
+            .addQueryParameter("order_by", "-created_at")
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, apiHeaders)
