@@ -25,7 +25,7 @@ const val MAX_LOCAL_FILE_HEADER_SIZE = 256 + 32 + 30 + 100
 val EOCD_MAX_BYTES = 128.toBigInteger()
 const val MIN_CD_LENGTH = 46
 const val MIN_EOCD_LENGTH = 22
-const val MIN_EOCD_LENGTH = 56
+const val MIN_EOCD64_LENGTH = 56
 const val MIN_LOCAL_FILE_LENGTH = 30
 
 class EndOfCentralDirectory(
@@ -211,7 +211,7 @@ object ZipParser {
     fun parseEOCD64(buffer: ByteArray): EndOfCentralDirectory? {
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
 
-        for (i in 0 until buffer.size - MIN_EOCD_LENGTH + 1) {
+        for (i in 0 until buffer.size - MIN_EOCD64_LENGTH + 1) {
             if (view.getInt(i) == END_OF_CENTRAL_DIRECTORY_64_SIGNATURE) {
                 return EndOfCentralDirectory(
                     centralDirectoryByteSize = view.getLong(i + 40).toBigInteger(),
