@@ -18,7 +18,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class DigitalComicMuseum() : ParsedHttpSource() {
+class DigitalComicMuseum : ParsedHttpSource() {
     override val baseUrl = "https://digitalcomicmuseum.com"
     override val lang = "en"
     override val name = "Digital Comic Museum"
@@ -39,9 +39,7 @@ class DigitalComicMuseum() : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = "img[alt=Next]"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100")
 
     override fun latestUpdatesSelector() = "tbody > .mainrow"
 
@@ -51,9 +49,7 @@ class DigitalComicMuseum() : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun popularMangaSelector() = latestUpdatesSelector()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100")
 
     // Search
 
@@ -118,9 +114,7 @@ class DigitalComicMuseum() : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String {
-        return document.select("body > a:nth-of-type(2) > img").attr("src")
-    }
+    override fun imageUrlParse(document: Document): String = document.select("body > a:nth-of-type(2) > img").attr("src")
 
     // Interceptor
     private fun errorIntercept(chain: Interceptor.Chain): Response {

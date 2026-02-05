@@ -33,11 +33,9 @@ class MangaPoisk : ParsedHttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.1185.50")
         .add("Referer", baseUrl)
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manga?sortBy=popular&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga?sortBy=popular&page=$page", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/manga?sortBy=-last_chapter_at&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga?sortBy=-last_chapter_at&page=$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotBlank()) {
@@ -55,16 +53,19 @@ class MangaPoisk : ParsedHttpSource() {
                         val ordRev = arrayOf("year", "-popular", "-name", "published_at", "last_chapter_at")[filter.state!!.index]
                         url.addQueryParameter("sortBy", if (filter.state!!.ascending) ordRev else ord)
                     }
+
                     is StatusList -> filter.state.forEach { status ->
                         if (status.state) {
                             url.addQueryParameter("translated[]", status.id)
                         }
                     }
+
                     is GenreList -> filter.state.forEach { genre ->
                         if (genre.state) {
                             url.addQueryParameter("genres[]", genre.id)
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -75,15 +76,13 @@ class MangaPoisk : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = "article.card"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            thumbnail_url = getImage(element.select("a > img").first()!!)
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = getImage(element.select("a > img").first()!!)
 
-            setUrlWithoutDomain(element.select("a.card-about").first()!!.attr("href"))
+        setUrlWithoutDomain(element.select("a.card-about").first()!!.attr("href"))
 
-            element.select("a > h2.entry-title").first()!!.let {
-                title = it.text().split("/").first()
-            }
+        element.select("a > h2.entry-title").first()!!.let {
+            title = it.text().split("/").first()
         }
     }
 
@@ -111,23 +110,20 @@ class MangaPoisk : ParsedHttpSource() {
     override fun popularMangaSelector() = ".manga-card"
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            thumbnail_url = getImage(element.select("a > img").first()!!)
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = getImage(element.select("a > img").first()!!)
 
-            setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
+        setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
 
-            element.select("a").first()!!.let {
-                title = it.attr("title").split("/").first()
-            }
+        element.select("a").first()!!.let {
+            title = it.attr("title").split("/").first()
         }
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     private fun getImage(first: Element): String? {
         val image = first.attr("data-src")
@@ -177,13 +173,9 @@ class MangaPoisk : ParsedHttpSource() {
         val document = response.asJsoup()
         return document.select(chapterListSelector()).map { chapterFromElement(it, manga) }
     }
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}/chaptersList", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}/chaptersList", headers)
 
-    private fun chapterPageListRequest(manga: SManga, page: Int): Request {
-        return GET("$baseUrl${manga.url}/chaptersList?page=$page", headers)
-    }
+    private fun chapterPageListRequest(manga: SManga, page: Int): Request = GET("$baseUrl${manga.url}/chaptersList?page=$page", headers)
 
     override fun chapterListSelector() = ".chapter-item"
 
@@ -230,11 +222,12 @@ class MangaPoisk : ParsedHttpSource() {
         GenreList(getGenreList()),
     )
 
-    private class OrderBy : Filter.Sort(
-        "Сортировка",
-        arrayOf("Год", "Популярности", "Алфавиту", "Дате добавления", "Дате обновления"),
-        Selection(1, false),
-    )
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("Год", "Популярности", "Алфавиту", "Дате добавления", "Дате обновления"),
+            Selection(1, false),
+        )
 
     private fun getStatusList() = listOf(
         CheckFilter("Выпускается", "0"),

@@ -7,12 +7,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LumireVerse : Madara(
-    "LumireVerse",
-    "https://lumire.asia",
-    "id",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
-) {
+class LumireVerse :
+    Madara(
+        "LumireVerse",
+        "https://lumire.asia",
+        "id",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
+    ) {
     // ============================== Popular ===============================
     override fun popularMangaSelector() = "div.manga-card"
     override val popularMangaUrlSelector = "h3 a"

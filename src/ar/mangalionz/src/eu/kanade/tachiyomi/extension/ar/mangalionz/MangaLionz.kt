@@ -6,12 +6,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaLionz : Madara(
-    "MangaLionz",
-    "https://manga-lionz.com",
-    "ar",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
-) {
+class MangaLionz :
+    Madara(
+        "MangaLionz",
+        "https://manga-lionz.com",
+        "ar",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()

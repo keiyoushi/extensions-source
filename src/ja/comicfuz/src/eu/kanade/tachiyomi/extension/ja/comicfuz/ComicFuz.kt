@@ -54,13 +54,9 @@ class ComicFuz : HttpSource() {
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", getFilterList())
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val payload = DayOfWeekRequest(
@@ -140,9 +136,7 @@ class ComicFuz : HttpSource() {
         return POST("$apiUrl/manga_detail", headers, payload)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<MangaDetailsResponse>()
@@ -162,9 +156,7 @@ class ComicFuz : HttpSource() {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val payload = MangaViewerRequest(
@@ -207,16 +199,10 @@ class ComicFuz : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return ProtoBuf.decodeFromByteArray(body.bytes())
-    }
+    private inline fun <reified T> Response.parseAs(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
-    private inline fun <reified T : Any> T.toRequestBody(): RequestBody {
-        return ProtoBuf.encodeToByteArray(this)
-            .toRequestBody("application/protobuf".toMediaType())
-    }
+    private inline fun <reified T : Any> T.toRequestBody(): RequestBody = ProtoBuf.encodeToByteArray(this)
+        .toRequestBody("application/protobuf".toMediaType())
 }

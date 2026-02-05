@@ -42,8 +42,7 @@ class Randomizer(seedInput: BigInteger, t: Int) {
         return n
     }
 
-    private fun expandEntropy(e: BigInteger): ByteArray =
-        MessageDigest.getInstance("SHA-512").digest(e.toString().toByteArray(StandardCharsets.UTF_8))
+    private fun expandEntropy(e: BigInteger): ByteArray = MessageDigest.getInstance("SHA-512").digest(e.toString().toByteArray(StandardCharsets.UTF_8))
 
     private fun sbox(e: Int): Int {
         val t = intArrayOf(163, 95, 137, 13, 55, 193, 107, 228, 114, 185, 22, 243, 68, 218, 158, 40)

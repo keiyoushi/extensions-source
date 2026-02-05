@@ -38,10 +38,8 @@ class LectorJpg : HttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .build()
 
-    class LimitedCache<K, V>() : LinkedHashMap<K, V>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean {
-            return size > 8
-        }
+    class LimitedCache<K, V> : LinkedHashMap<K, V>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean = size > 8
     }
 
     data class SearchKey(val page: Int, val query: String, val filters: String?)
@@ -49,9 +47,7 @@ class LectorJpg : HttpSource() {
     private val latestMangaCursor = LimitedCache<Int, String?>()
     private val searchMangaCursor = LimitedCache<SearchKey, String?>()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -121,11 +117,9 @@ class LectorJpg : HttpSource() {
         return MangasPage(mangas, result.hasNextPage())
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            GenreFilter("Géneros", getGenreList()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        GenreFilter("Géneros", getGenreList()),
+    )
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", headers)
 
@@ -172,12 +166,10 @@ class LectorJpg : HttpSource() {
         return Base64.encodeToString(json.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
     }
 
-    private fun Element?.parseStatus(): Int {
-        return when (this?.text()?.lowercase()) {
-            "on-going" -> SManga.ONGOING
-            "end" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "on-going" -> SManga.ONGOING
+        "end" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     private fun Element.imageFromStyle(): String? {

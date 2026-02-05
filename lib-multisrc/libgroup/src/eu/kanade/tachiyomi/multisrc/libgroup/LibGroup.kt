@@ -28,7 +28,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -49,7 +48,8 @@ abstract class LibGroup(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     private val json: Json = Json {
         ignoreUnknownKeys = true
@@ -105,19 +105,19 @@ abstract class LibGroup(
         add("Referer", baseUrl)
     }.build()
 
-    private var _constants: Constants? = null
+    private var constants: Constants? = null
     private fun getConstants(): Constants? {
-        if (_constants == null) {
+        if (constants == null) {
             try {
-                _constants = client.newCall(
+                constants = client.newCall(
                     GET("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headers),
                 ).execute().parseAs<Data<Constants>>().data
-                return _constants
+                return constants
             } catch (ex: Exception) {
                 Log.d("LibGroup", "Error getting constants: $ex")
             }
         }
-        return _constants
+        return constants
     }
 
     private fun checkForToken(chain: Interceptor.Chain): Response {
@@ -185,8 +185,8 @@ abstract class LibGroup(
                     view.evaluateJavascript(script) {
                         view.stopLoading()
                         view.destroy()
-                        if (!it.isNullOrBlank() && it != "null") {
-                            val str: String = if (it.first() == '"' && it.last() == '"') {
+                        if (!it.isNullOrBlank() && (it != "null")) {
+                            val str: String = if ((it.first() == '"') && (it.last() == '"')) {
                                 it.substringAfter("\"").substringBeforeLast("\"")
                                     .replace("\\", "")
                             } else {
@@ -222,9 +222,7 @@ abstract class LibGroup(
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/ru/manga${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/ru/manga${manga.url}"
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
@@ -277,17 +275,15 @@ abstract class LibGroup(
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng())
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservable().doOnNext { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 404) throw Exception("HTTP error ${response.code}. Для просмотра 18+ контента необходима авторизация через WebView\uD83C\uDF0E︎") else throw Exception("HTTP error ${response.code}")
-                }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
+        .asObservable().doOnNext { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 404) throw Exception("HTTP error ${response.code}. Для просмотра 18+ контента необходима авторизация через WebView\uD83C\uDF0E︎") else throw Exception("HTTP error ${response.code}")
             }
-            .map { response ->
-                mangaDetailsParse(response)
-            }
-    }
+        }
+        .map { response ->
+            mangaDetailsParse(response)
+        }
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
@@ -308,15 +304,14 @@ abstract class LibGroup(
         return "$baseUrl/ru/$slugUrl/read/v$volume/c$number?$branchStr$userStr"
     }
 
-    private fun getDefaultBranch(id: String): List<Branch> =
-        client.newCall(GET("$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
+    private fun getDefaultBranch(id: String): List<Branch> = client.newCall(GET("$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
         val chaptersData = response.parseAs<Data<List<Chapter>>>()
             .also { if (it.data.isEmpty()) return emptyList() }
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
-        val defaultBranchId = if (sortingList == "ms_mixing" && chaptersData.data.getBranchCount() > 1) {
+        val defaultBranchId = if ((sortingList == "ms_mixing") && (chaptersData.data.getBranchCount() > 1)) {
             runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
         } else {
             null
@@ -324,7 +319,7 @@ abstract class LibGroup(
 
         return chaptersData.data.flatMap { chapter ->
             when {
-                chapter.branchesCount > 1 && sortingList == "ms_mixing" -> {
+                (chapter.branchesCount > 1) && (sortingList == "ms_mixing") -> {
                     val branch = chapter.branches
                         .firstOrNull { it.branchId == defaultBranchId }?.branchId
                         ?: chapter.branches.first().branchId
@@ -333,11 +328,13 @@ abstract class LibGroup(
                         chapter.toSChapter(slugUrl, branch, isScanUser()),
                     )
                 }
-                chapter.branchesCount > 1 && sortingList == "ms_combining" -> {
+
+                (chapter.branchesCount > 1) && (sortingList == "ms_combining") -> {
                     chapter.branches.map { branch ->
                         chapter.toSChapter(slugUrl, branch.branchId, isScanUser())
                     }
                 }
+
                 else -> listOf(chapter.toSChapter(slugUrl, isScanUser = isScanUser()))
             }
         }.reversed()
@@ -397,26 +394,22 @@ abstract class LibGroup(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, imageHeader())
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeader())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-            client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
+        client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
+            .asObservableSuccess()
+            .map { response ->
+                val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
     }
 
     // Search
@@ -434,26 +427,31 @@ abstract class LibGroup(
                         url.addQueryParameter("types[]", category.id)
                     }
                 }
+
                 is FormatList -> filter.state.forEach { format ->
                     if (format.state != Filter.TriState.STATE_IGNORE) {
                         url.addQueryParameter(if (format.isIncluded()) "format[]" else "format_exclude[]", format.id)
                     }
                 }
+
                 is StatusList -> filter.state.forEach { status ->
                     if (status.state) {
                         url.addQueryParameter("scanlate_status[]", status.id)
                     }
                 }
+
                 is StatusTitleList -> filter.state.forEach { title ->
                     if (title.state) {
                         url.addQueryParameter("status[]", title.id)
                     }
                 }
+
                 is GenreList -> filter.state.forEach { genre ->
                     if (genre.state != Filter.TriState.STATE_IGNORE) {
                         url.addQueryParameter(if (genre.isIncluded()) "genres[]" else "genres_exclude[]", genre.id)
                     }
                 }
+
                 is OrderBy -> {
                     if (filter.state!!.index == 0) {
                         url.addQueryParameter("sort_type", if (filter.state!!.ascending) "asc" else "desc")
@@ -466,26 +464,31 @@ abstract class LibGroup(
                         url.addQueryParameter("rate_min", "50")
                     }
                 }
+
                 is MyList -> filter.state.forEach { favorite ->
                     if (favorite.state != Filter.TriState.STATE_IGNORE) {
                         url.addQueryParameter(if (favorite.isIncluded()) "bookmarks[]" else "bookmarks_exclude[]", favorite.id)
                     }
                 }
+
                 is RequireChapters -> {
                     if (filter.state == 0) {
                         url.setQueryParameter("chap_count_min", "1")
                     }
                 }
+
                 is AgeList -> filter.state.forEach { age ->
                     if (age.state) {
                         url.addQueryParameter("caution[]", age.id)
                     }
                 }
+
                 is TagList -> filter.state.forEach { tag ->
                     if (tag.state != Filter.TriState.STATE_IGNORE) {
                         url.addQueryParameter(if (tag.isIncluded()) "tags[]" else "tags_exclude[]", tag.id)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -515,7 +518,7 @@ abstract class LibGroup(
             OrderBy(),
         )
 
-        filters += if (_constants != null) {
+        filters += if (constants != null) {
             listOf(
                 CategoryList(getConstants()!!.getCategories(siteId).map { CheckFilter(it.label, it.id.toString()) }),
                 FormatList(getConstants()!!.getFormats(siteId).map { SearchFilter(it.name, it.id.toString()) }),
@@ -539,11 +542,12 @@ abstract class LibGroup(
         return FilterList(filters)
     }
 
-    private class OrderBy : Filter.Sort(
-        "Сортировка",
-        arrayOf("Популярность", "Рейтинг", "Имя (A-Z)", "Имя (А-Я)", "Просмотры", "Дата релиза", "Дате добавления", "Дате обновления", "Кол-во глав"),
-        Selection(0, false),
-    )
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("Популярность", "Рейтинг", "Имя (A-Z)", "Имя (А-Я)", "Просмотры", "Дата релиза", "Дате добавления", "Дате обновления", "Кол-во глав"),
+            Selection(0, false),
+        )
 
     private fun getMyList() = listOf(
         SearchFilter("Читаю", "1"),
@@ -553,19 +557,19 @@ abstract class LibGroup(
         SearchFilter("Любимые", "5"),
     )
 
-    private class RequireChapters : Filter.Select<String>(
-        "Только проекты с главами",
-        arrayOf("Да", "Все"),
-    )
+    private class RequireChapters :
+        Filter.Select<String>(
+            "Только проекты с главами",
+            arrayOf("Да", "Все"),
+        )
 
     // Utils
     private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
     private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
-    private fun urlChangedError(sourceName: String): String =
-        "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
-            "на $sourceName, чтобы список глав обновился."
+    private fun urlChangedError(sourceName: String): String = "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
+        "на $sourceName, чтобы список глав обновился."
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
@@ -673,17 +677,15 @@ abstract class LibGroup(
         screen.addPreference(titleLanguagePref)
         screen.addPreference(domainApiPref)
     }
-    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            summary = value.replace("/", "\n")
-            this.setDefaultValue(default)
-            dialogTitle = title
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(context, "Для обновления списка необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                true
-            }
+    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        summary = value.replace("/", "\n")
+        this.setDefaultValue(default)
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, _ ->
+            Toast.makeText(context, "Для обновления списка необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+            true
         }
     }
 }

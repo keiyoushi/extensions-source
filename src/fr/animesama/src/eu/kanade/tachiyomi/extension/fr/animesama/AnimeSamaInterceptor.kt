@@ -52,7 +52,5 @@ class AnimeSamaInterceptor(private val client: OkHttpClient, private val baseUrl
         return button.absUrl("href")
     }
 
-    fun getBaseUrl(): String? {
-        return _baseUrl
-    }
+    fun getBaseUrl(): String? = _baseUrl
 }

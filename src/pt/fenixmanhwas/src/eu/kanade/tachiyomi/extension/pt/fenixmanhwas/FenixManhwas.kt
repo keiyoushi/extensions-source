@@ -65,20 +65,16 @@ class FenixManhwas : HttpSource() {
 
     // ========================== Search ==========================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return Observable.zip(fetchPopularManga(page), fetchLatestUpdates(page)) { popularPage, latestPage ->
-            val distinctMangas = (popularPage.mangas + latestPage.mangas)
-                .distinctBy(SManga::url)
-                .filter { it.title.contains(query, ignoreCase = true) }
-            MangasPage(distinctMangas, hasNextPage = false)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.zip(fetchPopularManga(page), fetchLatestUpdates(page)) { popularPage, latestPage ->
+        val distinctMangas = (popularPage.mangas + latestPage.mangas)
+            .distinctBy(SManga::url)
+            .filter { it.title.contains(query, ignoreCase = true) }
+        MangasPage(distinctMangas, hasNextPage = false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // ========================== Details ==========================
 

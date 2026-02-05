@@ -12,13 +12,15 @@ class PururinFactory : SourceFactory {
 }
 
 class PururinAll : Pururin()
-class PururinEN : Pururin(
-    "en",
-    Pair("13010", "english"),
-    "/tags/language/13010/english",
-)
-class PururinJA : Pururin(
-    "ja",
-    Pair("13011", "japanese"),
-    "/tags/language/13011/japanese",
-)
+class PururinEN :
+    Pururin(
+        "en",
+        Pair("13010", "english"),
+        "/tags/language/13010/english",
+    )
+class PururinJA :
+    Pururin(
+        "ja",
+        Pair("13011", "japanese"),
+        "/tags/language/13011/japanese",
+    )

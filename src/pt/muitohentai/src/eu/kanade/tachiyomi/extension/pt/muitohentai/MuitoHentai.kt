@@ -93,9 +93,7 @@ class MuitoHentai : ParsedHttpSource() {
         thumbnail_url = document.selectFirst("#capaAnime img")?.attr("src")
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterListSelector(): String = "div.backgroundpost:contains(Capítulos de) h3 > a"
 
@@ -112,17 +110,15 @@ class MuitoHentai : ParsedHttpSource() {
         return GET(baseUrl + chapter.url, newHeader)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.selectFirst("script:containsData(numeroImgAtual)")
-            ?.data()
-            ?.substringAfter("var arr = ")
-            ?.substringBefore(";")
-            ?.let { json.parseToJsonElement(it).jsonArray }
-            ?.mapIndexed { i, el ->
-                Page(i, document.location(), el.jsonPrimitive.content)
-            }
-            .orEmpty()
-    }
+    override fun pageListParse(document: Document): List<Page> = document.selectFirst("script:containsData(numeroImgAtual)")
+        ?.data()
+        ?.substringAfter("var arr = ")
+        ?.substringBefore(";")
+        ?.let { json.parseToJsonElement(it).jsonArray }
+        ?.mapIndexed { i, el ->
+            Page(i, document.location(), el.jsonPrimitive.content)
+        }
+        .orEmpty()
 
     override fun imageUrlParse(document: Document) = ""
 

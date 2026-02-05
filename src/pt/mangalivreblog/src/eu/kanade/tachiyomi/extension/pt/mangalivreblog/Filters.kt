@@ -15,23 +15,33 @@ interface UrlQueryFilter {
     fun selectedValue(): String
 }
 
-class GenreFilter : Filter.Select<String>("Gênero", genres.map { it.first }.toTypedArray()), UrlQueryFilter {
+class GenreFilter :
+    Filter.Select<String>("Gênero", genres.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun selectedValue() = genres[state].second
 }
 
-class StatusFilter : Filter.Select<String>("Status", statuses.map { it.first }.toTypedArray()), UrlQueryFilter {
+class StatusFilter :
+    Filter.Select<String>("Status", statuses.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun selectedValue() = statuses[state].second
 }
 
-class RatingMinFilter : Filter.Select<String>("Avaliação Mínima", ratingMins.map { it.first }.toTypedArray()), UrlQueryFilter {
+class RatingMinFilter :
+    Filter.Select<String>("Avaliação Mínima", ratingMins.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun selectedValue() = ratingMins[state].second
 }
 
-class SortFilter : Filter.Select<String>("Ordenar por", sorts.map { it.first }.toTypedArray()), UrlQueryFilter {
+class SortFilter :
+    Filter.Select<String>("Ordenar por", sorts.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun selectedValue() = sorts[state].second
 }
 
-class OrderFilter : Filter.Select<String>("Ordem", orders.map { it.first }.toTypedArray()), UrlQueryFilter {
+class OrderFilter :
+    Filter.Select<String>("Ordem", orders.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun selectedValue() = orders[state].second
 }
 

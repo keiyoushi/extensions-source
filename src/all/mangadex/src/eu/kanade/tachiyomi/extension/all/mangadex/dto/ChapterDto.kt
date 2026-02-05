@@ -9,7 +9,7 @@ typealias ChapterListDto = PaginatedResponseDto<ChapterDataDto>
 typealias ChapterDto = ResponseDto<ChapterDataDto>
 
 @Serializable
-@SerialName(MDConstants.chapter)
+@SerialName(MDConstants.CHAPTER)
 data class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
 
 @Serializable

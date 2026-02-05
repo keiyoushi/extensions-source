@@ -73,13 +73,11 @@ class DetailsDto(
         status = this@DetailsDto.status.toStatus()
     }
 
-    private fun String.toStatus(): Int {
-        return when (this) {
-            "ONGOING" -> SManga.ONGOING
-            "ENDED" -> SManga.COMPLETED
-            "HIATUS" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun String.toStatus(): Int = when (this) {
+        "ONGOING" -> SManga.ONGOING
+        "ENDED" -> SManga.COMPLETED
+        "HIATUS" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 }
 

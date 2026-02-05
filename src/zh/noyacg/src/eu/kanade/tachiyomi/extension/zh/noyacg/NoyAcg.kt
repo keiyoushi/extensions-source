@@ -20,7 +20,9 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-class NoyAcg : HttpSource(), ConfigurableSource {
+class NoyAcg :
+    HttpSource(),
+    ConfigurableSource {
     override val name get() = "NoyAcg"
     override val lang get() = "zh"
     override val supportsLatest get() = true
@@ -69,10 +71,12 @@ class NoyAcg : HttpSource(), ConfigurableSource {
             POST("$baseUrl/api/search_v2", headers, builder.build())
         } else {
             var path: String? = null
-            for (filter in filters) when (filter) {
-                is RankingFilter -> path = filter.path
-                is RankingRangeFilter -> filter.addTo(builder)
-                else -> {}
+            for (filter in filters) {
+                when (filter) {
+                    is RankingFilter -> path = filter.path
+                    is RankingRangeFilter -> filter.addTo(builder)
+                    else -> {}
+                }
             }
             POST("$baseUrl/api/${path!!}", headers, builder.build())
         }

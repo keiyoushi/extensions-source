@@ -61,7 +61,9 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Kagane : HttpSource(), ConfigurableSource {
+class Kagane :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Kagane"
 
@@ -122,35 +124,33 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SortFilter(Filter.Sort.Selection(1, false)),
-                ContentRatingFilter(
-                    preferences.contentRating.toSet(),
-                ),
-                GenresFilter(emptyList()),
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortFilter(Filter.Sort.Selection(1, false)),
+            ContentRatingFilter(
+                preferences.contentRating.toSet(),
             ),
-        )
+            GenresFilter(emptyList()),
+        ),
+    )
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SortFilter(Filter.Sort.Selection(6, false)),
-                ContentRatingFilter(
-                    preferences.contentRating.toSet(),
-                ),
-                GenresFilter(emptyList()),
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortFilter(Filter.Sort.Selection(6, false)),
+            ContentRatingFilter(
+                preferences.contentRating.toSet(),
             ),
-        )
+            GenresFilter(emptyList()),
+        ),
+    )
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
@@ -163,9 +163,11 @@ class Kagane : HttpSource(), ConfigurableSource {
                     is GenresFilter -> {
                         filter.addToJsonObject(this, preferences.excludedGenres.toList())
                     }
+
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
+
                     else -> {}
                 }
             }
@@ -216,6 +218,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
                     when {
                         it.booksCount < alt.booksCount -> return@filter false
+
                         it.booksCount == alt.booksCount -> {
                             if (date > altDate) return@filter false
                         }
@@ -236,17 +239,11 @@ class Kagane : HttpSource(), ConfigurableSource {
         return dto.toSManga()
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga.url)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
 
-    private fun mangaDetailsRequest(seriesId: String): Request {
-        return GET("$apiUrl/api/v1/series/$seriesId", apiHeaders)
-    }
+    private fun mangaDetailsRequest(seriesId: String): Request = GET("$apiUrl/api/v1/series/$seriesId", apiHeaders)
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/series/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     // ============================== Chapters ==============================
 
@@ -272,9 +269,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         return dto.content.map { it -> it.toSChapter(useSourceChapterNumber) }.reversed()
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/api/v1/books/${manga.url}", apiHeaders)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/api/v1/books/${manga.url}", apiHeaders)
 
     // =============================== Pages ================================
 
@@ -283,11 +278,9 @@ class Kagane : HttpSource(), ConfigurableSource {
         add("Referer", "$baseUrl/")
     }.build()
 
-    private fun getCertificate(url: String): String {
-        return client.newCall(GET(url, apiHeaders)).execute()
-            .body.bytes()
-            .toBase64()
-    }
+    private fun getCertificate(url: String): String = client.newCall(GET(url, apiHeaders)).execute()
+        .body.bytes()
+        .toBase64()
 
     private val windvineCertificate by lazy { getCertificate("$apiUrl/api/v1/static/bin.bin") }
 
@@ -490,8 +483,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         return jsInterface.challenge
     }
 
-    private fun concat(vararg arrays: ByteArray): ByteArray =
-        arrays.reduce { acc, bytes -> acc + bytes }
+    private fun concat(vararg arrays: ByteArray): ByteArray = arrays.reduce { acc, bytes -> acc + bytes }
 
     private fun getPssh(t: ByteArray): ByteArray {
         val e = Base64.decode("7e+LqXnWSs6jyCfc1R0h7Q==", Base64.DEFAULT)
@@ -523,13 +515,9 @@ class Kagane : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException()
-    }
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================ Preferences =============================
 

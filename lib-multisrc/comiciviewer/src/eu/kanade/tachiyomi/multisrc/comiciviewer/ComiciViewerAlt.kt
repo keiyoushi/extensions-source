@@ -26,7 +26,8 @@ abstract class ComiciViewerAlt(
     override val baseUrl: String,
     override val lang: String,
     private val apiUrl: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
@@ -40,9 +41,7 @@ abstract class ComiciViewerAlt(
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/manga", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return latestUpdatesParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/manga", headers)
 
@@ -105,9 +104,7 @@ abstract class ComiciViewerAlt(
         return response.parseAs<ApiResponse>().series.summary.toSManga(seriesHash)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun chapterListRequest(manga: SManga): Request {
         val seriesHash = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
@@ -138,9 +135,7 @@ abstract class ComiciViewerAlt(
         return apiResponse.series.toSChapter(accessMap, showLocked, showCampaignLocked).reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.endsWith(LOGIN_SUFFIX)) {

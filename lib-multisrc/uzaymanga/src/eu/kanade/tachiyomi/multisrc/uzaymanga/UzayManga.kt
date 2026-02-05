@@ -39,11 +39,9 @@ abstract class UzayManga(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/search?page=$page&search=&order=4")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4")
 
-    override fun popularMangaNextPageSelector() =
-        "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
+    override fun popularMangaNextPageSelector() = "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
 
     override fun popularMangaSelector() = "section[aria-label='series area'] .card"
 
@@ -53,8 +51,7 @@ abstract class UzayManga(
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/search?page=$page&search=&order=3")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/search?page=$page&search=&order=3")
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -164,14 +161,11 @@ abstract class UzayManga(
 
     override fun imageUrlParse(document: Document) = ""
 
-    private fun isMangaPage(document: Document): Boolean =
-        document.selectFirst("div.grid h2 + p") != null
+    private fun isMangaPage(document: Document): Boolean = document.selectFirst("div.grid h2 + p") != null
 
-    private fun String.toDate(): Long =
-        dateFormat.tryParse(this)
+    private fun String.toDate(): Long = dateFormat.tryParse(this)
 
-    private fun String.contains(vararg fragment: String): Boolean =
-        fragment.any { trim().contains(it, ignoreCase = true) }
+    private fun String.contains(vararg fragment: String): Boolean = fragment.any { trim().contains(it, ignoreCase = true) }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"

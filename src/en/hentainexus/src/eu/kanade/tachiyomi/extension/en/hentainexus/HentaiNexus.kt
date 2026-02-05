@@ -70,14 +70,12 @@ class HentaiNexus : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(GET("$baseUrl/view/$id", headers)).asObservableSuccess()
-                .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/view/$id" }), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client.newCall(GET("$baseUrl/view/$id", headers)).asObservableSuccess()
+            .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/view/$id" }), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -138,14 +136,14 @@ class HentaiNexus : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val table = document.selectFirst(".view-page-details")!!
-        val date_upload_str = table.selectFirst("td.viewcolumn:contains(Published) + td")?.text()
+        val dateUploadStr = table.selectFirst("td.viewcolumn:contains(Published) + td")?.text()
 
         val id = response.request.url.toString().split("/").last()
         return listOf(
             SChapter.create().apply {
                 url = "/read/$id"
                 name = "Chapter"
-                date_upload = dateFormat.tryParse(date_upload_str)
+                date_upload = dateFormat.tryParse(dateUploadStr)
             },
         )
     }

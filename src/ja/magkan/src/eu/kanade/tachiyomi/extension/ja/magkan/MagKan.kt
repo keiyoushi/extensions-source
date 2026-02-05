@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.Request
 import okhttp3.Response
 
-class MagKan : ComiciViewer(
-    "MagKan",
-    "https://kansai.mag-garden.co.jp",
-    "ja",
-) {
+class MagKan :
+    ComiciViewer(
+        "MagKan",
+        "https://kansai.mag-garden.co.jp",
+        "ja",
+    ) {
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)

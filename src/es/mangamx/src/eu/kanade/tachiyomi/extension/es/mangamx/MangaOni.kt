@@ -22,7 +22,9 @@ import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class MangaOni : ConfigurableSource, ParsedHttpSource() {
+open class MangaOni :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "MangaOni"
 
@@ -85,7 +87,14 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
         if (query.isNotBlank()) {
             uri.appendQueryParameter("q", query)
         } else {
-            uri.appendQueryParameter("adulto", if (hideNSFWContent()) { "0" } else { "false" })
+            uri.appendQueryParameter(
+                "adulto",
+                if (hideNSFWContent()) {
+                    "0"
+                } else {
+                    "false"
+                },
+            )
 
             for (filter in filters) {
                 when (filter) {
@@ -93,25 +102,34 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
                         filter.name.lowercase(Locale.ROOT),
                         statusArray[filter.state].second,
                     )
+
                     is SortBy -> {
                         uri.appendQueryParameter("filtro", sortables[filter.state!!.index].second)
                         uri.appendQueryParameter(
                             "orden",
-                            if (filter.state!!.ascending) { "asc" } else { "desc" },
+                            if (filter.state!!.ascending) {
+                                "asc"
+                            } else {
+                                "desc"
+                            },
                         )
                     }
+
                     is TypeFilter -> uri.appendQueryParameter(
                         filter.name.lowercase(Locale.ROOT),
                         typedArray[filter.state].second,
                     )
+
                     is GenreFilter -> uri.appendQueryParameter(
                         "genero",
                         genresArray[filter.state].second,
                     )
+
                     is AdultContentFilter -> uri.appendQueryParameter(
                         "adulto",
                         adultContentArray[filter.state].second,
                     )
+
                     else -> {}
                 }
             }
@@ -180,9 +198,7 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
         date_upload = parseDate(element.select("span").attr("datetime"))
     }
 
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
-    }
+    private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
 
     override fun pageListParse(document: Document): List<Page> {
         val encoded = document.select("script:containsData(unicap)").firstOrNull()
@@ -216,23 +232,20 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
         return FilterList(filterList)
     }
 
-    private class StatusFilter(name: String, values: Array<Pair<String, String>>) :
-        Filter.Select<String>(name, values.map { it.first }.toTypedArray())
+    private class StatusFilter(name: String, values: Array<Pair<String, String>>) : Filter.Select<String>(name, values.map { it.first }.toTypedArray())
 
-    private class TypeFilter(name: String, values: Array<Pair<String, String>>) :
-        Filter.Select<String>(name, values.map { it.first }.toTypedArray())
+    private class TypeFilter(name: String, values: Array<Pair<String, String>>) : Filter.Select<String>(name, values.map { it.first }.toTypedArray())
 
-    private class GenreFilter(name: String, values: Array<Pair<String, String>>) :
-        Filter.Select<String>(name, values.map { it.first }.toTypedArray())
+    private class GenreFilter(name: String, values: Array<Pair<String, String>>) : Filter.Select<String>(name, values.map { it.first }.toTypedArray())
 
-    private class AdultContentFilter(name: String, values: Array<Pair<String, String>>) :
-        Filter.Select<String>(name, values.map { it.first }.toTypedArray())
+    private class AdultContentFilter(name: String, values: Array<Pair<String, String>>) : Filter.Select<String>(name, values.map { it.first }.toTypedArray())
 
-    class SortBy(name: String, values: Array<Pair<String, String>>) : Filter.Sort(
-        name,
-        values.map { it.first }.toTypedArray(),
-        Selection(0, false),
-    )
+    class SortBy(name: String, values: Array<Pair<String, String>>) :
+        Filter.Sort(
+            name,
+            values.map { it.first }.toTypedArray(),
+            Selection(0, false),
+        )
 
     private val statusArray = arrayOf(
         Pair("Estado", "false"),

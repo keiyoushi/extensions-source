@@ -4,11 +4,12 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.Response
 
-class Murim : ZeistManga(
-    "Murim",
-    "https://www.murim.site",
-    "ar",
-) {
+class Murim :
+    ZeistManga(
+        "Murim",
+        "https://www.murim.site",
+        "ar",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

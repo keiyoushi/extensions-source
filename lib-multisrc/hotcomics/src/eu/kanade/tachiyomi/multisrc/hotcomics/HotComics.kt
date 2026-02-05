@@ -117,15 +117,13 @@ abstract class HotComics(
         }.trim()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select("#tab-chapter a").map { element ->
-            SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
-                name = element.selectFirst(".cell-num")!!.text()
-                date_upload = parseDate(element.selectFirst(".cell-time")?.text())
-            }
-        }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("#tab-chapter a").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
+            name = element.selectFirst(".cell-num")!!.text()
+            date_upload = parseDate(element.selectFirst(".cell-time")?.text())
+        }
+    }.reversed()
 
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
@@ -139,20 +137,14 @@ abstract class HotComics(
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.imgAttr())
     }
 
-    private fun Element.imgAttr(): String {
-        return when {
-            hasAttr("data-src") -> absUrl("data-src")
-            else -> absUrl("src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

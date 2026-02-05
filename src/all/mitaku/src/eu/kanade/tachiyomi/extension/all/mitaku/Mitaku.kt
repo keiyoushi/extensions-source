@@ -39,21 +39,13 @@ class Mitaku : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = "div.wp-pagenavi a.page.larger"
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
@@ -67,6 +59,7 @@ class Mitaku : ParsedHttpSource() {
                 val url = "$baseUrl/category/${categoryFilter.toUriPart()}/page/$page/"
                 GET(url, headers)
             }
+
             query.isEmpty() && tagFilter.state.isNotEmpty() -> {
                 val url = baseUrl.toHttpUrl().newBuilder()
                     .addPathSegment("tag")
@@ -76,12 +69,14 @@ class Mitaku : ParsedHttpSource() {
                     .build()
                 GET(url, headers)
             }
+
             query.isNotEmpty() -> {
                 val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
                     .addQueryParameter("s", query)
                     .build()
                 GET(url, headers)
             }
+
             else -> latestUpdatesRequest(page)
         }
     }
@@ -114,13 +109,9 @@ class Mitaku : ParsedHttpSource() {
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
 
@@ -133,9 +124,7 @@ class Mitaku : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     open class UriPartFilter(
         displayName: String,
@@ -144,16 +133,17 @@ class Mitaku : ParsedHttpSource() {
         fun toUriPart() = valuePair[state].second
     }
 
-    class CategoryFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Ero Cosplay", "/ero-cosplay"),
-            Pair("Nude", "/nude"),
-            Pair("Sexy Set", "/sexy-set"),
-            Pair("Online Video", "/online-video"),
-        ),
-    )
+    class CategoryFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Ero Cosplay", "/ero-cosplay"),
+                Pair("Nude", "/nude"),
+                Pair("Sexy Set", "/sexy-set"),
+                Pair("Online Video", "/online-video"),
+            ),
+        )
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("NOTE: Only one tag search"),
         Filter.Separator(),
@@ -162,9 +152,7 @@ class Mitaku : ParsedHttpSource() {
     )
 
     class TagFilter : Filter.Text("Tag") {
-        fun toUriPart(): String {
-            return state.trim().lowercase().replace(" ", "-")
-        }
+        fun toUriPart(): String = state.trim().lowercase().replace(" ", "-")
     }
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T

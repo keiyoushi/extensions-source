@@ -45,7 +45,9 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.text.replace
 
-class ComX : ParsedHttpSource(), ConfigurableSource {
+class ComX :
+    ParsedHttpSource(),
+    ConfigurableSource {
     private val json: Json by injectLazy()
 
     override val id = 1114173092141608635
@@ -226,26 +228,31 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
                     orderBy = arrayOf("date", "rating", "news_read", "comm_num", "title")[filter.state!!.index]
                     ascEnd = if (filter.state!!.ascending) "asc" else "desc"
                 }
+
                 is AgeList -> filter.state.forEach { age ->
                     if (age.state) {
                         mutableAge += age.id
                     }
                 }
+
                 is GenreList -> filter.state.forEach { genre ->
                     if (genre.state) {
                         mutableGenre += genre.id
                     }
                 }
+
                 is TypeList -> filter.state.forEach { type ->
                     if (type.state) {
                         mutableType += type.id
                     }
                 }
+
                 is PubList -> filter.state.forEach { publisher ->
                     if (publisher.state) {
                         sectionPub += publisher.id
                     }
                 }
+
                 else -> {}
             }
         }
@@ -301,7 +308,11 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         manga.status = parseStatus(infoElement.select(".page__list li:contains(Статус)").text())
 
         manga.description = infoElement.select(".page__title-original").text().trim() + "\n" +
-            if (document.select(".page__list li:contains(Тип выпуска)").text().contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")) { "Cобытие в комиксах - ХРОНОЛОГИЯ\n" } else { "" } +
+            if (document.select(".page__list li:contains(Тип выпуска)").text().contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")) {
+                "Cобытие в комиксах - ХРОНОЛОГИЯ\n"
+            } else {
+                ""
+            } +
             ratingStar + " " + ratingValue + " (голосов: " + ratingVotes + ")\n" +
             infoElement.select(".page__text ").first()?.html()?.let { Jsoup.parse(it) }
                 ?.select("body:not(:has(p)),p,br")
@@ -324,6 +335,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         element.contains("Продолжается") ||
             element.contains(" из ") ||
             element.contains("Онгоинг") -> SManga.ONGOING
+
         element.contains("Заверш") ||
             element.contains("Лимитка") ||
             element.contains("Ван шот") ||
@@ -364,8 +376,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         return chapters ?: emptyList()
     }
 
-    override fun chapterFromElement(element: Element): SChapter =
-        throw NotImplementedError("Unused")
+    override fun chapterFromElement(element: Element): SChapter = throw NotImplementedError("Unused")
 
     // Pages
     override fun pageListParse(response: Response): List<Page> {
@@ -401,38 +412,33 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         return pages
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservable().doOnNext { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 404 && response.asJsoup().toString().contains("Выпуск был удален по требованию правообладателя")) {
-                        throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
-                    } else {
-                        throw Exception("HTTP error ${response.code}")
-                    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservable().doOnNext { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 404 && response.asJsoup().toString().contains("Выпуск был удален по требованию правообладателя")) {
+                    throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
+                } else {
+                    throw Exception("HTTP error ${response.code}")
                 }
             }
-            .map { response ->
-                pageListParse(response)
-            }
-    }
+        }
+        .map { response ->
+            pageListParse(response)
+        }
 
-    override fun pageListParse(document: Document): List<Page> {
-        throw Exception("Not used")
-    }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
     override fun imageUrlParse(document: Document) = ""
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers)
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
     // Filters
-    private class OrderBy : Filter.Sort(
-        "Сортировать по",
-        arrayOf("Дате", "Популярности", "Посещаемости", "Комментариям", "Алфавиту"),
-        Selection(1, false),
-    )
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировать по",
+            arrayOf("Дате", "Популярности", "Посещаемости", "Комментариям", "Алфавиту"),
+            Selection(1, false),
+        )
 
     private class CheckFilter(name: String, val id: String) : Filter.CheckBox(name)
 

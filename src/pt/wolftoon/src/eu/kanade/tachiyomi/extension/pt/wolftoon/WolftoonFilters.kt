@@ -7,17 +7,13 @@ abstract class Select<T>(name: String, values: Array<T>) : Filter.Select<T>(name
         get() = values[state]
 }
 
-class StatusFilter(name: String, values: Array<String>) :
-    Select<String>(name, values)
+class StatusFilter(name: String, values: Array<String>) : Select<String>(name, values)
 
-class TypeFilter(name: String, values: Array<String>) :
-    Select<String>(name, values)
+class TypeFilter(name: String, values: Array<String>) : Select<String>(name, values)
 
-class GenreFilter(name: String, values: Array<String>) :
-    Select<String>(name, values)
+class GenreFilter(name: String, values: Array<String>) : Select<String>(name, values)
 
-class OrderBy(name: String, values: Array<String>) :
-    Select<String>(name, values)
+class OrderBy(name: String, values: Array<String>) : Select<String>(name, values)
 
 val statusList: Array<String> = arrayOf(
     "Todos",

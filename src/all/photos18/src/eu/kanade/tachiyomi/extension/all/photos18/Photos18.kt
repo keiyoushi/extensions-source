@@ -22,7 +22,9 @@ import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 import rx.Observable
 
-class Photos18 : HttpSource(), ConfigurableSource {
+class Photos18 :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Photos18"
     override val lang = "all"
     override val supportsLatest = true
@@ -120,24 +122,25 @@ class Photos18 : HttpSource(), ConfigurableSource {
         private val queryValues: Array<String>,
         state: Int = 0,
     ) : Filter.Select<String>(name, values, state) {
-        fun addQueryTo(builder: HttpUrl.Builder) =
-            builder.addQueryParameter(queryName, queryValues[state])
+        fun addQueryTo(builder: HttpUrl.Builder) = builder.addQueryParameter(queryName, queryValues[state])
     }
 
-    private class SortFilter : QueryFilter(
-        "Sort by",
-        arrayOf("Latest", "Popular", "Trend", "Recommended", "Best"),
-        "sort",
-        arrayOf("created", "hits", "views", "score", "likes"),
-        state = 2,
-    )
+    private class SortFilter :
+        QueryFilter(
+            "Sort by",
+            arrayOf("Latest", "Popular", "Trend", "Recommended", "Best"),
+            "sort",
+            arrayOf("created", "hits", "views", "score", "likes"),
+            state = 2,
+        )
 
-    private class CategoryFilter(categories: List<Pair<String, String>>) : QueryFilter(
-        "Category",
-        categories.map { it.first }.toTypedArray(),
-        "category_id",
-        categories.map { it.second }.toTypedArray(),
-    )
+    private class CategoryFilter(categories: List<Pair<String, String>>) :
+        QueryFilter(
+            "Category",
+            categories.map { it.first }.toTypedArray(),
+            "category_id",
+            categories.map { it.second }.toTypedArray(),
+        )
 
     private var categories: List<Pair<String, String>> = emptyList()
 

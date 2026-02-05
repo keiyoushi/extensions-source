@@ -57,6 +57,5 @@ class Manhwa18Net : MyMangaCMS("Manhwa18.net", "https://manhwa18.net", "en") {
         Genre("Uncensore", 64),
     )
 
-    override fun dateUpdatedParser(date: String): Long =
-        runCatching { dateFormatter.parse(date.substringAfter(" - "))?.time }.getOrNull() ?: 0L
+    override fun dateUpdatedParser(date: String): Long = runCatching { dateFormatter.parse(date.substringAfter(" - "))?.time }.getOrNull() ?: 0L
 }

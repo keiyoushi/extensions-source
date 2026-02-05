@@ -46,8 +46,7 @@ class LeituraManga : HttpSource() {
 
     // ================= Latest ==================
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$apiUrl/api/manga/?sort=time&limit=24&isHome=true&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/api/manga/?sort=time&limit=24&isHome=true&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<MangaResponseDto<MangaListDto>>()
@@ -73,14 +72,17 @@ class LeituraManga : HttpSource() {
                         url.addQueryParameter("genre", filter.selectedValue)
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.selectedValue.isNotEmpty()) {
                         url.addQueryParameter("status", filter.selectedValue)
                     }
                 }
+
                 is SortFilter -> {
                     url.addQueryParameter("sort", filter.selectedValue)
                 }
+
                 else -> {}
             }
         }
@@ -97,8 +99,7 @@ class LeituraManga : HttpSource() {
     )
     // ================= Details ==================
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$apiUrl/api/manga/slug/${manga.url.removeSuffix("/").substringAfterLast("/")}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/api/manga/slug/${manga.url.removeSuffix("/").substringAfterLast("/")}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<MangaResponseDto<MangaDto>>()

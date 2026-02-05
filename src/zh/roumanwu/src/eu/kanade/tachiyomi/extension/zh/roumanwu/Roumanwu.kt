@@ -24,7 +24,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.max
 
-class Roumanwu : HttpSource(), ConfigurableSource {
+class Roumanwu :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "肉漫屋"
     override val lang = "zh"
     override val supportsLatest = true
@@ -39,13 +41,11 @@ class Roumanwu : HttpSource(), ConfigurableSource {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
 
-    private fun parseEntries(container: Element): List<SManga> {
-        return container.select("a[href*=/books/]").map {
-            SManga.create().apply {
-                title = it.selectFirst("div.truncate")!!.text()
-                url = it.attr("href")
-                thumbnail_url = it.selectFirst("div.bg-cover")!!.attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
-            }
+    private fun parseEntries(container: Element): List<SManga> = container.select("a[href*=/books/]").map {
+        SManga.create().apply {
+            title = it.selectFirst("div.truncate")!!.text()
+            url = it.attr("href")
+            thumbnail_url = it.selectFirst("div.bg-cover")!!.attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
         }
     }
 
@@ -73,13 +73,12 @@ class Roumanwu : HttpSource(), ConfigurableSource {
         return parseHomePage(document, Regex("最近更新"))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        if (query.isNotBlank()) {
-            GET("$baseUrl/search?term=$query&page=${page - 1}", headers)
-        } else {
-            val parts = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
-            GET("$baseUrl/books?page=${page - 1}$parts", headers)
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.isNotBlank()) {
+        GET("$baseUrl/search?term=$query&page=${page - 1}", headers)
+    } else {
+        val parts = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
+        GET("$baseUrl/books?page=${page - 1}$parts", headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -105,7 +104,9 @@ class Roumanwu : HttpSource(), ConfigurableSource {
             if (value.isEmpty()) continue
             when (text.take(3)) {
                 "別名:" -> if (value != title) description = "$text\n\n$description"
+
                 "作者:" -> author = value
+
                 "狀態:" -> status = when (value) {
                     "連載中" -> SManga.ONGOING
                     "已完結" -> SManga.COMPLETED
@@ -113,6 +114,7 @@ class Roumanwu : HttpSource(), ConfigurableSource {
                 }
 
                 "地區:" -> genres.add(value)
+
                 "標籤:" -> genres.addAll(value.split(","))
             }
         }
@@ -169,12 +171,11 @@ class Roumanwu : HttpSource(), ConfigurableSource {
     }
 
     private class StatusFilter : UriPartFilter("狀態", arrayOf("全部", "連載中", "已完結")) {
-        override fun toUriPart() =
-            when (state) {
-                1 -> "&continued=true"
-                2 -> "&continued=false"
-                else -> ""
-            }
+        override fun toUriPart() = when (state) {
+            1 -> "&continued=true"
+            2 -> "&continued=false"
+            else -> ""
+        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

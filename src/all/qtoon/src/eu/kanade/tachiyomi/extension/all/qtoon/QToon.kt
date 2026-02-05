@@ -35,11 +35,9 @@ class QToon(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", getFilterList())
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -51,8 +49,7 @@ class QToon(
         return apiRequest(url)
     }
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
@@ -174,8 +171,7 @@ class QToon(
         return comic.toSManga()
     }
 
-    override fun chapterListRequest(manga: SManga) =
-        mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val episodes = response.decryptAs<ChapterEpisodes>().episodes
@@ -247,9 +243,7 @@ class QToon(
         }.sortedBy { it.index }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private val requestToken = generateRandomString(24)
 

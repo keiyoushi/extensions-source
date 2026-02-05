@@ -5,13 +5,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
-class ComicGardo : GigaViewer(
-    "Comic Gardo",
-    "https://comic-gardo.com",
-    "ja",
-    "https://cdn-img.comic-gardo.com/public/page",
-    isPaginated = true,
-) {
+class ComicGardo :
+    GigaViewer(
+        "Comic Gardo",
+        "https://comic-gardo.com",
+        "ja",
+        "https://cdn-img.comic-gardo.com/public/page",
+        isPaginated = true,
+    ) {
 
     override val supportsLatest: Boolean = false
 

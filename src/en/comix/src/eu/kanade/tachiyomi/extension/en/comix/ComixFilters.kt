@@ -178,49 +178,56 @@ class ComixFilters {
             demographics,
         )
 
-    private class TypeFilter : UriMultiSelectFilter(
-        "Type",
-        "types[]",
-        arrayOf(
-            Pair("Manga", "manga"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Manhua", "manhua"),
-            Pair("Other", "other"),
-        ),
-    )
+    private class TypeFilter :
+        UriMultiSelectFilter(
+            "Type",
+            "types[]",
+            arrayOf(
+                Pair("Manga", "manga"),
+                Pair("Manhwa", "manhwa"),
+                Pair("Manhua", "manhua"),
+                Pair("Other", "other"),
+            ),
+        )
 
-    private class GenreFilter(genres: Array<Pair<String, String>>) : UriTriSelectFilter(
-        "Genres",
-        "genres[]",
-        genres,
-    )
+    private class GenreFilter(genres: Array<Pair<String, String>>) :
+        UriTriSelectFilter(
+            "Genres",
+            "genres[]",
+            genres,
+        )
 
-    private class StatusFilter : UriMultiSelectFilter(
-        "Status",
-        "statuses[]",
-        arrayOf(
-            Pair("Finished", "finished"),
-            Pair("Releasing", "releasing"),
-            Pair("On Hiatus", "on_hiatus"),
-            Pair("Discontinued", "discontinued"),
-            Pair("Not Yet Released", "not_yet_released"),
-        ),
-    )
+    private class StatusFilter :
+        UriMultiSelectFilter(
+            "Status",
+            "statuses[]",
+            arrayOf(
+                Pair("Finished", "finished"),
+                Pair("Releasing", "releasing"),
+                Pair("On Hiatus", "on_hiatus"),
+                Pair("Discontinued", "discontinued"),
+                Pair("Not Yet Released", "not_yet_released"),
+            ),
+        )
 
-    private class YearFromFilter : UriPartFilter(
-        "From",
-        "release_year[from]",
-        getYearsArray(includeOlder = true),
-        "older",
-    )
+    private class YearFromFilter :
+        UriPartFilter(
+            "From",
+            "release_year[from]",
+            getYearsArray(includeOlder = true),
+            "older",
+        )
 
-    private class YearToFilter : UriPartFilter(
-        "To",
-        "release_year[to]",
-        getYearsArray(includeOlder = false),
-    )
+    private class YearToFilter :
+        UriPartFilter(
+            "To",
+            "release_year[to]",
+            getYearsArray(includeOlder = false),
+        )
 
-    private class MinChapterFilter : Filter.Text("Minimum Chapter Length"), UriFilter {
+    private class MinChapterFilter :
+        Filter.Text("Minimum Chapter Length"),
+        UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             if (state.isNotEmpty()) {
                 val value = state.toIntOrNull()?.takeIf { it > 0 }

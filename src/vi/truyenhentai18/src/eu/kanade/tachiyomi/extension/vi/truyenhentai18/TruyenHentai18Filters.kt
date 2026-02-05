@@ -8,10 +8,11 @@ fun getFilters(): FilterList = FilterList(
     GenreFilter(),
 )
 
-class GenreFilter : Filter.Select<String>(
-    "Thể loại",
-    genres.map { it.first }.toTypedArray(),
-) {
+class GenreFilter :
+    Filter.Select<String>(
+        "Thể loại",
+        genres.map { it.first }.toTypedArray(),
+    ) {
     fun toUriPart(): String = genres[state].second
 }
 

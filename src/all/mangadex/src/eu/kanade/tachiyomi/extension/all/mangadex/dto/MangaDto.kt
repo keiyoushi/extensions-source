@@ -18,7 +18,7 @@ typealias MangaListDto = PaginatedResponseDto<MangaDataDto>
 typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
-@SerialName(MDConstants.manga)
+@SerialName(MDConstants.MANGA)
 data class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
 
 @Serializable
@@ -84,14 +84,15 @@ enum class StatusDto(val value: String) {
 }
 
 @Serializable
-@SerialName(MDConstants.tag)
+@SerialName(MDConstants.TAG)
 data class TagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
 
 @Serializable
 data class TagAttributesDto(val group: String) : AttributesDto()
 
-typealias LocalizedString = @Serializable(LocalizedStringSerializer::class)
-Map<String, String>
+typealias LocalizedString =
+    @Serializable(LocalizedStringSerializer::class)
+    Map<String, String>
 
 /**
  * Temporary workaround while Dex API still returns arrays instead of objects

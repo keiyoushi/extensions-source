@@ -15,17 +15,23 @@ private val RATING_PREDICATES: Array<((PixivIllust) -> Boolean)?> =
     arrayOf(null, { it.x_restrict == "0" }, { it.x_restrict == "1" })
 
 internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
-    init { add(Filter.Header("Deeplinks supported in search: pixiv link, aid:123, user:123, sid:123")) }
+    init {
+        add(Filter.Header("Deeplinks supported in search: pixiv link, aid:123, user:123, sid:123"))
+    }
 
     private val typeFilter = object : Filter.Select<String>("Type", TYPE_VALUES, 2) {}.also(::add)
     private val tagsFilter = object : Filter.Text("Tags") {}.also(::add)
     private val tagsModeFilter = object : Filter.Select<String>("Tags mode", TAGS_MODE_VALUES, 0) {}.also(::add)
     private val usersFilter = object : Filter.Text("Users") {}.also(::add)
-    init { add(Filter.Header("The usersFilter filter acts as lookup when search query is blank (requires login via WebView)")) }
+    init {
+        add(Filter.Header("The usersFilter filter acts as lookup when search query is blank (requires login via WebView)"))
+    }
 
     private val ratingFilter = object : Filter.Select<String>("Rating", RATING_VALUES, 0) {}.also(::add)
 
-    init { add(Filter.Header("(the following are ignored when the users filter is in use)")) }
+    init {
+        add(Filter.Header("(the following are ignored when the users filter is in use)"))
+    }
 
     private val orderFilter = object : Filter.Sort("Order", arrayOf("Date posted")) {}.also(::add)
     private val dateBeforeFilter = object : Filter.Text("Posted before") {}.also(::add)

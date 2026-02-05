@@ -8,12 +8,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class CeriseScan : Madara(
-    "Cerise Scan",
-    "https://loverstoon.com",
-    "pt-BR",
-    SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
-) {
+class CeriseScan :
+    Madara(
+        "Cerise Scan",
+        "https://loverstoon.com",
+        "pt-BR",
+        SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
+    ) {
     override val versionId: Int = 3
 
     override val client = super.client.newBuilder()

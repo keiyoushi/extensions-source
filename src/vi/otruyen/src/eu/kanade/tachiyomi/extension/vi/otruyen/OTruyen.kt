@@ -50,9 +50,7 @@ class OTruyen : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/danh-sach/truyen-moi?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/danh-sach/truyen-moi?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val res = response.parseAs<DataDto<ListingData>>()
@@ -63,28 +61,20 @@ class OTruyen : HttpSource() {
         return MangasPage(manga, hasNextPage)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/danh-sach/hoan-thanh?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/danh-sach/hoan-thanh?page=$page", headers)
 
     override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/truyen-tranh/${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/truyen-tranh/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val res = response.parseAs<DataDto<EntryData>>()
         return res.data.item.toSManga(imgUrl)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/truyen-tranh/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/truyen-tranh/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.parseAs<DataDto<EntryData>>()
@@ -119,14 +109,17 @@ class OTruyen : HttpSource() {
             query.isNotBlank() -> {
                 listOf("tim-kiem") to mapOf("keyword" to query)
             }
+
             filters.filterIsInstance<GenreList>().isNotEmpty() -> {
                 val genre = filters.filterIsInstance<GenreList>().first()
                 listOf("the-loai", genre.values[genre.state].slug) to emptyMap()
             }
+
             filters.filterIsInstance<GenreList>().isEmpty() -> {
                 val status = filters.filterIsInstance<StatusList>().first()
                 listOf("danh-sach", status.values[status.state].slug) to emptyMap()
             }
+
             else -> {
                 listOf("danh-sach", "dang-phat-hanh") to emptyMap()
             }
@@ -143,9 +136,7 @@ class OTruyen : HttpSource() {
 
     private fun genresRequest(): Request = GET("$apiUrl/the-loai", headers)
 
-    private fun parseGenres(response: Response): List<Pair<String, String>> {
-        return response.parseAs<DataDto<GenresData>>().data.items.map { Pair(it.slug, it.name) }
-    }
+    private fun parseGenres(response: Response): List<Pair<String, String>> = response.parseAs<DataDto<GenresData>>().data.items.map { Pair(it.slug, it.name) }
 
     private var genreList: List<Pair<String, String>> = emptyList()
 
@@ -170,15 +161,16 @@ class OTruyen : HttpSource() {
 
     private class GenreList(name: String, pairs: List<Pair<String, String>>) : GenresFilter(name, pairs)
 
-    private class StatusList : Filter.Select<Genre>(
-        "Trạng thái",
-        arrayOf(
-            Genre("Mới nhất", "truyen-moi"),
-            Genre("Đang phát hành", "dang-phat-hanh"),
-            Genre("Hoàn thành", "hoan-thanh"),
-            Genre("Sắp ra mắt", "sap-ra-mat"),
-        ),
-    )
+    private class StatusList :
+        Filter.Select<Genre>(
+            "Trạng thái",
+            arrayOf(
+                Genre("Mới nhất", "truyen-moi"),
+                Genre("Đang phát hành", "dang-phat-hanh"),
+                Genre("Hoàn thành", "hoan-thanh"),
+                Genre("Sắp ra mắt", "sap-ra-mat"),
+            ),
+        )
 
     private open class GenresFilter(title: String, pairs: List<Pair<String, String>>) :
         Filter.Select<Genre>(

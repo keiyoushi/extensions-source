@@ -28,7 +28,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
+class GocTruyenTranh :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val lang = "vi"
 
@@ -145,26 +147,29 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
                     is TextField -> setQueryParameter(filter.key, filter.state)
+
                     is GenreList ->
                         filter.state
                             .filter { it.state }
                             .map { it.id }
                             .forEach { addQueryParameter("categories", it) }
+
                     is StatusList ->
                         filter.state
                             .filter { it.state }
                             .map { it.id }
                             .forEach { addQueryParameter("status", it) }
-                    is ChapterCountList ->
-                        {
-                            val chapterCount = getChapterCountList()[filter.state]
-                            addQueryParameter("minChap", chapterCount.id)
-                        }
-                    is SortByList ->
-                        {
-                            val sort = getSortByList()[filter.state]
-                            addQueryParameter("sort", sort.id)
-                        }
+
+                    is ChapterCountList -> {
+                        val chapterCount = getChapterCountList()[filter.state]
+                        addQueryParameter("minChap", chapterCount.id)
+                    }
+
+                    is SortByList -> {
+                        val sort = getSortByList()[filter.state]
+                        addQueryParameter("sort", sort.id)
+                    }
+
                     is CountryList ->
                         filter.state
                             .filter { it.state }
@@ -200,16 +205,12 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     private class ChapterCountList(chapter: Array<ChapterCount>) : Filter.Select<ChapterCount>("Độ dài", chapter)
     private class ChapterCount(name: String, val id: String) : Filter.CheckBox(name) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class SortByList(sort: Array<SortBy>) : Filter.Select<SortBy>("Sắp xếp", sort)
     private class SortBy(name: String, val id: String) : Filter.CheckBox(name) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class CountryList(country: List<Country>) : Filter.Group<Country>("Quốc gia", country)

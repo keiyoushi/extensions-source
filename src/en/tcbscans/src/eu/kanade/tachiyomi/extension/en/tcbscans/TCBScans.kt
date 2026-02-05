@@ -43,9 +43,7 @@ class TCBScans : ParsedHttpSource() {
     }.build()
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/projects", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/projects", headers)
 
     override fun popularMangaSelector() = "div.bg-card"
 
@@ -117,10 +115,8 @@ class TCBScans : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("picture img, .image-container img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("picture img, .image-container img").mapIndexed { i, img ->
+        Page(i, imageUrl = img.absUrl("src"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()

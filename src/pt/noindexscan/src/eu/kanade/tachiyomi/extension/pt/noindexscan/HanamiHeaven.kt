@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class HanamiHeaven : Madara(
-    "Hanami Heaven",
-    "https://hanamiheaven.org",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class HanamiHeaven :
+    Madara(
+        "Hanami Heaven",
+        "https://hanamiheaven.org",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     // NoIndexScan (pt-BR) -> HanamiHeaven (pt-BR)
     override val id = 987786689720213769L
 

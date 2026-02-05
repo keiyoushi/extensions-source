@@ -12,11 +12,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
-private fun buildQuery(query: String): String {
-    return query.trimIndent()
-        .replace("#{body}", COMIC_BODY.trimIndent())
-        .replace("%", "$")
-}
+private fun buildQuery(query: String): String = query.trimIndent()
+    .replace("#{body}", COMIC_BODY.trimIndent())
+    .replace("%", "$")
 
 private const val COMIC_BODY =
     """

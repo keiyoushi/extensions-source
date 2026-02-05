@@ -156,12 +156,10 @@ class HoneyManga : HttpSource() {
         return POST("$API_URL/v2/manga/cursor-list", headers, body)
     }
 
-    private fun makeMangasPage(mangaList: List<HoneyMangaDto>): MangasPage {
-        return MangasPage(
-            mangaList.map(::makeSManga),
-            mangaList.size == DEFAULT_PAGE_SIZE,
-        )
-    }
+    private fun makeMangasPage(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
+        mangaList.map(::makeSManga),
+        mangaList.size == DEFAULT_PAGE_SIZE,
+    )
 
     private fun makeSManga(mangaDto: HoneyMangaDto) = SManga.create().apply {
         title = mangaDto.title
@@ -184,10 +182,8 @@ class HoneyManga : HttpSource() {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
         }
 
-        private fun String.toDate(): Long {
-            return runCatching { DATE_FORMATTER.parse(this)?.time }
-                .getOrNull() ?: 0L
-        }
+        private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+            .getOrNull() ?: 0L
 
         private val json: Json by injectLazy()
 

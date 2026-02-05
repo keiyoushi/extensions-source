@@ -47,10 +47,8 @@ class VizImageInterceptor : Interceptor {
             .build()
     }
 
-    private fun imageUrlParse(response: Response): String {
-        return response.use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
-            .data?.values?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
-    }
+    private fun imageUrlParse(response: Response): String = response.use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
+        .data?.values?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
 
     private fun imageRequest(url: String): Request {
         val headers = Headers.Builder()

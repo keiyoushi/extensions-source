@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 typealias ChapterListDto = PaginatedResponseDto<ChapterDataDto>
 
 @Serializable
-@SerialName(NamiComiConstants.chapter)
+@SerialName(NamiComiConstants.CHAPTER)
 class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
 
 @Serializable

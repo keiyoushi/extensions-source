@@ -15,12 +15,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaHentai : Madara(
-    "Manhwa Hentai",
-    "https://manhwahentai.to",
-    "en",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("eb")),
-) {
+class ManhwaHentai :
+    Madara(
+        "Manhwa Hentai",
+        "https://manhwahentai.to",
+        "en",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("eb")),
+    ) {
     override val mangaDetailsSelectorTitle = "div.post-title .h1"
     override val mangaDetailsSelectorArtist = "div.post-tax-wp-manga-artist a .tag-name"
     override val mangaDetailsSelectorDescription = ".post-meta-title:contains(Description:) + .post-meta-value"
@@ -91,7 +92,5 @@ class ManhwaHentai : Madara(
         }
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

@@ -23,7 +23,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Danbooru : HttpSource(), ConfigurableSource {
+class Danbooru :
+    HttpSource(),
+    ConfigurableSource {
     override val name: String = "Danbooru"
     override val baseUrl: String = "https://danbooru.donmai.us"
     override val lang: String = "all"
@@ -36,11 +38,9 @@ class Danbooru : HttpSource(), ConfigurableSource {
 
     private val preference by getPreferencesLazy()
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList())
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/pools/gallery".toHttpUrl().newBuilder()
@@ -102,11 +102,9 @@ class Danbooru : HttpSource(), ConfigurableSource {
             ?.substringBeforeLast(' ')?.trimStart()
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(FilterOrder("created_at")))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(filterOrder("created_at")))
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
@@ -123,8 +121,7 @@ class Danbooru : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl${manga.url}.json", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}.json", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<Pool>()
@@ -153,32 +150,27 @@ class Danbooru : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET("$baseUrl${chapter.url}.json", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}.json", headers)
 
-    override fun pageListParse(response: Response): List<Page> =
-        if (response.request.url.toString().contains("/posts/")) {
-            val data = response.parseAs<Post>()
+    override fun pageListParse(response: Response): List<Page> = if (response.request.url.toString().contains("/posts/")) {
+        val data = response.parseAs<Post>()
 
-            listOf(
-                Page(index = 0, imageUrl = data.fileUrl),
-            )
-        } else {
-            val data = response.parseAs<Pool>()
+        listOf(
+            Page(index = 0, imageUrl = data.fileUrl),
+        )
+    } else {
+        val data = response.parseAs<Pool>()
 
-            data.postIds.mapIndexed { index, id ->
-                Page(index, url = "/posts/$id")
-            }
+        data.postIds.mapIndexed { index, id ->
+            Page(index, url = "/posts/$id")
         }
+    }
 
-    override fun imageUrlRequest(page: Page): Request =
-        GET("$baseUrl${page.url}.json", headers)
+    override fun imageUrlRequest(page: Page): Request = GET("$baseUrl${page.url}.json", headers)
 
-    override fun imageUrlParse(response: Response): String =
-        response.parseAs<Post>().fileUrl
+    override fun imageUrlParse(response: Response): String = response.parseAs<Post>().fileUrl
 
-    override fun getChapterUrl(chapter: SChapter): String =
-        baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun getFilterList() = FilterList(
         listOf(

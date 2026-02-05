@@ -20,7 +20,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Komiic : HttpSource(), ConfigurableSource {
+class Komiic :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Komiic"
     override val baseUrl = "https://komiic.com"
     override val lang = "zh"
@@ -81,16 +83,14 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = buildFilterList()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            idsQuery(query.removePrefix(PREFIX_ID_SEARCH)).request()
-        } else if (query.isNotBlank()) {
-            searchQuery(query).request()
-        } else {
-            val variables = ListingVariables(Pagination((page - 1) * PAGE_SIZE))
-            for (filter in filters) if (filter is KomiicFilter) filter.apply(variables)
-            listingQuery(variables).request()
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        idsQuery(query.removePrefix(PREFIX_ID_SEARCH)).request()
+    } else if (query.isNotBlank()) {
+        searchQuery(query).request()
+    } else {
+        val variables = ListingVariables(Pagination((page - 1) * PAGE_SIZE))
+        for (filter in filters) if (filter is KomiicFilter) filter.apply(variables)
+        listingQuery(variables).request()
     }
 
     override fun searchMangaParse(response: Response) = parseListing(response.parse())
@@ -130,11 +130,9 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     // Page List ===================================================================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return pageListQuery(chapter.id).request().newBuilder()
-            .tag(String::class.java, chapter.url)
-            .build()
-    }
+    override fun pageListRequest(chapter: SChapter): Request = pageListQuery(chapter.id).request().newBuilder()
+        .tag(String::class.java, chapter.url)
+        .build()
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parse()
@@ -150,12 +148,10 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     // Image =======================================================================================
 
-    override fun imageRequest(page: Page): Request {
-        return super.imageRequest(page).newBuilder()
-            .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .addHeader("referer", page.url)
-            .build()
-    }
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .addHeader("referer", page.url)
+        .build()
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

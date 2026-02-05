@@ -47,10 +47,9 @@ class Tojimangas : ParsedHttpSource() {
         headers,
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        makeMangaRequest(page) {
-            it.setQueryParameter("s", query)
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = makeMangaRequest(page) {
+        it.setQueryParameter("s", query)
+    }
 
     override fun popularMangaRequest(page: Int): Request = makeMangaRequest(page) {
         it.addQueryParameter("orderby", "popular")
@@ -95,18 +94,14 @@ class Tojimangas : ParsedHttpSource() {
         date_upload = element.selectFirst(".time")?.text()?.trim()?.parseDate() ?: 0
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#ch-images img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#ch-images img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("data-src"))
     }
 
-    private fun String.parseDate(): Long {
-        return try {
-            parseRelativeDate(this)
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun String.parseDate(): Long = try {
+        parseRelativeDate(this)
+    } catch (_: ParseException) {
+        0L
     }
 
     protected open fun parseRelativeDate(date: String): Long {
@@ -168,8 +163,7 @@ class Tojimangas : ParsedHttpSource() {
     }
 
     class WordSet(private vararg val words: String) {
-        fun anyWordIn(dateString: String): Boolean =
-            words.any { dateString.contains(it, ignoreCase = true) }
+        fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
     }
 
     override fun imageUrlParse(document: Document): String = ""

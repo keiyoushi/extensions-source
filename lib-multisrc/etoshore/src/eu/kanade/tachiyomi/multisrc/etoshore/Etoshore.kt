@@ -73,6 +73,7 @@ abstract class Etoshore(
                         ?: return@forEach
                     url.addQueryParameter(selected.query, selected.value)
                 }
+
                 else -> {}
             }
         }
@@ -149,19 +150,15 @@ abstract class Etoshore(
             ?: element.takeIf { it.hasAttr("srcset") }?.attr("abs:srcset")?.getSrcSetImage()
     }
 
-    protected open fun String.getSrcSetImage(): String? {
-        return this.split(" ")
-            .filter(URL_REGEX::matches)
-            .maxOfOrNull(String::toString)
-    }
+    protected open fun String.getSrcSetImage(): String? = this.split(" ")
+        .filter(URL_REGEX::matches)
+        .maxOfOrNull(String::toString)
 
     // ============================== Chapters ============================
 
     override fun chapterListSelector() = ".chapter-list li a"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response)
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response)
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst(".title")!!.text()
@@ -170,10 +167,8 @@ abstract class Etoshore(
 
     // ============================== Pages ===============================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".chapter-images .chapter-item > img").mapIndexed { index, element ->
-            Page(index, document.location(), imageFromElement(element))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".chapter-images .chapter-item > img").mapIndexed { index, element ->
+        Page(index, document.location(), imageFromElement(element))
     }
 
     override fun imageUrlParse(document: Document) = ""
@@ -229,16 +224,13 @@ abstract class Etoshore(
 
     protected data class Tag(val name: String = "", val value: String = "", val query: String = "")
 
-    private open class SelectionList(displayName: String, private val vals: List<Tag>, state: Int = 0) :
-        Filter.Select<String>(displayName, vals.map { it.name }.toTypedArray(), state) {
+    private open class SelectionList(displayName: String, private val vals: List<Tag>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.name }.toTypedArray(), state) {
         fun selected() = vals[state]
     }
 
     // ============================= Utils ==============================
 
-    private fun String.containsIn(array: Array<String>): Boolean {
-        return this.lowercase() in array.map { it.lowercase() }
-    }
+    private fun String.containsIn(array: Array<String>): Boolean = this.lowercase() in array.map { it.lowercase() }
 
     companion object {
         const val PREFIX_SEARCH = "id:"

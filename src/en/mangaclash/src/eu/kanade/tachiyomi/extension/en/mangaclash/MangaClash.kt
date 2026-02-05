@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaClash : Madara(
-    "MangaClash",
-    "https://toonclash.com",
-    "en",
-    dateFormat = SimpleDateFormat("MM/dd/yy", Locale.US),
-) {
+class MangaClash :
+    Madara(
+        "MangaClash",
+        "https://toonclash.com",
+        "en",
+        dateFormat = SimpleDateFormat("MM/dd/yy", Locale.US),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)

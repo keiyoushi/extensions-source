@@ -11,12 +11,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDass : Madara(
-    "Manga Dass",
-    "https://mangadass.com",
-    "en",
-    SimpleDateFormat("dd MMM yyyy", Locale.US),
-) {
+class MangaDass :
+    Madara(
+        "Manga Dass",
+        "https://mangadass.com",
+        "en",
+        SimpleDateFormat("dd MMM yyyy", Locale.US),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
@@ -25,8 +26,7 @@ class MangaDass : Madara(
 
     override val filterNonMangaItems = false
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("h3")!!.text()
@@ -34,8 +34,7 @@ class MangaDass : Madara(
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -49,9 +48,7 @@ class MangaDass : Madara(
         date_upload = parseChapterDate(element.selectFirst(".chapter-time")?.text())
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".read-content img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".read-content img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.absUrl("src"))
     }
 }

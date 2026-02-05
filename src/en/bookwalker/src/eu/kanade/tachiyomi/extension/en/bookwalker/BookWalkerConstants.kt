@@ -26,9 +26,7 @@ enum class FilterChaptersPref(val key: String) {
     ALL("all"),
     ;
 
-    fun includes(other: FilterChaptersPref): Boolean {
-        return this >= other
-    }
+    fun includes(other: FilterChaptersPref): Boolean = this >= other
 
     companion object {
         const val PREF_KEY = "filterChapters"

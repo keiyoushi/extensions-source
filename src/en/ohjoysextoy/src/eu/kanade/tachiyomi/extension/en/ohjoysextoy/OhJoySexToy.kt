@@ -130,10 +130,8 @@ class OhJoySexToy : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.comicpane img")
-            .mapIndexed { index, img -> Page(index = index, imageUrl = img.absUrl("src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.comicpane img")
+        .mapIndexed { index, img -> Page(index = index, imageUrl = img.absUrl("src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

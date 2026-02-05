@@ -45,7 +45,8 @@ abstract class MangaHub(
     override val lang: String,
     private val mangaSource: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH),
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -130,12 +131,10 @@ abstract class MangaHub(
         return response
     }
 
-    private fun Response.createNewWithCompatBody(outputStream: ByteArray): Response {
-        return this.newBuilder()
-            .body(outputStream.toResponseBody(this.body.contentType()))
-            .removeHeader("Content-Encoding")
-            .build()
-    }
+    private fun Response.createNewWithCompatBody(outputStream: ByteArray): Response = this.newBuilder()
+        .body(outputStream.toResponseBody(this.body.contentType()))
+        .removeHeader("Content-Encoding")
+        .build()
 
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -248,9 +247,7 @@ abstract class MangaHub(
         return author + chNum + genres
     }
 
-    private fun mangaRequest(page: Int, order: String): Request {
-        return postRequestGraphQL(searchQuery(mangaSource, "", "all", order, page))
-    }
+    private fun mangaRequest(page: Int, order: String): Request = postRequestGraphQL(searchQuery(mangaSource, "", "all", order, page))
 
     // popular
     override fun popularMangaRequest(page: Int): Request = mangaRequest(page, "POPULAR")
@@ -284,13 +281,9 @@ abstract class MangaHub(
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return mangaRequest(page, "LATEST")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = mangaRequest(page, "LATEST")
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -302,9 +295,11 @@ abstract class MangaHub(
                 is OrderBy -> {
                     order = filter.values[filter.state].key
                 }
+
                 is GenreList -> {
                     genres = filter.included.joinToString(",").takeIf { it.isNotBlank() } ?: "all"
                 }
+
                 else -> {}
             }
         }
@@ -312,17 +307,13 @@ abstract class MangaHub(
         return postRequestGraphQL(searchQuery(mangaSource, query, genres, order, page))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // manga details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return postRequestGraphQL(
-            mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")),
-            refreshUrl = "$baseUrl${manga.url}",
-        )
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = postRequestGraphQL(
+        mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")),
+        refreshUrl = "$baseUrl${manga.url}",
+    )
 
     override fun mangaDetailsParse(response: Response): SManga {
         val rawManga = response.parseAs<ApiMangaDetailsResponse>()
@@ -355,12 +346,10 @@ abstract class MangaHub(
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return postRequestGraphQL(
-            mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")),
-            refreshUrl = "$baseUrl${manga.url}",
-        )
-    }
+    override fun chapterListRequest(manga: SManga): Request = postRequestGraphQL(
+        mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")),
+        refreshUrl = "$baseUrl${manga.url}",
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = response.parseAs<ApiMangaDetailsResponse>()
@@ -383,19 +372,15 @@ abstract class MangaHub(
         }.reversed() // The response is sorted in ASC format so we need to reverse it
     }
 
-    private fun generateChapterName(title: String, number: String): String {
-        return if (title.contains(number)) {
-            title
-        } else if (title.isNotBlank()) {
-            "Chapter $number - $title"
-        } else {
-            generateGenericChapterName(number)
-        }
+    private fun generateChapterName(title: String, number: String): String = if (title.contains(number)) {
+        title
+    } else if (title.isNotBlank()) {
+        "Chapter $number - $title"
+    } else {
+        generateGenericChapterName(number)
     }
 
-    private fun generateGenericChapterName(number: String): String {
-        return "Chapter $number"
-    }
+    private fun generateGenericChapterName(number: String): String = "Chapter $number"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter${chapter.url}"
 
@@ -463,19 +448,13 @@ abstract class MangaHub(
 
     // filters
     private class Genre(title: String, val key: String) : Filter.CheckBox(title) {
-        fun getGenreKey(): String {
-            return key
-        }
+        fun getGenreKey(): String = key
 
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class Order(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Order", orders, 0)

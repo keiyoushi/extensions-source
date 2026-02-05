@@ -29,9 +29,7 @@ abstract class MangaCatalog(
     override val supportsLatest: Boolean = false
 
     // Popular
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false))
     private fun popularMangaFromPair(name: String, sourceurl: String): SManga = SManga.create().apply {
         title = name
         url = sourceurl
@@ -66,15 +64,9 @@ abstract class MangaCatalog(
 
     // Get Override
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     // Details
 
@@ -100,10 +92,9 @@ abstract class MangaCatalog(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".js-pages-container img.js-page,.img_container img").mapIndexed { index, img ->
-            Page(index, "", img.attr("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".js-pages-container img.js-page,.img_container img").mapIndexed { index, img ->
+        Page(index, "", img.attr("src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

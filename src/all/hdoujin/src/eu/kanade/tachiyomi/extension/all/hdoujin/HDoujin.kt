@@ -42,7 +42,8 @@ import java.util.concurrent.TimeUnit
 class HDoujin(
     override val lang: String,
     private val siteLang: String = lang,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "HDoujin"
 
@@ -237,6 +238,7 @@ class HDoujin(
                             )
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -260,12 +262,10 @@ class HDoujin(
             alt2: DataKey?,
             alt3: DataKey?,
             alt4: DataKey?,
-        ): Pair<Int?, String?> {
-            return Pair(
-                ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
-                ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
-            )
-        }
+        ): Pair<Int?, String?> = Pair(
+            ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
+            ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
+        )
         val (id, public_key) = when (quality()) {
             "1600" -> getIPK(data.`1600`, data.`1280`, data.`0`, data.`980`, data.`780`)
             "1280" -> getIPK(data.`1280`, data.`1600`, data.`0`, data.`980`, data.`780`)
@@ -294,8 +294,7 @@ class HDoujin(
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private fun String.shortenTitle() = replace(shortenTitleRegex, "").trim()
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$bookApiUrl/detail/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$bookApiUrl/detail/${manga.url}", headers)
     override fun mangaDetailsParse(response: Response): SManga {
         val mangaDetail = response.parseAs<MangaDetail>()
         with(mangaDetail) {
@@ -324,15 +323,12 @@ class HDoujin(
         )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        POST("$bookApiUrl/detail/${chapter.url}", headers)
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return clearanceClient.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response)
-            }
-    }
+    override fun pageListRequest(chapter: SChapter): Request = POST("$bookApiUrl/detail/${chapter.url}", headers)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = clearanceClient.newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            pageListParse(response)
+        }
     override fun pageListParse(response: Response): List<Page> {
         val mangaData = response.parseAs<MangaData>()
         val url = response.request.url.toString()
@@ -345,15 +341,11 @@ class HDoujin(
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers)
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return jsonInstance.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = jsonInstance.decodeFromString(body.string())
 
     // Settings
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

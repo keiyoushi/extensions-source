@@ -9,12 +9,13 @@ import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SamuraiScan : Madara(
-    "SamuraiScan",
-    "https://samuraiscan.com",
-    "es",
-    SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
-) {
+class SamuraiScan :
+    Madara(
+        "SamuraiScan",
+        "https://samuraiscan.com",
+        "es",
+        SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
+    ) {
     override val id = 5713083996691468192
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

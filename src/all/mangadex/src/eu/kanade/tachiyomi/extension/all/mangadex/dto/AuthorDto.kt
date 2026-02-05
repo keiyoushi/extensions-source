@@ -5,11 +5,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-@SerialName(MDConstants.author)
+@SerialName(MDConstants.AUTHOR)
 data class AuthorDto(override val attributes: AuthorArtistAttributesDto? = null) : EntityDto()
 
 @Serializable
-@SerialName(MDConstants.artist)
+@SerialName(MDConstants.ARTIST)
 data class ArtistDto(override val attributes: AuthorArtistAttributesDto? = null) : EntityDto()
 
 @Serializable

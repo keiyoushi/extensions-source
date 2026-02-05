@@ -93,15 +93,13 @@ class Sadscans : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.selectFirst(".title")!!.text()
-            author = document.select(".author > span:nth-child(2)").text()
-            artist = author
-            status = document.select(".status > span:nth-child(2)").text().parseStatus()
-            description = document.select(".summary p").text()
-            thumbnail_url = document.select("div.series-image img").attr("abs:src")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst(".title")!!.text()
+        author = document.select(".author > span:nth-child(2)").text()
+        artist = author
+        status = document.select(".status > span:nth-child(2)").text().parseStatus()
+        description = document.select(".summary p").text()
+        thumbnail_url = document.select("div.series-image img").attr("abs:src")
     }
 
     // chapter list
@@ -116,22 +114,19 @@ class Sadscans : ParsedHttpSource() {
     }
 
     // page list
-    override fun pageListParse(document: Document) =
-        document.select(".swiper-slide img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(document: Document) = document.select(".swiper-slide img").mapIndexed { index, img ->
+        Page(index, imageUrl = img.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private val statusOngoing = listOf("ongoing", "devam ediyor")
     private val statusCompleted = listOf("complete", "tamamlandı", "bitti")
 
-    private fun String.parseStatus(): Int {
-        return when (this.lowercase()) {
-            in statusOngoing -> SManga.ONGOING
-            in statusCompleted -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus(): Int = when (this.lowercase()) {
+        in statusOngoing -> SManga.ONGOING
+        in statusCompleted -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     private fun Element.imgAttr(): String = when {
@@ -140,9 +135,8 @@ class Sadscans : ParsedHttpSource() {
         else -> dataImageAsUrl("src")
     }
 
-    private fun parseDate(dateStr: String) =
-        runCatching { dateFormat.parse(dateStr)!!.time }
-            .getOrDefault(0L)
+    private fun parseDate(dateStr: String) = runCatching { dateFormat.parse(dateStr)!!.time }
+        .getOrDefault(0L)
 
     companion object {
         const val SLUG_SEARCH_PREFIX = "slug:"

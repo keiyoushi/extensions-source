@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.ja.kimicomi
 
 import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
 
-class KimiComi : ComiciViewer(
-    "KimiComi",
-    "https://kimicomi.com",
-    "ja",
-) {
+class KimiComi :
+    ComiciViewer(
+        "KimiComi",
+        "https://kimicomi.com",
+        "ja",
+    ) {
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(
         Pair("ランキング", "/ranking/manga"),
         Pair("読み切り", "/category/manga?type=読み切り"),

@@ -100,9 +100,7 @@ class Hentaidexy : HttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // manga details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/mangas/${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/mangas/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val mangaDetails = json.decodeFromString<MangaDetails>(response.body.string())
@@ -116,9 +114,7 @@ class Hentaidexy : HttpSource() {
     }
 
     // chapter list
-    override fun chapterListRequest(manga: SManga): Request {
-        return paginatedChapterListRequest(manga.url, 1)
-    }
+    override fun chapterListRequest(manga: SManga): Request = paginatedChapterListRequest(manga.url, 1)
 
     private fun paginatedChapterListRequest(mangaID: String, page: Int): Request {
         val url = "$baseUrl/api/mangas/$mangaID/chapters".toHttpUrl().newBuilder()
@@ -157,9 +153,7 @@ class Hentaidexy : HttpSource() {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
@@ -175,44 +169,34 @@ class Hentaidexy : HttpSource() {
     }
 
     // unused
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Helpers
-    private fun toSManga(manga: Manga): SManga {
-        return SManga.create().apply {
-            url = manga._id
-            title = manga.title
-            author = manga.authors?.joinToString { it.trim() }
-            artist = author
-            description = manga.summary.trim() + "\n\nAlternative Names: ${manga.altTitles?.joinToString { it.trim() }}"
-            genre = manga.genres?.joinToString { it.trim() }
-            status = manga.status.parseStatus()
-            thumbnail_url = manga.coverImage
-        }
+    private fun toSManga(manga: Manga): SManga = SManga.create().apply {
+        url = manga._id
+        title = manga.title
+        author = manga.authors?.joinToString { it.trim() }
+        artist = author
+        description = manga.summary.trim() + "\n\nAlternative Names: ${manga.altTitles?.joinToString { it.trim() }}"
+        genre = manga.genres?.joinToString { it.trim() }
+        status = manga.status.parseStatus()
+        thumbnail_url = manga.coverImage
     }
 
-    private fun String.parseStatus(): Int {
-        return when {
-            this.contains("ongoing", true) -> SManga.ONGOING
-            this.contains("complete", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus(): Int = when {
+        this.contains("ongoing", true) -> SManga.ONGOING
+        this.contains("complete", true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
-    private fun Float.parseChapterNumber(): String {
-        return if (this.toInt().toFloat() == this) {
-            this.toInt().toString()
-        } else {
-            this.toString()
-        }
+    private fun Float.parseChapterNumber(): String = if (this.toInt().toFloat() == this) {
+        this.toInt().toString()
+    } else {
+        this.toString()
     }
 
-    private fun String.parseDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun String.parseDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy {

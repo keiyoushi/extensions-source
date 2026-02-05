@@ -236,7 +236,5 @@ class BatCave : HttpSource() {
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

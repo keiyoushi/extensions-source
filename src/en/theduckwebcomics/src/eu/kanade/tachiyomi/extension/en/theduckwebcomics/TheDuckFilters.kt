@@ -14,11 +14,11 @@ interface QueryParam {
 sealed class LabelGroup(
     name: String,
     values: List<Label>,
-) : QueryParam, Filter.Group<Label>(name, values) {
-    override fun encode(url: HttpUrl.Builder) =
-        state.filter { it.state }.forEach {
-            url.addQueryParameter(param, it.value)
-        }
+) : Filter.Group<Label>(name, values),
+    QueryParam {
+    override fun encode(url: HttpUrl.Builder) = state.filter { it.state }.forEach {
+        url.addQueryParameter(param, it.value)
+    }
 }
 
 class TypeFilter(
@@ -120,7 +120,8 @@ class RatingFilter(
 
 class UpdateFilter(
     values: Array<String> = labels.keys.toTypedArray(),
-) : QueryParam, Filter.Select<String>("Last update", values) {
+) : Filter.Select<String>("Last update", values),
+    QueryParam {
     override val param = "last_update"
 
     override fun encode(url: HttpUrl.Builder) {

@@ -66,38 +66,42 @@ class GenreFilter(
     genres: List<Pair<String, String>>,
 ) : TriStateGroupFilter<String>("Genre", genres)
 
-class GenreInclusion : SelectFilter<String>(
-    name = "Genre Inclusion Mode",
-    options = listOf(
-        "OR" to "OR",
-        "AND" to "AND",
-    ),
-)
+class GenreInclusion :
+    SelectFilter<String>(
+        name = "Genre Inclusion Mode",
+        options = listOf(
+            "OR" to "OR",
+            "AND" to "AND",
+        ),
+    )
 
-class GenreExclusion : SelectFilter<String>(
-    name = "Genre Exclusion Mode",
-    options = listOf(
-        "OR" to "OR",
-        "AND" to "AND",
-    ),
-)
+class GenreExclusion :
+    SelectFilter<String>(
+        name = "Genre Exclusion Mode",
+        options = listOf(
+            "OR" to "OR",
+            "AND" to "AND",
+        ),
+    )
 
-class TypeFilter : CheckBoxGroup<String>(
-    name = "Type",
-    options = listOf(
-        "Manga" to "manga",
-        "Manhwa" to "manhwa",
-        "Manhua" to "manhua",
-    ),
-)
+class TypeFilter :
+    CheckBoxGroup<String>(
+        name = "Type",
+        options = listOf(
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+        ),
+    )
 
-class StatusFilter : CheckBoxGroup<String>(
-    name = "Status",
-    options = listOf(
-        "Ongoing" to "ongoing",
-        "Completed" to "completed",
-        "Cancelled" to "cancelled",
-        "On Hiatus" to "on-hiatus",
-        "Unknown" to "unknown",
-    ),
-)
+class StatusFilter :
+    CheckBoxGroup<String>(
+        name = "Status",
+        options = listOf(
+            "Ongoing" to "ongoing",
+            "Completed" to "completed",
+            "Cancelled" to "cancelled",
+            "On Hiatus" to "on-hiatus",
+            "Unknown" to "unknown",
+        ),
+    )

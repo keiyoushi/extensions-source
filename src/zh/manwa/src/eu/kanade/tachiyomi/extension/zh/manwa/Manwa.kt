@@ -39,7 +39,9 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Manwa : ParsedHttpSource(), ConfigurableSource {
+class Manwa :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name: String = "漫蛙"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
@@ -195,8 +197,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     @Volatile
     private var isUpdateTag = false
@@ -246,9 +247,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         name = element.text()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         client.newCall(GET("$baseUrl/static/images/pv.gif")).execute()
@@ -256,12 +255,10 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(
-            "$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}",
-            headers,
-        )
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(
+        "$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}",
+        headers,
+    )
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
         val cssQuery = "#cp_img > div.img-content > img[data-r-src]"

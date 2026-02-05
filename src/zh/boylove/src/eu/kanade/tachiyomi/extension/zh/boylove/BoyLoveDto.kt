@@ -46,12 +46,11 @@ class MangaDto(
     }
 }
 
-fun String.toImageUrl() =
-    if (startsWith("http")) {
-        this
-    } else {
-        "https://blcnimghost2.cc$this"
-    }
+fun String.toImageUrl() = if (startsWith("http")) {
+    this
+} else {
+    "https://blcnimghost2.cc$this"
+}
 
 @Serializable
 class ChapterDto(

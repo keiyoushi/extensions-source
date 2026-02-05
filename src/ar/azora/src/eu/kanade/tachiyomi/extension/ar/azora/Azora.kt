@@ -7,12 +7,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Azora : Iken(
-    "Azora",
-    "ar",
-    "https://azoramoon.com",
-    "https://api.azoramoon.com",
-) {
+class Azora :
+    Iken(
+        "Azora",
+        "ar",
+        "https://azoramoon.com",
+        "https://api.azoramoon.com",
+    ) {
     override val versionId = 2
     val perPage = 18
     override fun popularMangaRequest(page: Int): Request {
@@ -26,7 +27,5 @@ class Azora : Iken(
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 }

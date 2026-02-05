@@ -115,8 +115,7 @@ class Mangasail : ParsedHttpSource() {
         }
     }
 
-    private fun Element.selectByText(key: String): Element? =
-        selectFirst(".field-label:contains($key) + .field-items .field-item")
+    private fun Element.selectByText(key: String): Element? = selectFirst(".field-label:contains($key) + .field-items .field-item")
 
     private fun String?.toStatus() = when {
         this == null -> SManga.UNKNOWN
@@ -148,9 +147,7 @@ class Mangasail : ParsedHttpSource() {
         return Observable.just(chapters)
     }
 
-    private fun parseChapterDate(string: String): Long {
-        return dateFormat.parse(string.substringAfter("on "))?.time ?: 0L
-    }
+    private fun parseChapterDate(string: String): Long = dateFormat.parse(string.substringAfter("on "))?.time ?: 0L
 
     // Page List
 
@@ -175,62 +172,62 @@ class Mangasail : ParsedHttpSource() {
     )
 
     // From https://www.sailmg.com/tagclouds/chunk/1
-    private class GenreFilter : UriPartFilter(
-        "Genres",
-        arrayOf(
-            Pair("<select>", ""),
-            Pair("4-Koma", "4-koma"),
-            Pair("Action", "action"),
-            Pair("Adult", "adult"),
-            Pair("Adventure", "adventure"),
-            Pair("Bender", "bender"),
-            Pair("Comedy", "comedy"),
-            Pair("Cooking", "cooking"),
-            Pair("Doujinshi", "doujinshi"),
-            Pair("Drama", "drama"),
-            Pair("Ecchi", "ecchi"),
-            Pair("Fantasy", "fantasy"),
-            Pair("Fantsy", "fantsy"),
-            Pair("Game", "game"),
-            Pair("Gender", "gender"),
-            Pair("Gender Bender", "gender-bender"),
-            Pair("Harem", "harem"),
-            Pair("Historical", "historical"),
-            Pair("Horror", "horror"),
-            Pair("Isekai", "isekai"),
-            Pair("Josei", "josei"),
-            Pair("Manhua", "manhua"),
-            Pair("Martial Arts", "martial-arts"),
-            Pair("Mature", "mature"),
-            Pair("Mecha", "mecha"),
-            Pair("Medical", "medical"),
-            Pair("Mystery", "mystery"),
-            Pair("One Shot", "one-shot"),
-            Pair("Psychological", "psychological"),
-            Pair("Romance", "romance"),
-            Pair("School Life", "school-life"),
-            Pair("Sci-fi", "sci-fi"),
-            Pair("Sci fi", "sci-fi-0"),
-            Pair("Seinen", "seinen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Shoujo Ai", "shoujo-ai"),
-            Pair("Shounen", "shounen"),
-            Pair("Shounen Ai", "shounen-ai"),
-            Pair("Slice of Life", "slice-life"),
-            Pair("Smut", "smut"),
-            Pair("Sports", "sports"),
-            Pair("Supernatura", "supernatura"),
-            Pair("Supernatural", "supernatural"),
-            Pair("Supernaturaledit", "supernaturaledit"),
-            Pair("Tragedy", "tragedy"),
-            Pair("Webtoon", "webtoon"),
-            Pair("Webtoons", "webtoons"),
-            Pair("Yaoi", "yaoi"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Genres",
+            arrayOf(
+                Pair("<select>", ""),
+                Pair("4-Koma", "4-koma"),
+                Pair("Action", "action"),
+                Pair("Adult", "adult"),
+                Pair("Adventure", "adventure"),
+                Pair("Bender", "bender"),
+                Pair("Comedy", "comedy"),
+                Pair("Cooking", "cooking"),
+                Pair("Doujinshi", "doujinshi"),
+                Pair("Drama", "drama"),
+                Pair("Ecchi", "ecchi"),
+                Pair("Fantasy", "fantasy"),
+                Pair("Fantsy", "fantsy"),
+                Pair("Game", "game"),
+                Pair("Gender", "gender"),
+                Pair("Gender Bender", "gender-bender"),
+                Pair("Harem", "harem"),
+                Pair("Historical", "historical"),
+                Pair("Horror", "horror"),
+                Pair("Isekai", "isekai"),
+                Pair("Josei", "josei"),
+                Pair("Manhua", "manhua"),
+                Pair("Martial Arts", "martial-arts"),
+                Pair("Mature", "mature"),
+                Pair("Mecha", "mecha"),
+                Pair("Medical", "medical"),
+                Pair("Mystery", "mystery"),
+                Pair("One Shot", "one-shot"),
+                Pair("Psychological", "psychological"),
+                Pair("Romance", "romance"),
+                Pair("School Life", "school-life"),
+                Pair("Sci-fi", "sci-fi"),
+                Pair("Sci fi", "sci-fi-0"),
+                Pair("Seinen", "seinen"),
+                Pair("Shoujo", "shoujo"),
+                Pair("Shoujo Ai", "shoujo-ai"),
+                Pair("Shounen", "shounen"),
+                Pair("Shounen Ai", "shounen-ai"),
+                Pair("Slice of Life", "slice-life"),
+                Pair("Smut", "smut"),
+                Pair("Sports", "sports"),
+                Pair("Supernatura", "supernatura"),
+                Pair("Supernatural", "supernatural"),
+                Pair("Supernaturaledit", "supernaturaledit"),
+                Pair("Tragedy", "tragedy"),
+                Pair("Webtoon", "webtoon"),
+                Pair("Webtoons", "webtoons"),
+                Pair("Yaoi", "yaoi"),
+            ),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

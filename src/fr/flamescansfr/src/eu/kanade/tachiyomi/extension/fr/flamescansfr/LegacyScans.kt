@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -38,45 +37,42 @@ class LegacyScans : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/misc/views/all", headers)
+    override fun popularMangaRequest(page: Int) = GET("$API_URL/misc/views/all", headers)
 
-    override fun popularMangaParse(response: Response) =
-        mangasPageParse(response.parseAs<List<MangaDto>>(), false)
+    override fun popularMangaParse(response: Response) = mangasPageParse(response.parseAs<List<MangaDto>>(), false)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val offset = pageOffset(page)
-        val url = "$apiUrl/misc/comic/home/updates".toHttpUrl().newBuilder()
+        val url = "$API_URL/misc/comic/home/updates".toHttpUrl().newBuilder()
             .addQueryParameter("start", "${offset.first}")
             .addQueryParameter("end", "${offset.second}")
             .build()
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        mangasPageParse(response.parseAs<List<MangaDto>>())
+    override fun latestUpdatesParse(response: Response): MangasPage = mangasPageParse(response.parseAs<List<MangaDto>>())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val manga = SManga.create().apply {
-                url = "/comics/${query.substringAfter(URL_SEARCH_PREFIX)}"
-            }
-            client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { response ->
-                val document = response.asJsoup()
-                when {
-                    isMangaPage(document) -> {
-                        MangasPage(listOf(mangaDetailsParse(document)), false)
-                    }
-                    else -> MangasPage(emptyList(), false)
-                }
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(URL_SEARCH_PREFIX)) {
+        val manga = SManga.create().apply {
+            url = "/comics/${query.substringAfter(URL_SEARCH_PREFIX)}"
         }
+        client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { response ->
+            val document = response.asJsoup()
+            when {
+                isMangaPage(document) -> {
+                    MangasPage(listOf(mangaDetailsParse(document)), false)
+                }
+
+                else -> MangasPage(emptyList(), false)
+            }
+        }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val url = "$apiUrl/misc/home/search".toHttpUrl().newBuilder()
+            val url = "$API_URL/misc/home/search".toHttpUrl().newBuilder()
                 .addQueryParameter("title", query)
                 .build()
             return GET(url, headers)
@@ -86,7 +82,7 @@ class LegacyScans : HttpSource() {
 
         val offset = pageOffset(page, defaultSearchOffSet)
 
-        val url = "$apiUrl/misc/comic/search/query".toHttpUrl().newBuilder()
+        val url = "$API_URL/misc/comic/search/query".toHttpUrl().newBuilder()
             .addQueryParameter("start", "${offset.first}")
             .addQueryParameter("end", "${offset.second}")
 
@@ -97,6 +93,7 @@ class LegacyScans : HttpSource() {
                     if (selected.isBlank()) return@forEach
                     url.addQueryParameter(filter.field, selected)
                 }
+
                 is GenreList -> {
                     val genres = filter.state
                         .filter(GenreCheckBox::state)
@@ -104,6 +101,7 @@ class LegacyScans : HttpSource() {
                     if (genres.isBlank()) return@forEach
                     url.addQueryParameter("genreNames", genres)
                 }
+
                 else -> {}
             }
         }
@@ -117,6 +115,7 @@ class LegacyScans : HttpSource() {
             pathSegments.contains("comic") -> {
                 mangasPageParse(response.parseAs<SearchDto>().comics)
             }
+
             else -> {
                 mangasPageParse(response.parseAs<SearchQueryDto>().results, false)
             }
@@ -125,8 +124,7 @@ class LegacyScans : HttpSource() {
 
     val mangaDetailsDescriptionSelector = ".serieDescription p"
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        mangaDetailsParse(response.asJsoup())
+    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -149,25 +147,21 @@ class LegacyScans : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = ""
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SelectFilter("Status", "status", statusList),
-            SelectFilter("Type", "type", typesList),
-            GenreList("Genres", genresList),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SelectFilter("Status", "status", statusList),
+        SelectFilter("Type", "type", typesList),
+        GenreList("Genres", genresList),
+    )
 
-    private fun mangaDetailsParse(document: Document): SManga {
-        return with(document.selectFirst(".serieContainer")!!) {
-            SManga.create().apply {
-                title = selectFirst("h1")!!.text()
-                thumbnail_url = selectFirst("img")?.absUrl("src")
-                genre = select(".serieGenre span").joinToString { it.text() }
-                description = selectFirst(mangaDetailsDescriptionSelector)?.text()
-                author = selectFirst(".serieAdd p:contains(produit) strong")?.text()
-                artist = selectFirst(".serieAdd p:contains(Auteur) strong")?.text()
-                setUrlWithoutDomain(document.location())
-            }
+    private fun mangaDetailsParse(document: Document): SManga = with(document.selectFirst(".serieContainer")!!) {
+        SManga.create().apply {
+            title = selectFirst("h1")!!.text()
+            thumbnail_url = selectFirst("img")?.absUrl("src")
+            genre = select(".serieGenre span").joinToString { it.text() }
+            description = selectFirst(mangaDetailsDescriptionSelector)?.text()
+            author = selectFirst(".serieAdd p:contains(produit) strong")?.text()
+            artist = selectFirst(".serieAdd p:contains(Auteur) strong")?.text()
+            setUrlWithoutDomain(document.location())
         }
     }
 
@@ -181,24 +175,25 @@ class LegacyScans : HttpSource() {
         val mangas = dto.map {
             SManga.create().apply {
                 title = it.title
-                thumbnail_url = it.cover?.let { cover -> "$apiUrl/$cover" }
+                thumbnail_url = it.cover?.let { cover -> "$API_URL/$cover" }
                 url = "/comics/${it.slug}"
             }
         }
         return MangasPage(mangas, hasNextPage && mangas.isNotEmpty())
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun isMangaPage(document: Document): Boolean =
-        document.selectFirst(mangaDetailsDescriptionSelector) != null
+    private fun isMangaPage(document: Document): Boolean = document.selectFirst(mangaDetailsDescriptionSelector) != null
 
-    private fun String.toDate(): Long =
-        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     companion object {
-        const val apiUrl = "https://api.legacy-scans.com"
+        const val API_URL = "https://api.legacy-scans.com"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.FRENCH)
     }

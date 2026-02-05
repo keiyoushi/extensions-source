@@ -47,24 +47,21 @@ abstract class FMReader(
 
     private fun Element.imgAttr(): String? = getImgAttr(this)
 
-    open fun getImgAttr(element: Element?): String? {
-        return when {
-            element == null -> null
-            element.hasAttr("data-original") -> element.attr("abs:data-original")
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-bg") -> element.attr("abs:data-bg")
-            element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
-            element.hasAttr("style") -> element.attr("style").substringAfter("(").substringBefore(")")
-            else -> element.attr("abs:src")
-        }
+    open fun getImgAttr(element: Element?): String? = when {
+        element == null -> null
+        element.hasAttr("data-original") -> element.attr("abs:data-original")
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-bg") -> element.attr("abs:data-bg")
+        element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
+        element.hasAttr("style") -> element.attr("style").substringAfter("(").substringBefore(")")
+        else -> element.attr("abs:src")
     }
 
     open val requestPath = "manga-list.html"
 
     open val popularSort = "sort=views"
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/$requestPath?listType=pagination&page=$page&$popularSort&sort_type=DESC", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$requestPath?listType=pagination&page=$page&$popularSort&sort_type=DESC", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/$requestPath?".toHttpUrl().newBuilder()
@@ -76,13 +73,16 @@ abstract class FMReader(
                     val status = arrayOf("", "1", "2")[filter.state]
                     url.addQueryParameter("m_status", status)
                 }
+
                 is TextField -> url.addQueryParameter(filter.key, filter.state)
+
                 is GenreList -> {
                     val included = filter.state.filter { it.isIncluded() }.joinToString(",") { it.name }
                     val excluded = filter.state.filter { it.isExcluded() }.joinToString(",") { it.name }
                     url.addQueryParameter("genre", included)
                     url.addQueryParameter("ungenre", excluded)
                 }
+
                 is SortBy -> {
                     url.addQueryParameter(
                         "sort",
@@ -96,14 +96,14 @@ abstract class FMReader(
                         url.addQueryParameter("sort_type", "ASC")
                     }
                 }
+
                 else -> {}
             }
         }
         return GET(url.build(), headers)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/$requestPath?listType=pagination&page=$page&sort=last_update&sort_type=DESC", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$requestPath?listType=pagination&page=$page&sort=last_update&sort_type=DESC", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -134,14 +134,12 @@ abstract class FMReader(
 
     open val headerSelector = "h3 a, .series-title a"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select(headerSelector).let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                title = it.text()
-            }
-            thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").imgAttr()
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select(headerSelector).let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.text()
         }
+        thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").imgAttr()
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -222,9 +220,7 @@ abstract class FMReader(
         return document.select(chapterListSelector()).map { chapterFromElement(it, mangaTitle) }.distinctBy { it.url }
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return chapterFromElement(element, "")
-    }
+    override fun chapterFromElement(element: Element): SChapter = chapterFromElement(element, "")
 
     override fun chapterListSelector() = "div#list-chapters p, table.table tr, .list-chapters > a"
 
@@ -234,25 +230,23 @@ abstract class FMReader(
 
     open val chapterNameAttrSelector = "title"
 
-    open fun chapterFromElement(element: Element, mangaTitle: String = ""): SChapter {
-        return SChapter.create().apply {
-            if (chapterUrlSelector != "") {
-                element.select(chapterUrlSelector).first()!!.let {
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                    name = it.text().substringAfter("$mangaTitle ")
-                }
-            } else {
-                element.let {
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                    name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
-                }
+    open fun chapterFromElement(element: Element, mangaTitle: String = ""): SChapter = SChapter.create().apply {
+        if (chapterUrlSelector != "") {
+            element.select(chapterUrlSelector).first()!!.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                name = it.text().substringAfter("$mangaTitle ")
             }
-            date_upload = element.select(chapterTimeSelector).let { dateElement ->
-                if (dateElement.hasText()) {
-                    parseRelativeDate(dateElement.text()).takeIf { it != 0L } ?: parseAbsoluteDate(dateElement.text())
-                } else {
-                    0L
-                }
+        } else {
+            element.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
+            }
+        }
+        date_upload = element.select(chapterTimeSelector).let { dateElement ->
+            if (dateElement.hasText()) {
+                parseRelativeDate(dateElement.text()).takeIf { it != 0L } ?: parseAbsoluteDate(dateElement.text())
+            } else {
+                0L
             }
         }
     }
@@ -281,31 +275,37 @@ abstract class FMReader(
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+
                 "hour", "giờ", "hora", "saat" -> Calendar.getInstance().apply {
                     add(Calendar.HOUR_OF_DAY, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+
                 "day", "ngày", "día", "gün" -> Calendar.getInstance().apply {
                     add(Calendar.DATE, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+
                 "week", "tuần", "semana", "hafta" -> Calendar.getInstance().apply {
                     add(Calendar.DATE, -value * 7)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+
                 "month", "tháng", "mes", "ay" -> Calendar.getInstance().apply {
                     add(Calendar.MONTH, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+
                 "year", "năm", "año", "yıl" -> Calendar.getInstance().apply {
                     add(Calendar.YEAR, -value)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
+
                 else -> {
                     return 0L
                 }
@@ -315,20 +315,16 @@ abstract class FMReader(
         }
     }
 
-    open fun parseAbsoluteDate(dateStr: String): Long {
-        return try {
-            dateFormat.parse(dateStr)?.time ?: 0L
-        } catch (_: ParseException) {
-            0L
-        }
+    open fun parseAbsoluteDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)?.time ?: 0L
+    } catch (_: ParseException) {
+        0L
     }
 
     open val pageListImageSelector = "img.chapter-img"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListImageSelector).mapIndexed { i, img ->
-            Page(i, document.location(), img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListImageSelector).mapIndexed { i, img ->
+        Page(i, document.location(), img.imgAttr())
     }
 
     protected fun base64PageListParse(document: Document): List<Page> {

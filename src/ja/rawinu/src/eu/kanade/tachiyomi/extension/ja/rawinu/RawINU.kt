@@ -18,11 +18,12 @@ import org.jsoup.nodes.Element
 
 private const val DOMAIN = "rawinu.com"
 
-class RawINU : FMReader(
-    "RawINU",
-    "https://$DOMAIN",
-    "ja",
-) {
+class RawINU :
+    FMReader(
+        "RawINU",
+        "https://$DOMAIN",
+        "ja",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .addInterceptor(::ddosChallengeInterceptor)

@@ -14,11 +14,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class DarkRoomFansub : ZeistManga(
-    "Dark Room Fansub",
-    "https://lector-darkroomfansub.blogspot.com",
-    "es",
-) {
+class DarkRoomFansub :
+    ZeistManga(
+        "Dark Room Fansub",
+        "https://lector-darkroomfansub.blogspot.com",
+        "es",
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(3)
@@ -84,18 +85,15 @@ class DarkRoomFansub : ZeistManga(
         }
     }
 
-    private fun chapterListFromDocument(document: Document) =
-        document.select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
-            .map(::toSChapter)
+    private fun chapterListFromDocument(document: Document) = document.select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
+        .map(::toSChapter)
 
-    private fun getChapterListURL(url: String): String =
-        fetchChapterList(url)
-            .selectFirst("h1 + .tac a")!!
-            .absUrl("href")
+    private fun getChapterListURL(url: String): String = fetchChapterList(url)
+        .selectFirst("h1 + .tac a")!!
+        .absUrl("href")
 
-    private fun fetchChapterList(url: String) =
-        client.newCall(GET(url, headers)).execute()
-            .asJsoup()
+    private fun fetchChapterList(url: String) = client.newCall(GET(url, headers)).execute()
+        .asJsoup()
 
     private fun toSChapter(element: Element) = SChapter.create().apply {
         name = element.text()

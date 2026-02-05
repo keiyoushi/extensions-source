@@ -18,12 +18,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class HuntersScans : Madara(
-    "Hunters Scan",
-    "https://readhunters.xyz",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class HuntersScans :
+    Madara(
+        "Hunters Scan",
+        "https://readhunters.xyz",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .readTimeout(1, TimeUnit.MINUTES)
@@ -44,8 +45,7 @@ class HuntersScans : Madara(
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.fromCallable { fetchAllChapters(manga) }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable { fetchAllChapters(manga) }
 
     private fun fetchAllChapters(manga: SManga): List<SChapter> {
         val chapters = mutableListOf<SChapter>()

@@ -5,12 +5,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NekoScans : MangaThemesia(
-    "NekoScans",
-    "https://nekoproject.org",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class NekoScans :
+    MangaThemesia(
+        "NekoScans",
+        "https://nekoproject.org",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     // Theme changed from ZeistManga to MangaThemesia
     override val versionId = 3
 

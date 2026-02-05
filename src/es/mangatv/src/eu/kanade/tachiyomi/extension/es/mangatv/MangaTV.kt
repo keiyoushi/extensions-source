@@ -14,13 +14,14 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTV : MangaThemesia(
-    "Manga  TV",
-    "https://mangatv.net",
-    "es",
-    mangaUrlDirectory = "/lista",
-    dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
-) {
+class MangaTV :
+    MangaThemesia(
+        "Manga  TV",
+        "https://mangatv.net",
+        "es",
+        mangaUrlDirectory = "/lista",
+        dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
+    ) {
 
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
 

@@ -7,12 +7,13 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RaindropFansub : MangaThemesia(
-    "Raindrop Fansub",
-    "https://www.raindropteamfan.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-) {
+class RaindropFansub :
+    MangaThemesia(
+        "Raindrop Fansub",
+        "https://www.raindropteamfan.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
+    ) {
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tür) a"
 
     override fun chapterListParse(response: Response): List<SChapter> {

@@ -16,54 +16,59 @@ abstract class SelectFilter(displayName: String, private val options: Array<Pair
     open val selected get() = options[state].second.takeUnless { it.isEmpty() }
 }
 
-class SearchType : SelectFilter(
-    "Title should contain/begin/end with typed text",
-    arrayOf(
-        Pair("Contain", "0"),
-        Pair("Begin", "1"),
-        Pair("End", "2"),
-    ),
-)
+class SearchType :
+    SelectFilter(
+        "Title should contain/begin/end with typed text",
+        arrayOf(
+            Pair("Contain", "0"),
+            Pair("Begin", "1"),
+            Pair("End", "2"),
+        ),
+    )
 
 class SearchDescription : Filter.CheckBox("Search In Description")
 
-class AuthorSearchType : SelectFilter(
-    "Author should contain/begin/end with typed text",
-    arrayOf(
-        Pair("Contain", "0"),
-        Pair("Begin", "1"),
-        Pair("End", "2"),
-    ),
-)
+class AuthorSearchType :
+    SelectFilter(
+        "Author should contain/begin/end with typed text",
+        arrayOf(
+            Pair("Contain", "0"),
+            Pair("Begin", "1"),
+            Pair("End", "2"),
+        ),
+    )
 
 class AuthorFilter : Filter.Text("Author")
 
-class StatusFilter : SelectFilter(
-    "Status",
-    arrayOf(
-        Pair("All", "2"),
-        Pair("Ongoing", "0"),
-        Pair("Completed", "1"),
-    ),
-)
+class StatusFilter :
+    SelectFilter(
+        "Status",
+        arrayOf(
+            Pair("All", "2"),
+            Pair("Ongoing", "0"),
+            Pair("Completed", "1"),
+        ),
+    )
 
-class SortFilter : SelectFilter(
-    "Sort by",
-    arrayOf(
-        Pair("Viewed", "viewed"),
-        Pair("Scored", "scored"),
-        Pair("Newest", "created_at"),
-        Pair("Latest Update", "updated_at"),
-    ),
-)
+class SortFilter :
+    SelectFilter(
+        "Sort by",
+        arrayOf(
+            Pair("Viewed", "viewed"),
+            Pair("Scored", "scored"),
+            Pair("Newest", "created_at"),
+            Pair("Latest Update", "updated_at"),
+        ),
+    )
 
-class SortType : SelectFilter(
-    "Sort order",
-    arrayOf(
-        Pair("Descending", "desc"),
-        Pair("Ascending", "asc"),
-    ),
-)
+class SortType :
+    SelectFilter(
+        "Sort order",
+        arrayOf(
+            Pair("Descending", "desc"),
+            Pair("Ascending", "asc"),
+        ),
+    )
 
 class Genre(name: String, val id: String) : Filter.TriState(name)
 
@@ -93,10 +98,10 @@ fun fetchGenres(baseUrl: String, headers: okhttp3.Headers, client: okhttp3.OkHtt
 
 private fun genresRequest(baseUrl: String, headers: okhttp3.Headers) = GET("$baseUrl/search", headers)
 
-private const val genresSelector = ".check-genre div div:has(.checkbox-genre)"
+private const val GENRES_SELECTOR = ".check-genre div div:has(.checkbox-genre)"
 
 private fun parseGenres(document: Document): List<Genre> {
-    val items = document.select(genresSelector)
+    val items = document.select(GENRES_SELECTOR)
     return buildList(items.size) {
         items.mapTo(this) {
             Genre(

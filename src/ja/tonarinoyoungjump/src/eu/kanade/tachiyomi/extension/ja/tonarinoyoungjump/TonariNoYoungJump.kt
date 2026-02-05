@@ -5,13 +5,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
-class TonariNoYoungJump : GigaViewer(
-    "Tonari no Young Jump",
-    "https://tonarinoyj.jp",
-    "ja",
-    "https://cdn-img.tonarinoyj.jp/public/page",
-    isPaginated = true,
-) {
+class TonariNoYoungJump :
+    GigaViewer(
+        "Tonari no Young Jump",
+        "https://tonarinoyj.jp",
+        "ja",
+        "https://cdn-img.tonarinoyj.jp/public/page",
+        isPaginated = true,
+    ) {
 
     override val supportsLatest: Boolean = false
 

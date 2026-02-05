@@ -7,20 +7,19 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RocksManga : Madara(
-    "Rocks Manga",
-    "https://rocksmanga.com",
-    "ar",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
-) {
+class RocksManga :
+    Madara(
+        "Rocks Manga",
+        "https://rocksmanga.com",
+        "ar",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
+    ) {
 
     override fun popularMangaSelector() = "div.page-content-listing > .manga"
     override val popularMangaUrlSelector = "div.manga-poster a"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
-            title = element.selectFirst(popularMangaUrlSelector)!!.attr("title")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        title = element.selectFirst(popularMangaUrlSelector)!!.attr("title")
     }
 
     override fun searchMangaSelector() = "#manga-search-results .manga-item"

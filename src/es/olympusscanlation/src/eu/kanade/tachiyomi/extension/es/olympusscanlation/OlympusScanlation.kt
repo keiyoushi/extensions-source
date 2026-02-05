@@ -29,7 +29,9 @@ import java.util.TimeZone
 import kotlin.concurrent.thread
 import kotlin.math.min
 
-class OlympusScanlation : HttpSource(), ConfigurableSource {
+class OlympusScanlation :
+    HttpSource(),
+    ConfigurableSource {
 
     override val versionId = 3
     private val isCi = System.getenv("CI") == "true"
@@ -154,16 +156,19 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
                         url.addQueryParameter("direction", "asc")
                     }
                 }
+
                 is GenreFilter -> {
                     if (filter.toUriPart() != 9999) {
                         url.addQueryParameter("genres", filter.toUriPart().toString())
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.toUriPart() != 9999) {
                         url.addQueryParameter("status", filter.toUriPart().toString())
                     }
                 }
+
                 else -> {}
             }
         }
@@ -245,12 +250,10 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         return paginatedChapterListRequest(mangaSlug, mangaId, 1)
     }
 
-    private fun paginatedChapterListRequest(mangaSlug: String, mangaId: String, page: Int): Request {
-        return GET(
-            url = "$apiBaseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic#$mangaId",
-            headers = headers,
-        )
-    }
+    private fun paginatedChapterListRequest(mangaSlug: String, mangaId: String, page: Int): Request = GET(
+        url = "$apiBaseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic#$mangaId",
+        headers = headers,
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaId = response.request.url.fragment ?: ""
@@ -280,35 +283,36 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         return GET("$apiBaseUrl/api/series/$mangaSlug/chapters/$chapterId?type=comic")
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PayloadPagesDto>().chapter.pages.mapIndexed { i, img ->
-            Page(i, imageUrl = img)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PayloadPagesDto>().chapter.pages.mapIndexed { i, img ->
+        Page(i, imageUrl = img)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private class SortFilter : Filter.Sort(
-        "Ordenar",
-        arrayOf("Alfabético"),
-        Selection(0, false),
-    )
+    private class SortFilter :
+        Filter.Sort(
+            "Ordenar",
+            arrayOf("Alfabético"),
+            Selection(0, false),
+        )
 
-    private class GenreFilter(genres: List<Pair<String, Int>>) : UriPartFilter(
-        "Género",
-        arrayOf(
-            Pair("Todos", 9999),
-            *genres.toTypedArray(),
-        ),
-    )
+    private class GenreFilter(genres: List<Pair<String, Int>>) :
+        UriPartFilter(
+            "Género",
+            arrayOf(
+                Pair("Todos", 9999),
+                *genres.toTypedArray(),
+            ),
+        )
 
-    private class StatusFilter(statuses: List<Pair<String, Int>>) : UriPartFilter(
-        "Estado",
-        arrayOf(
-            Pair("Todos", 9999),
-            *statuses.toTypedArray(),
-        ),
-    )
+    private class StatusFilter(statuses: List<Pair<String, Int>>) :
+        UriPartFilter(
+            "Estado",
+            arrayOf(
+                Pair("Todos", 9999),
+                *statuses.toTypedArray(),
+            ),
+        )
 
     override fun getFilterList(): FilterList {
         fetchFilters()
@@ -364,8 +368,7 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         }
     }
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
@@ -405,36 +408,36 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         }.also { screen.addPreference(it) }
     }
 
-    private var _cachedBaseUrl: String? = null
+    private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            if (cachedBaseUrl == null) {
+                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
-            return _cachedBaseUrl!!
+            return cachedBaseUrl!!
         }
         set(value) {
-            _cachedBaseUrl = value
+            cachedBaseUrl = value
             edit().putString(BASE_URL_PREF, value).apply()
         }
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
     private fun SharedPreferences.fetchBookmarksPref() = getBoolean(FETCH_BOOKMARKS_PREF, FETCH_BOOKMARKS_PREF_DEFAULT)
 
-    private var _slugMap: Map<Int, String>? = null
+    private var slugMapCache: Map<Int, String>? = null
     private var SharedPreferences.slugMap: Map<Int, String>
         get() {
-            _slugMap?.let { return it }
+            slugMapCache?.let { return it }
             val json = getString(SLUG_MAP, "{}")!!
-            _slugMap = try {
+            slugMapCache = try {
                 json.parseAs<Map<Int, String>>()
             } catch (_: SerializationException) {
                 emptyMap()
             }
-            return _slugMap!!
+            return slugMapCache!!
         }
         set(map) {
-            _slugMap = map
+            slugMapCache = map
             edit().putString(SLUG_MAP, map.toJsonString()).apply()
         }
 

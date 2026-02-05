@@ -29,17 +29,13 @@ class Extra(
 
 class SingleResultSerializer<T>(serializer: KSerializer<T>) : JsonTransformingSerializer<List<T>>(ListSerializer(serializer)) {
     // Wrap single results in a list. Leave multiple results as is.
-    override fun transformSerialize(element: JsonElement): JsonElement {
-        return when (element) {
-            is JsonArray -> element
-            is JsonObject -> JsonArray(listOf(element))
-            else -> throw IllegalStateException("Unexpected JSON element type: $element")
-        }
+    override fun transformSerialize(element: JsonElement): JsonElement = when (element) {
+        is JsonArray -> element
+        is JsonObject -> JsonArray(listOf(element))
+        else -> throw IllegalStateException("Unexpected JSON element type: $element")
     }
 
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        return if (element is JsonArray) element else JsonArray(listOf(element))
-    }
+    override fun transformDeserialize(element: JsonElement): JsonElement = if (element is JsonArray) element else JsonArray(listOf(element))
 }
 
 // Result objects

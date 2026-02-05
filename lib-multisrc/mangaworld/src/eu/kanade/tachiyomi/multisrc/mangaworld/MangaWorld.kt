@@ -41,12 +41,8 @@ abstract class MangaWorld(
         protected val DATE_FORMATTER_2 by lazy { SimpleDateFormat("H", Locale.ITALY) }
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/archive?sort=most_read&page=$page", headers)
-    }
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/archive?sort=most_read&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
 
     override fun searchMangaSelector() = "div.comics-grid .entry"
     override fun popularMangaSelector() = searchMangaSelector()
@@ -91,16 +87,21 @@ abstract class MangaWorld(
                     filter.state.filter { it.state }.forEach {
                         url.addQueryParameter("genre", it.id)
                     }
+
                 is StatusList ->
                     filter.state.filter { it.state }.forEach {
                         url.addQueryParameter("status", it.id)
                     }
+
                 is MTypeList ->
                     filter.state.filter { it.state }.forEach {
                         url.addQueryParameter("type", it.id)
                     }
+
                 is SortBy -> url.addQueryParameter("sort", filter.toUriPart())
+
                 is TextField -> url.addQueryParameter(filter.key, filter.state)
+
                 else -> {}
             }
         }
@@ -177,9 +178,12 @@ abstract class MangaWorld(
         val params = url.split("?").let { if (it.size > 1) it[1] else "" }
         return when {
             params.contains("style=list") -> url
+
             params.contains("style=pages") ->
                 url.replace("style=pages", "style=list")
+
             params.isEmpty() -> "$url?style=list"
+
             else -> "$url&style=list"
         }
     }
@@ -192,17 +196,13 @@ abstract class MangaWorld(
             ?: runCatching { DATE_FORMATTER_2.parse(string)?.time }.getOrNull() ?: 0L
     }
 
-    protected fun parseChapterNumber(string: String): Float? {
-        return CHAPTER_NUMBER_REGEX.find(string)?.let {
-            it.groups[1]?.value?.toFloat()
-        }
+    protected fun parseChapterNumber(string: String): Float? = CHAPTER_NUMBER_REGEX.find(string)?.let {
+        it.groups[1]?.value?.toFloat()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#page img.page-image").mapIndexed { index, it ->
-            val url = it.attr("src")
-            Page(index, imageUrl = url)
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#page img.page-image").mapIndexed { index, it ->
+        val url = it.attr("src")
+        Page(index, imageUrl = url)
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -223,18 +223,19 @@ abstract class MangaWorld(
         MTypeList(getTypesList()),
     )
 
-    private class SortBy : UriPartFilter(
-        "Ordina per",
-        arrayOf(
-            Pair("Rilevanza", ""),
-            Pair("Più letti", "most_read"),
-            Pair("Meno letti", "less_read"),
-            Pair("Più recenti", "newest"),
-            Pair("Meno recenti", "oldest"),
-            Pair("A-Z", "a-z"),
-            Pair("Z-A", "z-a"),
-        ),
-    )
+    private class SortBy :
+        UriPartFilter(
+            "Ordina per",
+            arrayOf(
+                Pair("Rilevanza", ""),
+                Pair("Più letti", "most_read"),
+                Pair("Meno letti", "less_read"),
+                Pair("Più recenti", "newest"),
+                Pair("Meno recenti", "oldest"),
+                Pair("A-Z", "a-z"),
+                Pair("Z-A", "z-a"),
+            ),
+        )
 
     private class TextField(name: String, val key: String) : Filter.Text(name)
 
@@ -301,8 +302,7 @@ abstract class MangaWorld(
         Status("Cancellato", "canceled"),
     )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

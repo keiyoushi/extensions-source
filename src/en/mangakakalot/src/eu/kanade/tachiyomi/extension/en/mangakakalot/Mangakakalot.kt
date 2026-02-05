@@ -4,14 +4,15 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 
-class Mangakakalot : MangaBox(
-    "Mangakakalot",
-    arrayOf(
-        "www.mangakakalot.gg",
-        "www.mangakakalove.com",
-    ),
-    "en",
-) {
+class Mangakakalot :
+    MangaBox(
+        "Mangakakalot",
+        arrayOf(
+            "www.mangakakalot.gg",
+            "www.mangakakalove.com",
+        ),
+        "en",
+    ) {
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (LEGACY_DOMAINS.any { manga.url.startsWith(it) }) {
             throw Exception(MIGRATE_MESSAGE)

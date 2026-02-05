@@ -48,26 +48,26 @@ class Erofus : EroMuse("Erofus", "https://www.erofus.com") {
             .map { response -> parseManga(response.asJsoup()) }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return SManga.create().apply {
-            with(response.asJsoup()) {
-                setUrlWithoutDomain(response.request.url.toString())
-                thumbnail_url = select("$albumSelector img").firstOrNull()?.imgAttr()
-                author = when (getAlbumType(url)) {
-                    AUTHOR -> {
-                        // eg. https://www.erofus.com/comics/witchking00-comics/adventure-time
-                        // eg. https://www.erofus.com/comics/mcc-comics/bearing-gifts/bearing-gifts-issue-1
-                        select("div.navigation-breadcrumb li:nth-child(3)").text()
-                    }
-                    VARIOUS_AUTHORS -> {
-                        // eg. https://www.erofus.com/comics/various-authors/artdude41/bat-vore
-                        select("div.navigation-breadcrumb li:nth-child(5)").text()
-                    }
-                    else -> null
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        with(response.asJsoup()) {
+            setUrlWithoutDomain(response.request.url.toString())
+            thumbnail_url = select("$albumSelector img").firstOrNull()?.imgAttr()
+            author = when (getAlbumType(url)) {
+                AUTHOR -> {
+                    // eg. https://www.erofus.com/comics/witchking00-comics/adventure-time
+                    // eg. https://www.erofus.com/comics/mcc-comics/bearing-gifts/bearing-gifts-issue-1
+                    select("div.navigation-breadcrumb li:nth-child(3)").text()
                 }
 
-                genre = select("div.album-tag-container a").joinToString { it.text() }
+                VARIOUS_AUTHORS -> {
+                    // eg. https://www.erofus.com/comics/various-authors/artdude41/bat-vore
+                    select("div.navigation-breadcrumb li:nth-child(5)").text()
+                }
+
+                else -> null
             }
+
+            genre = select("div.album-tag-container a").joinToString { it.text() }
         }
     }
 

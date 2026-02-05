@@ -75,10 +75,9 @@ class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
         }
     }
 
-    private fun Element.getInfo(text: String): String? =
-        selectFirst("$mangaDetailsSelectorInfo:containsOwn($text) > $mangaDetailsSelectorInfoDescription")
-            ?.text()
-            ?.trim()
+    private fun Element.getInfo(text: String): String? = selectFirst("$mangaDetailsSelectorInfo:containsOwn($text) > $mangaDetailsSelectorInfoDescription")
+        ?.text()
+        ?.trim()
 
     // =============================== Pages ================================
     // Specific/faster selection first, generic/slower last

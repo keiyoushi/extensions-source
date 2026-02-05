@@ -19,7 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-open class RainOfSnow() : ParsedHttpSource() {
+open class RainOfSnow : ParsedHttpSource() {
 
     override val name = "Rain Of Snow"
 
@@ -35,9 +35,7 @@ open class RainOfSnow() : ParsedHttpSource() {
         .rateLimit(2)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comics/page/$page")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comics/page/$page")
 
     override fun popularMangaSelector() = ".box .minbox"
 
@@ -65,6 +63,7 @@ open class RainOfSnow() : ParsedHttpSource() {
                         url.addQueryParameter("n_orderby", filter.toUriPart())
                     }
                 }
+
                 else -> {}
             }
         }
@@ -101,9 +100,7 @@ open class RainOfSnow() : ParsedHttpSource() {
         return super.chapterListRequest(manga)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterListSelector() = "#chapter li"
 
@@ -143,19 +140,19 @@ open class RainOfSnow() : ParsedHttpSource() {
         Filter.Separator(),
         AlbumTypeSelectFilter(),
     )
-    private class AlbumTypeSelectFilter() : UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "95"),
-            Pair("Manhua", "115"),
-            Pair("Manhwa", "105"),
-            Pair("Vietnamese Comic", "306"),
-        ),
-    )
+    private class AlbumTypeSelectFilter :
+        UriPartFilter(
+            "Type",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Manga", "95"),
+                Pair("Manhua", "115"),
+                Pair("Manhwa", "105"),
+                Pair("Vietnamese Comic", "306"),
+            ),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

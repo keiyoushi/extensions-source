@@ -20,7 +20,9 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.random.Random
 
-class NexusScan : HttpSource(), ConfigurableSource {
+class NexusScan :
+    HttpSource(),
+    ConfigurableSource {
 
     // SpectralScan (pt-BR) -> Nexus Scan (pt-BR)
     override val id = 5304928452449566995L
@@ -77,11 +79,9 @@ class NexusScan : HttpSource(), ConfigurableSource {
         }
     }
 
-    private fun xorCipher(input: String, key: String): String {
-        return input.mapIndexed { i, char ->
-            (char.code xor key[i % key.length].code).toChar()
-        }.joinToString("")
-    }
+    private fun xorCipher(input: String, key: String): String = input.mapIndexed { i, char ->
+        (char.code xor key[i % key.length].code).toChar()
+    }.joinToString("")
 
     private fun base64UrlEncode(input: String): String {
         val bytes = input.map { it.code.toByte() }.toByteArray()
@@ -165,6 +165,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 is CheckboxGroup -> {
                     val selected = filter.selected()
                     if (selected.isNotEmpty()) {
@@ -176,6 +177,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -211,9 +213,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
         return GET("$baseUrl/api/manga/$slug", apiHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaDetailsDto>().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().toSManga()
 
     // ==================== Chapter =======================
 
@@ -243,9 +243,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
             }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val headers = headersBuilder()

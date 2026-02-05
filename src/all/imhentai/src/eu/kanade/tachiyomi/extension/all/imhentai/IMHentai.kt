@@ -21,13 +21,12 @@ class IMHentai(
     override val supportAdvancedSearch: Boolean = true
     override val supportSpeechless: Boolean = true
 
-    override fun Element.mangaLang() =
-        select("a:has(.thumb_flag)").attr("href")
-            .removeSuffix("/").substringAfterLast("/")
-            .let {
-                // Include Speechless in search results
-                if (it == LANGUAGE_SPEECHLESS) mangaLang else it
-            }
+    override fun Element.mangaLang() = select("a:has(.thumb_flag)").attr("href")
+        .removeSuffix("/").substringAfterLast("/")
+        .let {
+            // Include Speechless in search results
+            if (it == LANGUAGE_SPEECHLESS) mangaLang else it
+        }
 
     override val client: OkHttpClient = network.cloudflareClient
         .newBuilder()
@@ -58,27 +57,24 @@ class IMHentai(
         ).build()
 
     /* Details */
-    override fun Element.getInfo(tag: String): String {
-        return select("li:has(.tags_text:contains($tag:)) a.tag")
-            .joinToString {
-                val name = it.ownText()
-                if (tag.contains(regexTag)) {
-                    genres[name] = it.attr("href")
-                        .removeSuffix("/").substringAfterLast('/')
-                }
-                listOf(
-                    name,
-                    it.select(".split_tag").text()
-                        .trim()
-                        .removePrefix("| "),
-                )
-                    .filter { s -> s.isNotBlank() }
-                    .joinToString()
+    override fun Element.getInfo(tag: String): String = select("li:has(.tags_text:contains($tag:)) a.tag")
+        .joinToString {
+            val name = it.ownText()
+            if (tag.contains(regexTag)) {
+                genres[name] = it.attr("href")
+                    .removeSuffix("/").substringAfterLast('/')
             }
-    }
+            listOf(
+                name,
+                it.select(".split_tag").text()
+                    .trim()
+                    .removePrefix("| "),
+            )
+                .filter { s -> s.isNotBlank() }
+                .joinToString()
+        }
 
-    override fun Element.getCover() =
-        selectFirst(".left_cover img")?.imgAttr()
+    override fun Element.getCover() = selectFirst(".left_cover img")?.imgAttr()
 
     override val mangaDetailInfoSelector = ".gallery_first"
 

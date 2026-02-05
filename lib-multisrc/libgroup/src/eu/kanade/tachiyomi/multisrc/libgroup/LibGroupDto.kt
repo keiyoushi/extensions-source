@@ -44,12 +44,11 @@ class Constants(
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
-    fun getServer(isServers: String?, siteId: Int): ImageServer =
-        if (!isServers.isNullOrBlank() and (isServers != "auto")) {
-            imageServers.first { it.id == isServers && it.siteIds.contains(siteId) }
-        } else {
-            imageServers.first { it.siteIds.contains(siteId) }
-        }
+    fun getServer(isServers: String?, siteId: Int): ImageServer = if (!isServers.isNullOrBlank() and (isServers != "auto")) {
+        imageServers.first { (it.id == isServers) && it.siteIds.contains(siteId) }
+    } else {
+        imageServers.first { it.siteIds.contains(siteId) }
+    }
 
     fun getCategories(siteId: Int): List<IdLabelSiteType> = types.filter { it.siteIds.contains(siteId) }
     fun getFormats(siteId: Int): List<IdNameSiteType> = formats.filter { it.siteIds.contains(siteId) }
@@ -70,9 +69,7 @@ class MangasPageDto(
         @SerialName("has_next_page") val hasNextPage: Boolean,
     )
 
-    fun mapToSManga(isEng: String): List<SManga> {
-        return this.data.map { it.toSManga(isEng) }
-    }
+    fun mapToSManga(isEng: String): List<SManga> = this.data.map { it.toSManga(isEng) }
 }
 
 @Serializable
@@ -142,30 +139,35 @@ class Manga(
             " (голосов: " + rating.votes + ")\n" + otherNames.joinAltNames() + summary
     }
 
-    private fun Float.parseAverage(): String {
-        return when {
-            this > 9.5 -> "★★★★★"
-            this > 8.5 -> "★★★★✬"
-            this > 7.5 -> "★★★★☆"
-            this > 6.5 -> "★★★✬☆"
-            this > 5.5 -> "★★★☆☆"
-            this > 4.5 -> "★★✬☆☆"
-            this > 3.5 -> "★★☆☆☆"
-            this > 2.5 -> "★✬☆☆☆"
-            this > 1.5 -> "★☆☆☆☆"
-            this > 0.5 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
+    private fun Float.parseAverage(): String = when {
+        this > 9.5 -> "★★★★★"
+        this > 8.5 -> "★★★★✬"
+        this > 7.5 -> "★★★★☆"
+        this > 6.5 -> "★★★✬☆"
+        this > 5.5 -> "★★★☆☆"
+        this > 4.5 -> "★★✬☆☆"
+        this > 3.5 -> "★★☆☆☆"
+        this > 2.5 -> "★✬☆☆☆"
+        this > 1.5 -> "★☆☆☆☆"
+        this > 0.5 -> "✬☆☆☆☆"
+        else -> "☆☆☆☆☆"
     }
 
     private fun parseStatus(isLicensed: Boolean, statusTranslate: String, statusTitle: String): Int = when {
         isLicensed -> SManga.LICENSED
-        statusTranslate == "Завершён" && statusTitle == "Приостановлен" || statusTranslate == "Заморожен" || statusTranslate == "Заброшен" -> SManga.ON_HIATUS
-        statusTranslate == "Завершён" && statusTitle == "Выпуск прекращён" -> SManga.CANCELLED
-        statusTranslate == "Продолжается" -> SManga.ONGOING
-        statusTranslate == "Выходит" -> SManga.ONGOING
-        statusTranslate == "Завершён" -> SManga.COMPLETED
-        statusTranslate == "Вышло" -> SManga.PUBLISHING_FINISHED
+
+        ((statusTranslate == "Завершён") && (statusTitle == "Приостановлен")) || (statusTranslate == "Заморожен") || (statusTranslate == "Заброшен") -> SManga.ON_HIATUS
+
+        (statusTranslate == "Завершён") && (statusTitle == "Выпуск прекращён") -> SManga.CANCELLED
+
+        (statusTranslate == "Продолжается") -> SManga.ONGOING
+
+        (statusTranslate == "Выходит") -> SManga.ONGOING
+
+        (statusTranslate == "Завершён") -> SManga.COMPLETED
+
+        (statusTranslate == "Вышло") -> SManga.PUBLISHING_FINISHED
+
         else -> when (statusTitle) {
             "Онгоинг" -> SManga.ONGOING
             "Анонс" -> SManga.ONGOING
@@ -221,17 +223,11 @@ class Chapter(
         )
     }
 
-    private fun first(branchId: Int? = null): Branch? {
-        return runCatching { if (branchId != null) branches.first { it.branchId == branchId } else branches.first() }.getOrNull()
-    }
+    private fun first(branchId: Int? = null): Branch? = runCatching { if (branchId != null) branches.first { it.branchId == branchId } else branches.first() }.getOrNull()
 
-    private fun getTeamName(branchId: Int? = null): String? {
-        return runCatching { first(branchId)!!.teams.first().name }.getOrNull()
-    }
+    private fun getTeamName(branchId: Int? = null): String? = runCatching { first(branchId)!!.teams.first().name }.getOrNull()
 
-    private fun getUserName(branchId: Int? = null): String? {
-        return runCatching { first(branchId)!!.user.username }.getOrNull()
-    }
+    private fun getUserName(branchId: Int? = null): String? = runCatching { first(branchId)!!.user.username }.getOrNull()
 
     fun toSChapter(slugUrl: String, branchId: Int? = null, isScanUser: Boolean): SChapter = SChapter.create().apply {
         val chapterName = "Том $volume. Глава $number"

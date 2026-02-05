@@ -47,14 +47,11 @@ class MangaBTT : ParsedHttpSource() {
         ),
     )
 
-    override fun popularMangaSelector(): String =
-        searchMangaSelector()
+    override fun popularMangaSelector(): String = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector(): String =
-        searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector(): String = searchMangaNextPageSelector()
 
     // =============================== Latest ===============================
 
@@ -68,14 +65,11 @@ class MangaBTT : ParsedHttpSource() {
         ),
     )
 
-    override fun latestUpdatesSelector(): String =
-        searchMangaSelector()
+    override fun latestUpdatesSelector(): String = searchMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector(): String =
-        searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector(): String = searchMangaNextPageSelector()
 
     // =============================== Search ===============================
 
@@ -111,8 +105,7 @@ class MangaBTT : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaNextPageSelector(): String =
-        "ul.pagination > li.active + li:not(.disabled)"
+    override fun searchMangaNextPageSelector(): String = "ul.pagination > li.active + li:not(.disabled)"
 
     // =============================== Filters ==============================
 
@@ -203,26 +196,32 @@ class MangaBTT : ParsedHttpSource() {
             "second" in this -> {
                 parsedDate = now.apply { add(Calendar.SECOND, -relativeDate) }.timeInMillis
             }
+
             // parses: "42 minutes ago"
             "minute" in this -> {
                 parsedDate = now.apply { add(Calendar.MINUTE, -relativeDate) }.timeInMillis
             }
+
             // parses: "1 hour ago" and "2 hours ago"
             "hour" in this -> {
                 parsedDate = now.apply { add(Calendar.HOUR, -relativeDate) }.timeInMillis
             }
+
             // parses: "2 days ago"
             "day" in this -> {
                 parsedDate = now.apply { add(Calendar.DAY_OF_YEAR, -relativeDate) }.timeInMillis
             }
+
             // parses: "2 weeks ago"
             "week" in this -> {
                 parsedDate = now.apply { add(Calendar.WEEK_OF_YEAR, -relativeDate) }.timeInMillis
             }
+
             // parses: "2 months ago"
             "month" in this -> {
                 parsedDate = now.apply { add(Calendar.MONTH, -relativeDate) }.timeInMillis
             }
+
             // parse: "2 years ago"
             "year" in this -> {
                 parsedDate = now.apply { add(Calendar.YEAR, -relativeDate) }.timeInMillis
@@ -233,14 +232,12 @@ class MangaBTT : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".reading-detail > .page-chapter").map { page ->
-            val img = page.selectFirst("img[data-index]")!!
-            val index = img.attr("data-index").toInt()
-            val url = img.imgAttr()
-            Page(index, imageUrl = url)
-        }.sortedBy { it.index }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".reading-detail > .page-chapter").map { page ->
+        val img = page.selectFirst("img[data-index]")!!
+        val index = img.attr("data-index").toInt()
+        val url = img.imgAttr()
+        Page(index, imageUrl = url)
+    }.sortedBy { it.index }
 
     override fun imageUrlParse(document: Document) = ""
 

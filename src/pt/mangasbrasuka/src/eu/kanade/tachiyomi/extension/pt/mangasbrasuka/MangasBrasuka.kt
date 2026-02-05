@@ -5,12 +5,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangasBrasuka : Madara(
-    "Mangas Brasuka",
-    "https://mangasbrasuka.com.br",
-    "pt-BR",
-    SimpleDateFormat("MM dd, yyyy", Locale("pt", "BR")),
-) {
+class MangasBrasuka :
+    Madara(
+        "Mangas Brasuka",
+        "https://mangasbrasuka.com.br",
+        "pt-BR",
+        SimpleDateFormat("MM dd, yyyy", Locale("pt", "BR")),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

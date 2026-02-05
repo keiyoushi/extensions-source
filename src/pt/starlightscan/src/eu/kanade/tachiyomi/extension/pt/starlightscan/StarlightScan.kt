@@ -17,13 +17,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class StarlightScan : MangaThemesia(
-    "Starlight Scan",
-    "https://starligthscan.com",
-    "pt-BR",
-    mangaUrlDirectory = "/mangas",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class StarlightScan :
+    MangaThemesia(
+        "Starlight Scan",
+        "https://starligthscan.com",
+        "pt-BR",
+        mangaUrlDirectory = "/mangas",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
@@ -82,12 +83,10 @@ class StarlightScan : MangaThemesia(
         else -> SManga.ONGOING
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup()
-            .select(chapterListSelector())
-            .map(::chapterFromElement)
-            .filter { it.name.isNotEmpty() }
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup()
+        .select(chapterListSelector())
+        .map(::chapterFromElement)
+        .filter { it.name.isNotEmpty() }
 
     override fun chapterListSelector() = "div.mangaDetails__episodesContainer div.mangaDetails__episode"
 

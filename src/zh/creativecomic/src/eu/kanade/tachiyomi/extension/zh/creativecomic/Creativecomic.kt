@@ -38,15 +38,15 @@ class Creativecomic : HttpSource() {
     override val supportsLatest: Boolean = true
     override val baseUrl: String = "https://www.creative-comic.tw"
     private val apiUrl = "https://api.creative-comic.tw"
-    private var _pageKey: ByteArray? = null
-    private var _pageIv: ByteArray? = null
-    private var _token: String? = null
+    private var pageKey: ByteArray? = null
+    private var pageIv: ByteArray? = null
+    private var token: String? = null
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     @SuppressLint("SetJavaScriptEnabled")
     fun getToken(): String {
-        _token?.also { return it }
+        token?.also { return it }
         val latch = CountDownLatch(1)
         handler.post {
             val webview = WebView(context)
@@ -61,7 +61,7 @@ class Creativecomic : HttpSource() {
                     view!!.evaluateJavascript("window.localStorage.getItem('accessToken')") { token ->
                         webview.stopLoading()
                         webview.destroy()
-                        _token = token.removeSurrounding("\"")
+                        this@Creativecomic.token = token.removeSurrounding("\"")
                         latch.countDown()
                     }
                 }
@@ -69,7 +69,7 @@ class Creativecomic : HttpSource() {
             webview.loadDataWithBaseURL("$baseUrl/", " ", "text/html", null, null)
         }
         latch.await(10, TimeUnit.SECONDS)
-        return _token!!
+        return token!!
     }
 
     private fun getApiHeaders(): Headers {
@@ -95,13 +95,13 @@ class Creativecomic : HttpSource() {
     }
 
     private fun getPageKeyIv(): Pair<ByteArray, ByteArray> {
-        _pageIv?.also { return Pair(_pageKey!!, _pageIv!!) }
+        pageIv?.also { return Pair(pageKey!!, pageIv!!) }
         val token = (getToken().takeUnless { it == "null" } ?: "freeforccc2020reading").toByteArray()
         val md = MessageDigest.getInstance("SHA-512")
         val digest = md.digest(token)
-        _pageKey = digest.sliceArray(0..31)
-        _pageIv = _pageKey!!.sliceArray(15..30)
-        return Pair(_pageKey!!, _pageIv!!)
+        pageKey = digest.sliceArray(0..31)
+        pageIv = pageKey!!.sliceArray(15..30)
+        return Pair(pageKey!!, pageIv!!)
     }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -133,9 +133,7 @@ class Creativecomic : HttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=like_count&class=2", getApiHeaders())
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=like_count&class=2", getApiHeaders())
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<PopularResponseDto>().data
@@ -151,9 +149,7 @@ class Creativecomic : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=updated_at&class=2", getApiHeaders())
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=updated_at&class=2", getApiHeaders())
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -176,41 +172,27 @@ class Creativecomic : HttpSource() {
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/book/${manga.url}/info", getApiHeaders())
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/book/${manga.url}/info", getApiHeaders())
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<DetailsResponseDto>().data.toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponseDto>().data.toSManga()
 
     // Chapters
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/book/${manga.url}/chapter", getApiHeaders())
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/book/${manga.url}/chapter", getApiHeaders())
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<ChapterListResponseDto>().data.chapters.map {
-            it.toSChapter()
-        }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChapterListResponseDto>().data.chapters.map {
+        it.toSChapter()
+    }.reversed()
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiUrl/book/chapter/${chapter.url}", getApiHeaders())
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/book/chapter/${chapter.url}", getApiHeaders())
+
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().data.chapter.proportion.mapIndexed { index, it ->
+        Page(index, it.id.toString())
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListResponseDto>().data.chapter.proportion.mapIndexed { index, it ->
-            Page(index, it.id.toString())
-        }
-    }
-
-    override fun imageUrlRequest(page: Page): Request {
-        return GET("$apiUrl/book/chapter/image/${page.url}", getApiHeaders())
-    }
+    override fun imageUrlRequest(page: Page): Request = GET("$apiUrl/book/chapter/image/${page.url}", getApiHeaders())
 
     override fun imageUrlParse(response: Response): String {
         val encryptedKey = response.parseAs<ImageUrlResponseDto>().data.key
@@ -220,13 +202,9 @@ class Creativecomic : HttpSource() {
         return "https://storage.googleapis.com/ccc-www/fs/chapter_content/encrypt/$id/2#$decryptedKey"
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/zh/book/${manga.url}/content"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/zh/book/${manga.url}/content"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/zh/reader_comic/${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/zh/reader_comic/${chapter.url}"
 
     private fun String.hexStringToByteArray(): ByteArray {
         val len = length

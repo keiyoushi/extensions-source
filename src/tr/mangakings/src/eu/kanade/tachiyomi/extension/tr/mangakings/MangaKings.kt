@@ -7,13 +7,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaKings : MangaThemesia(
-    "Manga Kings",
-    "https://mangakings.com.tr",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
+class MangaKings :
+    MangaThemesia(
+        "Manga Kings",
+        "https://mangakings.com.tr",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 
-) {
+    ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()

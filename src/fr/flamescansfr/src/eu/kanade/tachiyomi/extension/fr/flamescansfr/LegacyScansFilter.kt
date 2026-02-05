@@ -2,17 +2,17 @@ package eu.kanade.tachiyomi.extension.fr.flamescansfr
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class SelectFilter(name: String, val field: String, values: Array<String>) :
-    Filter.Select<String>(name, values) {
+class SelectFilter(name: String, val field: String, values: Array<String>) : Filter.Select<String>(name, values) {
     fun selectedValue() = values[state]
 }
 
 class GenreCheckBox(name: String) : Filter.CheckBox(name)
 
-class GenreList(title: String, genres: List<String>) : Filter.Group<GenreCheckBox>(
-    title,
-    genres.map(::GenreCheckBox),
-)
+class GenreList(title: String, genres: List<String>) :
+    Filter.Group<GenreCheckBox>(
+        title,
+        genres.map(::GenreCheckBox),
+    )
 
 val typesList = arrayOf("", "Manga", "Manhua", "Manhwa", "One shot")
 

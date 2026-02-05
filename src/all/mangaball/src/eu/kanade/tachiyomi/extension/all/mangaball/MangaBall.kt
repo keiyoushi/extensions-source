@@ -34,7 +34,8 @@ import java.util.Locale
 class MangaBall(
     override val lang: String,
     private vararg val siteLang: String,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "Manga Ball"
     override val baseUrl = "https://mangaball.net"
@@ -67,11 +68,11 @@ class MangaBall(
         }
         .build()
 
-    private var _csrf: String? = null
+    private var csrf: String? = null
 
     @Synchronized
     private fun getCSRF(document: Document? = null, forceReset: Boolean = false): String {
-        if (_csrf == null || document != null || forceReset) {
+        if (csrf == null || document != null || forceReset) {
             val doc = document ?: client.newCall(
                 GET(baseUrl, headers),
             ).execute().asJsoup()
@@ -79,10 +80,10 @@ class MangaBall(
             doc.selectFirst("meta[name=csrf-token]")
                 ?.attr("content")
                 ?.takeIf { it.isNotBlank() }
-                ?.also { _csrf = it }
+                ?.also { csrf = it }
         }
 
-        return _csrf ?: throw Exception("CSRF token not found")
+        return csrf ?: throw Exception("CSRF token not found")
     }
 
     override fun headersBuilder() = super.headersBuilder()
@@ -96,21 +97,16 @@ class MangaBall(
         return searchMangaRequest(page, "", filters)
     }
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", getFilterList())
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith("https://")) {
-            deepLink(query)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
+        deepLink(query)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -212,13 +208,9 @@ class MangaBall(
         throw Exception("Unsupported url")
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(getMangaUrl(manga), headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/title-detail/${manga.url}/"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/title-detail/${manga.url}/"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -326,13 +318,9 @@ class MangaBall(
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(getChapterUrl(chapter), headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/chapter-detail/${chapter.url}/"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter-detail/${chapter.url}/"
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -395,9 +383,7 @@ class MangaBall(
 
     private fun hideNsfwPreference() = preferences.getBoolean(NSFW_PREF, false)
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val NSFW_PREF = "nsfw_pref"

@@ -3,11 +3,12 @@ package eu.kanade.tachiyomi.extension.en.arvencomics
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class ArvenComics : Madara(
-    "Arven Scans",
-    "https://arvencomics.com",
-    "en",
-) {
+class ArvenComics :
+    Madara(
+        "Arven Scans",
+        "https://arvencomics.com",
+        "en",
+    ) {
     // migrated from Keyoapp to Madara
     override val versionId = 3
 

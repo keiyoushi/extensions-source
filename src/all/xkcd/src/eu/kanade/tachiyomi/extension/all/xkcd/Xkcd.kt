@@ -29,7 +29,8 @@ import java.util.Locale
 open class Xkcd(
     final override val baseUrl: String,
     final override val lang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
     final override val name = "xkcd"
 
     final override val supportsLatest = false
@@ -122,27 +123,25 @@ open class Xkcd(
     }
 
     // what key to use for grouping comics into mangas
-    private fun getChapterToKey(): (SChapter) -> String {
-        return when (getOrganizationMethod()) {
-            OrganizationMethod.SINGLE -> { chapter -> "SINGLE" }
-            OrganizationMethod.BY_YEAR -> { chapter ->
-                val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(chapter.date_upload)
-                date.split("-")[0] // Extract year
-            }
-            OrganizationMethod.BY_YEAR_MONTH -> { chapter ->
-                val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(chapter.date_upload)
-                val parts = date.split("-")
-                "${parts[0]}-${parts[1].padStart(2, '0')}" // "2024-01"
-            }
+    private fun getChapterToKey(): (SChapter) -> String = when (getOrganizationMethod()) {
+        OrganizationMethod.SINGLE -> { chapter -> "SINGLE" }
+
+        OrganizationMethod.BY_YEAR -> { chapter ->
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(chapter.date_upload)
+            date.split("-")[0] // Extract year
+        }
+
+        OrganizationMethod.BY_YEAR_MONTH -> { chapter ->
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(chapter.date_upload)
+            val parts = date.split("-")
+            "${parts[0]}-${parts[1].padStart(2, '0')}" // "2024-01"
         }
     }
 
-    private fun getKeyToTitleFormatter(): (String) -> String {
-        return when (getOrganizationMethod()) {
-            OrganizationMethod.SINGLE -> { key -> "xkcd" }
-            OrganizationMethod.BY_YEAR -> { key -> "xkcd $key" }
-            OrganizationMethod.BY_YEAR_MONTH -> { key -> "xkcd $key" }
-        }
+    private fun getKeyToTitleFormatter(): (String) -> String = when (getOrganizationMethod()) {
+        OrganizationMethod.SINGLE -> { key -> "xkcd" }
+        OrganizationMethod.BY_YEAR -> { key -> "xkcd $key" }
+        OrganizationMethod.BY_YEAR_MONTH -> { key -> "xkcd $key" }
     }
 
     // Archive caching
@@ -183,9 +182,7 @@ open class Xkcd(
         return allChaptersCache!!
     }
 
-    private fun getGroupedChapters(): Map<String, List<SChapter>> {
-        return getAllComicsAsChapters().groupBy(getChapterToKey())
-    }
+    private fun getGroupedChapters(): Map<String, List<SChapter>> = getAllComicsAsChapters().groupBy(getChapterToKey())
 
     // organize chapters into mangas according to the chosen key
     private fun makeGroupedManga(page: Int, perPage: Int = 10): MangasPage {
@@ -233,32 +230,27 @@ open class Xkcd(
 
     // overrides
 
-    final override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(makeGroupedManga(page))
+    final override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(makeGroupedManga(page))
 
-    final override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        Observable.just(MangasPage(emptyList(), false))
+    final override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    final override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(manga)
+    final override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
-    final override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.just(getGroupedChapters()[manga.url] ?: emptyList())
+    final override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(getGroupedChapters()[manga.url] ?: emptyList())
 
     // methods for translations to override
 
     // archiveResponse -> List<SChapter>
-    override fun chapterListParse(response: Response) =
-        response.asJsoup().select(chapterListSelector).map {
-            SChapter.create().apply {
-                // turn comic entry from archive entry into SChapter
-                url = it.attr("href")
-                val comicNumber = url.removeSurrounding("/").toInt()
-                name = chapterTitleFormatter(comicNumber, it.text())
-                chapter_number = comicNumber.toFloat()
-                date_upload = it.attr("title").timestamp()
-            }
+    override fun chapterListParse(response: Response) = response.asJsoup().select(chapterListSelector).map {
+        SChapter.create().apply {
+            // turn comic entry from archive entry into SChapter
+            url = it.attr("href")
+            val comicNumber = url.removeSurrounding("/").toInt()
+            name = chapterTitleFormatter(comicNumber, it.text())
+            chapter_number = comicNumber.toFloat()
+            date_upload = it.attr("title").timestamp()
         }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         // if the img tag is empty or has siblings then it is an interactive comic
@@ -278,9 +270,7 @@ open class Xkcd(
         return listOf(Page(0, "", image), Page(1, "", text))
     }
 
-    protected open fun extractImageFromContainer(container: Element): Element? {
-        return container
-    }
+    protected open fun extractImageFromContainer(container: Element): Element? = container
 
     protected open val defaultFallbackThumbnail = "https://thumbnail/xkcd.png"
 
@@ -311,27 +301,19 @@ open class Xkcd(
         }
     }
 
-    final override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    final override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    final override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    final override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    final override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    final override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    final override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    final override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    final override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    final override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    final override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    final override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    final override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    final override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    final override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    final override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 }

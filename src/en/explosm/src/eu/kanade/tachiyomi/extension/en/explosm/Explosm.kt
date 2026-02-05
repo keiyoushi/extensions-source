@@ -52,9 +52,7 @@ class Explosm : HttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return (GET(archivePage, headers))
-    }
+    override fun popularMangaRequest(page: Int): Request = (GET(archivePage, headers))
 
     override fun popularMangaParse(response: Response): MangasPage {
         val eachYearAsAManga = getArchiveAllYears(response)
@@ -88,14 +86,10 @@ class Explosm : HttpSource() {
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     // for webview
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/comics#${manga.url}-01")
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/comics#${manga.url}-01")
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
@@ -103,9 +97,7 @@ class Explosm : HttpSource() {
 
     private val date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    private fun JsonElement?.getContent(key: String): String {
-        return this?.jsonObject?.get(key)?.jsonPrimitive?.content ?: throw Exception("Error getting chapter content from $key")
-    }
+    private fun JsonElement?.getContent(key: String): String = this?.jsonObject?.get(key)?.jsonPrimitive?.content ?: throw Exception("Error getting chapter content from $key")
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         var chapterCount = 0F
@@ -140,9 +132,7 @@ class Explosm : HttpSource() {
 
     // Pages
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.just(listOf(Page(0, "", chapter.url)))
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, "", chapter.url)))
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 

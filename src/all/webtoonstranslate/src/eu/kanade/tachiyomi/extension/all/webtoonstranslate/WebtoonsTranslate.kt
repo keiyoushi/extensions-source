@@ -69,13 +69,11 @@ class WebtoonsTranslate(
         return MangasPage(mangaList, hasNextPage = result.result.totalCount > pageSize + offset)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map { response ->
+            searchMangaParse(response, query)
+        }
 
     /**
      * Don't see a search function for Fan Translations, so let's do it client side.
@@ -95,9 +93,7 @@ class WebtoonsTranslate(
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -120,8 +116,7 @@ class WebtoonsTranslate(
         }
     }
 
-    private fun Document.getMetaProp(property: String): String =
-        head().select("meta[property=\"$property\"]").attr("content")
+    private fun Document.getMetaProp(property: String): String = head().select("meta[property=\"$property\"]").attr("content")
 
     override fun chapterListRequest(manga: SManga): Request {
         val (titleNo, teamVersion) = manga.url.toHttpUrl().let {
@@ -153,9 +148,7 @@ class WebtoonsTranslate(
             .reversed()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiBaseUrl${chapter.url}", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiBaseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<Result<ImageList>>()
@@ -165,19 +158,11 @@ class WebtoonsTranslate(
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

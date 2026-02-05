@@ -54,9 +54,7 @@ class MangaFlix : HttpSource() {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/browse", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/browse", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<BrowseResponseDto>()
@@ -70,9 +68,7 @@ class MangaFlix : HttpSource() {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/latest-releases?selected_language=pt-br", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/latest-releases?selected_language=pt-br", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<LatestResponseDto>()
@@ -157,9 +153,7 @@ class MangaFlix : HttpSource() {
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<MangaDetailsResponseDto>()
@@ -185,9 +179,7 @@ class MangaFlix : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun MangaDto.toSManga() = SManga.create().apply {
         title = name

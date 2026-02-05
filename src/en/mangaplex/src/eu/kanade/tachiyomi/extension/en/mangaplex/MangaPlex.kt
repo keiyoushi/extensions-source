@@ -22,9 +22,7 @@ class MangaPlex : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/page/$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/mangas/page/$page", headers)
 
     override fun latestUpdatesNextPageSelector() = ".pages-nav a:contains(Next)"
 
@@ -56,9 +54,7 @@ class MangaPlex : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
 
     // search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search/$query/page/$page")
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/search/$query/page/$page")
 
     override fun searchMangaSelector() = "#posts-container li:has(h5:contains(Manga)):has(p:contains(Chapter))"
 
@@ -114,11 +110,9 @@ class MangaPlex : ParsedHttpSource() {
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#the-post .entry-content > img").toList()
-            .filter { it.attr("src").isNotEmpty() }
-            .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("#the-post .entry-content > img").toList()
+        .filter { it.attr("src").isNotEmpty() }
+        .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

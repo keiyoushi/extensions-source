@@ -90,49 +90,47 @@ data class PageData(
 )
 
 // DTO to SManga extension functions
-fun SeriesData.toSManga(useLowQuality: Boolean = false, slugSeparator: String): SManga =
-    SManga.create().apply {
-        title = this@toSManga.title
-        artist = this@toSManga.artist
-        author = this@toSManga.author
-        thumbnail_url = if (useLowQuality) this@toSManga.coverHq else this@toSManga.cover
-        url = "/${toSlug(this@toSManga.title, slugSeparator)}"
+fun SeriesData.toSManga(useLowQuality: Boolean = false, slugSeparator: String): SManga = SManga.create().apply {
+    title = this@toSManga.title
+    artist = this@toSManga.artist
+    author = this@toSManga.author
+    thumbnail_url = if (useLowQuality) this@toSManga.coverHq else this@toSManga.cover
+    url = "/${toSlug(this@toSManga.title, slugSeparator)}"
+}
+
+fun SeriesData.toDetailedSManga(useHighQuality: Boolean = false, slugSeparator: String): SManga = SManga.create().apply {
+    title = this@toDetailedSManga.title
+
+    val baseDescription = this@toDetailedSManga.description.let {
+        if (it?.contains("Pas de synopsis", ignoreCase = true) == true) null else it
     }
 
-fun SeriesData.toDetailedSManga(useHighQuality: Boolean = false, slugSeparator: String): SManga =
-    SManga.create().apply {
-        title = this@toDetailedSManga.title
-
-        val baseDescription = this@toDetailedSManga.description.let {
-            if (it?.contains("Pas de synopsis", ignoreCase = true) == true) null else it
-        }
-
-        val altTitles = this@toDetailedSManga.alternativeTitles
-        description = if (!altTitles.isNullOrEmpty()) {
-            buildString {
-                if (!baseDescription.isNullOrBlank()) {
-                    append(baseDescription)
-                    append("\n\n")
-                }
-                append("Alternative Titles:\n")
-                append(altTitles.joinToString("\n") { "• $it" })
+    val altTitles = this@toDetailedSManga.alternativeTitles
+    description = if (!altTitles.isNullOrEmpty()) {
+        buildString {
+            if (!baseDescription.isNullOrBlank()) {
+                append(baseDescription)
+                append("\n\n")
             }
-        } else {
-            baseDescription
+            append("Alternative Titles:\n")
+            append(altTitles.joinToString("\n") { "• $it" })
         }
-
-        artist = this@toDetailedSManga.artist
-        author = this@toDetailedSManga.author
-        genre = this@toDetailedSManga.tags?.joinToString(", ") ?: ""
-        status = when (this@toDetailedSManga.releaseStatus) {
-            "En cours" -> SManga.ONGOING
-            "Finis", "Fini" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-        thumbnail_url =
-            if (useHighQuality) this@toDetailedSManga.coverHq else this@toDetailedSManga.cover
-        url = "/${toSlug(this@toDetailedSManga.title, slugSeparator)}"
+    } else {
+        baseDescription
     }
+
+    artist = this@toDetailedSManga.artist
+    author = this@toDetailedSManga.author
+    genre = this@toDetailedSManga.tags?.joinToString(", ") ?: ""
+    status = when (this@toDetailedSManga.releaseStatus) {
+        "En cours" -> SManga.ONGOING
+        "Finis", "Fini" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
+    thumbnail_url =
+        if (useHighQuality) this@toDetailedSManga.coverHq else this@toDetailedSManga.cover
+    url = "/${toSlug(this@toDetailedSManga.title, slugSeparator)}"
+}
 
 // Utility function for slug generation
 // URLs are manually calculated using a slugify function

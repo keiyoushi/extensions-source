@@ -21,7 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class BuonDua() : ParsedHttpSource() {
+class BuonDua : ParsedHttpSource() {
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
@@ -45,18 +45,14 @@ class BuonDua() : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = ".pagination-next:not([disabled])"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?start=${20 * (page - 1)}")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}")
 
     override fun latestUpdatesSelector() = ".blog > div"
 
     // Popular
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/hot?start=${20 * (page - 1)}")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}")
 
     override fun popularMangaSelector() = latestUpdatesSelector()
 
@@ -110,10 +106,8 @@ class BuonDua() : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".article-fulltext img")
-            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".article-fulltext img")
+        .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

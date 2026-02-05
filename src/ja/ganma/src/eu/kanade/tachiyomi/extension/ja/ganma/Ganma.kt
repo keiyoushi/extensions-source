@@ -87,13 +87,11 @@ class Ganma : HttpSource() {
         return POST(apiUrl, finalHeaders, requestBody)
     }
 
-    private fun updateImageUrlWidth(url: String?, width: Int = 4999): String? {
-        return url?.toHttpUrlOrNull()
-            ?.newBuilder()
-            ?.setQueryParameter("w", width.toString())
-            ?.build()
-            ?.toString()
-    }
+    private fun updateImageUrlWidth(url: String?, width: Int = 4999): String? = url?.toHttpUrlOrNull()
+        ?.newBuilder()
+        ?.setQueryParameter("w", width.toString())
+        ?.build()
+        ?.toString()
 
     private val cacheWebOnlyAliases: Set<String> by lazy {
         try {
@@ -111,9 +109,7 @@ class Ganma : HttpSource() {
             .toSet()
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return graphQlRequest("home", EmptyVariables, useAppHeaders = true)
-    }
+    override fun popularMangaRequest(page: Int): Request = graphQlRequest("home", EmptyVariables, useAppHeaders = true)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<GraphQLResponse<HomeDto>>().data
@@ -121,9 +117,7 @@ class Ganma : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return graphQlRequest("home", EmptyVariables, useAppHeaders = true)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = graphQlRequest("home", EmptyVariables, useAppHeaders = true)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<GraphQLResponse<HomeDto>>().data
@@ -150,10 +144,12 @@ class Ganma : HttpSource() {
                 val variables = DayOfWeekVariables(dayOfWeek = category.id, first = 20, after = lastFilterCursor)
                 graphQlRequest("serialMagazinesByDayOfWeek", variables)
             }
+
             "finished" -> {
                 val variables = FinishedVariables(first = 20, after = lastFilterCursor)
                 graphQlRequest("finishedMagazines", variables)
             }
+
             else -> graphQlRequest("home", EmptyVariables)
         }
     }
@@ -182,6 +178,7 @@ class Ganma : HttpSource() {
                     .map { it.toSManga() }
                 MangasPage(mangas, data.pageInfo.hasNextPage)
             }
+
             "finishedMagazines" -> {
                 val data = response.parseAs<GraphQLResponse<FinishedResponseDto>>().data.magazinesByCategory.magazines
                 lastFilterCursor = data.pageInfo.endCursor
@@ -190,12 +187,14 @@ class Ganma : HttpSource() {
                     .map { it.toSManga() }
                 MangasPage(mangas, data.pageInfo.hasNextPage)
             }
+
             "home" -> {
                 val data = response.parseAs<GraphQLResponse<HomeDto>>().data
                 val mangas = data.ranking.totalRanking
                     .map { it.toSManga() }
                 MangasPage(mangas, false)
             }
+
             else -> MangasPage(emptyList(), false)
         }
     }
@@ -243,38 +242,36 @@ class Ganma : HttpSource() {
         return manga
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.fromCallable {
-            val chapters = mutableListOf<StoryInfoNode>()
-            var hasNextPage = true
-            var cursor: String? = null
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val chapters = mutableListOf<StoryInfoNode>()
+        var hasNextPage = true
+        var cursor: String? = null
 
-            while (hasNextPage) {
-                val variables = StoryInfoListVariables(magazineIdOrAlias = manga.url, first = 100, after = cursor)
-                val response = client.newCall(graphQlRequest("storyInfoList", variables, useAppHeaders = false)).execute()
-                val data = response.parseAs<GraphQLResponse<ChapterListDto>>().data.magazine.storyInfos
+        while (hasNextPage) {
+            val variables = StoryInfoListVariables(magazineIdOrAlias = manga.url, first = 100, after = cursor)
+            val response = client.newCall(graphQlRequest("storyInfoList", variables, useAppHeaders = false)).execute()
+            val data = response.parseAs<GraphQLResponse<ChapterListDto>>().data.magazine.storyInfos
 
-                chapters.addAll(data.edges.map { it.node })
-                hasNextPage = data.pageInfo.hasNextPage
-                cursor = data.pageInfo.endCursor
-            }
-
-            chapters.mapIndexed { index, chapter ->
-                SChapter.create().apply {
-                    url = "${manga.url}/${chapter.storyId}"
-                    name = (chapter.title + chapter.subtitle?.let { " $it" }.orEmpty()).trim()
-                    date_upload = chapter.contentsRelease
-                    chapter_number = (chapters.size - index).toFloat()
-                    val accessCondition = chapter.contentsAccessCondition
-                    val isPremiumType = accessCondition.typename != "FreeStoryContentsAccessCondition"
-                    val isPurchasable = chapter.isSellByStory && (accessCondition.info?.coins ?: 0) > 0
-
-                    if ((isPremiumType || isPurchasable) && !chapter.isPurchased) {
-                        name = "\uD83E\uDE99 $name"
-                    }
-                }
-            }.reversed()
+            chapters.addAll(data.edges.map { it.node })
+            hasNextPage = data.pageInfo.hasNextPage
+            cursor = data.pageInfo.endCursor
         }
+
+        chapters.mapIndexed { index, chapter ->
+            SChapter.create().apply {
+                url = "${manga.url}/${chapter.storyId}"
+                name = (chapter.title + chapter.subtitle?.let { " $it" }.orEmpty()).trim()
+                date_upload = chapter.contentsRelease
+                chapter_number = (chapters.size - index).toFloat()
+                val accessCondition = chapter.contentsAccessCondition
+                val isPremiumType = accessCondition.typename != "FreeStoryContentsAccessCondition"
+                val isPurchasable = chapter.isSellByStory && (accessCondition.info?.coins ?: 0) > 0
+
+                if ((isPremiumType || isPurchasable) && !chapter.isPurchased) {
+                    name = "\uD83E\uDE99 $name"
+                }
+            }
+        }.reversed()
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {

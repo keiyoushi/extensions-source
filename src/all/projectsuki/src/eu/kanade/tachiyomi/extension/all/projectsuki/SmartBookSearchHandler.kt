@@ -154,9 +154,7 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
             }
         }
 
-        private operator fun <T> ThreadLocal<T>.getValue(thisRef: Any?, property: KProperty<*>): T {
-            return get() ?: reportErrorToUser("SmartBookSearchHandler.${property.name}") { "null initialValue" }
-        }
+        private operator fun <T> ThreadLocal<T>.getValue(thisRef: Any?, property: KProperty<*>): T = get() ?: reportErrorToUser("SmartBookSearchHandler.${property.name}") { "null initialValue" }
 
         private val charBreak: BreakIterator by threadLocal { BreakIterator.getCharacterInstance() }
         private val wordBreak: BreakIterator by threadLocal { BreakIterator.getWordInstance() }
@@ -171,9 +169,12 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
 
         private val stringSearch: StringSearch by threadLocal {
             StringSearch(
-                /* pattern = */ "dummy",
-                /* target = */ StringCharacterIterator("dummy"),
-                /* collator = */ collator,
+                /* pattern = */
+                "dummy",
+                /* target = */
+                StringCharacterIterator("dummy"),
+                /* collator = */
+                collator,
             ).apply {
                 isOverlapping = true
             }
@@ -201,23 +202,19 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
 }
 
 /** simply creates an https://projectsuki.com/book/<bookid> [HttpUrl] */
-internal fun BookID.bookIDToURL(): HttpUrl {
-    return homepageUrl.newBuilder()
-        .addPathSegment("book")
-        .addPathSegment(this)
-        .build()
-}
+internal fun BookID.bookIDToURL(): HttpUrl = homepageUrl.newBuilder()
+    .addPathSegment("book")
+    .addPathSegment(this)
+    .build()
 
 internal fun Map<BookID, BookTitle>.toMangasPage(hasNextPage: Boolean = false): MangasPage = entries.toMangasPage(hasNextPage)
-internal fun Iterable<Map.Entry<BookID, BookTitle>>.toMangasPage(hasNextPage: Boolean = false): MangasPage {
-    return MangasPage(
-        mangas = map { (bookID: BookID, bookTitle: BookTitle) ->
-            SManga.create().apply {
-                title = bookTitle
-                url = bookID.bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $bookID" }
-                thumbnail_url = bookThumbnailUrl(bookID, "").toUri().toASCIIString()
-            }
-        },
-        hasNextPage = hasNextPage,
-    )
-}
+internal fun Iterable<Map.Entry<BookID, BookTitle>>.toMangasPage(hasNextPage: Boolean = false): MangasPage = MangasPage(
+    mangas = map { (bookID: BookID, bookTitle: BookTitle) ->
+        SManga.create().apply {
+            title = bookTitle
+            url = bookID.bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $bookID" }
+            thumbnail_url = bookThumbnailUrl(bookID, "").toUri().toASCIIString()
+        }
+    },
+    hasNextPage = hasNextPage,
+)

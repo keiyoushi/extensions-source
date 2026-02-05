@@ -34,7 +34,8 @@ abstract class GroupLe(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -46,9 +47,9 @@ abstract class GroupLe(
             val originalRequest = chain.request()
             val response = chain.proceed(originalRequest)
             if (originalRequest.url.toString().contains(baseUrl) && (
-                originalRequest.url.toString()
-                    .contains("internal/redirect") or (response.code == 301)
-                )
+                    originalRequest.url.toString()
+                        .contains("internal/redirect") or (response.code == 301)
+                    )
             ) {
                 if (originalRequest.url.toString().contains("/list?")) {
                     throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
@@ -73,11 +74,9 @@ abstract class GroupLe(
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/list?sortType=rate&offset=${50 * (page - 1)}", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list?sortType=rate&offset=${50 * (page - 1)}", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list?sortType=updated&offset=${50 * (page - 1)}", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list?sortType=updated&offset=${50 * (page - 1)}", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -90,8 +89,7 @@ abstract class GroupLe(
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = "a.nextLink"
 
@@ -158,10 +156,11 @@ abstract class GroupLe(
         return GET(url.toString().replace("=%3D", "="), headers)
     }
 
-    protected class OrderBy : Filter.Select<String>(
-        "Сортировка",
-        arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
-    )
+    protected class OrderBy :
+        Filter.Select<String>(
+            "Сортировка",
+            arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
+        )
 
     protected class Genre(name: String, val id: String) : Filter.TriState(name)
 
@@ -229,15 +228,17 @@ abstract class GroupLe(
         }
         manga.description =
             "$ratingStar $ratingValue[ⓘ$ratingValueOver] (голосов: $ratingVotes)\n$altName" + document.select(
-            "div#tab-description  .manga-description",
-        ).text()
+                "div#tab-description  .manga-description",
+            ).text()
         manga.status = when {
             (
                 document.html()
                     .contains("Запрещена публикация произведения по копирайту") || document.html()
                     .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!")
                 ) && document.select("div.chapters").isEmpty() -> SManga.LICENSED
+
             infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
+
             else ->
                 when (infoElement.selectFirst("span.badge:contains(выпуск)")?.text()) {
                     "выпуск продолжается" -> SManga.ONGOING
@@ -251,16 +252,14 @@ abstract class GroupLe(
         return manga
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return if (manga.status != SManga.LICENSED) {
-            client.newCall(chapterListRequest(manga))
-                .asObservableSuccess()
-                .map { response ->
-                    chapterListParse(response, manga)
-                }
-        } else {
-            Observable.error(java.lang.Exception("Лицензировано - Нет глав"))
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.status != SManga.LICENSED) {
+        client.newCall(chapterListRequest(manga))
+            .asObservableSuccess()
+            .map { response ->
+                chapterListParse(response, manga)
+            }
+    } else {
+        Observable.error(java.lang.Exception("Лицензировано - Нет глав"))
     }
 
     protected open fun getChapterSearchParams(document: Document): String {
@@ -283,8 +282,7 @@ abstract class GroupLe(
         return document.select(chapterListSelector()).map { chapterFromElement(it, manga, chapterSearchParams) }
     }
 
-    override fun chapterListSelector() =
-        "tr.item-row:has(td > a):has(td.date:not(.text-info))"
+    override fun chapterListSelector() = "tr.item-row:has(td > a):has(td.date:not(.text-info))"
 
     private fun chapterFromElement(element: Element, manga: SManga, chapterSearchParams: String): SChapter {
         val urlElement = element.select("a.chapter-link").first()!!
@@ -333,9 +331,7 @@ abstract class GroupLe(
         return chapter
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun prepareNewChapter(chapter: SChapter, manga: SManga) {
         val extra = Regex("""\s*([0-9]+\sЭкстра)\s*""")
@@ -374,10 +370,13 @@ abstract class GroupLe(
 
         val readerMark = when {
             html.contains("rm_h.readerInit(") -> "rm_h.readerInit("
+
             html.contains("rm_h.readerDoInit(") -> "rm_h.readerDoInit("
+
             !response.request.url.toString().contains(baseUrl) -> {
                 throw Exception("Не удалось загрузить главу. Url: ${response.request.url}")
             }
+
             else -> {
                 if (document.selectFirst("div.alert") != null || document.selectFirst("form.purchase-form") != null) {
                     throw Exception("Эта глава платная. Используйте сайт, чтобы купить и прочитать ее.")
@@ -419,9 +418,7 @@ abstract class GroupLe(
         return pages
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        throw Exception("Not used")
-    }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -433,31 +430,27 @@ abstract class GroupLe(
         return GET(page.imageUrl!!, imgHeader)
     }
 
-    private fun searchMangaByIdRequest(id: String): Request {
-        return GET("$baseUrl/$id", headers)
-    }
+    private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl/$id", headers)
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client.newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+        client.newCall(searchMangaByIdRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$realQuery"
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
@@ -468,26 +461,24 @@ abstract class GroupLe(
         title: String,
         default: String,
         value: String,
-    ): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
-            key = title
-            this.title = title
-            summary = value
-            this.setDefaultValue(default)
-            dialogTitle = title
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(title, newValue as String).commit()
-                    Toast.makeText(
-                        context,
-                        "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        summary = value
+        this.setDefaultValue(default)
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, newValue ->
+            try {
+                val res = preferences.edit().putString(title, newValue as String).commit()
+                Toast.makeText(
+                    context,
+                    "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                res
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
             }
         }
     }

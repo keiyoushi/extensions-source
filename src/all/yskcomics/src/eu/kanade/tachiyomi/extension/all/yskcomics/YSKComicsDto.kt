@@ -158,47 +158,45 @@ class DetailsRaw(
     val description: String,
     @SerialName("published_at") val publishedAt: String,
 ) {
-    fun toSManga(lang: String): SManga {
-        return SManga.create().apply {
-            url = "/$lang/comic/$slug"
-            title = fullName
-            artist = artists.joinToString { it.name }
-            author = writer.name
-            description = buildString {
-                if (lang != languageCode) {
-                    // The site redirects to the correct language in this case. Not possible here.
-                    // The user has to intentionally open an invalid URL to arrive here.
-                    val language = runCatching {
-                        Locale(lang).getDisplayLanguage(Locale.ENGLISH)
-                    }.getOrDefault(lang)
+    fun toSManga(lang: String): SManga = SManga.create().apply {
+        url = "/$lang/comic/$slug"
+        title = fullName
+        artist = artists.joinToString { it.name }
+        author = writer.name
+        description = buildString {
+            if (lang != languageCode) {
+                // The site redirects to the correct language in this case. Not possible here.
+                // The user has to intentionally open an invalid URL to arrive here.
+                val language = runCatching {
+                    Locale(lang).getDisplayLanguage(Locale.ENGLISH)
+                }.getOrDefault(lang)
 
-                    append("**Sorry, this content is not available in ", language, ".**\n\n")
-                }
-
-                val ratingString = getRatingString(rate, rateCount)
-                if (ratingString.isNotEmpty()) {
-                    append(ratingString, "\n")
-                }
-
-                append("Publisher: ", publisher.name, "\n")
-                append("Published at: ", publishedAt, "\n")
-
-                append("\n")
-
-                val plainText = Jsoup
-                    .parseBodyFragment(this@DetailsRaw.description)
-                    .wholeText()
-                    .trim()
-                append(plainText)
+                append("**Sorry, this content is not available in ", language, ".**\n\n")
             }
-            genre = genres.joinToString { it.name }
-            status = when (this@DetailsRaw.status) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
+
+            val ratingString = getRatingString(rate, rateCount)
+            if (ratingString.isNotEmpty()) {
+                append(ratingString, "\n")
             }
-            thumbnail_url = image
+
+            append("Publisher: ", publisher.name, "\n")
+            append("Published at: ", publishedAt, "\n")
+
+            append("\n")
+
+            val plainText = Jsoup
+                .parseBodyFragment(this@DetailsRaw.description)
+                .wholeText()
+                .trim()
+            append(plainText)
         }
+        genre = genres.joinToString { it.name }
+        status = when (this@DetailsRaw.status) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = image
     }
 }
 

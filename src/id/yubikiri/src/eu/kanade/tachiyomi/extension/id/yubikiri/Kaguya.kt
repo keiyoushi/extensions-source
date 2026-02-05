@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class Kaguya : Madara(
-    "Kaguya",
-    "https://kaguya.id",
-    "id",
-    dateFormat = SimpleDateFormat("d MMMM", Locale("en")),
-) {
+class Kaguya :
+    Madara(
+        "Kaguya",
+        "https://kaguya.id",
+        "id",
+        dateFormat = SimpleDateFormat("d MMMM", Locale("en")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .readTimeout(1, TimeUnit.MINUTES)

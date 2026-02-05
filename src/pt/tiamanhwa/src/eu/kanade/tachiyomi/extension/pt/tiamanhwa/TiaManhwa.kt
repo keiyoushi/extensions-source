@@ -6,12 +6,13 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TiaManhwa : Madara(
-    "Tia Manhwa",
-    "https://tiamanhwa.com",
-    "pt-BR",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class TiaManhwa :
+    Madara(
+        "Tia Manhwa",
+        "https://tiamanhwa.com",
+        "pt-BR",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)

@@ -87,29 +87,21 @@ class WebNovel : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return if (response.request.url.toString().contains(QUERY_SEARCH_PATH)) {
-            response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
-        } else {
-            response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
-        }
+    override fun searchMangaParse(response: Response): MangasPage = if (response.request.url.toString().contains(QUERY_SEARCH_PATH)) {
+        response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
+    } else {
+        response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
     }
 
     // Manga details
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.getId}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAsForWebNovel<ComicDetailInfoResponse>().toSManga(::getCoverUrl)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAsForWebNovel<ComicDetailInfoResponse>().toSManga(::getCoverUrl)
 
     // chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseApiUrl/comic/getChapterList?comicId=${manga.getId}", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseApiUrl/comic/getChapterList?comicId=${manga.getId}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = response.parseAsForWebNovel<ComicChapterListResponse>()
@@ -160,13 +152,11 @@ class WebNovel : HttpSource() {
         return "$baseUrl/comic/$comicId/$chapterId"
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response)
-            }
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            pageListParse(response)
+        }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val (comicId, chapterId) = chapter.getMangaAndChapterId
@@ -185,9 +175,7 @@ class WebNovel : HttpSource() {
 
     // LinkedHashMap with a capacity of 25. When exceeding the capacity the oldest entry is removed.
     private val chapterPageCache = object : LinkedHashMap<String, List<ChapterPage>>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<ChapterPage>>?): Boolean {
-            return size > 25
-        }
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<ChapterPage>>?): Boolean = size > 25
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -220,9 +208,7 @@ class WebNovel : HttpSource() {
             return comicId to chapterId
         }
 
-    private fun getCoverUrl(comicId: String, coverUpdatedAt: Long): String {
-        return "$baseCoverURl/bookcover/$comicId?imageId=$coverUpdatedAt&imageMogr2/thumbnail/1024x"
-    }
+    private fun getCoverUrl(comicId: String, coverUpdatedAt: Long): String = "$baseCoverURl/bookcover/$comicId?imageId=$coverUpdatedAt&imageMogr2/thumbnail/1024x"
 
     private fun csrfTokenInterceptor(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()

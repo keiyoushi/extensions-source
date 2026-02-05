@@ -36,21 +36,17 @@ class Mangafreak : ParsedHttpSource() {
         .followRedirects(true)
         .build()
 
-    private fun mangaFromElement(element: Element, urlSelector: String): SManga {
-        return SManga.create().apply {
-            thumbnail_url = element.select("img").attr("abs:src")
-            element.select(urlSelector).apply {
-                title = text()
-                url = attr("href")
-            }
+    private fun mangaFromElement(element: Element, urlSelector: String): SManga = SManga.create().apply {
+        thumbnail_url = element.select("img").attr("abs:src")
+        element.select(urlSelector).apply {
+            title = text()
+            url = attr("href")
         }
     }
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/Genre/All/$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/Genre/All/$page", headers)
     override fun popularMangaNextPageSelector(): String = "a.next_p"
     override fun popularMangaSelector(): String = "div.ranking_item"
     override fun popularMangaFromElement(element: Element): SManga = mangaFromElement(element, "a")
@@ -125,8 +121,11 @@ class Mangafreak : ParsedHttpSource() {
                     }
                     url.addPathSegments("Genre/$genres")
                 }
+
                 is StatusFilter -> url.addPathSegments("Status/${filter.toUriPart()}")
+
                 is TypeFilter -> url.addPathSegments("Type/${filter.toUriPart()}")
+
                 else -> {}
             }
         }
@@ -187,12 +186,8 @@ class Mangafreak : ParsedHttpSource() {
         setUrlWithoutDomain(element.select("a").attr("href"))
         date_upload = parseDate(element.select("td:eq(1)").text())
     }
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("yyyy/MM/dd", Locale.US).parse(date)?.time ?: 0L
-    }
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    private fun parseDate(date: String): Long = SimpleDateFormat("yyyy/MM/dd", Locale.US).parse(date)?.time ?: 0L
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     // Pages
 
@@ -202,9 +197,7 @@ class Mangafreak : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filter
 
@@ -259,26 +252,27 @@ class Mangafreak : ParsedHttpSource() {
         Genre("Yuri"),
     )
 
-    private class TypeFilter : UriPartFilter(
-        "Manga Type",
-        arrayOf(
-            Pair("Both", "0"),
-            Pair("Manga", "2"),
-            Pair("Manhwa", "1"),
-        ),
-    )
+    private class TypeFilter :
+        UriPartFilter(
+            "Manga Type",
+            arrayOf(
+                Pair("Both", "0"),
+                Pair("Manga", "2"),
+                Pair("Manhwa", "1"),
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "Manga Status",
-        arrayOf(
-            Pair("Both", "0"),
-            Pair("Completed", "1"),
-            Pair("Ongoing", "2"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "Manga Status",
+            arrayOf(
+                Pair("Both", "0"),
+                Pair("Completed", "1"),
+                Pair("Ongoing", "2"),
+            ),
+        )
 
-    private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

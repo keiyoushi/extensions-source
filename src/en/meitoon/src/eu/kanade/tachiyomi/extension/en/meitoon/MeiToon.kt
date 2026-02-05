@@ -4,11 +4,12 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 
-class MeiToon : Keyoapp(
-    "MeiToon",
-    "https://meitoon.org",
-    "en",
-) {
+class MeiToon :
+    Keyoapp(
+        "MeiToon",
+        "https://meitoon.org",
+        "en",
+    ) {
     override fun popularMangaSelector(): String = ".series-splide .splide__slide:not(.splide__slide--clone)"
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

@@ -31,7 +31,9 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class YugenMangas : HttpSource(), ConfigurableSource {
+class YugenMangas :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Yugen Mangás"
 
@@ -83,8 +85,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Popular =======================================
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/biblioteca?page=$page&sort_order=desc&sort_by=total_views", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/biblioteca?page=$page&sort_order=desc&sort_by=total_views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.getJsonBody().parseAs<LibraryWrapper<MangaDto>>()
@@ -213,11 +214,9 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Utils =======================================
 
-    private fun Element?.attrImageSet(): String? {
-        return this?.attr("srcset")?.split(SRCSET_DELIMITER_REGEX)
-            ?.map(String::trim)?.last(String::isNotBlank)
-            ?.let { "$baseUrl$it" }
-    }
+    private fun Element?.attrImageSet(): String? = this?.attr("srcset")?.split(SRCSET_DELIMITER_REGEX)
+        ?.map(String::trim)?.last(String::isNotBlank)
+        ?.let { "$baseUrl$it" }
 
     private fun Response.getJsonBody(): String {
         val document = asJsoup()

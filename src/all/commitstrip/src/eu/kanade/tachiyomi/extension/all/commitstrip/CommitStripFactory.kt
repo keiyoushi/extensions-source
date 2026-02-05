@@ -10,5 +10,5 @@ class CommitStripFactory : SourceFactory {
     )
 }
 
-class CommitStripEnglish() : CommitStrip("en", "en")
-class CommitStripFrench() : CommitStrip("fr", "fr")
+class CommitStripEnglish : CommitStrip("en", "en")
+class CommitStripFrench : CommitStrip("fr", "fr")

@@ -16,9 +16,7 @@ class Mangalay : ParsedHttpSource() {
     override val lang = "id"
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/2013/04/daftar-baca-komik_20.html", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/2013/04/daftar-baca-komik_20.html", headers)
 
     override fun popularMangaSelector() = ".post-body table"
 
@@ -39,14 +37,12 @@ class Mangalay : ParsedHttpSource() {
         name = element.select("b").text()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".separator img")
-            .dropLast(1) // :last-child not working somehow
-            .mapIndexed { index, element ->
-                val url = element.attr("src")
-                Page(index, "", url)
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".separator img")
+        .dropLast(1) // :last-child not working somehow
+        .mapIndexed { index, element ->
+            val url = element.attr("src")
+            Page(index, "", url)
+        }
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 

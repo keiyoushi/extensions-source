@@ -29,7 +29,9 @@ import kotlin.concurrent.thread
 
 // Uses MACCMS http://www.maccms.la/
 // 支持站点，不要添加屏蔽广告选项，何况广告本来就不多
-class BoyLove : HttpSource(), ConfigurableSource {
+class BoyLove :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "香香腐宅"
     override val lang = "zh"
     override val supportsLatest = true
@@ -49,8 +51,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
         .addInterceptor(UnscramblerInterceptor())
         .build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val listPage: ListPageDto<MangaDto> = response.parseAs()
@@ -58,45 +59,36 @@ class BoyLove : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, !listPage.lastPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangas = response.parseAs<List<MangaDto>>().map { it.toSManga() }
         return MangasPage(mangas, mangas.size >= 10)
     }
 
-    private fun textSearchRequest(page: Int, query: String): Request =
-        GET("$baseUrl/home/api/searchk?keyword=$query&type=1&pageNo=$page", headers)
+    private fun textSearchRequest(page: Int, query: String): Request = GET("$baseUrl/home/api/searchk?keyword=$query&type=1&pageNo=$page", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank()) {
-            textSearchRequest(page, query)
-        } else {
-            GET("$baseUrl/home/api/cate/tp/${parseFilters(page, filters)}", headers)
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
+        textSearchRequest(page, query)
+    } else {
+        GET("$baseUrl/home/api/cate/tp/${parseFilters(page, filters)}", headers)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // for WebView
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$baseUrl/home/book/index/id/${manga.url}")
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/home/book/index/id/${manga.url}")
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client.newCall(textSearchRequest(1, manga.title)).asObservableSuccess().map { response ->
-            val id = manga.url.toInt()
-            response.parseAs<ListPageDto<MangaDto>>().list.find { it.id == id }!!.toSManga()
-        }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(textSearchRequest(1, manga.title)).asObservableSuccess().map { response ->
+        val id = manga.url.toInt()
+        response.parseAs<ListPageDto<MangaDto>>().list.find { it.id == id }!!.toSManga()
+    }
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl/home/api/chapter_list/tp/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/home/api/chapter_list/tp/${manga.url}", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }.reversed()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val chapterUrl = chapter.url
@@ -109,42 +101,39 @@ class BoyLove : HttpSource(), ConfigurableSource {
         }.let { Observable.just(it) }
     }
 
-    private fun fetchPageList(chapterUrl: String): Observable<List<Page>> =
-        client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
-            val doc = response.asJsoup()
-            val root = doc.selectFirst(Evaluator.Tag("section"))!!
-            val images = root.select(Evaluator.Class("reader-cartoon-image"))
-            val urlList = if (images.isEmpty()) {
-                root.select(Evaluator.Tag("img")).map { it.attr("src").trim().toImageUrl() }
-                    .filterNot { it.endsWith(".gif") }
+    private fun fetchPageList(chapterUrl: String): Observable<List<Page>> = client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
+        val doc = response.asJsoup()
+        val root = doc.selectFirst(Evaluator.Tag("section"))!!
+        val images = root.select(Evaluator.Class("reader-cartoon-image"))
+        val urlList = if (images.isEmpty()) {
+            root.select(Evaluator.Tag("img")).map { it.attr("src").trim().toImageUrl() }
+                .filterNot { it.endsWith(".gif") }
+        } else {
+            images.map { it.child(0) }
+                .filter { it.attr("src").endsWith("load.png") }
+                .map { it.attr("data-original").trim().toImageUrl() }
+        }
+        val parts = doc.getPartsCount()
+        urlList.mapIndexed { index, imageUrl ->
+            val url = if (parts == null) {
+                imageUrl
             } else {
-                images.map { it.child(0) }
-                    .filter { it.attr("src").endsWith("load.png") }
-                    .map { it.attr("data-original").trim().toImageUrl() }
+                imageUrl.toHttpUrl().newBuilder()
+                    .addQueryParameter(UnscramblerInterceptor.PARTS_COUNT_PARAM, parts.toString())
+                    .build()
+                    .toString()
             }
-            val parts = doc.getPartsCount()
-            urlList.mapIndexed { index, imageUrl ->
-                val url = if (parts == null) {
-                    imageUrl
-                } else {
-                    imageUrl.toHttpUrl().newBuilder()
-                        .addQueryParameter(UnscramblerInterceptor.PARTS_COUNT_PARAM, parts.toString())
-                        .build()
-                        .toString()
-                }
-                Page(index, imageUrl = url)
-            }
+            Page(index, imageUrl = url)
         }
+    }
 
-    private fun Document.getPartsCount(): Int? {
-        return selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
-            substringBefore("var scrollTop")
-                .substringAfterLast("var randomClass = ")
-                .substringBefore(';')
-                .trim()
-                .substringAfterLast(" ")
-                .toIntOrNull()
-        }
+    private fun Document.getPartsCount(): Int? = selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
+        substringBefore("var scrollTop")
+            .substringAfterLast("var randomClass = ")
+            .substringBefore(';')
+            .trim()
+            .substringAfterLast(" ")
+            .toIntOrNull()
     }
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()

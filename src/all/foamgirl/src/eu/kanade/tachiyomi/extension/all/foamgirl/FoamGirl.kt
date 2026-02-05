@@ -18,7 +18,7 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FoamGirl() : ParsedHttpSource() {
+class FoamGirl : ParsedHttpSource() {
     override val baseUrl = "https://foamgirl.net"
     override val lang = "all"
     override val name = "FoamGirl"
@@ -39,17 +39,11 @@ class FoamGirl() : ParsedHttpSource() {
         initialized = true
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
     override fun popularMangaNextPageSelector() = "a.next"
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/page/$page", headers)
 
     override fun popularMangaSelector() = ".update_area .i_list"
 
@@ -57,17 +51,15 @@ class FoamGirl() : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET(
-            baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("page")
-                addPathSegment("$page")
-                addQueryParameter("post_type", "post")
-                addQueryParameter("s", query)
-            }.build(),
-            headers,
-        )
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
+        baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("page")
+            addPathSegment("$page")
+            addQueryParameter("post_type", "post")
+            addQueryParameter("s", query)
+        }.build(),
+        headers,
+    )
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -101,28 +93,18 @@ class FoamGirl() : ParsedHttpSource() {
     // Pages
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    private fun getDate(str: String): Long {
-        return try {
-            DATE_FORMAT.parse(str)?.time ?: 0L
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun getDate(str: String): Long = try {
+        DATE_FORMAT.parse(str)?.time ?: 0L
+    } catch (_: ParseException) {
+        0L
     }
 
     companion object {

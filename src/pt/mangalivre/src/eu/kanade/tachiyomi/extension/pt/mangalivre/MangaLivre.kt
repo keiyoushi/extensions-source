@@ -52,8 +52,7 @@ class MangaLivre :
 
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"
 
-    override fun xhrChaptersRequest(mangaUrl: String) =
-        POST("$mangaUrl/ajax/chapters/", xhrHeaders, FormBody.Builder().build())
+    override fun xhrChaptersRequest(mangaUrl: String) = POST("$mangaUrl/ajax/chapters/", xhrHeaders, FormBody.Builder().build())
 
     override fun pageListRequest(chapter: SChapter): Request {
         val fullUrl = if (chapter.url.startsWith("http")) {
@@ -64,12 +63,10 @@ class MangaLivre :
         return GET(fullUrl, headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".reading-content .page-break img.wp-manga-chapter-img[src]")
-            .mapIndexed { idx, img ->
-                Page(idx, document.location(), img.attr("abs:src").trim())
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".reading-content .page-break img.wp-manga-chapter-img[src]")
+        .mapIndexed { idx, img ->
+            Page(idx, document.location(), img.attr("abs:src").trim())
+        }
 
     override fun imageRequest(page: Page): Request {
         val referer = if (page.url.isNotEmpty()) page.url else "$baseUrl/"

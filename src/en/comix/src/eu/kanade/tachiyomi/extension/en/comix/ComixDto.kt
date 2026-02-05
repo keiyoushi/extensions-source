@@ -248,7 +248,9 @@ object SafeIntBooleanDeserializer : KSerializer<Int> {
                 is JsonPrimitive -> when {
                     element.booleanOrNull != null ->
                         if (element.booleanOrNull == true) 1 else 0
+
                     element.intOrNull != null -> element.intOrNull ?: 0
+
                     else -> element.content.toIntOrNull()
                         ?: if (element.content.equals("true", ignoreCase = true)) 1 else 0
                 }

@@ -4,11 +4,12 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit
 
-class GalaxScanlator : ZeistManga(
-    "GALAX Scans",
-    "https://galaxscanlator.blogspot.com",
-    "pt-BR",
-) {
+class GalaxScanlator :
+    ZeistManga(
+        "GALAX Scans",
+        "https://galaxscanlator.blogspot.com",
+        "pt-BR",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(5, 2, TimeUnit.SECONDS)
         .build()

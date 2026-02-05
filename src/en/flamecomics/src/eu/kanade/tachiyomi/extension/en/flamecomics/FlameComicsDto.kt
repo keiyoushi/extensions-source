@@ -115,9 +115,7 @@ class Page(
 class KeysToListSerializer : KSerializer<List<Page>> {
     private val listSer = MapSerializer(String.serializer(), Page.serializer())
     override val descriptor: SerialDescriptor = listSer.descriptor
-    override fun deserialize(decoder: Decoder): List<Page> {
-        return listSer.deserialize(decoder).flatMap { k -> listOf(k.value) }
-    }
+    override fun deserialize(decoder: Decoder): List<Page> = listSer.deserialize(decoder).flatMap { k -> listOf(k.value) }
 
     override fun serialize(encoder: Encoder, value: List<Page>) {}
 }

@@ -5,13 +5,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
-class SundayWebEvery : GigaViewer(
-    "Sunday Web Every",
-    "https://www.sunday-webry.com",
-    "ja",
-    "https://cdn-img.www.sunday-webry.com/public/page",
-    isPaginated = true,
-) {
+class SundayWebEvery :
+    GigaViewer(
+        "Sunday Web Every",
+        "https://www.sunday-webry.com",
+        "ja",
+        "https://cdn-img.www.sunday-webry.com/public/page",
+        isPaginated = true,
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor(::imageIntercept)

@@ -21,7 +21,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class MyComic : ParsedHttpSource(), ConfigurableSource {
+class MyComic :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://mycomic.com"
     override val lang: String = "zh"
     override val name: String = "MyComic"
@@ -67,8 +69,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(latestUpdateFilter))
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(latestUpdateFilter))
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
@@ -94,18 +95,15 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img[x-ref]").mapIndexed { index, element ->
-            Page(index, imageUrl = element.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img[x-ref]").mapIndexed { index, element ->
+        Page(index, imageUrl = element.imgAttr())
     }
 
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(popularFilter))
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(popularFilter))
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -129,13 +127,11 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            element.selectFirst("img")!!.let {
-                title = it.attr("alt")
-                thumbnail_url = it.imgAttr()
-            }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        element.selectFirst("img")!!.let {
+            title = it.attr("alt")
+            thumbnail_url = it.imgAttr()
         }
     }
 
@@ -168,16 +164,14 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         return GET(url.build(), headers = headers)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(0),
-            RegionFilter(),
-            TagFilter(),
-            AudienceFilter(),
-            YearFilter(),
-            StatusFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(0),
+        RegionFilter(),
+        TagFilter(),
+        AudienceFilter(),
+        YearFilter(),
+        StatusFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addPreference(

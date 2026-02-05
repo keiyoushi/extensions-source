@@ -13,8 +13,7 @@ import java.util.Calendar
 class Love4u : FMReader("Love4u", "https://love4u.net", "ja") {
     override val id = 1647179844716143786
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/manga-list.html?page=$page&sort=last_update")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga-list.html?page=$page&sort=last_update")
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = MID_URL_REGEX.find(manga.url)
@@ -28,16 +27,14 @@ class Love4u : FMReader("Love4u", "https://love4u.net", "ja") {
         return GET(xhrUrl, headers)
     }
 
-    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
-        return SChapter.create().apply {
-            element.let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                name = it.attr("title")
-            }
-
-            date_upload = element.select(chapterTimeSelector)
-                .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
+    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter = SChapter.create().apply {
+        element.let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            name = it.attr("title")
         }
+
+        date_upload = element.select(chapterTimeSelector)
+            .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
     }
 
     private fun parseChapterDate(date: String): Long {

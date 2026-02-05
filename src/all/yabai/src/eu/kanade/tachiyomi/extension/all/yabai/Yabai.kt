@@ -193,21 +193,18 @@ class Yabai : HttpSource() {
         headers,
     )
 
-    override fun mangaDetailsParse(response: Response) =
-        response.parseAs<DataResponse<DetailProps>>().props.post.data.toSManga()
+    override fun mangaDetailsParse(response: Response) = response.parseAs<DataResponse<DetailProps>>().props.post.data.toSManga()
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response) =
-        listOf(response.parseAs<DataResponse<DetailProps>>().props.post.data.toSChapter())
+    override fun chapterListParse(response: Response) = listOf(response.parseAs<DataResponse<DetailProps>>().props.post.data.toSChapter())
 
     override fun pageListRequest(chapter: SChapter) = GET(
         "$baseUrl${chapter.url}/read",
         headers,
     )
 
-    override fun pageListParse(response: Response) =
-        response.parseAs<DataResponse<ReaderProps>>().props.pages.data.list.toPages()
+    override fun pageListParse(response: Response) = response.parseAs<DataResponse<ReaderProps>>().props.pages.data.list.toPages()
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 

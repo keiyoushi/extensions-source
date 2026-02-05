@@ -18,9 +18,7 @@ class ChapterListDto(
 ) {
     val hasNextPage: Boolean
         get() = page * limit < total
-    fun toSChapterList(): List<SChapter> {
-        return data.map { it.toSChapter() }
-    }
+    fun toSChapterList(): List<SChapter> = data.map { it.toSChapter() }
 }
 
 @Serializable

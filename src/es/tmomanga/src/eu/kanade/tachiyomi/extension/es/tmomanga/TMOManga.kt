@@ -90,13 +90,11 @@ class TMOManga : ParsedHttpSource() {
         return GET(urlBuilder.build(), headers)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Los filtros seran ignorados si se realiza una busqueda por texto"),
-            Filter.Separator(),
-            GenreFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Los filtros seran ignorados si se realiza una busqueda por texto"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -118,20 +116,16 @@ class TMOManga : ParsedHttpSource() {
         setUrlWithoutDomain(element.select("a").attr("href"))
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#images_chapter img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#images_chapter img").mapIndexed { i, img ->
+        Page(i, imageUrl = img.imgAttr())
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr(): String {
-        return when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        else -> attr("abs:src")
     }
 
     private fun Elements.imgAttr() = this.first()!!.imgAttr()

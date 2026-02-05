@@ -17,8 +17,7 @@ data class ChapterDto(
     @Contextual
     private val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
-    fun getChapterURL(chapterEndpoint: String): String =
-        "/api/$chapterEndpoint/chapters?id=$id&number=${this.getNumberStr()}"
+    fun getChapterURL(chapterEndpoint: String): String = "/api/$chapterEndpoint/chapters?id=$id&number=${this.getNumberStr()}"
 
     fun getNumberStr(): String = if (this.number % 1 == 0f) {
         this.number.toInt().toString()

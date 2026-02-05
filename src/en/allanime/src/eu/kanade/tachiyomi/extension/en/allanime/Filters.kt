@@ -3,8 +3,7 @@ package eu.kanade.tachiyomi.extension.en.allanime
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-abstract class SelectFilter(name: String, private val options: List<Pair<String, String>>) :
-    Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
+abstract class SelectFilter(name: String, private val options: List<Pair<String, String>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
     fun getValue() = options[state].second.takeUnless { it.isEmpty() }
 }
 
@@ -14,8 +13,7 @@ internal class CountryFilter(name: String, countries: List<Pair<String, String>>
 
 internal class Genre(name: String) : Filter.TriState(name)
 
-internal class GenreFilter(title: String, genres: List<String>) :
-    Filter.Group<Genre>(title, genres.map(::Genre)) {
+internal class GenreFilter(title: String, genres: List<String>) : Filter.Group<Genre>(title, genres.map(::Genre)) {
     val included: List<String>?
         get() = state.filter { it.isIncluded() }.map { it.name }.takeUnless { it.isEmpty() }
 

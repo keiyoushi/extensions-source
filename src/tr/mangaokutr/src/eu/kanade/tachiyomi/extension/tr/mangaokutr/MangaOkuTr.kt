@@ -7,12 +7,13 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaOkuTr : MangaThemesia(
-    "Manga Oku TR",
-    "https://mangaokutr.net",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-) {
+class MangaOkuTr :
+    MangaThemesia(
+        "Manga Oku TR",
+        "https://mangaokutr.net",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
+    ) {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::statusCodeInterceptor)
         .build()

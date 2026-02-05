@@ -34,7 +34,9 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
+class GocTruyenTranhVui :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "vi"
 
     override val baseUrl = "https://goctruyentranhvui20.com"
@@ -134,7 +136,11 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         val jsonPage = response.parseAs<ResultDto<ImageListDto>>().result.data ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
 
         return jsonPage.mapIndexed { i, url ->
-            val finalUrl = if (url.startsWith("/image/")) { baseUrl + url } else { url }
+            val finalUrl = if (url.startsWith("/image/")) {
+                baseUrl + url
+            } else {
+                url
+            }
             Page(i, imageUrl = finalUrl)
         }
     }
@@ -148,17 +154,17 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
                 .build()
         } ?: xhrHeaders
     }
-    private var _token: String? = null
+    private var token: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun getToken(): String? {
-        _token?.also { return it }
+        token?.also { return it }
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         if (!customToken().isNullOrBlank()) {
             return customToken()
         }
-        if (_token != null) return _token
+        if (token != null) return token
 
         handler.post {
             val webview = WebView(Injekt.get<Application>())
@@ -172,7 +178,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     // Get token
                     view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
-                        _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
+                        this@GocTruyenTranhVui.token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
                         latch.countDown()
                         webview.destroy()
                     }
@@ -182,7 +188,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         }
 
         latch.await(10, TimeUnit.SECONDS)
-        return _token
+        return token
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

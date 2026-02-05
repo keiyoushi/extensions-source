@@ -40,9 +40,7 @@ class ExistentialComics : ParsedHttpSource() {
 
     override fun fetchMangaDetails(manga: SManga) = Observable.just(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).distinct().reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).distinct().reversed()
 
     override fun chapterListSelector() = "div#date-comics ul li a:eq(0)"
 

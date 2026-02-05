@@ -1,6 +1,6 @@
 ext {
     extName = 'oots'
-    extClass = '.oots'
+    extClass = '.OOTS'
     extVersionCode = 2
 }
 

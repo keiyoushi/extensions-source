@@ -13,7 +13,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-open class vinnieVeritas(override val lang: String = "en") : ParsedHttpSource() {
+open class VinnieVeritas(override val lang: String = "en") : ParsedHttpSource() {
 
     override val name = "Vinnie Veritas - CCC"
     override val supportsLatest = false
@@ -23,7 +23,11 @@ open class vinnieVeritas(override val lang: String = "en") : ParsedHttpSource() 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create()
         manga.setUrlWithoutDomain("ccc-$lang/")
-        manga.title = if (lang == "en") { "CCC: The city of opportunities" } else { "CCC: La ciudad de las oportunidades" }
+        manga.title = if (lang == "en") {
+            "CCC: The city of opportunities"
+        } else {
+            "CCC: La ciudad de las oportunidades"
+        }
         manga.artist = "Vinnie Veritas"
         manga.author = "Vinnie Veritas"
         manga.status = SManga.ONGOING
@@ -40,7 +44,7 @@ En este lapso de tiempo tuve mucho trabajo de animación e ilustración que no m
 
 CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la abreviación de algo, CCC: La ciudad de las oportunidades narra la historia de Lucio Vasalle y sus desventuras en CCC como recién llegado, el comic, los dibujos sueltos y las animaciones están relacionados, todos cuentan pequeños pedazos de  los personajes y de sus pasados, eres bienvenido a explorar todo esto y sacar tus propias conclusiones, si te fijas bien puede que encuentres algo que alguien no haya notado (:			"""
         }
-        manga.thumbnail_url = thumbnailUrl
+        manga.thumbnail_url = THUMBNAIL_URL
         manga.genre = "webcomic"
 
         return Observable.just(MangasPage(arrayListOf(manga), false))
@@ -50,11 +54,13 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
         .map { it.mangas.first().apply { initialized = true } }
 
     // Chapters are listed old to new.
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun chapterListSelector() = "option.webcomic${if (lang == "en"){1}else {2}}-link"
+    override fun chapterListSelector() = "option.webcomic${if (lang == "en") {
+        1
+    } else {
+        2
+    }}-link"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
@@ -63,16 +69,12 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
         return chapter
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".webcomic-image img").mapIndexed { i, image -> Page(i, "", image.attr("src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".webcomic-image img").mapIndexed { i, image -> Page(i, "", image.attr("src")) }
 
     companion object {
-        private const val thumbnailUrl = "https://i1.wp.com/vinnieveritas.com/wp-content/uploads/2016/02/CCC000.jpg"
+        private const val THUMBNAIL_URL = "https://i1.wp.com/vinnieveritas.com/wp-content/uploads/2016/02/CCC000.jpg"
     }
 
     // unused

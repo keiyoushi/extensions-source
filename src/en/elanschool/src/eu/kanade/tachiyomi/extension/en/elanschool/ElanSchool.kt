@@ -71,11 +71,9 @@ class ElanSchool : HttpSource() {
 
     private fun chapterListSelector() = "div.listing-item > a.title"
 
-    private fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.attr("href"))
-        }
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.text()
+        setUrlWithoutDomain(element.attr("href"))
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -85,27 +83,19 @@ class ElanSchool : HttpSource() {
         }
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
