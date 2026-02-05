@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -22,7 +23,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.json.JSONObject
+import kotlin.jvm.Synchronized
 
 abstract class GreenShit :
     HttpSource(),
@@ -54,41 +55,32 @@ abstract class GreenShit :
     }
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
-        val originalRequest = chain.request()
+        val request = chain.request()
+        if (request.header("Authorization") != null) return chain.proceed(request)
 
-        if (originalRequest.header("Authorization") != null) {
-            return chain.proceed(originalRequest)
-        }
+        val token = getValidToken() ?: return chain.proceed(request)
+        val response = chain.proceed(request.withAuth(token))
 
-        val token = getValidToken()
-        if (token.isNullOrEmpty()) {
-            return chain.proceed(originalRequest)
-        }
-
-        val authenticatedRequest = originalRequest.newBuilder()
-            .header("Authorization", "Bearer $token")
-            .build()
-
-        val response = chain.proceed(authenticatedRequest)
-
-        if (response.code == 401) {
-            response.body.close()
-            cachedToken = null
-            tokenExpiryTime = 0L
-            val newToken = getValidToken()
-
-            return if (!newToken.isNullOrEmpty()) {
-                val retryRequest = originalRequest.newBuilder()
-                    .header("Authorization", "Bearer $newToken")
-                    .build()
-                chain.proceed(retryRequest)
-            } else {
-                chain.proceed(originalRequest)
-            }
-        }
-        return response
+        if (response.code != 401) return response
+        response.body.close()
+        val newToken = clearTokenAndRefresh()
+        return chain.proceed(request.withAuth(newToken.orEmpty()))
     }
 
+    private fun Request.withAuth(token: String): Request = if (token.isNotEmpty()) {
+        newBuilder().header("Authorization", "Bearer $token").build()
+    } else {
+        this
+    }
+
+    @Synchronized
+    private fun clearTokenAndRefresh(): String? {
+        cachedToken = null
+        tokenExpiryTime = 0L
+        return getValidToken()
+    }
+
+    @Synchronized
     private fun getValidToken(): String? {
         val now = System.currentTimeMillis()
         if (cachedToken != null && now < tokenExpiryTime) {
@@ -97,6 +89,7 @@ abstract class GreenShit :
         return fetchNewToken()
     }
 
+    @Synchronized
     private fun fetchNewToken(): String? {
         return try {
             val email = preferences.getString(emailPreferenceKey, "")
@@ -110,45 +103,37 @@ abstract class GreenShit :
         }
     }
 
+    @Synchronized
     protected open fun loginAndGetToken(email: String, password: String): String? {
-        return try {
-            val json = JSONObject()
-                .put("login", email.trim())
-                .put("senha", password)
-                .put("tipo_usuario", "usuario")
-                .toString()
+        try {
+            val body = GreenShitLoginRequestDto(
+                login = email.trim(),
+                senha = password,
+                tipoUsuario = "usuario",
+            ).toJsonString().toRequestBody("application/json".toMediaType())
 
-            val body = json.toRequestBody("application/json".toMediaType())
-            val request = Request.Builder()
-                .url("$apiUrl/auth/login")
-                .post(body)
-                .header("Accept", "application/json")
-                .build()
+            val response = network.cloudflareClient.newCall(
+                Request.Builder()
+                    .url("$apiUrl/auth/login")
+                    .post(body)
+                    .header("Accept", "application/json")
+                    .header("scan-id", scanId)
+                    .build(),
+            ).execute()
 
-            val response = network.cloudflareClient.newCall(request).execute()
-
-            if (response.isSuccessful) {
-                val responseBody = response.body.string()
-                val jsonResponse = JSONObject(responseBody)
-                val token = when {
-                    jsonResponse.has("token") -> jsonResponse.getString("token")
-                    jsonResponse.has("access_token") -> jsonResponse.getString("access_token")
-                    else -> null
-                }
-                if (!token.isNullOrEmpty()) {
-                    val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
-                    cachedToken = token
-                    tokenExpiryTime = System.currentTimeMillis() + expiresIn
-                    return token
-                }
-                null
-            } else {
+            if (!response.isSuccessful) {
                 response.body.close()
-                null
+                return null
             }
+            val auth = response.body.string().parseAs<GreenShitLoginResponseDto>()
+            val token = auth.accessToken
+            val expiresIn = auth.expiresIn * 1000
+            cachedToken = token
+            tokenExpiryTime = System.currentTimeMillis() + expiresIn
+            return token
         } catch (e: Exception) {
             e.printStackTrace()
-            null
+            return null
         }
     }
 

@@ -13,6 +13,19 @@ import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
+data class GreenShitLoginRequestDto(
+    val login: String,
+    val senha: String,
+    @SerialName("tipo_usuario") val tipoUsuario: String,
+)
+
+@Serializable
+data class GreenShitLoginResponseDto(
+    @JsonNames("access_token", "token") val accessToken: String,
+    @SerialName("expires_in") val expiresIn: Long = 3600,
+)
+
+@Serializable
 data class GreenShitListDto<T>(
     val obras: T,
     @JsonNames("currentPage", "pagina_atual", "pagina") val currentPage: Int? = null,
@@ -23,26 +36,26 @@ data class GreenShitListDto<T>(
 
 @Serializable
 data class GreenShitTagDto(
-    @SerialName("tag_nome") val name: String = "",
+    @SerialName("tag_nome") val name: String,
 )
 
 @Serializable
 data class GreenShitStatusDto(
-    @SerialName("stt_nome") val name: String = "",
+    @SerialName("stt_nome") val name: String,
 )
 
 @Serializable
 data class GreenShitChapterSimpleDto(
-    @SerialName("cap_id") val id: Int = 0,
-    @SerialName("cap_nome") val name: String = "",
+    @SerialName("cap_id") val id: Int,
+    @SerialName("cap_nome") val name: String,
     @SerialName("cap_numero") val number: Float? = null,
     @SerialName("cap_criado_em") val createdAt: String? = null,
 )
 
 @Serializable
 data class GreenShitMangaDto(
-    @SerialName("obr_id") val id: Int = 0,
-    @SerialName("obr_nome") val name: String = "",
+    @SerialName("obr_id") val id: Int,
+    @SerialName("obr_nome") val name: String,
     @SerialName("obr_descricao") val description: String? = null,
     @SerialName("obr_imagem") val image: String? = null,
     val tags: List<GreenShitTagDto> = emptyList(),
@@ -53,13 +66,13 @@ data class GreenShitMangaDto(
 
 @Serializable
 data class GreenShitPageSrcDto(
-    val src: String = "",
+    val src: String,
 )
 
 @Serializable
 data class GreenShitChapterDetailDto(
-    @SerialName("cap_id") val id: Int = 0,
-    @SerialName("cap_nome") val name: String = "",
+    @SerialName("cap_id") val id: Int,
+    @SerialName("cap_nome") val name: String,
     @SerialName("cap_numero") val number: Float? = null,
     @SerialName("cap_paginas") val pages: List<GreenShitPageSrcDto> = emptyList(),
     @SerialName("obra") val manga: GreenShitMangaDto? = null,
