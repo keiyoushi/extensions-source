@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -62,7 +63,7 @@ abstract class GreenShit :
         val response = chain.proceed(request.withAuth(token))
 
         if (response.code != 401) return response
-        response.body.close()
+        response.close()
         val newToken = clearTokenAndRefresh()
         return chain.proceed(request.withAuth(newToken.orEmpty()))
     }
@@ -112,20 +113,17 @@ abstract class GreenShit :
                 tipoUsuario = "usuario",
             ).toJsonString().toRequestBody("application/json".toMediaType())
 
+            val headers = headersBuilder().set("Accept", "application/json").build()
+
             val response = network.cloudflareClient.newCall(
-                Request.Builder()
-                    .url("$apiUrl/auth/login")
-                    .post(body)
-                    .header("Accept", "application/json")
-                    .header("scan-id", scanId)
-                    .build(),
+                POST("$apiUrl/auth/login", headers, body),
             ).execute()
 
             if (!response.isSuccessful) {
                 response.body.close()
                 return null
             }
-            val auth = response.body.string().parseAs<GreenShitLoginResponseDto>()
+            val auth = response.parseAs<GreenShitLoginResponseDto>()
             val token = auth.accessToken
             val expiresIn = auth.expiresIn * 1000
             cachedToken = token
