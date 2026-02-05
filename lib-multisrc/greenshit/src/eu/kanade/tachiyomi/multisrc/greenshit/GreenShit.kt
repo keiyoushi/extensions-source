@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -38,7 +39,7 @@ abstract class GreenShit :
 
     protected open val rateLimitPerSecond = 2
     protected open val defaultGenreId = "1"
-    protected open val limitPerPage = "24"
+    protected open val limitPerPage = "26"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -71,7 +72,7 @@ abstract class GreenShit :
         val response = chain.proceed(authenticatedRequest)
 
         if (response.code == 401) {
-            response.body?.close()
+            response.body.close()
             cachedToken = null
             tokenExpiryTime = 0L
             val newToken = getValidToken()
@@ -104,7 +105,7 @@ abstract class GreenShit :
                 return null
             }
             return loginAndGetToken(email, password)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -127,7 +128,7 @@ abstract class GreenShit :
             val response = network.cloudflareClient.newCall(request).execute()
 
             if (response.isSuccessful) {
-                val responseBody = response.body?.string() ?: return null
+                val responseBody = response.body.string()
                 val jsonResponse = JSONObject(responseBody)
                 val token = when {
                     jsonResponse.has("token") -> jsonResponse.getString("token")
@@ -142,7 +143,7 @@ abstract class GreenShit :
                 }
                 null
             } else {
-                response.body?.close()
+                response.body.close()
                 null
             }
         } catch (e: Exception) {
@@ -161,28 +162,15 @@ abstract class GreenShit :
         val url = "$apiUrl/obras/ranking".toHttpUrl().newBuilder()
             .addQueryParameter("tipo", "visualizacoes_geral")
             .addQueryParameter("limite", limitPerPage)
+            .addQueryParameter("pagina", page.toString())
             .addQueryParameter("gen_id", defaultGenreId)
             .build()
         return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val rankingList = response.parseAs<GreenShitListDto<List<GreenShitRankingDto>>>()
-        val mangas = rankingList.obras.map { rankingDto ->
-            SManga.create().apply {
-                title = rankingDto.name
-                thumbnail_url = rankingDto.image?.let { img ->
-                    when {
-                        img.startsWith("http") -> img
-                        else -> "$cdnUrl/scans/${rankingDto.scanId}/obras/${rankingDto.id}/$img"
-                    }
-                }
-                url = "/obra/${rankingDto.id}"
-                description = ""
-                status = SManga.UNKNOWN
-                initialized = false
-            }
-        }
+        val rankingList = response.parseAs<GreenShitListDto<List<GreenShitMangaDto>>>()
+        val mangas = rankingList.obras.map { rankingDto -> rankingDto.toSManga(cdnUrl) }
         return MangasPage(mangas, hasNextPage = rankingList.hasNextPage)
     }
 
@@ -222,26 +210,14 @@ abstract class GreenShit :
                     }
                 }
 
-                is FormatoFilter -> {
-                    if (filter.selected.isNotEmpty()) {
-                        url.addQueryParameter("formt_id", filter.selected)
-                    }
-                }
+                is FormatoFilter -> url.addQueryParameterIfNotEmpty("formt_id", filter.selected)
 
-                is StatusFilter -> {
-                    if (filter.selected.isNotEmpty()) {
-                        url.addQueryParameter("stt_id", filter.selected)
-                    }
-                }
+                is StatusFilter -> url.addQueryParameterIfNotEmpty("stt_id", filter.selected)
 
-                is TagsFilter -> {
-                    filter.state.filter { it.state }.forEach { tag ->
-                        url.addQueryParameter("tag_ids", tag.value)
-                    }
-                }
+                is SortFilter -> url.addQueryParameterIfNotEmpty("orderBy", getSortFilterOptions()[filter.state].second)
 
-                is SortFilter -> {
-                    url.addQueryParameter("orderBy", filter.selected)
+                is TagsFilter -> filter.state.filter { it.state }.forEach { tag ->
+                    url.addQueryParameter("tag_ids", tag.value)
                 }
 
                 else -> {}
@@ -258,7 +234,7 @@ abstract class GreenShit :
     }
 
     // ============================== Filters ================================
-    open override fun getFilterList() = FilterList(
+    override fun getFilterList() = FilterList(
         GeneroFilter(getGeneroFilterOptions()),
         FormatoFilter(getFormatoFilterOptions()),
         StatusFilter(getStatusFilterOptions()),
@@ -468,5 +444,12 @@ abstract class GreenShit :
             summary = "Senha para login automático"
             setDefaultValue("")
         }.also(screen::addPreference)
+    }
+
+    fun HttpUrl.Builder.addQueryParameterIfNotEmpty(name: String, value: String?): HttpUrl.Builder {
+        if (!value.isNullOrEmpty()) {
+            addQueryParameter(name, value)
+        }
+        return this
     }
 }

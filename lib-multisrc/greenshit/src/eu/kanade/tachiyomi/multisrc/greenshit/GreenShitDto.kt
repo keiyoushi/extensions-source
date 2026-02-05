@@ -27,14 +27,6 @@ data class GreenShitTagDto(
 )
 
 @Serializable
-data class GreenShitRankingDto(
-    @SerialName("obr_id") val id: Int = 0,
-    @SerialName("obr_nome") val name: String = "",
-    @SerialName("obr_imagem") val image: String? = null,
-    @SerialName("scan_id") val scanId: Int = 0,
-)
-
-@Serializable
 data class GreenShitStatusDto(
     @SerialName("stt_nome") val name: String = "",
 )
