@@ -2,7 +2,7 @@ ext {
     extName = 'MangaSwat'
     extClass = '.MangaSwat'
     baseUrl = 'https://appswat.com'
-    extVersionCode = 57
+    extVersionCode = 58
     isNsfw = false
 }
 

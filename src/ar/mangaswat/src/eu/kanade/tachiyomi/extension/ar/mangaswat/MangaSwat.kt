@@ -23,7 +23,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaSwat : HttpSource(), ConfigurableSource {
+class MangaSwat :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "MangaSwat"
 
@@ -104,7 +106,8 @@ class MangaSwat : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addQueryParameter("status", "79")
+            .addQueryParameter("page_size", "12")
+            .addQueryParameter("order_by", "-created_at")
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, apiHeaders)
@@ -137,9 +140,7 @@ class MangaSwat : HttpSource(), ConfigurableSource {
         return GET(url, apiHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaDetailsDto>().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().toSManga()
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
