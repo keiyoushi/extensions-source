@@ -120,7 +120,7 @@ abstract class GreenShit :
             ).execute()
 
             if (!response.isSuccessful) {
-                response.body.close()
+                response.close()
                 return null
             }
             val auth = response.parseAs<GreenShitLoginResponseDto>()
