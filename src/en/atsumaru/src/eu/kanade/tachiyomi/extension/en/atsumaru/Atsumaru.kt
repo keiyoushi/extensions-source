@@ -39,22 +39,6 @@ class Atsumaru : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
-        .addInterceptor { chain ->
-            val request = chain.request()
-            println("Sending Request: ${request.url}")
-            if (request.body != null) {
-                val buffer = okio.Buffer()
-                request.body!!.writeTo(buffer)
-                println("Request Payload: ${buffer.readUtf8()}")
-            }
-
-            val response = chain.proceed(request)
-            if (!response.isSuccessful) {
-                println("Error Code: ${response.code}")
-                println("Error Body: ${response.peekBody(Long.MAX_VALUE).string()}")
-            }
-            response
-        }
         .build()
 
     private val json: Json by injectLazy()
@@ -86,7 +70,6 @@ class Atsumaru : HttpSource() {
     // =============================== Search ===============================
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored when using text search!"),
         Filter.Separator(),
         GenreFilter(getGenresList()),
         TypeFilter(getTypesList()),
@@ -105,25 +88,37 @@ class Atsumaru : HttpSource() {
     }
 
     private fun buildJsonPayload(page: Int, filters: FilterList, query: String): String {
-        var genreId: String? = null
+        val selectedGenres = mutableListOf<String>()
         val typesList = mutableListOf<String>()
-        val statusesList = mutableListOf<String>()
+        val statuses = mutableListOf<String>()
         var year: Int? = null
         var minChapters: Int? = null
-        var sort = "trending"
+        var sort = "popularity"
 
         filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> {
-                    if (filter.state > 0) genreId = filter.genres[filter.state - 1].id
+                    filter.state.forEachIndexed { index, checkBox ->
+                        if (checkBox.state) {
+                            selectedGenres.add(filter.genreIds[index])
+                        }
+                    }
                 }
 
                 is TypeFilter -> {
-                    if (filter.state > 0) typesList.add(filter.types[filter.state - 1].id)
+                    filter.state.forEachIndexed { index, checkBox ->
+                        if (checkBox.state) {
+                            typesList.add(filter.ids[index])
+                        }
+                    }
                 }
 
                 is StatusFilter -> {
-                    if (filter.state > 0) statusesList.add(filter.statuses[filter.state - 1].id)
+                    filter.state.forEachIndexed { index, checkBox ->
+                        if (checkBox.state) {
+                            statuses.add(filter.ids[index])
+                        }
+                    }
                 }
 
                 is YearFilter -> {
@@ -162,15 +157,15 @@ class Atsumaru : HttpSource() {
                     }
                 }
 
-                if (statusesList.isNotEmpty()) {
-                    putJsonArray("statuses") {
-                        statusesList.forEach { add(it) }
+                if (statuses.isNotEmpty()) {
+                    putJsonArray("status") {
+                        statuses.forEach { add(it) }
                     }
                 }
 
-                if (genreId != null) {
+                if (selectedGenres.isNotEmpty()) {
                     putJsonArray("includedTags") {
-                        add(genreId)
+                        selectedGenres.forEach { add(it) }
                     }
                 }
 
@@ -194,23 +189,35 @@ class Atsumaru : HttpSource() {
         }
     }
 
-    private class GenreFilter(val genres: List<Genre>) :
-        Filter.Select<String>(
-            "Genre",
-            arrayOf("None") + genres.map { it.name }.toTypedArray(),
-        )
+    private class GenreFilter(genres: List<Genre>) :
+        Filter.Group<Filter.CheckBox>(
+            "Genres",
+            genres.map { genre ->
+                object : Filter.CheckBox(genre.name, false) {}
+            },
+        ) {
+        val genreIds = genres.map { it.id }
+    }
 
-    private class TypeFilter(val types: List<Type>) :
-        Filter.Select<String>(
+    private class TypeFilter(types: List<Type>) :
+        Filter.Group<Filter.CheckBox>(
             "Manga Type",
-            arrayOf("None") + types.map { it.name }.toTypedArray(),
-        )
+            types.map { type ->
+                object : Filter.CheckBox(type.name, false) {}
+            },
+        ) {
+        val ids = types.map { it.id }
+    }
 
-    private class StatusFilter(val statuses: List<Status>) :
-        Filter.Select<String>(
+    private class StatusFilter(statuses: List<Status>) :
+        Filter.Group<Filter.CheckBox>(
             "Publishing Status",
-            arrayOf("None") + statuses.map { it.name }.toTypedArray(),
-        )
+            statuses.map { status ->
+                object : Filter.CheckBox(status.name, false) {}
+            },
+        ) {
+        val ids = statuses.map { it.id }
+    }
 
     private class YearFilter : Filter.Text("Year (e.g., 2024)")
 
