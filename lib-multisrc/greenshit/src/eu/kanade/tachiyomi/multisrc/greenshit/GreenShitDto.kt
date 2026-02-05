@@ -36,7 +36,7 @@ data class GreenShitListDto<T>(
 
 @Serializable
 data class GreenShitTagDto(
-    @SerialName("tag_nome") val name: String,
+    @SerialName("tag_nome") val name: String = "",
 )
 
 @Serializable
@@ -78,22 +78,38 @@ data class GreenShitChapterDetailDto(
     @SerialName("obra") val manga: GreenShitMangaDto? = null,
 )
 
-private fun isWpImage(src: String): Boolean = src.startsWith("wp-content/") ||
-    src.startsWith("uploads/") ||
-    src.startsWith("WP-manga") ||
-    src.startsWith("manga_")
+private fun isWpLikePath(src: String): Boolean = src.startsWith("uploads/") ||
+    src.startsWith("wp-content/") ||
+    src.startsWith("manga_") ||
+    src.startsWith("WP-manga")
+
+private fun normalizeSlashes(url: String): String = url.replace(Regex("(?<!:)/{2,}"), "/")
+
+fun buildImageUrl(
+    path: String = "",
+    src: String = "",
+    width: Int?,
+    base: String,
+): String {
+    if (src.isBlank()) return ""
+    if (src.startsWith("http")) return src
+    if (isWpLikePath(src)) {
+        return when {
+            src.startsWith("wp-content/uploads/") -> normalizeSlashes("$base/${src.trimStart('/')}")
+            src.startsWith("uploads/") -> normalizeSlashes("$base/wp-content/${src.trimStart('/')}")
+            else -> normalizeSlashes("$base/wp-content/uploads/WP-manga/data/${src.trimStart('/')}")
+        }
+    }
+    val query = width?.let { "?width=$it" } ?: ""
+    val safePath = if (path.isNotBlank()) path.replace("//", "/").trimEnd('/') else ""
+    val safeSrc = src.replace("//", "/").trimStart('/').trimEnd('/')
+    return normalizeSlashes("$base/$safePath/$safeSrc$query")
+}
 
 fun GreenShitMangaDto.toSManga(cdnUrl: String, isDetails: Boolean = false): SManga {
     val sManga = SManga.create().apply {
         title = name
-        thumbnail_url = image?.let {
-            when {
-                it.startsWith("http") -> it
-                isWpImage(it) && it.startsWith("uploads/") -> "$cdnUrl/wp-content/${it.removePrefix("uploads/")}"
-                isWpImage(it) -> "$cdnUrl/${it.trimStart('/')}"
-                else -> "$cdnUrl/scans/$scanId/obras/$id/$it?width=300"
-            }
-        }
+        thumbnail_url = buildImageUrl(path = "/scans/$scanId/obras/$id/", src = image ?: "", width = 300, base = cdnUrl)
         initialized = isDetails
         url = "/obra/$id"
         genre = tags.joinToString { it.name }
@@ -125,14 +141,7 @@ fun GreenShitChapterDetailDto.toPageList(cdnUrl: String): List<Page> {
     val scanId = manga?.scanId ?: 0
     val capituloNome = number?.toInt()?.toString() ?: name
     return pages.mapIndexed { idx, p ->
-        val imageUrl = p.src.let {
-            when {
-                it.startsWith("http") -> it
-                isWpImage(it) && it.startsWith("uploads/") -> "$cdnUrl/wp-content/${it.removePrefix("uploads/")}"
-                isWpImage(it) -> "$cdnUrl/${it.trimStart('/')}"
-                else -> "$cdnUrl/scans/$scanId/obras/$obraId/capitulos/$capituloNome/${it.trimStart('/')}"
-            }
-        }
+        val imageUrl = buildImageUrl(path = "/scans/$scanId/obras/$obraId/capitulos/$capituloNome/", src = p.src, width = null, base = cdnUrl)
         Page(idx, imageUrl = imageUrl)
     }
 }
