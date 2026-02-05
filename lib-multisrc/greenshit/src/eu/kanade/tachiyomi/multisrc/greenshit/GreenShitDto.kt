@@ -95,8 +95,10 @@ fun buildImageUrl(
     if (src.startsWith("http")) return src
     if (isWpLikePath(src)) {
         return when {
-            src.startsWith("wp-content/uploads/") -> normalizeSlashes("$base/${src.trimStart('/')}")
-            src.startsWith("uploads/") -> normalizeSlashes("$base/wp-content/${src.trimStart('/')}")
+            src.startsWith("manga_") -> normalizeSlashes("$base/wp-content/uploads/WP-manga/data/$src")
+            src.startsWith("WP-manga") -> normalizeSlashes("$base/wp-content/uploads/$src")
+            src.startsWith("uploads/") -> normalizeSlashes("$base/wp-content/$src")
+            src.startsWith("wp-content/") -> normalizeSlashes("$base/$src")
             else -> normalizeSlashes("$base/wp-content/uploads/WP-manga/data/${src.trimStart('/')}")
         }
     }
