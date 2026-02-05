@@ -79,7 +79,8 @@ fun GreenShitMangaDto.toSManga(cdnUrl: String, isDetails: Boolean = false): SMan
         thumbnail_url = image?.let {
             when {
                 it.startsWith("http") -> it
-                else -> "$cdnUrl/scans/$scanId/obras/${this@toSManga.id}/$it?v=3"
+                it.contains("/") -> "$cdnUrl/$it"
+                else -> "$cdnUrl/scans/$scanId/obras/$id/$it?width=300"
             }
         }
         initialized = isDetails
