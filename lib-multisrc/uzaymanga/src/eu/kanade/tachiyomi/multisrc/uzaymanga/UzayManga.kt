@@ -42,8 +42,13 @@ abstract class UzayManga(
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/search?page=$page&search=&order=4")
 
-    override fun popularMangaNextPageSelector() =
-        "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
+    override fun popularMangaNextPageSelector(): String? = null
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        return MangasPage(mangas, mangas.isNotEmpty())
+    }
 
     override fun popularMangaSelector() = "section[aria-label='series area'] .card"
 
@@ -53,14 +58,29 @@ abstract class UzayManga(
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/search?page=$page&search=&order=3")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page")
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val header = document.select("div.header:has(h2:contains(En Son Yüklenen))").first()
+        val grid = header?.nextElementSibling()
+            ?: document.select("div.grid.grid-cols-1").first()
+            ?: document.select("div.grid").first()
+        val elements = grid?.select("> div")?.toList().orEmpty()
+        val mangas = elements.map { latestUpdatesFromElement(it) }
+        return MangasPage(mangas, mangas.isNotEmpty())
+    }
 
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun latestUpdatesSelector() = "div.grid > div"
+
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        val mangaLink = element.selectFirst("h2")?.parent() ?: element.selectFirst("a[href*='/manga/']")!!
+        title = element.selectFirst("h2")!!.text()
+        thumbnail_url = element.selectFirst(".card-image img")?.absUrl("src") ?: element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(mangaLink.absUrl("href"))
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
