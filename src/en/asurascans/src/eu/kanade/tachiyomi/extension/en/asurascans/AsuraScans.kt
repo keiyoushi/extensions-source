@@ -36,7 +36,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
 
-class AsuraScans : ParsedHttpSource(), ConfigurableSource {
+class AsuraScans :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Asura Scans"
 
@@ -122,8 +124,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -131,8 +132,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/page/$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page", headers)
 
     override fun latestUpdatesSelector() = "div.grid.grid-rows-1.grid-cols-1 > div.w-full"
 
@@ -296,8 +296,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListSelector() =
-        if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
+    override fun chapterListSelector() = if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
@@ -559,8 +558,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 
-    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
