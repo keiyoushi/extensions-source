@@ -58,8 +58,8 @@ class TrManga : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
-        val genreFilter = filterList.firstInstance<genreFilter>()
-        val sortFilter = filterList.firstInstance<sortFilter>()
+        val genreFilter = filterList.firstInstance<GenreFilter>()
+        val sortFilter = filterList.firstInstance<SortFilter>()
         val shortTypeFilter = filterList.firstInstance<OrderFilter>()
         val statusFilter = filterList.firstInstance<StatusFilter>()
 
@@ -76,10 +76,10 @@ class TrManga : ParsedHttpSource() {
 
     // filters
     override fun getFilterList() = FilterList(
-        sortFilter(),
+        SortFilter(),
         OrderFilter(),
         StatusFilter(),
-        genreFilter(),
+        GenreFilter(),
     )
 
     // manga details
@@ -99,23 +99,22 @@ class TrManga : ParsedHttpSource() {
     private val statusOngoing = listOf("ongoing", "devam ediyor", "güncel")
     private val statusCompleted = listOf("complete", "tamamlandı", "bitti")
 
-    private fun String.parseStatus(): Int {
-        return when (this.lowercase()) {
-            in statusOngoing -> SManga.ONGOING
-            in statusCompleted -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus(): Int = when (this.lowercase()) {
+        in statusOngoing -> SManga.ONGOING
+        in statusCompleted -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     // chapter list
     override fun chapterListSelector() = "tbody>tr"
 
+    private val chapterNumberRegex = """\d+(\.\d+)?"""
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.selectFirst("a")!!.let {
             setUrlWithoutDomain(it.absUrl("href"))
             name = it.text()
             date_upload = parseChapterDate(element.selectFirst("td:last-child span:first-child")?.text())
-            chapter_number = it.text().filter { it.isDigit() }.toFloat()
+            chapter_number = Regex(chapterNumberRegex).find(it.text())!!.value.toFloat()
             scanlator = element.selectFirst("td:nth-child(2) a:first-child")?.text()
         }
     }
@@ -128,6 +127,7 @@ class TrManga : ParsedHttpSource() {
             " önce" in date -> {
                 parseRelativeDate(date)
             }
+
             else -> dateFormat.tryParse(date)
         }
     }
@@ -149,10 +149,8 @@ class TrManga : ParsedHttpSource() {
     }
 
     // page list
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img[data-src]").mapIndexed { i, img ->
-            Page(i, document.location(), img.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img[data-src]").mapIndexed { i, img ->
+        Page(i, document.location(), img.absUrl("data-src"))
     }
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
