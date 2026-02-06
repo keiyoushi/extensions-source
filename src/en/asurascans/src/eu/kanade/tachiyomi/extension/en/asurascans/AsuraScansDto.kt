@@ -33,6 +33,7 @@ class ChapterDataDto(
 @Serializable
 class UnlockResponseDto(
     val success: Boolean,
+    val message: String? = null,
     val data: UnlockDataDto,
 )
 
