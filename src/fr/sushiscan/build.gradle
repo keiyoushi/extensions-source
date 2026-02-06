@@ -3,7 +3,7 @@ ext {
     extClass = '.SushiScan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sushiscan.net'
-    overrideVersionCode = 14
+    overrideVersionCode = 15
     isNsfw = true
 }
 
