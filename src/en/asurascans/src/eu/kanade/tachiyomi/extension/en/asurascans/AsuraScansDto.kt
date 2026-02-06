@@ -33,6 +33,7 @@ class ChapterDataDto(
 @Serializable
 class UnlockResponseDto(
     val success: Boolean,
+    val message: String? = null,
     val data: UnlockDataDto,
 )
 
@@ -63,4 +64,19 @@ class MediaRequestDto(
     val chapterId: Int,
     val token: String,
     val quality: String,
+)
+
+@Serializable
+data class UserDto(
+    val data: UserDataDto,
+)
+
+@Serializable
+data class UserDataDto(
+    val streak: StreakDto,
+)
+
+@Serializable
+data class StreakDto(
+    val available_tokens: Int,
 )
