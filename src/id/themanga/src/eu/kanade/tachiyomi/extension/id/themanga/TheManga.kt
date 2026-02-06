@@ -1,8 +1,8 @@
-package eu.kanade.tachiyomi.extension.en.novel24h
+package eu.kanade.tachiyomi.extension.id.themanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class Novel24h : Madara("24HNovel", "https://24hnovel.com", "en") {
+class TheManga : Madara("TheManga", "https://themanga.my.id", "id") {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

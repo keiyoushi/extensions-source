@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.newtruyentranh
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -18,7 +20,16 @@ class MangaChannel(
     val image: ImageData,
     @SerialName("remote_data")
     val remoteData: RemoteData,
-)
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        val slug = image.url.substringAfterLast("/").substringBeforeLast(".")
+        url = "$id:$slug"
+        title = name
+        thumbnail_url = image.url
+        description = this@MangaChannel.description
+        initialized = true
+    }
+}
 
 @Serializable
 class ImageData(
@@ -74,7 +85,14 @@ class Stream(
     val name: String,
     @SerialName("remote_data")
     val remoteData: RemoteData,
-)
+) {
+    fun toSChapter(slug: String?): SChapter = SChapter.create().apply {
+        val chapterId = remoteData.url.substringAfterLast("/")
+        url = "$chapterId:$slug#$index"
+        name = this@Stream.name
+        chapter_number = index.toFloat()
+    }
+}
 
 @Serializable
 class PageListResponse(
