@@ -57,8 +57,8 @@ class GocTruyenTranh :
         val document = response.asJsoup()
         val manga = document.select("section.mt-12 > .grid > .flex").map { element ->
             SManga.create().apply {
-                element.selectFirst("a.line-clamp-2").let {
-                    setUrlWithoutDomain(it!!.absUrl("href"))
+                element.selectFirst("a.line-clamp-2")!!.let {
+                    setUrlWithoutDomain(it.absUrl("href"))
                     title = it.text()
                 }
                 thumbnail_url = element.selectFirst("img")
@@ -82,9 +82,9 @@ class GocTruyenTranh :
         val document = response.asJsoup()
         val chapter = document.select("section ul li a").map { element ->
             SChapter.create().apply {
-                element.selectFirst("a").let {
-                    setUrlWithoutDomain(it!!.absUrl("href"))
-                    name = it.select(".items-center:contains(Chapter)").text()
+                element.selectFirst("a")!!.let {
+                    setUrlWithoutDomain(it.absUrl("href"))
+                    name = it.selectFirst(".items-center:contains(Chapter)")!!.text()
                     date_upload = parseDate(it.select(".text-center").text())
                 }
             }
