@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 
@@ -18,30 +19,30 @@ class Azuretoons : HttpSource() {
     override val name = "Azuretoons"
     override val baseUrl = "https://azuretoons.com"
     override val lang = "pt-BR"
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     private val apiUrl = "https://azuretoons.com/api"
 
-    private val rateLimitPerSecond = 2
-
-    override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimit(rateLimitPerSecond)
-            .build()
-    }
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
     // ============================== Popular (Browse) =======================
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .build()
-        return GET(url, headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/obras", headers)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val dto = response.parseAs<List<AzuretoonsMangaDto>>()
+        val mangas = dto.sortedByDescending { it.viewCount }.map { it.toSManga() }
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    // ============================= Latest ===================================
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/obras", headers)
+    override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage = false)
@@ -50,13 +51,13 @@ class Azuretoons : HttpSource() {
     // =============================== Search (na mão: filtra por título) =====
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addQueryParameter("search", query)
+            .fragment(query)
             .build()
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.queryParameter("search")?.lowercase()
+        val query = response.request.url.fragment
         val dto = response.parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto
             .map { it.toSManga() }
@@ -80,7 +81,7 @@ class Azuretoons : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<AzuretoonsMangaDto>()
-        return dto.toSManga(isDetails = true)
+        return dto.toSManga()
     }
 
     // ============================== Chapters ================================
@@ -91,7 +92,7 @@ class Azuretoons : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val manga = response.parseAs<AzuretoonsMangaDto>()
         return manga.chapters
-            .map { it.toSChapter(manga.slug ?: "") }
+            .map { it.toSChapter(manga.slug) }
             .distinctBy { it.url }
             .sortedByDescending { it.chapter_number }
     }
@@ -108,16 +109,5 @@ class Azuretoons : HttpSource() {
         return dto.toPageList()
     }
 
-    override fun imageUrlParse(response: Response): String = ""
-
-    override fun imageUrlRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .add("Referer", "$baseUrl/")
-            .build()
-        return GET(page.url, imageHeaders)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

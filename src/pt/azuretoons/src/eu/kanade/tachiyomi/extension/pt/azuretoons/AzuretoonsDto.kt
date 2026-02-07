@@ -5,43 +5,39 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNames
-import kotlinx.serialization.json.jsonObject
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
-data class AzuretoonsMangaDto(
-    val title: String? = null,
-    val slug: String? = null,
+class AzuretoonsMangaDto(
+    val title: String,
+    val slug: String,
     val coverUrl: String? = null,
     val description: String? = null,
     val status: String? = null,
     val chapters: List<AzuretoonsChapterDto> = emptyList(),
+    val viewCount: Int = 0,
 )
 
 @Serializable
-data class AzuretoonsChapterDto(
-    val id: Int,
+class AzuretoonsChapterDto(
     val chapterNumber: Float = 0F,
     val title: String? = null,
     val createdAt: String? = null,
 )
 
 @Serializable
-data class AzuretoonsChapterDetailDto(
+class AzuretoonsChapterDetailDto(
     val images: List<String> = emptyList(),
 )
 
-fun AzuretoonsMangaDto.toSManga(isDetails: Boolean = false): SManga {
+fun AzuretoonsMangaDto.toSManga(): SManga {
     val sManga = SManga.create().apply {
-        title = this@toSManga.title.orEmpty()
+        title = this@toSManga.title
         thumbnail_url = coverUrl?.takeIf { it.isNotBlank() } ?: ""
-        initialized = isDetails
-        url = "/obra/${slug.orEmpty()}"
+        url = "/obra/$slug"
     }
     description?.let { sManga.description = Jsoup.parseBodyFragment(it).text() }
     status?.let {
