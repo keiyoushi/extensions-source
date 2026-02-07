@@ -143,7 +143,7 @@ fun GreenShitChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
 fun GreenShitChapterDetailDto.toPageList(cdnUrl: String): List<Page> {
     val obraId = manga?.id ?: 0
     val scanId = manga?.scanId ?: 0
-    val chapterNumber = number ?: 0F
+    val chapterNumber = number.toString()?.removeSuffix(".0") ?: "0"
     return pages.mapIndexed { idx, p ->
         val imageUrl = buildImageUrl(path = "/scans/$scanId/obras/$obraId/capitulos/$chapterNumber/", src = p.src, mime = p.mime, width = null, base = cdnUrl)
         Page(idx, imageUrl = imageUrl)
