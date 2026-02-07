@@ -33,6 +33,7 @@ abstract class GreenShit :
     override val supportsLatest = true
 
     abstract val apiUrl: String
+    abstract val cdnApiUrl: String
     abstract val cdnUrl: String
     abstract val scanId: String
 
@@ -153,7 +154,7 @@ abstract class GreenShit :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val rankingList = response.parseAs<GreenShitListDto<List<GreenShitMangaDto>>>()
-        val mangas = rankingList.obras.map { rankingDto -> rankingDto.toSManga(cdnUrl) }
+        val mangas = rankingList.obras.map { rankingDto -> rankingDto.toSManga(cdnApiUrl) }
         return MangasPage(mangas, hasNextPage = rankingList.hasNextPage)
     }
 
@@ -169,7 +170,7 @@ abstract class GreenShit :
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<GreenShitListDto<List<GreenShitMangaDto>>>()
-        val mangas = dto.obras.map { it.toSManga(cdnUrl) }
+        val mangas = dto.obras.map { it.toSManga(cdnApiUrl) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage)
     }
 
@@ -212,7 +213,7 @@ abstract class GreenShit :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<GreenShitListDto<List<GreenShitMangaDto>>>()
-        val mangas = dto.obras.map { it.toSManga(cdnUrl) }
+        val mangas = dto.obras.map { it.toSManga(cdnApiUrl) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage)
     }
 
@@ -376,7 +377,7 @@ abstract class GreenShit :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<GreenShitMangaDto>()
-        return dto.toSManga(cdnUrl, isDetails = true)
+        return dto.toSManga(cdnApiUrl, isDetails = true)
     }
 
     // ============================== Chapters ================================
@@ -403,14 +404,7 @@ abstract class GreenShit :
         return dto.toPageList(cdnUrl)
     }
 
-    override fun imageUrlParse(response: Response): String = ""
-
-    override fun imageUrlRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .add("Referer", "$baseUrl/")
-            .build()
-        return GET(page.url, imageHeaders)
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Settings ===============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

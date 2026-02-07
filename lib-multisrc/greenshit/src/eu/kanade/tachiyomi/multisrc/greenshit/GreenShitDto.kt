@@ -67,6 +67,7 @@ data class GreenShitMangaDto(
 @Serializable
 data class GreenShitPageSrcDto(
     val src: String,
+    val mime: String? = null,
 )
 
 @Serializable
@@ -90,10 +91,11 @@ fun buildImageUrl(
     src: String = "",
     width: Int?,
     base: String,
+    mime: String? = null,
 ): String {
     if (src.isBlank()) return ""
     if (src.startsWith("http")) return src
-    if (isWpLikePath(src)) {
+    if (isWpLikePath(src) || mime != null) {
         return when {
             src.startsWith("manga_") -> normalizeSlashes("$base/wp-content/uploads/WP-manga/data/$src")
             src.startsWith("WP-manga") -> normalizeSlashes("$base/wp-content/uploads/$src")
@@ -141,9 +143,9 @@ fun GreenShitChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
 fun GreenShitChapterDetailDto.toPageList(cdnUrl: String): List<Page> {
     val obraId = manga?.id ?: 0
     val scanId = manga?.scanId ?: 0
-    val capituloNome = number?.toInt()?.toString() ?: name
+    val chapterNumber = number ?: 0F
     return pages.mapIndexed { idx, p ->
-        val imageUrl = buildImageUrl(path = "/scans/$scanId/obras/$obraId/capitulos/$capituloNome/", src = p.src, width = null, base = cdnUrl)
+        val imageUrl = buildImageUrl(path = "/scans/$scanId/obras/$obraId/capitulos/$chapterNumber/", src = p.src, mime = p.mime, width = null, base = cdnUrl)
         Page(idx, imageUrl = imageUrl)
     }
 }
