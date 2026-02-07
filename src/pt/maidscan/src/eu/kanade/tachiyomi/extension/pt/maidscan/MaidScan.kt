@@ -6,7 +6,7 @@ class MaidScan : GreenShit() {
     override val apiUrl = "https://api.verdinha.wtf"
     override val cdnUrl = "https://cdn.verdinha.wtf"
     override val baseUrl = "https://empreguetes.xyz"
-    override val cdnApiUr = "https://api.verdinha.wtf/cdn"
+    override val cdnApiUrl = "https://api.verdinha.wtf/cdn"
     override val lang = "pt-BR"
     override val name = "Maid Scan"
     override val scanId = "3"
