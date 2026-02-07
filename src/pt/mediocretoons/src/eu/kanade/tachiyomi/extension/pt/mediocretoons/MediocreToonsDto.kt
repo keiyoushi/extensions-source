@@ -142,9 +142,9 @@ fun MediocreChapterSimpleDto.toSChapter(): SChapter {
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
     val obraId = manga?.id ?: 0
-    val capituloNome = number?.toInt()?.toString() ?: name
+    val chapterNumber = number?.toString() ?: name
     return pages.mapIndexed { idx, p ->
-        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$capituloNome/${p.src}"
+        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/${p.src}"
         Page(idx, imageUrl = imageUrl)
     }
 }
