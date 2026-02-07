@@ -53,7 +53,7 @@ fun AzuretoonsMangaDto.toSManga(): SManga {
 }
 
 fun AzuretoonsChapterDto.toSChapter(slug: String): SChapter = SChapter.create().apply {
-    name = this@toSChapter.title.orEmpty()
+    name = this@toSChapter.title!!
     chapter_number = chapterNumber
     url = "/obra/$slug/capitulo/$chapterNumber"
     date_upload = dateFormat.tryParse(createdAt)
