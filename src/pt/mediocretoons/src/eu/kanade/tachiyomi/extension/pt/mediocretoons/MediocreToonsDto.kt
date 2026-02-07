@@ -131,13 +131,11 @@ fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
     return sManga
 }
 
-fun MediocreChapterSimpleDto.toSChapter(): SChapter {
-    return SChapter.create().apply {
-        name = this@toSChapter.name
-        chapter_number = number ?: 0f
-        url = "/capitulo/$id"
-        date_upload = dateFormat.tryParse(createdAt)
-    }
+fun MediocreChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
+    name = this@toSChapter.name
+    chapter_number = number ?: 0f
+    url = "/capitulo/$id"
+    date_upload = dateFormat.tryParse(createdAt)
 }
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
