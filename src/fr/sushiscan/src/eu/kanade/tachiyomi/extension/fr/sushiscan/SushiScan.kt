@@ -30,7 +30,7 @@ class SushiScan :
         "https://sushiscan.net",
         "fr",
         mangaUrlDirectory = "/catalogue",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH),
+        dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH),
     ),
     ConfigurableSource {
 
@@ -75,10 +75,9 @@ class SushiScan :
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga =
-        super.mangaDetailsParse(document).apply {
-            status = document.select(seriesStatusSelector).text().parseStatus()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        status = document.select(seriesStatusSelector).text().parseStatus()
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val scriptContent = document.selectFirst("script:containsData(ts_reader)")?.data()
