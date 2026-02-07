@@ -12,18 +12,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class Atsumaru : HttpSource() {
 
@@ -40,8 +34,6 @@ class Atsumaru : HttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
-
-    private val json: Json by injectLazy()
 
     private fun apiHeadersBuilder() = headersBuilder().apply {
         add("Accept", "*/*")
@@ -81,13 +73,17 @@ class Atsumaru : HttpSource() {
     )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val jsonPayload = buildJsonPayload(page - 1, filters, query)
-        val requestBody = jsonPayload.toRequestBody("application/json".toMediaType())
+        val jsonPayload = buildSearchRequest(page - 1, filters, query)
+        val jsonString = Json.encodeToString(
+            SearchRequest.serializer(),
+            jsonPayload,
+        )
+        val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         return POST("$baseUrl/api/explore/filteredView", apiHeaders, requestBody)
     }
 
-    private fun buildJsonPayload(page: Int, filters: FilterList, query: String): String {
+    private fun buildSearchRequest(page: Int, filters: FilterList, query: String): SearchRequest {
         val selectedGenres = mutableListOf<String>()
         val typesList = mutableListOf<String>()
         val statuses = mutableListOf<String>()
@@ -137,106 +133,35 @@ class Atsumaru : HttpSource() {
             }
         }
 
-        val jsonObject = buildJsonObject {
-            put("page", page)
-            put("sort", sort)
-
-            putJsonObject("filter") {
-                if (query.isNotEmpty()) {
-                    put("search", query)
-                }
-
-                putJsonArray("types") {
-                    if (typesList.isEmpty()) {
-                        add("Manga")
-                        add("Manwha")
-                        add("Manhua")
-                        add("OEL")
-                    } else {
-                        typesList.forEach { add(it) }
-                    }
-                }
-
-                if (statuses.isNotEmpty()) {
-                    putJsonArray("status") {
-                        statuses.forEach { add(it) }
-                    }
-                }
-
-                if (selectedGenres.isNotEmpty()) {
-                    putJsonArray("includedTags") {
-                        selectedGenres.forEach { add(it) }
-                    }
-                }
-
-                if (year != null) put("year", year)
-                if (minChapters != null) put("minChapters", minChapters)
-            }
+        val types = typesList.ifEmpty {
+            listOf("Manga", "Manwha", "Manhua", "OEL")
         }
 
-        return jsonObject.toString()
+        return SearchRequest(
+            page = page,
+            sort = sort,
+            filter = SearchFilter(
+                search = query.ifEmpty { null },
+                types = types,
+                status = statuses.ifEmpty { null },
+                includedTags = selectedGenres.ifEmpty { null },
+                year = year,
+                minChapters = minChapters,
+            ),
+        )
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val body = response.body.string()
 
         return if (body.contains("\"hits\"")) {
-            val data = json.decodeFromString<SearchResultsDto>(body)
+            val data = body.parseAs<SearchResultsDto>()
             MangasPage(data.hits.map { it.document.toSManga(baseUrl) }, data.hasNextPage())
         } else {
-            val data = json.decodeFromString<BrowseMangaDto>(body)
+            val data = body.parseAs<BrowseMangaDto>()
             MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
         }
     }
-
-    private class GenreFilter(genres: List<Genre>) :
-        Filter.Group<Filter.CheckBox>(
-            "Genres",
-            genres.map { genre ->
-                object : Filter.CheckBox(genre.name, false) {}
-            },
-        ) {
-        val genreIds = genres.map { it.id }
-    }
-
-    private class TypeFilter(types: List<Type>) :
-        Filter.Group<Filter.CheckBox>(
-            "Manga Type",
-            types.map { type ->
-                object : Filter.CheckBox(type.name, false) {}
-            },
-        ) {
-        val ids = types.map { it.id }
-    }
-
-    private class StatusFilter(statuses: List<Status>) :
-        Filter.Group<Filter.CheckBox>(
-            "Publishing Status",
-            statuses.map { status ->
-                object : Filter.CheckBox(status.name, false) {}
-            },
-        ) {
-        val ids = statuses.map { it.id }
-    }
-
-    private class YearFilter : Filter.Text("Year (e.g., 2024)")
-
-    private class MinChaptersFilter : Filter.Text("Minimum Chapters")
-
-    private class SortFilter :
-        Filter.Sort(
-            "Sort By",
-            arrayOf("Title", "Popularity", "Trending", "Date Added", "Release Date"),
-            Selection(0, true),
-        ) {
-        companion object {
-            val VALUES = arrayOf("title", "", "trending", "createdAt", "released")
-        }
-    }
-
-    private data class Genre(val name: String, val id: String)
-    private data class Type(val name: String, val id: String)
-    private data class Status(val name: String, val id: String)
 
     private fun getGenresList() = listOf(
         Genre("Action", "Ip0"),
