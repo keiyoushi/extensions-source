@@ -5,20 +5,14 @@ pluginManagement {
         mavenCentral()
     }
 }
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-        maven(url = "https://jitpack.io")
-    }
-}
+
+// KITA HAPUS BAGIAN KONFLIK DISINI. BIARKAN BUILD.GRADLE YANG ATUR.
 
 rootProject.name = "keiyoushi-extensions"
 
 include(":core")
 
-// 1. LIBRARY (Tetap load jika ada, untuk jaga-jaga)
+// 1. SCAN LIBRARY (Hanya load kalau foldernya ADA)
 val libDir = File(rootDir, "lib")
 if (libDir.exists()) {
     libDir.listFiles()?.filter { it.isDirectory }?.forEach { include(":lib:${it.name}") }
@@ -29,8 +23,8 @@ if (multiSrcDir.exists()) {
     multiSrcDir.listFiles()?.filter { it.isDirectory }?.forEach { include(":lib-multisrc:${it.name}") }
 }
 
-// 2. FOKUS HANYA INDONESIA (SRC/ID)
-// Script ini TIDAK AKAN melihat folder bg, zh, all, dll.
+// 2. SCAN KHUSUS INDONESIA (SRC/ID)
+// Script ini otomatis MENGABAIKAN folder bg, zh, all, dll yang error.
 val idDir = File(rootDir, "src/id")
 if (idDir.exists()) {
     idDir.listFiles()?.filter { it.isDirectory }?.forEach { extDir ->
