@@ -1,0 +1,8 @@
+ext {
+    extName = 'Softkomik'
+    extClass = '.Softkomik'
+    extVersionCode = 1
+    baseUrl = 'https://softkomik.com/'
+}
+
+apply from: "$rootDir/common.gradle"
