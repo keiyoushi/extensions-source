@@ -17,11 +17,8 @@
 To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
 
 Please note that creating an issue does not mean that the source will be added or fixed in a  is volunteer-based. Some sources may also be impossible to do or prohibitively
-difficult to maintain.
-
-If you would like to see a redede
-ew
-Contributions are welcome!
+difficult to maint
+ are welcome!
 
 Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
 
