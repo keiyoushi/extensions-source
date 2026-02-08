@@ -1,4 +1,4 @@
-name: CI Full Version
+name: Build extensions
 
 on:
   push:
@@ -6,161 +6,35 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
-  build_and_publish:
-    name: Build & Publish (Official Standard)
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: 17
+          distribution: temurin
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # 1. BUILD SEMUA EKSTENSI
-      # Perintah ini akan mem-build apa saja yang terdaftar di settings.gradle.kts
-      - name: Build All Extensions
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+      - name: Build extensions
+        run: ./gradlew assembleRelease
 
-      # 2. PERSIAPAN FOLDER REPO
-      # Kita buat struktur folder "repo/apk" yang rapi
-      - name: Organize APKs
-        run: |
-          mkdir -p repo/apk
-          # Cari semua file .apk hasil build, pindahkan ke folder repo/apk
-          find . -name "*-release.apk" -exec cp {} repo/apk/ \;
-          
-          # Rename file agar rapi (menghapus -release)
-          cd repo/apk
-          for file in *-release.apk; do
-            mv "$file" "${file/-release.apk/.apk}"
-          done
-          ls -R # Cek isi folder di log buat debugging
+      - name: Generate repo
+        run: python3 .github/scripts/generate-repo.py
 
-      # 3. GENERATE JSON PAKAI INSPECTOR (ALAT RESMI)
-      # Ini adalah inti "Versi Lengkap". Inspector.jar akan membaca metadata asli APK.
-      - name: Generate Repo Index (Inspector)
-        run: |
-          # Download Inspector terbaru
-          curl -L "https://github.com/keiyoushi/extensions-inspector/releases/latest/download/Inspector.jar" -o Inspector.jar
-          
-          # Jalankan Inspector
-          # Format: java -jar Inspector.jar [Folder APK] [Output JSON Minified] [Output JSON Cantik]
-          java -jar Inspector.jar "repo/apk" "repo/index.min.json" "repo/index.json"
-          
-          # Validasi: Cek apakah file JSON berhasil dibuat dan ada isinya
-          if [ ! -s repo/index.min.json ]; then
-            echo "ERROR: JSON Kosong atau Gagal Dibuat!"
-            exit 1
-          fi
-          cat repo/index.min.json # Tampilkan isi JSON di log biar lu bisa liat strukturnya
-
-      # 4. UPLOAD KE BRANCH GH-PAGES
-      # Ini yang bikin link lu hidup.
-      - name: Deploy to gh-pages
+      - name: Deploy repo
         uses: peaceiris/actions-gh-pages@v3
         with:
-          personal_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./repo
-          publish_branch: gh-pages
-          force_orphan: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'Update extension repo (Full Version)'
-name: CI
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  build_and_publish:
-    name: Build & Publish Extensions
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Build All Extensions
-        # PERINTAH SAKTI: Ini otomatis cuma build folder yang tercatat di settings.gradle.kts
-        # Tidak peduli folder lain hilang atau rusak.
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
-
-      - name: Sign APKs
-        # Langkah ini opsional tapi bagus. Kalau tidak punya key, dia skip error.
-        if: ${{ env.SIGNING_KEY != null }}
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          ALIAS: ${{ secrets.ALIAS }}
-        run: |
-          # Logika signing sederhana jika diperlukan nanti
-          echo "Signing logic placeholder" 
-
-      - name: Create Repo Index (Inspector)
-        run: |
-          # 1. Download Inspector (Alat pembuat JSON Mihon)
-          curl -L "https://github.com/keiyoushi/extensions-inspector/releases/latest/download/Inspector.jar" -o Inspector.jar
-          
-          # 2. Kumpulkan APK yang jadi
-          mkdir -p repo/apk
-          find . -name "*.apk" -exec cp {} repo/apk/ \;
-          
-          # 3. Buat file index.min.json
-          java -jar Inspector.jar "repo/apk" "repo/index.min.json" "repo/index.json"
-
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          personal_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./repo
-          publish_branch: gh-pages
-          force_orphan: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'Update extension repo'
-name: CI
-
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - '**'
-      - '!**.md'
-      - '!.github/**'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: repo
+          publish_dir: ./output
