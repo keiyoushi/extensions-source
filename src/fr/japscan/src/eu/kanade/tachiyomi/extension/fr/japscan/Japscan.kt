@@ -55,7 +55,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     // Sometimes an adblock blocker will pop up, preventing the user from opening
     // a cloudflare protected page
-    private val internalBaseUrl = "https://www.japscan.vip"
+    private val internalBaseUrl = "https://www.japscan.foo"
     override val baseUrl = "$internalBaseUrl/mangas/?sort=popular&p=1"
 
     override val lang = "fr"
