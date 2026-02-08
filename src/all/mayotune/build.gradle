@@ -1,8 +1,0 @@
-ext {
-    extName = 'MayoTune'
-    extClass = '.MayoTuneFactory'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

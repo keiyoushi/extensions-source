@@ -1,8 +1,0 @@
-ext {
-    extName = 'Pixiv'
-    extClass = '.PixivFactory'
-    extVersionCode = 11
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
