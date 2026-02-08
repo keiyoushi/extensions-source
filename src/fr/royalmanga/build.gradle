@@ -1,9 +1,0 @@
-ext {
-    extName = 'Royal Manga'
-    extClass = '.RoyalManga'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.royalmanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,7 +1,0 @@
-ext {
-    extName = 'AnimeSama'
-    extClass = '.AnimeSama'
-    extVersionCode = 14
-}
-
-apply from: "$rootDir/common.gradle"
