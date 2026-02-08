@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaRabic'
-    extClass = '.MangaRabic'
-    themePkg = 'madara'
-    baseUrl = 'https://mangarabic.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
