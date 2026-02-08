@@ -1,7 +1,0 @@
-ext {
-    extName = 'ZeurelScan'
-    extClass = '.ZeurelScan'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
