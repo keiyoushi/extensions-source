@@ -2,7 +2,7 @@ ext {
     extName = 'LilyumFansub'
     extClass = '.LilyumFansub'
     themePkg = 'madara'
-    baseUrl = 'https://lilyumfansub.com.tr'
+    baseUrl = 'https://lilyumfansub.pro'
     overrideVersionCode = 0
     isNsfw = false
 }
