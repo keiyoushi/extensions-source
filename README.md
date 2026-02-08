@@ -20,11 +20,8 @@ Please note that creating an issue does not mean that the source will be added o
 fashion, because the work is volunteer-based. Some sources may also be impossible to do or prohibitively
 difficult to maintain.
 
-If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
-Issues are up-for-grabs for any developer if there is no assigned user already.
-
-## Contributing
-
+If you would like to see a redede
+ew
 Contributions are welcome!
 
 Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
