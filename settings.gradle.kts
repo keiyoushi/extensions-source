@@ -1,39 +1,32 @@
-/**
- * Add or remove modules to load as needed for local development here.
- */
-loadAllIndividualExtensions()
-// loadIndividualExtension("all", "mangadex")
-
-/**
- * ===================================== COMMON CONFIGURATION ======================================
- */
 include(":core")
 
-// Load all modules under /lib
-File(rootDir, "lib").eachDir { include("lib:${it.name}") }
+// Load folder lib jika ada
+if (File(rootDir, "lib").exists()) {
+    File(rootDir, "lib").eachDir { include("lib:${it.name}") }
+}
 
-// Load all modules under /lib-multisrc
-File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
+// Load folder lib-multisrc jika ada
+if (File(rootDir, "lib-multisrc").exists()) {
+    File(rootDir, "lib-multisrc").eachDir { include("lib-multisrc:${it.name}") }
+}
 
-/**
- * ======================================== HELPER FUNCTION ========================================
- */
+// FUNGSI SCAN OTOMATIS (Hanya ambil folder yang NYATA)
 fun loadAllIndividualExtensions() {
-    File(rootDir, "src").eachDir { dir ->
-        dir.eachDir { subdir ->
-            include("src:${dir.name}:${subdir.name}")
+    val srcDir = File(rootDir, "src")
+    if (srcDir.exists()) {
+        srcDir.eachDir { langDir ->
+            langDir.eachDir { extDir ->
+                // Cek apakah folder build.gradle ada di dalamnya
+                if (File(extDir, "build.gradle").exists()) {
+                    include("src:${langDir.name}:${extDir.name}")
+                }
+            }
         }
     }
 }
-fun loadIndividualExtension(lang: String, name: String) {
-    include("src:${lang}:${name}")
-}
+
+loadAllIndividualExtensions()
 
 fun File.eachDir(block: (File) -> Unit) {
-    val files = listFiles() ?: return
-    for (file in files) {
-        if (file.isDirectory && file.name != ".gradle" && file.name != "build") {
-            block(file)
-        }
-    }
+    listFiles()?.filter { it.isDirectory && it.name != ".gradle" && it.name != "build" }?.forEach(block)
 }
