@@ -4,6 +4,78 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_publish:
+    name: Build & Publish Extensions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build All Extensions
+        # PERINTAH SAKTI: Ini otomatis cuma build folder yang tercatat di settings.gradle.kts
+        # Tidak peduli folder lain hilang atau rusak.
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Sign APKs
+        # Langkah ini opsional tapi bagus. Kalau tidak punya key, dia skip error.
+        if: ${{ env.SIGNING_KEY != null }}
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+        run: |
+          # Logika signing sederhana jika diperlukan nanti
+          echo "Signing logic placeholder" 
+
+      - name: Create Repo Index (Inspector)
+        run: |
+          # 1. Download Inspector (Alat pembuat JSON Mihon)
+          curl -L "https://github.com/keiyoushi/extensions-inspector/releases/latest/download/Inspector.jar" -o Inspector.jar
+          
+          # 2. Kumpulkan APK yang jadi
+          mkdir -p repo/apk
+          find . -name "*.apk" -exec cp {} repo/apk/ \;
+          
+          # 3. Buat file index.min.json
+          java -jar Inspector.jar "repo/apk" "repo/index.min.json" "repo/index.json"
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          personal_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./repo
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'Update extension repo'
+name: CI
+
+on:
+  push:
+    branches:
+      - main
     paths:
       - '**'
       - '!**.md'
@@ -89,84 +161,3 @@ jobs:
       - name: Prepare signing key
         run: |
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
-
-      - name: Build extensions (${{ matrix.chunk.number }})
-        env:
-          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
-          ALIAS: ${{ secrets.ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          chmod +x gradlew
-          ./gradlew $MODULES
-
-      - name: Upload APKs (${{ matrix.chunk.number }})
-        uses: actions/upload-artifact@v4
-        with:
-          name: "individual-apks-${{ matrix.chunk.number }}"
-          path: "**/*.apk"
-          retention-days: 1
-
-      - name: Clean up CI files
-        run: rm signingkey.jks
-
-  publish:
-    name: Publish extension repo
-    needs: [prepare, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Download APK artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ~/apk-artifacts
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: 17
-          distribution: temurin
-
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: main
-          persist-credentials: false
-
-      - name: Create repo artifacts
-        run: |
-          cd main
-          python ./.github/scripts/move-built-apks.py
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
-          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
-          python ./.github/scripts/create-repo.py
-
-      - name: Checkout repo branch
-        uses: actions/checkout@v4
-        with:
-          ref: repo
-          path: repo
-          persist-credentials: true
-          fetch-depth: 0 
-
-      - name: Merge and deploy repo
-        env:
-          DELETE: ${{ needs.prepare.outputs.delete }}
-          # MENGGUNAKAN EMAIL ANDA AGAR GIT TIDAK ERROR
-          GIT_AUTHOR_NAME: "GH-Capital"
-          GIT_AUTHOR_EMAIL: "gh-capital@users.noreply.github.com"
-          GIT_COMMITTER_NAME: "GH-Capital"
-          GIT_COMMITTER_EMAIL: "gh-capital@users.noreply.github.com"
-        run: |
-          cd repo
-          python ../main/.github/scripts/merge-repo.py "$DELETE"
-          
-          # SKRIP MANUAL PUSH AGAR LEBIH AMAN
-          git config --global user.email "gh-capital@users.noreply.github.com"
-          git config --global user.name "GH-Capital"
-          git add .
-          git commit -m "Update extensions repo" || echo "No changes to commit"
-           git push origin repo
-
