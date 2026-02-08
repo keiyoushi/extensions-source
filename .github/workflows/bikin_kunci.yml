@@ -1,0 +1,15 @@
+name: Bikin Kunci Darurat
+on: workflow_dispatch
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Key
+        run: |
+          keytool -genkey -v -keystore waltzy.jks -alias waltzy -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Admin, OU=Pribadi, O=Waltzy, L=Jakarta, ST=ID, C=ID"
+          echo "SALIN KODE PANJANG DI BAWAH INI (JANGAN SAMPAI ADA SPASI TERTINGGAL):"
+          echo "======================================================================"
+          base64 -w 0 waltzy.jks
+          echo ""
+          echo "======================================================================"
