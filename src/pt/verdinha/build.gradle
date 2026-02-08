@@ -3,7 +3,7 @@ ext {
     extClass = '.Verdinha'
     baseUrl = 'https://verdinha.wtf'
     themePkg = 'greenshit'
-    overrideVersionCode = 50
+    overrideVersionCode = 0
     isNsfw = true
 }
 
