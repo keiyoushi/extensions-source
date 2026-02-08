@@ -1,8 +1,0 @@
-ext {
-    extName = 'TMOHentai'
-    extClass = '.TMOHentai'
-    extVersionCode = 10
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

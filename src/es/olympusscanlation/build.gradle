@@ -1,7 +1,0 @@
-ext {
-    extName = 'Olympus Scanlation'
-    extClass = '.OlympusScanlation'
-    extVersionCode = 16
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'ChoChoX'
-    extClass = '.Chochox'
-    themePkg = 'vercomics'
-    overrideVersionCode = 0
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

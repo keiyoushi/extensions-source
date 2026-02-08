@@ -1,9 +1,0 @@
-ext {
-    extName = 'Inventario Oculto'
-    extClass = '.InventarioOculto'
-    themePkg = 'madara'
-    baseUrl = 'https://inventariooculto.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
