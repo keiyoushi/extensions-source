@@ -1,8 +1,0 @@
-ext {
-    extName = 'Ciao Plus'
-    extClass = '.CiaoPlus'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

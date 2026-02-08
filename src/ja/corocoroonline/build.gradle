@@ -1,8 +1,0 @@
-ext {
-    extName = 'Corocoro Online'
-    extClass = '.CorocoroOnline'
-    extVersionCode = 9
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"
