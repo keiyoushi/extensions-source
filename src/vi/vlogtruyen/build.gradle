@@ -1,8 +1,0 @@
-ext {
-    extName = 'VlogTruyen'
-    extClass = '.VlogTruyen'
-    extVersionCode = 22
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
