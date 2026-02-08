@@ -164,14 +164,14 @@ class PageDataDto(
 )
 
 @Serializable
-internal data class SearchRequest(
+internal class SearchRequest(
     val page: Int,
     val sort: String,
     val filter: SearchFilter,
 )
 
 @Serializable
-internal data class SearchFilter(
+internal class SearchFilter(
     val search: String? = null,
     val types: List<String>,
     val status: List<String>? = null,
