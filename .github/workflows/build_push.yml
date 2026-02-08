@@ -23,11 +23,10 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Build extensions
-        run: ./gradlew assembleRelease
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-build-cache
 
       - name: Generate repo
         run: python3 .github/scripts/generate-repo.py
@@ -37,4 +36,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: repo
-          publish_dir: ./output
+          publish_dir: ./ output
