@@ -1,8 +1,0 @@
-ext {
-    extName = 'Mangahub'
-    extClass = '.Mangahub'
-    extVersionCode = 20
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
