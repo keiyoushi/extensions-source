@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -40,19 +41,33 @@ class AnimeSamaInterceptor(private val client: OkHttpClient, private val baseUrl
         return chain.proceed(request)
     }
 
+    @Serializable
+    class CheckResponse(
+        val code: Int,
+    )
+
     private fun fetchAnimeSamaURL(): String {
         val requestToFetchDomains = GET(baseUrl, headers)
 
         val domainsResponse = client.newCall(requestToFetchDomains).execute()
-        val domainsDocument = domainsResponse.asJsoup()
-        val button = domainsDocument.getElementsByClass("btn-primary").first()
+        val domainsBody = domainsResponse.body.string()
+        val domainRegex = Regex("'([^']+\\.[a-z]{2,})'")
 
-        if (button == null) throw UnsupportedOperationException("Unable to retrieve the most recent URL for anime-sama.")
+        // Find domain list in <script>
+        val extractedDomains = domainRegex.findAll(domainsBody)
+            .map { it.groups[1]?.value }
+            .filterNotNull()
+        for (domain in extractedDomains) {
+            val res = client.newCall(GET("https://anime-sama.pw/?check=$domain", headers)).execute()
+            val data = res.parseAs<CheckResponse>()
 
-        return button.absUrl("href")
+            if (data.code == 200) {
+                return "https://$domain"
+            }
+        }
+
+        throw UnsupportedOperationException("Unable to retrieve the most recent URL for anime-sama.")
     }
 
-    fun getBaseUrl(): String? {
-        return _baseUrl
-    }
+    fun getBaseUrl(): String? = _baseUrl
 }

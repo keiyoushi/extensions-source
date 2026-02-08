@@ -1,32 +1,38 @@
 package eu.kanade.tachiyomi.extension.pt.maidscan
 
 import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
-import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 
-class MaidScan : GreenShit(
-    "Maid Scan",
-    "https://empreguetes.xyz",
-    "pt-BR",
-) {
-    override val useWidthInThumbnail = false
-    override val defaultOrderBy = "data"
-    override val targetAudience = TargetAudience.Shoujo
-    override val popularGenreId = "4"
-    override val latestGenreId = "4"
-    override val popularType = "periodo"
-    override val popularTypeValue = "geral"
-    override val latestEndpoint = "atualizacoes"
-    override val includeSlugInUrl = true
+class MaidScan : GreenShit() {
+    override val apiUrl = "https://api.verdinha.wtf"
+    override val cdnUrl = "https://cdn.verdinha.wtf"
+    override val baseUrl = "https://empreguetes.xyz"
+    override val cdnApiUrl = "https://api.verdinha.wtf/cdn"
+    override val lang = "pt-BR"
+    override val name = "Maid Scan"
+    override val scanId = "3"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("scan-id", "empreguetes.xyz")
+    override val defaultGenreId = "4"
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .build()
+    override fun getGeneroFilterOptions(): Array<Pair<String, String>> = arrayOf(
+        Pair("Todos", ""),
+        Pair("Novel", "6"),
+        Pair("Shoujo / Romances", "4"),
+        Pair("Yaoi", "7"),
+    )
 
-    override fun getFilterList() = FilterList()
+    override fun getFormatoFilterOptions(): Array<Pair<String, String>> = arrayOf(
+        Pair("Todos", ""),
+        Pair("Manhwa", "16"),
+        Pair("Novel", "17"),
+    )
+
+    override fun getStatusFilterOptions(): Array<Pair<String, String>> = arrayOf(
+        Pair("Todos", ""),
+        Pair("Cancelado", "13"),
+        Pair("Completo", "12"),
+        Pair("Em Andamento", "10"),
+        Pair("Hiato", "11"),
+    )
+
+    override fun getTagsFilterOptions() = emptyList<TagCheckBox>()
 }
