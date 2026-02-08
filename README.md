@@ -29,8 +29,6 @@ Contributions are welcome!
 
 Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
 
-## License
-
     Copyright 2015 Javier Tomás
 
     Licensed under the Apache License, Version 2.0 (the "License");
