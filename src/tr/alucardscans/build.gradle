@@ -1,9 +1,0 @@
-ext {
-    extName = 'Alucard Scans'
-    extClass = '.Alucardscans'
-    baseUrl = 'https://alucardscans.com'
-    extVersionCode = 31
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"
