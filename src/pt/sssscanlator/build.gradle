@@ -1,8 +1,0 @@
-ext {
-    extName = 'Yomu Comics'
-    extClass = '.YomuComics'
-    baseUrl = 'https://yomu.com.br'
-    extVersionCode = 40
-}
-
-apply from: "$rootDir/common.gradle"

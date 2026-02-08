@@ -1,8 +1,0 @@
-ext {
-    extName = 'AnimeXNovel'
-    extClass = '.AnimeXNovel'
-    extVersionCode = 15
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

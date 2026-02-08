@@ -1,8 +1,0 @@
-ext {
-    extName = 'Nexus Scan'
-    extClass = '.NexusScan'
-    extVersionCode = 58
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

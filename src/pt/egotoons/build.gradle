@@ -1,9 +1,0 @@
-ext {
-    extName = 'Ego Toons'
-    extClass = '.EgoToons'
-    baseUrl = 'https://www.egotoons.com'
-    extVersionCode = 7
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
