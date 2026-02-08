@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -26,7 +28,7 @@ jobs:
       - name: Build extensions
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-build-cache
+          ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache
 
       - name: Generate repo
         run: python3 .github/scripts/generate-repo.py
