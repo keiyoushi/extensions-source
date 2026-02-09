@@ -10,15 +10,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 
 class Softkomik : HttpSource() {
     override val name = "Softkomik"
@@ -26,7 +23,10 @@ class Softkomik : HttpSource() {
     override val lang = "id"
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    companion object {
+        private const val COVER_URL = "https://cover.softdevices.my.id/softkomik-cover"
+        private const val IMAGE_URL = "https://image.softkomik.com/softkomik"
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::buildIdOutdatedInterceptor)
@@ -36,12 +36,12 @@ class Softkomik : HttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
+    @Volatile
     private var buildId = ""
-        get() {
-            if (field.isEmpty()) {
-                field = fetchBuildId()
+        get() = field.ifEmpty {
+            synchronized(this) {
+                field.ifEmpty { fetchBuildId().also { field = it } }
             }
-            return field
         }
 
     private fun fetchBuildId(document: Document? = null): String {
@@ -49,8 +49,7 @@ class Softkomik : HttpSource() {
             ?: client.newCall(GET(baseUrl, headers)).execute().use { it.asJsoup() }
         val nextData = doc.selectFirst("script#__NEXT_DATA__")?.data()
             ?: throw Exception("Could not find __NEXT_DATA__")
-        val nextDataDto = json.decodeFromString<NextDataDto>(nextData)
-        return nextDataDto.buildId
+        return nextData.parseAs<NextDataDto>().buildId
     }
 
     private fun buildIdOutdatedInterceptor(chain: Interceptor.Chain): Response {
@@ -68,10 +67,11 @@ class Softkomik : HttpSource() {
             response.header("Content-Type")?.contains("text/html") != false
         ) {
             val document = response.asJsoup()
-            buildId = fetchBuildId(document)
+            val newBuildId = fetchBuildId(document)
+            synchronized(this) { buildId = newBuildId }
 
             val newUrl = request.url.newBuilder()
-                .setPathSegment(2, buildId)
+                .setPathSegment(2, newBuildId)
                 .fragment("DO_NOT_RETRY")
                 .build()
             return chain.proceed(request.newBuilder().url(newUrl).build())
@@ -138,9 +138,9 @@ class Softkomik : HttpSource() {
             val libData = dto.pageProps.data
             val mangas = libData.data.map { manga ->
                 SManga.create().apply {
-                    setUrlWithoutDomain("/${manga.title_slug}")
+                    setUrlWithoutDomain(manga.title_slug)
                     title = manga.title
-                    thumbnail_url = "https://cover.softdevices.my.id/softkomik-cover/${manga.gambar.removePrefix("/")}"
+                    thumbnail_url = "$COVER_URL/${manga.gambar.removePrefix("/")}"
                 }
             }
             MangasPage(mangas, libData.page < libData.maxPage)
@@ -148,9 +148,9 @@ class Softkomik : HttpSource() {
             val dto = response.parseAs<LibraryDto>()
             val mangas = dto.pageProps.libData.data.map { manga ->
                 SManga.create().apply {
-                    setUrlWithoutDomain("/${manga.title_slug}")
+                    setUrlWithoutDomain(manga.title_slug)
                     title = manga.title
-                    thumbnail_url = "https://cover.softdevices.my.id/softkomik-cover/${manga.gambar}"
+                    thumbnail_url = "$COVER_URL/${manga.gambar.removePrefix("/")}"
                 }
             }
             MangasPage(mangas, dto.pageProps.libData.page < dto.pageProps.libData.maxPage)
@@ -158,17 +158,14 @@ class Softkomik : HttpSource() {
     }
 
     // ======================== Details ========================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/")
-        return GET("$baseUrl/_next/data/$buildId/$slug.json", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/_next/data/$buildId/${manga.url}.json", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<DetailsDto>()
         val manga = dto.pageProps.data
-        val slug = response.request.url.pathSegments.lastOrNull()?.removeSuffix(".json") ?: ""
+        val slug = response.request.url.pathSegments.lastOrNull()!!.removeSuffix(".json")
         return SManga.create().apply {
-            setUrlWithoutDomain("/$slug")
+            setUrlWithoutDomain(slug)
             title = manga.title
             author = manga.author
             description = manga.sinopsis
@@ -178,15 +175,14 @@ class Softkomik : HttpSource() {
                 "tamat" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = "https://cover.softdevices.my.id/softkomik-cover/${manga.gambar}"
+            thumbnail_url = "$COVER_URL/${manga.gambar.removePrefix("/")}"
         }
     }
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
+
     // ======================== Chapters ========================
-    override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/")
-        return GET("https://v2.softkomik.com/komik/$slug/chapter?limit=9999999", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("https://v2.softkomik.com/komik/${manga.url}/chapter?limit=9999999", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterListDto>()
@@ -216,11 +212,11 @@ class Softkomik : HttpSource() {
         val doc = response.asJsoup()
         val nextData = doc.selectFirst("script#__NEXT_DATA__")?.data()
             ?: throw Exception("Could not find __NEXT_DATA__")
-        val dto = json.decodeFromString<ChapterPageDto>(nextData)
+        val dto = nextData.parseAs<ChapterPageDto>()
         val images = dto.props.pageProps.data.data.imageSrc
 
         return images.mapIndexed { i, img ->
-            Page(i, "", "https://image.softkomik.com/softkomik/$img")
+            Page(i, imageUrl = "$IMAGE_URL/$img")
         }
     }
 
