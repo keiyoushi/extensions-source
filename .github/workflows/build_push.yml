@@ -38,17 +38,34 @@ jobs:
           ALIAS: waltzy
           KEY_PASSWORD: waltzysign
 
+      - name: Debug find APKs
+        run: |
+          echo "=== All APK files ==="
+          find . -name "*.apk" -type f
+          echo "=== Release APKs ==="
+          find . -name "*.apk" -path "*/release/*" -type f
+
       - name: Prepare repo
         run: |
           mkdir -p repo/apk
-          find . -path "*/build/outputs/apk/release/*.apk" -exec cp {} repo/apk/ \;
+          find . -name "*.apk" -path "*/release/*" -type f -exec cp {} repo/apk/ \;
+          echo "=== APKs copied ==="
+          ls -la repo/apk/
 
       - name: Generate repo
         run: python3 .github/scripts/create-repo.py
+
+      - name: Debug output
+        run: |
+          echo "=== index.min.json ==="
+          cat repo/index.min.json
+          echo ""
+          echo "=== Files in repo ==="
+          find repo -type f
 
       - name: Deploy repo
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: repo
-          publish_dir : ./repo
+          publish_d ir: ./repo
