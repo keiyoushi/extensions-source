@@ -13,6 +13,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      STORE_PASSWORD: android
+      KEY_PASSWORD: android
+      KEY_ALIAS: key
+      STORE_FILE: signingkey.jks
+      ALIAS: key
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,19 +38,33 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -keystore signingkey.jks \
+            -keystore ${{ github.workspace }}/signingkey.jks \
             -storepass android \
             -keypass android \
             -dname "CN=waltzy, OU=waltzy, O=waltzy, L=Unknown, ST=Unknown, C=US"
 
+      - name: Create local.properties
+        run: |
+          echo "STORE_FILE=${{ github.workspace }}/signingkey.jks" >> local.properties
+          echo "STORE_PASSWORD=android" >> local.properties
+          echo "KEY_ALIAS=key" >> local.properties
+          echo "KEY_PASSWORD=android" >> local.properties
+
+      - name: Create gradle.properties signing
+        run: |
+          echo "RELEASE_STORE_FILE=${{ github.workspace }}/signingkey.jks" >> gradle.properties
+          echo "RELEASE_STORE_PASSWORD=android" >> gradle.properties
+          echo "RELEASE_KEY_ALIAS=key" >> gradle.properties
+          echo "RELEASE_KEY_PASSWORD=android" >> gradle.properties
+
       - name: Build extensions
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache
-        env:
-          STORE_PASSWORD: android
-          KEY_PASSWORD: android
-          KEY_ALIAS: key
+          ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/signingkey.jks \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=key \
+            -Pandroid.injected.signing.key.password=android
 
       - name: Generate repo
         run: python3 .github/scripts/generate-repo.py
@@ -54,4 +74,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: repo
-          publish_dir: . /output
+          publish_dir:  ./output
