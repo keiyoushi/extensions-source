@@ -111,6 +111,8 @@ class ComicDetailsExtrasDto(
 
 @Serializable
 class PayloadChapterDto(
+    @SerialName("_id") val id: String,
+    @SerialName("real_id") val realId: String,
     val chapters: List<ChapterDto>,
 )
 
