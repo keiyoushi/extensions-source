@@ -13,6 +13,35 @@ APPLICATION_LABEL_REGEX = re.compile(r"^application-label:'([^']+)'", re.MULTILI
 APPLICATION_ICON_320_REGEX = re.compile(r"^application-icon-320:'([^']+)'", re.MULTILINE)
 LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
+ANDROID_HOME = os.environ.get("ANDROID_HOME", "")
+BUILD_TOOLS = Path(ANDROID_HOME) / "build-tools"
+
+AAPT_PATH = None
+if BUILD_TOOLS.exists():
+    for version_dir in sorted(BUILD_TOOLS.iterdir(), reverse=True):
+        candidate = version_dir / "aapt2"
+        if candidate.exists():
+            AAPT_PATH = str(candidate)
+            break
+
+if AAPT_PATH is None:
+    result = subprocess.run(["which", "aapt2"], capture_output=True, text=True)
+    if result.returncode == 0:
+        AAPT_PATH = result.stdout.strip()
+    else:
+        result = subprocess.run(["find", "/usr/local", "-name", "aapt2"], capture_output=True, text=True)
+        if result.stdout.strip():
+            AAPT_PATH = result.stdout.strip().split("\n")[0]
+
+if AAPT_PATH is None:
+    print("ERROR: aapt2 not found!")
+    print(f"ANDROID_HOME={ANDROID_HOME}")
+    if BUILD_TOOLS.exists():
+        print(f"Build tools contents: {list(BUILD_TOOLS.iterdir())}")
+    exit(1)
+
+print(f"Using aapt2: {AAPT_PATH}")
+
 REPO_DIR = Path("repo")
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_ICON_DIR = REPO_DIR / "icon"
@@ -27,7 +56,7 @@ for apk in sorted(REPO_APK_DIR.iterdir()):
 
     try:
         badging = subprocess.check_output(
-            ["aapt2", "dump", "badging", str(apk)]
+            [AAPT_PATH, "dump", "badging", str(apk)]
         ).decode()
     except Exception as e:
         print(f"Skipping {apk.name}: {e}")
