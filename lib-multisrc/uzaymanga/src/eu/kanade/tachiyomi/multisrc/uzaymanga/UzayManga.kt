@@ -39,8 +39,7 @@ abstract class UzayManga(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/search?page=$page&search=&order=4")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4")
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -58,18 +57,17 @@ abstract class UzayManga(
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val header = document.select("div.header:has(h2:contains(En Son Yüklenen))").first()
+        val header = document.selectFirst("div.header:has(h2:contains(En Son Yüklenen))")
         val grid = header?.nextElementSibling()
-            ?: document.select("div.grid.grid-cols-1").first()
-            ?: document.select("div.grid").first()
-        val elements = grid?.select("> div")?.toList().orEmpty()
-        val mangas = elements.map { latestUpdatesFromElement(it) }
+            ?: document.selectFirst("div.grid.grid-cols-1")
+            ?: document.selectFirst("div.grid")
+        val mangas = grid?.select("> div")?.map(::latestUpdatesFromElement) ?: emptyList()
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
