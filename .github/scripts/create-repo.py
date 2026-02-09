@@ -1,82 +1,79 @@
-name: Build extensions
+import json
+import os
+import re
+import subprocess
+from pathlib import Path
+from zipfile import ZipFile
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+PACKAGE_NAME_REGEX = re.compile(r"package: name='([^']+)'")
+VERSION_CODE_REGEX = re.compile(r"versionCode='([^']+)'")
+VERSION_NAME_REGEX = re.compile(r"versionName='([^']+)'")
+IS_NSFW_REGEX = re.compile(r"'tachiyomi.extension.nsfw' value='([^']+)'")
+APPLICATION_LABEL_REGEX = re.compile(r"^application-label:'([^']+)'", re.MULTILINE)
+APPLICATION_ICON_320_REGEX = re.compile(r"^application-icon-320:'([^']+)'", re.MULTILINE)
+LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+REPO_DIR = Path("repo")
+REPO_APK_DIR = REPO_DIR / "apk"
+REPO_ICON_DIR = REPO_DIR / "icon"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: 17
-          distribution: temurin
+index_min_data = []
 
-      - name: Generate signing key
-        run: |
-          keytool -genkeypair -alias waltzy -keyalg RSA -keysize 2048 -validity 10000 -keystore signingkey.jks -storepass waltzysign -keypass waltzysign -dname "CN=waltzy"
+for apk in sorted(REPO_APK_DIR.iterdir()):
+    if not apk.name.endswith(".apk"):
+        continue
 
-      - name: Build extensions
-        run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache
-        env:
-          KEY_STORE_PASSWORD: waltzysign
-          ALIAS: waltzy
-          KEY_PASSWORD: waltzysign
+    try:
+        badging = subprocess.check_output(
+            ["aapt2", "dump", "badging", str(apk)]
+        ).decode()
+    except Exception as e:
+        print(f"Skipping {apk.name}: {e}")
+        continue
 
-      - name: Prepare and generate repo
-        run: |
-          mkdir -p repo/apk repo/icon
+    package_info = next(
+        (x for x in badging.splitlines() if x.startswith("package: ")), None
+    )
+    if not package_info:
+        continue
 
-          echo "=== Finding APKs ==="
-          find . -name "*.apk" -path "*/release/*" -type f
+    package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)
 
-          echo "=== Copying APKs ==="
-          find . -name "*.apk" -path "*/release/*" -type f -exec cp {} repo/apk/ \;
+    icon_match = APPLICATION_ICON_320_REGEX.search(badging)
+    if icon_match:
+        application_icon = icon_match.group(1)
+        try:
+            with ZipFile(apk) as z, z.open(application_icon) as i, (
+                REPO_ICON_DIR / f"{package_name}.png"
+            ).open("wb") as f:
+                f.write(i.read())
+        except Exception:
+            pass
 
-          echo "=== APKs in repo/apk ==="
-          ls -la repo/apk/
+    language = LANGUAGE_REGEX.search(apk.name).group(1)
 
-          APK_COUNT=$(ls repo/apk/*.apk 2>/dev/null | wc -l)
-          echo "Total APKs: $APK_COUNT"
+    label_match = APPLICATION_LABEL_REGEX.search(badging)
+    label = label_match.group(1) if label_match else apk.name
 
-          if [ "$APK_COUNT" -eq "0" ]; then
-            echo "ERROR: No APKs found!"
-            exit 1
-          fi
+    nsfw_match = IS_NSFW_REGEX.search(badging)
+    nsfw = int(nsfw_match.group(1)) if nsfw_match else 0
 
-          echo "=== Generating index.min.json ==="
-          python3 .github/scripts/create-repo.py
+    min_data = {
+        "name": label,
+        "pkg": package_name,
+        "apk": apk.name,
+        "lang": language,
+        "code": int(VERSION_CODE_REGEX.search(package_info).group(1)),
+        "version": VERSION_NAME_REGEX.search(package_info).group(1),
+        "nsfw": nsfw,
+        "sources": [],
+    }
 
-          echo "=== index.min.json content ==="
-          cat repo/index.min.json
+    index_min_data.append(min_data)
 
-          echo ""
-          echo "=== All files in repo/ ==="
-          find repo -type f | head -50
+with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as f:
+    json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
 
-      - name: Deploy repo
-        run: |
-          cd repo
-          git init
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git checkout -b repo
-          git add .
-          git commit -m "Update repo"
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git push  -f origin repo
+print(f"Generated index with {len(index_min_data)} extensions")
