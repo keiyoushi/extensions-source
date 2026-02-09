@@ -92,11 +92,12 @@ for apk in sorted(REPO_APK_DIR.iterdir()):
     min_data = {
         "name": label,
         "pkg": package_name,
-        "apk": apk.name,
+        "apk": f"apk/{apk.name}",
         "lang": language,
         "code": int(VERSION_CODE_REGEX.search(package_info).group(1)),
         "version": VERSION_NAME_REGEX.search(package_info).group(1),
         "nsfw": nsfw,
+        "icon": f"icon/{package_name}.png",
         "sources": [],
     }
 
@@ -104,5 +105,8 @@ for apk in sorted(REPO_APK_DIR.iterdir()):
 
 with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as f:
     json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
+
+with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
+    json.dump(index_min_data, f, ensure_ascii=False, indent=2)
 
 print(f"Generated index with {len(index_min_data)} extensions")
