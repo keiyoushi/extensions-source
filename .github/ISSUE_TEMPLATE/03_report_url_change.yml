@@ -45,15 +45,15 @@ body:
       label: Acknowledgements
       description: Your issue will be closed if you haven't done these steps.
       options:
-        - label: I have updated all installed extensions.
+        - label: I have updated the extension to the latest version (as listed on the [extensions listing](https://keiyoushi.github.io/extensions/) page).
           required: true
-        - label: I have opened WebView and checked that the source URL has not changed yet.
+        - label: I have checked WebView to see the source's main URL is not up-to-date, or has to redirect into the new URL.
           required: true
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: I have searched [existing issues](https://github.com/keiyoushi/extensions-source/issues/) both open & closed, and confirm that this is a new unreported issue.
           required: true
         - label: I have written a short but informative title.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: I will correctly fill out all of the requested information in this form.
           required: true
 
   - type: textarea
