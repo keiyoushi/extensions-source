@@ -73,7 +73,6 @@ class Mangakakalot :
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .rateLimit(2, 1, TimeUnit.SECONDS)
-        .addInterceptor(ApiHeadersInterceptor())
         .build()
 
     /* ================================
@@ -81,9 +80,15 @@ class Mangakakalot :
      * ================================ */
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val titleSlug = titleToSlug(manga.title)
-        manga.url = "/manga/$titleSlug"
-        return super.mangaDetailsRequest(manga)
+        val currentSlug = manga.url.substringAfterLast("/")
+        val targetUrl = if (currentSlug.matches(idSlugRegex)) {
+            val newSlug = titleToSlug(manga.title)
+            "$baseUrl/manga/$newSlug"
+        } else {
+            "$baseUrl${manga.url}"
+        }
+
+        return GET(targetUrl, headers)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -105,16 +110,15 @@ class Mangakakalot :
     override fun chapterListRequest(manga: SManga): Request {
         val currentSlug = manga.url.substringAfterLast("/")
         val isIdSlug = currentSlug.matches(idSlugRegex)
-
-        val slug = if (manga.url.startsWith("/manga/") && !isIdSlug) {
-            currentSlug
+        val apiSlug = if (isIdSlug) {
+            val cleanSlug = titleToSlug(manga.title)
+            manga.url = "/manga/$cleanSlug"
+            cleanSlug
         } else {
-            val titleSlug = titleToSlug(manga.title)
-            manga.url = "/manga/$titleSlug"
-            titleSlug
+            currentSlug
         }
 
-        val apiUrl = "$baseUrl/api/manga/$slug/chapters?limit=-1"
+        val apiUrl = "$baseUrl/api/manga/$apiSlug/chapters?limit=-1"
         return GET(apiUrl, headers)
     }
 
@@ -136,63 +140,11 @@ class Mangakakalot :
             SChapter.create().apply {
                 name = item.name ?: "Chapter"
                 chapter_number = item.num ?: 0f
-                url = "/manga/$slug/$chapterSlug"
+                url = "$baseUrl/manga/$slug/$chapterSlug"
                 date_upload = item.updatedAt
                     ?.let { jsonDateFormat.tryParse(it) }
                     ?: 0L
             }
         }
-    }
-
-    /* ================================
-     * Page List
-     * ================================ */
-
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div.container-chapter-reader img")
-        .mapIndexedNotNull { i, img ->
-            val url = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-            if (url.isNotEmpty()) Page(i, imageUrl = url) else null
-        }
-
-    /* ================================
-     * Image Requests
-     * ================================ */
-
-    override fun imageRequest(page: Page): Request = GET(
-        page.imageUrl.orEmpty(),
-        headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .set("Connection", "close")
-            .build(),
-    )
-}
-
-    /* ================================
-     * API 403 BYPASS
-     * ================================ */
-
-class ApiHeadersInterceptor : Interceptor {
-    override fun intercept(chain: Interceptor.Chain): Response {
-        val req = chain.request()
-        val url = req.url.toString()
-
-        if (!req.url.toString().contains("/api/manga/")) {
-            return chain.proceed(req)
-        }
-
-        val slug = req.url.pathSegments
-            .dropWhile { it != "manga" }
-            .getOrNull(1)
-            ?: return chain.proceed(req)
-
-        val referer = "https://${req.url.host}/manga/$slug"
-
-        val newReq = req.newBuilder()
-            .header("Referer", referer)
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        return chain.proceed(req)
     }
 }
