@@ -25,10 +25,26 @@ jobs:
           java-version: 17
           distribution: temurin
 
+      - name: Generate signing key
+        run: |
+          keytool -genkeypair \
+            -alias key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -keystore signingkey.jks \
+            -storepass android \
+            -keypass android \
+            -dname "CN=waltzy, OU=waltzy, O=waltzy, L=Unknown, ST=Unknown, C=US"
+
       - name: Build extensions
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache
+        env:
+          STORE_PASSWORD: android
+          KEY_PASSWORD: android
+          KEY_ALIAS: key
 
       - name: Generate repo
         run: python3 .github/scripts/generate-repo.py
@@ -38,4 +54,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: repo
-          publish_dir: ./ output
+          publish_dir: . /output
