@@ -27,10 +27,28 @@ jobs:
 
       - name: Generate signing key
         run: |
-          keytool -genkeypair \
-            -alias waltzy \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -keystore signingkey.jks \
-            -storepass password 123 
+          keytool -genkeypair -alias waltzy -keyalg RSA -keysize 2048 -validity 10000 -keystore signingkey.jks -storepass waltzysign -keypass waltzysign -dname "CN=waltzy"
+
+      - name: Build extensions
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache
+        env:
+          KEY_STORE_PASSWORD: waltzysign
+          ALIAS: waltzy
+          KEY_PASSWORD: waltzysign
+
+      - name: Prepare repo
+        run: |
+          mkdir -p repo/apk
+          find . -path "*/build/outputs/apk/release/*.apk" -exec cp {} repo/apk/ \;
+
+      - name: Generate repo
+        run: python3 .github/scripts/create-repo.py
+
+      - name: Deploy repo
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: repo
+          publish_dir : ./repo
