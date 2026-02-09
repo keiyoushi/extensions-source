@@ -13,77 +13,67 @@ APPLICATION_LABEL_REGEX = re.compile(r"^application-label:'([^']+)'", re.MULTILI
 APPLICATION_ICON_320_REGEX = re.compile(r"^application-icon-320:'([^']+)'", re.MULTILINE)
 LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
-*_, ANDROID_BUILD_TOOLS = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
 REPO_DIR = Path("repo")
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_ICON_DIR = REPO_DIR / "icon"
 
 REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
-with open("output.json", encoding="utf-8") as f:
-    inspector_data = json.load(f)
-
 index_min_data = []
 
-for apk in REPO_APK_DIR.iterdir():
-    badging = subprocess.check_output(
-        [
-            ANDROID_BUILD_TOOLS / "aapt",
-            "dump",
-            "--include-meta-data",
-            "badging",
-            apk,
-        ]
-    ).decode()
+for apk in sorted(REPO_APK_DIR.iterdir()):
+    if not apk.name.endswith(".apk"):
+        continue
 
-    package_info = next(x for x in badging.splitlines() if x.startswith("package: "))
+    try:
+        badging = subprocess.check_output(
+            ["aapt2", "dump", "badging", str(apk)]
+        ).decode()
+    except Exception as e:
+        print(f"Skipping {apk.name}: {e}")
+        continue
+
+    package_info = next(
+        (x for x in badging.splitlines() if x.startswith("package: ")), None
+    )
+    if not package_info:
+        continue
+
     package_name = PACKAGE_NAME_REGEX.search(package_info).group(1)
-    application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
 
-    with ZipFile(apk) as z, z.open(application_icon) as i, (
-        REPO_ICON_DIR / f"{package_name}.png"
-    ).open("wb") as f:
-        f.write(i.read())
+    icon_match = APPLICATION_ICON_320_REGEX.search(badging)
+    if icon_match:
+        application_icon = icon_match.group(1)
+        try:
+            with ZipFile(apk) as z, z.open(application_icon) as i, (
+                REPO_ICON_DIR / f"{package_name}.png"
+            ).open("wb") as f:
+                f.write(i.read())
+        except Exception:
+            pass
 
     language = LANGUAGE_REGEX.search(apk.name).group(1)
-    sources = inspector_data[package_name]
 
-    if len(sources) == 1:
-        source_language = sources[0]["lang"]
+    label_match = APPLICATION_LABEL_REGEX.search(badging)
+    label = label_match.group(1) if label_match else apk.name
 
-        if (
-            source_language != language
-            and source_language not in {"all", "other"}
-            and language not in {"all", "other"}
-        ):
-            language = source_language
+    nsfw_match = IS_NSFW_REGEX.search(badging)
+    nsfw = int(nsfw_match.group(1)) if nsfw_match else 0
 
-    common_data = {
-        "name": APPLICATION_LABEL_REGEX.search(badging).group(1),
+    min_data = {
+        "name": label,
         "pkg": package_name,
         "apk": apk.name,
         "lang": language,
         "code": int(VERSION_CODE_REGEX.search(package_info).group(1)),
         "version": VERSION_NAME_REGEX.search(package_info).group(1),
-        "nsfw": int(IS_NSFW_REGEX.search(badging).group(1)),
-    }
-    min_data = {
-        **common_data,
+        "nsfw": nsfw,
         "sources": [],
     }
 
-    for source in sources:
-        min_data["sources"].append(
-            {
-                "name": source["name"],
-                "lang": source["lang"],
-                "id": source["id"],
-                "baseUrl": source["baseUrl"],
-                "versionId": source["versionId"],
-            }
-        )
-
     index_min_data.append(min_data)
 
-with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as index_file:
-    json.dump(index_min_data, index_file, ensure_ascii=False, separators=(",", ":"))
+with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as f:
+    json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
+
+print(f"Generated index with {len(index_min_data )} extensions")
