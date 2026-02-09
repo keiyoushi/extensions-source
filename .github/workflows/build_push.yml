@@ -29,6 +29,11 @@ jobs:
         run: |
           keytool -genkeypair -alias waltzy -keyalg RSA -keysize 2048 -validity 10000 -keystore signingkey.jks -storepass waltzysign -keypass waltzysign -dname "CN=waltzy"
 
+      - name: Get signing key fingerprint
+        run: |
+          FINGERPRINT=$(keytool -list -v -keystore signingkey.jks -storepass waltzysign | grep "SHA256: " | head -n 1 | awk '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
+          echo "REPO_FINGERPRINT=$FINGERPRINT" >> $GITHUB_ENV
+
       - name: Build extensions
         run: |
           chmod +x ./gradlew
@@ -56,6 +61,8 @@ jobs:
 
       - name: Generate repo
         run: python3 .github/scripts/create-repo.py
+        env:
+          REPO_FINGERPRINT: ${{ env.REPO_FINGERPRINT }}
 
       - name: Deploy repo
         run: |
