@@ -7,7 +7,7 @@ import java.util.Locale
 
 class MangaOnline : Madara(
     "Manga Online",
-    "https://mangaonline.app",
+    "https://mangasonline.blog",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("pt")),
 ) {
@@ -16,4 +16,6 @@ class MangaOnline : Madara(
         .build()
 
     override val chapterUrlSuffix = ""
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useNewChapterEndpoint = true
 }

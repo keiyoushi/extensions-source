@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Online'
     extClass = '.MangaOnline'
     themePkg = 'madara'
-    baseUrl = 'https://mangaonline.app'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangasonline.blog'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
