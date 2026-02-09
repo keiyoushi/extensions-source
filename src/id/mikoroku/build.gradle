@@ -3,7 +3,7 @@ ext {
     extClass = '.MikoRoku'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.mikoroku.my.id'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 

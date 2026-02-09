@@ -3,17 +3,18 @@ package eu.kanade.tachiyomi.extension.id.mikoroku
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 
 class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
 
     // ============================== Popular ===============================
-    override val popularMangaSelector = "div.PopularPosts article"
-    override val popularMangaSelectorTitle = ".post-title a"
-    override val popularMangaSelectorUrl = ".post-title a"
+    override val popularMangaSelector = "div.PopularPosts div.grid > *"
+    override val popularMangaSelectorTitle = "figcaption a, .post-title a"
+    override val popularMangaSelectorUrl = "figcaption a, .post-title a"
 
     // ============================== Filters ===============================
     override val hasFilters = true
@@ -57,30 +58,24 @@ class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
     )
 
     // =========================== Manga Details ============================
-    override val mangaDetailsSelector = "div.section#main div.widget:has(main)"
-    override val mangaDetailsSelectorGenres = "dl > dd > a[rel=tag]"
+    override val mangaDetailsSelectorGenres = "div.mt-15 > a[rel=tag]"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.use { it.asJsoup() }
-        val profileManga = document.selectFirst(mangaDetailsSelector)!!
-        return SManga.create().apply {
-            with(profileManga) {
-                thumbnail_url = selectFirst("img")?.absUrl("src")
-                description = document.select(mangaDetailsSelectorDescription).text()
-                genre = select(mangaDetailsSelectorGenres).eachText().joinToString()
-                status = parseStatus(selectFirst("span[data-status]")?.text().orEmpty())
-                author = getInfo("Author")
-                artist = getInfo("Artist")
+    // ============================ Chapter List ============================
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div#chapterContainer a.chap-btn").map { element ->
+            SChapter.create().apply {
+                name = element.selectFirst(".chap-num")?.text() ?: element.text()
+                url = element.attr("href").substringAfter(baseUrl)
             }
         }
     }
 
-    private fun Element.getInfo(text: String): String? =
-        selectFirst("$mangaDetailsSelectorInfo:containsOwn($text) > $mangaDetailsSelectorInfoDescription")
-            ?.text()
-            ?.trim()
-
     // =============================== Pages ================================
-    // Specific/faster selection first, generic/slower last
-    override val pageListSelector = "article#reader div.separator a, article#reader"
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url
+        return GET(url, headers)
+    }
+
+    override val pageListSelector = "div.separator"
 }
