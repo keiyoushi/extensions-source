@@ -96,6 +96,7 @@ object WeebDexConstants {
 
     // Sort Options
     val sortList = listOf(
+        "Relevance" to "relevance",
         "Views" to "views",
         "Updated At" to "updatedAt",
         "Created At" to "createdAt",
