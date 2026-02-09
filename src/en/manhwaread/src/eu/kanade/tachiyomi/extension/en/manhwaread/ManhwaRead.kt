@@ -267,9 +267,9 @@ class ManhwaRead :
         }
         return if (ratingValue > 0.0) {
             buildString {
-                append("$ratingStar $rate")
+                append(ratingStar, " ", rate)
                 if (rateCount > 0) {
-                    append(" ($rateCount)")
+                    append(" (", rateCount, ")")
                 }
             }
         } else {
