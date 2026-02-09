@@ -14,15 +14,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.getValue
@@ -38,7 +37,7 @@ class ManhwaRead :
     override val baseUrl: String
         get() = when {
             System.getenv("CI") == "true" -> mirrors.joinToString("#, ")
-            else -> preferences.getString(MIRROR_URL_PREF_KEY, mirrors[0])!!
+            else -> mirrors[preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()]
         }
 
     override val lang = "en"
@@ -49,7 +48,6 @@ class ManhwaRead :
         .set("Referer", "$baseUrl/")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-    private val json: Json by injectLazy()
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     // Popular
@@ -61,16 +59,21 @@ class ManhwaRead :
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = query.takeIf { it.startsWith("https://") }
-        ?.toHttpUrlOrNull()
-        ?.pathSegments
-        ?.getOrNull(1)
-        ?.let { slug ->
-            // Rewrite to strip suffixes after slug
-            val newUrl = "$baseUrl/manhwa/$slug/"
-            fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(newUrl) })
-                .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
-        } ?: super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            query.toHttpUrlOrNull()
+                ?.pathSegments
+                ?.getOrNull(1)
+                ?.let { slug ->
+                    // Rewrite to strip suffixes after slug
+                    val newUrl = "$baseUrl/manhwa/$slug/"
+                    return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(newUrl) })
+                        .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
+                        ?: throw Exception("Invalid URL")
+                }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder().apply {
@@ -151,21 +154,21 @@ class ManhwaRead :
                         val ratingString = getRatingString(rating, ratingCount.toIntOrNull() ?: 0)
                         if (ratingString.isNotEmpty()) {
                             if (isNotEmpty()) append("\n")
-                            append("Rating: $ratingString")
+                            append("Rating: ", ratingString)
                         }
                     }
                 }
                 metrics?.selectFirst(".fa-eye + span")?.text()?.also { views ->
                     if (isNotEmpty()) append("\n")
-                    append("Views: $views")
+                    append("Views: ", views)
                 }
                 metrics?.selectFirst(".fa-comments + span")?.text()?.also { comments ->
                     if (isNotEmpty()) append("\n")
-                    append("Comments: $comments")
+                    append("Comments: ", comments)
                 }
                 metrics?.selectFirst(".w-5.h-5 + span")?.text()?.also { bookmarks ->
                     if (isNotEmpty()) append("\n")
-                    append("Bookmarks: $bookmarks")
+                    append("Bookmarks: ", bookmarks)
                 }
 
                 document.select("#mangaSummary .text-primary:contains(Publisher:) + .flex a span:first-child")
@@ -174,7 +177,7 @@ class ManhwaRead :
                         if (isNotEmpty()) append("\n")
                         val publishers = publisher.joinToString { it.text() }
                         val publisherLabel = if (publisher.count() > 1) "Publishers" else "Publisher"
-                        append("$publisherLabel: $publishers")
+                        append(publisherLabel, ": ", publishers)
                     }
 
                 document.selectFirst("#mangaDesc > .manga-desc__content")?.text()?.also {
@@ -231,11 +234,11 @@ class ManhwaRead :
     override fun pageListParse(response: Response): List<Page> {
         val chapterDataString = response.body.string()
             .let { PATTERN_CHAPTER_DATA.find(it)?.groupValues?.get(1) }
-            ?: throw Exception()
+            ?: throw Exception("Chapter data not found")
 
-        val chapterData = json.decodeFromString<ChapterData>(chapterDataString)
+        val chapterData = chapterDataString.parseAs<ChapterData>()
         val chapterDataData = String(Base64.decode(chapterData.data, Base64.DEFAULT))
-        val pages = json.decodeFromString<List<ChapterDataData>>(chapterDataData)
+        val pages = chapterDataData.parseAs<List<ChapterDataData>>()
 
         return pages.mapIndexed { index, page ->
             Page(index, imageUrl = "${chapterData.base}/${page.src}")
@@ -276,19 +279,17 @@ class ManhwaRead :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
-            key = MIRROR_URL_PREF_KEY
+            key = MIRROR_PREF_KEY
             title = "Mirror URL"
             entries = mirrors
-            entryValues = mirrors
-            setDefaultValue(mirrors[0])
+            entryValues = Array(mirrors.size, Int::toString)
+            setDefaultValue("0")
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, _ -> true }
         }.also(screen::addPreference)
     }
 
     companion object {
-        const val MIRROR_URL_PREF_KEY = "mirror_url"
+        const val MIRROR_PREF_KEY = "pref_mirror"
         val PATTERN_CHAPTER_DATA = """var\s+chapterData\s*=\s*(\{.*\})""".toRegex()
     }
 }
