@@ -38,9 +38,20 @@ jobs:
           ALIAS: waltzy
           KEY_PASSWORD: waltzysign
 
+      - name: Checkout repo branch
+        uses: actions/checkout@v4
+        with:
+          ref: repo
+          path: repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Prepare repo
         run: |
           mkdir -p repo/apk
+          mkdir -p repo/icon
+          rm -f repo/apk/*.apk
+          rm -f repo/icon/*.png
           find . -name "*.apk" -path "*/release/*" -type f -exec cp {} repo/apk/ \;
 
       - name: Generate repo
@@ -49,11 +60,17 @@ jobs:
       - name: Deploy repo
         run: |
           cd repo
-          git init
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git checkout -b repo
-          git add .
-          git commit -m "Update repo"
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git push -f origin repo
+          if [ -d ".git" ]; then
+            git add .
+            git commit -m "Update repo"
+            git push origin repo
+          else
+            git init
+            git checkout -b repo
+            git add .
+            git commit -m "Update repo"
+            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+            git push -u origin repo
+          fi
