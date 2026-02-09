@@ -1,4 +1,4 @@
-name: Build extensions
+name: CI Keiyoushi Style (Flat)
 
 on:
   push:
@@ -6,24 +6,29 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  build_and_publish:
+    name: Build & Publish (Flat)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: 17
-          distribution: temurin
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Generate signing key
         run: |
@@ -34,50 +39,54 @@ jobs:
           FINGERPRINT=$(keytool -list -v -keystore signingkey.jks -storepass waltzysign | grep "SHA256: " | head -n 1 | awk '{print $2}' | sed 's/://g' | tr '[:upper:]' '[:lower:]')
           echo "REPO_FINGERPRINT=$FINGERPRINT" >> $GITHUB_ENV
 
-      - name: Build extensions
+      - name: Build All Extensions
         run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease -x spotlessCheck -x spotlessGradleCheck --no-build-cache
+          chmod +x gradlew
+          ./gradlew assembleRelease
         env:
           KEY_STORE_PASSWORD: waltzysign
           ALIAS: waltzy
           KEY_PASSWORD: waltzysign
 
-      - name: Checkout repo branch
-        uses: actions/checkout@v4
-        with:
-          ref: repo
-          path: repo
-          token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-
-      - name: Prepare repo
+      # BAGIAN INI YANG DIUBAH BIAR MIRIP KEIYOUSHI
+      - name: Organize APKs (Flat Structure)
         run: |
-          mkdir -p repo/apk
-          mkdir -p repo/icon
-          rm -f repo/apk/*.apk
-          rm -f repo/icon/*.png
-          find . -name "*.apk" -path "*/release/*" -type f -exec cp {} repo/apk/ \;
+          mkdir -p repo
+          # Copy APK langsung ke folder repo (bukan repo/apk)
+          find . -name "*-release.apk" -exec cp {} repo/ \;
 
-      - name: Generate repo
-        run: python3 .github/scripts/create-repo.py
-        env:
-          REPO_FINGERPRINT: ${{ env.REPO_FINGERPRINT }}
-
-      - name: Deploy repo
-        run: |
+          # Rename file (hapus -release)
           cd repo
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          if [ -d ".git" ]; then
-            git add .
-            git commit -m "Update repo"
-            git push origin repo
-          else
-            git init
-            git checkout -b repo
-            git add .
-            git commit -m "Update repo"
-            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-            git push -u origin repo
-          fi
+          for file in *-release.apk; do
+            mv "$file" "${file/-release.apk/.apk}"
+          done
+
+          # Hapus file yg bukan APK biar bersih
+          rm -f index.html || true
+
+          # Generate repo.json (Required for Mihon/Tachiyomi to accept the repo)
+          echo '{
+            "meta": {
+              "name": "Manga Indo Extensions",
+              "website": "https://github.com/'"${{ github.repository }}"'",
+              "signingKeyFingerprint": "'"${{ env.REPO_FINGERPRINT }}"'"
+            }
+          }' > repo.json
+
+      - name: Generate Repo Index (Inspector)
+        run: |
+          curl -L "https://github.com/keiyoushi/extensions-inspector/releases/latest/download/Inspector.jar" -o Inspector.jar
+
+          # Scan folder "repo" langsung (karena APK udah disitu)
+          java -jar Inspector.jar "repo" "repo/index.min.json" "repo/index.json"
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          personal_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./repo
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'Update repo (Keiyoushi Flat Style)'
