@@ -18,9 +18,7 @@ class ChapterListDto(
 ) {
     val hasNextPage: Boolean
         get() = page * limit < total
-    fun toSChapterList(): List<SChapter> {
-        return data.map { it.toSChapter() }
-    }
+    fun toSChapterList(): List<SChapter> = data.map { it.toSChapter() }
 }
 
 @Serializable
@@ -75,8 +73,12 @@ class ChapterDto(
             scanlator = relationships?.groups?.joinToString(", ") { it.name }
         }
     }
-    fun toPageList(): List<Page> {
-        val pagesArray = dataOptimized ?: data ?: emptyList()
+    fun toPageList(dataSaver: Boolean): List<Page> {
+        val pagesArray = if (dataSaver) {
+            dataOptimized ?: data
+        } else {
+            data ?: dataOptimized
+        } ?: emptyList()
         val pages = mutableListOf<Page>()
 
         pagesArray.forEachIndexed { index, pageData ->
