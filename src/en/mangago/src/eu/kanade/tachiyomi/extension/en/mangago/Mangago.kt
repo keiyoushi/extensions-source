@@ -214,8 +214,11 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        if (!document.select("div.controls ul#dropdown-menu-page").isNullOrEmpty()) {
-            return pageListParseMobile(document)
+        val dropdownItems = document.select("div ul#dropdown-menu-page li a")
+        if (dropdownItems.isNotEmpty()) {
+            return dropdownItems.mapIndexed { idx, it ->
+                Page(idx + 1, url = it.attr("abs:href"))
+            }
         }
 
         val imgsrcsScript = document.selectFirst("script:containsData(imgsrcs)")?.html()
@@ -264,12 +267,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         return super.pageListRequest(chapter)
     }
 
-    private fun pageListParseMobile(document: Document): List<Page> {
-        val pagesCount = document.select("div.controls ul#dropdown-menu-page li").size
-        val pageUrl = document.location().removeSuffix("/").substringBeforeLast("-")
-        return IntRange(1, pagesCount).map { Page(it, url = "$pageUrl-$it/") }
-    }
-
     private var cachedDeofChapterJS: String? = null
     private var cachedKey: ByteArray? = null
     private var cachedIv: ByteArray? = null
@@ -302,11 +299,14 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
         imageList = unescrambleImageList(imageList, cachedDeofChapterJS!!)
 
+        val urls = imageList.split(",")
+
         val cols = colsRegex.find(cachedDeofChapterJS!!)?.groupValues?.get(1) ?: ""
 
-        val pageNumber = document.location().removeSuffix("/").substringAfterLast("-").toInt()
+        val pageNumber = document.location().removeSuffix("/").substringAfterLast("/").toIntOrNull()
+        val finalPageNumber = if (pageNumber == null || pageNumber > urls.size) 1 else pageNumber
 
-        return imageList.split(",")[pageNumber - 1].let {
+        return urls[finalPageNumber - 1].let {
             if (it.contains("cspiclink")) {
                 "$it#desckey=${getDescramblingKey(cachedDeofChapterJS!!, it)}&cols=$cols"
             } else {
