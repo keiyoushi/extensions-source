@@ -46,17 +46,19 @@ jobs:
           ALIAS: waltzy
           KEY_PASSWORD: password123
 
-      - name: Prepare output
+      - name: Inspect extensions
         run: |
-          mkdir -p output/apk output/icon
-          find . -path "*/build/outputs/apk/release/*.apk" -exec cp {} output/apk/ \;
-          find src -name "ic_launcher.png" -path "*/mipmap-xxxhdpi/*" | while read icon; do
-            ext_dir=$(echo "$icon" | sed 's|/res/.*||')
-            lang=$(echo "$ext_dir" | cut -d'/' -f2)
-            name=$(echo "$ext_dir" | cut -d'/' -f3)
-            pkg="eu.kanade.tachiyomi.extension.${lang}.${name}"
-            cp "$icon" "output/icon/${pkg}.png"
-          done
+          chmod +x ./gradlew
+          ./gradlew :core:inspectExtensions -x spotlessCheck -x spotlessGradleCheck --no-build-cache
+        env:
+          KEY_STORE_PASSWORD: password123
+          ALIAS: waltzy
+          KEY_PASSWORD: password123
+
+      - name: Prepare repo
+        run: |
+          mkdir -p repo/apk
+          find . -path "*/build/outputs/apk/release/*.apk" -exec cp {} repo/apk/ \;
 
       - name: Generate repo
         run: python3 .github/scripts/create-repo.py
@@ -66,4 +68,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: repo
-          publish_dir:  ./output
+          publish_di r: ./repo
