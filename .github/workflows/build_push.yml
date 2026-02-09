@@ -46,14 +46,10 @@ jobs:
           ALIAS: waltzy
           KEY_PASSWORD: password123
 
-      - name: Generate repo
+      - name: Prepare output
         run: |
           mkdir -p output/apk output/icon
-
-          # Copy APKs
           find . -path "*/build/outputs/apk/release/*.apk" -exec cp {} output/apk/ \;
-
-          # Copy icons
           find src -name "ic_launcher.png" -path "*/mipmap-xxxhdpi/*" | while read icon; do
             ext_dir=$(echo "$icon" | sed 's|/res/.*||')
             lang=$(echo "$ext_dir" | cut -d'/' -f2)
@@ -62,84 +58,12 @@ jobs:
             cp "$icon" "output/icon/${pkg}.png"
           done
 
-          # Generate index.min.json
-          python3 << 'EOF'
-          import json, subprocess, zipfile, os, glob, re
-
-          apks = sorted(glob.glob("output/apk/*.apk"))
-          extensions = []
-
-          for apk_path in apks:
-              apk_name = os.path.basename(apk_path)
-
-              # Read AndroidManifest from APK
-              try:
-                  with zipfile.ZipFile(apk_path) as z:
-                      pass
-              except:
-                  continue
-
-              # Parse info from filename
-              # Format: tachiyomi-{lang}.{name}-v{version}.apk
-              match = re.match(r'tachiyomi-(.+?)\.(.+?)-v(.+?)\.apk', apk_name)
-              if not match:
-                  continue
-
-              lang = match.group(1)
-              name = match.group(2)
-              version = match.group(3)
-              pkg = f"eu.kanade.tachiyomi.extension.{lang}.{name}"
-
-              # Get version code from APK using aapt2
-              version_code = 1
-              try:
-                  result = subprocess.run(
-                      ["aapt2", "dump", "badging", apk_path],
-                      capture_output=True, text=True
-                  )
-                  vc_match = re.search(r"versionCode='(\d+)'", result.stdout)
-                  if vc_match:
-                      version_code = int(vc_match.group(1))
-              except:
-                  pass
-
-              # Check NSFW
-              nsfw = 0
-              try:
-                  result = subprocess.run(
-                      ["aapt2", "dump", "badging", apk_path],
-                      capture_output=True, text=True
-                  )
-                  if "tachiyomi.extension.nsfw" in result.stdout:
-                      nsfw = 1
-              except:
-                  pass
-
-              # Get sources from APK manifest
-              sources = []
-
-              extensions.append({
-                  "name": f"Tachiyomi: {name.replace('-', ' ').title()}",
-                  "pkg": pkg,
-                  "apk": apk_name,
-                  "lang": lang,
-                  "code": version_code,
-                  "version": version,
-                  "nsfw": nsfw,
-                  "hasReadme": 0,
-                  "hasChangelog": 0,
-                  "sources": sources
-              })
-
-          with open("output/index.min.json", "w") as f:
-              json.dump(extensions, f, separators=(',', ':'))
-
-          print(f"Generated index with {len(extensions)} extensions")
-          EOF
+      - name: Generate repo
+        run: python3 .github/scripts/create-repo.py
 
       - name: Deploy repo
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: repo
-           publish_dir: ./output
+          publish_dir:  ./output
