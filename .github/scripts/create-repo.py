@@ -92,16 +92,28 @@ for apk in sorted(REPO_APK_DIR.iterdir()):
     min_data = {
         "name": label,
         "pkg": package_name,
-        "apk": f"apk/{apk.name}",
+        "apk": apk.name,
         "lang": language,
         "code": int(VERSION_CODE_REGEX.search(package_info).group(1)),
         "version": VERSION_NAME_REGEX.search(package_info).group(1),
         "nsfw": nsfw,
-        "icon": f"icon/{package_name}.png",
+        "icon": f"{package_name}.png",
         "sources": [],
     }
 
     index_min_data.append(min_data)
+
+repo_fingerprint = os.environ.get("REPO_FINGERPRINT")
+if repo_fingerprint:
+    repo_data = {
+        "meta": {
+            "name": "Manga Indo Extensions",
+            "website": f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'keiyoushi/extensions')}",
+            "signingKeyFingerprint": repo_fingerprint,
+        }
+    }
+    with REPO_DIR.joinpath("repo.json").open("w", encoding="utf-8") as f:
+        json.dump(repo_data, f, ensure_ascii=False, indent=2)
 
 with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as f:
     json.dump(index_min_data, f, ensure_ascii=False, separators=(",", ":"))
