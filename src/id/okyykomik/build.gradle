@@ -1,8 +1,8 @@
 ext {
-    extName = 'ShiyuraSub'
-    extClass = '.ShiyuraSub'
+    extName = 'OkyyKomik'
+    extClass = '.OkyyKomik'
     themePkg = 'zeistmanga'
-    baseUrl = 'https://shiyurasub.blogspot.com'
+    baseUrl = 'https://www.okyykomik.my.id'
     overrideVersionCode = 0
     isNsfw = false
 }
