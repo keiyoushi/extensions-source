@@ -4,7 +4,7 @@ ext {
     themePkg = 'zeistmanga'
     baseUrl = 'http://www.okyykomik.my.id'
     overrideVersionCode = 0
-    isNsfw = true
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
