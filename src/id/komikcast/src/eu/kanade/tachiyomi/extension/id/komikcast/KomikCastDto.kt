@@ -11,35 +11,42 @@ import java.util.Locale
 
 @Serializable
 data class SeriesListResponse(
-    val data: List<SeriesItem>,
+    val data: List<SeriesItem> = emptyList(),
     val meta: Meta? = null,
 )
 
 @Serializable
 data class SeriesItem(
-    val id: Int,
-    val data: SeriesData,
+    val id: Int = 0,
+    val data: SeriesData = SeriesData(),
+    // Some APIs return coverImage at root level too
+    @SerialName("coverImage") val rootCoverImage: String? = null,
 )
 
 @Serializable
 data class SeriesData(
-    val slug: String?,
-    val title: String,
+    val slug: String? = null,
+    val title: String = "",
     val author: String? = null,
     val status: String? = null,
     val synopsis: String? = null,
     @SerialName("coverImage") val coverImage: String? = null,
+    // Alternative field names the API might use
+    @SerialName("cover_image") val coverImageAlt: String? = null,
+    @SerialName("thumbnail") val thumbnail: String? = null,
+    @SerialName("cover") val cover: String? = null,
+    @SerialName("image") val image: String? = null,
     val genres: List<GenreData>? = null,
 )
 
 @Serializable
 data class GenreData(
-    val data: GenreInfo,
+    val data: GenreInfo = GenreInfo(),
 )
 
 @Serializable
 data class GenreInfo(
-    val name: String,
+    val name: String = "",
 )
 
 @Serializable
@@ -50,37 +57,43 @@ data class Meta(
 
 @Serializable
 data class SeriesDetailResponse(
-    val data: SeriesItem,
+    val data: SeriesItem = SeriesItem(),
 )
 
 @Serializable
 data class ChapterItem(
-    val data: ChapterData,
+    val data: ChapterData = ChapterData(),
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
 
 @Serializable
 data class ChapterData(
-    val index: Float,
+    val index: Float = 0f,
     val title: String? = null,
     val images: List<String>? = null,
 )
 
 @Serializable
 data class ChapterListResponse(
-    val data: List<ChapterItem>,
+    val data: List<ChapterItem> = emptyList(),
 )
 
 @Serializable
 data class ChapterDetailResponse(
-    val data: ChapterItem,
+    val data: ChapterItem = ChapterItem(),
 )
 
 fun SeriesItem.toSManga(): SManga = SManga.create().apply {
     url = "/series/${data.slug ?: id}"
     title = data.title
+    // Try multiple possible cover image sources
     thumbnail_url = data.coverImage
+        ?: data.coverImageAlt
+        ?: data.thumbnail
+        ?: data.cover
+        ?: data.image
+        ?: rootCoverImage
     author = data.author
     description = data.synopsis
     genre = data.genres?.joinToString { it.data.name } ?: ""
@@ -91,6 +104,7 @@ fun SeriesItem.toSManga(): SManga = SManga.create().apply {
         "cancelled", "canceled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
+
     initialized = true
 }
 

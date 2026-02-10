@@ -9,11 +9,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.injectLazy
 
 class KomikCast : HttpSource() {
 
@@ -23,6 +25,8 @@ class KomikCast : HttpSource() {
     private val apiUrl = "https://be.komikcast.fit"
     override val lang = "id"
     override val supportsLatest = true
+
+    private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
@@ -129,11 +133,30 @@ class KomikCast : HttpSource() {
         }
     }
 
+    /**
+     * Handle both responses:
+     * - Popular/Latest/Search: {"data": [...], "meta": {...}}  (array)
+     * - Related/Suggestions:   {"data": {"id":..., "data":{...}}} (single object)
+     */
     private fun parseSeriesListResponse(response: Response): MangasPage {
-        val result = response.parseAs<SeriesListResponse>()
-        val mangas = result.data.map { it.toSManga() }
-        val hasNextPage = result.meta?.let { it.page ?: 0 < (it.lastPage ?: 0) } ?: false
-        return MangasPage(mangas, hasNextPage)
+        val body = response.body.string()
+
+        return try {
+            // Normal: data is array
+            val result = json.decodeFromString(SeriesListResponse.serializer(), body)
+            val mangas = result.data.map { it.toSManga() }
+            val hasNextPage = result.meta?.let { (it.page ?: 0) < (it.lastPage ?: 0) } ?: false
+            MangasPage(mangas, hasNextPage)
+        } catch (_: Exception) {
+            // Fallback: data is single object (suggestions/related)
+            try {
+                val result = json.decodeFromString(SeriesDetailResponse.serializer(), body)
+                val manga = result.data.toSManga()
+                MangasPage(listOf(manga), false)
+            } catch (_: Exception) {
+                MangasPage(emptyList(), false)
+            }
+        }
     }
 
     override fun getFilterList(): FilterList = FilterList(
