@@ -289,7 +289,6 @@ class Manhuarm(
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
-        val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
         val chapterUrl = document.location().toHttpUrl().newBuilder()
             .removeAllQueryParameters("style")
             .build()
@@ -300,9 +299,15 @@ class Manhuarm(
             .add("Accept", "*/*")
             .build()
 
+        val ocrUrl = Regex("""securePath\s*=\s*"([^"]+)"""")
+            .find(document.html())
+            ?.groupValues
+            ?.get(1)
+            ?.replace("\\/", "/")
+            ?: return pages
+
         val dialog = try {
-            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data-1/$chapterId.json", jsonHeaders))
-                .execute()
+            val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()
 
             // If server returns error (403, etc), skip translations
             if (!response.isSuccessful) {
