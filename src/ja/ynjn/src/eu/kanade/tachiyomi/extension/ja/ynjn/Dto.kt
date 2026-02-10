@@ -98,7 +98,7 @@ class ChapterData(
 class Episode(
     private val id: Int,
     private val name: String,
-    @SerialName("reading_condition") private val readingCondition: String,
+    @SerialName("reading_condition") val readingCondition: String,
 ) {
     fun toSChapter(titleId: String): SChapter = SChapter.create().apply {
         url = "$id#$titleId"

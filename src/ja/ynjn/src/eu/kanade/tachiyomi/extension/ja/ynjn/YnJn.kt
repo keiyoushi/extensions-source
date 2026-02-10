@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.ynjn
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,13 +13,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class YnJn : HttpSource() {
-
+class YnJn :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Young Jump+"
     private val domain = "ynjn.jp"
     override val baseUrl = "https://$domain"
@@ -23,6 +29,7 @@ class YnJn : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "https://webapi.$domain"
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -104,7 +111,12 @@ class YnJn : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val titleId = response.request.url.pathSegments[1]
-        return response.parseAs<ChapterDetails>().data.episodes.map { it.toSChapter(titleId) }.reversed()
+        val result = response.parseAs<ChapterDetails>()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, true)
+        return result.data.episodes
+            .filter { !hideLocked || it.readingCondition == "EPISODE_READ_CONDITION_FREE" }
+            .map { it.toSChapter(titleId) }
+            .reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -440,5 +452,17 @@ class YnJn : HttpSource() {
             get() = vals[state].third
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Paid Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+    }
 }
