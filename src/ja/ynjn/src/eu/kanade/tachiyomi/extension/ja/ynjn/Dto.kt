@@ -35,6 +35,12 @@ class Data(
     @SerialName("has_next") val hasNext: Boolean?,
     val titles: List<MangaDetails>,
     @SerialName("total_count") val totalCount: Int,
+    val info: DataInfo?,
+)
+
+@Serializable
+class DataInfo(
+    val id: Int,
 )
 
 @Serializable

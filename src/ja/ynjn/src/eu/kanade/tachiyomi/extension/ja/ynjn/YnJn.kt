@@ -51,8 +51,15 @@ class YnJn :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/title/feature".toHttpUrl().newBuilder()
-            .addQueryParameter("id", "5398")
+        val featureUrl = "$apiUrl/title/feature".toHttpUrl()
+        val getId = featureUrl.newBuilder()
+            .addQueryParameter("displayLocation", "TOP_PAGE_RENSAI")
+            .build()
+        val request = GET(getId, headers)
+        val response = client.newCall(request).execute()
+        val latestId = response.parseAs<DataResponse>().data.info?.id
+        val url = featureUrl.newBuilder()
+            .addQueryParameter("id", latestId.toString())
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
