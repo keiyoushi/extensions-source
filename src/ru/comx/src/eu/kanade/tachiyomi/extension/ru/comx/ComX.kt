@@ -360,60 +360,83 @@ class ComX :
         val data = json.decodeFromString<JsonObject>(dataStr)
         val chaptersList = data["chapters"]?.jsonArray ?: return emptyList()
 
-        val isEvent = document.select(".page__list li:contains(Тип выпуска)")
+        val isEvent = document
+            .select(".page__list li:contains(Тип выпуска)")
             .text()
             .contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")
 
         var currentBase: Float? = null
         var subIndex = 0
 
-        return chaptersList.map { element ->
-            val obj = element.jsonObject
+        val pendingExtras = mutableListOf<SChapter>()
 
+        val result = mutableListOf<SChapter>()
+
+        chaptersList.forEach { element ->
+
+            val obj = element.jsonObject
             val chapter = SChapter.create()
+
             val title = obj["title"]!!.jsonPrimitive.content.orEmpty()
             val posi = obj["posi"]!!.jsonPrimitive.float
 
             chapter.name = title
             chapter.date_upload =
-                simpleDateFormat.parse(obj["date"]!!.jsonPrimitive.content)?.time ?: 0L
+                simpleDateFormat.parse(
+                    obj["date"]!!.jsonPrimitive.content,
+                )?.time ?: 0L
 
             val parsedBase = parseBaseChapterNumber(title)
             val isExtra = isExtraChapter(title)
 
-            val chapterNumber: Float = when {
+            when {
                 parsedBase != null -> {
                     currentBase = parsedBase
                     subIndex = 0
-                    parsedBase
+                    if (pendingExtras.isNotEmpty()) {
+                        pendingExtras.reversed().forEach {
+                            subIndex++
+                            it.chapter_number =
+                                (currentBase!! + subIndex.toFloat() * extraStep).toFloat()
+                        }
+                        pendingExtras.clear()
+                    }
+                    chapter.chapter_number = parsedBase
                 }
 
-                isExtra && (currentBase != null) -> {
-                    subIndex++
-                    (currentBase + subIndex * extraStep).toFloat()
+                isExtra -> {
+                    pendingExtras += chapter
                 }
 
                 else -> {
                     currentBase = posi
                     subIndex = 0
-                    posi
+                    if (pendingExtras.isNotEmpty()) {
+                        pendingExtras.reversed().forEach {
+                            subIndex++
+                            it.chapter_number =
+                                (currentBase + subIndex.toFloat() * extraStep).toFloat()
+                        }
+                        pendingExtras.clear()
+                    }
+                    chapter.chapter_number = posi
                 }
             }
-
-            chapter.chapter_number = chapterNumber
-
-            if (isEvent) {
+            if (isEvent && chapter.chapter_number > 0f) {
                 chapter.name =
-                    chapter.chapter_number.toInt().toString() + " " + chapter.name
+                    chapter.chapter_number.toInt().toString() +
+                    " " + chapter.name
             }
-
             chapter.setUrlWithoutDomain(
-                "/reader/" + data["news_id"] + "/" +
+                "/reader/" +
+                    data["news_id"] +
+                    "/" +
                     obj["id"]!!.jsonPrimitive.content,
             )
 
-            chapter
+            result += chapter
         }
+        return result
     }
 
     private fun parseBaseChapterNumber(title: String): Float? {
