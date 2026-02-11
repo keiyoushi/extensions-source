@@ -131,20 +131,18 @@ fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
     return sManga
 }
 
-fun MediocreChapterSimpleDto.toSChapter(): SChapter {
-    return SChapter.create().apply {
-        name = this@toSChapter.name
-        chapter_number = number ?: 0f
-        url = "/capitulo/$id"
-        date_upload = dateFormat.tryParse(createdAt)
-    }
+fun MediocreChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
+    name = this@toSChapter.name
+    chapter_number = number ?: 0f
+    url = "/capitulo/$id"
+    date_upload = dateFormat.tryParse(createdAt)
 }
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
     val obraId = manga?.id ?: 0
-    val capituloNome = number?.toInt()?.toString() ?: name
+    val chapterNumber = number?.toString()?.removeSuffix(".0") ?: name
     return pages.mapIndexed { idx, p ->
-        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$capituloNome/${p.src}"
+        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/${p.src}"
         Page(idx, imageUrl = imageUrl)
     }
 }
