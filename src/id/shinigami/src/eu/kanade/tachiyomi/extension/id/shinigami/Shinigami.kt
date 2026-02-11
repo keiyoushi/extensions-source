@@ -10,10 +10,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -32,6 +37,8 @@ class Shinigami : HttpSource() {
     override val lang = "id"
 
     override val supportsLatest = true
+
+    private val json: Json by injectLazy()
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
@@ -72,10 +79,29 @@ class Shinigami : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val rootObject = response.parseAs<ShinigamiBrowseDto>()
-        val projectList = rootObject.data.map(::popularMangaFromObject)
+        val body = response.body.string()
+        val rootJson = json.parseToJsonElement(body).jsonObject
+        val dataElement = rootJson["data"] ?: return MangasPage(emptyList(), false)
 
-        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
+        // Handle both array and single object responses
+        val projectList: List<SManga> = try {
+            val dataArray = dataElement.jsonArray
+            dataArray.map { element ->
+                val obj = json.decodeFromJsonElement(ShinigamiBrowseDataDto.serializer(), element)
+                popularMangaFromObject(obj)
+            }
+        } catch (_: IllegalArgumentException) {
+            // data is a single object, not an array (e.g. related manga response)
+            return MangasPage(emptyList(), false)
+        }
+
+        val metaElement = rootJson["meta"]
+        val hasNextPage = if (metaElement != null) {
+            val meta = json.decodeFromJsonElement(MetaDto.serializer(), metaElement)
+            meta.totalPage?.let { meta.page < it } ?: false
+        } else {
+            false
+        }
 
         return MangasPage(projectList, hasNextPage)
     }
@@ -221,7 +247,7 @@ class Shinigami : HttpSource() {
 
     private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
         date_upload = dateFormat.tryParse(obj.date)
-        name = "Chapter ${obj.name.toString().replace(".0","")} ${obj.title}"
+        name = "Chapter ${obj.name.toString().replace(".0", "")} ${obj.title}"
         url = obj.chapterId
     }
 
