@@ -37,7 +37,7 @@ class ManhwaRead :
     override val baseUrl: String
         get() = when {
             System.getenv("CI") == "true" -> mirrors.joinToString("#, ")
-            else -> mirrors[preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt()]
+            else -> mirrors[preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt().coerceIn(mirrors.indices)]
         }
 
     override val lang = "en"
@@ -61,16 +61,15 @@ class ManhwaRead :
     // Search
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
-            query.toHttpUrlOrNull()
+            val slug = query.toHttpUrlOrNull()
                 ?.pathSegments
                 ?.getOrNull(1)
-                ?.let { slug ->
-                    // Rewrite to strip suffixes after slug
-                    val newUrl = "$baseUrl/manhwa/$slug/"
-                    return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(newUrl) })
-                        .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
-                        ?: throw Exception("Invalid URL")
-                }
+                ?: throw Exception("Invalid URL")
+
+            // Rewrite to strip suffixes after slug
+            val newUrl = "$baseUrl/manhwa/$slug/"
+            return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(newUrl) })
+                .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
         }
         return super.fetchSearchManga(page, query, filters)
     }
