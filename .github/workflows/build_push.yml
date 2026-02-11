@@ -1,4 +1,4 @@
-name: CI Keiyoushi Style (Python Native + Fix Key)
+name: Ultimate Debug & Build
 
 on:
   push:
@@ -6,22 +6,14 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: write
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build_and_publish:
-    name: Build & Publish (With Signing Key)
+  debug_and_build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # PENTING: Biar Spotless gak error history
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -32,90 +24,103 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # --- INI YANG DITAMBAHKAN (MEMBUAT KUNCI DARURAT) ---
-      - name: Create Dummy Signing Key
+      # 1. BIKIN KUNCI DARURAT
+      - name: Generate Keystore
         run: |
-          # Bikin file signingkey.jks palsu biar build gak error
-          keytool -genkey -v -keystore signingkey.jks -storepass 123456 -alias key0 -keypass 123456 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Waltzy,O=Waltzy,C=ID"
+          keytool -genkey -v -keystore ${{ github.workspace }}/signingkey.jks -storepass 123456 -alias key0 -keypass 123456 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Waltzy,O=Waltzy,C=ID"
+          echo "✅ Keystore ada di: ${{ github.workspace }}/signingkey.jks"
 
+      # 2. INJEKSI PASSWORD (SEMUA KEMUNGKINAN DIMASUKKAN)
+      # Kita tembak semua variabel yang mungkin dipake sama script Gradle
+      - name: Inject All Possible Properties
+        run: |
+          echo "Menulis gradle.properties..."
+          
+          # Variasi 1: Standard Android Plugin
+          echo "android.injected.signing.store.file=${{ github.workspace }}/signingkey.jks" >> gradle.properties
+          echo "android.injected.signing.store.password=123456" >> gradle.properties
+          echo "android.injected.signing.key.alias=key0" >> gradle.properties
+          echo "android.injected.signing.key.password=123456" >> gradle.properties
+          
+          # Variasi 2: Standard Gradle/Kotlin
+          echo "keyStore=${{ github.workspace }}/signingkey.jks" >> gradle.properties
+          echo "keyStorePassword=123456" >> gradle.properties
+          echo "keyAlias=key0" >> gradle.properties
+          echo "keyPassword=123456" >> gradle.properties
+          
+          # Variasi 3: Keiyoushi Style / Extension Common
+          echo "signing.keyStore=${{ github.workspace }}/signingkey.jks" >> gradle.properties
+          echo "signing.keyStorePassword=123456" >> gradle.properties
+          echo "signing.keyAlias=key0" >> gradle.properties
+          echo "signing.keyPassword=123456" >> gradle.properties
+          
+          # Variasi 4: Polos (Just in case)
+          echo "storeFile=${{ github.workspace }}/signingkey.jks" >> gradle.properties
+          echo "storePassword=123456" >> gradle.properties
+          echo "keyAlias=key0" >> gradle.properties
+          echo "keyPassword=123456" >> gradle.properties
+
+          echo "✅ gradle.properties berhasil dibuat penuh!"
+
+      # 3. INTIP ISI build.gradle (Cuma buat jaga-jaga kalau kita perlu debug manual nanti)
+      - name: Inspect Build Scripts (Reconnaissance)
+        run: |
+          echo "=== ISI ROOT BUILD.GRADLE ==="
+          cat build.gradle.kts || cat build.gradle || echo "Gak nemu root build.gradle"
+          echo "============================="
+
+      # 4. BUILD DENGAN FULL STACKTRACE
       - name: Build All Extensions
         env:
-          # Masukkan password kunci palsu tadi ke Gradle
+          # Backup: Masukin juga lewat Environment Variable
           INJECT_ESIGN_SIGNING_KEY_STORE_PASSWORD: '123456'
           INJECT_ESIGN_SIGNING_KEY_ALIAS: 'key0'
           INJECT_ESIGN_SIGNING_KEY_PASSWORD: '123456'
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace --info
 
-      # SCRIPT PYTHON (TIDAK PERLU DIUBAH, SUDAH BENAR)
+      # 5. GENERATOR PYTHON (Script Final yang sudah terbukti benar)
       - name: Generate Repo Structure
+        if: success() # Cuma jalan kalau build di atas IJO
         run: |
           mkdir -p repo
-          
-          # Pindahkan APK
           find . -name "*-release.apk" -exec cp {} repo/ \;
-          
           cd repo
-          
-          # Rename APK
-          for file in *-release.apk; do
-            mv "$file" "${file/-release.apk/.apk}"
-          done
+          for file in *-release.apk; do mv "$file" "${file/-release.apk/.apk}"; done
 
-          # Python Generator
           python3 -c '
-          import os
-          import json
-          
+          import os, json
           repo_data = []
           base_url = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          
-          print("Scanning APKs...")
           
           for filename in os.listdir("."):
               if filename.endswith(".apk"):
                   try:
                       parts = filename.replace(".apk", "").split("-")
                       version = parts[-1].replace("v", "")
-                      full_pkg_suffix = parts[-2]
-                      
-                      lang = "all"
-                      if "." in full_pkg_suffix:
-                          lang = full_pkg_suffix.split(".")[0]
-                      
-                      name = full_pkg_suffix.split(".")[-1].title()
-                      pkg_name = f"eu.kanade.tachiyomi.extension.{full_pkg_suffix}"
-                      
+                      full_pkg = parts[-2]
+                      lang = full_pkg.split(".")[0] if "." in full_pkg else "all"
+                      name = full_pkg.split(".")[-1].title()
                       entry = {
                           "name": f"Tachiyomi: {name}",
-                          "pkg": pkg_name,
-                          "apk": filename, 
+                          "pkg": f"eu.kanade.tachiyomi.extension.{full_pkg}",
+                          "apk": filename,
                           "lang": lang,
-                          "code": 1, 
+                          "code": 1,
                           "version": version,
                           "nsfw": 0,
                           "sources": []
                       }
                       repo_data.append(entry)
-                      print(f"Added: {name}")
-                  except Exception as e:
-                      print(f"Skipping {filename}: {e}")
+                  except: pass
 
-          with open("index.min.json", "w") as f:
-              json.dump(repo_data, f, separators=(",", ":"))
-              
-          repo_meta = {
-              "name": "Waltzy Extensions",
-              "id": "waltzy-repo",
-              "baseUrl": base_url,
-              "formatVersion": 1
-          }
-          with open("repo.json", "w") as f:
-              json.dump(repo_meta, f, indent=2)
+          with open("index.min.json", "w") as f: json.dump(repo_data, f, separators=(",", ":"))
+          with open("repo.json", "w") as f: json.dump({"name":"Waltzy","id":"waltzy-repo","baseUrl":base_url,"formatVersion":1}, f, indent=2)
           '
 
       - name: Deploy to gh-pages
+        if: success()
         uses: peaceiris/actions-gh-pages@v3
         with:
           personal_token: ${{ secrets.GITHUB_TOKEN }}
@@ -124,5 +129,6 @@ jobs:
           force_orphan: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'Update repo (With Signing  Key Fix)'
+          commit_message: 'Update repo (Debug Kitchen Sink)'
 
+ 
