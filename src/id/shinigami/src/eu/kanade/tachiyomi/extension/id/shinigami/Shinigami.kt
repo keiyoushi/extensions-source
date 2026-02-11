@@ -17,9 +17,9 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-import uy.kohesive.injekt.injectLazy
 
 class Shinigami : HttpSource() {
     // moved from Reaper Scans (id) to Shinigami (id)
@@ -228,9 +228,7 @@ class Shinigami : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ShinigamiChapterListDto>()
