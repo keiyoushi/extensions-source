@@ -3,7 +3,7 @@ ext {
     extClass = '.LepoyTL'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.lepoytl.my.id'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
