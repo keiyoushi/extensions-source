@@ -18,6 +18,8 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.util.Calendar
+import java.util.TimeZone
 
 class YnJn :
     HttpSource(),
@@ -30,6 +32,9 @@ class YnJn :
 
     private val apiUrl = "https://webapi.$domain"
     private val preferences: SharedPreferences by getPreferencesLazy()
+    private val jst = TimeZone.getTimeZone("Asia/Tokyo")
+    private var cachedlatestId: Int? = null
+    private var cacheExpiry: Long = 0L
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -52,14 +57,26 @@ class YnJn :
 
     override fun latestUpdatesRequest(page: Int): Request {
         val featureUrl = "$apiUrl/title/feature".toHttpUrl()
-        val getId = featureUrl.newBuilder()
-            .addQueryParameter("displayLocation", "TOP_PAGE_RENSAI")
-            .build()
-        val request = GET(getId, headers)
-        val response = client.newCall(request).execute()
-        val latestId = response.parseAs<DataResponse>().data.info?.id
+        val now = System.currentTimeMillis()
+        if (cachedlatestId == null || now >= cacheExpiry) {
+            val cal = Calendar.getInstance(jst)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+            cacheExpiry = cal.timeInMillis
+
+            val getId = featureUrl.newBuilder()
+                .addQueryParameter("displayLocation", "TOP_PAGE_RENSAI")
+                .build()
+            val request = GET(getId, headers)
+            val response = client.newCall(request).execute()
+            cachedlatestId = response.parseAs<DataResponse>().data.info?.id
+        }
+
         val url = featureUrl.newBuilder()
-            .addQueryParameter("id", latestId.toString())
+            .addQueryParameter("id", cachedlatestId.toString())
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
