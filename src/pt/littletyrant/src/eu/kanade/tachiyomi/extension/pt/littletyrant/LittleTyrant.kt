@@ -17,7 +17,7 @@ class LittleTyrant :
         "pt-BR",
         dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
     ) {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(2)
         .addNetworkInterceptor(::loginCheckInterceptor)
         .build()
