@@ -41,6 +41,8 @@ class LittleTyrant :
 
     override val popularMangaUrlSelector = "div.post-title h3 a"
 
+    private fun extractThumbnailUrlFromStyle(style: String): String? = REGEX_THUMBNAIL_URL.find(style)?.groupValues?.get(1)?.trim()
+
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         with(element) {
@@ -50,11 +52,15 @@ class LittleTyrant :
             }
             // Thumbnail vem de div.content-top style="background-image:url('...')", não tem img
             selectFirst("div.content-top")?.attr("style")?.let { style ->
-                Regex("""url\s*\(\s*['"]?([^'")]+)['"]?\s*\)""").find(style)?.groupValues?.get(1)?.trim()?.let { url ->
+                extractThumbnailUrlFromStyle(style)?.let { url ->
                     manga.thumbnail_url = processThumbnail(url, true)
                 }
             }
         }
         return manga
+    }
+
+    companion object {
+        val REGEX_THUMBNAIL_URL = Regex("""url\s*\(\s*['"]?([^'")]+)['"]?\s*\)""")
     }
 }
