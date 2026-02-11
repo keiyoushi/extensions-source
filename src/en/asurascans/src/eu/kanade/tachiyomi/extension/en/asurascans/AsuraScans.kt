@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -380,15 +381,15 @@ class AsuraScans :
         return mediaResponse.parseAs<MediaResponseDto>("Failed to get image URL").data
     }
 
-    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request = Request.Builder()
-        .url(url)
-        .headers(headers)
-        .post(jsonPayload.toRequestBody("application/json".toMediaType()))
-        .header("X-XSRF-TOKEN", xsrfToken)
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/json")
-        .header("X-Requested-With", "XMLHttpRequest")
-        .build()
+    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request =  POST(
+        url,
+        headers.newBuilder()
+            .add("X-XSRF-TOKEN", xsrfToken)
+            .add("Accept", "application/json")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build(),
+        jsonPayload.toRequestBody("application/json".toMediaType()),
+    )
 
     private inline fun <reified T> Response.parseAs(errorPrefix: String): T {
         if (!isSuccessful) {
