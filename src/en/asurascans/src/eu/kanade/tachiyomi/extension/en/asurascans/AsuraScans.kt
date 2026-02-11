@@ -381,7 +381,7 @@ class AsuraScans :
         return mediaResponse.parseAs<MediaResponseDto>("Failed to get image URL").data
     }
 
-    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request =  POST(
+    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request = POST(
         url,
         headers.newBuilder()
             .add("X-XSRF-TOKEN", xsrfToken)
