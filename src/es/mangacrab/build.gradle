@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaCrab'
     themePkg = 'madara'
     baseUrl = 'https://mangacrab.org'
-    overrideVersionCode = 19
+    overrideVersionCode = 20
     isNsfw = false
 }
 
