@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
@@ -18,15 +19,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.FormBody
@@ -365,8 +364,8 @@ class ComX :
             .text()
             .contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")
 
-        var currentBase: Float? = null
-        var subIndex = 0
+        var currentBase: Float?
+        var subIndex: Int
 
         val pendingExtras = mutableListOf<SChapter>()
 
@@ -377,14 +376,12 @@ class ComX :
             val obj = element.jsonObject
             val chapter = SChapter.create()
 
-            val title = obj["title"]!!.jsonPrimitive.content.orEmpty()
+            val title = obj["title"]!!.jsonPrimitive.content
             val posi = obj["posi"]!!.jsonPrimitive.float
 
             chapter.name = title
             chapter.date_upload =
-                simpleDateFormat.parse(
-                    obj["date"]!!.jsonPrimitive.content,
-                )?.time ?: 0L
+                simpleDateFormat.tryParse(obj["date"]!!.jsonPrimitive.content)
 
             val parsedBase = parseBaseChapterNumber(title)
             val isExtra = isExtraChapter(title)
@@ -691,11 +688,11 @@ class ComX :
         CheckFilter("Ёнкома", "121"),
     )
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = DOMAIN_PREF
             title = "Домен"
-            summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
+            summary = "$baseUrl\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 if (!newValue.toString().matches(URL_REGEX)) {
@@ -717,7 +714,7 @@ class ComX :
                 "\nПо умолчанию домент картинок берётся автоматически." +
                 "\nЧтобы узнать домен изображения откройте главу в браузере и после долгим тапом откройте изображение в новом окне."
             setDefaultValue("")
-            setOnPreferenceChangeListener { _, newValue ->
+            setOnPreferenceChangeListener { _, _ ->
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
