@@ -1,0 +1,63 @@
+name: Spotless Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Module to check (e.g. :src:id:shinigami)'
+        required: false
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spotless:
+    name: Spotless Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884 # v5.0.1
+        with:
+          cache-read-only: true
+
+      - name: Run Spotless Check (specific module)
+        if: ${{ github.event.inputs.module != '' }}
+        run: |
+          ./gradlew ${{ github.event.inputs.module }}:spotlessCheck
+
+      - name: Run Spotless Check (all)
+        if: ${{ github.event.inputs.module == '' }}
+        run: |
+          ./gradlew spotlessCheck
+
+      - name: Run Spotless Apply (fix violations)
+        if: failure()
+        run: |
+          echo "::group::Spotless Apply Output"
+          ./gradlew ${{ github.event.inputs.module != '' && format('{0}:spotlessApply', github.event.inputs.module) || 'spotlessApply' }} 2>&1 || true
+          echo "::endgroup::"
+          echo ""
+          echo "::warning::Spotless violations found! Run locally:"
+          echo "  ./gradlew spotlessApply"
+          echo ""
+          echo "Changed files after spotlessApply:"
+          git diff --name-only
+          echo ""
+          echo "Diff:"
+          git diff

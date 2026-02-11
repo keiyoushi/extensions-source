@@ -142,16 +142,14 @@ class Shinigami : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-            SortOrderFilter(),
-            StatusFilter(),
-            FormatFilter(),
-            TypeFilter(),
-            GenreFilter(getGenres()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        SortOrderFilter(),
+        StatusFilter(),
+        FormatFilter(),
+        TypeFilter(),
+        GenreFilter(getGenres()),
+    )
 
     private fun getGenres(): Array<Pair<String, String>> = arrayOf(
         Pair("Action", "action"),
@@ -198,9 +196,7 @@ class Shinigami : HttpSource() {
         Pair("Tragedy", "tragedy"),
     )
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/series/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Migration from old web urls to the new api based
@@ -227,12 +223,10 @@ class Shinigami : HttpSource() {
         }
     }
 
-    private fun Int.toStatus(): Int {
-        return when (this) {
-            1 -> SManga.ONGOING
-            2 -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun Int.toStatus(): Int = when (this) {
+        1 -> SManga.ONGOING
+        2 -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     override fun chapterListRequest(manga: SManga): Request {
