@@ -16,8 +16,7 @@ Ujj---------------7jj-------------jjj-----diid-udjndjdj----dwejbnd
 
 To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
 
-Please note that creating an issue does not mean that the source will be added or fixed in a  is volunteer-based. Some sources may aqwsd
-difficult to maint
+Please note that creating an issue does not mean that the source will be added or fixed in a  is volunteer-based. Soaasxax
  are welcome!
 
 Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
