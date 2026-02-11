@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mist Scans'
+    extClass = '.MistScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://mistscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
