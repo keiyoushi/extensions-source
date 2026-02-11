@@ -3,8 +3,8 @@ ext {
     extClass = '.Kaguya'
     themePkg = 'madara'
     baseUrl = 'https://kaguya.id'
-    overrideVersionCode = 1
-    isNsfw = false
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
