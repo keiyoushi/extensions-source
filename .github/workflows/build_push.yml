@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # <--- INI OBATNYA! (Download semua history biar Spotless gak error)
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -35,8 +37,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # INI PENGGANTI INSPECTOR (Script Python Manual)
-      # Tidak perlu download JAR, jadi tidak akan error 404 lagi.
+      # SCRIPT PYTHON MANUAL (ANTI ERROR 404)
       - name: Generate Repo Structure
         run: |
           # 1. Buat folder repo
@@ -68,22 +69,20 @@ jobs:
               if filename.endswith(".apk"):
                   try:
                       # CONTOH NAMA: tachiyomi-id.komikcast-v1.2.3.apk
-                      # Kita pecah namanya buat ambil data
                       parts = filename.replace(".apk", "").split("-")
                       
                       # Ambil Versi (v1.2.3 -> 1.2.3)
                       version = parts[-1].replace("v", "")
                       
                       # Ambil Package & Lang
-                      # parts[-2] biasanya "id.komikcast"
                       full_pkg_suffix = parts[-2]
                       
                       lang = "all"
                       if "." in full_pkg_suffix:
-                          lang = full_pkg_suffix.split(".")[0] # Ambil "id"
+                          lang = full_pkg_suffix.split(".")[0]
                       
-                      # Ambil Nama (Komikcast)
-                      name = full_pkg_suffix.split(".")[-1].title() 
+                      # Ambil Nama
+                      name = full_pkg_suffix.split(".")[-1].title()
                       
                       # Bikin Package Name Lengkap
                       pkg_name = f"eu.kanade.tachiyomi.extension.{full_pkg_suffix}"
@@ -128,4 +127,6 @@ jobs:
           force_orphan: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'Update repo (Python Native)'
+          commit_message: 'Update repo (Python Native Fix)'
+
+ 
