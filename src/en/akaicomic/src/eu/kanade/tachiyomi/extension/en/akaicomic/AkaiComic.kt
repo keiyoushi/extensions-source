@@ -101,11 +101,9 @@ class AkaiComic : HttpSource() {
         allManga.map { it.toSManga() }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Details ================================
 
@@ -114,8 +112,7 @@ class AkaiComic : HttpSource() {
         return GET("$apiUrl/manga/$mangaId", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
     // ============================== Chapters ==============================
 
@@ -157,8 +154,7 @@ class AkaiComic : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val headers = headersBuilder()
