@@ -37,25 +37,11 @@ class Yupmanga : HttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.comic-card").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("h3")!!.text()
-                val rawUrl = element.selectFirst("> a[href]")!!.attr("abs:href")
-                url = rawUrl.toHttpUrl().queryParameter("id")!!
-                thumbnail_url = element.selectFirst("img.object-cover")?.attr("abs:src")
-            }
-        }
-        return MangasPage(mangas, false)
-    }
+    override fun popularMangaParse(response: Response) = parseSeriesList(response.asJsoup())
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        return parseSeriesList(document)
-    }
+    override fun latestUpdatesParse(response: Response) = parseSeriesList(response.asJsoup())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search.php".toHttpUrl().newBuilder()
