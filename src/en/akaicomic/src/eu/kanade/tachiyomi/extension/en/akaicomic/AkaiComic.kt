@@ -42,9 +42,7 @@ class AkaiComic : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/manga/list?limit=$PAGE_SIZE&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manga/list?limit=$PAGE_SIZE&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<MangaListResponse>()
@@ -55,9 +53,7 @@ class AkaiComic : HttpSource() {
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/manga/list?limit=$PAGE_SIZE&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/manga/list?limit=$PAGE_SIZE&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<MangaListResponse>()
@@ -74,48 +70,42 @@ class AkaiComic : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return fetchAllManga().map { allManga ->
-            val filtered = if (query.isNotBlank()) {
-                allManga.filter { it.title.contains(query, ignoreCase = true) }
-            } else {
-                allManga
-            }
-            val chunked = filtered.chunked(PAGE_SIZE)
-            if (chunked.isEmpty()) {
-                MangasPage(emptyList(), false)
-            } else {
-                val entries = chunked.getOrElse(page - 1) { emptyList() }
-                MangasPage(entries, page < chunked.size)
-            }
+    ): Observable<MangasPage> = fetchAllManga().map { allManga ->
+        val filtered = if (query.isNotBlank()) {
+            allManga.filter { it.title.contains(query, ignoreCase = true) }
+        } else {
+            allManga
+        }
+        val chunked = filtered.chunked(PAGE_SIZE)
+        if (chunked.isEmpty()) {
+            MangasPage(emptyList(), false)
+        } else {
+            val entries = chunked.getOrElse(page - 1) { emptyList() }
+            MangasPage(entries, page < chunked.size)
         }
     }
 
-    private fun fetchAllManga(): Observable<List<SManga>> {
-        return Observable.fromCallable {
-            val allManga = mutableListOf<MangaDto>()
-            var page = 1
-            var hasMore = true
-            while (hasMore) {
-                val response = client.newCall(
-                    GET("$apiUrl/manga/list?limit=$FETCH_ALL_SIZE&page=$page", headers),
-                ).execute()
-                val data = response.parseAs<MangaListResponse>()
-                allManga.addAll(data.manga)
-                hasMore = page * data.pageSize < data.total
-                page++
-            }
-            allManga.map { it.toSManga() }
+    private fun fetchAllManga(): Observable<List<SManga>> = Observable.fromCallable {
+        val allManga = mutableListOf<MangaDto>()
+        var page = 1
+        var hasMore = true
+        while (hasMore) {
+            val response = client.newCall(
+                GET("$apiUrl/manga/list?limit=$FETCH_ALL_SIZE&page=$page", headers),
+            ).execute()
+            val data = response.parseAs<MangaListResponse>()
+            allManga.addAll(data.manga)
+            hasMore = page * data.pageSize < data.total
+            page++
         }
+        allManga.map { it.toSManga() }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         throw UnsupportedOperationException()
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    override fun searchMangaParse(response: Response): MangasPage =
         throw UnsupportedOperationException()
-    }
 
     // ============================== Details ================================
 
@@ -124,10 +114,8 @@ class AkaiComic : HttpSource() {
         return GET("$apiUrl/manga/$mangaId", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseAs<MangaDto>()
-        return manga.toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga =
+        response.parseAs<MangaDto>().toSManga()
 
     // ============================== Chapters ==============================
 
@@ -169,9 +157,8 @@ class AkaiComic : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
+    override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException()
-    }
 
     override fun imageRequest(page: Page): Request {
         val headers = headersBuilder()
