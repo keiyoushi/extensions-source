@@ -1,0 +1,7 @@
+ext {
+    extName = 'Akai Comic'
+    extClass = '.AkaiComic'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
