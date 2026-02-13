@@ -6,7 +6,6 @@ import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import android.util.JsonToken
 import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
@@ -93,8 +92,25 @@ class Kagane :
             return chain.proceed(request)
         }
 
-        val seriesId = url.queryParameter("seriesId")!!
-        val chapterId = url.pathSegments[4].removeSuffix("_ds")
+        val chapterId = try {
+            val segments = url.pathSegments
+            if (segments.size < 5) {
+                Log.e("Kagane", "URL path too short: $url")
+                return chain.proceed(
+                    request.newBuilder()
+                        .url(url.newBuilder().setQueryParameter("token", accessToken).build())
+                        .build(),
+                )
+            }
+            segments[4].removeSuffix("_ds")
+        } catch (e: Exception) {
+            Log.e("Kagane", "Error extracting chapterId from URL: $url", e)
+            return chain.proceed(
+                request.newBuilder()
+                    .url(url.newBuilder().setQueryParameter("token", accessToken).build())
+                    .build(),
+            )
+        }
 
         var response = chain.proceed(
             request.newBuilder()
@@ -104,18 +120,21 @@ class Kagane :
 
         if (response.code == 401 || response.code == 507) {
             response.close()
-            val challenge = try {
-                getChallengeResponse(chapterId, getIntegrityToken())
-            } catch (_: Exception) {
-                throw IOException("Failed to retrieve token")
+
+            try {
+                val challenge = getChallengeResponse(chapterId, getIntegrityToken())
+                accessToken = challenge.accessToken
+                cacheUrl = challenge.cacheUrl
+
+                response = chain.proceed(
+                    request.newBuilder()
+                        .url(url.newBuilder().setQueryParameter("token", accessToken).build())
+                        .build(),
+                )
+            } catch (e: Exception) {
+                Log.e("Kagane", "Failed to refresh token", e)
+                throw IOException("Failed to retrieve token: ${e.message}")
             }
-            accessToken = challenge.accessToken
-            cacheUrl = challenge.cacheUrl
-            response = chain.proceed(
-                request.newBuilder()
-                    .url(url.newBuilder().setQueryParameter("token", accessToken).build())
-                    .build(),
-            )
         }
 
         return response
@@ -267,7 +286,7 @@ class Kagane :
             "Square Enix Manga",
         )
 
-        return detailsDto.books.map { it -> it.toSChapter(useSourceChapterNumber, detailsDto.id) }.reversed()
+        return detailsDto.books.map { it.toSChapter(useSourceChapterNumber, detailsDto.id) }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
@@ -302,32 +321,52 @@ class Kagane :
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
-        var (seriesId, chapterId, pageCount) = chapter.url.split(";")
+        val (seriesId, chapterId, pageCount) = chapter.url.split(";")
+        Log.d("Kagane", "fetchPageList: seriesId=$seriesId, chapterId=$chapterId, pageCount=$pageCount")
+
         val integrityToken = getIntegrityToken()
+        Log.d("Kagane", "Got integrity token: ${integrityToken.take(20)}...")
+
         val challengeResp = getChallengeResponse(chapterId, integrityToken)
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 
-        if (preferences.dataSaver) {
-            chapterId = chapterId + "_ds"
-        }
+        Log.d("Kagane", "accessToken: ${accessToken.take(20)}...")
+        Log.d("Kagane", "cacheUrl: $cacheUrl")
 
         val pageMapping = challengeResp.getPageMapping()
+        Log.d("Kagane", "Got ${pageMapping.size} pages in mapping")
+        Log.d("Kagane", "Expected pageCount: $pageCount")
 
-        // Getting the pages
-        val pages = (0 until pageCount.toInt()).map { page ->
-            val pageUrl = "$cacheUrl/api/v2/books".toHttpUrl().newBuilder().apply {
-                addPathSegment("file")
-                addPathSegment(chapterId)
-                addPathSegment(pageMapping.getValue(page + 1))
-                addQueryParameter("is_datasaver", preferences.dataSaver.toString())
+        // Log all page mappings to see what we actually have
+        pageMapping.forEach { (pageNum, uuid) ->
+            Log.d("Kagane", "Mapping: Page $pageNum -> $uuid")
+        }
+
+        // Create page URLs - images are no longer encrypted, just direct URLs
+        val pages = (0 until pageCount.toInt()).mapIndexed { index, _ ->
+            val pageNumber = index + 1
+            val imageId = pageMapping[pageNumber]
+
+            if (imageId == null) {
+                Log.e("Kagane", "ERROR: No imageId found for page $pageNumber")
+                Log.e("Kagane", "Available pages in mapping: ${pageMapping.keys.sorted()}")
+                throw Exception("Missing imageId for page $pageNumber")
+            }
+
+            Log.d("Kagane", "Processing page $pageNumber with imageId: $imageId")
+
+            val pageUrl = "$cacheUrl/api/v2/books/file/$imageId".toHttpUrl().newBuilder().apply {
                 addQueryParameter("token", accessToken)
-                addQueryParameter("index", (page + 1).toString())
-                addQueryParameter("seriesId", seriesId)
+                addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
 
-            Page(page, imageUrl = pageUrl)
+            Log.d("Kagane", "Page $pageNumber URL: $pageUrl")
+
+            Page(index, imageUrl = pageUrl)
         }
+
+        Log.d("Kagane", "Successfully created ${pages.size} pages")
 
         return Observable.just(pages)
     }
