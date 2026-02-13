@@ -157,9 +157,19 @@ class ChallengeDto(
     val cacheUrl: String,
     @SerialName("integrity_token")
     val integrityToken: String? = null,
-    @SerialName("page_mapping")
-    val pageMapping: Map<Int, String>,
-)
+    val pages: List<PageInfo> = emptyList(),
+) {
+    @Serializable
+    class PageInfo(
+        @SerialName("page_number")
+        val pageNumber: Int,
+        @SerialName("page_uuid")
+        val pageUuid: String,
+        val format: String,
+    )
+
+    fun getPageMapping(): Map<Int, String> = pages.associate { it.pageNumber to it.pageUuid }
+}
 
 @Serializable
 class IntegrityDto(

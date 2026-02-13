@@ -95,56 +95,61 @@ open class ImageInterceptor : Interceptor {
     }
 
     private fun processData(input: ByteArray, index: Int, seriesId: String, chapterId: String): ByteArray? {
-        fun isValidImage(data: ByteArray): Boolean {
-            return when {
-                // JPEG
-                data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0xD8.toByte() -> true
-                // GIF
-                data.size >= 6 && (
-                    data.copyOfRange(0, 6).contentEquals("GIF87a".encodeToByteArray()) ||
-                        data.copyOfRange(0, 6).contentEquals("GIF89a".encodeToByteArray())
-                    ) -> true
-                // PNG
-                data.size >= 8 && data.copyOfRange(0, 8).contentEquals(
-                    byteArrayOf(
-                        0x89.toByte(),
-                        'P'.code.toByte(),
-                        'N'.code.toByte(),
-                        'G'.code.toByte(),
-                        0x0D,
-                        0x0A,
-                        0x1A,
-                        0x0A,
-                    ),
+        fun isValidImage(data: ByteArray): Boolean = when {
+            // JPEG
+            data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0xD8.toByte() -> true
+
+            // GIF
+            data.size >= 6 && (
+                data.copyOfRange(0, 6).contentEquals("GIF87a".encodeToByteArray()) ||
+                    data.copyOfRange(0, 6).contentEquals("GIF89a".encodeToByteArray())
                 ) -> true
-                // WEBP
-                data.size >= 12 && data[0] == 'R'.code.toByte() && data[1] == 'I'.code.toByte() &&
-                    data[2] == 'F'.code.toByte() && data[3] == 'F'.code.toByte() &&
-                    data[8] == 'W'.code.toByte() && data[9] == 'E'.code.toByte() &&
-                    data[10] == 'B'.code.toByte() && data[11] == 'P'.code.toByte() -> true
-                // HEIF
-                data.size >= 12 && data.copyOfRange(4, 8).contentEquals("ftyp".encodeToByteArray()) -> {
-                    val type = data.copyOfRange(8, 11)
-                    type.contentEquals("hei".encodeToByteArray()) ||
-                        type.contentEquals("hev".encodeToByteArray()) ||
-                        type.contentEquals("avi".encodeToByteArray())
-                }
-                // JXL
-                data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0x0A.toByte() -> true
-                data.size >= 12 && data.copyOfRange(0, 8).contentEquals(
-                    byteArrayOf(
-                        0,
-                        0,
-                        0,
-                        12,
-                        'J'.code.toByte(),
-                        'X'.code.toByte(),
-                        'L'.code.toByte(),
-                        ' '.code.toByte(),
-                    ),
-                ) -> true
-                else -> false
+
+            // PNG
+            data.size >= 8 && data.copyOfRange(0, 8).contentEquals(
+                byteArrayOf(
+                    0x89.toByte(),
+                    'P'.code.toByte(),
+                    'N'.code.toByte(),
+                    'G'.code.toByte(),
+                    0x0D,
+                    0x0A,
+                    0x1A,
+                    0x0A,
+                ),
+            ) -> true
+
+            // WEBP
+            data.size >= 12 && data[0] == 'R'.code.toByte() && data[1] == 'I'.code.toByte() &&
+                data[2] == 'F'.code.toByte() && data[3] == 'F'.code.toByte() &&
+                data[8] == 'W'.code.toByte() && data[9] == 'E'.code.toByte() &&
+                data[10] == 'B'.code.toByte() && data[11] == 'P'.code.toByte() -> true
+
+            // HEIF
+            data.size >= 12 && data.copyOfRange(4, 8).contentEquals("ftyp".encodeToByteArray()) -> {
+                val type = data.copyOfRange(8, 11)
+                type.contentEquals("hei".encodeToByteArray()) ||
+                    type.contentEquals("hev".encodeToByteArray()) ||
+                    type.contentEquals("avi".encodeToByteArray())
             }
+
+            // JXL
+            data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0x0A.toByte() -> true
+
+            data.size >= 12 && data.copyOfRange(0, 8).contentEquals(
+                byteArrayOf(
+                    0,
+                    0,
+                    0,
+                    12,
+                    'J'.code.toByte(),
+                    'X'.code.toByte(),
+                    'L'.code.toByte(),
+                    ' '.code.toByte(),
+                ),
+            ) -> true
+
+            else -> false
         }
 
         try {
@@ -165,7 +170,7 @@ open class ImageInterceptor : Interceptor {
     }
 
     private fun generateSeed(t: String, n: String, e: String): BigInteger {
-        val sha256 = "$t:$n:$e".sha256()
+        val sha256 = ":$n:$e".sha256()
         var a = BigInteger.ZERO
         for (i in 0 until 8) {
             a = a.shiftLeft(8).or(BigInteger.valueOf((sha256[i].toInt() and 0xFF).toLong()))

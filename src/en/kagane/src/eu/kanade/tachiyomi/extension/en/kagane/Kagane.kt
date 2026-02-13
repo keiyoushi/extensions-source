@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.util.JsonToken
 import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
@@ -104,7 +105,7 @@ class Kagane :
         if (response.code == 401 || response.code == 507) {
             response.close()
             val challenge = try {
-                getChallengeResponse(seriesId, chapterId)
+                getChallengeResponse(chapterId, getIntegrityToken())
             } catch (_: Exception) {
                 throw IOException("Failed to retrieve token")
             }
@@ -243,6 +244,16 @@ class Kagane :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        val parts = chapter.url.split(";")
+        if (parts.size != 3) {
+            return "$baseUrl/reader/${chapter.url}"
+        }
+
+        val (seriesId, chapterId, _) = parts
+        return "$baseUrl/reader/$seriesId/$chapterId"
+    }
+
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -272,6 +283,19 @@ class Kagane :
         .body.bytes()
         .toBase64()
 
+    private fun getIntegrityToken(): String {
+        val url = "$baseUrl/api/integrity"
+        val request = client.newCall(POST(url, headers)).execute()
+        val dto = request.parseAs<IntegrityDto>()
+        return dto.token
+    }
+
+    private fun challengeApiHeader(integrityToken: String) = headers.newBuilder().apply {
+        add("Origin", baseUrl)
+        add("Referer", "$baseUrl/")
+        add("x-integrity-token", integrityToken)
+    }.build()
+
     private val windvineCertificate by lazy { getCertificate("$apiUrl/api/v2/static/bin.bin") }
 
     private val fairPlayCertificate by lazy { getCertificate("$apiUrl/api/v2/static/crt.crt") }
@@ -279,8 +303,8 @@ class Kagane :
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
         var (seriesId, chapterId, pageCount) = chapter.url.split(";")
-
-        val challengeResp = getChallengeResponse(seriesId, chapterId)
+        val integrityToken = getIntegrityToken()
+        val challengeResp = getChallengeResponse(chapterId, integrityToken)
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 
@@ -288,12 +312,15 @@ class Kagane :
             chapterId = chapterId + "_ds"
         }
 
+        val pageMapping = challengeResp.getPageMapping()
+
         // Getting the pages
         val pages = (0 until pageCount.toInt()).map { page ->
             val pageUrl = "$cacheUrl/api/v2/books".toHttpUrl().newBuilder().apply {
                 addPathSegment("file")
                 addPathSegment(chapterId)
-                addPathSegment(challengeResp.pageMapping.getValue(page + 1))
+                addPathSegment(pageMapping.getValue(page + 1))
+                addQueryParameter("is_datasaver", preferences.dataSaver.toString())
                 addQueryParameter("token", accessToken)
                 addQueryParameter("index", (page + 1).toString())
                 addQueryParameter("seriesId", seriesId)
@@ -309,8 +336,8 @@ class Kagane :
     private var accessToken: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun getChallengeResponse(seriesId: String, chapterId: String): ChallengeDto {
-        val f = "$seriesId:$chapterId".sha256().sliceArray(0 until 16)
+    private fun getChallengeResponse(chapterId: String, integrityToken: String): ChallengeDto {
+        val f = ":$chapterId".sha256().sliceArray(0 until 16)
 
         val challenge = if (preferences.wvd.isNotBlank()) {
             getChallengeWvd(f)
@@ -327,7 +354,7 @@ class Kagane :
             put("challenge", challenge)
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
-        return client.newCall(POST(challengeUrl.toString(), apiHeaders, challengeBody)).execute()
+        return client.newCall(POST(challengeUrl.toString(), challengeApiHeader(integrityToken), challengeBody)).execute()
             .parseAs<ChallengeDto>()
     }
 
@@ -341,94 +368,94 @@ class Kagane :
     private fun getChallengeWebview(f: ByteArray, chapterId: String): String {
         val interfaceName = "jsInterface"
         val html = """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Title</title>
-            </head>
-            <body>
-                <script>
-                    function detectDRMSupport() {
-                        return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Title</title>
+        </head>
+        <body>
+            <script>
+                function detectDRMSupport() {
+                    return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
+                }
+
+                function base64ToArrayBuffer(base64) {
+                    var binaryString = atob(base64);
+                    var bytes = new Uint8Array(binaryString.length);
+                    for (var i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
                     }
+                    return bytes.buffer;
+                }
 
-                    function base64ToArrayBuffer(base64) {
-                        var binaryString = atob(base64);
-                        var bytes = new Uint8Array(binaryString.length);
-                        for (var i = 0; i < binaryString.length; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        return bytes.buffer;
+                async function getData() {
+                    let widevine = detectDRMSupport() !== 'fairplay';
+                    const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
+                    let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
+                        initDataTypes: ["cenc"],
+                        audioCapabilities: [],
+                        videoCapabilities: [{
+                            contentType: 'video/mp4; codecs="avc1.42E01E"'
+                        }]
+                    }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
+                        initDataTypes: ["skd"],
+                        audioCapabilities: [{
+                            contentType: 'audio/mp4; codecs="mp4a.40.2"'
+                        }],
+                        videoCapabilities: [{
+                            contentType: 'video/mp4; codecs="avc1.42E01E"'
+                        }]
+                    }]);
+
+                    let e = await t.createMediaKeys();
+                    await e.setServerCertificate(g);
+                    let video = widevine ? null : document.createElement("video");
+                    if (video) {
+                        video.style.display = "none";
+                        document.body.appendChild(video);
+                        await video.setMediaKeys(e);
                     }
-
-                    async function getData() {
-                        let widevine = detectDRMSupport() !== 'fairplay';
-                        const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
-                        let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
-                            initDataTypes: ["cenc"],
-                            audioCapabilities: [],
-                            videoCapabilities: [{
-                                contentType: 'video/mp4; codecs="avc1.42E01E"'
-                            }]
-                        }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
-                            initDataTypes: ["skd"],
-                            audioCapabilities: [{
-                                contentType: 'audio/mp4; codecs="mp4a.40.2"'
-                            }],
-                            videoCapabilities: [{
-                                contentType: 'video/mp4; codecs="avc1.42E01E"'
-                            }]
-                        }]);
-
-                        let e = await t.createMediaKeys();
-                        await e.setServerCertificate(g);
-                        let video = widevine ? null : document.createElement("video");
+                    let n = e.createSession();
+                    let i = new Promise((resolve, reject) => {
+                      function onMessage(event) {
+                        n.removeEventListener("message", onMessage);
                         if (video) {
-                            video.style.display = "none";
-                            document.body.appendChild(video);
-                            await video.setMediaKeys(e);
+                            document.body.removeChild(video)
                         }
-                        let n = e.createSession();
-                        let i = new Promise((resolve, reject) => {
-                          function onMessage(event) {
-                            n.removeEventListener("message", onMessage);
-                            if (video) {
-                                document.body.removeChild(video)
-                            }
-                            resolve(event.message);
-                          }
+                        resolve(event.message);
+                      }
 
-                          function onError() {
-                            n.removeEventListener("error", onError);
-                            reject(new Error("Failed to generate license challenge"));
-                          }
+                      function onError() {
+                        n.removeEventListener("error", onError);
+                        reject(new Error("Failed to generate license challenge"));
+                      }
 
-                          n.addEventListener("message", onMessage);
-                          n.addEventListener("error", onError);
+                      n.addEventListener("message", onMessage);
+                      n.addEventListener("error", onError);
+                    });
+
+                    if (widevine) {
+                        await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
+                    } else {
+                        let oo = base64ToArrayBuffer("${f.toBase64()}")
+                        let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
+                        let d = JSON.stringify({
+                            uri: "skd://" + c,
+                            assetId: "$chapterId",
                         });
-
-                        if (widevine) {
-                            await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
-                        } else {
-                            let oo = base64ToArrayBuffer("${f.toBase64()}")
-                            let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
-                            let d = JSON.stringify({
-                                uri: "skd://" + c,
-                                assetId: "$chapterId",
-                            });
-                            const textEncoder = new TextEncoder();
-                            await n.generateRequest("skd", textEncoder.encode(d));
-                        }
-                        let o = await i;
-                        let m = new Uint8Array(o);
-                        let v = btoa(String.fromCharCode(...m));
-                        window.$interfaceName.passPayload(v);
+                        const textEncoder = new TextEncoder();
+                        await n.generateRequest("skd", textEncoder.encode(d));
                     }
-                    getData();
-                </script>
-            </body>
-            </html>
+                    let o = await i;
+                    let m = new Uint8Array(o);
+                    let v = btoa(String.fromCharCode(...m));
+                    window.$interfaceName.passPayload(v);
+                }
+                getData();
+            </script>
+        </body>
+        </html>
         """.trimIndent()
 
         val handler = Handler(Looper.getMainLooper())
