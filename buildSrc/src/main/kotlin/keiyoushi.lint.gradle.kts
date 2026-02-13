@@ -1,9 +1,33 @@
+import java.io.File
+
 plugins {
     id("com.diffplug.spotless")
 }
 
 spotless {
-    ratchetFrom = "68ed874a42038f4efd001c555cba9bf7de8474d7"
+    val isCi = System.getenv("CI") == "true"
+
+    val isSparseCheckout = if (isCi) {
+        false // irrelevant in CI; we always ratchet
+    } else {
+        val sparseCheckoutFile = File(project.rootDir, ".git/info/sparse-checkout")
+        if (!sparseCheckoutFile.exists() || sparseCheckoutFile.readText().isBlank()) {
+            false
+        } else { // sparse-checkout file sometimes exists even when disabled
+            val enabledRegex = Regex("(?m)^\\s*sparseCheckout\\s*=\\s*true")
+            val gitConfig = File(project.rootDir, ".git/config")
+            val gitWorktreeConfig = File(project.rootDir, ".git/config.worktree")
+
+            (gitConfig.exists() && enabledRegex.containsMatchIn(gitConfig.readText())) ||
+                    (gitWorktreeConfig.exists() && enabledRegex.containsMatchIn(gitWorktreeConfig.readText()))
+        }
+    }
+
+    // In CI we always ratchet; locally we ratchet when NOT in a sparse checkout.
+    // Ratcheting breaks in sparse checkouts with "Invalid path" and "zero length name" errors
+    if (isCi || !isSparseCheckout) {
+        ratchetFrom = "68ed874a42038f4efd001c555cba9bf7de8474d7"
+    }
 
     kotlin {
         target("**/*.kt", "**/*.kts")
