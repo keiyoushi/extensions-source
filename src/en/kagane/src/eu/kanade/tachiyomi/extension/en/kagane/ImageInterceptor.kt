@@ -15,8 +15,8 @@ open class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url
         return if (url.queryParameterNames.contains("token")) {
-            val seriesId = url.pathSegments[3]
-            val chapterId = url.pathSegments[5]
+            val seriesId = url.queryParameter("seriesId")!!
+            val chapterId = url.pathSegments[4]
             val index = url.queryParameter("index")!!.toInt()
 
             val imageResp = chain.proceed(chain.request())
@@ -50,21 +50,19 @@ open class ImageInterceptor : Interceptor {
         return result
     }
 
-    private fun aesGcmDecrypt(keyWordArray: WordArray, ivWordArray: WordArray, cipherWordArray: WordArray): ByteArray? {
-        return try {
-            val keyBytes = wordArrayToBytes(keyWordArray)
-            val iv = wordArrayToBytes(ivWordArray)
-            val cipherBytes = wordArrayToBytes(cipherWordArray)
+    private fun aesGcmDecrypt(keyWordArray: WordArray, ivWordArray: WordArray, cipherWordArray: WordArray): ByteArray? = try {
+        val keyBytes = wordArrayToBytes(keyWordArray)
+        val iv = wordArrayToBytes(ivWordArray)
+        val cipherBytes = wordArrayToBytes(cipherWordArray)
 
-            val secretKey: SecretKey = SecretKeySpec(keyBytes, "AES")
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            val spec = GCMParameterSpec(128, iv)
+        val secretKey: SecretKey = SecretKeySpec(keyBytes, "AES")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val spec = GCMParameterSpec(128, iv)
 
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
-            cipher.doFinal(cipherBytes)
-        } catch (_: Exception) {
-            null
-        }
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+        cipher.doFinal(cipherBytes)
+    } catch (_: Exception) {
+        null
     }
 
     private fun toWordArray(bytes: ByteArray): WordArray {

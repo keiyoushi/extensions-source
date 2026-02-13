@@ -17,91 +17,96 @@ class SearchDto(
 
     @Serializable
     class Book(
+        @SerialName("series_id")
         val id: String,
+        @SerialName("title")
         val name: String,
+        @SerialName("source_id")
         val source: String,
-        @SerialName("books_count")
+        @SerialName("current_books")
         val booksCount: Int,
-        @SerialName("release_date")
-        val releaseDate: String?,
+        @SerialName("start_year")
+        val releaseDate: Int?,
+        @SerialName("cover_image_id")
+        val coverImage: String? = null,
     ) {
 
-        fun toSManga(domain: String, showSource: Boolean): SManga = SManga.create().apply {
+        fun toSManga(apiUrl: String, showSource: Boolean): SManga = SManga.create().apply {
             title = if (showSource) "${name.trim()} [$source]" else name
             url = id
-            thumbnail_url = "$domain/api/v1/series/$id/thumbnail"
+            thumbnail_url = coverImage?.let { "$apiUrl/api/v2/image/$it" }
         }
     }
 }
 
 @Serializable
 class AlternateSeries(
-    @SerialName("books_count")
+    @SerialName("current_books")
     val booksCount: Int,
-    @SerialName("release_date")
-    val releaseDate: String?,
+    @SerialName("start_year")
+    val releaseDate: Int?,
 )
 
 @Serializable
 class DetailsDto(
+    @SerialName("series_id")
+    val id: String,
+    @SerialName("source_id")
     val source: String,
-    val authors: List<String>,
+    @SerialName("series_staff")
+    val authors: List<StaffDto>,
+    @SerialName("publication_status")
     val status: String,
+    @SerialName("description")
     val summary: String?,
-    val genres: List<String>,
-    @SerialName("alternate_titles")
+    val genres: List<GenreDto>,
+    @SerialName("series_alternate_titles")
     val alternateTitles: List<AlternateTitles>,
+    @SerialName("series_books")
+    val books: List<BookDto> = emptyList(),
+    @SerialName("series_links")
+    val links: List<LinkDto> = emptyList(),
 ) {
+    @Serializable
+    class StaffDto(
+        val name: String,
+        val role: String,
+    )
+
+    @Serializable
+    class GenreDto(
+        @SerialName("genre_name")
+        val name: String,
+    )
+
     @Serializable
     class AlternateTitles(
         val title: String,
     )
 
-    fun toSManga(): SManga = SManga.create().apply {
-        val desc = StringBuilder()
-        if (!summary.isNullOrBlank()) desc.append(summary + "\n\n")
-        desc.append("Source: ").append(source + "\n\n")
-
-        if (alternateTitles.isNotEmpty()) {
-            desc.append("Associated Name(s):\n\n")
-            alternateTitles.forEach { desc.append("• ${it.title}\n") }
-        }
-
-        author = authors.joinToString()
-        description = desc.toString()
-        genre = (listOf(source) + genres).joinToString()
-        status = this@DetailsDto.status.toStatus()
-    }
-
-    private fun String.toStatus(): Int {
-        return when (this) {
-            "ONGOING" -> SManga.ONGOING
-            "ENDED" -> SManga.COMPLETED
-            "HIATUS" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-    }
-}
-
-@Serializable
-class ChapterDto(
-    val content: List<Book>,
-) {
     @Serializable
-    class Book(
+    class LinkDto(
+        val label: String,
+        val url: String,
+    )
+
+    @Serializable
+    class BookDto(
+        @SerialName("book_id")
         val id: String,
         @SerialName("series_id")
-        val seriesId: String,
+        val seriesId: String? = null,
         val title: String,
-        @SerialName("release_date")
+        @SerialName("published_on")
         val releaseDate: String?,
-        @SerialName("pages_count")
+        @SerialName("page_count")
         val pagesCount: Int,
-        @SerialName("number_sort")
+        @SerialName("sort_no")
         val number: Float,
     ) {
-        fun toSChapter(useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
-            url = "$seriesId;$id;$pagesCount"
+        fun toSChapter(useSourceChapterNumber: Boolean = false, fallbackSeriesId: String? = null): SChapter = SChapter.create().apply {
+            val sId = seriesId ?: fallbackSeriesId ?: ""
+            url = "$sId;$id;$pagesCount"
             name = title
             date_upload = dateFormat.tryParse(releaseDate)
             if (useSourceChapterNumber) {
@@ -110,8 +115,37 @@ class ChapterDto(
         }
     }
 
+    val sourceName: String
+        get() = links.firstOrNull { it.label.lowercase() in officialSources }?.label
+            ?: links.firstOrNull()?.label
+            ?: source
+
+    fun toSManga(): SManga = SManga.create().apply {
+        val desc = StringBuilder()
+        if (!summary.isNullOrBlank()) desc.append(summary + "\n\n")
+
+        desc.append("Source: ").append(sourceName + "\n\n")
+
+        if (alternateTitles.isNotEmpty()) {
+            desc.append("Associated Name(s):\n\n")
+            alternateTitles.forEach { desc.append("• ${it.title}\n") }
+        }
+
+        author = authors.filter { it.role == "Author" }.joinToString { it.name }
+        description = desc.toString()
+        genre = (listOf(sourceName) + genres.map { it.name }).joinToString()
+        status = this@DetailsDto.status.toStatus()
+    }
+
+    private fun String.toStatus(): Int = when (this.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
+
     companion object {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
     }
 }
 
@@ -121,6 +155,16 @@ class ChallengeDto(
     val accessToken: String,
     @SerialName("cache_url")
     val cacheUrl: String,
+    @SerialName("integrity_token")
+    val integrityToken: String? = null,
     @SerialName("page_mapping")
     val pageMapping: Map<Int, String>,
+)
+
+@Serializable
+class IntegrityDto(
+    @SerialName("token")
+    val token: String,
+    @SerialName("exp")
+    val exp: Long? = null,
 )

@@ -16,16 +16,17 @@ data class MetadataDto(
     val sources: List<MetadataTagDto>,
 ) {
     fun getGenresList() = genres
-        .map { FilterData(it.name, it.name) }
+        .map { FilterData(it.id, it.name) }
     fun getTagsList() = tags.sortedByDescending { it.count }
         .slice(0..200)
-        .map { FilterData(it.name, it.name.replaceFirstChar { c -> c.uppercase() }) }
+        .map { FilterData(it.id, it.name.replaceFirstChar { c -> c.uppercase() }) }
     fun getSourcesList() = sources
-        .map { FilterData(it.name, it.name) }
+        .map { FilterData(it.id, it.name) }
 }
 
 @Serializable
 data class MetadataTagDto(
+    val id: String,
     val name: String,
     val count: Int = 0,
 )
@@ -117,7 +118,8 @@ internal open class JsonMultiSelectFilter(
     name: String,
     private val param: String,
     genres: List<MultiSelectOption>,
-) : Filter.Group<MultiSelectOption>(name, genres), JsonFilter {
+) : Filter.Group<MultiSelectOption>(name, genres),
+    JsonFilter {
     override fun addToJsonObject(builder: JsonObjectBuilder, additionExcludeList: List<String>) {
         val whatToInclude = state.filter { it.state }.map { it.id }
 
@@ -135,7 +137,8 @@ internal open class JsonMultiSelectTriFilter(
     name: String,
     private val param: String,
     genres: List<MultiSelectTriOption>,
-) : Filter.Group<MultiSelectTriOption>(name, genres), JsonFilter {
+) : Filter.Group<MultiSelectTriOption>(name, genres),
+    JsonFilter {
     override fun addToJsonObject(builder: JsonObjectBuilder, additionExcludeList: List<String>) {
         val whatToInclude = state.filter { it.state == TriState.STATE_INCLUDE }.map { it.id }
         val whatToExclude = state.filter { it.state == TriState.STATE_EXCLUDE }.map { it.id } + additionExcludeList
