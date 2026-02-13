@@ -44,6 +44,9 @@ class Yupmanga : HttpSource() {
     override fun latestUpdatesParse(response: Response) = parseSeriesList(response.asJsoup())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.length < 3) {
+            throw Exception("El término de búsqueda debe tener al menos 3 caracteres.")
+        }
         val url = "$baseUrl/search.php".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
@@ -54,20 +57,20 @@ class Yupmanga : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         document.selectFirst("main > div.container > div[class^=bg-red]:has(p)")?.let {
-            throw Exception(it.selectFirst("p")!!.text())
+            throw Exception("Límite de solicitudes alcanzado. Intente de nuevo en unos minutos.")
         }
         return parseSeriesList(document)
     }
 
     private fun parseSeriesList(document: Document): MangasPage {
-        val mangas = document.selectFirst("div.grid:has(> div.comic-card)")!!.select("div.comic-card").map { element ->
+        val mangas = document.selectFirst("div.grid:has(> div.comic-card)")?.select("div.comic-card")?.map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
                 val rawUrl = element.selectFirst("> a[href]")!!.attr("abs:href")
                 url = rawUrl.toHttpUrl().queryParameter("id")!!
                 thumbnail_url = element.selectFirst("img.object-cover")?.attr("abs:src")
             }
-        }
+        } ?: emptyList()
         val hasNextPage = document.selectFirst("div.flex > a:contains(Siguiente)") != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -125,7 +128,7 @@ class Yupmanga : HttpSource() {
                 ).execute().parseAs()
             }
 
-            val doc = Jsoup.parse(chapterListDto.html, baseUrl)
+            val doc = Jsoup.parseBodyFragment(chapterListDto.html, baseUrl)
             allChapters.addAll(parseChapterList(doc))
 
             page++
