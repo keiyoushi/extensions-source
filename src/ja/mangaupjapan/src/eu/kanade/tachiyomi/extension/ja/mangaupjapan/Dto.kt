@@ -11,16 +11,12 @@ class ChapterData(
     private val publishingStatus: Int?,
 ) {
     fun toSChapter(titleId: String): SChapter = SChapter.create().apply {
-        val isLocked = publishingStatus != PublishingStatus.FREE.value
+        val isLocked = publishingStatus != 3 // 3 = free and full chapter
         val lockPrefix = if (isLocked) "🔒 (Preview) " else ""
         val sub = if (subName.isNullOrEmpty()) "" else "$subName - "
         name = "$lockPrefix$sub${this@ChapterData.name}"
         url = "$id#$titleId"
     }
-}
-
-enum class PublishingStatus(val value: Int) {
-    FREE(3),
 }
 
 @Serializable
