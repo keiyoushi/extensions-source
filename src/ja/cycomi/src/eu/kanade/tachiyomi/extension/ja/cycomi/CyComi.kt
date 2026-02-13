@@ -76,7 +76,7 @@ class CyComi :
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
-        val url = "$apiUrl/title/serialization/list/${filter.value}".toHttpUrl()
+        val url = "$apiUrl/title/serialization/list/${filter.value}"
         return GET(url, headers)
     }
 
