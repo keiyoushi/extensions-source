@@ -36,6 +36,7 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.Base64
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -299,12 +300,17 @@ class Manhuarm(
             .add("Accept", "*/*")
             .build()
 
-        val ocrUrl = Regex("""securePath\s*=\s*"([^"]+)"""")
+        val encoded = Regex("""_0xraw\s*=\s*"([^"]+)"""")
             .find(document.html())
             ?.groupValues
             ?.get(1)
-            ?.replace("\\/", "/")
             ?: return pages
+
+        val ocrUrl = try {
+            String(Base64.getDecoder().decode(encoded))
+        } catch (_: Exception) {
+            return pages
+        }
 
         val dialog = try {
             val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()
