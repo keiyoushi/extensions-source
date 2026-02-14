@@ -8,10 +8,14 @@ import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -76,7 +80,7 @@ class Kagane :
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(ImageInterceptor())
+//        .addInterceptor(ImageInterceptor())
         .addInterceptor(::refreshTokenInterceptor)
         // fix disk cache
         .apply {
@@ -85,6 +89,29 @@ class Kagane :
         }
         .build()
 
+    val genres by lazy {
+        client.newCall(GET("$apiUrl/api/v2/genres/list")).execute().parseAs<List<GenreDto>>().associate { it.id to it.genreName }
+    }
+
+    val tags by lazy {
+        client.newCall(GET("$apiUrl/api/v2/tags/list")).execute().parseAs<List<TagDto>>().associate { it.id to it.tagName }
+    }
+    val sourcesInfo by lazy {
+        client.newCall(
+            POST(
+                "$apiUrl/api/v2/sources/list",
+                body = buildJsonObject { put("source_types", null) }.toJsonString().toRequestBody("application/json".toMediaType()),
+            ),
+        ).execute().parseAs<SourcesDto>().sources.associate { it.sourceId to (it.title to it.sourceType) }
+    }
+
+    val sources by lazy {
+        sourcesInfo.map { (k, v) -> k to v.first }.toMap()
+    }
+    val officialSources by lazy {
+        sourcesInfo.filter { it.value.second == "Official" }.toMap()
+    }
+
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url
@@ -92,25 +119,7 @@ class Kagane :
             return chain.proceed(request)
         }
 
-        val chapterId = try {
-            val segments = url.pathSegments
-            if (segments.size < 5) {
-                Log.e("Kagane", "URL path too short: $url")
-                return chain.proceed(
-                    request.newBuilder()
-                        .url(url.newBuilder().setQueryParameter("token", accessToken).build())
-                        .build(),
-                )
-            }
-            segments[4].removeSuffix("_ds")
-        } catch (e: Exception) {
-            Log.e("Kagane", "Error extracting chapterId from URL: $url", e)
-            return chain.proceed(
-                request.newBuilder()
-                    .url(url.newBuilder().setQueryParameter("token", accessToken).build())
-                    .build(),
-            )
-        }
+        val chapterId = url.pathSegments[5]
 
         var response = chain.proceed(
             request.newBuilder()
@@ -120,21 +129,18 @@ class Kagane :
 
         if (response.code == 401 || response.code == 507) {
             response.close()
-
-            try {
-                val challenge = getChallengeResponse(chapterId, getIntegrityToken())
-                accessToken = challenge.accessToken
-                cacheUrl = challenge.cacheUrl
-
-                response = chain.proceed(
-                    request.newBuilder()
-                        .url(url.newBuilder().setQueryParameter("token", accessToken).build())
-                        .build(),
-                )
-            } catch (e: Exception) {
-                Log.e("Kagane", "Failed to refresh token", e)
-                throw IOException("Failed to retrieve token: ${e.message}")
+            val challenge = try {
+                getChallengeResponse(chapterId)
+            } catch (_: Exception) {
+                throw IOException("Failed to retrieve token")
             }
+            accessToken = challenge.accessToken
+            cacheUrl = challenge.cacheUrl
+            response = chain.proceed(
+                request.newBuilder()
+                    .url(url.newBuilder().setQueryParameter("token", accessToken).build())
+                    .build(),
+            )
         }
 
         return response
@@ -176,10 +182,21 @@ class Kagane :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val body = buildJsonObject {
+            if (query.isNotBlank()) {
+                put("title", query)
+            }
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
-                        filter.addToJsonObject(this, preferences.excludedGenres.toList())
+                        filter.addToJsonObject(this, "genres", preferences.excludedGenres.toList())
+                    }
+
+                    is TagsFilter -> {
+                        filter.addToJsonObject(this, "genres")
+                    }
+
+                    is SourcesFilter -> {
+                        filter.addToJsonObject(this, "source_id")
                     }
 
                     is JsonFilter -> {
@@ -188,9 +205,6 @@ class Kagane :
 
                     else -> {}
                 }
-            }
-            if (query.isNotBlank()) {
-                put("title", query)
             }
         }
             .toJsonString()
@@ -230,15 +244,15 @@ class Kagane :
 
                 if (alternateSeries.isEmpty()) return@filter true
 
-                val date = it.releaseDate ?: 0
+                val startYear = it.startYear ?: 0
                 for (alt in alternateSeries) {
-                    val altDate = alt.releaseDate ?: 0
+                    val altYear = alt.startYear ?: 0
 
                     when {
                         it.booksCount < alt.booksCount -> return@filter false
 
                         it.booksCount == alt.booksCount -> {
-                            if (date > altDate) return@filter false
+                            if (startYear < altYear) return@filter false
                         }
                     }
                 }
@@ -246,7 +260,7 @@ class Kagane :
             } else {
                 true
             }
-        }.map { it.toSManga(apiUrl, preferences.showSource) }
+        }.map { it.toSManga(apiUrl, preferences.showSource, sources) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
@@ -263,33 +277,30 @@ class Kagane :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val parts = chapter.url.split(";")
-        if (parts.size != 3) {
-            return "$baseUrl/reader/${chapter.url}"
-        }
-
-        val (seriesId, chapterId, _) = parts
-        return "$baseUrl/reader/$seriesId/$chapterId"
-    }
-
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val detailsDto = response.parseAs<DetailsDto>()
+        val seriesId = response.request.url.toString()
+            .substringAfterLast("/")
 
-        val source = detailsDto.sourceName
-        val useSourceChapterNumber = source in setOf(
+        val dto = response.parseAs<DetailsDto>()
+
+        val useSourceChapterNumber = dto.format in setOf(
             "Dark Horse Comics",
             "Flame Comics",
             "MangaDex",
             "Square Enix Manga",
         )
 
-        return detailsDto.books.map { it.toSChapter(useSourceChapterNumber, detailsDto.id) }.reversed()
+        return dto.seriesBooks.map { book ->
+            book.toSChapter(useSourceChapterNumber).apply {
+                // Fix the URL to include the actual seriesId
+                url = "/series/$seriesId/reader/${book.id}"
+            }
+        }.reversed()
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/api/v2/series/${manga.url}", apiHeaders)
 
     // =============================== Pages ================================
 
@@ -302,80 +313,71 @@ class Kagane :
         .body.bytes()
         .toBase64()
 
-    private fun getIntegrityToken(): String {
-        val url = "$baseUrl/api/integrity"
-        val request = client.newCall(POST(url, headers)).execute()
-        val dto = request.parseAs<IntegrityDto>()
-        return dto.token
-    }
-
-    private fun challengeApiHeader(integrityToken: String) = headers.newBuilder().apply {
-        add("Origin", baseUrl)
-        add("Referer", "$baseUrl/")
-        add("x-integrity-token", integrityToken)
-    }.build()
-
     private val windvineCertificate by lazy { getCertificate("$apiUrl/api/v2/static/bin.bin") }
 
     private val fairPlayCertificate by lazy { getCertificate("$apiUrl/api/v2/static/crt.crt") }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
-        val (seriesId, chapterId, pageCount) = chapter.url.split(";")
-        Log.d("Kagane", "fetchPageList: seriesId=$seriesId, chapterId=$chapterId, pageCount=$pageCount")
-
-        val integrityToken = getIntegrityToken()
-        Log.d("Kagane", "Got integrity token: ${integrityToken.take(20)}...")
-
-        val challengeResp = getChallengeResponse(chapterId, integrityToken)
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
+        val challengeResp = getChallengeResponse(chapterId)
+        Log.d("challenge", challengeResp.accessToken)
+        Log.d("challenge", "${challengeResp.pages.map { page -> page.pageUuid }}")
+        Log.d("challenge", challengeResp.cacheUrl)
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 
-        Log.d("Kagane", "accessToken: ${accessToken.take(20)}...")
-        Log.d("Kagane", "cacheUrl: $cacheUrl")
-
-        val pageMapping = challengeResp.getPageMapping()
-        Log.d("Kagane", "Got ${pageMapping.size} pages in mapping")
-        Log.d("Kagane", "Expected pageCount: $pageCount")
-
-        // Log all page mappings to see what we actually have
-        pageMapping.forEach { (pageNum, uuid) ->
-            Log.d("Kagane", "Mapping: Page $pageNum -> $uuid")
-        }
-
-        // Create page URLs - images are no longer encrypted, just direct URLs
-        val pages = (0 until pageCount.toInt()).mapIndexed { index, _ ->
-            val pageNumber = index + 1
-            val imageId = pageMapping[pageNumber]
-
-            if (imageId == null) {
-                Log.e("Kagane", "ERROR: No imageId found for page $pageNumber")
-                Log.e("Kagane", "Available pages in mapping: ${pageMapping.keys.sorted()}")
-                throw Exception("Missing imageId for page $pageNumber")
-            }
-
-            Log.d("Kagane", "Processing page $pageNumber with imageId: $imageId")
-
-            val pageUrl = "$cacheUrl/api/v2/books/file/$imageId".toHttpUrl().newBuilder().apply {
+        val pages = challengeResp.pages.map { page ->
+            val pageUrl = "$cacheUrl/api/v2/books/file".toHttpUrl().newBuilder().apply {
+                addPathSegment(chapterId)
+                addPathSegment(page.pageUuid)
                 addQueryParameter("token", accessToken)
                 addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
 
-            Log.d("Kagane", "Page $pageNumber URL: $pageUrl")
-
-            Page(index, imageUrl = pageUrl)
+            Page(page.pageNumber, url = pageUrl, imageUrl = pageUrl)
         }
-
-        Log.d("Kagane", "Successfully created ${pages.size} pages")
-
+        Log.d("pages", "${pages.map { it.imageUrl }}")
         return Observable.just(pages)
     }
 
+    override fun imageUrlRequest(page: Page): Request = GET(page.imageUrl!!, apiHeaders)
+
     private var cacheUrl = "https://akari.$domain"
     private var accessToken: String = ""
+    private var integrityToken: String = ""
+    private var integrityExp = System.currentTimeMillis()
+
+    private fun getIntegrityToken(): String {
+        if (integrityExp < System.currentTimeMillis()) {
+            val res = metadataClient.newCall(
+                POST(
+                    "https://kagane.org/api/integrity",
+                    headers,
+                    body = "".toRequestBody("application/json".toMediaType()),
+                ),
+            ).execute().parseAs<IntegrityDto>()
+            integrityToken = res.token
+            integrityExp = res.exp * 1000
+        }
+
+        return integrityToken
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun getChallengeResponse(chapterId: String, integrityToken: String): ChallengeDto {
+    private fun getChallengeResponse(chapterId: String): ChallengeDto {
+        if (preferences.drm_proxy_server.isNotBlank()) {
+            val proxyUrl = preferences.drm_proxy_server.toHttpUrl().newBuilder()
+                .addPathSegment("drm")
+                .addQueryParameter("cid", chapterId)
+                .addQueryParameter("ds", preferences.dataSaver.toString())
+                .build()
+            Log.d("here", "$proxyUrl")
+            val challenge = client.newCall(GET(proxyUrl)).execute()
+            Log.d("there", "${challenge.body}")
+            return challenge.parseAs<ChallengeDto>()
+        }
+
+        val integrityToken = getIntegrityToken()
         val f = ":$chapterId".sha256().sliceArray(0 until 16)
 
         val challenge = if (preferences.wvd.isNotBlank()) {
@@ -385,15 +387,16 @@ class Kagane :
         }
 
         val challengeUrl =
-            "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder().apply {
-                addQueryParameter("is_datasaver", preferences.dataSaver.toString())
-            }.build()
-
+            "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
+                .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
+                .build()
         val challengeBody = buildJsonObject {
             put("challenge", challenge)
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
-        return client.newCall(POST(challengeUrl.toString(), challengeApiHeader(integrityToken), challengeBody)).execute()
+        val headers = apiHeaders.newBuilder().add("x-integrity-token", integrityToken).build()
+
+        return client.newCall(POST(challengeUrl.toString(), headers, challengeBody)).execute()
             .parseAs<ChallengeDto>()
     }
 
@@ -407,94 +410,94 @@ class Kagane :
     private fun getChallengeWebview(f: ByteArray, chapterId: String): String {
         val interfaceName = "jsInterface"
         val html = """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Title</title>
-        </head>
-        <body>
-            <script>
-                function detectDRMSupport() {
-                    return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
-                }
-
-                function base64ToArrayBuffer(base64) {
-                    var binaryString = atob(base64);
-                    var bytes = new Uint8Array(binaryString.length);
-                    for (var i = 0; i < binaryString.length; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>Title</title>
+            </head>
+            <body>
+                <script>
+                    function detectDRMSupport() {
+                        return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
                     }
-                    return bytes.buffer;
-                }
 
-                async function getData() {
-                    let widevine = detectDRMSupport() !== 'fairplay';
-                    const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
-                    let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
-                        initDataTypes: ["cenc"],
-                        audioCapabilities: [],
-                        videoCapabilities: [{
-                            contentType: 'video/mp4; codecs="avc1.42E01E"'
-                        }]
-                    }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
-                        initDataTypes: ["skd"],
-                        audioCapabilities: [{
-                            contentType: 'audio/mp4; codecs="mp4a.40.2"'
-                        }],
-                        videoCapabilities: [{
-                            contentType: 'video/mp4; codecs="avc1.42E01E"'
-                        }]
-                    }]);
-
-                    let e = await t.createMediaKeys();
-                    await e.setServerCertificate(g);
-                    let video = widevine ? null : document.createElement("video");
-                    if (video) {
-                        video.style.display = "none";
-                        document.body.appendChild(video);
-                        await video.setMediaKeys(e);
-                    }
-                    let n = e.createSession();
-                    let i = new Promise((resolve, reject) => {
-                      function onMessage(event) {
-                        n.removeEventListener("message", onMessage);
-                        if (video) {
-                            document.body.removeChild(video)
+                    function base64ToArrayBuffer(base64) {
+                        var binaryString = atob(base64);
+                        var bytes = new Uint8Array(binaryString.length);
+                        for (var i = 0; i < binaryString.length; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
                         }
-                        resolve(event.message);
-                      }
-
-                      function onError() {
-                        n.removeEventListener("error", onError);
-                        reject(new Error("Failed to generate license challenge"));
-                      }
-
-                      n.addEventListener("message", onMessage);
-                      n.addEventListener("error", onError);
-                    });
-
-                    if (widevine) {
-                        await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
-                    } else {
-                        let oo = base64ToArrayBuffer("${f.toBase64()}")
-                        let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
-                        let d = JSON.stringify({
-                            uri: "skd://" + c,
-                            assetId: "$chapterId",
-                        });
-                        const textEncoder = new TextEncoder();
-                        await n.generateRequest("skd", textEncoder.encode(d));
+                        return bytes.buffer;
                     }
-                    let o = await i;
-                    let m = new Uint8Array(o);
-                    let v = btoa(String.fromCharCode(...m));
-                    window.$interfaceName.passPayload(v);
-                }
-                getData();
-            </script>
-        </body>
-        </html>
+
+                    async function getData() {
+                        let widevine = detectDRMSupport() !== 'fairplay';
+                        const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
+                        let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
+                            initDataTypes: ["cenc"],
+                            audioCapabilities: [],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.42E01E"'
+                            }]
+                        }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
+                            initDataTypes: ["skd"],
+                            audioCapabilities: [{
+                                contentType: 'audio/mp4; codecs="mp4a.40.2"'
+                            }],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.42E01E"'
+                            }]
+                        }]);
+
+                        let e = await t.createMediaKeys();
+                        await e.setServerCertificate(g);
+                        let video = widevine ? null : document.createElement("video");
+                        if (video) {
+                            video.style.display = "none";
+                            document.body.appendChild(video);
+                            await video.setMediaKeys(e);
+                        }
+                        let n = e.createSession();
+                        let i = new Promise((resolve, reject) => {
+                          function onMessage(event) {
+                            n.removeEventListener("message", onMessage);
+                            if (video) {
+                                document.body.removeChild(video)
+                            }
+                            resolve(event.message);
+                          }
+
+                          function onError() {
+                            n.removeEventListener("error", onError);
+                            reject(new Error("Failed to generate license challenge"));
+                          }
+
+                          n.addEventListener("message", onMessage);
+                          n.addEventListener("error", onError);
+                        });
+
+                        if (widevine) {
+                            await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
+                        } else {
+                            let oo = base64ToArrayBuffer("${f.toBase64()}")
+                            let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
+                            let d = JSON.stringify({
+                                uri: "skd://" + c,
+                                assetId: "$chapterId",
+                            });
+                            const textEncoder = new TextEncoder();
+                            await n.generateRequest("skd", textEncoder.encode(d));
+                        }
+                        let o = await i;
+                        let m = new Uint8Array(o);
+                        let v = btoa(String.fromCharCode(...m));
+                        window.$interfaceName.passPayload(v);
+                    }
+                    getData();
+                </script>
+            </body>
+            </html>
         """.trimIndent()
 
         val handler = Handler(Looper.getMainLooper())
@@ -600,6 +603,9 @@ class Kagane :
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
+    private val SharedPreferences.drm_proxy_server
+        get() = this.getString(DRM_PROXY_SERVER, PROXY_DEFAULT)!!
+
     private val SharedPreferences.wvd
         get() = this.getString(WVD_KEY, WVD_DEFAULT)!!
 
@@ -655,6 +661,12 @@ class Kagane :
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
+            key = DRM_PROXY_SERVER
+            title = "DRM proxy server url"
+            setDefaultValue(PROXY_DEFAULT)
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
             key = WVD_KEY
             title = "WVD file"
             summary = "Enter contents as base64 string"
@@ -668,10 +680,10 @@ class Kagane :
         private const val CONTENT_RATING = "pref_content_rating"
         private const val CONTENT_RATING_DEFAULT = "pornographic"
         internal val CONTENT_RATINGS = arrayOf(
-            "Safe",
-            "Suggestive",
-            "Erotica",
-            "Pornographic",
+            "safe",
+            "suggestive",
+            "erotica",
+            "pornographic",
         )
 
         private const val GENRES_PREF = "pref_genres_exclude"
@@ -688,6 +700,10 @@ class Kagane :
 
         private const val WVD_KEY = "wvd_key"
         private const val WVD_DEFAULT = ""
+
+        private const val DRM_PROXY_SERVER = "drm_proxy_server"
+
+        private const val PROXY_DEFAULT = ""
     }
 
     // ============================= Filters ==============================
@@ -713,50 +729,7 @@ class Kagane :
             Filter.Separator(),
         )
 
-        val response = metadataClient.newCall(
-            GET("$apiUrl/api/v2/metadata", apiHeaders, CacheControl.FORCE_CACHE),
-        ).await()
-
-        // the cache only request fails if it was not cached already
-        if (!response.isSuccessful) {
-            metadataClient.newCall(
-                GET("$apiUrl/api/v2/metadata", apiHeaders, CacheControl.FORCE_NETWORK),
-            ).enqueue(
-                object : Callback {
-                    override fun onResponse(call: Call, response: Response) {
-                        response.closeQuietly()
-                    }
-                    override fun onFailure(call: Call, e: IOException) {
-                        Log.e(name, "Failed to fetch filters", e)
-                    }
-                },
-            )
-
-            filters.addAll(
-                index = 0,
-                listOf(
-                    Filter.Header("Press 'Reset' to load more filters"),
-                    Filter.Separator(),
-                ),
-            )
-
-            return@runBlocking FilterList(filters)
-        }
-
-        val metadata = try {
-            response.parseAs<MetadataDto>()
-        } catch (e: Throwable) {
-            Log.e(name, "Unable to parse filters", e)
-
-            filters.addAll(
-                index = 0,
-                listOf(
-                    Filter.Header("Failed to parse additional filters"),
-                    Filter.Separator(),
-                ),
-            )
-            return@runBlocking FilterList(filters)
-        }
+        val metadata = MetadataDto(genres, tags, sources)
 
         filters.addAll(
             index = 2,
