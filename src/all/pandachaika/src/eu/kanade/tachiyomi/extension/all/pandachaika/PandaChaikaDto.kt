@@ -54,7 +54,7 @@ class LongArchive(
         val characters = filterTags("character", tags = tags)
         val male = filterTags("male", tags = tags)
         val female = filterTags("female", tags = tags)
-        val others = filterTags(exclude = listOf("female", "male", "artist", "publisher", "group", "parody"), tags = tags)
+        val others = filterTags(exclude = listOf("language", "female", "male", "artist", "publisher", "group", "parody"), tags = tags)
         val parodies = filterTags("parody", tags = tags)
         var appended = false
 
