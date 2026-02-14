@@ -23,6 +23,43 @@ def run_command(command: str) -> str:
     return result.stdout.strip()
 
 
+def resolve_dependent_libs(libs: set[str]) -> set[str]:
+    """
+    returns all libs which depend on any of the passed libs (/lib),
+    recursively resolving transitive dependencies
+    """
+    if not libs:
+        return set()
+    
+    all_dependent_libs = set()
+    to_process = set(libs)
+    
+    while to_process:
+        current_libs = to_process
+        to_process = set()
+        
+        lib_dependency = re.compile(
+            rf"project\([\"']:(?:lib):({'|'.join(map(re.escape, current_libs))})[\"']\)"
+        )
+        
+        for lib in Path("lib").iterdir():
+            if lib.name in all_dependent_libs or lib.name in libs:
+                continue
+                
+            build_file = lib / "build.gradle.kts"
+            if not build_file.is_file():
+                continue
+            
+            with open(build_file) as f:
+                content = f.read()
+                
+            if lib_dependency.search(content):
+                all_dependent_libs.add(lib.name)
+                to_process.add(lib.name)
+    
+    return all_dependent_libs
+
+
 def resolve_multisrc_lib(libs: set[str]) -> set[str]:
     """
     returns all multisrc which depend on any of the
@@ -114,6 +151,10 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
                 
     if core_files_changed:
         return get_all_modules()
+    
+    # Resolve libs that depend on the changed libs (recursively)
+    dependent_libs = resolve_dependent_libs(libs)
+    libs.update(dependent_libs)
                 
     multisrcs.update(resolve_multisrc_lib(libs))
     
