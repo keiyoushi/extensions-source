@@ -72,7 +72,6 @@ class Kagane :
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-//        .addInterceptor(ImageInterceptor())
         .addInterceptor(::refreshTokenInterceptor)
         // fix disk cache
         .apply {
@@ -355,18 +354,6 @@ class Kagane :
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun getChallengeResponse(chapterId: String): ChallengeDto {
-        if (preferences.drm_proxy_server.isNotBlank()) {
-            val proxyUrl = preferences.drm_proxy_server.toHttpUrl().newBuilder()
-                .addPathSegment("drm")
-                .addQueryParameter("cid", chapterId)
-                .addQueryParameter("ds", preferences.dataSaver.toString())
-                .build()
-            Log.d("here", "$proxyUrl")
-            val challenge = client.newCall(GET(proxyUrl)).execute()
-            Log.d("there", "${challenge.body}")
-            return challenge.parseAs<ChallengeDto>()
-        }
-
         val integrityToken = getIntegrityToken()
         val f = ":$chapterId".sha256().sliceArray(0 until 16)
 
@@ -593,9 +580,6 @@ class Kagane :
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
-    private val SharedPreferences.drm_proxy_server
-        get() = this.getString(DRM_PROXY_SERVER, PROXY_DEFAULT)!!
-
     private val SharedPreferences.wvd
         get() = this.getString(WVD_KEY, WVD_DEFAULT)!!
 
@@ -654,12 +638,6 @@ class Kagane :
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
-            key = DRM_PROXY_SERVER
-            title = "DRM proxy server url"
-            setDefaultValue(PROXY_DEFAULT)
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
             key = WVD_KEY
             title = "WVD file"
             summary = "Enter contents as base64 string"
@@ -693,10 +671,6 @@ class Kagane :
 
         private const val WVD_KEY = "wvd_key"
         private const val WVD_DEFAULT = ""
-
-        private const val DRM_PROXY_SERVER = "drm_proxy_server"
-
-        private const val PROXY_DEFAULT = ""
 
         private var cachedMetadata: MetadataDto? = null
     }
