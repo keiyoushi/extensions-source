@@ -23,23 +23,21 @@ internal data class InkStorySearchFilters(
     val sort: String
         get() = "$sortField,$sortOrder"
 
-    fun hasActiveFilters(): Boolean {
-        return sortField != DEFAULT_SORT_FIELD ||
-            sortOrder != DEFAULT_SORT_ORDER ||
-            statuses.isNotEmpty() ||
-            countries.isNotEmpty() ||
-            contentStatuses.isNotEmpty() ||
-            formats.isNotEmpty() ||
-            labelIncludes.isNotEmpty() ||
-            labelExcludes.isNotEmpty() ||
-            strictLabelEqual ||
-            averageRatingMin != null ||
-            averageRatingMax != null ||
-            yearMin != null ||
-            yearMax != null ||
-            chaptersCountMin != null ||
-            chaptersCountMax != null
-    }
+    fun hasActiveFilters(): Boolean = sortField != DEFAULT_SORT_FIELD ||
+        sortOrder != DEFAULT_SORT_ORDER ||
+        statuses.isNotEmpty() ||
+        countries.isNotEmpty() ||
+        contentStatuses.isNotEmpty() ||
+        formats.isNotEmpty() ||
+        labelIncludes.isNotEmpty() ||
+        labelExcludes.isNotEmpty() ||
+        strictLabelEqual ||
+        averageRatingMin != null ||
+        averageRatingMax != null ||
+        yearMin != null ||
+        yearMax != null ||
+        chaptersCountMin != null ||
+        chaptersCountMax != null
 
     companion object {
         const val DEFAULT_SORT_FIELD = "viewsCount"
@@ -113,11 +111,12 @@ internal abstract class QuerySelectFilter(
         get() = options[state].second
 }
 
-internal class SortFieldFilter : QuerySelectFilter(
-    name = "\u0421\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u043A\u0430 \u043F\u043E",
-    options = SORT_OPTIONS,
-    defaultValue = InkStorySearchFilters.DEFAULT_SORT_FIELD,
-) {
+internal class SortFieldFilter :
+    QuerySelectFilter(
+        name = "\u0421\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u043A\u0430 \u043F\u043E",
+        options = SORT_OPTIONS,
+        defaultValue = InkStorySearchFilters.DEFAULT_SORT_FIELD,
+    ) {
     companion object {
         private val SORT_OPTIONS = arrayOf(
             "\u041F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430\u043C" to "viewsCount",
@@ -130,14 +129,15 @@ internal class SortFieldFilter : QuerySelectFilter(
     }
 }
 
-internal class SortOrderFilter : QuerySelectFilter(
-    name = "\u041F\u043E\u0440\u044F\u0434\u043E\u043A",
-    options = arrayOf(
-        "\u041F\u043E \u0443\u0431\u044B\u0432\u0430\u043D\u0438\u044E" to "desc",
-        "\u041F\u043E \u0432\u043E\u0437\u0440\u0430\u0441\u0442\u0430\u043D\u0438\u044E" to "asc",
-    ),
-    defaultValue = InkStorySearchFilters.DEFAULT_SORT_ORDER,
-)
+internal class SortOrderFilter :
+    QuerySelectFilter(
+        name = "\u041F\u043E\u0440\u044F\u0434\u043E\u043A",
+        options = arrayOf(
+            "\u041F\u043E \u0443\u0431\u044B\u0432\u0430\u043D\u0438\u044E" to "desc",
+            "\u041F\u043E \u0432\u043E\u0437\u0440\u0430\u0441\u0442\u0430\u043D\u0438\u044E" to "asc",
+        ),
+        defaultValue = InkStorySearchFilters.DEFAULT_SORT_ORDER,
+    )
 
 internal class MultiValueOption(name: String, val value: String) : Filter.CheckBox(name)
 
@@ -152,73 +152,81 @@ internal abstract class MultiValueFilter(
         get() = state.filter { it.state }.map { it.value }
 }
 
-internal class StatusFilter : MultiValueFilter(
-    name = "\u0421\u0442\u0430\u0442\u0443\u0441\u044B",
-    values = listOf(
-        "\u041E\u043D\u0433\u043E\u0438\u043D\u0433" to "ONGOING",
-        "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D" to "DONE",
-        "\u0417\u0430\u043C\u043E\u0440\u043E\u0436\u0435\u043D" to "FROZEN",
-        "\u0410\u043D\u043E\u043D\u0441" to "ANNOUNCE",
-    ),
-)
+internal class StatusFilter :
+    MultiValueFilter(
+        name = "\u0421\u0442\u0430\u0442\u0443\u0441\u044B",
+        values = listOf(
+            "\u041E\u043D\u0433\u043E\u0438\u043D\u0433" to "ONGOING",
+            "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D" to "DONE",
+            "\u0417\u0430\u043C\u043E\u0440\u043E\u0436\u0435\u043D" to "FROZEN",
+            "\u0410\u043D\u043E\u043D\u0441" to "ANNOUNCE",
+        ),
+    )
 
-internal class CountryFilter : MultiValueFilter(
-    name = "\u0421\u0442\u0440\u0430\u043D\u044B",
-    values = listOf(
-        "\u0420\u043E\u0441\u0441\u0438\u044F" to "RUSSIA",
-        "\u042F\u043F\u043E\u043D\u0438\u044F" to "JAPAN",
-        "\u041A\u043E\u0440\u0435\u044F" to "KOREA",
-        "\u041A\u0438\u0442\u0430\u0439" to "CHINA",
-        "\u0414\u0440\u0443\u0433\u043E\u0435" to "OTHER",
-    ),
-)
+internal class CountryFilter :
+    MultiValueFilter(
+        name = "\u0421\u0442\u0440\u0430\u043D\u044B",
+        values = listOf(
+            "\u0420\u043E\u0441\u0441\u0438\u044F" to "RUSSIA",
+            "\u042F\u043F\u043E\u043D\u0438\u044F" to "JAPAN",
+            "\u041A\u043E\u0440\u0435\u044F" to "KOREA",
+            "\u041A\u0438\u0442\u0430\u0439" to "CHINA",
+            "\u0414\u0440\u0443\u0433\u043E\u0435" to "OTHER",
+        ),
+    )
 
-internal class ContentStatusFilter : MultiValueFilter(
-    name = "\u041A\u043E\u043D\u0442\u0435\u043D\u0442-\u0441\u0442\u0430\u0442\u0443\u0441\u044B",
-    values = listOf(
-        "\u041F\u043E\u0440\u043D\u043E\u0433\u0440\u0430\u0444\u0438\u0447\u0435\u0441\u043A\u0438\u0439" to "PORNOGRAPHIC",
-        "\u041D\u0435\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u044B\u0439" to "UNSAFE",
-        "\u0411\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u044B\u0439" to "SAFE",
-        "\u042D\u0440\u043E\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439" to "EROTIC",
-    ),
-)
+internal class ContentStatusFilter :
+    MultiValueFilter(
+        name = "\u041A\u043E\u043D\u0442\u0435\u043D\u0442-\u0441\u0442\u0430\u0442\u0443\u0441\u044B",
+        values = listOf(
+            "\u041F\u043E\u0440\u043D\u043E\u0433\u0440\u0430\u0444\u0438\u0447\u0435\u0441\u043A\u0438\u0439" to "PORNOGRAPHIC",
+            "\u041D\u0435\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u044B\u0439" to "UNSAFE",
+            "\u0411\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u044B\u0439" to "SAFE",
+            "\u042D\u0440\u043E\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439" to "EROTIC",
+        ),
+    )
 
-internal class FormatFilter : MultiValueFilter(
-    name = "\u0424\u043E\u0440\u043C\u0430\u0442\u044B",
-    values = listOf(
-        "\u0415\u043D\u043A\u043E\u043C\u0430" to "FOURTH_KOMA",
-        "\u0421\u0431\u043E\u0440\u043D\u0438\u043A" to "COMPILATION",
-        "\u0414\u043E\u0434\u0437\u0438\u043D\u0441\u0438" to "DOUJINSHI",
-        "\u0412\u0435\u0431\u0442\u0443\u043D" to "WEBTOON",
-        "\u0426\u0432\u0435\u0442\u043D\u043E\u0439" to "COLORED",
-        "\u0410\u0440\u0442\u0431\u0443\u043A" to "ARTBOOK",
-        "\u0421\u0438\u043D\u0433\u043B" to "SINGLE",
-        "\u041B\u0430\u0439\u0442" to "LIGHT",
-        "\u0412\u0435\u0431" to "WEB",
-    ),
-)
+internal class FormatFilter :
+    MultiValueFilter(
+        name = "\u0424\u043E\u0440\u043C\u0430\u0442\u044B",
+        values = listOf(
+            "\u0415\u043D\u043A\u043E\u043C\u0430" to "FOURTH_KOMA",
+            "\u0421\u0431\u043E\u0440\u043D\u0438\u043A" to "COMPILATION",
+            "\u0414\u043E\u0434\u0437\u0438\u043D\u0441\u0438" to "DOUJINSHI",
+            "\u0412\u0435\u0431\u0442\u0443\u043D" to "WEBTOON",
+            "\u0426\u0432\u0435\u0442\u043D\u043E\u0439" to "COLORED",
+            "\u0410\u0440\u0442\u0431\u0443\u043A" to "ARTBOOK",
+            "\u0421\u0438\u043D\u0433\u043B" to "SINGLE",
+            "\u041B\u0430\u0439\u0442" to "LIGHT",
+            "\u0412\u0435\u0431" to "WEB",
+        ),
+    )
 
-internal class GenreIncludeFilter : MultiValueFilter(
-    name = "\u0416\u0430\u043D\u0440\u044B (\u0432\u043A\u043B\u044E\u0447\u0438\u0442\u044C)",
-    values = GENRE_VALUES,
-)
+internal class GenreIncludeFilter :
+    MultiValueFilter(
+        name = "\u0416\u0430\u043D\u0440\u044B (\u0432\u043A\u043B\u044E\u0447\u0438\u0442\u044C)",
+        values = GENRE_VALUES,
+    )
 
-internal class GenreExcludeFilter : MultiValueFilter(
-    name = "\u0416\u0430\u043D\u0440\u044B (\u0438\u0441\u043A\u043B\u044E\u0447\u0438\u0442\u044C)",
-    values = GENRE_VALUES,
-)
+internal class GenreExcludeFilter :
+    MultiValueFilter(
+        name = "\u0416\u0430\u043D\u0440\u044B (\u0438\u0441\u043A\u043B\u044E\u0447\u0438\u0442\u044C)",
+        values = GENRE_VALUES,
+    )
 
-internal class StrictLabelEqualFilter : Filter.CheckBox(
-    "\u0421\u0442\u0440\u043E\u0433\u043E\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u0436\u0430\u043D\u0440\u043E\u0432",
-)
+internal class StrictLabelEqualFilter :
+    Filter.CheckBox(
+        "\u0421\u0442\u0440\u043E\u0433\u043E\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u0436\u0430\u043D\u0440\u043E\u0432",
+    )
 
 internal class RatingMinFilter : Filter.Text("\u041E\u0442")
 internal class RatingMaxFilter : Filter.Text("\u0414\u043E")
 
-internal class RatingRangeFilter : Filter.Group<Filter<*>>(
-    name = "\u0420\u0435\u0439\u0442\u0438\u043D\u0433",
-    state = listOf(RatingMinFilter(), RatingMaxFilter()),
-) {
+internal class RatingRangeFilter :
+    Filter.Group<Filter<*>>(
+        name = "\u0420\u0435\u0439\u0442\u0438\u043D\u0433",
+        state = listOf(RatingMinFilter(), RatingMaxFilter()),
+    ) {
     val minValue: String
         get() = (state[0] as RatingMinFilter).state
     val maxValue: String
@@ -228,10 +236,11 @@ internal class RatingRangeFilter : Filter.Group<Filter<*>>(
 internal class YearMinFilter : Filter.Text("\u041E\u0442")
 internal class YearMaxFilter : Filter.Text("\u0414\u043E")
 
-internal class YearRangeFilter : Filter.Group<Filter<*>>(
-    name = "\u0413\u043E\u0434 \u0432\u044B\u043F\u0443\u0441\u043A\u0430",
-    state = listOf(YearMinFilter(), YearMaxFilter()),
-) {
+internal class YearRangeFilter :
+    Filter.Group<Filter<*>>(
+        name = "\u0413\u043E\u0434 \u0432\u044B\u043F\u0443\u0441\u043A\u0430",
+        state = listOf(YearMinFilter(), YearMaxFilter()),
+    ) {
     val minValue: String
         get() = (state[0] as YearMinFilter).state
     val maxValue: String
@@ -241,10 +250,11 @@ internal class YearRangeFilter : Filter.Group<Filter<*>>(
 internal class ChaptersCountMinFilter : Filter.Text("\u041E\u0442")
 internal class ChaptersCountMaxFilter : Filter.Text("\u0414\u043E")
 
-internal class ChaptersRangeFilter : Filter.Group<Filter<*>>(
-    name = "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0433\u043B\u0430\u0432",
-    state = listOf(ChaptersCountMinFilter(), ChaptersCountMaxFilter()),
-) {
+internal class ChaptersRangeFilter :
+    Filter.Group<Filter<*>>(
+        name = "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0433\u043B\u0430\u0432",
+        state = listOf(ChaptersCountMinFilter(), ChaptersCountMaxFilter()),
+    ) {
     val minValue: String
         get() = (state[0] as ChaptersCountMinFilter).state
     val maxValue: String

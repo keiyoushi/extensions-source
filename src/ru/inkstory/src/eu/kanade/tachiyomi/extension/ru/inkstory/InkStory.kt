@@ -28,7 +28,9 @@ import uy.kohesive.injekt.injectLazy
 import java.time.Instant
 import java.util.LinkedHashMap
 
-class InkStory : HttpSource(), ConfigurableSource {
+class InkStory :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "InkStory"
     override val baseUrl = "https://inkstory.net"
@@ -40,9 +42,7 @@ class InkStory : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val secretKeyByChapter = object : LinkedHashMap<String, String>(SECRET_KEY_CACHE_MAX, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
-            return size > SECRET_KEY_CACHE_MAX
-        }
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > SECRET_KEY_CACHE_MAX
     }
     private val secretKeyLock = Any()
 
@@ -418,11 +418,9 @@ class InkStory : HttpSource(), ConfigurableSource {
         return ChapterBranchMode.fromValue(value)
     }
 
-    private fun preferredBranchQuery(): String? {
-        return preferences.getString(PREF_PREFERRED_BRANCH_QUERY, DEFAULT_PREFERRED_BRANCH_QUERY)
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-    }
+    private fun preferredBranchQuery(): String? = preferences.getString(PREF_PREFERRED_BRANCH_QUERY, DEFAULT_PREFERRED_BRANCH_QUERY)
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
 
     private fun resolveBranchName(branchId: String?, branchMap: Map<String, String?>): String? {
         if (branchId.isNullOrBlank()) return null
@@ -436,11 +434,10 @@ class InkStory : HttpSource(), ConfigurableSource {
         else -> SManga.UNKNOWN
     }
 
-    private fun resolveTitle(name: NameDto, fallbackSlug: String): String =
-        name.ru?.takeIf(String::isNotBlank)
-            ?: name.en?.takeIf(String::isNotBlank)
-            ?: name.original?.takeIf(String::isNotBlank)
-            ?: fallbackSlug
+    private fun resolveTitle(name: NameDto, fallbackSlug: String): String = name.ru?.takeIf(String::isNotBlank)
+        ?: name.en?.takeIf(String::isNotBlank)
+        ?: name.original?.takeIf(String::isNotBlank)
+        ?: fallbackSlug
 
     private fun formatDecimal(value: Double?): String? = value?.let {
         if (it % 1.0 == 0.0) {
@@ -450,10 +447,8 @@ class InkStory : HttpSource(), ConfigurableSource {
         }
     }
 
-    private fun parseDate(value: String?): Long {
-        return runCatching { value?.let { Instant.parse(it).toEpochMilli() } ?: 0L }
-            .getOrDefault(0L)
-    }
+    private fun parseDate(value: String?): Long = runCatching { value?.let { Instant.parse(it).toEpochMilli() } ?: 0L }
+        .getOrDefault(0L)
 
     private fun getSecretKey(chapterId: String, forceRefresh: Boolean = false): String {
         if (!forceRefresh) {
@@ -486,9 +481,7 @@ class InkStory : HttpSource(), ConfigurableSource {
         }.getOrNull()
     }
 
-    private fun encodePageMeta(chapterId: String, key: String): String {
-        return "$chapterId$PAGE_META_DELIMITER$key"
-    }
+    private fun encodePageMeta(chapterId: String, key: String): String = "$chapterId$PAGE_META_DELIMITER$key"
 
     private fun decodePageMeta(meta: String): Pair<String, String> {
         if (meta.isBlank()) return "" to ""
@@ -628,9 +621,7 @@ class InkStory : HttpSource(), ConfigurableSource {
         ;
 
         companion object {
-            fun fromValue(value: String?): ChapterBranchMode {
-                return values().firstOrNull { it.value == value } ?: ALL
-            }
+            fun fromValue(value: String?): ChapterBranchMode = values().firstOrNull { it.value == value } ?: ALL
         }
     }
 
