@@ -26,7 +26,7 @@ class Hiperdex :
         "Hiperdex",
         "https://hiperdex.com",
         "en",
-        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US),
     ),
     ConfigurableSource {
 
