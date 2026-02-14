@@ -31,7 +31,9 @@ import rx.Observable
 import java.text.Normalizer
 import java.util.Locale
 
-class SanaScans : HttpSource(), ConfigurableSource {
+class SanaScans :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Sana Scans"
     override val lang = "en"
@@ -108,7 +110,7 @@ class SanaScans : HttpSource(), ConfigurableSource {
         }
 
         val totalCount = json["totalCount"]?.asInt() ?: 0
-        val hasNextPage = page * latestPageSize < totalCount
+        val hasNextPage = page * LATEST_PAGE_SIZE < totalCount
 
         return MangasPage(entries, hasNextPage)
     }
@@ -159,16 +161,13 @@ class SanaScans : HttpSource(), ConfigurableSource {
         headers,
     )
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                parseMangaDetails(response).apply { url = manga.url }
-            }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            parseMangaDetails(response).apply { url = manga.url }
+        }
 
     private fun parseMangaDetails(response: Response): SManga {
         val body = response.body.string()
@@ -231,7 +230,7 @@ class SanaScans : HttpSource(), ConfigurableSource {
                 (chapter.price ?: 0) > 0 ||
                 chapter.unlockAt != null
 
-            if (isLocked && !preferences.getBoolean(showLockedChapterPrefKey, false)) {
+            if (isLocked && !preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false)) {
                 return@mapNotNull null
             }
 
@@ -270,12 +269,11 @@ class SanaScans : HttpSource(), ConfigurableSource {
         val url: String,
     )
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = showLockedChapterPrefKey
+            key = SHOW_LOCKED_CHAPTER_PREF_KEY
             title = "Show inaccessible chapters"
             setDefaultValue(false)
         }.also(screen::addPreference)
@@ -436,16 +434,16 @@ private fun extractJsonLdDescriptions(document: Document): List<String> {
     }.distinct()
 }
 
-private fun collectJsonLdDescriptions(element: JsonElement): List<String> {
-    return when (element) {
-        is JsonObject -> {
-            val current = element["description"]?.asString()
-            val nested = element.values.flatMap(::collectJsonLdDescriptions)
-            if (current == null) nested else listOf(current) + nested
-        }
-        is JsonArray -> element.flatMap(::collectJsonLdDescriptions)
-        else -> emptyList()
+private fun collectJsonLdDescriptions(element: JsonElement): List<String> = when (element) {
+    is JsonObject -> {
+        val current = element["description"]?.asString()
+        val nested = element.values.flatMap(::collectJsonLdDescriptions)
+        if (current == null) nested else listOf(current) + nested
     }
+
+    is JsonArray -> element.flatMap(::collectJsonLdDescriptions)
+
+    else -> emptyList()
 }
 
 private fun JsonElement.asString(): String? {
@@ -476,9 +474,7 @@ private fun looksLikeDescription(text: String): Boolean {
 
     return ratio <= 0.12
 }
-private fun Response.asJsoupXml(): Document {
-    return Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
-}
+private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
 private fun String.toFragmentQueryParameter(name: String): String? {
     val url = "https://localhost/?$this".toHttpUrlOrNull() ?: return null
@@ -514,5 +510,5 @@ private fun seriesSlug(url: HttpUrl): String? {
     return segments[seriesIndex + 1]
 }
 
-private const val latestPageSize = 30
-private const val showLockedChapterPrefKey = "pref_show_locked_chapters"
+private const val LATEST_PAGE_SIZE = 30
+private const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
