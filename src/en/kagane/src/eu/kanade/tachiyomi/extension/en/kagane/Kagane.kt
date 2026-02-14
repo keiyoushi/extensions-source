@@ -87,7 +87,7 @@ class Kagane :
             return chain.proceed(request)
         }
 
-        val chapterId = url.pathSegments[5]
+        val chapterId = url.pathSegments[4]
 
         var response = chain.proceed(
             request.newBuilder()
@@ -341,7 +341,7 @@ class Kagane :
             val res = metadataClient.newCall(
                 POST(
                     "https://kagane.org/api/integrity",
-                    headers,
+                    apiHeaders,
                     body = "".toRequestBody("application/json".toMediaType()),
                 ),
             ).execute().parseAs<IntegrityDto>()
