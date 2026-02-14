@@ -142,14 +142,18 @@ class DetailsDto(
             }
         }
 
-        // Extract authors from staff (roles like "Author", "Artist", "Story", "Art")
+        // Extract authors and artists from staff (roles like "Author", "Artist", "Story", "Art")
         val authors = seriesStaff.filter {
-            it.role.contains("Author", ignoreCase = true) ||
-                it.role.contains("Story", ignoreCase = true) ||
-                it.role.contains("Art", ignoreCase = true) ||
-                it.role.contains("Artist", ignoreCase = true)
+            it.role.contains("Author", ignoreCase = true) || it.role.contains("Story", ignoreCase = true)
         }.map { it.name }.distinct()
+        val artists = seriesStaff.filter {
+            it.role.contains("Artist", ignoreCase = true) || it.role.contains("Art", ignoreCase = true)
+        }
+            .map { it.name }
+            .distinct()
+            .joinToString(", ")
 
+        artist = artists
         author = authors.joinToString()
         description = desc.toString().trim()
         genre = genres.joinToString { it.genreName }
