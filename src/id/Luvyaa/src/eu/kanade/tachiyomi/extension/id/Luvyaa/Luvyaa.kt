@@ -1,4 +1,6 @@
-package eu.kanade.tachiyomi.extension.id.luvyaa
+@file:Suppress("ktlint:standard:package-name")
+
+package eu.kanade.tachiyomi.extension.id.Luvyaa
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
