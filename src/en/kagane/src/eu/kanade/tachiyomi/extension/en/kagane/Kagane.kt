@@ -8,14 +8,10 @@ import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import android.view.View
-import android.view.ViewGroup
-import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
-import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -26,7 +22,6 @@ import eu.kanade.tachiyomi.extension.en.kagane.wv.ProtectionSystemHeaderBox
 import eu.kanade.tachiyomi.extension.en.kagane.wv.parsePssh
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -39,12 +34,10 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.CacheControl
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -52,7 +45,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
-import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -88,29 +80,6 @@ class Kagane :
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
         .build()
-
-    val genres by lazy {
-        client.newCall(GET("$apiUrl/api/v2/genres/list")).execute().parseAs<List<GenreDto>>().associate { it.id to it.genreName }
-    }
-
-    val tags by lazy {
-        client.newCall(GET("$apiUrl/api/v2/tags/list")).execute().parseAs<List<TagDto>>().associate { it.id to it.tagName }
-    }
-    val sourcesInfo by lazy {
-        client.newCall(
-            POST(
-                "$apiUrl/api/v2/sources/list",
-                body = buildJsonObject { put("source_types", null) }.toJsonString().toRequestBody("application/json".toMediaType()),
-            ),
-        ).execute().parseAs<SourcesDto>().sources.associate { it.sourceId to (it.title to it.sourceType) }
-    }
-
-    val sources by lazy {
-        sourcesInfo.map { (k, v) -> k to v.first }.toMap()
-    }
-    val officialSources by lazy {
-        sourcesInfo.filter { it.value.second == "Official" }.toMap()
-    }
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -236,11 +205,32 @@ class Kagane :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<SearchDto>()
+        val sources = try {
+            val sourceResponse = metadataClient.newCall(
+                POST(
+                    "$apiUrl/api/v2/sources/list",
+                    apiHeaders,
+                    buildJsonObject { put("source_types", null) }.toJsonString()
+                        .toRequestBody("application/json".toMediaType()),
+                    CacheControl.FORCE_CACHE,
+                ),
+            ).execute()
+
+            if (sourceResponse.isSuccessful) {
+                sourceResponse.parseAs<List<SourceDto>>().associate { it.sourceId to it.title }
+            } else {
+                emptyMap()
+            }
+        } catch (e: Exception) {
+            Log.w(name, "Failed to load sources", e)
+            emptyMap()
+        }
         val mangas = dto.content.filter {
             if (!preferences.showDuplicates) {
-                val alternateSeries = client.newCall(GET("$apiUrl/api/v2/alternate_series/${it.id}", apiHeaders))
-                    .execute()
-                    .parseAs<List<AlternateSeries>>()
+                val alternateSeries =
+                    client.newCall(GET("$apiUrl/api/v2/alternate_series/${it.id}", apiHeaders))
+                        .execute()
+                        .parseAs<List<AlternateSeries>>()
 
                 if (alternateSeries.isEmpty()) return@filter true
 
@@ -613,7 +603,8 @@ class Kagane :
         ListPreference(screen.context).apply {
             key = CONTENT_RATING
             title = "Content Rating"
-            entries = CONTENT_RATINGS.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+            entries =
+                CONTENT_RATINGS.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
@@ -624,7 +615,8 @@ class Kagane :
             title = "Exclude Genres"
             entries = GenresList.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
             entryValues = GenresList
-            summary = preferences.excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+            summary =
+                preferences.excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
             setDefaultValue(emptySet<String>())
 
             setOnPreferenceChangeListener { _, values ->
@@ -643,7 +635,8 @@ class Kagane :
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_DUPLICATES
             title = "Show duplicates"
-            summary = "Show duplicate entries.\nPicks the entry with most chapters if disabled\nThis switch isn't always accurate\nNOTE: Enabling this option will slow your search speed down"
+            summary =
+                "Show duplicate entries.\nPicks the entry with most chapters if disabled\nThis switch isn't always accurate\nNOTE: Enabling this option will slow your search speed down"
             setDefaultValue(SHOW_DUPLICATES_DEFAULT)
         }.let(screen::addPreference)
 
@@ -704,6 +697,8 @@ class Kagane :
         private const val DRM_PROXY_SERVER = "drm_proxy_server"
 
         private const val PROXY_DEFAULT = ""
+
+        private var cachedMetadata: MetadataDto? = null
     }
 
     // ============================= Filters ==============================
@@ -717,29 +712,76 @@ class Kagane :
                 .build()
         }.build()
 
-    override fun getFilterList(): FilterList = runBlocking(Dispatchers.IO) {
+    override fun getFilterList(): FilterList {
         val filters: MutableList<Filter<*>> = mutableListOf(
             SortFilter(),
             ContentRatingFilter(
                 preferences.contentRating.toSet(),
             ),
-            // GenresFilter(),
-            // TagsFilter(),
-            // SourcesFilter(),
             Filter.Separator(),
         )
 
-        val metadata = MetadataDto(genres, tags, sources)
+        val metadata = cachedMetadata
 
-        filters.addAll(
-            index = 2,
-            listOf(
-                GenresFilter(metadata.getGenresList()),
-                TagsFilter(metadata.getTagsList()),
-                SourcesFilter(metadata.getSourcesList().filter { !(!preferences.showScanlations && !officialSources.contains(it.name.lowercase())) }),
-            ),
-        )
+        if (metadata != null) {
+            // Metadata exists in memory, create the filters
+            filters.addAll(
+                listOf(
+                    GenresFilter(metadata.getGenresList()),
+                    TagsFilter(metadata.getTagsList()),
+                    SourcesFilter(
+                        metadata.getSourcesList().filter {
+                            !(!preferences.showScanlations && !isOfficialSource(it.id, metadata))
+                        },
+                    ),
+                ),
+            )
+        } else {
+            fetchMetadata()
+            filters.add(0, Filter.Header("Press 'Reset' to load more filters"))
+            filters.add(1, Filter.Separator())
+        }
 
-        FilterList(filters)
+        return FilterList(filters)
+    }
+
+    private fun isOfficialSource(sourceId: String, metadata: MetadataDto): Boolean {
+        val sourceName = metadata.sources[sourceId]?.lowercase() ?: return false
+        return officialSources.any { sourceName.contains(it) }
+    }
+
+    private fun fetchMetadata() {
+        // Can't use direct metadataClient cache because of POST request
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val genreResponse = metadataClient.newCall(
+                    GET("$apiUrl/api/v2/genres/list", apiHeaders),
+                ).execute()
+                val tagsResponse = metadataClient.newCall(
+                    GET("$apiUrl/api/v2/tags/list", apiHeaders),
+                ).execute()
+                val sourcesResponse = metadataClient.newCall(
+                    POST(
+                        "$apiUrl/api/v2/sources/list",
+                        apiHeaders,
+                        buildJsonObject { put("source_types", null) }.toJsonString()
+                            .toRequestBody("application/json".toMediaType()),
+                    ),
+                ).execute()
+
+                if (genreResponse.isSuccessful && tagsResponse.isSuccessful && sourcesResponse.isSuccessful) {
+                    val genres = genreResponse.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
+                    val tags = tagsResponse.parseAs<List<TagDto>>().associate { it.id to it.tagName }
+                    val sources = sourcesResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
+
+                    cachedMetadata = MetadataDto(genres, tags, sources)
+                    Log.d(name, "Metadata fetched and cached in memory")
+                } else {
+                    Log.e(name, "Failed to fetch metadata: One or more requests failed")
+                }
+            } catch (e: Exception) {
+                Log.e(name, "Failed to fetch metadata", e)
+            }
+        }
     }
 }
