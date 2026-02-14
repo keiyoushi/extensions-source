@@ -36,6 +36,7 @@ class SanaScans : HttpSource(), ConfigurableSource {
     override val name = "Sana Scans"
     override val lang = "en"
     override val baseUrl = "https://sanascans.com"
+    private val apiUrl = "https://api.sanascans.com"
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
@@ -73,18 +74,43 @@ class SanaScans : HttpSource(), ConfigurableSource {
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/rss.xml", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/posts")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("perPage", "30")
+            .addQueryParameter("tag", "latestUpdate")
+            .addQueryParameter("isNovel", "false")
+            .build()
+
+        return GET(url, headers)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoupXml()
+        val body = response.body.string()
+        val json = body.parseAs<JsonObject>()
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
 
-        val entries = document.select("channel > item").mapNotNull(::parseRssItem)
-        val paged = entries.drop((page - 1) * latestPageSize).take(latestPageSize)
-        val hasNextPage = entries.size > page * latestPageSize
+        val posts = (json["posts"] as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            .orEmpty()
 
-        return MangasPage(paged, hasNextPage)
+        val entries = posts.mapNotNull { post ->
+            val slug = post["slug"]?.asString() ?: return@mapNotNull null
+            val title = post["postTitle"]?.asString() ?: slugToTitle(slug)
+            val thumbnail = post["featuredImage"]?.asString()
+
+            SManga.create().apply {
+                url = slug
+                this.title = title
+                thumbnail_url = thumbnail
+            }
+        }
+
+        val totalCount = json["totalCount"]?.asInt() ?: 0
+        val hasNextPage = page * latestPageSize < totalCount
+
+        return MangasPage(entries, hasNextPage)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -279,23 +305,6 @@ class SanaScans : HttpSource(), ConfigurableSource {
         }
     }
 
-    private fun parseRssItem(item: org.jsoup.nodes.Element): SManga? {
-        val link = item.selectFirst("link")?.text()
-        if (link.isNullOrEmpty()) return null
-        val seriesUrl = sanitizeSeriesUrl(link) ?: return null
-        val slug = seriesSlug(seriesUrl) ?: return null
-
-        val title = item.selectFirst("title")?.text()?.takeIf(String::isNotEmpty)
-            ?: slugToTitle(slug)
-        val description = item.selectFirst("description")?.text()?.let { Jsoup.parse(it).text() }
-
-        return SManga.create().apply {
-            this.url = slug
-            this.title = title
-            this.description = description
-        }
-    }
-
     private fun sanitizeSeriesUrl(url: String): HttpUrl? {
         val httpUrl = url.toHttpUrlOrNull() ?: return null
         val segments = httpUrl.pathSegments.filter { it.isNotEmpty() }
@@ -444,6 +453,11 @@ private fun JsonElement.asString(): String? {
     return if (primitive.isString) primitive.content else null
 }
 
+private fun JsonElement.asInt(): Int? {
+    val primitive = this as? JsonPrimitive ?: return null
+    return primitive.content.toIntOrNull()
+}
+
 private fun looksLikeDescription(text: String): Boolean {
     val trimmed = text.trim()
     if (trimmed.length < 20) return false
@@ -500,5 +514,5 @@ private fun seriesSlug(url: HttpUrl): String? {
     return segments[seriesIndex + 1]
 }
 
-private const val latestPageSize = 20
+private const val latestPageSize = 30
 private const val showLockedChapterPrefKey = "pref_show_locked_chapters"
