@@ -1,0 +1,10 @@
+ext {
+    extName = 'Lunaranime'
+    extClass = '.Lunaranime'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://lunaranime.example'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
