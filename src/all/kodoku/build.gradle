@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kodoku Studio'
+    extClass = '.KodokuStudio'
+    themePkg = 'madara'
+    baseUrl = 'https://kodokustudio.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
