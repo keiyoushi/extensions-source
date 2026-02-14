@@ -40,7 +40,9 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Mangago : ParsedHttpSource(), ConfigurableSource {
+class Mangago :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Mangago"
 
@@ -104,8 +106,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         thumbnail_url = thumbnailElem.attr("abs:data-src").ifBlank { thumbnailElem.attr("abs:src") }
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=view&e=", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=view&e=", headers)
 
     override fun popularMangaSelector(): String = genreListingSelector
 
@@ -113,8 +114,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = genreListingNextPageSelector
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=update_date&e=", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=update_date&e=", headers)
 
     override fun latestUpdatesSelector() = genreListingSelector
 
@@ -136,6 +136,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                 filters.ifEmpty { getFilterList() }.forEach {
                     when (it) {
                         is UriFilter -> it.addToUrl(this)
+
                         is GenreFilterGroup -> it.state.forEach { genre ->
                             when (genre.state) {
                                 Filter.TriState.STATE_EXCLUDE -> genresEx.add(genre.name)
@@ -143,6 +144,7 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
                                 else -> {}
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -184,12 +186,15 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
             it.select(".manga_info li, .manga_right tr").forEach { el ->
                 when (el.selectFirst("b, label")!!.text().lowercase()) {
                     "alternative:" -> description += "\n\n${el.text()}"
+
                     "status:" -> status = when (el.selectFirst("span")!!.text().lowercase()) {
                         "ongoing" -> SManga.ONGOING
                         "completed" -> SManga.COMPLETED
                         else -> SManga.UNKNOWN
                     }
+
                     "author(s):", "author:" -> author = el.select("a").joinToString { it.text() }
+
                     "genre(s):" -> genre = el.select("a").joinToString { it.text() }
                 }
             }
@@ -214,8 +219,11 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        if (!document.select("div.controls ul#dropdown-menu-page").isNullOrEmpty()) {
-            return pageListParseMobile(document)
+        val dropdownItems = document.select("div ul#dropdown-menu-page li a")
+        if (dropdownItems.isNotEmpty()) {
+            return dropdownItems.mapIndexed { idx, it ->
+                Page(idx + 1, url = it.attr("abs:href"))
+            }
         }
 
         val imgsrcsScript = document.selectFirst("script:containsData(imgsrcs)")?.html()
@@ -264,12 +272,6 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         return super.pageListRequest(chapter)
     }
 
-    private fun pageListParseMobile(document: Document): List<Page> {
-        val pagesCount = document.select("div.controls ul#dropdown-menu-page li").size
-        val pageUrl = document.location().removeSuffix("/").substringBeforeLast("-")
-        return IntRange(1, pagesCount).map { Page(it, url = "$pageUrl-$it/") }
-    }
-
     private var cachedDeofChapterJS: String? = null
     private var cachedKey: ByteArray? = null
     private var cachedIv: ByteArray? = null
@@ -302,11 +304,14 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
 
         imageList = unescrambleImageList(imageList, cachedDeofChapterJS!!)
 
+        val urls = imageList.split(",")
+
         val cols = colsRegex.find(cachedDeofChapterJS!!)?.groupValues?.get(1) ?: ""
 
-        val pageNumber = document.location().removeSuffix("/").substringAfterLast("-").toInt()
+        val pageNumber = document.location().removeSuffix("/").substringAfterLast("/").toIntOrNull()
+        val finalPageNumber = if (pageNumber == null || pageNumber > urls.size) 1 else pageNumber
 
-        return imageList.split(",")[pageNumber - 1].let {
+        return urls[finalPageNumber - 1].let {
             if (it.contains("cspiclink")) {
                 "$it#desckey=${getDescramblingKey(cachedDeofChapterJS!!, it)}&cols=$cols"
             } else {
@@ -326,19 +331,23 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         fun addToUrl(builder: HttpUrl.Builder)
     }
 
-    private class StatusFilter(name: String, val query: String, state: Boolean) : UriFilter, Filter.CheckBox(name, state) {
+    private class StatusFilter(name: String, val query: String, state: Boolean) :
+        Filter.CheckBox(name, state),
+        UriFilter {
         override fun addToUrl(builder: HttpUrl.Builder) {
             builder.addQueryParameter(query, if (state) "1" else "0")
         }
     }
 
-    private class StatusFilterGroup : UriFilter, Filter.Group<StatusFilter>(
-        "Status",
-        listOf(
-            StatusFilter("Completed", "f", true),
-            StatusFilter("Ongoing", "o", true),
+    private class StatusFilterGroup :
+        Filter.Group<StatusFilter>(
+            "Status",
+            listOf(
+                StatusFilter("Completed", "f", true),
+                StatusFilter("Ongoing", "o", true),
+            ),
         ),
-    ) {
+        UriFilter {
         override fun addToUrl(builder: HttpUrl.Builder) {
             state.forEach {
                 it.addToUrl(builder)
@@ -352,7 +361,8 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         private val vals: Array<Pair<String, String>>,
         private val firstIsUnspecified: Boolean = true,
         state: Int = 0,
-    ) : UriFilter, Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+    ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state),
+        UriFilter {
         override fun addToUrl(builder: HttpUrl.Builder) {
             if (state != 0 || !firstIsUnspecified) {
                 builder.addQueryParameter(query, vals[state].second)
@@ -360,63 +370,65 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private class SortFilter : UriPartFilter(
-        "Sort",
-        "sortby",
-        arrayOf(
-            Pair("Random", "random"),
-            Pair("Views", "view"),
-            Pair("Comment Count", "comment_count"),
-            Pair("Creation Date", "create_date"),
-            Pair("Update Date", "update_date"),
-        ),
-        state = 1,
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "Sort",
+            "sortby",
+            arrayOf(
+                Pair("Random", "random"),
+                Pair("Views", "view"),
+                Pair("Comment Count", "comment_count"),
+                Pair("Creation Date", "create_date"),
+                Pair("Update Date", "update_date"),
+            ),
+            state = 1,
+        )
 
     private class GenreFilter(name: String) : Filter.TriState(name)
 
-    private class GenreFilterGroup : Filter.Group<GenreFilter>(
-        "Genres",
-        listOf(
-            GenreFilter("Yaoi"),
-            GenreFilter("Doujinshi"),
-            GenreFilter("Shounen Ai"),
-            GenreFilter("Shoujo"),
-            GenreFilter("Yuri"),
-            GenreFilter("Romance"),
-            GenreFilter("Fantasy"),
-            GenreFilter("Comedy"),
-            GenreFilter("Smut"),
-            GenreFilter("Adult"),
-            GenreFilter("School Life"),
-            GenreFilter("Mystery"),
-            GenreFilter("One Shot"),
-            GenreFilter("Ecchi"),
-            GenreFilter("Shounen"),
-            GenreFilter("Martial Arts"),
-            GenreFilter("Shoujo Ai"),
-            GenreFilter("Supernatural"),
-            GenreFilter("Drama"),
-            GenreFilter("Action"),
-            GenreFilter("Adventure"),
-            GenreFilter("Harem"),
-            GenreFilter("Historical"),
-            GenreFilter("Horror"),
-            GenreFilter("Josei"),
-            GenreFilter("Mature"),
-            GenreFilter("Mecha"),
-            GenreFilter("Psychological"),
-            GenreFilter("Sci-fi"),
-            GenreFilter("Seinen"),
-            GenreFilter("Slice Of Life"),
-            GenreFilter("Sports"),
-            GenreFilter("Gender Bender"),
-            GenreFilter("Tragedy"),
-            GenreFilter("Bara"),
-            GenreFilter("Shotacon"),
-            GenreFilter("Webtoons"),
-        ),
-    )
+    private class GenreFilterGroup :
+        Filter.Group<GenreFilter>(
+            "Genres",
+            listOf(
+                GenreFilter("Yaoi"),
+                GenreFilter("Doujinshi"),
+                GenreFilter("Shounen Ai"),
+                GenreFilter("Shoujo"),
+                GenreFilter("Yuri"),
+                GenreFilter("Romance"),
+                GenreFilter("Fantasy"),
+                GenreFilter("Comedy"),
+                GenreFilter("Smut"),
+                GenreFilter("Adult"),
+                GenreFilter("School Life"),
+                GenreFilter("Mystery"),
+                GenreFilter("One Shot"),
+                GenreFilter("Ecchi"),
+                GenreFilter("Shounen"),
+                GenreFilter("Martial Arts"),
+                GenreFilter("Shoujo Ai"),
+                GenreFilter("Supernatural"),
+                GenreFilter("Drama"),
+                GenreFilter("Action"),
+                GenreFilter("Adventure"),
+                GenreFilter("Harem"),
+                GenreFilter("Historical"),
+                GenreFilter("Horror"),
+                GenreFilter("Josei"),
+                GenreFilter("Mature"),
+                GenreFilter("Mecha"),
+                GenreFilter("Psychological"),
+                GenreFilter("Sci-fi"),
+                GenreFilter("Seinen"),
+                GenreFilter("Slice Of Life"),
+                GenreFilter("Sports"),
+                GenreFilter("Gender Bender"),
+                GenreFilter("Tragedy"),
+                GenreFilter("Bara"),
+                GenreFilter("Shotacon"),
+                GenreFilter("Webtoons"),
+            ),
+        )
 
     private fun findHexEncodedVariable(input: String, variable: String): String {
         val regex = Regex("""var $variable\s*=\s*CryptoJS\.enc\.Hex\.parse\("([0-9a-zA-Z]+)"\)""")
@@ -494,10 +506,9 @@ class Mangago : ParsedHttpSource(), ConfigurableSource {
         return output.toByteArray()
     }
 
-    private fun buildCookies(cookies: Map<String, String>) =
-        cookies.entries.joinToString(separator = "; ", postfix = ";") {
-            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }
+    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
+        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+    }
 
     private fun String.decodeHex(): ByteArray {
         check(length % 2 == 0) { "Must have an even length" }
