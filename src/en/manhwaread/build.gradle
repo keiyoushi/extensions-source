@@ -1,0 +1,9 @@
+ext {
+    extName = 'ManhwaRead'
+    extClass = '.ManhwaRead'
+    baseUrl = 'https://manhwaread.com'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

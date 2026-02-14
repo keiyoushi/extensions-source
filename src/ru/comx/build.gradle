@@ -1,7 +1,7 @@
 ext {
     extName = 'Com-X'
     extClass = '.ComX'
-    extVersionCode = 33
+    extVersionCode = 34
 }
 
 apply from: "$rootDir/common.gradle"
