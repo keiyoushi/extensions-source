@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -31,8 +31,6 @@ class AkaiComic : HttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
-
-    private val json: Json by injectLazy()
 
     private val apiUrl = "$baseUrl/api"
 
@@ -130,9 +128,7 @@ class AkaiComic : HttpSource() {
                     url = "/manga/${chapter.mangaId}/chapter/${chapter.chapterNumber}"
                     name = "Chapter ${chapter.chapterNumber}"
                     chapter_number = chapter.chapterNumber.toFloat()
-                    date_upload = chapter.createdAt?.let {
-                        runCatching { dateFormat.parse(it)?.time }.getOrNull()
-                    } ?: 0L
+                    date_upload = dateFormat.tryParse(chapter.createdAt)
                 }
             }
             .sortedByDescending { it.chapter_number }
@@ -141,9 +137,9 @@ class AkaiComic : HttpSource() {
     // ============================== Pages ==================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val parts = chapter.url.removePrefix("/manga/").split("/chapter/")
-        val mangaId = parts[0]
-        val chapterNum = parts[1]
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val mangaId = url.pathSegments[1]
+        val chapterNum = url.pathSegments[3]
         return GET("$apiUrl/manga/$mangaId/chapter/$chapterNum/pages", headers)
     }
 
@@ -191,10 +187,6 @@ class AkaiComic : HttpSource() {
             else -> SManga.UNKNOWN
         }
         initialized = true
-    }
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
     }
 
     companion object {
