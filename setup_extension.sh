@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Extension name
-ext_name="Lunaranime"
+ext_name="lunaranime"
 
 # GitHub repository details
 repo_owner="GH-Capital"
