@@ -21,6 +21,9 @@ class TiaManhwa :
 
     override val mangaSubString = "manhwa"
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useNewChapterEndpoint = true
+
     // Search
     override fun searchMangaRequest(
         page: Int,
