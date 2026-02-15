@@ -50,8 +50,7 @@ def resolve_dependent_libs(libs: set[str]) -> set[str]:
             if not build_file.is_file():
                 continue
             
-            with open(build_file) as f:
-                content = f.read()
+            content = build_file.read_text("utf-8")
                 
             if lib_dependency.search(content):
                 all_dependent_libs.add(lib.name)
@@ -65,6 +64,8 @@ def resolve_multisrc_lib(libs: set[str]) -> set[str]:
     returns all multisrc which depend on any of the
     passed libs (/lib)
     """
+    if not libs:
+        return set()
     
     lib_dependency = re.compile(
         rf"project\([\"']:(?:lib):({'|'.join(map(re.escape, libs))})[\"']\)"
@@ -77,8 +78,7 @@ def resolve_multisrc_lib(libs: set[str]) -> set[str]:
         if not build_file.is_file():
             continue
         
-        with open(build_file) as f:
-            content = f.read()
+        content = build_file.read_text("utf-8")
             
         if (lib_dependency.search(content)):
             multisrcs.add(multisrc.name)
@@ -90,14 +90,19 @@ def resolve_ext(multisrcs: set[str], libs: set[str]) -> set[tuple[str, str]]:
     returns all extensions which depend on any of the
     passed multisrcs or libs
     """
+    if not multisrcs and not libs:
+        return set()
     
-    multisrc_dependency = re.compile(
-        rf"themePkg\s*=\s*['\"]({'|'.join(map(re.escape, multisrcs))})['\"]"
-    )
+    multisrc_pattern = '|'.join(map(re.escape, multisrcs)) if multisrcs else None
+    lib_pattern = '|'.join(map(re.escape, libs)) if libs else None
     
-    lib_dependency = re.compile(
-        rf"project\([\"']:(?:lib):({'|'.join(map(re.escape, libs))})[\"']\)"
-    )
+    patterns = []
+    if multisrc_pattern:
+        patterns.append(rf"themePkg\s*=\s*['\"]({multisrc_pattern})['\"]")
+    if lib_pattern:
+        patterns.append(rf"project\([\"']:(?:lib):({lib_pattern})[\"']\)")
+    
+    regex = re.compile('|'.join(patterns))
     
     extensions = set()
     
@@ -107,10 +112,9 @@ def resolve_ext(multisrcs: set[str], libs: set[str]) -> set[tuple[str, str]]:
             if not build_file.is_file():
                 continue
             
-            with open(build_file) as f:
-                content = f.read()
+            content = build_file.read_text("utf-8")
                 
-            if (multisrc_dependency.search(content) or lib_dependency.search(content)):
+            if regex.search(content):
                 extensions.add((lang.name, extension.name))
     
     return extensions
@@ -128,36 +132,39 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     multisrcs = set()
     libs = set()
     deleted = set()
-    core_files_changed = False
 
     for file in map(lambda x: Path(x).as_posix(), changed_files):
         if CORE_FILES_REGEX.search(file):
-            core_files_changed = True
-            break
+            return get_all_modules()
+        
         elif match := EXTENSION_REGEX.search(file):
             lang = match.group("lang")
             extension = match.group("extension")
             if Path("src", lang, extension).is_dir():
                 modules.add(f':src:{lang}:{extension}')
             deleted.add(f"{lang}.{extension}")
+            
         elif match := MULTISRC_LIB_REGEX.search(file):
             multisrc = match.group("multisrc")
             if Path("lib-multisrc", multisrc).is_dir():
                 multisrcs.add(multisrc)
+                
         elif match := LIB_REGEX.search(file):
             lib = match.group("lib")
             if Path("lib", lib).is_dir():
                 libs.add(lib)
-                
-    if core_files_changed:
-        return get_all_modules()
     
     # Resolve libs that depend on the changed libs (recursively)
-    dependent_libs = resolve_dependent_libs(libs)
-    libs.update(dependent_libs)
+    libs.update(
+        resolve_dependent_libs(libs)
+    )
                 
-    multisrcs.update(resolve_multisrc_lib(libs))
+    # Resolve multisrcs that depend on the changed libs
+    multisrcs.update(
+        resolve_multisrc_lib(libs)
+    )
     
+    # Resolve extensions that depend on the changed multisrcs or libs
     extensions = resolve_ext(multisrcs, libs)
     modules.update([f":src:{lang}:{extension}" for lang, extension in extensions])
     deleted.update([f"{lang}.{extension}" for lang, extension in extensions])
