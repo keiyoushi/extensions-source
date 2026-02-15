@@ -23,13 +23,6 @@ data class MetadataDto(
         .map { (k, v) -> FilterData(k, v) }.sortedBy { it.name }
 }
 
-@Serializable
-data class MetadataTagDto(
-    val id: String,
-    val name: String,
-    val count: Int = 0,
-)
-
 internal class SortFilter(
     selection: Selection = Selection(0, false),
     private val options: List<SelectFilterOption> = getSortFilter(),
@@ -88,15 +81,7 @@ internal class GenresFilter(
     },
 )
 
-internal class TagsFilter(
-    tags: List<FilterData>,
-) : JsonMultiSelectTriFilter(
-    "Tags",
-    "tags",
-    tags.map {
-        MultiSelectTriOption(it.name, it.id)
-    },
-)
+internal class TagsSearchFilter : Filter.Text(" Tags (e.g. Medieval, -Politics)")
 
 internal class SourcesFilter(
     sources: List<FilterData>,

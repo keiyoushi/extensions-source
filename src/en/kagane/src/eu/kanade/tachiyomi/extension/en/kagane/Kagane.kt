@@ -35,8 +35,11 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -159,8 +162,44 @@ class Kagane :
                         filter.addToJsonObject(this, "genres", preferences.excludedGenres.toList())
                     }
 
-                    is TagsFilter -> {
-                        filter.addToJsonObject(this, "genres")
+                    is TagsSearchFilter -> {
+                        val rawInput = filter.state.trim()
+                        if (rawInput.isNotBlank()) {
+                            val metadata = cachedMetadata
+                            if (metadata != null) {
+                                val tagEntries = rawInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+                                val includeIds = mutableListOf<String>()
+                                val excludeIds = mutableListOf<String>()
+
+                                tagEntries.forEach { entry ->
+                                    val isExclude = entry.startsWith("-")
+                                    val tagName = if (isExclude) entry.removePrefix("-").trim() else entry
+                                    val tagId = metadata.tags.entries.firstOrNull {
+                                        it.value.equals(tagName, ignoreCase = true)
+                                    }?.key
+                                    if (tagId != null) {
+                                        if (isExclude) excludeIds.add(tagId) else includeIds.add(tagId)
+                                    }
+                                }
+
+                                if (includeIds.isNotEmpty() || excludeIds.isNotEmpty()) {
+                                    putJsonObject("tags") {
+                                        put("match_all", false)
+                                        if (includeIds.isNotEmpty()) {
+                                            putJsonArray("values") {
+                                                includeIds.forEach { add(it) }
+                                            }
+                                        }
+                                        if (excludeIds.isNotEmpty()) {
+                                            putJsonArray("exclude") {
+                                                excludeIds.forEach { add(it) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     is SourcesFilter -> {
@@ -702,7 +741,7 @@ class Kagane :
             filters.addAll(
                 listOf(
                     GenresFilter(metadata.getGenresList()),
-                    TagsFilter(metadata.getTagsList()),
+                    TagsSearchFilter(),
                     SourcesFilter(
                         metadata.getSourcesList().filter {
                             !(!preferences.showScanlations && !isOfficialSource(it.id, metadata))
