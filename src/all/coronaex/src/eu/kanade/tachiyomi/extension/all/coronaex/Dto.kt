@@ -17,7 +17,7 @@ class TitleResponse(
 
 @Serializable
 class TitleResources(
-    @SerialName("cover_image_url") val coverImageUrl: String,
+    @SerialName("cover_image_url") private val coverImageUrl: String,
     private val id: String,
     private val title: String,
 ) {
