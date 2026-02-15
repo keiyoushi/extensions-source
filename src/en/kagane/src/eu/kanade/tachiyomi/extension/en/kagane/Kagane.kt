@@ -164,7 +164,7 @@ class Kagane :
                     is TagsSearchFilter -> {
                         val rawInput = filter.state.trim()
                         if (rawInput.isNotBlank()) {
-                            val metadata = cachedMetadata
+                            val metadata = metadata
                             if (metadata != null) {
                                 val tagEntries = rawInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -202,7 +202,7 @@ class Kagane :
                     }
 
                     is SourcesFilter -> {
-                        filter.addToJsonObject(this, "source_id")
+                        filter.addToJsonObject(this, "")
                     }
 
                     is JsonFilter -> {
@@ -253,7 +253,7 @@ class Kagane :
             ).execute()
 
             if (sourceResponse.isSuccessful) {
-                sourceResponse.parseAs<List<SourceDto>>().associate { it.sourceId to it.title }
+                sourceResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
             } else {
                 emptyMap()
             }
@@ -261,32 +261,7 @@ class Kagane :
             Log.w(name, "Failed to load sources", e)
             emptyMap()
         }
-        val mangas = dto.content.filter {
-            if (!preferences.showDuplicates) {
-                val alternateSeries =
-                    client.newCall(GET("$apiUrl/api/v2/alternate_series/${it.id}", apiHeaders))
-                        .execute()
-                        .parseAs<List<AlternateSeries>>()
-
-                if (alternateSeries.isEmpty()) return@filter true
-
-                val startYear = it.startYear ?: 0
-                for (alt in alternateSeries) {
-                    val altYear = alt.startYear ?: 0
-
-                    when {
-                        it.booksCount < alt.booksCount -> return@filter false
-
-                        it.booksCount == alt.booksCount -> {
-                            if (startYear < altYear) return@filter false
-                        }
-                    }
-                }
-                true
-            } else {
-                true
-            }
-        }.map { it.toSManga(apiUrl, preferences.showSource, sources) }
+        val mangas = dto.content.map { it.toSManga(apiUrl, preferences.showSource, sources) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
@@ -374,10 +349,10 @@ class Kagane :
 
     private fun getIntegrityToken(): String {
         if (integrityExp < System.currentTimeMillis()) {
-            val res = metadataClient.newCall(
+            val res = client.newCall(
                 POST(
                     "https://kagane.org/api/integrity",
-                    apiHeaders,
+                    headers,
                     body = "".toRequestBody("application/json".toMediaType()),
                 ),
             ).execute().parseAs<IntegrityDto>()
@@ -610,9 +585,6 @@ class Kagane :
     private val SharedPreferences.showSource: Boolean
         get() = this.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
-    private val SharedPreferences.showDuplicates: Boolean
-        get() = this.getBoolean(SHOW_DUPLICATES, SHOW_DUPLICATES_DEFAULT)
-
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
@@ -650,14 +622,6 @@ class Kagane :
             key = SHOW_SCANLATIONS
             title = "Show scanlations"
             setDefaultValue(SHOW_SCANLATIONS_DEFAULT)
-        }.let(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_DUPLICATES
-            title = "Show duplicates"
-            summary =
-                "Show duplicate entries.\nPicks the entry with most chapters if disabled\nThis switch isn't always accurate\nNOTE: Enabling this option will slow your search speed down"
-            setDefaultValue(SHOW_DUPLICATES_DEFAULT)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -700,19 +664,15 @@ class Kagane :
         private const val SHOW_SOURCE = "pref_show_source"
         private const val SHOW_SOURCE_DEFAULT = false
 
-        private const val SHOW_DUPLICATES = "pref_show_duplicates"
-        private const val SHOW_DUPLICATES_DEFAULT = true
-
         private const val DATA_SAVER = "data_saver_default"
 
         private const val WVD_KEY = "wvd_key"
         private const val WVD_DEFAULT = ""
-
-        private var cachedMetadata: MetadataDto? = null
     }
 
     // ============================= Filters ==============================
 
+    private var metadata: MetadataDto? = null
     private val metadataClient = client.newBuilder()
         .addNetworkInterceptor { chain ->
             chain.proceed(chain.request()).newBuilder()
@@ -731,23 +691,23 @@ class Kagane :
             Filter.Separator(),
         )
 
-        val metadata = cachedMetadata
+        fetchMetadata()
 
-        if (metadata != null) {
-            // Metadata exists in memory, create the filters
+        val meta = metadata
+
+        if (meta != null) {
             filters.addAll(
                 listOf(
-                    GenresFilter(metadata.getGenresList()),
+                    GenresFilter(meta.getGenresList()),
                     TagsSearchFilter(),
                     SourcesFilter(
-                        metadata.getSourcesList().filter {
-                            !(!preferences.showScanlations && !isOfficialSource(it.id, metadata))
+                        meta.getSourcesList().filter {
+                            !(!preferences.showScanlations && !isOfficialSource(it.id, meta))
                         },
                     ),
                 ),
             )
         } else {
-            fetchMetadata()
             filters.add(0, Filter.Header("Press 'Reset' to load more filters"))
             filters.add(1, Filter.Separator())
         }
@@ -761,7 +721,6 @@ class Kagane :
     }
 
     private fun fetchMetadata() {
-        // Can't use direct metadataClient cache because of POST request
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
                 val genreResponse = metadataClient.newCall(
@@ -784,8 +743,9 @@ class Kagane :
                     val tags = tagsResponse.parseAs<List<TagDto>>().associate { it.id to it.tagName }
                     val sources = sourcesResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
 
-                    cachedMetadata = MetadataDto(genres, tags, sources)
-                    Log.d(name, "Metadata fetched and cached in memory")
+
+                    metadata = MetadataDto(genres, tags, sources)
+                    Log.d(name, "Metadata fetched and updated")
                 } else {
                     Log.e(name, "Failed to fetch metadata: One or more requests failed")
                 }

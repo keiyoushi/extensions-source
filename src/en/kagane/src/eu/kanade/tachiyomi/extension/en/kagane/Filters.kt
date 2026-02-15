@@ -150,10 +150,8 @@ internal open class JsonMultiSelectTriFilter(
             if (whatToInclude.isNotEmpty() || whatToExclude.isNotEmpty()) {
                 putJsonObject(key) {
                     put("match_all", true)
-                    if (whatToInclude.isNotEmpty()) {
-                        putJsonArray("values") {
-                            whatToInclude.forEach { add(it) }
-                        }
+                    putJsonArray("values") {
+                        whatToInclude.forEach { add(it) }
                     }
 
                     if (whatToExclude.isNotEmpty()) {
