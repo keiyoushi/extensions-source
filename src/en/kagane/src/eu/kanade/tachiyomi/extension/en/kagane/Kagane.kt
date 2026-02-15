@@ -40,7 +40,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -250,7 +249,6 @@ class Kagane :
                     apiHeaders,
                     buildJsonObject { put("source_types", null) }.toJsonString()
                         .toRequestBody("application/json".toMediaType()),
-                    CacheControl.FORCE_CACHE,
                 ),
             ).execute()
 
@@ -321,10 +319,7 @@ class Kagane :
         )
 
         return dto.seriesBooks.map { book ->
-            book.toSChapter(useSourceChapterNumber).apply {
-                // Fix the URL to include the actual seriesId
-                url = "/series/$seriesId/reader/${book.id}"
-            }
+            book.toSChapter(seriesId, useSourceChapterNumber)
         }.reversed()
     }
 
@@ -346,11 +341,13 @@ class Kagane :
     private val fairPlayCertificate by lazy { getCertificate("$apiUrl/api/v2/static/crt.crt") }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        if (chapter.url.contains(";")) {
+            throw Exception("Outdated chapter URL. Please refresh the chapter list")
+        }
+
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
         val challengeResp = getChallengeResponse(chapterId)
-        Log.d("challenge", challengeResp.accessToken)
-        Log.d("challenge", "${challengeResp.pages.map { page -> page.pageUuid }}")
-        Log.d("challenge", challengeResp.cacheUrl)
+
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 

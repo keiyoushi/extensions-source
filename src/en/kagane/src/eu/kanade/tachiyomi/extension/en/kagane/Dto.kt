@@ -192,10 +192,8 @@ class ChapterDto(
         @SerialName("volume_no")
         val volumeNo: String?,
     ) {
-        fun toSChapter(useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
-            // series_id might be null in the books endpoint, so we extract it from the request URL later
-            val actualSeriesId = seriesId ?: "unknown"
-            url = "$actualSeriesId;$id;$pagesCount"
+        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
+            url = "/series/$actualSeriesId/reader/$id"
             name = buildChapterName()
             date_upload = dateFormat.tryParse(createdAt)
             if (useSourceChapterNumber) {
