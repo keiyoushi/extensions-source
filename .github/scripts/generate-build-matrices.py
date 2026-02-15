@@ -132,10 +132,11 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     multisrcs = set()
     libs = set()
     deleted = set()
+    core_files_changed = False
 
     for file in map(lambda x: Path(x).as_posix(), changed_files):
         if CORE_FILES_REGEX.search(file):
-            return get_all_modules()
+            core_files_changed = True
         
         elif match := EXTENSION_REGEX.search(file):
             lang = match.group("lang")
@@ -153,6 +154,15 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
             lib = match.group("lib")
             if Path("lib", lib).is_dir():
                 libs.add(lib)
+              
+    if core_files_changed:
+        (all_modules, all_deleted) = get_all_modules()
+
+        # update existing set so we include deleted extensions
+        modules.update(all_modules)
+        deleted.update(all_deleted)
+        
+        return list(modules), list(deleted)
     
     # Resolve libs that depend on the changed libs (recursively)
     libs.update(
