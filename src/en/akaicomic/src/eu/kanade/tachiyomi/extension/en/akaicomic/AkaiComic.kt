@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -74,13 +73,7 @@ class AkaiComic : HttpSource() {
         } else {
             allManga
         }
-        val chunked = filtered.chunked(PAGE_SIZE)
-        if (chunked.isEmpty()) {
-            MangasPage(emptyList(), false)
-        } else {
-            val entries = chunked.getOrElse(page - 1) { emptyList() }
-            MangasPage(entries, page < chunked.size)
-        }
+        MangasPage(filtered, false)
     }
 
     private fun fetchAllManga(): Observable<List<SManga>> = Observable.fromCallable {
@@ -105,19 +98,20 @@ class AkaiComic : HttpSource() {
 
     // ============================== Details ================================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/manga/$mangaId", headers)
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/manga/$mangaId/chapters", headers)
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (mangaId, chapterNum) = chapter.url.split("/")
+        return "$baseUrl/reader/$mangaId/$chapterNum"
     }
+
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<ChapterListResponse>()
@@ -125,7 +119,7 @@ class AkaiComic : HttpSource() {
             .filter { it.lockedByCoins == 0 }
             .map { chapter ->
                 SChapter.create().apply {
-                    url = "/manga/${chapter.mangaId}/chapter/${chapter.chapterNumber}"
+                    url = "${chapter.mangaId}/${chapter.chapterNumber}"
                     name = "Chapter ${chapter.chapterNumber}"
                     chapter_number = chapter.chapterNumber.toFloat()
                     date_upload = dateFormat.tryParse(chapter.createdAt)
@@ -137,9 +131,7 @@ class AkaiComic : HttpSource() {
     // ============================== Pages ==================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
-        val mangaId = url.pathSegments[1]
-        val chapterNum = url.pathSegments[3]
+        val (mangaId, chapterNum) = chapter.url.split("/")
         return GET("$apiUrl/manga/$mangaId/chapter/$chapterNum/pages", headers)
     }
 
@@ -163,7 +155,7 @@ class AkaiComic : HttpSource() {
     // ============================== Helpers ================================
 
     private fun MangaDto.toSManga(): SManga = SManga.create().apply {
-        url = "/manga/$id"
+        url = id
         title = seriesName
         thumbnail_url = coverUrl
         author = this@toSManga.author
