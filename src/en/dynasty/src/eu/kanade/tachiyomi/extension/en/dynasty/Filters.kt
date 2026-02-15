@@ -3,26 +3,29 @@ package eu.kanade.tachiyomi.extension.en.dynasty
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.Serializable
 
-class SortFilter : Filter.Select<String>(
-    name = "Sort",
-    values = selectOptions.map { it.first }.toTypedArray(),
-) {
+class SortFilter :
+    Filter.Select<String>(
+        name = "Sort",
+        values = selectOptions.map { it.first }.toTypedArray(),
+    ) {
     val sort get() = selectOptions[state].second
 }
 
 private val selectOptions = listOf(
-    "Best Match" to "",
+    "Smart" to SMART_SORT, // best match for query search, release date otherwise
+    "Best Match" to BEST_MATCH,
     "Alphabetical" to "name",
     "Date Added" to "created_at",
-    "Release Date" to "released_on",
+    "Release Date" to RELEASED_ON,
 )
 
 class TypeOption(name: String) : Filter.CheckBox(name, true)
 
-class TypeFilter : Filter.Group<TypeOption>(
-    name = "Type",
-    state = typeOptions.map { TypeOption(it) },
-) {
+class TypeFilter :
+    Filter.Group<TypeOption>(
+        name = "Type",
+        state = typeOptions.map { TypeOption(it) },
+    ) {
     val checked get() = state.filter { it.state }.map { it.name }
 }
 
