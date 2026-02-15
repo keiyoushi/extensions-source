@@ -89,8 +89,7 @@ class SanaScans :
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val body = response.body.string()
-        val json = body.parseAs<JsonObject>()
+        val json = response.parseAs<JsonObject>()
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
 
         val posts = (json["posts"] as? JsonArray)
