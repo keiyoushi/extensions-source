@@ -4,11 +4,25 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+
+@Serializable
+class AzuretoonsLoginRequestDto(
+    val identifier: String,
+    val password: String,
+)
+
+@Serializable
+class AzuretoonsLoginResponseDto(
+    @JsonNames("access_token", "token") val accessToken: String,
+    @SerialName("expires_in") val expiresIn: Long = 3600,
+)
 
 @Serializable
 class AzuretoonsMangaDto(
