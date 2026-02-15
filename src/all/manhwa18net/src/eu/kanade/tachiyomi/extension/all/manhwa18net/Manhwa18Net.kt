@@ -17,6 +17,7 @@ import org.jsoup.Jsoup
 
 class Manhwa18Net : HttpSource() {
 
+    override val versionId = 2
     override val name = "Manhwa18Net"
     override val baseUrl = "https://manhwa18.net"
     override val lang = "en"
