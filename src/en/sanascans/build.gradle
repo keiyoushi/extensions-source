@@ -1,7 +1,7 @@
 ext {
     extName = 'Sana Scans'
     extClass = '.SanaScans'
-    extVersionCode = 16
+    extVersionCode = 17
     isNsfw = false
 }
 
