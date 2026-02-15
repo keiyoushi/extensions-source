@@ -7,40 +7,35 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 
-class Manhwa18Net : ParsedHttpSource() {
+class Manhwa18Net : HttpSource() {
 
     override val name = "Manhwa18Net"
     override val baseUrl = "https://manhwa18.net"
-    override val lang = "all"
+    override val lang = "en"
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    private fun extractPageJson(document: Document): JsonObject? {
-        val app = document.selectFirst("#app") ?: return null
-        val data = app.attr("data-page")
-        if (data.isBlank()) return null
-        return data.parseAs<JsonObject>()
-    }
+    private fun Response.asJsoup() = Jsoup.parse(body.string())
 
-    private fun extractProps(document: Document): JsonObject? = extractPageJson(document)?.get("props")?.jsonObject
+    private fun extractPageDto(response: Response): PageDto {
+        val document = response.asJsoup()
+        val app = document.selectFirst("#app")
+            ?: throw Exception("Could not find #app element")
+        val data = app.attr("data-page")
+        if (data.isBlank()) throw Exception("data-page attribute is empty")
+        return data.parseAs<PageDto>()
+    }
 
     // ============================================================
     // REQUESTS
@@ -90,73 +85,54 @@ class Manhwa18Net : ParsedHttpSource() {
     // ============================================================
 
     override fun popularMangaParse(response: Response) = parseList(response)
+
     override fun latestUpdatesParse(response: Response) = parseList(response)
+
     override fun searchMangaParse(response: Response) = parseList(response)
 
     private fun parseList(response: Response): MangasPage {
-        val document = Jsoup.parse(response.body.string())
-        val props = extractProps(document) ?: return MangasPage(emptyList(), false)
+        val props = extractPageDto(response).props
 
-        val listing = props["paginate"]?.jsonObject
-            ?: props["popularManga"]?.jsonObject
-            ?: props["mangas"]?.jsonObject
-            ?: props["latestManhwaMain"]?.jsonObject
-            ?: return MangasPage(emptyList(), false)
+        val listing = props.paginate
+            ?: props.popularManga
+            ?: props.mangas
+            ?: props.latestManhwaMain
+            ?: throw Exception("No manga listing found in response")
 
-        val dataArray = listing["data"]?.jsonArray ?: return MangasPage(emptyList(), false)
-
-        val mangas = dataArray.mapNotNull {
-            val obj = it.jsonObject
-            val slug = obj["slug"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            val title = obj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-
+        val mangas = listing.data.map { manga ->
             SManga.create().apply {
-                this.title = title
-                url = "/manga/$slug"
-                thumbnail_url = fixImageUrl(
-                    obj["cover_url"]?.jsonPrimitive?.contentOrNull
-                        ?: obj["thumb_url"]?.jsonPrimitive?.contentOrNull,
-                )
+                title = manga.name
+                url = "/manga/${manga.slug}"
+                thumbnail_url = fixImageUrl(manga.coverUrl ?: manga.thumbUrl)
             }
         }
 
-        val hasNextPage = listing["next_page_url"]?.jsonPrimitive?.contentOrNull != null
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, listing.nextPageUrl != null)
     }
-
     // ============================================================
     // DETAILS
     // ============================================================
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val props = extractProps(document) ?: return SManga.create()
-        val manga = props["manga"]?.jsonObject ?: return SManga.create()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val props = extractPageDto(response).props
+        val manga = props.manga ?: throw Exception("Manga details not found")
 
         return SManga.create().apply {
-            title = manga["name"]?.jsonPrimitive?.contentOrNull ?: ""
+            title = manga.name
 
-            description =
-                manga["pilot"]?.jsonPrimitive?.contentOrNull?.let { Jsoup.parse(it).text() }
-                    ?: manga["description"]?.jsonPrimitive?.contentOrNull?.let { Jsoup.parse(it).text() }
-                    ?: ""
+            description = manga.pilot?.let { Jsoup.parse(it).text() }
+                ?: manga.description?.let { Jsoup.parse(it).text() }
+                ?: ""
 
-            thumbnail_url = fixImageUrl(
-                manga["cover_url"]?.jsonPrimitive?.contentOrNull
-                    ?: manga["thumb_url"]?.jsonPrimitive?.contentOrNull,
-            )
+            thumbnail_url = fixImageUrl(manga.coverUrl ?: manga.thumbUrl)
 
-            genre = manga["genres"]?.jsonArray
-                ?.mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull }
-                ?.joinToString(", ")
+            genre = manga.genres?.joinToString(", ") { it.name }
 
-            author = manga["artists"]?.jsonArray
-                ?.mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull }
-                ?.joinToString(", ")
-                ?.ifEmpty { null }
+            author = manga.artists?.joinToString(", ") { it.name }?.ifEmpty { null }
 
             artist = author
 
-            status = when (manga["status_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()) {
+            status = when (manga.statusId) {
                 0 -> SManga.ONGOING
                 1, 2 -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
@@ -169,53 +145,42 @@ class Manhwa18Net : ParsedHttpSource() {
     // ============================================================
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = Jsoup.parse(response.body.string())
-        val props = extractProps(document) ?: return emptyList()
-        val manga = props["manga"]?.jsonObject ?: return emptyList()
-        val slug = manga["slug"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
-        val chapters = props["chapters"]?.jsonArray ?: return emptyList()
+        val props = extractPageDto(response).props
+        val manga = props.manga ?: throw Exception("Manga not found")
+        val chapters = props.chapters ?: throw Exception("Chapters not found")
 
-        val chapterList = chapters.mapNotNull {
-            val obj = it.jsonObject
-            val chapSlug = obj["slug"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-
+        return chapters.map { chapter ->
             SChapter.create().apply {
-                name = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
-                url = "/manga/$slug/$chapSlug"
+                name = chapter.name
+                url = "/manga/${manga.slug}/${chapter.slug}"
             }
         }
-        return chapterList
-    }
-
-    private fun extractChapterNumber(name: String): Float {
-        // Extract chapter number from name like "Chapter 80" or "Chap 80"
-        val regex = """(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)""".toRegex(RegexOption.IGNORE_CASE)
-        return regex.find(name)?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
     }
 
     // ============================================================
     // PAGE LIST
     // ============================================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        val root = extractPageJson(document) ?: return emptyList()
-        val props = root["props"]?.jsonObject ?: return emptyList()
-        val chapterContent = props["chapterContent"]?.jsonPrimitive?.contentOrNull
-            ?: return emptyList()
+    override fun pageListParse(response: Response): List<Page> {
+        val props = extractPageDto(response).props
+        val chapterContent = props.chapterContent
+            ?: throw Exception("Chapter content not found")
 
         val contentDoc = Jsoup.parse(chapterContent)
         val images = contentDoc.select("img")
+
+        if (images.isEmpty()) throw Exception("No images found in chapter")
 
         return images.mapIndexedNotNull { index, img ->
             val src = img.attr("src")
                 .ifBlank { img.attr("data-src") }
                 .ifBlank { img.attr("data-lazy-src") }
 
-            fixImageUrl(src)?.let {
-                Page(index, "", it)
-            }
+            fixImageUrl(src)?.let { Page(index, "", it) }
         }
     }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request = GET(
         page.imageUrl!!,
@@ -223,27 +188,6 @@ class Manhwa18Net : ParsedHttpSource() {
             .add("Referer", baseUrl)
             .build(),
     )
-
-    // ============================================================
-    // ABSTRACTS
-    // ============================================================
-
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // ============================================================
     // UTIL
