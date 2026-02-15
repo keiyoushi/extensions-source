@@ -1,7 +1,7 @@
 ext {
     extName = 'InkStory'
     extClass = '.InkStory'
-    extVersionCode = 6
+    extVersionCode = 1
     isNsfw = true
 }
 

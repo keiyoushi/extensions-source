@@ -13,9 +13,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -24,9 +24,10 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import uy.kohesive.injekt.injectLazy
-import java.time.Instant
+import java.text.SimpleDateFormat
 import java.util.LinkedHashMap
+import java.util.Locale
+import java.util.TimeZone
 
 class InkStory :
     HttpSource(),
@@ -38,7 +39,6 @@ class InkStory :
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.inkstory.net"
-    private val json: Json by injectLazy()
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val secretKeyByChapter = object : LinkedHashMap<String, String>(SECRET_KEY_CACHE_MAX, 0.75f, true) {
@@ -85,7 +85,7 @@ class InkStory :
 
         ListPreference(screen.context).apply {
             key = PREF_CHAPTER_BRANCH_MODE
-            title = "\u0420\u0435\u0436\u0438\u043C \u0432\u0435\u0442\u043E\u043A \u0433\u043B\u0430\u0432"
+            title = "Режим веток глав"
             entries = BRANCH_MODE_ENTRIES
             entryValues = BRANCH_MODE_VALUES
             summary = "%s"
@@ -94,9 +94,9 @@ class InkStory :
 
         EditTextPreference(screen.context).apply {
             key = PREF_PREFERRED_BRANCH_QUERY
-            title = "\u041F\u0440\u0435\u0434\u043F\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F \u0432\u0435\u0442\u043A\u0430"
-            dialogTitle = "\u041F\u0440\u0435\u0434\u043F\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F \u0432\u0435\u0442\u043A\u0430"
-            summary = "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u0432 \u0440\u0435\u0436\u0438\u043C\u0435 \"\u041F\u0440\u0435\u0434\u043F\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F \u0432\u0435\u0442\u043A\u0430\" (\u043F\u043E\u0438\u0441\u043A \u043F\u043E \u0447\u0430\u0441\u0442\u0438 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u044B)"
+            title = "Предпочитаемая ветка"
+            dialogTitle = "Предпочитаемая ветка"
+            summary = "Используется в режиме \"Предпочитаемая ветка\" (поиск по части названия команды)"
             setDefaultValue(DEFAULT_PREFERRED_BRANCH_QUERY)
         }.let(screen::addPreference)
     }
@@ -148,13 +148,15 @@ class InkStory :
 
     override fun searchMangaParse(response: Response): MangasPage = booksParse(response)
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.substringBefore(MANGA_URL_ID_DELIMITER)
+
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast('/')
+        val slug = manga.url.substringBefore(MANGA_URL_ID_DELIMITER).substringAfterLast('/')
         return GET("$apiBaseUrl/v2/books/$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val book = json.decodeFromString<BookDto>(response.body.string())
+        val book = response.parseAs<BookDto>()
 
         val authorNames = book.relations
             .asSequence()
@@ -187,7 +189,7 @@ class InkStory :
             .distinct()
 
         return SManga.create().apply {
-            url = "/content/${book.slug}"
+            url = mangaUrl(book.slug, book.id)
             title = resolveTitle(book.name, book.slug)
             thumbnail_url = book.poster
             description = buildString {
@@ -205,28 +207,40 @@ class InkStory :
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaId = mangaIdFromUrl(manga.url)
+        return if (mangaId != null) {
+            GET("$apiBaseUrl/v2/chapters?bookId=$mangaId", headers)
+        } else {
+            mangaDetailsRequest(manga)
+        }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val book = json.decodeFromString<BookDto>(response.body.string())
-        val branchMap = fetchBranchNames(book.id)
+        val requestUrl = response.request.url
+        val path = requestUrl.encodedPath
+        val bookIdFromQuery = requestUrl.queryParameter("bookId")
 
-        val chapters = client.newCall(GET("$apiBaseUrl/v2/chapters?bookId=${book.id}", headers))
-            .execute()
-            .use { chaptersResponse ->
-                json.decodeFromString<List<ChapterDto>>(chaptersResponse.body.string())
-            }
+        val (bookId, chapters) = if (bookIdFromQuery != null && path == "/v2/chapters") {
+            bookIdFromQuery to response.parseAs<List<ChapterDto>>()
+        } else {
+            val book = response.parseAs<BookDto>()
+            book.id to fetchChapters(book.id)
+        }
+
+        val branchMap = fetchBranchNames(bookId)
+        val processedChapters = chapters
             .let { preprocessChapters(it, branchMap) }
 
-        return chapters.map { chapter ->
+        return processedChapters.map { chapter ->
             SChapter.create().apply {
                 val vol = formatDecimal(chapter.volume)
                 val num = formatDecimal(chapter.number)
                 val baseChapterName = when {
-                    vol != null && num != null -> "\u0422\u043E\u043C $vol \u0413\u043B\u0430\u0432\u0430 $num"
-                    num != null -> "\u0413\u043B\u0430\u0432\u0430 $num"
-                    vol != null -> "\u0422\u043E\u043C $vol"
-                    else -> "\u0413\u043B\u0430\u0432\u0430"
+                    vol != null && num != null -> "Том $vol Глава $num"
+                    num != null -> "Глава $num"
+                    vol != null -> "Том $vol"
+                    else -> "Глава"
                 }
                 val subtitle = listOf(chapter.name, chapter.title)
                     .firstOrNull { !it.isNullOrBlank() }
@@ -238,7 +252,7 @@ class InkStory :
                 }
 
                 setUrlWithoutDomain("/chapter/${chapter.id}")
-                name = if (chapter.donut == true) "\uD83D\uDD12 $readableName" else readableName
+                name = if (chapter.donut == true) "🔒 $readableName" else readableName
                 chapter_number = chapter.number?.toFloat() ?: -1f
                 date_upload = parseDate(chapter.createdAt)
                 scanlator = resolveBranchName(chapter.branchId, branchMap)
@@ -246,16 +260,18 @@ class InkStory :
         }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast('/')
         return GET("$apiBaseUrl/v2/chapters/$chapterId", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapter = json.decodeFromString<ChapterDto>(response.body.string())
+        val chapter = response.parseAs<ChapterDto>()
         val chapterId = chapter.id
         val secretKey = getSecretKey(chapterId)
-        val pages = chapter.pages
+        return chapter.pages
             .sortedBy { it.index ?: Int.MAX_VALUE }
             .mapIndexedNotNull { index, page ->
                 page.image?.takeIf(String::isNotBlank)?.let { imageUrl ->
@@ -267,16 +283,10 @@ class InkStory :
                     )
                 }
             }
-
-        if (pages.isEmpty()) {
-            throw Exception("No pages found for this chapter")
-        }
-
-        return pages
     }
 
     override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl ?: error("Image URL is missing")
+        val imageUrl = page.imageUrl!!
         val (chapterId, imageKey) = decodePageMeta(page.url)
         val imageHeaders = headersBuilder().apply {
             if (imageKey.isNotBlank()) {
@@ -329,11 +339,11 @@ class InkStory :
     private fun booksParse(response: Response): MangasPage {
         val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
         val totalHits = response.header("x-estimated-total-hits")?.toIntOrNull()
-        val books = json.decodeFromString<List<BookDto>>(response.body.string())
+        val books = response.parseAs<List<BookDto>>()
 
         val mangas = books.map { book ->
             SManga.create().apply {
-                url = "/content/${book.slug}"
+                url = mangaUrl(book.slug, book.id)
                 title = resolveTitle(book.name, book.slug)
                 thumbnail_url = book.poster
             }
@@ -348,12 +358,14 @@ class InkStory :
         return MangasPage(mangas, hasNextPage)
     }
 
+    private fun fetchChapters(bookId: String): List<ChapterDto> = client.newCall(GET("$apiBaseUrl/v2/chapters?bookId=$bookId", headers))
+        .execute()
+        .parseAs()
+
     private fun fetchBranchNames(bookId: String): Map<String, String?> {
         val branches = client.newCall(GET("$apiBaseUrl/v2/branches?bookId=$bookId", headers))
             .execute()
-            .use { branchResponse ->
-                json.decodeFromString<List<BranchDto>>(branchResponse.body.string())
-            }
+            .parseAs<List<BranchDto>>()
 
         return branches.associate { branch ->
             val name = branch.publishers
@@ -424,7 +436,7 @@ class InkStory :
 
     private fun resolveBranchName(branchId: String?, branchMap: Map<String, String?>): String? {
         if (branchId.isNullOrBlank()) return null
-        return branchMap[branchId]?.takeIf(String::isNotBlank) ?: "\u0412\u0435\u0442\u043A\u0430 $branchId"
+        return branchMap[branchId]?.takeIf(String::isNotBlank) ?: "Ветка $branchId"
     }
 
     private fun parseStatus(status: String?): Int = when (status) {
@@ -447,8 +459,9 @@ class InkStory :
         }
     }
 
-    private fun parseDate(value: String?): Long = runCatching { value?.let { Instant.parse(it).toEpochMilli() } ?: 0L }
-        .getOrDefault(0L)
+    private fun parseDate(value: String?): Long = CHAPTER_DATE_FORMATS.firstNotNullOfOrNull { format ->
+        format.tryParse(value).takeIf { it != 0L }
+    } ?: 0L
 
     private fun getSecretKey(chapterId: String, forceRefresh: Boolean = false): String {
         if (!forceRefresh) {
@@ -568,6 +581,10 @@ class InkStory :
             .build()
             .toString()
     }
+
+    private fun mangaUrl(slug: String, id: String): String = "/content/$slug$MANGA_URL_ID_DELIMITER$id"
+
+    private fun mangaIdFromUrl(url: String): String? = url.substringAfter(MANGA_URL_ID_DELIMITER, "").takeIf(String::isNotBlank)
 
     private fun decodeXor(payload: ByteArray, key: String): ByteArray {
         val keyBytes = key.toByteArray()
@@ -715,20 +732,25 @@ class InkStory :
         private const val SECRET_KEY_CACHE_MAX = 500
         private const val DEFAULT_SECRET_KEY = "UySkp0BzPhwlvP2V"
         private const val PAGE_META_DELIMITER = "|"
+        private const val MANGA_URL_ID_DELIMITER = "#id="
 
         private val IMAGE_QUALITY_OPTIONS = arrayOf("50", "75", "100")
         private val IMAGE_TYPE_OPTIONS = arrayOf("webp", "jpeg")
         private val IMAGE_WIDTH_OPTIONS = arrayOf("700", "1200", "1600")
         private val BRANCH_MODE_ENTRIES = arrayOf(
-            "\u0412\u0441\u0435 \u0432\u0435\u0442\u043A\u0438",
-            "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0432\u0435\u0440\u0441\u0438\u044F \u0433\u043B\u0430\u0432\u044B",
-            "\u041F\u0440\u0435\u0434\u043F\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F \u0432\u0435\u0442\u043A\u0430",
+            "Все ветки",
+            "Последняя версия главы",
+            "Предпочитаемая ветка",
         )
         private val BRANCH_MODE_VALUES = arrayOf(
             ChapterBranchMode.ALL.value,
             ChapterBranchMode.LATEST.value,
             ChapterBranchMode.PREFERRED.value,
         )
+        private val CHAPTER_DATE_FORMATS = listOf(
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ROOT),
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.ROOT),
+        ).onEach { it.timeZone = TimeZone.getTimeZone("UTC") }
 
         private val SECRET_KEY_REGEX = "\"secret-key\",\"([^\"]+)\"".toRegex()
     }
