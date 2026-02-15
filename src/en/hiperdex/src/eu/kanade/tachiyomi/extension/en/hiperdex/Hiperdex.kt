@@ -26,7 +26,7 @@ class Hiperdex :
         "Hiperdex",
         "https://hiperdex.com",
         "en",
-        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US),
     ),
     ConfigurableSource {
 
@@ -116,36 +116,28 @@ class Hiperdex :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
-            title = title.cleanTitleIfNeeded()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        title = title.cleanTitleIfNeeded()
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return super.latestUpdatesFromElement(element).apply {
-            title = title.cleanTitleIfNeeded()
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = super.latestUpdatesFromElement(element).apply {
+        title = title.cleanTitleIfNeeded()
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
-            title = title.cleanTitleIfNeeded()
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        title = title.cleanTitleIfNeeded()
     }
 
     override fun searchMangaSelector() = "#loop-content div.page-listing-item"
 
     override val chapterUrlSuffix = ""
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(document).apply {
-            val cleanedTitle = title.cleanTitleIfNeeded()
-            if (cleanedTitle != title.trim()) {
-                description = listOfNotNull(title, description)
-                    .joinToString("\n\n")
-                title = cleanedTitle
-            }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        val cleanedTitle = title.cleanTitleIfNeeded()
+        if (cleanedTitle != title.trim()) {
+            description = listOfNotNull(title, description)
+                .joinToString("\n\n")
+            title = cleanedTitle
         }
     }
 
@@ -163,11 +155,8 @@ class Hiperdex :
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
-    private fun isRemoveTitleVersion(): Boolean {
-        return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
-    }
-    private fun customRemoveTitle(): String =
-        preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
+    private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
+    private fun customRemoveTitle(): String = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { defaultBaseUrl ->
