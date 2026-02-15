@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.mimihentai
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,7 +12,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
@@ -30,16 +28,11 @@ class MiMiHentai : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val rateLimitClient = network.cloudflareClient.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 14, 1, TimeUnit.MINUTES)
         .build()
 
     // ============================== Popular ===============================
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = rateLimitClient
-        .newCall(popularMangaRequest(page))
-        .asObservableSuccess()
-        .map { response -> popularMangaParse(response) }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/danh-sach?sort=-views&page=$page", headers)
 
@@ -65,21 +58,11 @@ class MiMiHentai : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = rateLimitClient
-        .newCall(latestUpdatesRequest(page))
-        .asObservableSuccess()
-        .map { response -> latestUpdatesParse(response) }
-
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/danh-sach?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Search ===============================
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = rateLimitClient
-        .newCall(searchMangaRequest(page, query, filters))
-        .asObservableSuccess()
-        .map { response -> searchMangaParse(response) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder().apply {
@@ -117,11 +100,6 @@ class MiMiHentai : HttpSource() {
 
     // =============================== Details ==============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = rateLimitClient
-        .newCall(mangaDetailsRequest(manga))
-        .asObservableSuccess()
-        .map { response -> mangaDetailsParse(response) }
-
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
 
@@ -146,11 +124,6 @@ class MiMiHentai : HttpSource() {
     }
 
     // ============================== Chapters ==============================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = rateLimitClient
-        .newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .map { response -> chapterListParse(response) }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -195,12 +168,6 @@ class MiMiHentai : HttpSource() {
 
     // =============================== Pages ================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = rateLimitClient.newCall(pageListRequest(chapter))
-        .asObservableSuccess()
-        .map { response ->
-            pageListParse(response)
-        }
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
@@ -216,11 +183,6 @@ class MiMiHentai : HttpSource() {
 
     // =============================== Related ================================
     // dirty hack to disable suggested mangas on Komikku due to heavy rate limit
-    // https://github.com/komikku-app/komikku/blob/4323fd5841b390213aa4c4af77e07ad42eb423fc/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/CatalogueSource.kt#L71-L76
-    @Suppress("Unused")
-    @JvmName("getSupportsRelatedMangas")
-    fun supportsRelatedMangas() = false
-
     // https://github.com/komikku-app/komikku/blob/4323fd5841b390213aa4c4af77e07ad42eb423fc/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/CatalogueSource.kt#L176-L184
     @Suppress("Unused")
     @JvmName("getDisableRelatedMangasBySearch")
