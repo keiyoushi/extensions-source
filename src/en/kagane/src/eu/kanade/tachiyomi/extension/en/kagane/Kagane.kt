@@ -294,7 +294,7 @@ class Kagane :
         )
 
         return dto.seriesBooks.map { book ->
-            book.toSChapter(seriesId, useSourceChapterNumber)
+            book.toSChapter(seriesId, useSourceChapterNumber, preferences.chapterTitleMode)
         }.reversed()
     }
 
@@ -591,6 +591,9 @@ class Kagane :
     private val SharedPreferences.wvd
         get() = this.getString(WVD_KEY, WVD_DEFAULT)!!
 
+    private val SharedPreferences.chapterTitleMode
+        get() = this.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = CONTENT_RATING
@@ -643,6 +646,15 @@ class Kagane :
             summary = "Enter contents as base64 string"
             setDefaultValue(WVD_DEFAULT)
         }.let(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = CHAPTER_TITLE_MODE
+            title = "Chapter title format"
+            entries = CHAPTER_TITLE_MODE_NAMES
+            entryValues = CHAPTER_TITLE_MODES
+            summary = "%s"
+            setDefaultValue(CHAPTER_TITLE_MODE_DEFAULT)
+        }.let(screen::addPreference)
     }
 
     // ============================= Utilities ==============================
@@ -668,6 +680,19 @@ class Kagane :
 
         private const val WVD_KEY = "wvd_key"
         private const val WVD_DEFAULT = ""
+
+        private const val CHAPTER_TITLE_MODE = "chapter_title_mode"
+        private const val CHAPTER_TITLE_MODE_DEFAULT = "smart"
+        internal val CHAPTER_TITLE_MODES = arrayOf(
+            "smart",
+            "always",
+            "never",
+        )
+        internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
+            "Smart (Default)",
+            "Always show chapter number",
+            "Never show chapter number",
+        )
     }
 
     // ============================= Filters ==============================
@@ -742,7 +767,6 @@ class Kagane :
                     val genres = genreResponse.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
                     val tags = tagsResponse.parseAs<List<TagDto>>().associate { it.id to it.tagName }
                     val sources = sourcesResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
-
 
                     metadata = MetadataDto(genres, tags, sources)
                     Log.d(name, "Metadata fetched and updated")
