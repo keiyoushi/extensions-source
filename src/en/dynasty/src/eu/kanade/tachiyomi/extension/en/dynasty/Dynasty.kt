@@ -214,7 +214,7 @@ class Dynasty :
                     val sort = if (query.isNotBlank()) {
                         BEST_MATCH
                     } else {
-                        RELEASE
+                        RELEASED_ON
                     }
                     addQueryParameter("sort", sort)
                 } else {

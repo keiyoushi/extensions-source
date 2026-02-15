@@ -32,4 +32,4 @@ val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
 // sort filters
 const val SMART_SORT = "_smart_"
 const val BEST_MATCH = ""
-const val RELEASE = "released_on"
+const val RELEASED_ON = "released_on"
