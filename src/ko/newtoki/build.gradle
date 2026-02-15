@@ -21,7 +21,7 @@ tasks.register('updateDomainNumber') {
             it.println("// spotless:off")
             it.println("// THIS FILE IS AUTO-GENERATED, DO NOT COMMIT")
             it.println("package eu.kanade.tachiyomi.extension.ko.newtoki")
-            it.println("const val fallbackDomainNumber = \"$number\"")
+            it.println("const val FALLBACK_DOMAIN_NUMBER = \"$number\"")
         }
     }
 }
