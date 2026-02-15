@@ -56,29 +56,23 @@ open class MangaTaro(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.popular)
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.popular)
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.latest)
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith("https://")) {
-            deeplinkHandler(query)
-        } else if (
-            query.isNotBlank() &&
-            filters.firstInstanceOrNull<SearchWithFilters>()?.state == false
-        ) {
-            querySearch(query)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
+        deeplinkHandler(query)
+    } else if (
+        query.isNotBlank() &&
+        filters.firstInstanceOrNull<SearchWithFilters>()?.state == false
+    ) {
+        querySearch(query)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun querySearch(query: String): Observable<MangasPage> {
@@ -225,7 +219,7 @@ open class MangaTaro(
             description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
             genre = buildSet {
                 addAll(data.embedded.getTerms("post_tag"))
-                if (listOf("Manhwa", "Manhua", "Manga").none { it -> this.contains(it) }) {
+                if (listOf("Manhwa", "Manhua", "Manga").none { this.contains(it) }) {
                     add(data.type)
                 }
             }.joinToString()
@@ -306,15 +300,25 @@ open class MangaTaro(
         return chapters
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-        return document.select("img.comic-image").mapIndexed { idx, img ->
-            val imageUrl = when {
-                img.hasAttr("data-src") -> img.absUrl("data-src")
-                else -> img.absUrl("src")
-            }
-            Page(idx, imageUrl = imageUrl)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = getChapterUrl(chapter).toHttpUrl()
+            .pathSegments.last()
+            .substringAfter("-")
+
+        val url = "$baseUrl/auth/chapter-content".toHttpUrl().newBuilder()
+            .addQueryParameter("chapter_id", chapterId)
+            .build()
+
+        return GET(url, headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val data = response.parseAs<Pages>()
+
+        return data.images.mapIndexed { idx, img ->
+            Page(idx, imageUrl = img)
         }
     }
 
@@ -377,13 +381,13 @@ open class MangaTaro(
             )
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 // Map groups by language
-class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), ConfigurableSource {
+class MangaTaroGroup(lang: String, val groups: List<Long>) :
+    MangaTaro(lang),
+    ConfigurableSource {
 
     override val supportsLatest: Boolean = false
 
@@ -404,8 +408,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
 
     val groupsMapped: List<Long> by lazy { (groups + userGroups).distinct() }
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")!!.toLong()
@@ -414,23 +417,19 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
             .let { MangasPage(it, hasNextPage = page < groupsMapped.size) }
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return libraryCached.takeIf(List<SManga>::isNotEmpty)?.let {
-            Observable.just(MangasPage(libraryCached, hasNextPage = false))
-        } ?: super.fetchPopularManga(page)
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = libraryCached.takeIf(List<SManga>::isNotEmpty)?.let {
+        Observable.just(MangasPage(libraryCached, hasNextPage = false))
+    } ?: super.fetchPopularManga(page)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return Observable.fromCallable {
-            if (libraryCached.isEmpty()) {
-                do {
-                    val mangasPage = fetchPopularManga(page)
-                        .toBlocking().first()
-                    libraryCached += mangasPage.mangas
-                } while (mangasPage.hasNextPage)
-            }
-            MangasPage(libraryCached.filter { it.title.contains(query, ignoreCase = true) }, false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+        if (libraryCached.isEmpty()) {
+            do {
+                val mangasPage = fetchPopularManga(page)
+                    .toBlocking().first()
+                libraryCached += mangasPage.mangas
+            } while (mangasPage.hasNextPage)
         }
+        MangasPage(libraryCached.filter { it.title.contains(query, ignoreCase = true) }, false)
     }
 
     override fun getFilterList(): FilterList = FilterList()
@@ -450,7 +449,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
 
             setDefaultValue(groups.joinToString())
 
-            setOnPreferenceChangeListener { preference, newValue ->
+            setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
                 true
             }
@@ -458,7 +457,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
     }
 
     companion object {
-        private val GROUP_PREF = "groupPref"
+        private const val GROUP_PREF = "groupPref"
         private const val RESTART_APP = "Restart app to apply new setting."
     }
 }
