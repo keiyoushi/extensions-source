@@ -31,7 +31,7 @@ import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
 
-open class Dynasty : HttpSource(), ConfigurableSource {
+class Dynasty : HttpSource(), ConfigurableSource {
 
     override val name = "Dynasty Scans"
 
