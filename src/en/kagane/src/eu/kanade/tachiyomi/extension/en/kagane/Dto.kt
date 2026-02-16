@@ -191,7 +191,7 @@ class ChapterDto(
         val volumeNo: String?,
         val groups: List<Group> = emptyList(),
     ) {
-        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "smart"): SChapter = SChapter.create().apply {
+        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
             url = "/series/$actualSeriesId/reader/$id"
             name = buildChapterName(chapterTitleMode)
             date_upload = dateFormat.tryParse(createdAt)
@@ -201,11 +201,14 @@ class ChapterDto(
             scanlator = groups.joinToString(", ") { it.title }
         }
 
-        private fun buildChapterName(mode: String = "smart"): String {
+        private fun buildChapterName(mode: String = "optional"): String {
             val trimmedTitle = title.trim()
             return when (mode) {
-                "never" -> {
-                    trimmedTitle
+                "optional" -> {
+                    when {
+                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Chapter $chapterNo"
+                        else -> trimmedTitle
+                    }
                 }
 
                 "always" -> {
@@ -216,39 +219,8 @@ class ChapterDto(
                     }
                 }
 
-                else -> {
-                    when {
-                        chapterNo.isNullOrBlank() -> trimmedTitle
-
-                        trimmedTitle.isEmpty() -> "Chapter $chapterNo"
-
-                        trimmedTitle.matches(
-                            Regex(
-                                "^\\(S\\d+\\)\\s*(Chapter|Episode|Ch|Ep).*",
-                                RegexOption.IGNORE_CASE,
-                            ),
-                        ) -> trimmedTitle
-
-                        trimmedTitle.matches(
-                            Regex(
-                                "^(Chapter|Ch\\.|Ch|Episode|Ep\\.|Ep)\\s*${Regex.escape(chapterNo)}[\\s\\-:.].*",
-                                RegexOption.IGNORE_CASE,
-                            ),
-                        ) -> trimmedTitle
-
-                        trimmedTitle.matches(
-                            Regex(
-                                "^(Chapter|Ch\\.|Ch|Episode|Ep\\.|Ep)\\s*\\d+.*",
-                                RegexOption.IGNORE_CASE,
-                            ),
-                        ) -> trimmedTitle
-
-                        trimmedTitle.matches(Regex("^\\d+[\\s\\-:.].*")) -> trimmedTitle
-
-                        else -> "Chapter $chapterNo: $trimmedTitle"
-                    }
-                }
-            }
+                else -> {}
+            } as String
         }
     }
 

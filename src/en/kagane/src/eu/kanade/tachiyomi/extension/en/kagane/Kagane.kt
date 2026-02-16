@@ -690,7 +690,7 @@ class Kagane :
             title = "Chapter title format"
             entries = CHAPTER_TITLE_MODE_NAMES
             entryValues = CHAPTER_TITLE_MODES
-            summary = "%s"
+            summary = "How the chapter title should be displayed"
             setDefaultValue(CHAPTER_TITLE_MODE_DEFAULT)
         }.let(screen::addPreference)
     }
@@ -721,16 +721,14 @@ class Kagane :
         private const val WVD_DEFAULT = ""
 
         private const val CHAPTER_TITLE_MODE = "chapter_title_mode"
-        private const val CHAPTER_TITLE_MODE_DEFAULT = "smart"
+        private const val CHAPTER_TITLE_MODE_DEFAULT = "optional"
         internal val CHAPTER_TITLE_MODES = arrayOf(
-            "smart",
+            "optional",
             "always",
-            "never",
         )
         internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
-            "Smart (Default)",
-            "Always show chapter number",
-            "Never show chapter number",
+            "Default (Hide numbers)",
+            "Include chapter numbers",
         )
     }
 
