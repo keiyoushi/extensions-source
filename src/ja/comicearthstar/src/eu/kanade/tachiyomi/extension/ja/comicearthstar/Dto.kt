@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.comicearthstar
 
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Suppress("Unused")
 @Serializable
@@ -32,12 +32,12 @@ class LatestSerialGroup(
 
 @Serializable
 class LatestUpdatedSeriesEpisode(
-    val permalink: String,
-    val series: LatestSeries,
+    private val permalink: String,
+    private val series: LatestSeries,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = series.title
-        url = permalink.removePrefix(baseUrl)
+        url = permalink.toHttpUrl().encodedPath
         thumbnail_url = series.thumbnailUri
     }
 }
@@ -70,13 +70,13 @@ class SearchEdge(
 
 @Serializable
 class EntryNode(
-    val firstEpisode: FirstEpisode,
-    val thumbnailUri: String,
-    val title: String,
+    private val firstEpisode: FirstEpisode,
+    private val thumbnailUri: String,
+    private val title: String,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@EntryNode.title
-        url = firstEpisode.permalink.removePrefix(baseUrl)
+        url = firstEpisode.permalink.toHttpUrl().encodedPath
         thumbnail_url = thumbnailUri
     }
 }
@@ -84,16 +84,6 @@ class EntryNode(
 @Serializable
 class FirstEpisode(
     val permalink: String,
-)
-
-@Serializable
-class OneshotResponse(
-    val data: OneshotData,
-)
-
-@Serializable
-class OneshotData(
-    val seriesOneshot: SeriesEntries,
 )
 
 @Serializable

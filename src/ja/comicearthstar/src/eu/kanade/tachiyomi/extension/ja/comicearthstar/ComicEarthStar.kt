@@ -66,7 +66,7 @@ class ComicEarthStar :
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val results = response.parseAs<LatestResponse>().data.serialGroup.latestUpdatedSeriesEpisodes.map { it.toSManga(baseUrl) }
+        val results = response.parseAs<LatestResponse>().data.serialGroup.latestUpdatedSeriesEpisodes.map { it.toSManga() }
         return MangasPage(results, false)
     }
 
@@ -78,56 +78,48 @@ class ComicEarthStar :
             return apiRequest("Common_Search", variables, SEARCH_QUERY).newBuilder().tag("search").build()
         }
 
-        return when (val filter = filters.firstInstance<CollectionFilter>().selected.path) {
-            "Earthstar_SeriesOngoing" -> apiRequest(filter, EmptyVariables, ONGOING_QUERY).newBuilder().tag("ongoing").build()
-            "Earthstar_SeriesFinished" -> apiRequest(filter, EmptyVariables, FINISHED_QUERY).newBuilder().tag("finished").build()
-            "Earthstar_Oneshot" -> apiRequest(filter, EmptyVariables, ONESHOT_QUERY).newBuilder().tag("oneshot").build()
-            else -> popularMangaRequest(page)
-        }
+        val filter = filters.firstInstance<CategoryFilter>()
+        return apiRequest(filter.type, EmptyVariables, filter.value)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val tag = response.request.tag()
-        val mangas = when (tag) {
-            "search" -> {
-                val results = response.parseAs<SearchResponse>()
-                results.data.searchSeries.edges.map { it.node.toSManga(baseUrl) }
-            }
-
-            "oneshot" -> {
-                val results = response.parseAs<OneshotResponse>()
-                results.data.seriesOneshot.seriesSlice.seriesList.map { it.toSManga(baseUrl) }
-            }
-
-            "finished", "ongoing" -> {
-                val results = response.parseAs<SeriesResponse>()
-                results.data.serialGroup.seriesSlice.seriesList.map { it.toSManga(baseUrl) }
-            }
-
-            else -> popularMangaParse(response).mangas
+        val mangas = if (tag == "search") {
+            response.parseAs<SearchResponse>().data.searchSeries.edges.map { it.node.toSManga() }
+        } else {
+            response.parseAs<SeriesResponse>().data.serialGroup.seriesSlice.seriesList.map { it.toSManga() }
         }
+
         return MangasPage(mangas, false)
     }
 
-    override fun getFilterList(): FilterList = FilterList(CollectionFilter(getCollections()))
+    override fun getFilterList() = FilterList(
+        CategoryFilter(),
+    )
 
-    private class CollectionFilter(val collections: List<Collection>) : Filter.Select<Collection>("コレクション", collections.toTypedArray()) {
-        val selected: Collection
-            get() = collections[state]
+    private open class SelectFilter(displayName: String, private val vals: Array<Triple<String, String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+        val type: String
+            get() = vals[state].second
+
+        val value: String
+            get() = vals[state].third
     }
 
-    override fun getCollections(): List<Collection> = listOf(
-        Collection("最新の更新", ""),
-        Collection("連載中", "Earthstar_SeriesOngoing"),
-        Collection("連載終了", "Earthstar_SeriesFinished"),
-        Collection("読切作品", "Earthstar_Oneshot"),
-    )
+    private class CategoryFilter :
+        SelectFilter(
+            "コレクション",
+            arrayOf(
+                Triple("連載中", "Earthstar_SeriesOngoing", ONGOING_QUERY),
+                Triple("連載終了", "Earthstar_SeriesFinished", FINISHED_QUERY),
+                Triple("読切作品", "Earthstar_Oneshot", ONESHOT_QUERY),
+            ),
+        )
 
     // https://comic-earthstar.com/_next/static/chunks/4037-39196498009057a7.js
     companion object {
         private const val LATEST_QUERY = $$"query Earthstar_LatestUpdates($latestUpdatedSince: DateTime!, $latestUpdatedUntil: DateTime!) { serialGroup(groupName: \"トップ：更新作品\") { latestUpdatedSeriesEpisodes: updatedFreeEpisodes(since: $latestUpdatedSince until: $latestUpdatedUntil) { permalink series { title thumbnailUri } } } }"
         private const val SEARCH_QUERY = $$"query Common_Search($keyword: String!) { searchSeries(keyword: $keyword) { edges { node { title thumbnailUri firstEpisode { permalink } } } } }"
-        private const val ONESHOT_QUERY = "query Earthstar_Oneshot { seriesOneshot: serialGroup(groupName: \"連載・読切：読切作品\") { seriesSlice { seriesList { ...Earthstar_SeriesListItem_Series } } } } fragment Earthstar_SeriesListItem_Series on Series { thumbnailUri title firstEpisode { permalink } }"
+        private const val ONESHOT_QUERY = "query Earthstar_Oneshot { serialGroup(groupName: \"連載・読切：読切作品\") { seriesSlice { seriesList { ...Earthstar_SeriesListItem_Series } } } } fragment Earthstar_SeriesListItem_Series on Series { thumbnailUri title firstEpisode { permalink } }"
         private const val ONGOING_QUERY = "query Earthstar_SeriesOngoing { serialGroup(groupName: \"連載・読切：連載作品：連載中\") { seriesSlice { seriesList { ...Earthstar_SeriesListItem_Series } } } } fragment Earthstar_SeriesListItem_Series on Series { thumbnailUri title firstEpisode { permalink } }"
         private const val FINISHED_QUERY = "query Earthstar_SeriesFinished { serialGroup(groupName: \"連載・読切：連載作品：連載終了\") { seriesSlice { seriesList { ...Earthstar_SeriesListItem_Series } } } } fragment Earthstar_SeriesListItem_Series on Series { thumbnailUri title firstEpisode { permalink } }"
     }
