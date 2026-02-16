@@ -28,12 +28,10 @@ class SourcesDto(
 )
 
 @Serializable
-class SourceDto(
-    @SerialName("source_id")
-    val sourceId: String,
+data class SourceDto(
+    @SerialName("source_id") val sourceId: String,
+    @SerialName("source_type") val sourceType: String, // "Official", "Unofficial", "Mixed"
     val title: String,
-    @SerialName("source_type")
-    val sourceType: String,
 )
 
 @Serializable
@@ -214,7 +212,7 @@ class ChapterDto(
                     when {
                         chapterNo.isNullOrBlank() -> trimmedTitle
                         trimmedTitle.isEmpty() -> "Chapter $chapterNo"
-                        else -> "Chapter $chapterNo: $trimmedTitle"
+                        else -> "($chapterNo) $trimmedTitle"
                     }
                 }
 

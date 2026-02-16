@@ -13,14 +13,14 @@ import kotlinx.serialization.json.putJsonObject
 data class MetadataDto(
     val genres: Map<String, String>,
     val tags: Map<String, String>,
-    val sources: Map<String, String>,
+    val sources: List<SourceDto>,
 ) {
     fun getGenresList() = genres
         .map { (k, v) -> FilterData(k, v) }.sortedBy { it.name }
     fun getTagsList() = tags
         .map { (k, v) -> FilterData(k, v.replaceFirstChar { c -> c.uppercase() }) }.sortedBy { it.name }
     fun getSourcesList() = sources
-        .map { (k, v) -> FilterData(k, v) }.sortedBy { it.name }
+        .map { FilterData(it.sourceId, it.title) }.sortedBy { it.name }
 }
 
 internal class SortFilter(
@@ -87,7 +87,7 @@ internal class SourcesFilter(
     sources: List<FilterData>,
 ) : JsonMultiSelectFilter(
     "Sources",
-    "sources",
+    "source_id",
     sources.map {
         MultiSelectOption(it.name, it.id)
     },
@@ -241,43 +241,4 @@ internal val GenresList = arrayOf(
     "Magic",
     "fan colored",
     "monsters",
-)
-
-val officialSources = listOf(
-    "webtoon",
-    "lezhin",
-    "tapas",
-    "comikey",
-    "pocket comics",
-    "day comics",
-    "webcomics",
-    "tappytoon",
-    "toomics",
-    "inkr comics",
-    "manta",
-    "kodoku studio",
-    "dark horse comics",
-    "kodansha comics",
-    "seven seas entertainment",
-    "square enix manga",
-    "udon entertainment",
-    "viz media",
-    "yen press",
-    "tokyopop",
-    "fakku",
-    "j-novel club",
-    "kana",
-    "vast visual",
-    "one peace books",
-    "booklive",
-    "medibang",
-    "mangadex",
-    "digital manga",
-    "denpa books",
-    "irodori comics",
-    "kodama tales",
-    "shusuisha",
-    "titan manga",
-    "ponent mon",
-    "k manga",
 )
