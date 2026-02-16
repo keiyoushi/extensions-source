@@ -1,0 +1,31 @@
+name: Build Poseidon Scan APK
+
+on:
+  workflow_dispatch: # Permet de lancer le build manuellement
+
+jobs:
+  build:
+    name: Compilation de l'extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Configuration de Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Compiler Poseidon Scan (Debug)
+        # On cible uniquement le module de Poseidon Scan en français
+        run: ./gradlew :extensions:fr:poseidonscan:assembleDebug
+
+      - name: Téléverser l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: poseidon-scan-apk
+          path: "**/*.apk"
