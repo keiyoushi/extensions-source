@@ -166,10 +166,32 @@ class Kagane :
                 sourceTypes.forEach { add(it) }
             }
 
+            var genresMatchAll: Boolean? = null
+            var tagsMatchAll: Boolean? = null
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is MatchAllGenresFilter -> {
+                        genresMatchAll = if (filter.state) true else null
+                    }
+
+                    is MatchAllTagsFilter -> {
+                        tagsMatchAll = if (filter.state) true else null
+                    }
+
+                    else -> { }
+                }
+            }
+
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
-                        filter.addToJsonObject(this, "genres", preferences.excludedGenres.toList())
+                        val excludedGenreIds = preferences.excludedGenres.mapNotNull { genreName ->
+                            metadata?.genres?.entries?.firstOrNull {
+                                it.value.equals(genreName, ignoreCase = true)
+                            }?.key
+                        }
+                        filter.addToJsonObject(this, "genres", excludedGenreIds, genresMatchAll)
                     }
 
                     is TagsSearchFilter -> {
@@ -195,7 +217,9 @@ class Kagane :
 
                                 if (includeIds.isNotEmpty() || excludeIds.isNotEmpty()) {
                                     putJsonObject("tags") {
-                                        put("match_all", false)
+                                        if (tagsMatchAll == true) {
+                                            put("match_all", true)
+                                        }
                                         if (includeIds.isNotEmpty()) {
                                             putJsonArray("values") {
                                                 includeIds.forEach { add(it) }
@@ -753,7 +777,9 @@ class Kagane :
 
             filters.addAll(
                 listOf(
+                    MatchAllGenresFilter(),
                     GenresFilter(meta.getGenresList()),
+                    MatchAllTagsFilter(),
                     TagsSearchFilter(),
                     SourcesFilter(sourceFilters),
                 ),
