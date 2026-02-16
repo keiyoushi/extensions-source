@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
@@ -30,6 +31,17 @@ class MiMiHentai : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 14, 1, TimeUnit.MINUTES)
+        .addNetworkInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+
+            if (request.url.toString().startsWith(baseUrl)) {
+                if (response.code == 429) {
+                    throw IOException("Bạn đang request quá nhanh!")
+                }
+            }
+            response
+        }
         .build()
 
     // ============================== Popular ===============================
