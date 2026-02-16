@@ -41,21 +41,16 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
     override fun searchMangaSelector() = "main#main-content a[href*='/series/']:has([style*='background-image'])"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val href = element.attr("abs:href").ifBlank {
-            element.attr("href").let { h -> if (h.startsWith("http")) h else baseUrl + "/" + h.trimStart('/') }
-        }
+        val href = element.attr("abs:href")
         setUrlWithoutDomain(href)
-        title = element.attr("title").ifBlank { element.selectFirst("h3")?.text()?.trim() ?: "" }
+        title = element.attr("title").ifBlank { element.selectFirst("h3")!!.text() }
         thumbnail_url = element.getImageUrl("*[style*=background-image]")
-            ?: element.parent()?.parent()?.parent()?.parent()?.getImageUrl("*[style*=background-image]")
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
         val main = response.asJsoup().selectFirst("main#main-content") ?: return MangasPage(emptyList(), false)
-        val links = main.select("a[href*='/series/']:has([style*='background-image'])").ifEmpty {
-            main.select("a[href*='/series/']")
-        }
+        val links = main.select("a[href*='/series/']")
         val mangas = links.map(::searchMangaFromElement)
             .filter { it.title.isNotBlank() && it.url.isNotBlank() }
             .distinctBy { it.url }
