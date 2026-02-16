@@ -257,13 +257,10 @@ class Kagane :
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
-                        filter.toUriPart().takeIf { it.isNotEmpty() }
-                            ?.let { uriPart -> addQueryParameter("sort", uriPart) }
-                            ?: run {
-                                if (query.isBlank()) {
-                                    addQueryParameter("sort", "updated_at,desc")
-                                }
-                            }
+                        val sortParam = filter.toUriPart()
+                        when {
+                            sortParam.isNotEmpty() -> addQueryParameter("sort", sortParam)
+                        }
                     }
 
                     else -> {}
