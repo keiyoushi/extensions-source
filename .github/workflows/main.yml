@@ -1,7 +1,7 @@
 name: Build Poseidon Scan APK
 
 on:
-  workflow_dispatch: # Permet de lancer le build manuellement
+  workflow_dispatch: # Lancement manuel
 
 jobs:
   build:
@@ -21,11 +21,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Compiler Poseidon Scan (Debug)
-        # On cible uniquement le module de Poseidon Scan en français
-        run: ./gradlew :extensions:fr:poseidonscan:assembleDebug
+        # Le chemin exact dans le repo Keiyoushi est :src:
+        run: ./gradlew :src:fr:poseidonscan:assembleDebug
 
       - name: Téléverser l'APK
         uses: actions/upload-artifact@v4
         with:
           name: poseidon-scan-apk
           path: "**/*.apk"
+          
