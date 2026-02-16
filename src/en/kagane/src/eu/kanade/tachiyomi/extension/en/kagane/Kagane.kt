@@ -155,6 +155,17 @@ class Kagane :
             if (query.isNotBlank()) {
                 put("title", query)
             }
+
+            val displayMode = preferences.sourceDisplayMode
+            val sourceTypes = if (displayMode == "official") {
+                listOf("Official")
+            } else {
+                listOf("Official", "Unofficial", "Mixed")
+            }
+            putJsonArray("source_type") {
+                sourceTypes.forEach { add(it) }
+            }
+
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
