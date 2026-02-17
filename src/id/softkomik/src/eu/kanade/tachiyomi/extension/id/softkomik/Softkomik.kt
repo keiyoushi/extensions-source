@@ -26,6 +26,7 @@ class Softkomik : HttpSource() {
     companion object {
         private const val COVER_URL = "https://cover.softdevices.my.id/softkomik-cover"
         private const val IMAGE_URL = "https://image.softkomik.com/softkomik"
+        private const val CHAPTER_URL = "https://v2.softdevices.my.id"
     }
 
     override val client = network.cloudflareClient.newBuilder()
@@ -182,7 +183,7 @@ class Softkomik : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
     // ======================== Chapters ========================
-    override fun chapterListRequest(manga: SManga): Request = GET("https://v2.softkomik.com/komik/${manga.url}/chapter?limit=9999999", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$CHAPTER_URL/komik/${manga.url}/chapter?limit=9999999", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterListDto>()
