@@ -18,8 +18,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -80,12 +78,6 @@ class AsuraScans :
     private val apiClient = network.cloudflareClient.newBuilder()
         .rateLimit(10, 1)
         .build()
-
-    @Volatile
-    private var cachedPremiumAccess: Boolean? = null
-
-    @Volatile
-    private var lastPremiumCheck: Long = 0L
 
     private var failedHighQuality = false
 
@@ -295,7 +287,7 @@ class AsuraScans :
         val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
         val isPremiumChapter = element.selectFirst("svg") != null
         val baseName = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
-        name = if (isPremiumChapter && !hasPremiumAccess()) "🔒 $baseName" else baseName
+        name = if (isPremiumChapter) "🔒 $baseName" else baseName
 
         date_upload = try {
             val text = element.selectFirst("h3 + h3")!!.ownText()
@@ -438,27 +430,6 @@ class AsuraScans :
         }.getOrDefault(xsrfToken)
     }
 
-    private fun hasPremiumAccess(): Boolean {
-        val now = System.currentTimeMillis()
-        val cached = cachedPremiumAccess
-        if (cached != null && now - lastPremiumCheck < PREMIUM_CHECK_CACHE_DURATION) {
-            return cached
-        }
-
-        val hasPremium = runCatching {
-            client.newCall(GET("$apiUrl/user", headers)).execute().use { resp ->
-                if (!resp.isSuccessful) return@use false
-
-                val user = resp.parseAs<UserResponseDto>("Failed to fetch user data")
-                user.data?.premium?.active ?: false
-            }
-        }.getOrDefault(false)
-
-        cachedPremiumAccess = hasPremium
-        lastPremiumCheck = now
-        return hasPremium
-    }
-
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
@@ -541,6 +512,5 @@ class AsuraScans :
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
         private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
-        private const val PREMIUM_CHECK_CACHE_DURATION = 60_000L // 60 seconds
     }
 }
