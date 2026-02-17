@@ -39,7 +39,7 @@ abstract class UzayManga(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4", headers)
 
     override fun popularMangaNextPageSelector(): String? = null
 
