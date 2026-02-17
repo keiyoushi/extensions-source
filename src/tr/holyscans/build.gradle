@@ -1,0 +1,10 @@
+ext {
+    extName = 'Holy Scans'
+    extClass = '.HolyScans'
+    themePkg = 'madara'
+    baseUrl = 'https://holyscans.com.tr'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

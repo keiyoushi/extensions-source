@@ -32,9 +32,7 @@ class SearchResultsDto(
     val hits: List<SearchMangaDto>,
     @SerialName("request_params") val requestParams: RequestParamsDto,
 ) {
-    fun hasNextPage(): Boolean {
-        return page * requestParams.perPage < found
-    }
+    fun hasNextPage(): Boolean = page * requestParams.perPage < found
 
     @Serializable
     class SearchMangaDto(
@@ -114,9 +112,7 @@ class ChapterListDto(
     val pages: Int,
     val page: Int,
 ) {
-    fun hasNextPage(): Boolean {
-        return page + 1 < pages
-    }
+    fun hasNextPage(): Boolean = page + 1 < pages
 }
 
 @Serializable
@@ -135,13 +131,12 @@ class ChapterDto(
         }
     }
 
-    private fun parseDate(dateElement: JsonElement): Long {
-        return when (dateElement) {
-            is JsonPrimitive -> {
-                dateElement.longOrNull ?: DATE_FORMAT.tryParse(dateElement.content.replace("T ", "T"))
-            }
-            else -> 0L
+    private fun parseDate(dateElement: JsonElement): Long = when (dateElement) {
+        is JsonPrimitive -> {
+            dateElement.longOrNull ?: DATE_FORMAT.tryParse(dateElement.content.replace("T ", "T"))
         }
+
+        else -> 0L
     }
 
     companion object {
@@ -166,4 +161,21 @@ class PageDto(
 @Serializable
 class PageDataDto(
     val image: String,
+)
+
+@Serializable
+internal class SearchRequest(
+    val page: Int,
+    val sort: String,
+    val filter: SearchFilter,
+)
+
+@Serializable
+internal class SearchFilter(
+    val search: String? = null,
+    val types: List<String>,
+    val status: List<String>? = null,
+    val includedTags: List<String>? = null,
+    val year: Int? = null,
+    val minChapters: Int? = null,
 )

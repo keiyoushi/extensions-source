@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -13,12 +14,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -28,14 +29,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
 
-class AsuraScans : ParsedHttpSource(), ConfigurableSource {
+class AsuraScans :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Asura Scans"
 
@@ -69,8 +71,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private val json: Json by injectLazy()
-
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::forceHighQualityInterceptor)
         .rateLimit(2, 2)
@@ -82,12 +82,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     private var failedHighQuality = false
-
-    @Volatile
-    private var cachedPremiumAccess: Boolean? = null
-
-    @Volatile
-    private var lastPremiumCheck: Long = 0L
 
     private fun forceHighQualityInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -115,8 +109,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?genres=&status=-1&types=-1&order=rating&page=$page", headers)
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -124,8 +117,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/page/$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page", headers)
 
     override fun latestUpdatesSelector() = "div.grid.grid-rows-1.grid-cols-1 > div.w-full"
 
@@ -219,7 +211,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         thread {
             try {
                 val response = client.newCall(GET("$apiUrl/series/filters", headers)).execute()
-                val filters = json.decodeFromString<FiltersDto>(response.body.string())
+                val filters = response.body.string().parseAs<FiltersDto>()
 
                 genresList = filters.genres.filter { it.id > 0 }.map { it.name.trim() to it.id }
                 statusesList = filters.statuses.map { it.name.trim() to it.id }
@@ -289,16 +281,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListSelector() =
-        if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
+    override fun chapterListSelector() = if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
         val chNumber = element.selectFirst("h3")!!.ownText()
         val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
         val isPremiumChapter = element.selectFirst("svg") != null
-        val baseName = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
-        name = if (isPremiumChapter && !hasPremiumAccess()) "🔒 $baseName" else baseName
+        this.name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+
         date_upload = try {
             val text = element.selectFirst("h3 + h3")!!.ownText()
             val cleanText = text.replace(CLEAN_DATE_REGEX, "$1")
@@ -327,15 +318,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         if (chapterDataMatch != null && pagesData != null) {
             // check for premium chapter
             val chapterId = chapterDataMatch.groupValues[1].toIntOrNull()
-            val isEarlyAccess = chapterDataMatch.groupValues[2] == "true"
             val pages = try {
-                json.decodeFromString<List<PageDto>>(pagesData.unescape())
+                pagesData.unescape().parseAs<List<PageDto>>()
             } catch (_: Exception) {
                 emptyList()
             }
 
-            if (chapterId != null && isEarlyAccess && pages.isEmpty()) {
-                return unlockPremiumChapter(chapterId)
+            // If unlocked, fetch info via API
+            if (chapterId != null && pages.isEmpty()) {
+                return fetchChapterImages(chapterId)
             }
         }
 
@@ -344,7 +335,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             throw Exception("Failed to find chapter pages")
         }
 
-        val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }
+        val pageList = pagesData.unescape().parseAs<List<PageDto>>().sortedBy { it.order }
         return pageList.mapIndexed { i, page ->
             val newUrl = page.url.toHttpUrlOrNull()?.run {
                 newBuilder()
@@ -357,22 +348,18 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun unlockPremiumChapter(chapterId: Int): List<Page> {
-        if (!hasPremiumAccess()) {
-            throw Exception("Premium subscription required. Please log in via WebView and ensure you have an active subscription.")
-        }
-
+    private fun fetchChapterImages(chapterId: Int): List<Page> {
         val xsrfToken = getXsrfToken()
-        val unlockPayload = json.encodeToString(UnlockRequestDto(chapterId))
+        val unlockPayload = UnlockRequestDto(chapterId).toJsonString()
 
         val unlockResponse = apiClient.newCall(
             buildApiRequest("$apiUrl/chapter/unlock", unlockPayload, xsrfToken),
         ).execute()
 
-        val unlockData = unlockResponse.parseAs<UnlockResponseDto>("Failed to unlock chapter")
+        val unlockData = unlockResponse.parseAs<UnlockResponseDto>("Failed to load chapter")
 
         if (!unlockData.success) {
-            throw Exception("Failed to unlock chapter. Please ensure you have premium access.")
+            throw Exception("Chapter locked. Please unlock in WebView first.")
         }
 
         val unlockToken = unlockData.data.unlockToken
@@ -385,7 +372,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun getPageImageUrl(mediaId: Int, chapterId: Int, unlockToken: String, xsrfToken: String): String {
-        val mediaPayload = json.encodeToString(MediaRequestDto(mediaId, chapterId, unlockToken, "max-quality"))
+        val mediaPayload = MediaRequestDto(mediaId, chapterId, unlockToken, "max-quality").toJsonString()
 
         val mediaResponse = apiClient.newCall(
             buildApiRequest("$apiUrl/media", mediaPayload, xsrfToken),
@@ -394,17 +381,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return mediaResponse.parseAs<MediaResponseDto>("Failed to get image URL").data
     }
 
-    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request {
-        return Request.Builder()
-            .url(url)
-            .headers(headers)
-            .post(jsonPayload.toRequestBody("application/json".toMediaType()))
-            .header("X-XSRF-TOKEN", xsrfToken)
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-    }
+    private fun buildApiRequest(url: String, jsonPayload: String, xsrfToken: String): Request = POST(
+        url,
+        headers.newBuilder()
+            .add("X-XSRF-TOKEN", xsrfToken)
+            .add("Accept", "application/json")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build(),
+        jsonPayload.toRequestBody("application/json".toMediaType()),
+    )
 
     private inline fun <reified T> Response.parseAs(errorPrefix: String): T {
         if (!isSuccessful) {
@@ -421,7 +406,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         val responseBody = body.string()
 
         return try {
-            json.decodeFromString<T>(responseBody)
+            responseBody.parseAs<T>()
         } catch (e: Exception) {
             throw Exception("$errorPrefix: Invalid response")
         }
@@ -441,42 +426,16 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             throw Exception("Not logged in. Please log in via WebView to access premium chapters.")
         }
 
-        // Decode the token (handles case where Cookie.value might not be fully decoded)
         return runCatching {
             URLDecoder.decode(xsrfToken, StandardCharsets.UTF_8.name())
         }.getOrDefault(xsrfToken)
-    }
-
-    private fun hasPremiumAccess(): Boolean {
-        val now = System.currentTimeMillis()
-        val cached = cachedPremiumAccess
-        if (cached != null && now - lastPremiumCheck < PREMIUM_CHECK_CACHE_DURATION) {
-            return cached
-        }
-
-        val hasPremium = runCatching {
-            client.newCall(GET("$apiUrl/user", headers)).execute().use { resp ->
-                if (!resp.isSuccessful) return@use false
-
-                val body = resp.body.string()
-                val userData = json.parseToJsonElement(body).jsonObject
-                val data = userData["data"]?.jsonObject ?: return@use false
-                val premium = data["premium"]?.jsonObject ?: return@use false
-                premium["active"]?.jsonPrimitive?.content?.toBoolean() ?: false
-            }
-        }.getOrDefault(false)
-
-        cachedPremiumAccess = hasPremium
-        lastPremiumCheck = now
-        return hasPremium
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 
-    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -508,14 +467,14 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         get() {
             val jsonMap = getString(PREF_SLUG_MAP, "{}")!!
             return try {
-                json.decodeFromString<Map<String, String>>(jsonMap).toMutableMap()
+                jsonMap.parseAs<Map<String, String>>().toMutableMap()
             } catch (_: Exception) {
                 mutableMapOf()
             }
         }
         set(newSlugMap) {
             edit()
-                .putString(PREF_SLUG_MAP, json.encodeToString(newSlugMap))
+                .putString(PREF_SLUG_MAP, newSlugMap.toJsonString())
                 .apply()
         }
 
@@ -537,9 +496,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return this.replace(slug, absSlug)
     }
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
@@ -556,6 +513,5 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
         private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
-        private const val PREMIUM_CHECK_CACHE_DURATION = 60_000L // 60 seconds
     }
 }

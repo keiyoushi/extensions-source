@@ -20,10 +20,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -45,7 +42,8 @@ abstract class GalleryAdults(
     override val lang: String = "all",
     protected open val mangaLang: String = LANGUAGE_MULTI,
     protected val simpleDateFormat: SimpleDateFormat? = null,
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     override val client: OkHttpClient = network.cloudflareClient
 
@@ -80,23 +78,19 @@ abstract class GalleryAdults(
         val lang: String,
     )
 
-    protected open fun Element.mangaTitle(selector: String = ".caption"): String? =
-        mangaFullTitle(selector).let {
-            if (preferences.shortTitle) it?.shortenTitle() else it
-        }
+    protected open fun Element.mangaTitle(selector: String = ".caption"): String? = mangaFullTitle(selector).let {
+        if (preferences.shortTitle) it?.shortenTitle() else it
+    }
 
-    protected open fun Element.mangaFullTitle(selector: String) =
-        selectFirst(selector)?.text()
+    protected open fun Element.mangaFullTitle(selector: String) = selectFirst(selector)?.text()
 
     protected open fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     protected open val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
-    protected open fun Element.mangaUrl() =
-        selectFirst(".inner_thumb a")?.attr("abs:href")
+    protected open fun Element.mangaUrl() = selectFirst(".inner_thumb a")?.attr("abs:href")
 
-    protected open fun Element.mangaThumbnail() =
-        selectFirst(".inner_thumb img")?.imgAttr()
+    protected open fun Element.mangaThumbnail() = selectFirst(".inner_thumb img")?.imgAttr()
 
     // Overwrite this to filter other languages' manga from search result.
     // Default to [mangaLang] won't filter anything
@@ -123,12 +117,10 @@ abstract class GalleryAdults(
 
     override fun popularMangaSelector() = "div.thumb"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.mangaTitle()!!
-            setUrlWithoutDomain(element.mangaUrl()!!)
-            thumbnail_url = element.mangaThumbnail()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.mangaTitle()!!
+        setUrlWithoutDomain(element.mangaUrl()!!)
+        thumbnail_url = element.mangaThumbnail()
     }
 
     override fun popularMangaNextPageSelector() = ".pagination li.active + li:not(.disabled)"
@@ -158,17 +150,20 @@ abstract class GalleryAdults(
                     .asObservableSuccess()
                     .map { response -> randomEntryParse(response) }
             }
+
             query.startsWith(PREFIX_ID_SEARCH) -> {
                 val id = query.removePrefix(PREFIX_ID_SEARCH)
                 client.newCall(searchMangaByIdRequest(id))
                     .asObservableSuccess()
                     .map { response -> searchMangaByIdParse(response, id) }
             }
+
             query.toIntOrNull() != null -> {
                 client.newCall(searchMangaByIdRequest(query))
                     .asObservableSuccess()
                     .map { response -> searchMangaByIdParse(response, query) }
             }
+
             else -> {
                 client.newCall(searchMangaRequest(page, query, filters))
                     .asObservableSuccess()
@@ -237,18 +232,25 @@ abstract class GalleryAdults(
         return when {
             favoriteFilter?.state == true ->
                 favoriteFilterSearchRequest(page, query, filters)
+
             supportSpeechless && speechlessFilter?.state == true ->
                 speechlessFilterSearchRequest(page, query, filters)
+
             supportAdvancedSearch && advancedSearchFilters.any { it.state.isNotBlank() } ->
                 advancedSearchRequest(page, query, filters)
+
             selectedGenres.size == 1 && query.isBlank() ->
                 tagBrowsingSearchRequest(page, query, filters)
+
             useIntermediateSearch ->
                 intermediateSearchRequest(page, query, filters)
+
             useBasicSearch && (selectedGenres.size > 1 || query.isNotBlank()) ->
                 basicSearchRequest(page, query, filters)
+
             sortOrderFilter?.state == 1 ->
                 latestUpdatesRequest(page)
+
             else ->
                 popularMangaRequest(page)
         }
@@ -381,16 +383,14 @@ abstract class GalleryAdults(
     /**
      * Convert space( ) typed in search-box into plus(+) in URL. Then:
      * - uses plus(+) to search for exact match
-     * - use comma(,) for separate terms, as AND condition.
-     * Plus(+) after comma(,) doesn't have any effect.
+     * - use comma(, ) for separate terms, as AND condition.
+     * Plus(+) after comma(, ) doesn't have any effect.
      */
-    protected open fun buildQueryString(tags: List<String>, query: String): String {
-        return (tags + query).filterNot { it.isBlank() }.joinToString(",") {
-            // any space except after a comma (we're going to replace spaces only between words)
-            it.trim()
-                .replace(regexSpaceNotAfterComma, "+")
-                .replace(" ", "")
-        }
+    protected open fun buildQueryString(tags: List<String>, query: String): String = (tags + query).filterNot { it.isBlank() }.joinToString(",") {
+        // any space except after a comma (we're going to replace spaces only between words)
+        it.trim()
+            .replace(regexSpaceNotAfterComma, "+")
+            .replace(" ", "")
     }
 
     protected open fun tagBrowsingSearchRequest(page: Int, query: String, filters: FilterList): Request {
@@ -442,12 +442,10 @@ abstract class GalleryAdults(
 
     protected open val favoritePath = "user/fav_pags.php"
 
-    protected open fun loginRequired(document: Document, url: String): Boolean {
-        return (
-            url.contains("/login/") &&
-                document.select("input[value=Login]").isNotEmpty()
-            )
-    }
+    protected open fun loginRequired(document: Document, url: String): Boolean = (
+        url.contains("/login/") &&
+            document.select("input[value=Login]").isNotEmpty()
+        )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -490,22 +488,19 @@ abstract class GalleryAdults(
     /* Details */
     protected open val mangaDetailInfoSelector = ".gallery_top"
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return document.selectFirst(mangaDetailInfoSelector)!!.run {
-            SManga.create().apply {
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                status = SManga.COMPLETED
-                title = mangaTitle("h1")!!
-                thumbnail_url = getCover()
-                genre = getInfo("Tags")
-                author = getInfo("Artists")
-                description = getDescription(document)
-            }
+    override fun mangaDetailsParse(document: Document): SManga = document.selectFirst(mangaDetailInfoSelector)!!.run {
+        SManga.create().apply {
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.COMPLETED
+            title = mangaTitle("h1")!!
+            thumbnail_url = getCover()
+            genre = getInfo("Tags")
+            author = getInfo("Artists")
+            description = getDescription(document)
         }
     }
 
-    protected open fun Element.getCover() =
-        selectFirst(".cover img")?.imgAttr()
+    protected open fun Element.getCover() = selectFirst(".cover img")?.imgAttr()
 
     protected val regexTag = Regex("Tags?")
 
@@ -529,23 +524,19 @@ abstract class GalleryAdults(
         )
         .joinToString("\n\n")
 
-    protected open fun Element.getInfoPages(document: Document? = null): String? =
-        document?.inputIdValueOf(totalPagesSelector)
-            ?.takeIf { it.isNotBlank() }
-            ?.let { "Pages: $it" }
+    protected open fun Element.getInfoPages(document: Document? = null): String? = document?.inputIdValueOf(totalPagesSelector)
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "Pages: $it" }
 
-    protected open fun Element.getInfoAlternativeTitle(): String? =
-        selectFirst("h1 + h2, .subtitle")?.ownText()
-            .takeIf { !it.isNullOrBlank() }
-            ?.let { "Alternative title: $it" }
+    protected open fun Element.getInfoAlternativeTitle(): String? = selectFirst("h1 + h2, .subtitle")?.ownText()
+        .takeIf { !it.isNullOrBlank() }
+        ?.let { "Alternative title: $it" }
 
-    protected open fun Element.getInfoFullTitle(): String? =
-        if (preferences.shortTitle) "Full title: ${mangaFullTitle("h1")}" else null
+    protected open fun Element.getInfoFullTitle(): String? = if (preferences.shortTitle) "Full title: ${mangaFullTitle("h1")}" else null
 
-    protected open fun Element.getTime(): Long =
-        selectFirst(".uploaded")
-            ?.ownText()
-            .toDate(simpleDateFormat)
+    protected open fun Element.getTime(): Long = selectFirst(".uploaded")
+        ?.ownText()
+        .toDate(simpleDateFormat)
 
     /* Chapters */
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -566,9 +557,7 @@ abstract class GalleryAdults(
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     /* Pages */
-    protected open fun Element.inputIdValueOf(string: String): String {
-        return select("input[id=$string]").attr("value")
-    }
+    protected open fun Element.inputIdValueOf(string: String): String = select("input[id=$string]").attr("value")
 
     protected open val pagesRequest = "inc/thumbs_loader.php"
     protected open val galleryIdSelector = "gallery_id"
@@ -606,14 +595,12 @@ abstract class GalleryAdults(
             ?: getCover()!!.toHttpUrl().host
     }
 
-    protected open fun Element.serverNumber(): String? =
-        inputIdValueOf(serverSelector)
-            .takeIf { it.isNotBlank() }
+    protected open fun Element.serverNumber(): String? = inputIdValueOf(serverSelector)
+        .takeIf { it.isNotBlank() }
 
-    protected open fun Element.parseJson(): String? =
-        selectFirst("script:containsData(parseJSON)")?.data()
-            ?.substringAfter("$.parseJSON('")
-            ?.substringBefore("');")?.trim()
+    protected open fun Element.parseJson(): String? = selectFirst("script:containsData(parseJSON)")?.data()
+        ?.substringAfter("$.parseJSON('")
+        ?.substringBefore("');")?.trim()
 
     /**
      * Page URL: $baseUrl/$pageUri/<id>/<page>
@@ -656,7 +643,7 @@ abstract class GalleryAdults(
                     )
                 }
                 return pages
-            } catch (e: SerializationException) {
+            } catch (_: SerializationException) {
                 Log.e("GalleryAdults", "Failed to decode JSON")
                 return this.pageListParseAlternative(document)
             }
@@ -767,9 +754,7 @@ abstract class GalleryAdults(
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        return document.selectFirst("img#gimg, img#fimg")?.imgAttr()!!
-    }
+    override fun imageUrlParse(document: Document): String = document.selectFirst("img#gimg, img#fimg")?.imgAttr()!!
 
     /* Filters */
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -793,45 +778,36 @@ abstract class GalleryAdults(
     /**
      * Parsing [document] to return a list of tags in <name, uri> pairs.
      */
-    protected open fun tagsParser(document: Document): List<Genre> {
-        return document.select("a.tag_btn")
-            .mapNotNull {
-                Genre(
-                    it.select(".list_tag, .tag_name").text(),
-                    it.attr("href")
-                        .removeSuffix("/").substringAfterLast('/'),
-                )
-            }
-    }
+    protected open fun tagsParser(document: Document): List<Genre> = document.select("a.tag_btn")
+        .mapNotNull {
+            Genre(
+                it.select(".list_tag, .tag_name").text(),
+                it.attr("href")
+                    .removeSuffix("/").substringAfterLast('/'),
+            )
+        }
 
     protected open fun requestTags() {
         if (!tagsFetched && tagsFetchAttempt < 3) {
             launchIO {
                 val tags = mutableListOf<Genre>()
-                runBlocking {
-                    val jobsPool = mutableListOf<Job>()
-                    // Get first 5 pages
+                try {
                     (1..5).forEach { page ->
-                        jobsPool.add(
-                            launchIO {
-                                runCatching {
-                                    tags.addAll(
-                                        client.newCall(tagsRequest(page))
-                                            .execute().asJsoup().let { tagsParser(it) },
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    jobsPool.joinAll()
-                    tags.sortedWith(compareBy { it.name })
-                        .forEach {
-                            genres[it.name] = it.uri
+                        runCatching {
+                            client.newCall(tagsRequest(page))
+                                .execute().use { it.asJsoup().let(::tagsParser) }
+                        }.onSuccess { parsed ->
+                            tags.addAll(parsed)
                         }
-                    tagsFetched = true
-                }
+                    }
 
-                tagsFetchAttempt++
+                    tags.sortedWith(compareBy { it.name })
+                        .forEach { genres[it.name] = it.uri }
+
+                    tagsFetched = true
+                } finally {
+                    tagsFetchAttempt++
+                }
             }
         }
     }

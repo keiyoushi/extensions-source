@@ -1,0 +1,10 @@
+ext {
+    extName = 'Verdinha'
+    extClass = '.Verdinha'
+    baseUrl = 'https://verdinha.wtf'
+    themePkg = 'greenshit'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

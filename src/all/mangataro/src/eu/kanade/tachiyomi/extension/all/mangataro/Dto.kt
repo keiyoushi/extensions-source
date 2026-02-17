@@ -27,11 +27,9 @@ class SearchPayload(
     private val genreMatchMode: String,
 )
 
-class StringifiedListSerializer<T>(elementSerializer: KSerializer<T>) :
-    JsonTransformingSerializer<List<T>>(ListSerializer(elementSerializer)) {
+class StringifiedListSerializer<T>(elementSerializer: KSerializer<T>) : JsonTransformingSerializer<List<T>>(ListSerializer(elementSerializer)) {
 
-    override fun transformSerialize(element: JsonElement) =
-        JsonPrimitive(element.toJsonString())
+    override fun transformSerialize(element: JsonElement) = JsonPrimitive(element.toJsonString())
 }
 
 @Serializable
@@ -93,9 +91,7 @@ class Embedded(
     @SerialName("wp:term")
     private val terms: List<List<Term>>,
 ) {
-    fun getTerms(type: String): List<String> {
-        return terms.find { it.firstOrNull()?.taxonomy == type }.orEmpty().map { it.name }
-    }
+    fun getTerms(type: String): List<String> = terms.find { it.firstOrNull()?.taxonomy == type }.orEmpty().map { it.name }
 }
 
 @Serializable
@@ -129,6 +125,11 @@ class Chapter(
     @SerialName("group_name")
     val groupName: String? = null,
     val language: String,
+)
+
+@Serializable
+class Pages(
+    val images: List<String>,
 )
 
 @Serializable

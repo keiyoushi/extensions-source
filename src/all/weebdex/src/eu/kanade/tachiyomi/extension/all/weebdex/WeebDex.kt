@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.weebdex
 
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
@@ -25,7 +26,8 @@ import okhttp3.Response
 open class WeebDex(
     override val lang: String,
     private val weebdexLang: String = lang,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "WeebDex"
     override val baseUrl = "https://weebdex.org"
     override val supportsLatest = true
@@ -105,6 +107,7 @@ open class WeebDex(
                             }
                         }
                     }
+
                     is TagsExcludeFilter -> {
                         filter.state.forEach { tag ->
                             if (tag.state) {
@@ -114,8 +117,11 @@ open class WeebDex(
                             }
                         }
                     }
+
                     is TagModeFilter -> urlBuilder.addQueryParameter("tmod", filter.state.toString())
+
                     is TagExcludeModeFilter -> urlBuilder.addQueryParameter("txmod", filter.state.toString())
+
                     else -> { /* Do Nothing */ }
                 }
             }
@@ -144,17 +150,13 @@ open class WeebDex(
 
     // -------------------- Manga details --------------------
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl.toHttpUrl().newBuilder()
-            .addEncodedPathSegments(manga.url)
-            .removePathSegment(0)
-            .setPathSegment(0, "title")
-            .build().toString()
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
+        .addEncodedPathSegments(manga.url)
+        .removePathSegment(0)
+        .setPathSegment(0, "title")
+        .build().toString()
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("${WeebDexConstants.API_URL}${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("${WeebDexConstants.API_URL}${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
@@ -200,13 +202,11 @@ open class WeebDex(
 
     // -------------------- Pages --------------------
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("${WeebDexConstants.API_URL}${chapter.url}", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("${WeebDexConstants.API_URL}${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.parseAs<ChapterDto>()
-        return chapter.toPageList()
+        return chapter.toPageList(dataSaver)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -222,11 +222,24 @@ open class WeebDex(
             setDefaultValue(COVER_QUALITY_ORIGINAL)
             summary = "%s"
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DATA_SAVER_PREFERENCE
+            title = "Data Saver"
+            summary = "Enable to use lower quality images in the chapter"
+            setDefaultValue(DATA_SAVER_DEFAULT)
+        }.also(screen::addPreference)
     }
 
     private val coverQuality: String
         get() = preferences.getString(COVER_QUALITY_PREFERENCE, COVER_QUALITY_ORIGINAL) ?: COVER_QUALITY_ORIGINAL
+
+    private val dataSaver: Boolean
+        get() = preferences.getBoolean(DATA_SAVER_PREFERENCE, DATA_SAVER_DEFAULT)
 }
 
 private const val COVER_QUALITY_PREFERENCE = "cover_quality"
 private const val COVER_QUALITY_ORIGINAL = ""
+
+private const val DATA_SAVER_PREFERENCE = "data_saver"
+private const val DATA_SAVER_DEFAULT = false

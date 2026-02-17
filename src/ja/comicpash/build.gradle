@@ -3,7 +3,7 @@ ext {
     extClass = ".ComicPash"
     themePkg = 'comiciviewer'
     baseUrl = "https://comicpash.jp"
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

@@ -36,6 +36,7 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.Base64
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -171,9 +172,7 @@ class Manhuarm(
         return builder
     }
 
-    private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder {
-        return this.takeIf { condition.not() } ?: this.addInterceptor(interceptor)
-    }
+    private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder = this.takeIf { condition.not() } ?: this.addInterceptor(interceptor)
 
     private val translationAvailability = Calendar.getInstance().apply {
         set(2025, Calendar.SEPTEMBER, 9, 0, 0, 0)
@@ -233,6 +232,7 @@ class Manhuarm(
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // =========================== Details ==========================================
+
     /**
      * Extracts the cover image URL from an image element, checking multiple attributes
      * to handle lazy loading and different image formats.
@@ -282,17 +282,14 @@ class Manhuarm(
 
     // =========================== Chapters =======================================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).filter {
-            language.target == language.origin || Date(it.date_upload).after(translationAvailability.time)
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).filter {
+        language.target == language.origin || Date(it.date_upload).after(translationAvailability.time)
     }
 
     // =========================== Pages ==========================================
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
-        val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
         val chapterUrl = document.location().toHttpUrl().newBuilder()
             .removeAllQueryParameters("style")
             .build()
@@ -303,9 +300,20 @@ class Manhuarm(
             .add("Accept", "*/*")
             .build()
 
+        val encoded = Regex("""_0xraw\s*=\s*"([^"]+)"""")
+            .find(document.html())
+            ?.groupValues
+            ?.get(1)
+            ?: return pages
+
+        val ocrUrl = try {
+            String(Base64.getDecoder().decode(encoded))
+        } catch (_: Exception) {
+            return pages
+        }
+
         val dialog = try {
-            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", jsonHeaders))
-                .execute()
+            val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()
 
             // If server returns error (403, etc), skip translations
             if (!response.isSuccessful) {

@@ -17,17 +17,11 @@ import okhttp3.Response
 
 class KomikCast : HttpSource() {
 
-    // Formerly "Komik Cast (WP Manga Stream)"
     override val id = 972717448578983812
-
     override val name = "Komik Cast"
-
     override val baseUrl = "https://v1.komikcast.fit"
-
     private val apiUrl = "https://be.komikcast.fit"
-
     override val lang = "id"
-
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -118,7 +112,6 @@ class KomikCast : HttpSource() {
         if (chapter.url.startsWith("/chapter/")) {
             val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
             val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
-
             return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
         }
 
@@ -130,8 +123,7 @@ class KomikCast : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterDetailResponse>()
-        val images = result.data.dataImages?.toSortedMap(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
-            ?.values?.toList() ?: emptyList()
+        val images = result.data.data.images ?: emptyList()
         return images.mapIndexed { index, imageUrl ->
             Page(index, "", imageUrl)
         }
@@ -144,16 +136,14 @@ class KomikCast : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-            SortOrderFilter(),
-            StatusFilter(),
-            FormatFilter(),
-            TypeFilter(),
-            GenreFilter(getGenres()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        SortOrderFilter(),
+        StatusFilter(),
+        FormatFilter(),
+        TypeFilter(),
+        GenreFilter(getGenres()),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
