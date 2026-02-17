@@ -18,7 +18,7 @@ import org.jsoup.Jsoup
 class Manhwa18Net : HttpSource() {
 
     override val versionId = 2
-    override val name = "Manhwa18Net"
+    override val name = "Manhwa18.Net"
     override val baseUrl = "https://manhwa18.net"
     override val lang = "en"
     override val supportsLatest = true
@@ -123,7 +123,6 @@ class Manhwa18Net : HttpSource() {
 
             description = manga.pilot?.let { Jsoup.parse(it).text() }
                 ?: manga.description?.let { Jsoup.parse(it).text() }
-                ?: ""
 
             thumbnail_url = fixImageUrl(manga.coverUrl ?: manga.thumbUrl)
 
@@ -169,8 +168,6 @@ class Manhwa18Net : HttpSource() {
 
         val contentDoc = Jsoup.parse(chapterContent)
         val images = contentDoc.select("img")
-
-        if (images.isEmpty()) throw Exception("No images found in chapter")
 
         return images.mapIndexedNotNull { index, img ->
             val src = img.attr("src")
