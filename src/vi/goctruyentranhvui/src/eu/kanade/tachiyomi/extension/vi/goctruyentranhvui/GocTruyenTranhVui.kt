@@ -34,10 +34,12 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
+class GocTruyenTranhVui :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui20.com"
+    override val baseUrl = "https://goctruyentranhvui21.com"
 
     override val name = "Goc Truyen Tranh Vui"
 
@@ -92,7 +94,10 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slug = response.request.url.fragment!!
-        val chapterJson = response.parseAs<ResultDto<ChapterListDto>>()
+        val chapterJson = runCatching { response.parseAs<ResultDto<ChapterListDto>>() }.getOrNull()
+        if (chapterJson == null || chapterJson.result.chapters.isEmpty()) {
+            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
+        }
         return chapterJson.result.chapters.map { it.toSChapter(slug) }
     }
 
@@ -105,7 +110,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         thumbnail_url = document.selectFirst("img.image")?.absUrl("src")
         status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")?.text())
         author = document.selectFirst(".mb-1:contains(Tác giả:) span")?.text()
-        description = document.select(".v-card-text").joinToString { it.wholeText() }
+        description = document.select(".v-card-text").joinToString { it.wholeText().trim() }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -131,16 +136,28 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val jsonPage = response.parseAs<ResultDto<ImageListDto>>().result.data ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+        val jsonResult = runCatching { response.parseAs<ResultDto<ImageListDto>>() }
+        jsonResult.onFailure {
+            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại")
+        }
 
-        return jsonPage.mapIndexed { i, url ->
-            val finalUrl = if (url.startsWith("/image/")) { baseUrl + url } else { url }
+        val imageList = jsonResult.getOrThrow().result.data
+        if (imageList.isNullOrEmpty()) {
+            throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+        }
+
+        return imageList.mapIndexed { i, url ->
+            val finalUrl = if (url.startsWith("/image/")) {
+                baseUrl + url
+            } else {
+                url
+            }
             Page(i, imageUrl = finalUrl)
         }
     }
 
     private val pageHeaders by lazy {
-        getToken()?.let {
+        token?.let {
             headersBuilder()
                 .set("X-Requested-With", "XMLHttpRequest")
                 .set("Origin", baseUrl)
@@ -148,42 +165,44 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
                 .build()
         } ?: xhrHeaders
     }
+
     private var _token: String? = null
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun getToken(): String? {
-        _token?.also { return it }
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        if (!customToken().isNullOrBlank()) {
-            return customToken()
-        }
-        if (_token != null) return _token
-
-        handler.post {
-            val webview = WebView(Injekt.get<Application>())
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
+    @get:SuppressLint("SetJavaScriptEnabled")
+    val token: String?
+        get() {
+            _token?.also { return it }
+            val handler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
+            if (!customToken().isNullOrBlank()) {
+                return customToken()
             }
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    // Get token
-                    view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
-                        _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
-                        latch.countDown()
-                        webview.destroy()
+            if (_token != null) return _token
+
+            handler.post {
+                val webview = WebView(Injekt.get<Application>())
+                with(webview.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    blockNetworkImage = true
+                }
+                webview.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        // Get token
+                        view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
+                            _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
+                            latch.countDown()
+                            webview.destroy()
+                        }
                     }
                 }
+                webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
             }
-            webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
-        }
 
-        latch.await(10, TimeUnit.SECONDS)
-        return _token
-    }
+            latch.await(10, TimeUnit.SECONDS)
+            return _token
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
