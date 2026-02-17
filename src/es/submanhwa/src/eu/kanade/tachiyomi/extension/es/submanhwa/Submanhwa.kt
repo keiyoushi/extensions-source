@@ -108,10 +108,9 @@ class Submanhwa : ParsedHttpSource() {
         date_upload = dateFormat.tryParse(date)
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#all img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#all img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("data-src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }
