@@ -208,25 +208,17 @@ class InkStory :
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = mangaIdFromUrl(manga.url)
-        return if (mangaId != null) {
-            GET("$apiBaseUrl/v2/chapters?bookId=$mangaId", headers)
-        } else {
-            mangaDetailsRequest(manga)
+        val mangaId = requireNotNull(mangaIdFromUrl(manga.url)) {
+            "Expected manga url format /content/{slug}#id={id}, got: ${manga.url}"
         }
+        return GET("$apiBaseUrl/v2/chapters?bookId=$mangaId", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val requestUrl = response.request.url
-        val path = requestUrl.encodedPath
-        val bookIdFromQuery = requestUrl.queryParameter("bookId")
-
-        val (bookId, chapters) = if (bookIdFromQuery != null && path == "/v2/chapters") {
-            bookIdFromQuery to response.parseAs<List<ChapterDto>>()
-        } else {
-            val book = response.parseAs<BookDto>()
-            book.id to fetchChapters(book.id)
+        val bookId = requireNotNull(response.request.url.queryParameter("bookId")) {
+            "Missing bookId query parameter in chapter list request"
         }
+        val chapters = response.parseAs<List<ChapterDto>>()
 
         val branchMap = fetchBranchNames(bookId)
         val processedChapters = chapters
@@ -357,10 +349,6 @@ class InkStory :
 
         return MangasPage(mangas, hasNextPage)
     }
-
-    private fun fetchChapters(bookId: String): List<ChapterDto> = client.newCall(GET("$apiBaseUrl/v2/chapters?bookId=$bookId", headers))
-        .execute()
-        .parseAs()
 
     private fun fetchBranchNames(bookId: String): Map<String, String?> {
         val branches = client.newCall(GET("$apiBaseUrl/v2/branches?bookId=$bookId", headers))
