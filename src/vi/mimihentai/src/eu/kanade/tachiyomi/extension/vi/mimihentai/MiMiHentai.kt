@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.mimihentai
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,7 +12,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 class MiMiHentai : HttpSource() {
 
@@ -26,11 +29,24 @@ class MiMiHentai : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 14, 1, TimeUnit.MINUTES)
+        .addNetworkInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+
+            if (request.url.toString().startsWith(baseUrl)) {
+                if (response.code == 429) {
+                    throw IOException("Bạn đang request quá nhanh!")
+                }
+            }
+            response
+        }
+        .build()
+
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/danh-sach?sort=-views&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/danh-sach?sort=-views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -54,13 +70,9 @@ class MiMiHentai : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/danh-sach?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/danh-sach?page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Search ===============================
 
@@ -77,14 +89,17 @@ class MiMiHentai : HttpSource() {
                             addQueryParameter("filter[accept_genres]", selectedGenres)
                         }
                     }
+
                     is StatusFilter -> {
                         if (filter.state > 0) {
                             addQueryParameter("filter[status]", filter.toUriPart())
                         }
                     }
+
                     is SortFilter -> {
                         addQueryParameter("sort", filter.toUriPart())
                     }
+
                     else -> {}
                 }
             }
@@ -93,9 +108,7 @@ class MiMiHentai : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Details ==============================
 
@@ -178,9 +191,14 @@ class MiMiHentai : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // =============================== Related ================================
+    // dirty hack to disable suggested mangas on Komikku due to heavy rate limit
+    // https://github.com/komikku-app/komikku/blob/4323fd5841b390213aa4c4af77e07ad42eb423fc/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/CatalogueSource.kt#L176-L184
+    @Suppress("Unused")
+    @JvmName("getDisableRelatedMangasBySearch")
+    fun disableRelatedMangasBySearch() = true
 
     // ============================== Filters ===============================
 
