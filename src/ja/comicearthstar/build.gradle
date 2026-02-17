@@ -1,0 +1,10 @@
+ext {
+    extName = 'Comic Earth Star'
+    extClass = '.ComicEarthStar'
+    themePkg = 'gigaviewer'
+    baseUrl = 'https://comic-earthstar.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
