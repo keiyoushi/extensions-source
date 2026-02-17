@@ -182,14 +182,11 @@ abstract class UzayManga(
 
     override fun imageUrlParse(document: Document) = ""
 
-    private fun isMangaPage(document: Document): Boolean =
-        document.selectFirst("div.grid h2 + p") != null
+    private fun isMangaPage(document: Document): Boolean = document.selectFirst("div.grid h2 + p") != null
 
-    private fun String.toDate(): Long =
-        dateFormat.tryParse(this)
+    private fun String.toDate(): Long = dateFormat.tryParse(this)
 
-    private fun String.contains(vararg fragment: String): Boolean =
-        fragment.any { trim().contains(it, ignoreCase = true) }
+    private fun String.contains(vararg fragment: String): Boolean = fragment.any { trim().contains(it, ignoreCase = true) }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
