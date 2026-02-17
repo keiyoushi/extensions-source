@@ -28,12 +28,10 @@ class SourcesDto(
 )
 
 @Serializable
-class SourceDto(
-    @SerialName("source_id")
-    val sourceId: String,
+data class SourceDto(
+    @SerialName("source_id") val sourceId: String,
+    @SerialName("source_type") val sourceType: String, // "Official", "Unofficial", "Mixed"
     val title: String,
-    @SerialName("source_type")
-    val sourceType: String,
 )
 
 @Serializable
@@ -191,27 +189,45 @@ class ChapterDto(
         val chapterNo: String?,
         @SerialName("volume_no")
         val volumeNo: String?,
+        val groups: List<Group> = emptyList(),
     ) {
-        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
+        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
             url = "/series/$actualSeriesId/reader/$id"
-            name = buildChapterName()
+            name = buildChapterName(chapterTitleMode)
             date_upload = dateFormat.tryParse(createdAt)
             if (useSourceChapterNumber) {
                 chapter_number = number
             }
+            scanlator = groups.joinToString(", ") { it.title }
         }
 
-        private fun buildChapterName(): String = if (!chapterNo.isNullOrBlank()) {
-            if (title.isNotBlank()) {
-                "Chapter $chapterNo: $title"
-            } else {
-                "Chapter $chapterNo"
-            }
-        } else {
-            title
+        private fun buildChapterName(mode: String = "optional"): String {
+            val trimmedTitle = title.trim()
+            return when (mode) {
+                "optional" -> {
+                    when {
+                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Chapter $chapterNo"
+                        else -> trimmedTitle
+                    }
+                }
+
+                "always" -> {
+                    when {
+                        chapterNo.isNullOrBlank() -> trimmedTitle
+                        trimmedTitle.isEmpty() -> "Chapter $chapterNo"
+                        else -> "($chapterNo) $trimmedTitle"
+                    }
+                }
+
+                else -> {}
+            } as String
         }
     }
 
+    @Serializable
+    class Group(
+        val title: String,
+    )
     companion object {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
     }
