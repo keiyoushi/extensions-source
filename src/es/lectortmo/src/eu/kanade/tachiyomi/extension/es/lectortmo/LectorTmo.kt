@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.lectortmo
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
@@ -18,6 +19,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -35,6 +40,14 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+@Serializable
+data class NsfwState(
+    val ecchi: Boolean,
+    val girlsLove: Boolean,
+    val boysLove: Boolean,
+    val harem: Boolean,
+    val trap: Boolean,
+)
 class LectorTmo : ParsedHttpSource(), ConfigurableSource {
 
     override val id = 4146344224513899730
@@ -98,7 +111,32 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
-    private fun getSFWUrlPart(): String = if (getSFWModePref()) "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false" else ""
+    private fun getSFWUrlPart(): String {
+        val hidden = mutableListOf<String>()
+
+        if (getSfwGeneral()) {
+            // Oculta TODO el contenido NSFW
+            hidden += listOf("6", "17", "18", "19", "94")
+        } else {
+            if (getNsfwEcchi()) hidden += "6"
+            if (getNsfwGirlsLove()) hidden += "17"
+            if (getNsfwBoysLove()) hidden += "18"
+            if (getNsfwHarem()) hidden += "19"
+            if (getNsfwTrap()) hidden += "94"
+        }
+
+        if (hidden.isEmpty()) return ""
+
+        val params = hidden.joinToString("") { "&exclude_genders[]=$it" }
+
+        val addErotic = getSfwGeneral() || getNsfwEcchi()
+
+        return if (addErotic) {
+            "$params&erotic=false"
+        } else {
+            params
+        }
+    }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return safeClient.newCall(popularMangaRequest(page))
@@ -163,11 +201,16 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/library".toHttpUrl().newBuilder()
         url.addQueryParameter("title", query)
-        if (getSFWModePref()) {
-            SFW_MODE_PREF_EXCLUDE_GENDERS.forEach { gender ->
-                url.addQueryParameter("exclude_genders[]", gender)
-            }
-            url.addQueryParameter("erotic", "false")
+        val nsfwPart = getSFWUrlPart()
+        if (nsfwPart.isNotEmpty()) {
+            nsfwPart.split("&")
+                .filter { it.isNotBlank() }
+                .forEach { param ->
+                    val (key, value) = param.split("=").let {
+                        it.first().removePrefix("?") to it.getOrElse(1) { "" }
+                    }
+                    url.addQueryParameter(key, value)
+                }
         }
         url.addQueryParameter("page", page.toString())
         url.addQueryParameter("_pg", "1") // Extra Query to Prevent Scrapping aka without it = 403
@@ -190,12 +233,10 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
                 }
                 is ContentTypeList -> {
                     filter.state.forEach { content ->
-                        if (!getSFWModePref() || (getSFWModePref() && content.id != "erotic")) {
-                            when (content.state) {
-                                Filter.TriState.STATE_IGNORE -> url.addQueryParameter(content.id, "")
-                                Filter.TriState.STATE_INCLUDE -> url.addQueryParameter(content.id, "true")
-                                Filter.TriState.STATE_EXCLUDE -> url.addQueryParameter(content.id, "false")
-                            }
+                        when (content.state) {
+                            Filter.TriState.STATE_IGNORE -> url.addQueryParameter(content.id, "")
+                            Filter.TriState.STATE_INCLUDE -> url.addQueryParameter(content.id, "true")
+                            Filter.TriState.STATE_EXCLUDE -> url.addQueryParameter(content.id, "false")
                         }
                     }
                 }
@@ -575,36 +616,136 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
 
     private fun getScanlatorPref(): Boolean = preferences.getBoolean(SCANLATOR_PREF, SCANLATOR_PREF_DEFAULT_VALUE)
 
-    private fun getSFWModePref(): Boolean = preferences.getBoolean(SFW_MODE_PREF, SFW_MODE_PREF_DEFAULT_VALUE)
-
     private fun getSaveLastCFUrlPref(): Boolean = preferences.getBoolean(SAVE_LAST_CF_URL_PREF, SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE)
 
+    private fun checkBox(
+        ctx: Context,
+        key: String,
+        title: String,
+        summary: String? = null,
+        default: Boolean = false,
+    ) = CheckBoxPreference(ctx).apply {
+        this.key = key
+        this.title = title
+        summary?.let { this.summary = it }
+        setDefaultValue(default)
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val sfwModePref = CheckBoxPreference(screen.context).apply {
-            key = SFW_MODE_PREF
-            title = SFW_MODE_PREF_TITLE
-            summary = SFW_MODE_PREF_SUMMARY
-            setDefaultValue(SFW_MODE_PREF_DEFAULT_VALUE)
+        val ctx = screen.context
+
+        val nsfwGeneral = checkBox(
+            ctx,
+            SFW_GENERAL,
+            "Ocultar todo el contenido NSFW",
+            "Bloquea automáticamente Ecchi, GL, BL, Harem y Trap",
+        )
+
+        val ecchi = checkBox(ctx, NSFW_ECCHI, "    • Ocultar Ecchi")
+        val gl = checkBox(ctx, NSFW_GIRLS_LOVE, "    • Ocultar Girls Love")
+        val bl = checkBox(ctx, NSFW_BOYS_LOVE, "    • Ocultar Boys Love")
+        val harem = checkBox(ctx, NSFW_HAREM, "    • Ocultar Harem")
+        val trap = checkBox(ctx, NSFW_TRAP, "    • Ocultar Trap")
+
+        val nsfwPrefs = listOf(ecchi, gl, bl, harem, trap)
+
+        fun updateState(allSfwEnabled: Boolean) {
+            val enabled = !allSfwEnabled
+
+            nsfwPrefs.forEach { it.setEnabled(enabled) }
+
+            if (allSfwEnabled && preferences.getString(NSFW_STATE_CACHE, null) == null) {
+                cacheNsfwState()
+                preferences.edit()
+                    .putBoolean(NSFW_ECCHI, false)
+                    .putBoolean(NSFW_GIRLS_LOVE, false)
+                    .putBoolean(NSFW_BOYS_LOVE, false)
+                    .putBoolean(NSFW_HAREM, false)
+                    .putBoolean(NSFW_TRAP, false)
+                    .apply()
+            } else {
+                restoreNsfwState()
+            }
         }
 
-        val scanlatorPref = CheckBoxPreference(screen.context).apply {
-            key = SCANLATOR_PREF
-            title = SCANLATOR_PREF_TITLE
-            summary = SCANLATOR_PREF_SUMMARY
-            setDefaultValue(SCANLATOR_PREF_DEFAULT_VALUE)
+        updateState(isSfwEnabled())
+
+        nsfwGeneral.setOnPreferenceChangeListener { _, newValue ->
+            updateState(newValue as Boolean)
+            true
         }
 
-        val saveLastCFUrlPreference = CheckBoxPreference(screen.context).apply {
-            key = SAVE_LAST_CF_URL_PREF
-            title = SAVE_LAST_CF_URL_PREF_TITLE
-            summary = SAVE_LAST_CF_URL_PREF_SUMMARY
-            setDefaultValue(SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE)
-        }
+        val scanlatorPref = checkBox(
+            ctx,
+            SCANLATOR_PREF,
+            SCANLATOR_PREF_TITLE,
+            SCANLATOR_PREF_SUMMARY,
+            SCANLATOR_PREF_DEFAULT_VALUE,
+        )
 
-        screen.addPreference(sfwModePref)
+        val saveLastCFUrlPreference = checkBox(
+            ctx,
+            SAVE_LAST_CF_URL_PREF,
+            SAVE_LAST_CF_URL_PREF_TITLE,
+            SAVE_LAST_CF_URL_PREF_SUMMARY,
+            SAVE_LAST_CF_URL_PREF_DEFAULT_VALUE,
+        )
+
+        screen.addPreference(nsfwGeneral)
+        nsfwPrefs.forEach(screen::addPreference)
         screen.addPreference(scanlatorPref)
         screen.addPreference(saveLastCFUrlPreference)
     }
+
+    private fun cacheNsfwState() {
+        val state = NsfwState(
+            ecchi = getNsfwEcchi(),
+            girlsLove = getNsfwGirlsLove(),
+            boysLove = getNsfwBoysLove(),
+            harem = getNsfwHarem(),
+            trap = getNsfwTrap(),
+        )
+        preferences.edit()
+            .putString(NSFW_STATE_CACHE, Json.encodeToString(state))
+            .apply()
+    }
+
+    private fun restoreNsfwState() {
+        val json = preferences.getString(NSFW_STATE_CACHE, null) ?: return
+        val state = runCatching {
+            Json.decodeFromString<NsfwState>(json)
+        }.getOrNull() ?: return
+
+        preferences.edit()
+            .putBoolean(NSFW_ECCHI, state.ecchi)
+            .putBoolean(NSFW_GIRLS_LOVE, state.girlsLove)
+            .putBoolean(NSFW_BOYS_LOVE, state.boysLove)
+            .putBoolean(NSFW_HAREM, state.harem)
+            .putBoolean(NSFW_TRAP, state.trap)
+            .remove(NSFW_STATE_CACHE)
+            .apply()
+    }
+
+    private fun isSfwEnabled(): Boolean =
+        getSfwGeneral()
+
+    private fun getSfwGeneral(): Boolean =
+        preferences.getBoolean(SFW_GENERAL, false)
+
+    private fun getNsfwEcchi(): Boolean =
+        preferences.getBoolean(NSFW_ECCHI, false)
+
+    private fun getNsfwGirlsLove(): Boolean =
+        preferences.getBoolean(NSFW_GIRLS_LOVE, false)
+
+    private fun getNsfwBoysLove(): Boolean =
+        preferences.getBoolean(NSFW_BOYS_LOVE, false)
+
+    private fun getNsfwHarem(): Boolean =
+        preferences.getBoolean(NSFW_HAREM, false)
+
+    private fun getNsfwTrap(): Boolean =
+        preferences.getBoolean(NSFW_TRAP, false)
 
     companion object {
         val DIRPATH_REGEX = """var\s+dirPath\s*=\s*'(.*?)'\s*;""".toRegex()
@@ -615,11 +756,15 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         private const val SCANLATOR_PREF_SUMMARY = "Se mostraran capítulos repetidos pero con diferentes Scanlators"
         private const val SCANLATOR_PREF_DEFAULT_VALUE = true
 
-        private const val SFW_MODE_PREF = "SFWModePref"
-        private const val SFW_MODE_PREF_TITLE = "Ocultar contenido NSFW"
-        private const val SFW_MODE_PREF_SUMMARY = "Ocultar el contenido erótico (puede que aún activandolo se sigan mostrando portadas o series NSFW). Ten en cuenta que al activarlo se ignoran filtros al explorar y buscar.\nLos filtros ignorados son: Filtrar por tipo de contenido (Erotico) y el Filtrar por generos: Ecchi, Boys Love, Girls Love, Harem y Trap."
-        private const val SFW_MODE_PREF_DEFAULT_VALUE = false
-        private val SFW_MODE_PREF_EXCLUDE_GENDERS = listOf("6", "17", "18", "19")
+        private const val SFW_GENERAL = "pref_sfw_general"
+
+        private const val NSFW_ECCHI = "pref_nsfw_ecchi"
+        private const val NSFW_GIRLS_LOVE = "pref_nsfw_girls_love"
+        private const val NSFW_BOYS_LOVE = "pref_nsfw_boys_love"
+        private const val NSFW_HAREM = "pref_nsfw_harem"
+        private const val NSFW_TRAP = "pref_nsfw_trap"
+
+        private const val NSFW_STATE_CACHE = "pref_nsfw_state_cache"
 
         private const val SAVE_LAST_CF_URL_PREF = "saveLastCFUrlPreference"
         private const val SAVE_LAST_CF_URL_PREF_TITLE = "Guardar la última URL con error de Cloudflare"
