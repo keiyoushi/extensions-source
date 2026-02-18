@@ -5,8 +5,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -29,19 +31,22 @@ class TiaManhwa :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request = GET(
-        "$baseUrl/page/$page/?s=$query&post_type=wp-manga",
-        headers,
-    )
+    ): Request {
+        val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
+            .addQueryParameter("s", query)
+            .addQueryParameter("post_type", "wp-manga")
+            .build()
+
+        return GET(url, headers)
+    }
 
     override fun searchMangaSelector() = "div.page-item-detail.manga"
 
-    // The site returns absolute URLs; Madara requires relative paths to avoid baseUrl duplication.
+    // Search results parsing
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".post-title a")!!.text()
-        setUrlWithoutDomain(
-            element.selectFirst(".post-title a")!!.attr("href"),
-        )
+        val titleElement = element.selectFirst(".post-title a")!!
+        title = titleElement.text()
+        setUrlWithoutDomain(titleElement.attr("abs:href"))
         thumbnail_url = element.selectFirst(".item-thumb img")?.attr("src")
     }
 
@@ -75,12 +80,12 @@ class TiaManhwa :
     override fun latestUpdatesSelector(): String = "#loop-content .page-listing-item .page-item-detail.manga"
 
     override fun latestUpdatesFromElement(element: Element): SManga {
-        val titleElement = element.selectFirst(".post-title h3 a")
+        val titleElement = element.selectFirst(".post-title h3 a")!!
         val thumbElement = element.selectFirst(".item-thumb img")
 
         return SManga.create().apply {
-            title = titleElement?.text() ?: ""
-            setUrlWithoutDomain(titleElement?.attr("href") ?: "")
+            title = titleElement.text()
+            setUrlWithoutDomain(titleElement.attr("abs:href"))
             thumbnail_url = thumbElement?.attr("src")
         }
     }
@@ -88,7 +93,7 @@ class TiaManhwa :
     override fun latestUpdatesNextPageSelector(): String? = "a.nextpostslink"
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = org.jsoup.Jsoup.parse(
+        val document = Jsoup.parse(
             response.body!!.string(),
             response.request.url.toString(),
         )
