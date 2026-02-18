@@ -16,15 +16,14 @@ import java.lang.IllegalStateException
 
 class Zazhimi : HttpSource() {
 
-    private val apiUrl = "https://android2024.zazhimi.net/api"
+    private val apiUrl = "https://android2026.zazhimi.net/api"
 
     override val baseUrl = "https://www.zazhimi.net"
     override val lang = "zh"
     override val name = "杂志迷"
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "ZaZhiMi_5.3.0")
+    override fun headersBuilder() = super.headersBuilder().set("User-Agent", "ZaZhiMi_6.0.0")
 
     // Popular
 
