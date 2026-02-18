@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.zazhimi
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -43,12 +44,22 @@ class Zazhimi : HttpSource() {
 
     // Search
 
+    override fun getFilterList() = FilterList(
+        Filter.Header("筛选条件（搜索关键字时无效）"),
+        TypeFilter(),
+        BrandFilter(),
+    )
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("search.php")
-            .addQueryParameter("k", query)
-            .addQueryParameter("p", page.toString())
-            .addQueryParameter("s", "20")
+        if (query.isEmpty()) {
+            url.addPathSegment("lists.php")
+                .addQueryParameter("c", filters[1].toString())
+                .addQueryParameter("m", filters[2].toString())
+        } else {
+            url.addPathSegment("search.php").addQueryParameter("k", query)
+        }
+        url.addQueryParameter("p", page.toString()).addQueryParameter("s", "20")
         return GET(url.build(), headers)
     }
 
@@ -63,7 +74,7 @@ class Zazhimi : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ShowResponse>()
-        if (result.content.isEmpty()) throw IllegalStateException("漫画内容解析为空！")
+        if (result.content.isEmpty()) throw IllegalStateException("内容解析为空！")
         val item = result.content[0]
         return SManga.create().apply {
             title = item.magName
