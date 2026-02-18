@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,11 +18,13 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -220,17 +223,35 @@ class MangaCloud : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$API_URL/comic/${manga.url}"
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val path = url.pathSegments
 
-        return GET(url, headers)
+            if (url.host == DOMAIN && path[0] == "comic" && path.size > 1) {
+                val comicId = path[1]
+
+                return client.newCall(mangaDetailsRequest(comicId))
+                    .asObservableSuccess()
+                    .map(::mangaDetailsParse)
+                    .map { MangasPage(listOf(it), false) }
+            } else {
+                throw Exception("Unsupported Url")
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
     }
+
+    override fun mangaDetailsRequest(manga: SManga) = mangaDetailsRequest(manga.url)
+
+    private fun mangaDetailsRequest(comicId: String) = GET("$API_URL/comic/$comicId", headers)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga()
+    override fun mangaDetailsParse(response: Response) = response.parseAs<Data<Manga>>().data.toSManga()
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<Data<Manga>>()
@@ -264,7 +285,7 @@ class MangaCloud : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
 
 private val jsonMediaType = "application/json".toMediaType()
