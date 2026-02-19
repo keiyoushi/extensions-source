@@ -9,7 +9,7 @@ coroutines = "1.10.2"
 serialization = "1.7.3"
 
 [libraries]
-gradle-agp = { module = "com.android.tools.build:gradle", version = "9.0.0" }
+gradle-agp = { module = "com.android.tools.build:gradle", version = "9.0.1" }
 gradle-kotlin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 gradle-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 
