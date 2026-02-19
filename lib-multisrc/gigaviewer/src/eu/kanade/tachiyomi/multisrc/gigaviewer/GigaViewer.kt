@@ -27,6 +27,7 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
+// GigaViewer Sources: https://hatena.co.jp/solutions/gigaviewer
 abstract class GigaViewer(
     override val name: String,
     override val baseUrl: String,

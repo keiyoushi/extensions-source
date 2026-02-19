@@ -51,5 +51,5 @@ class GigaViewerPaginationReadableProduct(
 
 @Serializable
 class GigaViewerPaginationReadableProductStatus(
-    val label: String?, // is_free, is_rentable, is_purchasable, unpublished
+    val label: String?, // is_free, is_rentable, is_purchasable, unpublished, is_rentable_and_subscribable
 )
