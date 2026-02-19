@@ -18,7 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Hentai3(
+open class Hentai3(
     override val lang: String = "all",
     private val searchLang: String = "",
 ) : HttpSource() {

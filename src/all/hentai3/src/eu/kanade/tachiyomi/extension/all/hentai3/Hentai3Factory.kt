@@ -22,7 +22,10 @@ class Hentai3Factory : SourceFactory {
         Hentai3("tr", "turkish"),
         Hentai3("ru", "russian"),
         Hentai3("uk", "ukrainian"),
-        Hentai3("po", "polish"),
+        object : Hentai3("pl", "polish") {
+            // lang changed from po to pl
+            override val id = 7940950215101782907
+        },
         Hentai3("fi", "finnish"),
         Hentai3("de", "german"),
         Hentai3("it", "italian"),
