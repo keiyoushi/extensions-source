@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.weebdex
 
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
@@ -205,7 +206,7 @@ open class WeebDex(
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.parseAs<ChapterDto>()
-        return chapter.toPageList()
+        return chapter.toPageList(dataSaver)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -221,11 +222,24 @@ open class WeebDex(
             setDefaultValue(COVER_QUALITY_ORIGINAL)
             summary = "%s"
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DATA_SAVER_PREFERENCE
+            title = "Data Saver"
+            summary = "Enable to use lower quality images in the chapter"
+            setDefaultValue(DATA_SAVER_DEFAULT)
+        }.also(screen::addPreference)
     }
 
     private val coverQuality: String
         get() = preferences.getString(COVER_QUALITY_PREFERENCE, COVER_QUALITY_ORIGINAL) ?: COVER_QUALITY_ORIGINAL
+
+    private val dataSaver: Boolean
+        get() = preferences.getBoolean(DATA_SAVER_PREFERENCE, DATA_SAVER_DEFAULT)
 }
 
 private const val COVER_QUALITY_PREFERENCE = "cover_quality"
 private const val COVER_QUALITY_ORIGINAL = ""
+
+private const val DATA_SAVER_PREFERENCE = "data_saver"
+private const val DATA_SAVER_DEFAULT = false

@@ -12,10 +12,11 @@ class SortFilter :
 }
 
 private val selectOptions = listOf(
-    "Best Match" to "",
+    "Smart" to SMART_SORT, // best match for query search, release date otherwise
+    "Best Match" to BEST_MATCH,
     "Alphabetical" to "name",
     "Date Added" to "created_at",
-    "Release Date" to "released_on",
+    "Release Date" to RELEASED_ON,
 )
 
 class TypeOption(name: String) : Filter.CheckBox(name, true)

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangakuri'
+    extClass = '.Mangakuri'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangakuri.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

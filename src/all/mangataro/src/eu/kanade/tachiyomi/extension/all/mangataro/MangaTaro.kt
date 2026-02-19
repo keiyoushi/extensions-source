@@ -219,7 +219,7 @@ open class MangaTaro(
             description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
             genre = buildSet {
                 addAll(data.embedded.getTerms("post_tag"))
-                if (listOf("Manhwa", "Manhua", "Manga").none { it -> this.contains(it) }) {
+                if (listOf("Manhwa", "Manhua", "Manga").none { this.contains(it) }) {
                     add(data.type)
                 }
             }.joinToString()
@@ -300,15 +300,25 @@ open class MangaTaro(
         return chapters
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-        return document.select("img.comic-image").mapIndexed { idx, img ->
-            val imageUrl = when {
-                img.hasAttr("data-src") -> img.absUrl("data-src")
-                else -> img.absUrl("src")
-            }
-            Page(idx, imageUrl = imageUrl)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = getChapterUrl(chapter).toHttpUrl()
+            .pathSegments.last()
+            .substringAfter("-")
+
+        val url = "$baseUrl/auth/chapter-content".toHttpUrl().newBuilder()
+            .addQueryParameter("chapter_id", chapterId)
+            .build()
+
+        return GET(url, headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val data = response.parseAs<Pages>()
+
+        return data.images.mapIndexed { idx, img ->
+            Page(idx, imageUrl = img)
         }
     }
 
@@ -439,7 +449,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) :
 
             setDefaultValue(groups.joinToString())
 
-            setOnPreferenceChangeListener { preference, newValue ->
+            setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
                 true
             }
@@ -447,7 +457,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) :
     }
 
     companion object {
-        private val GROUP_PREF = "groupPref"
+        private const val GROUP_PREF = "groupPref"
         private const val RESTART_APP = "Restart app to apply new setting."
     }
 }

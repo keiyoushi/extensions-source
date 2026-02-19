@@ -1,9 +1,0 @@
-ext {
-    extName = 'Hanuman Scan'
-    extClass = '.HanumanScan'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://hanumanscan.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

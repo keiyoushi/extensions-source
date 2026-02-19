@@ -30,7 +30,7 @@ class SushiScan :
         "https://sushiscan.net",
         "fr",
         mangaUrlDirectory = "/catalogue",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH),
+        dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH),
     ),
     ConfigurableSource {
 

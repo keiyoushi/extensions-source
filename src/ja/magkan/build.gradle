@@ -3,7 +3,7 @@ ext {
     extClass = ".MagKan"
     themePkg = 'comiciviewer'
     baseUrl = "https://kansai.mag-garden.co.jp"
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

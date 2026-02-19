@@ -47,11 +47,11 @@ body:
       options:
         - label: I have checked that the extension does not already exist by searching the [extension listing](https://keiyoushi.github.io/extensions/) and verified it does not appear there.
           required: true
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: I have searched [existing issues](https://github.com/keiyoushi/extensions-source/issues) both open & closed, and confirm that this is a new unreported issue.
           required: true
         - label: I have written a meaningful title with the source name.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: I will correctly fill out all of the requested information in this form.
           required: true
 
   - type: textarea

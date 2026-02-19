@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
@@ -18,10 +19,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -348,32 +348,113 @@ class ComX :
     override fun chapterListSelector() = throw NotImplementedError("Unused")
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val extraStep = 0.001
         val document = response.asJsoup()
 
-        val dataStr = document
-            .toString()
+        val dataStr = document.toString()
             .substringAfter("window.__DATA__ = ")
             .substringBefore("</script>")
             .substringBeforeLast(";")
 
         val data = json.decodeFromString<JsonObject>(dataStr)
-        val chaptersList = data["chapters"]?.jsonArray
-        val isEvent = document.select(".page__list li:contains(Тип выпуска)").text()
+        val chaptersList = data["chapters"]?.jsonArray ?: return emptyList()
+
+        val isEvent = document
+            .select(".page__list li:contains(Тип выпуска)")
+            .text()
             .contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")
 
-        val chapters: List<SChapter>? = chaptersList?.map {
+        var currentBase: Float?
+        var subIndex: Int
+
+        val pendingExtras = mutableListOf<SChapter>()
+
+        val result = mutableListOf<SChapter>()
+
+        chaptersList.forEach { element ->
+
+            val obj = element.jsonObject
             val chapter = SChapter.create()
-            chapter.name = it.jsonObject["title"]!!.jsonPrimitive.contentOrNull.toString()
-            chapter.date_upload = simpleDateFormat.parse(it.jsonObject["date"]!!.jsonPrimitive.content)?.time ?: 0L
-            chapter.chapter_number = it.jsonObject["posi"]!!.jsonPrimitive.float
-            // when it is Event add reading order numbers as prefix
-            if (isEvent) {
-                chapter.name = chapter.chapter_number.toInt().toString() + " " + chapter.name
+
+            val title = obj["title"]!!.jsonPrimitive.content
+            val posi = obj["posi"]!!.jsonPrimitive.float
+
+            chapter.name = title
+            chapter.date_upload =
+                simpleDateFormat.tryParse(obj["date"]!!.jsonPrimitive.content)
+
+            val parsedBase = parseBaseChapterNumber(title)
+            val isExtra = isExtraChapter(title)
+
+            when {
+                parsedBase != null -> {
+                    currentBase = parsedBase
+                    subIndex = 0
+                    if (pendingExtras.isNotEmpty()) {
+                        pendingExtras.reversed().forEach {
+                            subIndex++
+                            it.chapter_number =
+                                (currentBase!! + subIndex.toFloat() * extraStep).toFloat()
+                        }
+                        pendingExtras.clear()
+                    }
+                    chapter.chapter_number = parsedBase
+                }
+
+                isExtra -> {
+                    pendingExtras += chapter
+                }
+
+                else -> {
+                    currentBase = posi
+                    subIndex = 0
+                    if (pendingExtras.isNotEmpty()) {
+                        pendingExtras.reversed().forEach {
+                            subIndex++
+                            it.chapter_number =
+                                (currentBase + subIndex.toFloat() * extraStep).toFloat()
+                        }
+                        pendingExtras.clear()
+                    }
+                    chapter.chapter_number = posi
+                }
             }
-            chapter.setUrlWithoutDomain("/reader/" + data["news_id"] + "/" + it.jsonObject["id"]!!.jsonPrimitive.content)
-            chapter
+            if (isEvent && chapter.chapter_number > 0f) {
+                chapter.name =
+                    chapter.chapter_number.toInt().toString() +
+                    " " + chapter.name
+            }
+            chapter.setUrlWithoutDomain(
+                "/reader/" +
+                    data["news_id"] +
+                    "/" +
+                    obj["id"]!!.jsonPrimitive.content,
+            )
+
+            result += chapter
         }
-        return chapters ?: emptyList()
+        return result
+    }
+
+    private fun parseBaseChapterNumber(title: String): Float? {
+        val dashIndex = title.indexOf('-')
+        if (dashIndex == -1) return null
+
+        val afterDash = title.substring(dashIndex + 1).trimStart()
+
+        val end = afterDash.indexOf(' ').let {
+            if (it == -1) afterDash.length else it
+        }
+
+        return afterDash.take(end).toFloatOrNull()
+    }
+
+    private fun isExtraChapter(title: String): Boolean {
+        val lower = title.lowercase()
+        return "экстра" in lower ||
+            "extra" in lower ||
+            "special" in lower ||
+            "bonus" in lower
     }
 
     override fun chapterFromElement(element: Element): SChapter = throw NotImplementedError("Unused")
@@ -607,11 +688,11 @@ class ComX :
         CheckFilter("Ёнкома", "121"),
     )
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = DOMAIN_PREF
             title = "Домен"
-            summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
+            summary = "$baseUrl\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 if (!newValue.toString().matches(URL_REGEX)) {
@@ -633,7 +714,7 @@ class ComX :
                 "\nПо умолчанию домент картинок берётся автоматически." +
                 "\nЧтобы узнать домен изображения откройте главу в браузере и после долгим тапом откройте изображение в новом окне."
             setDefaultValue("")
-            setOnPreferenceChangeListener { _, newValue ->
+            setOnPreferenceChangeListener { _, _ ->
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true

@@ -58,13 +58,13 @@ data class ChapterItem(
     val data: ChapterData,
     val createdAt: String? = null,
     val updatedAt: String? = null,
-    @SerialName("dataImages") val dataImages: Map<String, String>? = null,
 )
 
 @Serializable
 data class ChapterData(
     val index: Float,
     val title: String? = null,
+    val images: List<String>? = null,
 )
 
 @Serializable

@@ -31,7 +31,7 @@ import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
 
-open class Dynasty :
+class Dynasty :
     HttpSource(),
     ConfigurableSource {
 
@@ -39,7 +39,8 @@ open class Dynasty :
 
     override val lang = "en"
 
-    override val baseUrl = "https://dynasty-scans.com"
+    private val domain = "dynasty-scans.com"
+    override val baseUrl = "https://$domain"
 
     override val supportsLatest = false
 
@@ -99,6 +100,29 @@ open class Dynasty :
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://") || query.startsWith("deeplink:")) {
+            return deepLink(query)
+        }
+
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, filters) }
+    }
+
+    private fun deepLink(query: String): Observable<MangasPage> {
+        var query = query
+
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val path = url.pathSegments
+
+            if (url.host == domain && path.size > 1) {
+                query = "deeplink:${path[0]}:${path[1]}"
+            } else {
+                throw Exception("Invalid url")
+            }
+        }
+
         if (query.startsWith("deeplink:")) {
             var (_, directory, permalink) = query.split(":", limit = 3)
 
@@ -125,9 +149,7 @@ open class Dynasty :
             )
         }
 
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { searchMangaParse(it, filters) }
+        throw Exception("Invalid url")
     }
 
     override fun getFilterList(): FilterList {
@@ -188,7 +210,16 @@ open class Dynasty :
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.trim())
             filters.firstInstance<SortFilter>().also {
-                addQueryParameter("sort", it.sort)
+                if (it.sort == SMART_SORT) {
+                    val sort = if (query.isNotBlank()) {
+                        BEST_MATCH
+                    } else {
+                        RELEASED_ON
+                    }
+                    addQueryParameter("sort", sort)
+                } else {
+                    addQueryParameter("sort", it.sort)
+                }
             }
             typeFilter.also {
                 it.checked.forEach { type ->

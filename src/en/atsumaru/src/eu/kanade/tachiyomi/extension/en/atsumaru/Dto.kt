@@ -162,3 +162,20 @@ class PageDto(
 class PageDataDto(
     val image: String,
 )
+
+@Serializable
+internal class SearchRequest(
+    val page: Int,
+    val sort: String,
+    val filter: SearchFilter,
+)
+
+@Serializable
+internal class SearchFilter(
+    val search: String? = null,
+    val types: List<String>,
+    val status: List<String>? = null,
+    val includedTags: List<String>? = null,
+    val year: Int? = null,
+    val minChapters: Int? = null,
+)

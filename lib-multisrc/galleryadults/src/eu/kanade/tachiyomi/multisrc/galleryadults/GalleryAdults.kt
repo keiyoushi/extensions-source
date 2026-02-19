@@ -20,10 +20,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -646,7 +643,7 @@ abstract class GalleryAdults(
                     )
                 }
                 return pages
-            } catch (e: SerializationException) {
+            } catch (_: SerializationException) {
                 Log.e("GalleryAdults", "Failed to decode JSON")
                 return this.pageListParseAlternative(document)
             }
@@ -794,30 +791,23 @@ abstract class GalleryAdults(
         if (!tagsFetched && tagsFetchAttempt < 3) {
             launchIO {
                 val tags = mutableListOf<Genre>()
-                runBlocking {
-                    val jobsPool = mutableListOf<Job>()
-                    // Get first 5 pages
+                try {
                     (1..5).forEach { page ->
-                        jobsPool.add(
-                            launchIO {
-                                runCatching {
-                                    tags.addAll(
-                                        client.newCall(tagsRequest(page))
-                                            .execute().asJsoup().let { tagsParser(it) },
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    jobsPool.joinAll()
-                    tags.sortedWith(compareBy { it.name })
-                        .forEach {
-                            genres[it.name] = it.uri
+                        runCatching {
+                            client.newCall(tagsRequest(page))
+                                .execute().use { it.asJsoup().let(::tagsParser) }
+                        }.onSuccess { parsed ->
+                            tags.addAll(parsed)
                         }
-                    tagsFetched = true
-                }
+                    }
 
-                tagsFetchAttempt++
+                    tags.sortedWith(compareBy { it.name })
+                        .forEach { genres[it.name] = it.uri }
+
+                    tagsFetched = true
+                } finally {
+                    tagsFetchAttempt++
+                }
             }
         }
     }

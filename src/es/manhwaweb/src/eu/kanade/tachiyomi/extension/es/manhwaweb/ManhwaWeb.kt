@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -135,16 +134,17 @@ class ManhwaWeb : HttpSource() {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
         val chapters = result.chapters.filterNot {
             it.createdAt == null || (it.espUrl == null && it.rawUrl == null)
-        }.map { it.toSChapter() }
+        }.map { it.toSChapter(result.id, result.realId) }
 
         return chapters.sortedByDescending { it.chapter_number }
     }
 
-    private fun ChapterDto.toSChapter() = SChapter.create().apply {
+    private fun ChapterDto.toSChapter(id: String, realId: String) = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")}"
         chapter_number = number
         date_upload = createdAt ?: 0
-        url = espUrl ?: rawUrl!!
+        val url = (espUrl ?: rawUrl!!).replace(id, realId)
+        setUrlWithoutDomain(url)
         scanlator = if (espUrl != null) "Esp" else "Raw"
     }
 

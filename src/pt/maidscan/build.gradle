@@ -3,7 +3,7 @@ ext {
     extClass = '.MaidScan'
     themePkg = 'greenshit'
     baseUrl = 'https://empreguetes.xyz'
-    overrideVersionCode = 46
+    overrideVersionCode = 50
     isNsfw = true
 }
 

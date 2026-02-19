@@ -128,6 +128,11 @@ class Chapter(
 )
 
 @Serializable
+class Pages(
+    val images: List<String>,
+)
+
+@Serializable
 class ProjectList(
     val titles: List<MangaDto>,
 ) {

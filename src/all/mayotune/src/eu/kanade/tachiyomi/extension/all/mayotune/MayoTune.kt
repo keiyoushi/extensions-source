@@ -19,7 +19,7 @@ class MayoTune(
     private val chapterEndpoint: String,
 ) : HttpSource() {
     override val name: String = "MayoTune"
-    override val baseUrl: String = "https://mayotune.xyz"
+    override val baseUrl: String = "https://mayochuu.xyz"
     override val versionId: Int = 1
 
     private val names = mapOf(
