@@ -190,7 +190,7 @@ abstract class GigaViewer(
             resultData.asSequence().filter {
                 when (it.status?.label) {
                     "unpublished" -> !hideUnavailable
-                    "is_rentable", "is_purchasable" -> !hideLocked
+                    "is_rentable", "is_purchasable", "is_rentable_and_subscribable" -> !hideLocked
                     else -> true
                 }
             }.map {

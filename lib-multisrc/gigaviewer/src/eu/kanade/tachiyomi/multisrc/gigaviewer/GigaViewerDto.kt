@@ -40,7 +40,7 @@ class GigaViewerPaginationReadableProduct(
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
         val prefix = when (status?.label) {
             "unpublished" -> "🔒 "
-            "is_rentable", "is_purchasable" -> "💴 "
+            "is_rentable", "is_purchasable", "is_rentable_and_subscribable" -> "💴 "
             else -> ""
         }
         name = prefix + title
