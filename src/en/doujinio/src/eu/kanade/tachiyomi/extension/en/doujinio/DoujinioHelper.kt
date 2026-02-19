@@ -65,12 +65,10 @@ val tags = listOf(
     Tag(id = 99, name = "Yaoi"),
 )
 
-fun parseDate(dateStr: String): Long {
-    return try {
-        dateFormat.parse(dateStr)!!.time
-    } catch (_: ParseException) {
-        0L
-    }
+fun parseDate(dateStr: String): Long = try {
+    dateFormat.parse(dateStr)!!.time
+} catch (_: ParseException) {
+    0L
 }
 
 private val dateFormat by lazy {

@@ -150,17 +150,15 @@ class KManga : HttpSource() {
     }
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) {
-            val titleId = query.removePrefix(PREFIX_SEARCH)
-            fetchMangaDetails(
-                SManga.create().apply { url = "/title/$titleId" },
-            ).map { manga ->
-                MangasPage(listOf(manga.apply { url = "/title/$titleId" }), false)
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) {
+        val titleId = query.removePrefix(PREFIX_SEARCH)
+        fetchMangaDetails(
+            SManga.create().apply { url = "/title/$titleId" },
+        ).map { manga ->
+            MangasPage(listOf(manga.apply { url = "/title/$titleId" }), false)
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -259,9 +257,7 @@ class KManga : HttpSource() {
     }
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -355,19 +351,17 @@ class KManga : HttpSource() {
     }
 
     // Pages
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservable()
-            .map { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 400) {
-                        throw Exception("This chapter is locked. Log in via WebView and rent or purchase the chapter to read.")
-                    }
-                    throw Exception("HTTP error ${response.code}")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservable()
+        .map { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 400) {
+                    throw Exception("This chapter is locked. Log in via WebView and rent or purchase the chapter to read.")
                 }
-                pageListParse(response)
+                throw Exception("HTTP error ${response.code}")
             }
-    }
+            pageListParse(response)
+        }
 
     override fun pageListParse(response: Response): List<Page> {
         val apiResponse = response.parseAs<ViewerApiResponse>()
@@ -402,31 +396,31 @@ class KManga : HttpSource() {
         GenreFilter(),
     )
 
-    private class GenreFilter : UriPartFilter(
-        "Genre",
-        arrayOf(
-            Pair("All", "/ranking"),
-            Pair("Romance･Romcom", "/search/genre/1"),
-            Pair("Horror･Mystery･Suspense", "/search/genre/2"),
-            Pair("Gag･Comedy･Slice-of-Life", "/search/genre/3"),
-            Pair("SF･Fantasy", "/search/genre/4"),
-            Pair("Sports", "/search/genre/5"),
-            Pair("Drama", "/search/genre/6"),
-            Pair("Outlaws･Underworld･Punks", "/search/genre/7"),
-            Pair("Action･Battle", "/search/genre/8"),
-            Pair("Isekai･Super Powers", "/search/genre/9"),
-            Pair("One-off Books", "/search/genre/10"),
-            Pair("Shojo/josei", "/search/genre/11"),
-            Pair("Yaoi/BL", "/search/genre/12"),
-            Pair("LGBTQ", "/search/genre/13"),
-            Pair("Yuri/GL", "/search/genre/14"),
-            Pair("Anime", "/search/genre/15"),
-            Pair("Award Winner", "/search/genre/16"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Genre",
+            arrayOf(
+                Pair("All", "/ranking"),
+                Pair("Romance･Romcom", "/search/genre/1"),
+                Pair("Horror･Mystery･Suspense", "/search/genre/2"),
+                Pair("Gag･Comedy･Slice-of-Life", "/search/genre/3"),
+                Pair("SF･Fantasy", "/search/genre/4"),
+                Pair("Sports", "/search/genre/5"),
+                Pair("Drama", "/search/genre/6"),
+                Pair("Outlaws･Underworld･Punks", "/search/genre/7"),
+                Pair("Action･Battle", "/search/genre/8"),
+                Pair("Isekai･Super Powers", "/search/genre/9"),
+                Pair("One-off Books", "/search/genre/10"),
+                Pair("Shojo/josei", "/search/genre/11"),
+                Pair("Yaoi/BL", "/search/genre/12"),
+                Pair("LGBTQ", "/search/genre/13"),
+                Pair("Yuri/GL", "/search/genre/14"),
+                Pair("Anime", "/search/genre/15"),
+                Pair("Award Winner", "/search/genre/16"),
+            ),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

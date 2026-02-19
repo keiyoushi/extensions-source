@@ -24,13 +24,14 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangasIn : MMRCMS(
-    "Mangas.in",
-    "https://m440.in",
-    "es",
-    supportsAdvancedSearch = false,
-    dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
-) {
+class MangasIn :
+    MMRCMS(
+        "Mangas.in",
+        "https://m440.in",
+        "es",
+        supportsAdvancedSearch = false,
+        dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .build()
@@ -146,20 +147,16 @@ class MangasIn : MMRCMS(
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#all > img.img-responsive").mapIndexed { i, it ->
-            var url = it.imgAttr()
-            if (url.toHttpUrlOrNull() == null) {
-                val decodedB64 = String(Base64.decode(url.substringAfter("://"), Base64.DEFAULT))
-                url = URLDecoder.decode(decodedB64, "UTF-8")
-            }
-            Page(i, imageUrl = url)
+    override fun pageListParse(document: Document): List<Page> = document.select("#all > img.img-responsive").mapIndexed { i, it ->
+        var url = it.imgAttr()
+        if (url.toHttpUrlOrNull() == null) {
+            val decodedB64 = String(Base64.decode(url.substringAfter("://"), Base64.DEFAULT))
+            url = URLDecoder.decode(decodedB64, "UTF-8")
         }
+        Page(i, imageUrl = url)
     }
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     private fun String.unescapeJava(): String {
         var escaped = this

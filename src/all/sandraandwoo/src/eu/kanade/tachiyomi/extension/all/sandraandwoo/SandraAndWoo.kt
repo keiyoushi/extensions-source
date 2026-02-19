@@ -47,8 +47,7 @@ abstract class SandraAndWoo(
         return Observable.just(mangasPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        Observable.just(MangasPage(emptyList(), false))!!
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = Observable.just(MangasPage(emptyList(), false))!!
 
     override fun chapterListSelector() = "#column a"
 

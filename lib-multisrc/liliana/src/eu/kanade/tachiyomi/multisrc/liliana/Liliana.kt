@@ -61,20 +61,15 @@ abstract class Liliana(
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/all-manga/$page/?sort=last_update&status=0", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/all-manga/$page/?sort=last_update&status=0", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun latestUpdatesSelector(): String =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
@@ -139,14 +134,11 @@ abstract class Liliana(
         )
     }
 
-    override fun searchMangaSelector(): String =
-        throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String =
-        throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
@@ -201,14 +193,10 @@ abstract class Liliana(
         sortData = document.getSelectData("select-sort")
     }
 
-    private fun Document.getSelectName(selectorClass: String): String {
-        return this.selectFirst(".select-div > label.$selectorClass")?.text() ?: ""
-    }
+    private fun Document.getSelectName(selectorClass: String): String = this.selectFirst(".select-div > label.$selectorClass")?.text() ?: ""
 
-    private fun Document.getSelectData(selectorId: String): List<Pair<String, String>> {
-        return this.select("#$selectorId > option").map {
-            it.text() to it.attr("value")
-        }
+    private fun Document.getSelectData(selectorId: String): List<Pair<String, String>> = this.select("#$selectorId > option").map {
+        it.text() to it.attr("value")
     }
 
     override fun getFilterList(): FilterList {
@@ -321,19 +309,17 @@ abstract class Liliana(
         )
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return if (document.selectFirst("div.separator[data-index]") == null) {
-            document.select("div.separator").mapIndexed { i, page ->
-                val url = page.selectFirst("a")!!.attr("abs:href")
-                Page(i, document.location(), url)
-            }
-        } else {
-            document.select("div.separator[data-index]").map { page ->
-                val index = page.attr("data-index").toInt()
-                val url = page.selectFirst("a")!!.attr("abs:href")
-                Page(index, document.location(), url)
-            }.sortedBy { it.index }
+    override fun pageListParse(document: Document): List<Page> = if (document.selectFirst("div.separator[data-index]") == null) {
+        document.select("div.separator").mapIndexed { i, page ->
+            val url = page.selectFirst("a")!!.attr("abs:href")
+            Page(i, document.location(), url)
         }
+    } else {
+        document.select("div.separator[data-index]").map { page ->
+            val index = page.attr("data-index").toInt()
+            val url = page.selectFirst("a")!!.attr("abs:href")
+            Page(index, document.location(), url)
+        }.sortedBy { it.index }
     }
 
     override fun imageUrlParse(document: Document) = ""
@@ -356,7 +342,5 @@ abstract class Liliana(
         else -> attr("abs:src")
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

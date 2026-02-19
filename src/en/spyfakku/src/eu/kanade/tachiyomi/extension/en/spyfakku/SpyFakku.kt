@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
@@ -40,7 +39,9 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import kotlin.random.Random
 
-class SpyFakku : HttpSource(), ConfigurableSource {
+class SpyFakku :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "SpyFakku"
 
@@ -58,7 +59,7 @@ class SpyFakku : HttpSource(), ConfigurableSource {
             return mirrors[index]
         }
 
-    private val baseImageUrl = "$tmpCdnUrl/image"
+    private val baseImageUrl = "$TMP_CDN_URL/image"
 
     private val baseApiUrl get() = "$baseUrl/api"
 
@@ -77,7 +78,7 @@ class SpyFakku : HttpSource(), ConfigurableSource {
         // change domain of image urls
         .addInterceptor { chain ->
             val url = chain.request().url
-            if (url.host == tmpCdnDomain) {
+            if (url.host == TMP_CDN_DOMAIN) {
                 val (host, port) = baseUrl.toHttpUrl().let { it.host to it.port }
                 val newUrl = url.newBuilder()
                     .scheme("https")
@@ -96,12 +97,13 @@ class SpyFakku : HttpSource(), ConfigurableSource {
         }
         // airdns domain is self-signed
         .apply {
-            val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-            object : X509TrustManager {
-                override fun getAcceptedIssuers(): Array<X509Certificate?> = emptyArray()
-                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            }
+            val naiveTrustManager =
+                @SuppressLint("CustomX509TrustManager")
+                object : X509TrustManager {
+                    override fun getAcceptedIssuers(): Array<X509Certificate?> = emptyArray()
+                    override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                    override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                }
 
             val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
                 val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
@@ -118,13 +120,9 @@ class SpyFakku : HttpSource(), ConfigurableSource {
 
     private val charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseApiUrl/library?sort=created_at&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseApiUrl/library?sort=created_at&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val library = response.parseAs<HentaiLib>()
@@ -195,8 +193,8 @@ class SpyFakku : HttpSource(), ConfigurableSource {
         val thumbnail = data[hentaiIndexes.thumbnail].jsonPrimitive.int
 
         val description = data[hentaiIndexes.description].jsonPrimitive.contentOrNull
-        val released_at = data[hentaiIndexes.released_at].jsonPrimitive.content
-        val created_at = data[hentaiIndexes.created_at].jsonPrimitive.content
+        val releasedAt = data[hentaiIndexes.released_at].jsonPrimitive.content
+        val createdAt = data[hentaiIndexes.created_at].jsonPrimitive.content
         val size = data[hentaiIndexes.size].jsonPrimitive.long
         val pages = data[hentaiIndexes.pages].jsonPrimitive.int
 
@@ -205,16 +203,14 @@ class SpyFakku : HttpSource(), ConfigurableSource {
             hash = hash,
             thumbnail = thumbnail,
             description = description,
-            released_at = released_at,
-            created_at = created_at,
+            released_at = releasedAt,
+            created_at = createdAt,
             tags = tags,
             size = size,
             pages = pages,
         )
     }
-    private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
-        return this.ifEmpty { null }
-    }
+    private fun <T> Collection<T>.emptyToNull(): Collection<T>? = this.ifEmpty { null }
 
     private fun Hentai.toSManga() = SManga.create().apply {
         title = this@toSManga.title
@@ -405,9 +401,7 @@ class SpyFakku : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     // Others
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     private fun generateSeed(): String {
         val length = Random.nextInt(4, 9)
@@ -440,5 +434,5 @@ private val mirrors = arrayOf(
     "https://fakku.cc",
     "https://fakkuonion.airdns.org:4096",
 )
-private const val tmpCdnDomain = "127.0.0.1"
-private const val tmpCdnUrl = "http://$tmpCdnDomain"
+private const val TMP_CDN_DOMAIN = "127.0.0.1"
+private const val TMP_CDN_URL = "http://$TMP_CDN_DOMAIN"

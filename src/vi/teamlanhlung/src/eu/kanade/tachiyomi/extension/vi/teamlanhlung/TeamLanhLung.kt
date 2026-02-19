@@ -37,9 +37,7 @@ class TeamLanhLung : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/danh-sach/truyen-hot?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/danh-sach/truyen-hot?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -61,31 +59,26 @@ class TeamLanhLung : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val slug = query.removePrefix(PREFIX_ID_SEARCH).trim()
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        url = "/$slug/"
-                    },
-                ).map {
-                    it.url = "/$slug/"
-                    MangasPage(listOf(it), false)
-                }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val slug = query.removePrefix(PREFIX_ID_SEARCH).trim()
+            fetchMangaDetails(
+                SManga.create().apply {
+                    url = "/$slug/"
+                },
+            ).map {
+                it.url = "/$slug/"
+                MangasPage(listOf(it), false)
             }
-            else -> super.fetchSearchManga(page, query, filters)
         }
+
+        else -> super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -96,15 +89,11 @@ class TeamLanhLung : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -175,9 +164,7 @@ class TeamLanhLung : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"

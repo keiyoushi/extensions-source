@@ -7,11 +7,12 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.nodes.Document
 
-class MonzeeKomik : MangaThemesia(
-    "Monzee Komik",
-    "https://monzee01.my.id",
-    "id",
-) {
+class MonzeeKomik :
+    MangaThemesia(
+        "Monzee Komik",
+        "https://monzee01.my.id",
+        "id",
+    ) {
     override val hasProjectPage = true
 
     override fun pageListParse(document: Document): List<Page> {

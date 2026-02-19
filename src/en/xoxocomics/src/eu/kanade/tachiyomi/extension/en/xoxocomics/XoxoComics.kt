@@ -16,13 +16,14 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class XoxoComics : WPComics(
-    "XOXO Comics",
-    "https://xoxocomic.com",
-    "en",
-    dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
-    gmtOffset = null,
-) {
+class XoxoComics :
+    WPComics(
+        "XOXO Comics",
+        "https://xoxocomic.com",
+        "en",
+        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
+        gmtOffset = null,
+    ) {
     override val client = super.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val request = chain.request()
@@ -47,14 +48,12 @@ class XoxoComics : WPComics(
     override val popularPath = "hot-comic"
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic-update?page=$page", headers)
     override fun latestUpdatesSelector() = "li.row"
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("h3 a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("img").attr("data-original")
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("h3 a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.select("img").attr("data-original")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -108,10 +107,8 @@ class XoxoComics : WPComics(
         return chapters
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            date_upload = element.select("div.col-xs-3").text().toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        date_upload = element.select("div.col-xs-3").text().toDate()
     }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "${chapter.url}/all", headers)
@@ -133,7 +130,5 @@ class XoxoComics : WPComics(
         )
     }
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!! + "#imagereq", headers)
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!! + "#imagereq", headers)
 }

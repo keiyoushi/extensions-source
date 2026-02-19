@@ -41,13 +41,11 @@ class MangaDetailsDto(
 class PageDto(
     val props: Props<ChapterWrapper>,
 ) {
-    fun toPageList(srcPath: String): List<Page> {
-        return props.content.chapter.pages
-            .filter { it.pathSegment.contains("xml").not() }
-            .mapIndexed { index, path ->
-                Page(index, imageUrl = "$srcPath/${path.pathSegment}")
-            }
-    }
+    fun toPageList(srcPath: String): List<Page> = props.content.chapter.pages
+        .filter { it.pathSegment.contains("xml").not() }
+        .mapIndexed { index, path ->
+            Page(index, imageUrl = "$srcPath/${path.pathSegment}")
+        }
 
     @Serializable
     class ChapterWrapper(

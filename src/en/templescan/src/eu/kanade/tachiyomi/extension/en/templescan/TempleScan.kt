@@ -25,7 +25,9 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 
-class TempleScan : HttpSource(), ConfigurableSource {
+class TempleScan :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Temple Scan"
 
@@ -53,13 +55,9 @@ class TempleScan : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, "", OrderFilter.POPULAR)
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", OrderFilter.POPULAR)
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, "", OrderFilter.LATEST)
-    }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", OrderFilter.LATEST)
 
     private lateinit var seriesCache: List<BrowseSeries>
 
@@ -73,9 +71,7 @@ class TempleScan : HttpSource(), ConfigurableSource {
         return Observable.just(parseDirectory(page, query, filters))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/comics", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", headers)
 
     private fun parseSearchResponse(response: Response) {
         val document = response.asJsoup()
@@ -208,30 +204,22 @@ class TempleScan : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return IMAGES_REGEX.find(response.body.string())!!.groupValues[1]
-            .unescape()
-            .parseAs<List<String>>()
-            .mapIndexed { index, image ->
-                Page(index, imageUrl = image)
-            }
-    }
+    override fun pageListParse(response: Response): List<Page> = IMAGES_REGEX.find(response.body.string())!!.groupValues[1]
+        .unescape()
+        .parseAs<List<String>>()
+        .mapIndexed { index, image ->
+            Page(index, imageUrl = image)
+        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
     }
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private inline fun <reified T : Filter<*>> FilterList.get(): T? {
-        return filterIsInstance<T>().firstOrNull()
-    }
+    private inline fun <reified T : Filter<*>> FilterList.get(): T? = filterIsInstance<T>().firstOrNull()
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()

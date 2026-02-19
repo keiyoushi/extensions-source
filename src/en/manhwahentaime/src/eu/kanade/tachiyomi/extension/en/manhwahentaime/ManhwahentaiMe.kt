@@ -27,31 +27,29 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         val comicObj = document.selectFirst("script:containsData(comicObj)")!!.data()
         val id = comicObj.filter { it.isDigit() }
         val name = comicObj.substringBefore(":").substringAfter("{").trim()
-        val ajax_url = document.selectFirst("script:containsData(ajax)")!!.data().substringAfter('"').substringBefore('"')
+        val ajaxUrl = document.selectFirst("script:containsData(ajax)")!!.data().substringAfter('"').substringBefore('"')
 
         val body = FormBody.Builder()
             .add(name, id)
             .add("action", "ajax_chap")
             .build()
-        val doc = client.newCall(POST(ajax_url, headers, body)).execute().asJsoup()
+        val doc = client.newCall(POST(ajaxUrl, headers, body)).execute().asJsoup()
         val chapterElements = doc.select(chapterListSelector())
 
         return chapterElements.map(::chapterFromElement)
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = true)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = true)
+    } else {
+        GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
+    }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/home/${searchPage(page)}", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (useLoadMoreRequest()) {
+        loadMoreRequest(page, popular = false)
+    } else {
+        GET("$baseUrl/home/${searchPage(page)}", headers)
+    }
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder().apply {
@@ -67,27 +65,32 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
                             alr = true
                         }
                     }
+
                     is ArtistFilter -> {
                         if (filter.state.isNotBlank() && !alr) {
                             addQueryParameter("artist", filter.state.replace(" ", "-"))
                             alr = true
                         }
                     }
+
                     is YearFilter -> {
                         if (filter.state.isNotBlank() && !alr) {
                             addPathSegments("webtoon-release/${filter.state}")
                             alr = true
                         }
                     }
+
                     is OrderByFilter -> {
                         addQueryParameter("m_orderby", filter.toUriPart())
                     }
+
                     is GenreConditionFilter -> {
                         val name = filter.toUriPart()
                         if (name != "all" && !alr) {
                             addPathSegments("webtoon-genre/$name")
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -104,19 +107,17 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         intl["order_by_filter_new"] to "new-manga",
     )
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return document.selectFirst("div.genres")
-            ?.select("a")
-            .orEmpty()
-            .map { a ->
-                Genre(
-                    a.ownText(),
-                    a.attr("href").substringBeforeLast("/").substringAfterLast("/"),
-                )
-            }.let {
-                listOf(Genre("All", "all")) + it
-            }
-    }
+    override fun parseGenres(document: Document): List<Genre> = document.selectFirst("div.genres")
+        ?.select("a")
+        .orEmpty()
+        .map { a ->
+            Genre(
+                a.ownText(),
+                a.attr("href").substringBeforeLast("/").substringAfterLast("/"),
+            )
+        }.let {
+            listOf(Genre("All", "all")) + it
+        }
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }

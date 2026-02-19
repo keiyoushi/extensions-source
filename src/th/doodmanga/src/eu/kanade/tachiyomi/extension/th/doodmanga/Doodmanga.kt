@@ -22,6 +22,7 @@ class Doodmanga : Madara("Doodmanga", "https://www.doodmanga.com", "th", SimpleD
         return document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
             val src = when (element.tagName()) {
                 "img" -> element.attr("src")
+
                 "script" -> {
                     if (element.data().startsWith("eval(")) {
                         val quickJs = QuickJs.create()
@@ -41,6 +42,7 @@ class Doodmanga : Madara("Doodmanga", "https://www.doodmanga.com", "th", SimpleD
                         null
                     }
                 }
+
                 else -> null
             }
 

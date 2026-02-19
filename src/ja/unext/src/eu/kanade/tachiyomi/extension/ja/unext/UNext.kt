@@ -31,7 +31,9 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class UNext : HttpSource(), ConfigurableSource {
+class UNext :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "U-NEXT"
     private val domain = "unext.jp"
     override val baseUrl = "https://video.$domain"
@@ -137,9 +139,7 @@ class UNext : HttpSource(), ConfigurableSource {
         return apiRequest(payload)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<DetailsResponse>().data.bookTitle.toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().data.bookTitle.toSManga()
 
     override fun chapterListRequest(manga: SManga): Request {
         val bookSakuhinCode = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
@@ -164,89 +164,83 @@ class UNext : HttpSource(), ConfigurableSource {
             .reversed()
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.fromCallable {
-            val bookFileCode = (baseUrl + chapter.url).toHttpUrl().fragment
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val bookFileCode = (baseUrl + chapter.url).toHttpUrl().fragment
 
-            val payload = Payload(
-                "cosmo_getBookPlaylistUrl",
-                PageListVariables(bookFileCode!!),
-                Payload.Extensions(
-                    Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
-                ),
+        val payload = Payload(
+            "cosmo_getBookPlaylistUrl",
+            PageListVariables(bookFileCode!!),
+            Payload.Extensions(
+                Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
+            ),
+        )
+
+        val apiRequest = apiRequest(payload)
+        val playlistData = client.newCall(apiRequest).execute()
+        val playlistParse = playlistData.parseAs<PlaylistResponse>().data?.playlistUrl
+            ?: throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
+
+        var keys: Map<String, String>? = null
+
+        // Try multiple times to load all signed cookies
+        for (i in 1..4) {
+            try {
+                val viewerUrl = getChapterUrl(chapter)
+                keys = fetchKeys(viewerUrl)
+
+                if (keys != null) break
+            } catch (e: Exception) {
+                if (i == 4) throw e
+                Thread.sleep(2000)
+            }
+        }
+
+        if (keys == null) {
+            throw Exception("Failed to fetch DRM keys. Try again.")
+        }
+
+        val base = playlistParse.playlistBaseUrl
+        val ubookPath = playlistParse.playlistUrl.ubooks.first().content
+        val zipUrl = "$base/$ubookPath".toHttpUrl().newBuilder().build().toString()
+
+        val headRequest = Request.Builder().url(zipUrl).headers(headers).head().build()
+        val contentLength = client.newCall(headRequest).execute().use {
+            it.header("Content-Length")?.toBigInteger()
+        } ?: throw Exception("Could not get Content-Length")
+
+        val zipHandler = ZipHandler(zipUrl, client, headers, "zip", contentLength)
+        val zip = zipHandler.populate()
+
+        val indexJson = zip.fetch("index.json", client).toString(Charsets.UTF_8).parseAs<UBookIndex>()
+        val drmJson = zip.fetch("drm.json", client).toString(Charsets.UTF_8).parseAs<UBookDrm>()
+
+        indexJson.spine.mapIndexed { i, spine ->
+            val pageInfo = indexJson.pages[spine.pageId]
+                ?: throw Exception("Page definition not found for ${spine.pageId}")
+
+            val entryName = pageInfo.image.src
+            val drmData = drmJson.encryptedFileList[entryName]
+                ?: throw Exception("DRM metadata not found for $entryName")
+
+            val key = keys[drmData.keyId] ?: throw Exception("Decryption key not found for ${drmData.keyId}")
+            val zipEntry = zip.getEntry(entryName) ?: throw Exception("Entry not found in CD: $entryName")
+
+            val requestData = ImageRequestData(
+                zipUrl,
+                zip.zipStartOffset,
+                zipEntry.localFileHeaderRelativeOffset.toLong(),
+                zipEntry.compressedSize,
+                key,
+                drmData.iv,
+                drmData.originalFileSize,
             )
 
-            val apiRequest = apiRequest(payload)
-            val playlistData = client.newCall(apiRequest).execute()
-            val playlistParse = playlistData.parseAs<PlaylistResponse>().data?.playlistUrl
-                ?: throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
-
-            var keys: Map<String, String>? = null
-
-            // Try multiple times to load all signed cookies
-            for (i in 1..4) {
-                try {
-                    val viewerUrl = getChapterUrl(chapter)
-                    keys = fetchKeys(viewerUrl)
-
-                    if (keys != null) break
-                } catch (e: Exception) {
-                    if (i == 4) throw e
-                    Thread.sleep(2000)
-                }
-            }
-
-            if (keys == null) {
-                throw Exception("Failed to fetch DRM keys. Try again.")
-            }
-
-            val base = playlistParse.playlistBaseUrl
-            val ubookPath = playlistParse.playlistUrl.ubooks.first().content
-            val zipUrl = "$base/$ubookPath".toHttpUrl().newBuilder().build().toString()
-
-            val headRequest = Request.Builder().url(zipUrl).headers(headers).head().build()
-            val contentLength = client.newCall(headRequest).execute().use {
-                it.header("Content-Length")?.toBigInteger()
-            } ?: throw Exception("Could not get Content-Length")
-
-            val zipHandler = ZipHandler(zipUrl, client, headers, "zip", contentLength)
-            val zip = zipHandler.populate()
-
-            val indexJson = zip.fetch("index.json", client).toString(Charsets.UTF_8).parseAs<UBookIndex>()
-            val drmJson = zip.fetch("drm.json", client).toString(Charsets.UTF_8).parseAs<UBookDrm>()
-
-            indexJson.spine.mapIndexed { i, spine ->
-                val pageInfo = indexJson.pages[spine.pageId]
-                    ?: throw Exception("Page definition not found for ${spine.pageId}")
-
-                val entryName = pageInfo.image.src
-                val drmData = drmJson.encryptedFileList[entryName]
-                    ?: throw Exception("DRM metadata not found for $entryName")
-
-                val key = keys[drmData.keyId] ?: throw Exception("Decryption key not found for ${drmData.keyId}")
-                val zipEntry = zip.getEntry(entryName) ?: throw Exception("Entry not found in CD: $entryName")
-
-                val requestData = ImageRequestData(
-                    zipUrl,
-                    zip.zipStartOffset,
-                    zipEntry.localFileHeaderRelativeOffset.toLong(),
-                    zipEntry.compressedSize,
-                    key,
-                    drmData.iv,
-                    drmData.originalFileSize,
-                )
-
-                val fragment = requestData.toJsonString()
-                Page(i, imageUrl = "http://127.0.0.1/#$fragment")
-            }
+            val fragment = requestData.toJsonString()
+            Page(i, imageUrl = "http://127.0.0.1/#$fragment")
         }
     }
 
@@ -288,7 +282,7 @@ class UNext : HttpSource(), ConfigurableSource {
                             .use { it.readText() }
 
                         view.evaluateJavascript(script, null)
-                    }, 3000,)
+                    }, 3000)
                 }
             }
 
@@ -316,9 +310,7 @@ class UNext : HttpSource(), ConfigurableSource {
         return result?.parseAs<Map<String, String>>()
     }
 
-    override fun imageUrlParse(response: Response): String {
-        return response.request.url.toString()
-    }
+    override fun imageUrlParse(response: Response): String = response.request.url.toString()
 
     private inline fun <reified T> apiRequest(payload: Payload<T>): Request {
         val url = apiUrl.toHttpUrl().newBuilder()

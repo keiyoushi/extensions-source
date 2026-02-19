@@ -28,7 +28,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RinkoComics : HttpSource(), ConfigurableSource {
+class RinkoComics :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Rinko Comics"
 
@@ -47,22 +49,18 @@ class RinkoComics : HttpSource(), ConfigurableSource {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET(comicsUrl(page).build(), headers)
+    override fun popularMangaRequest(page: Int): Request = GET(comicsUrl(page).build(), headers)
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        parseComicsPage(response)
+    override fun popularMangaParse(response: Response): MangasPage = parseComicsPage(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET(
-            comicsUrl(page)
-                .addQueryParameter(SORT_PARAM, SortFilter.OPTIONS.first().second)
-                .build(),
-            headers,
-        )
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        comicsUrl(page)
+            .addQueryParameter(SORT_PARAM, SortFilter.OPTIONS.first().second)
+            .build(),
+        headers,
+    )
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        parseComicsPage(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = parseComicsPage(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = comicsUrl(page)
@@ -78,9 +76,11 @@ class RinkoComics : HttpSource(), ConfigurableSource {
                     filter.state.filter { it.state }
                         .forEach { url.addQueryParameter("genres[]", it.slug) }
                 }
+
                 is SortFilter -> {
                     filter.toQuery()?.let { url.addQueryParameter(SORT_PARAM, it) }
                 }
+
                 else -> {}
             }
         }
@@ -88,11 +88,9 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        parseComicsPage(response)
+    override fun searchMangaParse(response: Response): MangasPage = parseComicsPage(response)
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        parseMangaDetails(response.asJsoup())
+    override fun mangaDetailsParse(response: Response): SManga = parseMangaDetails(response.asJsoup())
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
         title = requireField(
@@ -240,14 +238,12 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         return MangasPage(entries, hasNextPage)
     }
 
-    private fun parseGenres(document: Document): List<Genre> {
-        return document.select(".ac-filter-group.ac-genre input[name='genres[]']")
-            .mapNotNull { input ->
-                val slug = input.attr("value").trim()
-                val name = input.parent()?.selectFirst(".ac-option-text")?.text()?.trim().orEmpty()
-                if (slug.isBlank() || name.isBlank()) null else Genre(name, slug)
-            }
-    }
+    private fun parseGenres(document: Document): List<Genre> = document.select(".ac-filter-group.ac-genre input[name='genres[]']")
+        .mapNotNull { input ->
+            val slug = input.attr("value").trim()
+            val name = input.parent()?.selectFirst(".ac-option-text")?.text()?.trim().orEmpty()
+            if (slug.isBlank() || name.isBlank()) null else Genre(name, slug)
+        }
 
     private fun parseChapterElements(elements: List<Element>, hideLocked: Boolean): List<SChapter> {
         return elements.mapNotNull { element ->
@@ -319,14 +315,12 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         return match.groupValues[1]
     }
 
-    private fun parseStatus(status: String?): Int {
-        return when (status?.trim()?.lowercase(Locale.ROOT)) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "hiatus" -> SManga.UNKNOWN
-            "cancelled", "canceled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when (status?.trim()?.lowercase(Locale.ROOT)) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.UNKNOWN
+        "cancelled", "canceled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     private fun parseDate(date: String?): Long {

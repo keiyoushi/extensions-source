@@ -5,12 +5,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hadess : Madara(
-    "Hadess",
-    "https://www.hadess.xyz",
-    "ar",
-    dateFormat = SimpleDateFormat("dd MMMM، yyyy", Locale("ar")),
-) {
+class Hadess :
+    Madara(
+        "Hadess",
+        "https://www.hadess.xyz",
+        "ar",
+        dateFormat = SimpleDateFormat("dd MMMM، yyyy", Locale("ar")),
+    ) {
     override val versionId = 2
 
     override val client = super.client.newBuilder()

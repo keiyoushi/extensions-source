@@ -47,7 +47,8 @@ import java.util.Locale
 class Manhuagui(
     override val name: String = "漫画柜",
     override val lang: String = "zh",
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -130,6 +131,7 @@ class Manhuagui(
             //                                        /$params                      /$sortOrder $page
             val url: String = when {
                 sortOrder == "" -> "$baseUrl/list${params.toPathOrEmpty()}/index_p$page.html"
+
                 sortOrder.startsWith(RANK_PREFIX) -> {
                     "$baseUrl/rank${params.toPathOrEmpty()}".let {
                         if (it.endsWith("rank")) {
@@ -139,24 +141,21 @@ class Manhuagui(
                         }
                     }
                 }
+
                 else -> "$baseUrl/list${params.toPathOrEmpty()}/${sortOrder}_p$page.html"
             }
             return GET(url, headers)
         }
     }
 
-    private fun String.toPathOrEmpty(prefix: String = "/", suffix: String = ""): String {
-        return if (isEmpty()) {
-            this
-        } else {
-            "$prefix$this$suffix"
-        }
+    private fun String.toPathOrEmpty(prefix: String = "/", suffix: String = ""): String = if (isEmpty()) {
+        this
+    } else {
+        "$prefix$this$suffix"
     }
 
     // Return mobile webpage url to "Open in browser" and "Share manga".
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(mobileWebsiteUrl + manga.url)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(mobileWebsiteUrl + manga.url)
 
     // Bypass mangaDetailsRequest
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
@@ -210,15 +209,13 @@ class Manhuagui(
         return MangasPage(listOf(sManga), false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client.newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -235,6 +232,7 @@ class Manhuagui(
 
                 MangasPage(mangas, hasNextPage)
             }
+
             response.request.url.encodedPath.startsWith("/rank/") -> {
                 MangasPage(
                     document.select("td.rank-title").map {
@@ -247,6 +245,7 @@ class Manhuagui(
                     false,
                 )
             }
+
             else -> {
                 // Filters search
                 val mangas = document.select(popularMangaSelector()).map { element ->
@@ -354,15 +353,6 @@ class Manhuagui(
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-        /**
-         * When searching manga from intent filter, sometimes will cause the error below and manga don't appear in search result:
-         *   eu.kanade.tachiyomi.debug E/GlobalSearchPresenter$search: kotlin.UninitializedPropertyAccessException: lateinit property title has not been initialized
-         *      at eu.kanade.tachiyomi.source.model.SMangaImpl.getTitle(SMangaImpl.kt:7)
-         *      at eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchPresenter.networkToLocalManga(GlobalSearchPresenter.kt:259)
-         *      at eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchPresenter$search$1$4.call(GlobalSearchPresenter.kt:172)
-         *      at eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchPresenter$search$1$4.call(GlobalSearchPresenter.kt:34)
-         * Parse manga.title here can solve it.
-         */
         manga.title = document.select("div.book-title > h1:nth-child(1)").text().trim()
         manga.description = document.select("div#intro-all").text().trim()
         manga.thumbnail_url = document.select("p.hcover > img").attr("abs:src")
@@ -494,159 +484,166 @@ class Manhuagui(
         StatusFilter(),
     )
 
-    private class SortFilter : UriPartFilter(
-        "排序方式",
-        arrayOf(
-            Pair("人气最旺", "view"), // Same to popularMangaRequest()
-            Pair("最新发布", ""), // Publish date
-            Pair("最新更新", "update"),
-            Pair("评分最高", "rate"),
-            Pair("日排行", RANK_PREFIX),
-            Pair("周排行", "${RANK_PREFIX}week"),
-            Pair("月排行", "${RANK_PREFIX}month"),
-            Pair("总排行", "${RANK_PREFIX}total"),
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "排序方式",
+            arrayOf(
+                Pair("人气最旺", "view"), // Same to popularMangaRequest()
+                Pair("最新发布", ""), // Publish date
+                Pair("最新更新", "update"),
+                Pair("评分最高", "rate"),
+                Pair("日排行", RANK_PREFIX),
+                Pair("周排行", "${RANK_PREFIX}week"),
+                Pair("月排行", "${RANK_PREFIX}month"),
+                Pair("总排行", "${RANK_PREFIX}total"),
+            ),
+        )
 
-    private class LocaleFilter : UriPartFilter(
-        "按地区",
-        arrayOf(
-            Pair("全部", ""), // all
-            Pair("日本", "japan"),
-            Pair("港台", "hongkong"),
-            Pair("其它", "other"),
-            Pair("欧美", "europe"),
-            Pair("内地", "china"),
-            Pair("韩国", "korea"),
-        ),
-    )
+    private class LocaleFilter :
+        UriPartFilter(
+            "按地区",
+            arrayOf(
+                Pair("全部", ""), // all
+                Pair("日本", "japan"),
+                Pair("港台", "hongkong"),
+                Pair("其它", "other"),
+                Pair("欧美", "europe"),
+                Pair("内地", "china"),
+                Pair("韩国", "korea"),
+            ),
+        )
 
-    private class GenreFilter : UriPartFilter(
-        "按剧情",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("热血", "rexue"),
-            Pair("冒险", "maoxian"),
-            Pair("魔幻", "mohuan"),
-            Pair("神鬼", "shengui"),
-            Pair("搞笑", "gaoxiao"),
-            Pair("萌系", "mengxi"),
-            Pair("爱情", "aiqing"),
-            Pair("科幻", "kehuan"),
-            Pair("魔法", "mofa"),
-            Pair("格斗", "gedou"),
-            Pair("武侠", "wuxia"),
-            Pair("机战", "jizhan"),
-            Pair("战争", "zhanzheng"),
-            Pair("竞技", "jingji"),
-            Pair("体育", "tiyu"),
-            Pair("校园", "xiaoyuan"),
-            Pair("生活", "shenghuo"),
-            Pair("励志", "lizhi"),
-            Pair("历史", "lishi"),
-            Pair("伪娘", "weiniang"),
-            Pair("宅男", "zhainan"),
-            Pair("腐女", "funv"),
-            Pair("耽美", "danmei"),
-            Pair("百合", "baihe"),
-            Pair("后宫", "hougong"),
-            Pair("治愈", "zhiyu"),
-            Pair("美食", "meishi"),
-            Pair("推理", "tuili"),
-            Pair("悬疑", "xuanyi"),
-            Pair("恐怖", "kongbu"),
-            Pair("四格", "sige"),
-            Pair("职场", "zhichang"),
-            Pair("侦探", "zhentan"),
-            Pair("社会", "shehui"),
-            Pair("音乐", "yinyue"),
-            Pair("舞蹈", "wudao"),
-            Pair("杂志", "zazhi"),
-            Pair("黑道", "heidao"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "按剧情",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("热血", "rexue"),
+                Pair("冒险", "maoxian"),
+                Pair("魔幻", "mohuan"),
+                Pair("神鬼", "shengui"),
+                Pair("搞笑", "gaoxiao"),
+                Pair("萌系", "mengxi"),
+                Pair("爱情", "aiqing"),
+                Pair("科幻", "kehuan"),
+                Pair("魔法", "mofa"),
+                Pair("格斗", "gedou"),
+                Pair("武侠", "wuxia"),
+                Pair("机战", "jizhan"),
+                Pair("战争", "zhanzheng"),
+                Pair("竞技", "jingji"),
+                Pair("体育", "tiyu"),
+                Pair("校园", "xiaoyuan"),
+                Pair("生活", "shenghuo"),
+                Pair("励志", "lizhi"),
+                Pair("历史", "lishi"),
+                Pair("伪娘", "weiniang"),
+                Pair("宅男", "zhainan"),
+                Pair("腐女", "funv"),
+                Pair("耽美", "danmei"),
+                Pair("百合", "baihe"),
+                Pair("后宫", "hougong"),
+                Pair("治愈", "zhiyu"),
+                Pair("美食", "meishi"),
+                Pair("推理", "tuili"),
+                Pair("悬疑", "xuanyi"),
+                Pair("恐怖", "kongbu"),
+                Pair("四格", "sige"),
+                Pair("职场", "zhichang"),
+                Pair("侦探", "zhentan"),
+                Pair("社会", "shehui"),
+                Pair("音乐", "yinyue"),
+                Pair("舞蹈", "wudao"),
+                Pair("杂志", "zazhi"),
+                Pair("黑道", "heidao"),
+            ),
+        )
 
-    private class ReaderFilter : UriPartFilter(
-        "按受众",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("少女", "shaonv"),
-            Pair("少年", "shaonian"),
-            Pair("青年", "qingnian"),
-            Pair("儿童", "ertong"),
-            Pair("通用", "tongyong"),
-        ),
-    )
+    private class ReaderFilter :
+        UriPartFilter(
+            "按受众",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("少女", "shaonv"),
+                Pair("少年", "shaonian"),
+                Pair("青年", "qingnian"),
+                Pair("儿童", "ertong"),
+                Pair("通用", "tongyong"),
+            ),
+        )
 
-    private class PublishDateFilter : UriPartFilter(
-        "按年份",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("2025年", "2025"),
-            Pair("2024年", "2024"),
-            Pair("2023年", "2023"),
-            Pair("2022年", "2022"),
-            Pair("2021年", "2021"),
-            Pair("2020年", "2020"),
-            Pair("2019年", "2019"),
-            Pair("2018年", "2018"),
-            Pair("2017年", "2017"),
-            Pair("2016年", "2016"),
-            Pair("2015年", "2015"),
-            Pair("2014年", "2014"),
-            Pair("2013年", "2013"),
-            Pair("2012年", "2012"),
-            Pair("2011年", "2011"),
-            Pair("2010年", "2010"),
-            Pair("00年代", "200x"),
-            Pair("90年代", "199x"),
-            Pair("80年代", "198x"),
-            Pair("更早", "197x"),
-        ),
-    )
+    private class PublishDateFilter :
+        UriPartFilter(
+            "按年份",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("2025年", "2025"),
+                Pair("2024年", "2024"),
+                Pair("2023年", "2023"),
+                Pair("2022年", "2022"),
+                Pair("2021年", "2021"),
+                Pair("2020年", "2020"),
+                Pair("2019年", "2019"),
+                Pair("2018年", "2018"),
+                Pair("2017年", "2017"),
+                Pair("2016年", "2016"),
+                Pair("2015年", "2015"),
+                Pair("2014年", "2014"),
+                Pair("2013年", "2013"),
+                Pair("2012年", "2012"),
+                Pair("2011年", "2011"),
+                Pair("2010年", "2010"),
+                Pair("00年代", "200x"),
+                Pair("90年代", "199x"),
+                Pair("80年代", "198x"),
+                Pair("更早", "197x"),
+            ),
+        )
 
-    private class FirstLetterFilter : UriPartFilter(
-        "按字母",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("A", "a"),
-            Pair("B", "b"),
-            Pair("C", "c"),
-            Pair("D", "d"),
-            Pair("E", "e"),
-            Pair("F", "f"),
-            Pair("G", "g"),
-            Pair("H", "h"),
-            Pair("I", "i"),
-            Pair("J", "j"),
-            Pair("K", "k"),
-            Pair("L", "l"),
-            Pair("M", "m"),
-            Pair("N", "n"),
-            Pair("O", "o"),
-            Pair("P", "p"),
-            Pair("Q", "q"),
-            Pair("R", "r"),
-            Pair("S", "s"),
-            Pair("T", "t"),
-            Pair("U", "u"),
-            Pair("V", "v"),
-            Pair("W", "w"),
-            Pair("X", "x"),
-            Pair("Y", "y"),
-            Pair("Z", "z"),
-            Pair("0-9", "0-9"),
-        ),
-    )
+    private class FirstLetterFilter :
+        UriPartFilter(
+            "按字母",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("A", "a"),
+                Pair("B", "b"),
+                Pair("C", "c"),
+                Pair("D", "d"),
+                Pair("E", "e"),
+                Pair("F", "f"),
+                Pair("G", "g"),
+                Pair("H", "h"),
+                Pair("I", "i"),
+                Pair("J", "j"),
+                Pair("K", "k"),
+                Pair("L", "l"),
+                Pair("M", "m"),
+                Pair("N", "n"),
+                Pair("O", "o"),
+                Pair("P", "p"),
+                Pair("Q", "q"),
+                Pair("R", "r"),
+                Pair("S", "s"),
+                Pair("T", "t"),
+                Pair("U", "u"),
+                Pair("V", "v"),
+                Pair("W", "w"),
+                Pair("X", "x"),
+                Pair("Y", "y"),
+                Pair("Z", "z"),
+                Pair("0-9", "0-9"),
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "按进度",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("连载", "lianzai"),
-            Pair("完结", "wanjie"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "按进度",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("连载", "lianzai"),
+                Pair("完结", "wanjie"),
+            ),
+        )
 
     companion object {
         private const val SHOW_R18_PREF = "showR18Default"

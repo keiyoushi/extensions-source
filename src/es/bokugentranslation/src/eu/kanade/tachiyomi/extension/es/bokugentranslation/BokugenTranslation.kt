@@ -15,12 +15,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 
-class BokugenTranslation : Madara(
-    "BokugenTranslation",
-    "https://bokugents.com",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class BokugenTranslation :
+    Madara(
+        "BokugenTranslation",
+        "https://bokugents.com",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     private var loadWebView = true
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor { chain ->

@@ -38,7 +38,6 @@ import java.io.InputStream
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.WeakHashMap
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec

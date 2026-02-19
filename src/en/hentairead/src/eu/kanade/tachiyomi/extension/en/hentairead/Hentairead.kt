@@ -161,6 +161,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
                         addQueryParameter("sortby", it.getValue())
                         addQueryParameter("order", if (it.state!!.ascending) "asc" else "desc")
                     }
+
                     else -> {}
                 }
             }
@@ -175,12 +176,15 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         if (num < 0) return minPages to maxPages
         return when (query.firstOrNull()) {
             '<' -> 1 to if (query[1] == '=') limitedNum() else limitedNum(num + 1)
+
             '>' -> limitedNum(if (query[1] == '=') num else num + 1) to maxPages
+
             '=' -> when (query[1]) {
                 '>' -> limitedNum() to maxPages
                 '<' -> 1 to limitedNum(maxPages)
                 else -> limitedNum() to limitedNum()
             }
+
             else -> limitedNum() to limitedNum()
         }
     }
@@ -209,19 +213,17 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Chapter"
-                    url = manga.url
-                    if (manga.description?.contains("Scanlators") == true) {
-                        scanlator = manga.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
-                    }
-                },
-            ),
-        )
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = "Chapter"
+                url = manga.url
+                if (manga.description?.contains("Scanlators") == true) {
+                    scanlator = manga.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
+                }
+            },
+        ),
+    )
 
     override fun pageListRequest(chapter: SChapter): Request {
         // There's like 2 non-English entries where this breaks
@@ -233,17 +235,13 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         return GET(baseUrl + url, headers)
     }
 
-    override fun imageFromElement(element: Element): String? {
-        return when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ").removeSuffix(",")
-            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            else -> element.attr("abs:src")
-        }
+    override fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+        element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ").removeSuffix(",")
+        element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
+        else -> element.attr("abs:src")
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

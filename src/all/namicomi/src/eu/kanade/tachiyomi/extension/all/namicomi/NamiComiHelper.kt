@@ -34,8 +34,8 @@ class NamiComiHelper(lang: String) {
 
     val intl = Intl(
         language = lang,
-        baseLanguage = NamiComiConstants.english,
-        availableLanguages = setOf(NamiComiConstants.english),
+        baseLanguage = NamiComiConstants.ENGLISH,
+        availableLanguages = setOf(NamiComiConstants.ENGLISH),
         classLoader = this::class.java.classLoader!!,
         createMessageFileName = { lang -> Intl.createDefaultMessageFileName(lang) },
     )
@@ -43,20 +43,17 @@ class NamiComiHelper(lang: String) {
     /**
      * Get the manga offset pages are 1 based, so subtract 1
      */
-    fun getMangaListOffset(page: Int): String = (NamiComiConstants.mangaLimit * (page - 1)).toString()
+    fun getMangaListOffset(page: Int): String = (NamiComiConstants.MANGA_LIMIT * (page - 1)).toString()
 
-    private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int {
-        return when (mangaDataDto.attributes!!.publicationStatus) {
-            StatusDto.ONGOING -> SManga.ONGOING
-            StatusDto.CANCELLED -> SManga.CANCELLED
-            StatusDto.COMPLETED -> SManga.COMPLETED
-            StatusDto.HIATUS -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun getPublicationStatus(mangaDataDto: MangaDataDto): Int = when (mangaDataDto.attributes!!.publicationStatus) {
+        StatusDto.ONGOING -> SManga.ONGOING
+        StatusDto.CANCELLED -> SManga.CANCELLED
+        StatusDto.COMPLETED -> SManga.COMPLETED
+        StatusDto.HIATUS -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 
-    private fun parseDate(dateAsString: String): Long =
-        NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
+    private fun parseDate(dateAsString: String): Long = NamiComiConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
     /**
      * Create an [SManga] from the JSON element with all attributes filled.
@@ -119,8 +116,8 @@ class NamiComiHelper(lang: String) {
 
             coverFileName?.let {
                 thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
-                    true -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                    else -> "${NamiComiConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                    true -> "${NamiComiConstants.CDN_URL}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                    else -> "${NamiComiConstants.CDN_URL}/covers/${mangaDataDto.id}/$coverFileName"
                 }
             }
         }

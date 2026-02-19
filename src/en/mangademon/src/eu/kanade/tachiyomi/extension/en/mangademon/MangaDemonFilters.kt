@@ -37,10 +37,11 @@ class CheckBoxFilter(
     val value: String,
 ) : Filter.CheckBox(name)
 
-class GenreFilter : Filter.Group<CheckBoxFilter>(
-    "Genre",
-    genres.map { CheckBoxFilter(it.first, it.second) },
-) {
+class GenreFilter :
+    Filter.Group<CheckBoxFilter>(
+        "Genre",
+        genres.map { CheckBoxFilter(it.first, it.second) },
+    ) {
     val checked get() = state.filter { it.state }.map { it.value }
 
     companion object {

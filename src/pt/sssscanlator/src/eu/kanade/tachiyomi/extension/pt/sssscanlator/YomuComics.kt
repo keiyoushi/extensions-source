@@ -25,7 +25,9 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
-class YomuComics : HttpSource(), ConfigurableSource {
+class YomuComics :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Yomu Comics"
 
@@ -114,9 +116,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/home", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/home", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val homeDto = response.parseAs<HomeDto>()
@@ -125,9 +125,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/updates?page=$page&limit=50", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/updates?page=$page&limit=50", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesDto = response.parseAs<UpdatesDto>()
@@ -169,6 +167,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
                         url.addQueryParameter("genre", filter.toUriPart())
                     }
                 }
+
                 is TypeFilter -> {
                     if (filter.state != 0) {
                         val part = filter.toUriPart()
@@ -178,16 +177,19 @@ class YomuComics : HttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.state != 0) {
                         url.addQueryParameter("status", filter.toUriPart())
                     }
                 }
+
                 is AdultFilter -> {
                     if (filter.state) {
                         url.addQueryParameter("showAdult", "true")
                     }
                 }
+
                 else -> {}
             }
         }
@@ -232,9 +234,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
     // =============================== Chapters =============================
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val seriesDto = response.parseAs<SeriesDto>()
@@ -265,9 +265,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

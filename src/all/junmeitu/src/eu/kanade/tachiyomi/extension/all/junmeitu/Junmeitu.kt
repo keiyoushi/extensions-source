@@ -39,18 +39,14 @@ class Junmeitu : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = "span + a  + a"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/beauty/index-$page.html")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/beauty/index-$page.html")
 
     override fun latestUpdatesSelector() = ".pic-list > ul > li"
 
     // Popular
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/beauty/hot-$page.html")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/beauty/hot-$page.html")
     override fun popularMangaSelector() = latestUpdatesSelector()
 
     // Search

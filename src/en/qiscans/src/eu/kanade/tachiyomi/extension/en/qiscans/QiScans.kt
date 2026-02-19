@@ -19,12 +19,13 @@ import rx.Observable
 import rx.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 
-class QiScans : Iken(
-    "Qi Scans",
-    "en",
-    "https://qiscans.org",
-    "https://api.qiscans.org",
-) {
+class QiScans :
+    Iken(
+        "Qi Scans",
+        "en",
+        "https://qiscans.org",
+        "https://api.qiscans.org",
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
@@ -39,12 +40,11 @@ class QiScans : Iken(
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply { // 'query' instead of 'posts'
+        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
+            // 'query' instead of 'posts'
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", "18")
             addQueryParameter("orderBy", "updatedAt")
@@ -104,24 +104,26 @@ class QiScans : Iken(
         return FilterList(filters)
     }
 
-    private class SortFilter : SelectFilter(
-        "Sort",
-        "orderBy",
-        listOf(
-            Pair("Popularity", "totalViews"),
-            Pair("Latest", "updatedAt"),
-        ),
-    )
+    private class SortFilter :
+        SelectFilter(
+            "Sort",
+            "orderBy",
+            listOf(
+                Pair("Popularity", "totalViews"),
+                Pair("Latest", "updatedAt"),
+            ),
+        )
 
-    private class StatusFilter : SelectFilter(
-        "Status",
-        "seriesStatus",
-        listOf(
-            Pair("All", ""),
-            Pair("Ongoing", "ONGOING"),
-            Pair("Hiatus", "HIATUS"),
-            Pair("Completed", "COMPLETED"),
-            Pair("Dropped", "DROPPED"),
-        ),
-    )
+    private class StatusFilter :
+        SelectFilter(
+            "Status",
+            "seriesStatus",
+            listOf(
+                Pair("All", ""),
+                Pair("Ongoing", "ONGOING"),
+                Pair("Hiatus", "HIATUS"),
+                Pair("Completed", "COMPLETED"),
+                Pair("Dropped", "DROPPED"),
+            ),
+        )
 }

@@ -33,7 +33,9 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.floor
 
-class Picacomic : HttpSource(), ConfigurableSource {
+class Picacomic :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "哔咔漫画"
@@ -236,11 +238,9 @@ class Picacomic : HttpSource(), ConfigurableSource {
         return POST(url, picaHeaders(url, "POST"), body)
     }
 
-    private fun hitBlocklist(comic: PicaSearchComic): Boolean {
-        return ((comic.tags ?: (emptyList<String>() + comic.categories)))
-            .map(String::trim)
-            .any { it in blocklist }
-    }
+    private fun hitBlocklist(comic: PicaSearchComic): Boolean = ((comic.tags ?: (emptyList<String>() + comic.categories)))
+        .map(String::trim)
+        .any { it in blocklist }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.toString().contains("/comics/leaderboard".toRegex())) {
@@ -266,8 +266,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, comics.page < comics.pages)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(manga.url, picaHeaders(manga.url))
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, picaHeaders(manga.url))
 
     override fun mangaDetailsParse(response: Response): SManga {
         val comic = json.decodeFromString<PicaResponse>(
@@ -360,46 +359,48 @@ class Picacomic : HttpSource(), ConfigurableSource {
         RankFilter(),
     )
 
-    private class SortFilter : UriPartFilter(
-        "排序",
-        arrayOf(
-            "新到旧" to "dd",
-            "旧到新" to "da",
-            "最多爱心" to "ld",
-            "最多绅士指名" to "vd",
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "排序",
+            arrayOf(
+                "新到旧" to "dd",
+                "旧到新" to "da",
+                "最多爱心" to "ld",
+                "最多绅士指名" to "vd",
+            ),
+        )
 
-    private class CategoryFilter : UriPartFilter(
-        "类型",
-        arrayOf("全部" to "") + arrayOf(
-            "大家都在看", "牛牛不哭", "那年今天", "官方都在看",
-            "嗶咔漢化", "全彩", "長篇", "同人", "短篇", "圓神領域",
-            "碧藍幻想", "CG雜圖", "純愛", "百合花園", "後宮閃光", "單行本", "姐姐系",
-            "妹妹系", "SM", "人妻", "NTR", "強暴",
-            "艦隊收藏", "Love Live", "SAO 刀劍神域", "Fate",
-            "東方", "禁書目錄", "Cosplay",
-            "英語 ENG", "生肉", "性轉換", "足の恋", "非人類",
-            "耽美花園", "偽娘哲學", "扶他樂園", "重口地帶", "歐美", "WEBTOON",
-        ).map { it to it }.toTypedArray(),
-    )
+    private class CategoryFilter :
+        UriPartFilter(
+            "类型",
+            arrayOf("全部" to "") + arrayOf(
+                "大家都在看", "牛牛不哭", "那年今天", "官方都在看",
+                "嗶咔漢化", "全彩", "長篇", "同人", "短篇", "圓神領域",
+                "碧藍幻想", "CG雜圖", "純愛", "百合花園", "後宮閃光", "單行本", "姐姐系",
+                "妹妹系", "SM", "人妻", "NTR", "強暴",
+                "艦隊收藏", "Love Live", "SAO 刀劍神域", "Fate",
+                "東方", "禁書目錄", "Cosplay",
+                "英語 ENG", "生肉", "性轉換", "足の恋", "非人類",
+                "耽美花園", "偽娘哲學", "扶他樂園", "重口地帶", "歐美", "WEBTOON",
+            ).map { it to it }.toTypedArray(),
+        )
 
-    private class RankFilter : UriPartFilter(
-        "榜单",
-        arrayOf(
-            Pair("无", ""),
-            Pair("过去24小时最热门", "/comics/leaderboard?tt=H24&ct=VC"),
-            Pair("过去7天最热门", "/comics/leaderboard?tt=D7&ct=VC"),
-            Pair("过去30天最热门", "/comics/leaderboard?tt=D30&ct=VC"),
-        ),
-    )
+    private class RankFilter :
+        UriPartFilter(
+            "榜单",
+            arrayOf(
+                Pair("无", ""),
+                Pair("过去24小时最热门", "/comics/leaderboard?tt=H24&ct=VC"),
+                Pair("过去7天最热门", "/comics/leaderboard?tt=D7&ct=VC"),
+                Pair("过去30天最热门", "/comics/leaderboard?tt=D30&ct=VC"),
+            ),
+        )
 
     private open class UriPartFilter(
         displayName: String,
         val vals: Array<Pair<String, String>>,
         defaultValue: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultValue) {
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultValue) {
         open fun toUriPart() = vals[state].second
     }
 

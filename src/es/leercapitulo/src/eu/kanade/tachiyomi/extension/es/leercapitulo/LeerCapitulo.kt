@@ -72,6 +72,7 @@ class LeerCapitulo : ParsedHttpSource() {
                             break
                         }
                     }
+
                     is AlphabeticFilter -> {
                         if (filter.state != 0) {
                             urlBuilder.addPathSegment("initial")
@@ -79,6 +80,7 @@ class LeerCapitulo : ParsedHttpSource() {
                             break
                         }
                     }
+
                     is StatusFilter -> {
                         if (filter.state != 0) {
                             urlBuilder.addPathSegment("status")
@@ -86,6 +88,7 @@ class LeerCapitulo : ParsedHttpSource() {
                             break
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -124,15 +127,13 @@ class LeerCapitulo : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = "ul.pagination > li.active + li"
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Los filtros serán ignorados si se realiza una búsqueda por texto."),
-            Filter.Header("Los filtros no se pueden combinar  entre ellos."),
-            GenreFilter(),
-            AlphabeticFilter(),
-            StatusFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Los filtros serán ignorados si se realiza una búsqueda por texto."),
+        Filter.Header("Los filtros no se pueden combinar  entre ellos."),
+        GenreFilter(),
+        AlphabeticFilter(),
+        StatusFilter(),
+    )
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
@@ -226,8 +227,7 @@ class LeerCapitulo : ParsedHttpSource() {
         else -> attr("abs:src")
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun String.toStatus() = when (this) {
         "Ongoing" -> SManga.ONGOING

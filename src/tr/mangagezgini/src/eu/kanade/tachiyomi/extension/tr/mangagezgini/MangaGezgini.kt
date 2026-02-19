@@ -9,12 +9,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaGezgini : Madara(
-    "MangaGezgini",
-    "https://mangagezgini.love",
-    "tr",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class MangaGezgini :
+    Madara(
+        "MangaGezgini",
+        "https://mangagezgini.love",
+        "tr",
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val chapterUrlSelector = "> a"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
@@ -22,9 +23,8 @@ class MangaGezgini : Madara(
 
     private var captchaUrl: String? = null
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-            ?: super.mangaDetailsRequest(manga)
+    override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
+        ?: super.mangaDetailsRequest(manga)
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst(".reading-content form, .reading-content input[value=Doğrula]") != null) {

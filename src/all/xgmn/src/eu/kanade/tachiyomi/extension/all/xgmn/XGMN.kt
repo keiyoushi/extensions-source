@@ -78,24 +78,23 @@ class XGMN : HttpSource() {
         return GET(url.build())
     }
 
-    override fun searchMangaParse(response: Response) =
-        if (response.request.url.pathSegments.contains("search")) {
-            val doc = response.asJsoup()
-            redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
-            val current = doc.selectFirst(".current")!!.text().toInt()
-            MangasPage(
-                doc.select(".node > p > a").map {
-                    SManga.create().apply {
-                        title = it.text()
-                        setUrlWithoutDomain(it.absUrl("href"))
-                        thumbnail_url = "$baseUrl/uploadfile/pic/${ID_REGEX.find(url)?.value}.jpg"
-                    }
-                },
-                current < doc.select(".list .pagination a").size,
-            )
-        } else {
-            popularMangaParse(response)
-        }
+    override fun searchMangaParse(response: Response) = if (response.request.url.pathSegments.contains("search")) {
+        val doc = response.asJsoup()
+        redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
+        val current = doc.selectFirst(".current")!!.text().toInt()
+        MangasPage(
+            doc.select(".node > p > a").map {
+                SManga.create().apply {
+                    title = it.text()
+                    setUrlWithoutDomain(it.absUrl("href"))
+                    thumbnail_url = "$baseUrl/uploadfile/pic/${ID_REGEX.find(url)?.value}.jpg"
+                }
+            },
+            current < doc.select(".list .pagination a").size,
+        )
+    } else {
+        popularMangaParse(response)
+    }
 
     // Manga Detail Page
 

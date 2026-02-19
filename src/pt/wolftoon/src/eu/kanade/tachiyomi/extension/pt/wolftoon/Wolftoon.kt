@@ -124,16 +124,19 @@ class Wolftoon : HttpSource() {
                                 it.status.equals(filter.selected, ignoreCase = true)
                             }
                         }
+
                         is TypeFilter -> {
                             mangas = mangas.filter {
                                 it.type.equals(filter.selected, ignoreCase = true)
                             }
                         }
+
                         is GenreFilter -> {
                             mangas = mangas.filter { dto ->
                                 dto.genres.any { it.equals(filter.selected, ignoreCase = true) }
                             }
                         }
+
                         is OrderBy -> {
                             mangas = when (filter.selected.lowercase()) {
                                 "mais popular" -> mangas.sortedByDescending { it.views }
@@ -142,6 +145,7 @@ class Wolftoon : HttpSource() {
                                 else -> mangas
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -166,8 +170,7 @@ class Wolftoon : HttpSource() {
         return GET(url, apiHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<List<MangaDto>>().first().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<List<MangaDto>>().first().toSManga()
 
     // ================================ Chapters =======================================
 
@@ -184,25 +187,22 @@ class Wolftoon : HttpSource() {
         return GET(url, apiHeaders)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<List<ChapterDto>>().map { it.toSChapter() }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<ChapterDto>>().map { it.toSChapter() }
 
     // ================================ Pages =======================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.fromCallable {
-            val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-            val chapterId = chapterUrl.fragment
-            val titleId = chapterUrl.pathSegments[1]
-            val url = "$supabaseUrl/rest/v1/chapters".toHttpUrl().newBuilder()
-                .addQueryParameter("select", "id,title_id,images")
-                .addQueryParameter("title_id", "eq.$titleId")
-                .addQueryParameter("order", "chapter_number.desc")
-                .addQueryParameter("apikey", apiKey)
-                .fragment(chapterId)
-                .build()
-            pageListParse(client.newCall(GET(url, apiHeaders)).execute())
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val chapterUrl = getChapterUrl(chapter).toHttpUrl()
+        val chapterId = chapterUrl.fragment
+        val titleId = chapterUrl.pathSegments[1]
+        val url = "$supabaseUrl/rest/v1/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "id,title_id,images")
+            .addQueryParameter("title_id", "eq.$titleId")
+            .addQueryParameter("order", "chapter_number.desc")
+            .addQueryParameter("apikey", apiKey)
+            .fragment(chapterId)
+            .build()
+        pageListParse(client.newCall(GET(url, apiHeaders)).execute())
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -213,8 +213,7 @@ class Wolftoon : HttpSource() {
             ?: emptyList()
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ================================ Filters =======================================
 
@@ -245,6 +244,7 @@ class Wolftoon : HttpSource() {
 
         when {
             genreList.isNotEmpty() -> filters += GenreFilter("Gêneros", genreList)
+
             else -> filters += listOf(
                 Filter.Separator(),
                 Filter.Header("Aperte 'Redefinir' para tentar mostrar os gêneros"),

@@ -52,9 +52,7 @@ class AuthorDto(
     val firstName: String? = null,
     val lastName: String? = null,
 ) {
-    override fun toString(): String {
-        return listOfNotNull(firstName, lastName).joinToString(" ").trim()
-    }
+    override fun toString(): String = listOfNotNull(firstName, lastName).joinToString(" ").trim()
 }
 
 @Serializable

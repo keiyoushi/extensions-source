@@ -75,30 +75,27 @@ class KairosToons : HttpSource() {
 
     // ======================== Chapters ========================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.fromCallable {
-            mutableListOf<SChapter>().apply {
-                val urlBuilder = getMangaUrl(manga).toHttpUrl().newBuilder()
-                var page = 1
-                do {
-                    val url = urlBuilder
-                        .setQueryParameter("page", (page++).toString())
-                        .build()
-                    val document = client.newCall(GET(url, headers)).execute().asJsoup()
-                    addAll(chapterListParse(document))
-                } while (document.selectFirst(hasNextPageSelector) != null)
-            }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        mutableListOf<SChapter>().apply {
+            val urlBuilder = getMangaUrl(manga).toHttpUrl().newBuilder()
+            var page = 1
+            do {
+                val url = urlBuilder
+                    .setQueryParameter("page", (page++).toString())
+                    .build()
+                val document = client.newCall(GET(url, headers)).execute().asJsoup()
+                addAll(chapterListParse(document))
+            } while (document.selectFirst(hasNextPageSelector) != null)
         }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    private fun chapterListParse(document: Document): List<SChapter> {
-        return document.select(".chapter-item-list a.chapter-link").map { element ->
-            SChapter.create().apply {
-                name = element.selectFirst(".chapter-number")!!.text()
-                date_upload = DATE_FORMAT.tryParse(element.selectFirst(".chapter-date")?.ownText())
-                setUrlWithoutDomain(element.absUrl("href"))
-            }
+    private fun chapterListParse(document: Document): List<SChapter> = document.select(".chapter-item-list a.chapter-link").map { element ->
+        SChapter.create().apply {
+            name = element.selectFirst(".chapter-number")!!.text()
+            date_upload = DATE_FORMAT.tryParse(element.selectFirst(".chapter-date")?.ownText())
+            setUrlWithoutDomain(element.absUrl("href"))
         }
     }
 

@@ -12,32 +12,35 @@ open class UriPartFilter(
     private val query: String,
     private val vals: Array<Pair<String, String>>,
     state: Int = 0,
-) : UriFilter, Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         builder.addQueryParameter(query, vals[state].second)
     }
 }
 
-class StatusFilter : UriPartFilter(
-    "Status",
-    "status",
-    arrayOf(
-        "All" to "",
-        "Ongoing" to "ongoing",
-        "Completed" to "completed",
-    ),
-)
+class StatusFilter :
+    UriPartFilter(
+        "Status",
+        "status",
+        arrayOf(
+            "All" to "",
+            "Ongoing" to "ongoing",
+            "Completed" to "completed",
+        ),
+    )
 
-class SortFilter(state: Int = 1) : UriPartFilter(
-    "Sort by",
-    "sort",
-    arrayOf(
-        "Recently updated" to "",
-        "Most viewed" to "most_viewed",
-        "Most viewed today" to "most_viewed_today",
-    ),
-    state,
-)
+class SortFilter(state: Int = 1) :
+    UriPartFilter(
+        "Sort by",
+        "sort",
+        arrayOf(
+            "Recently updated" to "",
+            "Most viewed" to "most_viewed",
+            "Most viewed today" to "most_viewed_today",
+        ),
+        state,
+    )
 
 data class Genre(val name: String, val path: String) {
     override fun toString() = name

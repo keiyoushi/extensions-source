@@ -44,8 +44,6 @@ class Mangaforfreecom : Madara("Mangaforfree.com", "https://mangaforfree.com", "
             .hostnameVerifier { _, _ -> true }.build()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document)
-            .onEach { it.imageUrl = it.imageUrl!!.replace("http://", "https://") }
-    }
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document)
+        .onEach { it.imageUrl = it.imageUrl!!.replace("http://", "https://") }
 }

@@ -55,14 +55,12 @@ class ReadAllComics : ParsedHttpSource() {
     override fun popularMangaSelector() = "#post-area > div"
     override fun popularMangaNextPageSelector() = "a.page-numbers.next"
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it) }
-        } else {
-            Observable.just(searchPageParse(page))
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (page == 1) {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it) }
+    } else {
+        Observable.just(searchPageParse(page))
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -129,10 +127,8 @@ class ReadAllComics : ParsedHttpSource() {
         name = element.attr("title")
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
-            Page(idx, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
+        Page(idx, "", element.attr("abs:src"))
     }
 
     private fun String.titleCaseWords(): String {
@@ -140,14 +136,9 @@ class ReadAllComics : ParsedHttpSource() {
         return words.joinToString(" ") { word -> word.replaceFirstChar { it.titlecase() } }
     }
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 }

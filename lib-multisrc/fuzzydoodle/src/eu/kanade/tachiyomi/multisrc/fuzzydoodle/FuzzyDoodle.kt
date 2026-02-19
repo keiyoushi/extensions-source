@@ -39,8 +39,7 @@ abstract class FuzzyDoodle(
         .add("Referer", "$baseUrl/")
 
     // Popular
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/manga?page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?page=$page", headers)
 
     override fun popularMangaSelector() = "div#card-real"
     override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
@@ -66,26 +65,22 @@ abstract class FuzzyDoodle(
     // latest
     protected open val latestFromHomePage = false
 
-    override fun latestUpdatesRequest(page: Int) =
-        if (latestFromHomePage) {
-            latestHomePageRequest(page)
-        } else {
-            latestPageRequest(page)
-        }
+    override fun latestUpdatesRequest(page: Int) = if (latestFromHomePage) {
+        latestHomePageRequest(page)
+    } else {
+        latestPageRequest(page)
+    }
 
-    protected open fun latestHomePageRequest(page: Int) =
-        GET("$baseUrl/?page=$page", headers)
+    protected open fun latestHomePageRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
-    protected open fun latestPageRequest(page: Int) =
-        GET("$baseUrl/latest?page=$page", headers)
+    protected open fun latestPageRequest(page: Int) = GET("$baseUrl/latest?page=$page", headers)
 
-    override fun latestUpdatesSelector() =
-        if (latestFromHomePage) {
-            "section:has(h2:containsOwn(Recent Chapters)) div#card-real," +
-                " section:has(h2:containsOwn(Chapitres récents)) div#card-real"
-        } else {
-            popularMangaSelector()
-        }
+    override fun latestUpdatesSelector() = if (latestFromHomePage) {
+        "section:has(h2:containsOwn(Recent Chapters)) div#card-real," +
+            " section:has(h2:containsOwn(Chapitres récents)) div#card-real"
+    } else {
+        popularMangaSelector()
+    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -222,13 +217,11 @@ abstract class FuzzyDoodle(
         }
     }
 
-    protected fun Element.getInfo(text: String): String? =
-        selectFirst("p:has(span:containsOwn($text)) span.capitalize")
-            ?.ownText()
-            ?.trim()
+    protected fun Element.getInfo(text: String): String? = selectFirst("p:has(span:containsOwn($text)) span.capitalize")
+        ?.ownText()
+        ?.trim()
 
-    protected fun String?.removePlaceHolder(): String? =
-        takeUnless { it == "-" }
+    protected fun String?.removePlaceHolder(): String? = takeUnless { it == "-" }
 
     // chapters
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -238,7 +231,9 @@ abstract class FuzzyDoodle(
             var page = 1
             do {
                 val doc = when {
-                    isEmpty() -> response // First page
+                    isEmpty() -> response
+
+                    // First page
                     else -> {
                         page++
                         client.newCall(GET("$originalUrl?page=$page", headers)).execute()
@@ -272,46 +267,47 @@ abstract class FuzzyDoodle(
             listOf("detik", "segundo", "second", "วินาที").any { contains(it, true) } -> {
                 cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
             }
+
             listOf("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").any { contains(it, true) } -> {
                 cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
             }
+
             listOf("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة", "小时").any { contains(it, true) } -> {
                 cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
             }
+
             listOf("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام", "天").any { contains(it, true) } -> {
                 cal.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
             }
+
             listOf("week", "sema").any { contains(it, true) } -> {
                 cal.apply { add(Calendar.WEEK_OF_YEAR, -number) }.timeInMillis
             }
+
             listOf("month", "mes").any { it in this } -> {
                 cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
             }
+
             listOf("year", "año").any { it in this } -> {
                 cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
             }
+
             else -> 0L
         }
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#chapter-container > img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#chapter-container > img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.imgAttr())
     }
 
-    private fun Element.imgAttr(): String {
-        return when {
-            hasAttr("srcset") -> attr("srcset").substringBefore(" ")
-            hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-            hasAttr("data-src") -> absUrl("data-src")
-            hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-            else -> absUrl("src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("srcset") -> attr("srcset").substringBefore(" ")
+        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+        hasAttr("data-src") -> absUrl("data-src")
+        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+        else -> absUrl("src")
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

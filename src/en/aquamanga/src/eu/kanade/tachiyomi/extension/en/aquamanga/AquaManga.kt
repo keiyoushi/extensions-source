@@ -41,7 +41,9 @@ class AquaManga : Madara("Aqua Manga", "https://aquareader.net", "en") {
     private val chromiumBrowserValue = "org.chromium.chrome"
 
     private val randomValue = when {
-        Random.nextInt(1, 11) == 1 -> chromiumBrowserValue // 10% chance
+        Random.nextInt(1, 11) == 1 -> chromiumBrowserValue
+
+        // 10% chance
         else -> randomStringValue // 90% chance
     }
 

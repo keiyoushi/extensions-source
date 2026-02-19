@@ -28,20 +28,16 @@ class BroccoliSoup : HttpSource() {
 
     // Popular
 
-    private fun createManga(): SManga {
-        return SManga.create().apply {
-            title = "Broccoli Soup"
-            url = "/comic/archive"
-            author = "Secret Pie"
-            artist = author
-            description = " Hello there! How is the Weather? This comic is made by me, Secret Pie. I am a pie with legs who draws comics and makes music. I am also an entomologist."
-            thumbnail_url = "https://politeandgood.com/assets/images/static/Bocki%20(correct%20size).png"
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        title = "Broccoli Soup"
+        url = "/comic/archive"
+        author = "Secret Pie"
+        artist = author
+        description = " Hello there! How is the Weather? This comic is made by me, Secret Pie. I am a pie with legs who draws comics and makes music. I am also an entomologist."
+        thumbnail_url = "https://politeandgood.com/assets/images/static/Bocki%20(correct%20size).png"
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(createManga()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -63,9 +59,7 @@ class BroccoliSoup : HttpSource() {
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(createManga().apply { initialized = true })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
@@ -73,12 +67,10 @@ class BroccoliSoup : HttpSource() {
 
     private val characterSummaryPathSlug = "comic-characters"
 
-    private fun createCharacterSummaryChapter(): SChapter {
-        return SChapter.create().apply {
-            url = "/$characterSummaryPathSlug"
-            name = "Characters"
-            chapter_number = 0f
-        }
+    private fun createCharacterSummaryChapter(): SChapter = SChapter.create().apply {
+        url = "/$characterSummaryPathSlug"
+        name = "Characters"
+        chapter_number = 0f
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -136,31 +128,31 @@ class BroccoliSoup : HttpSource() {
 
     // Pages
 
-    private fun characterSummaryPageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("section.static-block:has(figure, .block-content)")
-            .flatMap { sectionElement ->
-                val headerText = sectionElement
-                    .selectFirst("section > :is(h1, h2, h3, h4)")
-                    ?.text()?.trim()
+    private fun characterSummaryPageListParse(response: Response): List<Page> = response.asJsoup().select("section.static-block:has(figure, .block-content)")
+        .flatMap { sectionElement ->
+            val headerText = sectionElement
+                .selectFirst("section > :is(h1, h2, h3, h4)")
+                ?.text()?.trim()
 
-                val bodyText = sectionElement.selectFirst("div.block-content")
-                    ?.text()?.trim()
+            val bodyText = sectionElement.selectFirst("div.block-content")
+                ?.text()?.trim()
 
-                val imageUrl = sectionElement.selectFirst("figure img")
-                    ?.attr("abs:src")
+            val imageUrl = sectionElement.selectFirst("figure img")
+                ?.attr("abs:src")
 
-                var pageIndex = 0
-                listOfNotNull<Page>(
-                    // The character's name and summary
-                    if (headerText != null || bodyText != null) {
-                        val textUrl = TextInterceptorHelper.createUrl(headerText ?: "", bodyText ?: "")
-                        Page(pageIndex++, "", textUrl)
-                    } else { null },
-                    // The character's image
-                    imageUrl?.let { Page(pageIndex++, "", imageUrl) },
-                )
-            }
-    }
+            var pageIndex = 0
+            listOfNotNull<Page>(
+                // The character's name and summary
+                if (headerText != null || bodyText != null) {
+                    val textUrl = TextInterceptorHelper.createUrl(headerText ?: "", bodyText ?: "")
+                    Page(pageIndex++, "", textUrl)
+                } else {
+                    null
+                },
+                // The character's image
+                imageUrl?.let { Page(pageIndex++, "", imageUrl) },
+            )
+        }
 
     override fun pageListParse(response: Response): List<Page> {
         if (response.request.url.pathSegments.lastOrNull() == characterSummaryPathSlug) {

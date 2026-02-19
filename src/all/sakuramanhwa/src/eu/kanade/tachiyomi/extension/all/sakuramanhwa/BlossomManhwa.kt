@@ -27,7 +27,8 @@ import java.util.Locale
 
 class BlossomManhwa(
     override val lang: String = "all",
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "BlossomManhwa"
 
     override val id = 1781921631032816989
@@ -87,9 +88,7 @@ class BlossomManhwa(
         return lis
     }
 
-    private fun getChapterName(number: Float): String {
-        return if (number % 1 == 0f) "${number.toInt()}" else "$number"
-    }
+    private fun getChapterName(number: Float): String = if (number % 1 == 0f) "${number.toInt()}" else "$number"
 
     // Image
 
@@ -107,9 +106,7 @@ class BlossomManhwa(
 
     // LatestUpdates
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return focusFetchManga(page == 1, this::latestUpdatesRequest, this::latestUpdatesParse)
-    }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = focusFetchManga(page == 1, this::latestUpdatesRequest, this::latestUpdatesParse)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -133,26 +130,22 @@ class BlossomManhwa(
         }
     }
 
-    private fun mangaDetailsToSManga(details: MangaDetails): SManga {
-        return SManga.create().apply {
-            url = "/v1/manga/findBySlug/${details.slug}"
-            title = getTitle(details.title, details.language)
-            genre = buildList {
-                add("lang: ${details.language}")
-                add("type: ${details.type}")
-                details.authors?.forEach { add("author: $it") }
-                details.rating?.also { add("rating: $it") }
-            }.joinToString()
-            status = if (details.status == "ongoing") SManga.ONGOING else SManga.COMPLETED
-            thumbnail_url = "$baseUrl/v1/images/manga${details.img}"
-        }
+    private fun mangaDetailsToSManga(details: MangaDetails): SManga = SManga.create().apply {
+        url = "/v1/manga/findBySlug/${details.slug}"
+        title = getTitle(details.title, details.language)
+        genre = buildList {
+            add("lang: ${details.language}")
+            add("type: ${details.type}")
+            details.authors?.forEach { add("author: $it") }
+            details.rating?.also { add("rating: $it") }
+        }.joinToString()
+        status = if (details.status == "ongoing") SManga.ONGOING else SManga.COMPLETED
+        thumbnail_url = "$baseUrl/v1/images/manga${details.img}"
     }
 
     // Pages
 
-    private fun getTagUrl(tagUrl: String): Pair<String, String> {
-        return Pair(tagUrl.substring(0, 3), tagUrl.substring(3))
-    }
+    private fun getTagUrl(tagUrl: String): Pair<String, String> = Pair(tagUrl.substring(0, 3), tagUrl.substring(3))
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (tag, realUrl) = getTagUrl(chapter.url)
@@ -168,8 +161,7 @@ class BlossomManhwa(
         return Observable.just(lis)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     // Popular
 
@@ -199,9 +191,7 @@ class BlossomManhwa(
         return Observable.just(mangasPage!!)
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return focusFetchManga(page == 1, this::popularMangaRequest, this::popularMangaParse)
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = focusFetchManga(page == 1, this::popularMangaRequest, this::popularMangaParse)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<ApiMangaList>()
@@ -218,14 +208,12 @@ class BlossomManhwa(
         return MangasPage(lis, data.next_page != null)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            baseUrl.toHttpUrl().newBuilder().encodedPath("/v1/manga/views/top")
-                .addQueryParameter("limit", "72").addQueryParameter("page", "$page").build()
-                .toString(),
-            headers,
-        )
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(
+        baseUrl.toHttpUrl().newBuilder().encodedPath("/v1/manga/views/top")
+            .addQueryParameter("limit", "72").addQueryParameter("page", "$page").build()
+            .toString(),
+        headers,
+    )
 
     // Search
 
@@ -233,13 +221,11 @@ class BlossomManhwa(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return focusFetchManga(
-            page == 1,
-            { currentPage -> this.searchMangaRequest(currentPage, query, filters) },
-            this::searchMangaParse,
-        )
-    }
+    ): Observable<MangasPage> = focusFetchManga(
+        page == 1,
+        { currentPage -> this.searchMangaRequest(currentPage, query, filters) },
+        this::searchMangaParse,
+    )
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -268,7 +254,7 @@ class BlossomManhwa(
                 }
             }
 
-            if (groupState == GroupTypeSearch && query.isNotBlank()) {
+            if (groupState == GROUP_TYPE_SEARCH && query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
             addQueryParameter("limit", "72")
@@ -278,15 +264,11 @@ class BlossomManhwa(
         return GET(url, headers)
     }
 
-    private fun getTitle(title: String, lang: String): String {
-        return capitalizeWords(title.removeSuffix(lang))
-    }
+    private fun getTitle(title: String, lang: String): String = capitalizeWords(title.removeSuffix(lang))
 
-    private fun capitalizeWords(str: String): String {
-        return str.split(" ").joinToString(" ") {
-            it.replaceFirstChar { char ->
-                if (char.isLowerCase()) char.titlecase() else char.toString()
-            }
+    private fun capitalizeWords(str: String): String = str.split(" ").joinToString(" ") {
+        it.replaceFirstChar { char ->
+            if (char.isLowerCase()) char.titlecase() else char.toString()
         }
     }
 

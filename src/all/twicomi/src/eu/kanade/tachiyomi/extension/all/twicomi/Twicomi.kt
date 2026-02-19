@@ -59,6 +59,7 @@ class Twicomi : HttpSource() {
                     addPathSegment("author")
                     filters.filterIsInstance<AuthorSortFilter>().firstOrNull()?.addToUrl(this)
                 }
+
                 else -> {
                     addPathSegment("manga")
                     filters.filterIsInstance<MangaSortFilter>().firstOrNull()?.addToUrl(this)
@@ -78,29 +79,27 @@ class Twicomi : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return when (response.request.url.toString().removePrefix(apiUrl).split("/")[1]) {
-            "author" -> {
-                val data = response.parseAs<TwicomiResponse<AuthorListWithCount>>()
-                val manga = data.response.authorList.map { it.author.toSManga() }
+    override fun searchMangaParse(response: Response): MangasPage = when (response.request.url.toString().removePrefix(apiUrl).split("/")[1]) {
+        "author" -> {
+            val data = response.parseAs<TwicomiResponse<AuthorListWithCount>>()
+            val manga = data.response.authorList.map { it.author.toSManga() }
 
-                val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
-                val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
-                val hasNextPage = currentPage * pageLimit < data.response.totalCount
+            val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
+            val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
+            val hasNextPage = currentPage * pageLimit < data.response.totalCount
 
-                MangasPage(manga, hasNextPage)
-            }
-            "manga" -> popularMangaParse(response)
-            else -> throw IllegalArgumentException()
+            MangasPage(manga, hasNextPage)
         }
+
+        "manga" -> popularMangaParse(response)
+
+        else -> throw IllegalArgumentException()
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return when (manga.url.split("/")[1]) {
-            "author" -> baseUrl + manga.url + "/page/1"
-            "manga" -> baseUrl + manga.url.substringBefore("#")
-            else -> throw IllegalArgumentException()
-        }
+    override fun getMangaUrl(manga: SManga): String = when (manga.url.split("/")[1]) {
+        "author" -> baseUrl + manga.url + "/page/1"
+        "manga" -> baseUrl + manga.url.substringBefore("#")
+        else -> throw IllegalArgumentException()
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
@@ -111,12 +110,10 @@ class Twicomi : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("#")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return when (manga.url.split("/")[1]) {
-            "manga" -> Observable.just(listOf(dummyChapterFromManga(manga)))
-            "author" -> super.fetchChapterList(manga)
-            else -> throw IllegalArgumentException()
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = when (manga.url.split("/")[1]) {
+        "manga" -> Observable.just(listOf(dummyChapterFromManga(manga)))
+        "author" -> super.fetchChapterList(manga)
+        else -> throw IllegalArgumentException()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -161,8 +158,7 @@ class Twicomi : HttpSource() {
         }.reversed()
     }
 
-    private fun paginatedChapterListRequest(screenName: String, page: Int) =
-        GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
+    private fun paginatedChapterListRequest(screenName: String, page: Int) = GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
 
     private fun dummyChapterFromManga(manga: SManga) = SChapter.create().apply {
         url = manga.url
@@ -193,11 +189,12 @@ class Twicomi : HttpSource() {
         override fun toString() = title
     }
 
-    open class SortFilter(name: String, private val sortables: Array<Sortable>, state: Selection? = null) : Filter.Sort(
-        name,
-        sortables.map(Sortable::title).toTypedArray(),
-        state,
-    ) {
+    open class SortFilter(name: String, private val sortables: Array<Sortable>, state: Selection? = null) :
+        Filter.Sort(
+            name,
+            sortables.map(Sortable::title).toTypedArray(),
+            state,
+        ) {
         fun addToUrl(url: HttpUrl.Builder) {
             if (state == null) {
                 return
@@ -211,25 +208,27 @@ class Twicomi : HttpSource() {
         }
     }
 
-    class MangaSortFilter : SortFilter(
-        "Sort (Tweet)",
-        arrayOf(
-            Sortable("Date", "create_time"),
-            Sortable("Retweets", "retweet_count"),
-            Sortable("Likes", "good_count"),
-        ),
-        Selection(0, false),
-    )
+    class MangaSortFilter :
+        SortFilter(
+            "Sort (Tweet)",
+            arrayOf(
+                Sortable("Date", "create_time"),
+                Sortable("Retweets", "retweet_count"),
+                Sortable("Likes", "good_count"),
+            ),
+            Selection(0, false),
+        )
 
-    class AuthorSortFilter : SortFilter(
-        "Sort (Author)",
-        arrayOf(
-            Sortable("Followers", "follower_count"),
-            Sortable("Tweets", "manga_tweet_count"),
-            Sortable("Recently tweeted", "latest_manga_tweet_time"),
-        ),
-        Selection(0, false),
-    )
+    class AuthorSortFilter :
+        SortFilter(
+            "Sort (Author)",
+            arrayOf(
+                Sortable("Followers", "follower_count"),
+                Sortable("Tweets", "manga_tweet_count"),
+                Sortable("Recently tweeted", "latest_manga_tweet_time"),
+            ),
+            Selection(0, false),
+        )
 
     private inline fun <reified T> Response.parseAs() = json.decodeFromString<T>(body.string())
 }

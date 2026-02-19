@@ -30,29 +30,23 @@ class MangaShip : ParsedHttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/Tr/PopulerMangalar?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/Tr/PopulerMangalar?page=$page", headers)
 
     override fun popularMangaSelector() = "div.movie-item-contents"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("div.movie-item-title a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("div.movie-item-title a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
+        thumbnail_url = element.select("img").attr("abs:src")
     }
 
     override fun popularMangaNextPageSelector() = "li.active + li a:not(.lastpage)"
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/Tr/YeniMangalar?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/Tr/YeniMangalar?page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -79,34 +73,28 @@ class MangaShip : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            thumbnail_url = document.select("div.dec-review-img img").attr("abs:src")
-            genre = document.select("div.col-md-10 li:contains(Kategori) div a").joinToString { it.text() }
-            author = document.select("div.col-md-10 li:contains(Yazar) div a").text()
-            description = document.select("div.details-dectiontion p").joinToString("\n") { it.text() }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select("div.dec-review-img img").attr("abs:src")
+        genre = document.select("div.col-md-10 li:contains(Kategori) div a").joinToString { it.text() }
+        author = document.select("div.col-md-10 li:contains(Yazar) div a").text()
+        description = document.select("div.details-dectiontion p").joinToString("\n") { it.text() }
     }
 
     // Chapters
 
     override fun chapterListSelector() = "div.item > div"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            element.select("div.plylist-single-content > a[title]").let {
-                name = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("div.plylist-single-content > a[title]").let {
+            name = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
     }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.reading-content-manga img").mapIndexed { i, img ->
-            Page(i, "", img.dataImageAsUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.reading-content-manga img").mapIndexed { i, img ->
+        Page(i, "", img.dataImageAsUrl("src"))
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

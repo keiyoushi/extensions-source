@@ -89,17 +89,13 @@ abstract class FansubsCat(
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiBaseUrl/manga/popular/$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/manga/popular/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaFromJson(response)
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiBaseUrl/manga/recent/$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/manga/recent/$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaFromJson(response)
 
@@ -130,16 +126,12 @@ abstract class FansubsCat(
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(
-            "$apiBaseUrl/manga/details/${manga.url.substringAfterLast('/')}",
-            headers,
-        )
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(
+        "$apiBaseUrl/manga/details/${manga.url.substringAfterLast('/')}",
+        headers,
+    )
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val jsonObject = json.decodeFromString<JsonObject>(response.body.string())
@@ -165,33 +157,25 @@ abstract class FansubsCat(
 
     // Chapters
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(
-            "$apiBaseUrl/manga/chapters/${manga.url.substringAfterLast('/')}",
-            headers,
-        )
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(
+        "$apiBaseUrl/manga/chapters/${manga.url.substringAfterLast('/')}",
+        headers,
+    )
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        parseChapterListFromJson(response)
+    override fun chapterListParse(response: Response): List<SChapter> = parseChapterListFromJson(response)
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(
-            "$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}",
-            headers,
-        )
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(
+        "$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}",
+        headers,
+    )
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/${chapter.url.replace("/", "?f=")}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url.replace("/", "?f=")}"
 
     override fun pageListParse(response: Response): List<Page> = parsePageListFromJson(response)
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filter
     override fun getFilterList() = FilterList(

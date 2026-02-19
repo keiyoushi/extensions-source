@@ -147,19 +147,15 @@ class RaijinScans : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
-    private fun parseStatus(status: String?): Int {
-        return when {
-            status == null -> SManga.UNKNOWN
-            status.contains("En cours", ignoreCase = true) -> SManga.ONGOING
-            status.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("En cours", ignoreCase = true) -> SManga.ONGOING
+        status.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     // ========================= Chapter List ==========================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select("ul.scroll-sm li.item").map(::chapterFromElement)
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("ul.scroll-sm li.item").map(::chapterFromElement)
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val link = element.selectFirst("a")!!
@@ -178,7 +174,9 @@ class RaijinScans : HttpSource() {
 
         return when {
             "aujourd'hui" in lcDate -> cal.timeInMillis
+
             "hier" in lcDate -> cal.apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+
             number != null -> when {
                 ("h" in lcDate || "heure" in lcDate) && "chapitre" !in lcDate -> cal.apply { add(Calendar.HOUR_OF_DAY, -number) }.timeInMillis
                 "min" in lcDate -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
@@ -188,18 +186,17 @@ class RaijinScans : HttpSource() {
                 "an" in lcDate -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
                 else -> 0L
             }
+
             else -> 0L
         }
     }
 
     // ========================== Page List =============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
-            val encodedUrl = element.attr("data-src")
-            val imageUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT))
-            Page(index, imageUrl = imageUrl)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
+        val encodedUrl = element.attr("data-src")
+        val imageUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT))
+        Page(index, imageUrl = imageUrl)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")

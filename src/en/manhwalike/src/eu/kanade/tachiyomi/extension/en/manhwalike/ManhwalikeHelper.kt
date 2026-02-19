@@ -19,27 +19,21 @@ object ManhwalikeHelper {
         .add("X-Requested-With", "XMLHttpRequest")
         .build()
 
-    inline fun <reified T : Any> T.toFormRequestBody(): RequestBody {
-        return FormBody.Builder()
-            .add("keyword", this.toString())
-            .build()
+    inline fun <reified T : Any> T.toFormRequestBody(): RequestBody = FormBody.Builder()
+        .add("keyword", this.toString())
+        .build()
+
+    fun String?.toStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+        this.contains("Ongoing", true) -> SManga.ONGOING
+        this.contains("Finish", true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
-    fun String?.toStatus(): Int {
-        return when {
-            this == null -> SManga.UNKNOWN
-            this.contains("Ongoing", true) -> SManga.ONGOING
-            this.contains("Finish", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-    }
-
-    fun String?.toDate(): Long {
-        return try {
-            dateFormat.parse(this).time
-        } catch (_: Exception) {
-            0L
-        }
+    fun String?.toDate(): Long = try {
+        dateFormat.parse(this).time
+    } catch (_: Exception) {
+        0L
     }
 
     fun Element.toOriginal(): String = when {

@@ -32,12 +32,10 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
         .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1")).build()
 
     // source is picky about URL format
-    private fun mangaRequest(sortBy: String, page: Int): Request {
-        return GET(
-            "$baseUrl/manga-list.html?listType=pagination&page=$page&artist=&author=&group=&m_status=&name=&genre=&ungenre=&magazine=&sort=$sortBy&sort_type=DESC",
-            headers,
-        )
-    }
+    private fun mangaRequest(sortBy: String, page: Int): Request = GET(
+        "$baseUrl/manga-list.html?listType=pagination&page=$page&artist=&author=&group=&m_status=&name=&genre=&ungenre=&magazine=&sort=$sortBy&sort_type=DESC",
+        headers,
+    )
 
     override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
 
@@ -45,28 +43,29 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
 
     override fun popularMangaSelector() = "div.manga-grid div.manga-card"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.selectFirst(".manga-title")!!.let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                title = it.text()
-            }
-            thumbnail_url = getImgAttr(element.selectFirst(".manga-cover"))
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.selectFirst(".manga-title")!!.let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.text()
         }
+        thumbnail_url = getImgAttr(element.selectFirst(".manga-cover"))
     }
 
-    override fun getImgAttr(element: Element?): String? {
-        return when {
-            element == null -> null
-            element.hasAttr("data-original") -> element.attr("abs:data-original")
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-bg") -> element.attr("abs:data-bg")
-            element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
-            element.hasAttr("style") -> element.attr("style").substringAfter("url(")
-                .substringBefore(")").trim('\'', '"')
+    override fun getImgAttr(element: Element?): String? = when {
+        element == null -> null
 
-            else -> element.attr("abs:src")
-        }
+        element.hasAttr("data-original") -> element.attr("abs:data-original")
+
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+
+        element.hasAttr("data-bg") -> element.attr("abs:data-bg")
+
+        element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
+
+        element.hasAttr("style") -> element.attr("style").substringAfter("url(")
+            .substringBefore(")").trim('\'', '"')
+
+        else -> element.attr("abs:src")
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {

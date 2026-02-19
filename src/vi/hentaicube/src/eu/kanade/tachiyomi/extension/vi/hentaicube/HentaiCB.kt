@@ -96,11 +96,9 @@ class HentaiCB :
 
     private val thumbnailOriginalUrlRegex = Regex("-\\d+x\\d+(\\.[a-zA-Z]+)$")
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
-            element.selectFirst("img")?.let { img ->
-                thumbnail_url = imageFromElement(img)?.replace(thumbnailOriginalUrlRegex, "$1")
-            }
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        element.selectFirst("img")?.let { img ->
+            thumbnail_url = imageFromElement(img)?.replace(thumbnailOriginalUrlRegex, "$1")
         }
     }
 
@@ -136,14 +134,10 @@ class HentaiCB :
     private val oldMangaUrlRegex = Regex("^$baseUrl/\\w+/")
 
     // Change old entries from mangaSubString
-    override fun getMangaUrl(manga: SManga): String {
-        return super.getMangaUrl(manga)
-            .replace(oldMangaUrlRegex, "$baseUrl/$mangaSubString/")
-    }
+    override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga)
+        .replace(oldMangaUrlRegex, "$baseUrl/$mangaSubString/")
 
-    override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document).distinctBy { it.imageUrl }
-    }
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).distinctBy { it.imageUrl }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {

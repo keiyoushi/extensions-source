@@ -50,9 +50,7 @@ class KissLove : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/${manga.url}.html"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}.html"
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -85,6 +83,7 @@ class KissLove : HttpSource() {
                     }
 
                     is StatusFilter -> addQueryParameter("status", filter.toUriPart())
+
                     else -> {}
                 }
             }
@@ -112,9 +111,7 @@ class KissLove : HttpSource() {
         return result.toSManga()
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<Manga>()
@@ -214,8 +211,7 @@ class KissLove : HttpSource() {
         intl["completed"] to "Completed",
     )
 
-    private class StatusFilter(name: String, private val status: Array<Pair<String, String>>) :
-        Filter.Select<String>(name, status.map { it.first }.toTypedArray()) {
+    private class StatusFilter(name: String, private val status: Array<Pair<String, String>>) : Filter.Select<String>(name, status.map { it.first }.toTypedArray()) {
         fun toUriPart() = status[state].second
     }
 

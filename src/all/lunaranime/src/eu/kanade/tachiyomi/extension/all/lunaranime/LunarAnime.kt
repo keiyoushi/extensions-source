@@ -78,31 +78,25 @@ class LunarAnime : HttpSource() {
         encodeDefaults = true
     }
 
-    override fun popularMangaRequest(page: Int): Request =
-        buildSearchRequest(
-            page = page,
-            query = "",
-            filters = SearchFilters(sort = SORT_POPULAR, format = FORMAT_MANGA),
-        )
+    override fun popularMangaRequest(page: Int): Request = buildSearchRequest(
+        page = page,
+        query = "",
+        filters = SearchFilters(sort = SORT_POPULAR, format = FORMAT_MANGA),
+    )
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        parseAniSearchPage(response)
+    override fun popularMangaParse(response: Response): MangasPage = parseAniSearchPage(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        buildSearchRequest(
-            page = page,
-            query = "",
-            filters = SearchFilters(sort = SORT_LATEST, format = FORMAT_MANGA),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = buildSearchRequest(
+        page = page,
+        query = "",
+        filters = SearchFilters(sort = SORT_LATEST, format = FORMAT_MANGA),
+    )
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        parseAniSearchPage(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = parseAniSearchPage(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        buildSearchRequest(page, query, filters.toSearchFilters(format = FORMAT_MANGA))
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = buildSearchRequest(page, query, filters.toSearchFilters(format = FORMAT_MANGA))
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        parseAniSearchPage(response)
+    override fun searchMangaParse(response: Response): MangasPage = parseAniSearchPage(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = mangaIdFromUrl(manga.url)
@@ -115,38 +109,28 @@ class LunarAnime : HttpSource() {
         return GET(url.toString(), headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        parseAniDetails(response)
+    override fun mangaDetailsParse(response: Response): SManga = parseAniDetails(response)
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.fromCallable {
-            val mangaId = mangaIdFromUrl(manga.url)
-            fetchVermillionChapters(mangaId)
-                .sortedWith(compareByDescending<SChapter> { it.chapter_number }.thenBy { it.name })
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val mangaId = mangaIdFromUrl(manga.url)
+        fetchVermillionChapters(mangaId)
+            .sortedWith(compareByDescending<SChapter> { it.chapter_number }.thenBy { it.name })
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        throw UnsupportedOperationException("Not used.")
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException("Not used.")
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException("Not used.")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used.")
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.fromCallable {
-            val info = parseChapterUrl(chapter.url)
-            fetchVermillionPages(info)
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val info = parseChapterUrl(chapter.url)
+        fetchVermillionPages(info)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        throw UnsupportedOperationException("Not used.")
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException("Not used.")
 
-    override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException("Not used.")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used.")
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Sort"),
@@ -386,19 +370,16 @@ class LunarAnime : HttpSource() {
         return candidates
     }
 
-    private fun String?.toMangaStatus(): Int {
-        return when (this?.uppercase(Locale.ROOT)) {
-            "RELEASING", "ONGOING" -> SManga.ONGOING
-            "FINISHED", "COMPLETED" -> SManga.COMPLETED
-            "NOT_YET_RELEASED" -> SManga.UNKNOWN
-            "CANCELLED" -> SManga.CANCELLED
-            "HIATUS" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    private fun String?.toMangaStatus(): Int = when (this?.uppercase(Locale.ROOT)) {
+        "RELEASING", "ONGOING" -> SManga.ONGOING
+        "FINISHED", "COMPLETED" -> SManga.COMPLETED
+        "NOT_YET_RELEASED" -> SManga.UNKNOWN
+        "CANCELLED" -> SManga.CANCELLED
+        "HIATUS" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 
-    private fun AniTitle.displayTitle(): String =
-        english ?: romaji ?: native ?: "Unknown"
+    private fun AniTitle.displayTitle(): String = english ?: romaji ?: native ?: "Unknown"
 
     private fun AniMedia.toSManga(url: String): SManga = SManga.create().apply {
         title = this@toSManga.title.english
@@ -436,10 +417,11 @@ class LunarAnime : HttpSource() {
         fun toValue(): Int? = YEAR_VALUES.getOrNull(state)?.toIntOrNull()
     }
 
-    private class GenreFilter : Filter.Group<GenreOption>(
-        "Genres",
-        GENRE_OPTIONS.map { GenreOption(it) },
-    ) {
+    private class GenreFilter :
+        Filter.Group<GenreOption>(
+            "Genres",
+            GENRE_OPTIONS.map { GenreOption(it) },
+        ) {
         fun toGenres(): List<String> = state.filter { it.state }.map { it.name }
     }
 
@@ -556,9 +538,7 @@ class LunarAnime : HttpSource() {
         ;
 
         companion object {
-            fun fromId(@Suppress("UNUSED_PARAMETER") id: String?): ChapterSource {
-                return VERMILLION
-            }
+            fun fromId(@Suppress("UNUSED_PARAMETER") id: String?): ChapterSource = VERMILLION
         }
     }
 

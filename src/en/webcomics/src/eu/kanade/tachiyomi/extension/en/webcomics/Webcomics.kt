@@ -23,7 +23,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Webcomics : HttpSource(), ConfigurableSource {
+class Webcomics :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Webcomics"
 
@@ -63,22 +65,18 @@ class Webcomics : HttpSource(), ConfigurableSource {
         )
         .build()
 
-    private fun Request.isSearchRequest(): Boolean =
-        url.pathSegments.contains("search") || url.pathSegments.count { segment -> segment == "All" } == 1
+    private fun Request.isSearchRequest(): Boolean = url.pathSegments.contains("search") || url.pathSegments.count { segment -> segment == "All" } == 1
 
     private var userAgentList: UserAgentList? = null
 
-    private fun getDesktopUA(): UserAgentList {
-        return userAgentList ?: network.cloudflareClient.newCall(GET(UA_DB_URL))
-            .execute().parseAs<UserAgentList>().also {
-                userAgentList = it
-            }
-    }
+    private fun getDesktopUA(): UserAgentList = userAgentList ?: network.cloudflareClient.newCall(GET(UA_DB_URL))
+        .execute().parseAs<UserAgentList>().also {
+            userAgentList = it
+        }
 
     // ========================== Popular =====================================
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/genres/All/All/Popularity/$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/genres/All/All/Popularity/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -100,8 +98,7 @@ class Webcomics : HttpSource(), ConfigurableSource {
     }
 
     // ========================== Latest =====================================
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/genres/All/All/Latest_Updated/$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/genres/All/All/Latest_Updated/$page", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -228,18 +225,14 @@ class Webcomics : HttpSource(), ConfigurableSource {
 
     // =============================== Utlis ====================================
 
-    private fun String.toPathSegment(): String {
-        return this
-            .replace(PUNCTUATION_REGEX, "")
-            .replace(WHITE_SPACE_REGEX, "-")
-    }
+    private fun String.toPathSegment(): String = this
+        .replace(PUNCTUATION_REGEX, "")
+        .replace(WHITE_SPACE_REGEX, "-")
 
-    fun String.unicode(): String {
-        return UNICODE_REGEX.replace(this) { match ->
-            val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
-            val value = hex.toInt(16)
-            value.toChar().toString()
-        }
+    fun String.unicode(): String = UNICODE_REGEX.replace(this) { match ->
+        val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
+        val value = hex.toInt(16)
+        value.toChar().toString()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

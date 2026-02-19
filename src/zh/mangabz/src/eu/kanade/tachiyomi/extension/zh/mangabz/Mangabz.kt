@@ -24,7 +24,9 @@ import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 import rx.Observable
 
-class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
+class Mangabz :
+    MangabzTheme("Mangabz"),
+    ConfigurableSource {
 
     override val baseUrl: String
     override val client: OkHttpClient

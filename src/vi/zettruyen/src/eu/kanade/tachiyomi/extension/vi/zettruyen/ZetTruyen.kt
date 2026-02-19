@@ -71,8 +71,11 @@ class ZetTruyen : HttpSource() {
         filters.forEach { filter ->
             when (filter) {
                 is SortFilter -> sortValue = filter.toUriPart()
+
                 is StatusFilter -> statusValue = filter.toUriPart()
+
                 is TypeFilter -> typeValue = filter.toUriPart()
+
                 is GenreFilter -> {
                     filter.state.forEach { genre ->
                         if (genre.state) {
@@ -80,6 +83,7 @@ class ZetTruyen : HttpSource() {
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -97,8 +101,7 @@ class ZetTruyen : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        buildSearchRequest(page, query, filters, "latest")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = buildSearchRequest(page, query, filters, "latest")
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
@@ -143,61 +146,55 @@ class ZetTruyen : HttpSource() {
     }
 
     // ============================== Chapters ==============================
-    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> {
-        return rx.Observable.fromCallable {
-            val allChapters = mutableListOf<SChapter>()
-            val slug = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
+    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> = rx.Observable.fromCallable {
+        val allChapters = mutableListOf<SChapter>()
+        val slug = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
 
-            var currentPage = 1
-            var lastPage = 1
+        var currentPage = 1
+        var lastPage = 1
 
-            do {
-                val apiUrl = "$baseUrl/api/comics/$slug/chapters".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", currentPage.toString())
-                    .addQueryParameter("per_page", "100")
-                    .addQueryParameter("order", "desc")
-                    .build()
+        do {
+            val apiUrl = "$baseUrl/api/comics/$slug/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("page", currentPage.toString())
+                .addQueryParameter("per_page", "100")
+                .addQueryParameter("order", "desc")
+                .build()
 
-                val apiHeaders = headers.newBuilder()
-                    .add("Accept", "application/json")
-                    .build()
+            val apiHeaders = headers.newBuilder()
+                .add("Accept", "application/json")
+                .build()
 
-                val request = GET(apiUrl, apiHeaders)
+            val request = GET(apiUrl, apiHeaders)
 
-                val response = client.newCall(request).execute()
-                val result = response.parseAs<ChapterListResponse>()
-                val data = result.data ?: break
+            val response = client.newCall(request).execute()
+            val result = response.parseAs<ChapterListResponse>()
+            val data = result.data ?: break
 
-                lastPage = data.lastPage
+            lastPage = data.lastPage
 
-                data.chapters.forEach { chapter ->
-                    // API uses 'chapter-X' but website uses 'chuong-X'
-                    val chapterSlug = chapter.chapterSlug.replace("chapter-", "chuong-")
-                    allChapters.add(
-                        SChapter.create().apply {
-                            url = "/truyen-tranh/$slug/$chapterSlug"
-                            name = chapter.chapterName
-                            date_upload = chapter.updatedAt?.substringBefore(".")
-                                ?.let { apiDateFormat.tryParse(it) }
-                                ?: 0L
-                        },
-                    )
-                }
+            data.chapters.forEach { chapter ->
+                // API uses 'chapter-X' but website uses 'chuong-X'
+                val chapterSlug = chapter.chapterSlug.replace("chapter-", "chuong-")
+                allChapters.add(
+                    SChapter.create().apply {
+                        url = "/truyen-tranh/$slug/$chapterSlug"
+                        name = chapter.chapterName
+                        date_upload = chapter.updatedAt?.substringBefore(".")
+                            ?.let { apiDateFormat.tryParse(it) }
+                            ?: 0L
+                    },
+                )
+            }
 
-                currentPage++
-            } while (currentPage <= lastPage)
+            currentPage++
+        } while (currentPage <= lastPage)
 
-            allChapters
-        }
+        allChapters
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // ============================== Pages =================================
     override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url, headers)
@@ -213,9 +210,7 @@ class ZetTruyen : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()

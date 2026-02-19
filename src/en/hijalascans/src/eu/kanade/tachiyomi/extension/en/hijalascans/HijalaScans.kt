@@ -7,12 +7,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 
-class HijalaScans : Iken(
-    "Hijala Scans",
-    "en",
-    "https://en-hijala.com",
-    "https://api.en-hijala.com",
-) {
+class HijalaScans :
+    Iken(
+        "Hijala Scans",
+        "en",
+        "https://en-hijala.com",
+        "https://api.en-hijala.com",
+    ) {
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {

@@ -28,22 +28,18 @@ class SwordsComic : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
 
-    private fun createManga(): SManga {
-        return SManga.create().apply {
-            title = "Swords Comic"
-            url = "/archive/pages/"
-            author = "Matthew Wills"
-            artist = author
-            description = "A webcomic about swords and the heroes who wield them"
-            thumbnail_url = "https://swordscomic.com/media/ArgoksEdgeEmote.png"
-        }
+    private fun createManga(): SManga = SManga.create().apply {
+        title = "Swords Comic"
+        url = "/archive/pages/"
+        author = "Matthew Wills"
+        artist = author
+        description = "A webcomic about swords and the heroes who wield them"
+        thumbnail_url = "https://swordscomic.com/media/ArgoksEdgeEmote.png"
     }
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(createManga()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -65,26 +61,22 @@ class SwordsComic : HttpSource() {
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(createManga().apply { initialized = true })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select("a.archive-tile")
-            .map { element ->
-                SChapter.create().apply {
-                    name = element.select("strong").text()
-                    setUrlWithoutDomain(element.attr("href"))
-                    date_upload = element.select("small").text()
-                        .let { SimpleDateFormat("dd MMM yyyy", Locale.US).parse(it)?.time ?: 0L }
-                }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a.archive-tile")
+        .map { element ->
+            SChapter.create().apply {
+                name = element.select("strong").text()
+                setUrlWithoutDomain(element.attr("href"))
+                date_upload = element.select("small").text()
+                    .let { SimpleDateFormat("dd MMM yyyy", Locale.US).parse(it)?.time ?: 0L }
             }
-            .reversed()
-    }
+        }
+        .reversed()
 
     // Pages
 

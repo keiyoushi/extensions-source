@@ -11,10 +11,11 @@ abstract class SelectFilter(
     name: String,
     private val urlParameter: String,
     private val options: List<Pair<String, String>>,
-) : UrlPartFilter, Filter.Select<String>(
+) : Filter.Select<String>(
     name,
     options.map { it.first }.toTypedArray(),
-) {
+),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         url.addQueryParameter(urlParameter, options[state].second)
     }
@@ -26,10 +27,11 @@ abstract class CheckBoxGroup(
     name: String,
     private val urlParameter: String,
     options: List<Pair<String, String>>,
-) : UrlPartFilter, Filter.Group<CheckBoxFilter>(
+) : Filter.Group<CheckBoxFilter>(
     name,
     options.map { CheckBoxFilter(it.first, it.second) },
-) {
+),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         val checked = state.filter { it.state }.map { it.value }
 
@@ -39,34 +41,37 @@ abstract class CheckBoxGroup(
     }
 }
 
-class StatusFilter : SelectFilter(
-    "Status",
-    "seriesStatus",
-    listOf(
-        Pair("", ""),
-        Pair("Ongoing", "ONGOING"),
-        Pair("Completed", "COMPLETED"),
-        Pair("Cancelled", "CANCELLED"),
-        Pair("Dropped", "DROPPED"),
-        Pair("Mass Released", "MASS_RELEASED"),
-        Pair("Coming Soon", "COMING_SOON"),
-    ),
-)
+class StatusFilter :
+    SelectFilter(
+        "Status",
+        "seriesStatus",
+        listOf(
+            Pair("", ""),
+            Pair("Ongoing", "ONGOING"),
+            Pair("Completed", "COMPLETED"),
+            Pair("Cancelled", "CANCELLED"),
+            Pair("Dropped", "DROPPED"),
+            Pair("Mass Released", "MASS_RELEASED"),
+            Pair("Coming Soon", "COMING_SOON"),
+        ),
+    )
 
-class TypeFilter : SelectFilter(
-    "Type",
-    "seriesType",
-    listOf(
-        Pair("", ""),
-        Pair("Manga", "MANGA"),
-        Pair("Manhua", "MANHUA"),
-        Pair("Manhwa", "MANHWA"),
-        Pair("Russian", "RUSSIAN"),
-    ),
-)
+class TypeFilter :
+    SelectFilter(
+        "Type",
+        "seriesType",
+        listOf(
+            Pair("", ""),
+            Pair("Manga", "MANGA"),
+            Pair("Manhua", "MANHUA"),
+            Pair("Manhwa", "MANHWA"),
+            Pair("Russian", "RUSSIAN"),
+        ),
+    )
 
-class GenreFilter(genres: List<Pair<String, String>>) : CheckBoxGroup(
-    "Genres",
-    "genreIds",
-    genres,
-)
+class GenreFilter(genres: List<Pair<String, String>>) :
+    CheckBoxGroup(
+        "Genres",
+        "genreIds",
+        genres,
+    )

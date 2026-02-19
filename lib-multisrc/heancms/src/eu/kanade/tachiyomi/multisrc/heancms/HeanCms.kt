@@ -35,7 +35,8 @@ abstract class HeanCms(
     override val baseUrl: String,
     override val lang: String,
     protected val apiUrl: String = baseUrl.replace("://", "://api."),
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -322,8 +323,7 @@ abstract class HeanCms(
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders())
+    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders())
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<HeanCmsPagePayloadDto>()
@@ -343,9 +343,7 @@ abstract class HeanCms(
         }
     }
 
-    protected open fun String.toAbsoluteUrl(): String {
-        return if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
-    }
+    protected open fun String.toAbsoluteUrl(): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
 
@@ -461,8 +459,7 @@ abstract class HeanCms(
 
     protected inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    protected inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
+    protected inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     private val SharedPreferences.showPaidChapters: Boolean
         get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)

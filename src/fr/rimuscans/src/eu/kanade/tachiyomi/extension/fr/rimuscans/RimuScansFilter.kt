@@ -9,8 +9,7 @@ class TypeFilter(displayName: String, vals: Array<Pair<String, String>>) : UriPa
 class Genre(name: String) : Filter.CheckBox(name)
 class GenreFilter(displayName: String, genres: List<Genre>) : Filter.Group<Genre>(displayName, genres)
 
-open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-    Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart() = vals[state].second
 }
 

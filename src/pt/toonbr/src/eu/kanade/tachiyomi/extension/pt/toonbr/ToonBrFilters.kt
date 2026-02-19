@@ -7,8 +7,7 @@ fun getFilters() = FilterList(
     CategoryFilter("Categoria", getCategories()),
 )
 
-class CategoryFilter(displayName: String, private val categories: List<Pair<String, String>>) :
-    Filter.Select<String>(displayName, categories.map { it.first }.toTypedArray()) {
+class CategoryFilter(displayName: String, private val categories: List<Pair<String, String>>) : Filter.Select<String>(displayName, categories.map { it.first }.toTypedArray()) {
     val selected: String?
         get() = if (state == 0) null else categories.getOrNull(state)?.second
 }

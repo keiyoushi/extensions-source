@@ -41,8 +41,7 @@ class ManhwaXXL : ParsedHttpSource() {
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/hot-releases" + (if (page > 1) "/page/$page" else ""))
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/hot-releases" + (if (page > 1) "/page/$page" else ""))
 
     override fun popularMangaSelector() = "a.comic-tmb"
 
@@ -54,8 +53,7 @@ class ManhwaXXL : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.active:not(:last-child)"
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/latest" + (if (page > 1) "/page/$page" else ""))
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest" + (if (page > 1) "/page/$page" else ""))
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -125,19 +123,15 @@ class ManhwaXXL : ParsedHttpSource() {
         }
     }
 
-    private fun JsonElement?.getContent(key: String): String {
-        return this?.jsonObject?.get(key)?.jsonPrimitive?.content
-            ?: throw Exception("Key $key not found")
-    }
+    private fun JsonElement?.getContent(key: String): String = this?.jsonObject?.get(key)?.jsonPrimitive?.content
+        ?: throw Exception("Key $key not found")
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("section#viewer img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("section#viewer img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("src"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -151,8 +145,7 @@ class ManhwaXXL : ParsedHttpSource() {
         override fun toString() = name
     }
 
-    private class GenreFilter(val genres: Array<Genre>) :
-        Filter.Select<String>("Genre", genres.map { it.name }.toTypedArray())
+    private class GenreFilter(val genres: Array<Genre>) : Filter.Select<String>("Genre", genres.map { it.name }.toTypedArray())
 
     // If you want to add new genres just add the name and id. (eg. https://hentaitnt.net/genre/action) action is the id
     // You can search more here: https://hentaitnt.net/genres

@@ -90,10 +90,9 @@ class Vgperson : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response) = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document) =
-        document.select("img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.attr("src"))
-        }
+    override fun pageListParse(document: Document) = document.select("img").mapIndexed { i, img ->
+        Page(i, imageUrl = img.attr("src"))
+    }
 
     override fun fetchSearchManga(
         page: Int,
@@ -126,8 +125,7 @@ class Vgperson : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
     override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 

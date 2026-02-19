@@ -17,7 +17,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class RimuScans : HttpSource(), ConfigurableSource {
+class RimuScans :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Rimu Scans"
 
@@ -71,21 +73,25 @@ class RimuScans : HttpSource(), ConfigurableSource {
             filters.forEach { filter ->
                 when (filter) {
                     is OrderByFilter -> addQueryParameter("sortBy", filter.toUriPart())
+
                     is GenreFilter -> {
                         filter.state
                             .filter { it.state }
                             .forEach { addQueryParameter("genres", it.name) }
                     }
+
                     is StatusFilter -> {
                         if (filter.state != 0) {
                             addQueryParameter("status", filter.toUriPart())
                         }
                     }
+
                     is TypeFilter -> {
                         if (filter.state != 0) {
                             addQueryParameter("type", filter.toUriPart())
                         }
                     }
+
                     else -> {}
                 }
             }

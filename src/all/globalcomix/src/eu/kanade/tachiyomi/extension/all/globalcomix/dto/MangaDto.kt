@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.globalcomix.dto
 
-import eu.kanade.tachiyomi.extension.all.globalcomix.comic
+import eu.kanade.tachiyomi.extension.all.globalcomix.COMIC
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -10,7 +10,7 @@ typealias MangasDto = PaginatedResponseDto<MangaDataDto>
 
 @Suppress("PropertyName")
 @Serializable
-@SerialName(comic)
+@SerialName(COMIC)
 class MangaDataDto(
     val name: String,
     val description: String?,
@@ -23,27 +23,24 @@ class MangaDataDto(
         /**
          * Create an [SManga] instance from the JSON DTO element.
          */
-        fun MangaDataDto.createManga(): SManga =
-            SManga.create().also {
-                it.initialized = true
-                it.url = id.toString()
-                it.description = description
-                it.author = artist.let { it.roman_name ?: it.name }
-                it.status = status_name?.let(::convertStatus) ?: SManga.UNKNOWN
-                it.genre = category_name
-                it.title = name
-                it.thumbnail_url = image_url
-            }
+        fun MangaDataDto.createManga(): SManga = SManga.create().also {
+            it.initialized = true
+            it.url = id.toString()
+            it.description = description
+            it.author = artist.let { it.roman_name ?: it.name }
+            it.status = status_name?.let(::convertStatus) ?: SManga.UNKNOWN
+            it.genre = category_name
+            it.title = name
+            it.thumbnail_url = image_url
+        }
 
-        private fun convertStatus(status: String): Int {
-            return when (status) {
-                "Ongoing" -> SManga.ONGOING
-                "Preview" -> SManga.ONGOING
-                "Finished" -> SManga.COMPLETED
-                "On hold" -> SManga.ON_HIATUS
-                "Cancelled" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+        private fun convertStatus(status: String): Int = when (status) {
+            "Ongoing" -> SManga.ONGOING
+            "Preview" -> SManga.ONGOING
+            "Finished" -> SManga.COMPLETED
+            "On hold" -> SManga.ON_HIATUS
+            "Cancelled" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
         }
     }
 }

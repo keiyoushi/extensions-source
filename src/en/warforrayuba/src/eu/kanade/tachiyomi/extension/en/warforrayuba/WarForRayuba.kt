@@ -79,21 +79,15 @@ class WarForRayuba : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(apiMangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(apiMangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
-    private fun apiMangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
+    private fun apiMangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl, headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val githubData: RoundDto = json.decodeFromString(response.body.string())
@@ -106,9 +100,7 @@ class WarForRayuba : HttpSource() {
         description = githubData.description
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseJson: RoundDto = json.decodeFromString(response.body.string())
@@ -128,9 +120,7 @@ class WarForRayuba : HttpSource() {
         return chapterList.reversed()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, cubariHeaders)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, cubariHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterData: List<PageDto> = json.decodeFromString(response.body.string())
@@ -142,9 +132,7 @@ class WarForRayuba : HttpSource() {
         return pageList
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return Observable.just(MangasPage(emptyList(), false))
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 

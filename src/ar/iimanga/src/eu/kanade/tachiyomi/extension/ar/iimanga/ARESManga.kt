@@ -10,13 +10,14 @@ import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ARESManga : MangaThemesia(
-    "ARESManga",
-    "https://fl-ares.com",
-    "ar",
-    mangaUrlDirectory = "/series",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
-) {
+class ARESManga :
+    MangaThemesia(
+        "ARESManga",
+        "https://fl-ares.com",
+        "ar",
+        mangaUrlDirectory = "/series",
+        dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
+    ) {
     // Source renamed a while back
     override val id = 230017529540228175
 

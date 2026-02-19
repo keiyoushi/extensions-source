@@ -5,13 +5,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
-class MagComi : GigaViewer(
-    "MAGCOMI",
-    "https://magcomi.com",
-    "ja",
-    "https://cdn-img.magcomi.com/public/page",
-    isPaginated = true,
-) {
+class MagComi :
+    GigaViewer(
+        "MAGCOMI",
+        "https://magcomi.com",
+        "ja",
+        "https://cdn-img.magcomi.com/public/page",
+        isPaginated = true,
+    ) {
 
     override val supportsLatest: Boolean = false
 

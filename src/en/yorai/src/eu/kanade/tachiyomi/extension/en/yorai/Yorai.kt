@@ -20,7 +20,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Locale.getDefault
 
-class Yorai : HttpSource(), ConfigurableSource {
+class Yorai :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Yorai"
     override val baseUrl = "https://yorai.io"
@@ -36,14 +38,10 @@ class Yorai : HttpSource(), ConfigurableSource {
     }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/manga/browse?page=$page&sort=popular", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manga/browse?page=$page&sort=popular", headers)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/manga/browse?page=$page&sort=updated_at", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/manga/browse?page=$page&sort=updated_at", headers)
 
     // Search
     override fun getFilterList(): FilterList = getFilters()
@@ -58,18 +56,22 @@ class Yorai : HttpSource(), ConfigurableSource {
                         addQueryParameter("sort", filter.selected)
                         addQueryParameter("order", if (filter.state!!.ascending) "asc" else "desc")
                     }
+
                     is GenreFilter -> {
                         val (activeFilters, _) = filter.state.partition { stIt -> stIt.state }
                         activeFilters.forEach {
                             genres.add(it.name.lowercase().replace(" ", "_"))
                         }
                     }
+
                     is StatusFilter -> {
                         addQueryParameter("status", filter.selected)
                     }
+
                     is TypeFilter -> {
                         addQueryParameter("type", filter.selected)
                     }
+
                     else -> {}
                 }
             }
@@ -101,9 +103,7 @@ class Yorai : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(apiUrl + manga.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(apiUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<DetailSeries>()
@@ -131,8 +131,7 @@ class Yorai : HttpSource(), ConfigurableSource {
     }
     // Chapters
 
-    override fun chapterListRequest(manga: SManga) =
-        GET(apiUrl + manga.url + "/chapters", headers)
+    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url + "/chapters", headers)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
     override fun chapterListParse(response: Response): List<SChapter> {

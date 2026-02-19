@@ -26,7 +26,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
+class YellowNote :
+    SimpleParsedHttpSource(),
+    ConfigurableSource {
 
     override val id get() = 170542391855030753
 
@@ -67,8 +69,7 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
             .forEach(screen::addPreference)
     }
 
-    override fun simpleMangaSelector() =
-        "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
+    override fun simpleMangaSelector() = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
 
     override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
         val mangaEl = element.selectFirst("a")!!
@@ -86,19 +87,15 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    fun parseUrlFormStyle(element: Element?): String? {
-        return element
-            ?.attr("style")
-            ?.let { styleUrlRegex.find(it) }
-            ?.groupValues
-            ?.get(1)
-    }
+    fun parseUrlFormStyle(element: Element?): String? = element
+        ?.attr("style")
+        ?.let { styleUrlRegex.find(it) }
+        ?.groupValues
+        ?.get(1)
 
-    override fun simpleNextPageSelector() =
-        "div.pager:first-of-type > a.pager-next"
+    override fun simpleNextPageSelector() = "div.pager:first-of-type > a.pager-next"
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/photos/sort-hot/$page.html", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/photos/sort-hot/$page.html", headers)
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/photos/$page.html", headers)
 
@@ -124,20 +121,16 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    private fun parseInfosByIcon(infoCardElement: Element, iconClass: String): List<String>? {
-        return infoCardElement
-            .selectFirst("div.item:has(.icon > $iconClass)")
-            ?.selectFirst("div.text")
-            ?.children()
-            ?.map { it.text() }
-    }
+    private fun parseInfosByIcon(infoCardElement: Element, iconClass: String): List<String>? = infoCardElement
+        .selectFirst("div.item:has(.icon > $iconClass)")
+        ?.selectFirst("div.text")
+        ?.children()
+        ?.map { it.text() }
 
-    private fun parseInfoByIcon(infoCardElement: Element, iconClass: String): String? {
-        return infoCardElement
-            .selectFirst("div.item:has(.icon > $iconClass)")
-            ?.selectFirst("div.text")
-            ?.text()
-    }
+    private fun parseInfoByIcon(infoCardElement: Element, iconClass: String): String? = infoCardElement
+        .selectFirst("div.item:has(.icon > $iconClass)")
+        ?.selectFirst("div.text")
+        ?.text()
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -171,13 +164,11 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
     private val imageSelector =
         "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(imageSelector)
-            .mapIndexed { i, imageElement ->
-                val url = parseUrlFormStyle(imageElement.selectFirst("div.img"))!!
-                Page(i, imageUrl = url)
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(imageSelector)
+        .mapIndexed { i, imageElement ->
+            val url = parseUrlFormStyle(imageElement.selectFirst("div.img"))!!
+            Page(i, imageUrl = url)
+        }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val categorySelector = filters.firstInstance<YellowNoteFilters.CategorySelector>()

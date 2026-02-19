@@ -68,7 +68,7 @@ class Twi4 : HttpSource() {
                         author = manga.select("div.hgroup > p").text()
                         status =
                             if (manga.select("ul:first-child > li:last-child > em.is-completed")
-                                .isEmpty()
+                                    .isEmpty()
                             ) {
                                 SManga.ONGOING
                             } else {
@@ -81,12 +81,9 @@ class Twi4 : HttpSource() {
         return MangasPage(ret, false)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, getChromeHeaders())
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, getChromeHeaders())
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(getUrlDomain() + manga.url, getChromeHeaders())
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getUrlDomain() + manga.url, getChromeHeaders())
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -118,10 +115,12 @@ class Twi4 : HttpSource() {
                         author = staff.select("span").text()
                         artist = staff.select("span").text()
                     }
+
                     // If 作者 and 原作 appear at the same time, 原作 will overwrite the author field
                     "原作" -> {
                         author = staff.select("span").text()
                     }
+
                     "漫画" -> {
                         artist = staff.select("span").text()
                     }
@@ -131,8 +130,7 @@ class Twi4 : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET(getUrlDomain() + manga.url, getChromeHeaders())
+    override fun chapterListRequest(manga: SManga): Request = GET(getUrlDomain() + manga.url, getChromeHeaders())
 
     // They have a <noscript> layout! This is surprising
     // Though their manga pages fails to load as it relies on JS
@@ -171,8 +169,7 @@ class Twi4 : HttpSource() {
         return ret
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(getUrlDomain() + chapter.url, getChromeHeaders())
+    override fun pageListRequest(chapter: SChapter): Request = GET(getUrlDomain() + chapter.url, getChromeHeaders())
 
     override fun pageListParse(response: Response): List<Page> {
         val doc = response.asJsoup()
@@ -262,18 +259,13 @@ class Twi4 : HttpSource() {
     }
 
     // All these functions are unused
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

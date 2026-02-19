@@ -107,14 +107,12 @@ class VolumeChapterDto(
         val createdAt: String,
     )
 
-    fun toChapterList(pathSegment: String): List<SChapter> {
-        return volumes.flatMap(ChapterListDto::chapters).map {
-            SChapter.create().apply {
-                name = it.number.toString()
-                chapter_number = it.number
-                date_upload = DATE_FORMAT.tryParse(it.createdAt)
-                url = "$pathSegment/capitulo/$chapter_number"
-            }
+    fun toChapterList(pathSegment: String): List<SChapter> = volumes.flatMap(ChapterListDto::chapters).map {
+        SChapter.create().apply {
+            name = it.number.toString()
+            chapter_number = it.number
+            date_upload = DATE_FORMAT.tryParse(it.createdAt)
+            url = "$pathSegment/capitulo/$chapter_number"
         }
     }
     companion object {

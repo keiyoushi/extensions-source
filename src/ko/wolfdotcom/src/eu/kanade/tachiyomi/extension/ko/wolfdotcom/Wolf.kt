@@ -37,7 +37,8 @@ open class Wolf(
     private val browsePath: String,
     private val entryPath: String,
     private val readerPath: String,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "늑대닷컴 - $name"
 
@@ -55,13 +56,9 @@ open class Wolf(
 
     private val preference: SharedPreferences by getPreferencesLazy()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, "", POPULAR)
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", POPULAR)
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, "", LATEST)
-    }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", LATEST)
 
     private var searchFilters: List<FilterData> = emptyList()
     private var filterParseError = false
@@ -171,18 +168,16 @@ open class Wolf(
         }.chunked(20)
     }
 
-    private fun paginatedBrowsePage(index: Int): MangasPage {
-        return MangasPage(
-            browseCache[index].map {
-                SManga.create().apply {
-                    url = it.id.toString()
-                    title = it.title
-                    thumbnail_url = it.cover
-                }
-            },
-            browseCache.lastIndex > index,
-        )
-    }
+    private fun paginatedBrowsePage(index: Int): MangasPage = MangasPage(
+        browseCache[index].map {
+            SManga.create().apply {
+                url = it.id.toString()
+                title = it.title
+                thumbnail_url = it.cover
+            }
+        },
+        browseCache.lastIndex > index,
+    )
 
     private val specialChars = Regex("""[^\p{InHangul_Syllables}0-9a-z ]""", RegexOption.IGNORE_CASE)
     private val styleImage = Regex("""background-image:url\(([^)]+)\)""")
@@ -220,16 +215,12 @@ open class Wolf(
             }
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment(entryPath)
-            .addQueryParameter("toon", manga.url)
-            .toString()
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegment(entryPath)
+        .addQueryParameter("toon", manga.url)
+        .toString()
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(getMangaUrl(manga), headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -243,9 +234,7 @@ open class Wolf(
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     @Serializable
     class ChapterUrl(
@@ -281,9 +270,7 @@ open class Wolf(
             .toString()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(getChapterUrl(chapter), headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -382,24 +369,12 @@ open class Wolf(
         return chain.proceed(request)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
-    override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }
 
 private const val PREF_DOMAIN_NUM = "domain_number"

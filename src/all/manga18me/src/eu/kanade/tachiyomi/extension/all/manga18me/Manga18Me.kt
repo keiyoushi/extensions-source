@@ -32,9 +32,7 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
         add("Referer", "$baseUrl/")
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga/$page?orderby=trending", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/$page?orderby=trending", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -71,9 +69,7 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga/$page?orderby=latest", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/$page?orderby=latest", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
     override fun latestUpdatesSelector() = popularMangaSelector()

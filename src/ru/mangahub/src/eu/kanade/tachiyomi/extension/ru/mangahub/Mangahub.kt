@@ -87,16 +87,13 @@ open class Mangahub : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            thumbnail_url = element.selectFirst("img.item-grid-image")?.absUrl("src")
-            title = element.selectFirst("a.fw-medium")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a.fw-medium")!!.absUrl("href"))
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img.item-grid-image")?.absUrl("src")
+        title = element.selectFirst("a.fw-medium")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a.fw-medium")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = ".page-link:contains(→)"
 
@@ -112,40 +109,38 @@ open class Mangahub : ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url + "/chapters", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "/chapters", headers)
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            val authorElement = document.selectFirst(".attr-name:contains(Автор) + .attr-value a")
-            if (authorElement != null) {
-                author = authorElement.text()
-            } else {
-                author = document.selectFirst(".attr-name:contains(Сценарист) + .attr-value a")?.text()
-                artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")?.text()
-            }
-            genre = document.select(".tags a").joinToString { it.text() }
-            description = document.selectFirst(".markdown-style.text-expandable-content")?.text()
-            val statusElement = document.selectFirst(".attr-name:contains(Томов) + .attr-value")?.text()
-            status = when {
-                statusElement?.contains("продолжается") == true -> SManga.ONGOING
-                statusElement?.contains("приостановлен") == true -> SManga.ON_HIATUS
-                statusElement?.contains("завершен") == true || statusElement?.contains("выпуск прекращён") == true ->
-                    if (document.selectFirst(".attr-name:contains(Перевод) + .attr-value")?.text()?.contains("Завершен") == true) {
-                        SManga.COMPLETED
-                    } else {
-                        SManga.PUBLISHING_FINISHED
-                    }
-                else -> SManga.UNKNOWN
-            }
-            thumbnail_url = document.selectFirst("img.cover-detail")?.absUrl("src")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val authorElement = document.selectFirst(".attr-name:contains(Автор) + .attr-value a")
+        if (authorElement != null) {
+            author = authorElement.text()
+        } else {
+            author = document.selectFirst(".attr-name:contains(Сценарист) + .attr-value a")?.text()
+            artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")?.text()
         }
+        genre = document.select(".tags a").joinToString { it.text() }
+        description = document.selectFirst(".markdown-style.text-expandable-content")?.text()
+        val statusElement = document.selectFirst(".attr-name:contains(Томов) + .attr-value")?.text()
+        status = when {
+            statusElement?.contains("продолжается") == true -> SManga.ONGOING
+
+            statusElement?.contains("приостановлен") == true -> SManga.ON_HIATUS
+
+            statusElement?.contains("завершен") == true || statusElement?.contains("выпуск прекращён") == true ->
+                if (document.selectFirst(".attr-name:contains(Перевод) + .attr-value")?.text()?.contains("Завершен") == true) {
+                    SManga.COMPLETED
+                } else {
+                    SManga.PUBLISHING_FINISHED
+                }
+
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = document.selectFirst("img.cover-detail")?.absUrl("src")
     }
 
     override fun chapterListSelector() = "div.py-2.px-3"

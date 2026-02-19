@@ -9,12 +9,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiManga : Madara(
-    "Hentai Manga",
-    "https://hentaimanga.me",
-    "en",
-    dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-) {
+class HentaiManga :
+    Madara(
+        "Hentai Manga",
+        "https://hentaimanga.me",
+        "en",
+        dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
+    ) {
 
     // The website does not flag the content.
     override val filterNonMangaItems = false
@@ -27,11 +28,9 @@ class HentaiManga : Madara(
     override fun searchMangaSelector() = "li.movie-item > a"
     override fun searchMangaNextPageSelector() = "a.next"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.attr("title")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.attr("title")
     }
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {

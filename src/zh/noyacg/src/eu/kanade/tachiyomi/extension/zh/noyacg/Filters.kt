@@ -20,13 +20,17 @@ interface ListingFilter {
 
 interface SearchFilter : ListingFilter
 
-class SearchTypeFilter : SearchFilter, Filter.Select<String>("搜索范围", arrayOf("综合", "标签", "作者")) {
+class SearchTypeFilter :
+    Filter.Select<String>("搜索范围", arrayOf("综合", "标签", "作者")),
+    SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("type", arrayOf("de", "tag", "author")[state])
     }
 }
 
-class SortFilter : SearchFilter, Filter.Select<String>("排序", arrayOf("时间", "阅读量", "收藏")) {
+class SortFilter :
+    Filter.Select<String>("排序", arrayOf("时间", "阅读量", "收藏")),
+    SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("sort", arrayOf("bid", "views", "favorites")[state])
     }
@@ -36,7 +40,9 @@ class RankingFilter : Filter.Select<String>("排行榜", arrayOf("阅读榜", "�
     val path get() = arrayOf("readLeaderboard", "favLeaderboard", "proportion")[state]
 }
 
-class RankingRangeFilter : ListingFilter, Filter.Select<String>("阅读/收藏榜范围", arrayOf("日榜", "周榜", "月榜")) {
+class RankingRangeFilter :
+    Filter.Select<String>("阅读/收藏榜范围", arrayOf("日榜", "周榜", "月榜")),
+    ListingFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("type", arrayOf("day", "week", "moon")[state])
     }

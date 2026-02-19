@@ -29,26 +29,20 @@ abstract class ZManga(
     protected fun pagePathSegment(page: Int): String = if (page > 1) "page/$page/" else ""
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular")
 
     override fun popularMangaSelector() = "div.flexbox2-item"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.select("div.flexbox2-content a").attr("href"))
-            title = element.select("div.flexbox2-title > span").first()!!.text()
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("div.flexbox2-content a").attr("href"))
+        title = element.select("div.flexbox2-title > span").first()!!.text()
+        thumbnail_url = element.select("img").attr("abs:src")
     }
 
     override fun popularMangaNextPageSelector() = "div.pagination .next"
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update")
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -65,9 +59,11 @@ abstract class ZManga(
                 is AuthorFilter -> {
                     url.addQueryParameter("author", filter.state)
                 }
+
                 is YearFilter -> {
                     url.addQueryParameter("yearx", filter.state)
                 }
+
                 is StatusFilter -> {
                     val status = when (filter.state) {
                         Filter.TriState.STATE_INCLUDE -> "completed"
@@ -76,23 +72,28 @@ abstract class ZManga(
                     }
                     url.addQueryParameter("status", status)
                 }
+
                 is TypeFilter -> {
                     url.addQueryParameter("type", filter.toUriPart())
                 }
+
                 is OrderByFilter -> {
                     url.addQueryParameter("order", filter.toUriPart())
                 }
+
                 is GenreList -> {
                     filter.state
                         .filter { it.state }
                         .forEach { url.addQueryParameter("genre[]", it.id) }
                 }
+
                 // if site has project page, default value "hasProjectPage" = false
                 is ProjectFilter -> {
                     if (filter.toUriPart() == "project-filter-on") {
                         url = "$baseUrl$projectPageString/page/$page".toHttpUrl().newBuilder()
                     }
                 }
+
                 else -> {}
             }
         }
@@ -108,29 +109,27 @@ abstract class ZManga(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            thumbnail_url = document.select("div.series-thumb img").attr("abs:src")
-            author = document.select(".series-infolist li:contains(Author) span").text()
-            artist = document.select(".series-infolist li:contains(Artist) span").text()
-            status = parseStatus(document.select(".series-infoz .status").firstOrNull()?.ownText())
-            description = document.select("div.series-synops").text()
-            genre = document.select("div.series-genres a").joinToString { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        thumbnail_url = document.select("div.series-thumb img").attr("abs:src")
+        author = document.select(".series-infolist li:contains(Author) span").text()
+        artist = document.select(".series-infolist li:contains(Artist) span").text()
+        status = parseStatus(document.select(".series-infoz .status").firstOrNull()?.ownText())
+        description = document.select("div.series-synops").text()
+        genre = document.select("div.series-genres a").joinToString { it.text() }
 
-            // add series type(manga/manhwa/manhua/other) thinggy to genre
-            document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
-                if (it.isEmpty().not() && it != "-" && genre!!.contains(it, true).not()) {
-                    genre += if (genre!!.isEmpty()) it else ", $it"
-                }
+        // add series type(manga/manhwa/manhua/other) thinggy to genre
+        document.select(seriesTypeSelector).firstOrNull()?.ownText()?.let {
+            if (it.isEmpty().not() && it != "-" && genre!!.contains(it, true).not()) {
+                genre += if (genre!!.isEmpty()) it else ", $it"
             }
+        }
 
-            // add alternative name to manga description
-            document.select(altNameSelector).firstOrNull()?.ownText()?.let {
-                if (it.isBlank().not()) {
-                    description = when {
-                        description.isNullOrBlank() -> altName + it
-                        else -> description + "\n\n$altName" + it
-                    }
+        // add alternative name to manga description
+        document.select(altNameSelector).firstOrNull()?.ownText()?.let {
+            if (it.isBlank().not()) {
+                description = when {
+                    description.isNullOrBlank() -> altName + it
+                    else -> description + "\n\n$altName" + it
                 }
             }
         }
@@ -147,31 +146,25 @@ abstract class ZManga(
         else -> SManga.UNKNOWN
     }
 
-    private fun parseDate(date: String): Long {
-        return try {
-            dateFormat.parse(date)?.time ?: 0
-        } catch (_: Exception) {
-            0L
-        }
+    private fun parseDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0
+    } catch (_: Exception) {
+        0L
     }
 
     // chapters
     // careful not to include download links
     override fun chapterListSelector() = "ul.series-chapterlist div.flexch-infoz a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.select("span").first()!!.ownText()
-            date_upload = parseDate(element.select("span.date").text())
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        name = element.select("span").first()!!.ownText()
+        date_upload = parseDate(element.select("span.date").text())
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.reader-area img").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img").mapIndexed { i, img ->
+        Page(i, "", img.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -204,13 +197,14 @@ abstract class ZManga(
         return FilterList(filters)
     }
 
-    protected class ProjectFilter : UriPartFilter(
-        "Filter Project",
-        arrayOf(
-            Pair("Show all manga", ""),
-            Pair("Show only project manga", "project-filter-on"),
-        ),
-    )
+    protected class ProjectFilter :
+        UriPartFilter(
+            "Filter Project",
+            arrayOf(
+                Pair("Show all manga", ""),
+                Pair("Show only project manga", "project-filter-on"),
+            ),
+        )
 
     private class AuthorFilter : Filter.Text("Author")
 
@@ -218,29 +212,31 @@ abstract class ZManga(
 
     private class StatusFilter : Filter.TriState("Completed")
 
-    private class TypeFilter : UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "Manga"),
-            Pair("Manhua", "Manhua"),
-            Pair("Manhwa", "Manhwa"),
-            Pair("One-Shot", "One-Shot"),
-            Pair("Doujin", "Doujin"),
-        ),
-    )
-    private class OrderByFilter : UriPartFilter(
-        "Order By",
-        arrayOf(
-            Pair("<select>", ""),
-            Pair("A-Z", "title"),
-            Pair("Z-A", "titlereverse"),
-            Pair("Latest Update", "update"),
-            Pair("Latest Added", "latest"),
-            Pair("Popular", "popular"),
-            Pair("Rating", "rating"),
-        ),
-    )
+    private class TypeFilter :
+        UriPartFilter(
+            "Type",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Manga", "Manga"),
+                Pair("Manhua", "Manhua"),
+                Pair("Manhwa", "Manhwa"),
+                Pair("One-Shot", "One-Shot"),
+                Pair("Doujin", "Doujin"),
+            ),
+        )
+    private class OrderByFilter :
+        UriPartFilter(
+            "Order By",
+            arrayOf(
+                Pair("<select>", ""),
+                Pair("A-Z", "title"),
+                Pair("Z-A", "titlereverse"),
+                Pair("Latest Update", "update"),
+                Pair("Latest Added", "latest"),
+                Pair("Popular", "popular"),
+                Pair("Rating", "rating"),
+            ),
+        )
 
     private fun getGenreList() = listOf(
         Tag("4-koma", "4-Koma"),
@@ -300,8 +296,7 @@ abstract class ZManga(
         Tag("yuri", "Yuri"),
     )
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

@@ -5,13 +5,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
-class ComicDays : GigaViewer(
-    "Comic Days",
-    "https://comic-days.com",
-    "ja",
-    "https://cdn-img.comic-days.com/public/page",
-    isPaginated = true,
-) {
+class ComicDays :
+    GigaViewer(
+        "Comic Days",
+        "https://comic-days.com",
+        "ja",
+        "https://cdn-img.comic-days.com/public/page",
+        isPaginated = true,
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor(::imageIntercept)

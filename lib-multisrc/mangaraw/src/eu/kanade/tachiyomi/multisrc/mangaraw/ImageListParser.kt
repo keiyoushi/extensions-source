@@ -43,14 +43,17 @@ class ImageListParser(
                     counter--
                     charaIndexCounter++
                 }
+
                 1 -> {
                     charMap[charaIndexCounter] = charCodeToString(getCharCode(data, position, 65536))
                     counter--
                     charaIndexCounter++
                 }
+
                 2 -> {
                     return imageCharList.joinToString("").split(",")
                 }
+
                 else -> {
                     charCode
                 }
@@ -102,27 +105,19 @@ class ImageListParser(
         return charIndex
     }
 
-    fun getValue(index: Int): Int {
-        return getValueByChar(code.charAt(index))
-    }
+    fun getValue(index: Int): Int = getValueByChar(code.charAt(index))
 
     private fun getCode(html: String): String {
         val regex = Regex(pattern)
         return regex.find(html)!!.value.replace("'", "").replace("\\", "").replace("u002b", "+")
     }
 
-    private fun getValueByChar(char: String): Int {
-        return keys.indexOf(char)
-    }
+    private fun getValueByChar(char: String): Int = keys.indexOf(char)
 
     companion object {
 
-        private fun String.charAt(index: Int): String {
-            return substring(index, index + 1)
-        }
+        private fun String.charAt(index: Int): String = substring(index, index + 1)
 
-        private fun charCodeToString(charCode: Int): String {
-            return charCode.toChar().toString()
-        }
+        private fun charCodeToString(charCode: Int): String = charCode.toChar().toString()
     }
 }

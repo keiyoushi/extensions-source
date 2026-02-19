@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class SetsuScans : Madara(
-    "Setsu Scans",
-    "https://setsuscans.com",
-    "en",
-) {
+class SetsuScans :
+    Madara(
+        "Setsu Scans",
+        "https://setsuscans.com",
+        "en",
+    ) {
     override val client = super.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val request = chain.request()

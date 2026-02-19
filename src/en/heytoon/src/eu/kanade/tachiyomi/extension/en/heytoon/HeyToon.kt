@@ -35,12 +35,10 @@ class HeyToon : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            super.fetchPopularManga(page)
-        } else {
-            fetchSearchManga(page - 1, "", SortFilter.popular)
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
+        super.fetchPopularManga(page)
+    } else {
+        fetchSearchManga(page - 1, "", SortFilter.popular)
     }
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
@@ -60,22 +58,18 @@ class HeyToon : HttpSource() {
         return MangasPage(entries, hasNextPage = true)
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.latest)
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.isNotEmpty()) {
-            querySearch(query)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.isNotEmpty()) {
+        querySearch(query)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun getFilterList() = FilterList(
@@ -194,7 +188,5 @@ class HeyToon : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

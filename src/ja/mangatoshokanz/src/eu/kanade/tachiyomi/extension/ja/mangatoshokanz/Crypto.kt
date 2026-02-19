@@ -17,11 +17,9 @@ import javax.crypto.Cipher
 
 private val json: Json by injectLazy()
 
-internal fun getKeys(): KeyPair {
-    return KeyPairGenerator.getInstance("RSA").run {
-        initialize(RSAKeyGenParameterSpec(512, RSAKeyGenParameterSpec.F4))
-        generateKeyPair()
-    }
+internal fun getKeys(): KeyPair = KeyPairGenerator.getInstance("RSA").run {
+    initialize(RSAKeyGenParameterSpec(512, RSAKeyGenParameterSpec.F4))
+    generateKeyPair()
 }
 
 internal fun PublicKey.toPem(): String {

@@ -34,7 +34,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
@@ -108,18 +107,17 @@ class MangaDexHelper(lang: String) {
     /**
      * Get chapters for manga (aka manga/$id/feed endpoint)
      */
-    fun getChapterEndpoint(mangaId: String, offset: Int, langCode: String) =
-        "${MDConstants.apiMangaUrl}/$mangaId/feed".toHttpUrl().newBuilder()
-            .addQueryParameter("includes[]", MDConstants.scanlationGroup)
-            .addQueryParameter("includes[]", MDConstants.user)
-            .addQueryParameter("limit", "500")
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("translatedLanguage[]", langCode)
-            .addQueryParameter("order[volume]", "desc")
-            .addQueryParameter("order[chapter]", "desc")
-            .addQueryParameter("includeFuturePublishAt", "0")
-            .addQueryParameter("includeEmptyPages", "0")
-            .toString()
+    fun getChapterEndpoint(mangaId: String, offset: Int, langCode: String) = "${MDConstants.API_MANGA_URL}/$mangaId/feed".toHttpUrl().newBuilder()
+        .addQueryParameter("includes[]", MDConstants.SCANLATION_GROUP)
+        .addQueryParameter("includes[]", MDConstants.USER)
+        .addQueryParameter("limit", "500")
+        .addQueryParameter("offset", offset.toString())
+        .addQueryParameter("translatedLanguage[]", langCode)
+        .addQueryParameter("order[volume]", "desc")
+        .addQueryParameter("order[chapter]", "desc")
+        .addQueryParameter("includeFuturePublishAt", "0")
+        .addQueryParameter("includeEmptyPages", "0")
+        .toString()
 
     /**
      * Check if the manga url is a valid uuid
@@ -134,34 +132,29 @@ class MangaDexHelper(lang: String) {
     /**
      * Get the manga offset pages are 1 based, so subtract 1
      */
-    fun getMangaListOffset(page: Int): String = (MDConstants.mangaLimit * (page - 1)).toString()
+    fun getMangaListOffset(page: Int): String = (MDConstants.MANGA_LIMIT * (page - 1)).toString()
 
     /**
      * Get the latest chapter offset pages are 1 based, so subtract 1
      */
-    fun getLatestChapterOffset(page: Int): String =
-        (MDConstants.latestChapterLimit * (page - 1)).toString()
+    fun getLatestChapterOffset(page: Int): String = (MDConstants.LATEST_CHAPTER_LIMIT * (page - 1)).toString()
 
     /**
      * Remove any HTML characters in manga or chapter name to actual
      * characters. For example &hearts; will show ♥.
      */
-    private fun String.removeEntities(): String {
-        return Parser.unescapeEntities(this, false)
-    }
+    private fun String.removeEntities(): String = Parser.unescapeEntities(this, false)
 
     /**
      * Remove any HTML characters in description to actual characters.
      * It also removes Markdown syntax for links, italic and bold.
      */
-    private fun String.removeEntitiesAndMarkdown(): String {
-        return removeEntities()
-            .substringBefore("\n---")
-            .replace(markdownLinksRegex, "$1")
-            .replace(markdownItalicBoldRegex, "$1")
-            .replace(markdownItalicRegex, "$1")
-            .trim()
-    }
+    private fun String.removeEntitiesAndMarkdown(): String = removeEntities()
+        .substringBefore("\n---")
+        .replace(markdownLinksRegex, "$1")
+        .replace(markdownItalicBoldRegex, "$1")
+        .replace(markdownItalicRegex, "$1")
+        .trim()
 
     /**
      * Maps MangaDex status to Tachiyomi status.
@@ -183,8 +176,8 @@ class MangaDexHelper(lang: String) {
         val publishedOrCancelled = tempStatus == SManga.PUBLISHING_FINISHED ||
             tempStatus == SManga.CANCELLED
 
-        val isOneShot = attr.tags.any { it.id == MDConstants.tagOneShotUuid } &&
-            attr.tags.none { it.id == MDConstants.tagAnthologyUuid }
+        val isOneShot = attr.tags.any { it.id == MDConstants.TAG_ONE_SHOT_UUID } &&
+            attr.tags.none { it.id == MDConstants.TAG_ANTHOLOGY_UUID }
 
         return when {
             chaptersList.contains(attr.lastChapter) && publishedOrCancelled -> SManga.COMPLETED
@@ -193,8 +186,7 @@ class MangaDexHelper(lang: String) {
         }
     }
 
-    private fun parseDate(dateAsString: String): Long =
-        MDConstants.dateFormatter.parse(dateAsString)?.time ?: 0
+    private fun parseDate(dateAsString: String): Long = MDConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
     /**
      * Chapter URL where we get the token, last request time.
@@ -224,6 +216,7 @@ class MangaDexHelper(lang: String) {
         val mdAtHomeServerUrl =
             when (Date().time - time.toLong() > MDConstants.mdAtHomeTokenLifespan) {
                 false -> host
+
                 true -> {
                     val tokenLifespan = Date().time - (tokenTracker[tokenRequestUrl] ?: 0)
                     val cacheControl = if (tokenLifespan > MDConstants.mdAtHomeTokenLifespan) {
@@ -275,8 +268,7 @@ class MangaDexHelper(lang: String) {
         return GET(tokenRequestUrl, headers, cacheControl)
     }
 
-    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? =
-        firstOrNull { it[lang] != null }?.values?.singleOrNull()
+    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? = firstOrNull { it[lang] != null }?.values?.singleOrNull()
 
     /**
      * Create a [SManga] from the JSON element with only basic attributes filled.
@@ -307,8 +299,8 @@ class MangaDexHelper(lang: String) {
 
         coverFileName?.let {
             thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
-                true -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                else -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                true -> "${MDConstants.CDN_URL}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                else -> "${MDConstants.CDN_URL}/covers/${mangaDataDto.id}/$coverFileName"
             }
         }
     }
@@ -364,7 +356,7 @@ class MangaDexHelper(lang: String) {
             .groupBy({ it.attributes!!.group }) { tagDto -> tags[tagDto.id] }
             .mapValues { it.value.filterNotNull().sortedWith(intl.collator) }
 
-        val genreList = MDConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
+        val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
         // Build description
         val desc = mutableListOf<String>()
@@ -418,7 +410,7 @@ class MangaDexHelper(lang: String) {
 
         val groups = chapterDataDto.relationships
             .filterIsInstance<ScanlationGroupDto>()
-            .filterNot { it.id == MDConstants.legacyNoGroupId } // 'no group' left over from MDv3
+            .filterNot { it.id == MDConstants.LEGACY_NO_GROUP_ID } // 'no group' left over from MDv3
             .mapNotNull { it.attributes?.name }
             .joinToString(" & ")
             .ifEmpty {

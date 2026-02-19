@@ -10,13 +10,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Ichicomi : GigaViewer(
-    "Ichicomi",
-    "https://ichicomi.com",
-    "ja",
-    "https://cdn-img.ichicomi.com",
-    isPaginated = true,
-) {
+class Ichicomi :
+    GigaViewer(
+        "Ichicomi",
+        "https://ichicomi.com",
+        "ja",
+        "https://cdn-img.ichicomi.com",
+        isPaginated = true,
+    ) {
     override val supportsLatest = false
 
     override val publisher: String = "一迅社"
@@ -60,8 +61,7 @@ class Ichicomi : GigaViewer(
         thumbnail_url = link.selectFirst("img")?.attr("src")
     }
 
-    private class CollectionFilter(filters: List<Pair<String, String>>) :
-        Filter.Select<String>("フィルター", filters.map { it.first }.toTypedArray()) {
+    private class CollectionFilter(filters: List<Pair<String, String>>) : Filter.Select<String>("フィルター", filters.map { it.first }.toTypedArray()) {
         private val paths = filters.map { it.second }
         fun getPath(): String = paths[state]
     }

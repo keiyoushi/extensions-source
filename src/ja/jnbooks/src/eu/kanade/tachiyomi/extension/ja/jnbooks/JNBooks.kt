@@ -5,12 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.Request
 import okhttp3.Response
 
-class JNBooks : ComiciViewerAlt(
-    "J-N Books",
-    "https://comic.j-nbooks.jp",
-    "ja",
-    "https://comic.j-nbooks.jp/api",
-) {
+class JNBooks :
+    ComiciViewerAlt(
+        "J-N Books",
+        "https://comic.j-nbooks.jp",
+        "ja",
+        "https://comic.j-nbooks.jp/api",
+    ) {
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)

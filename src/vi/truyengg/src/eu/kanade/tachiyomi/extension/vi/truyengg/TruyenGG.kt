@@ -26,7 +26,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TruyenGG : ParsedHttpSource(), ConfigurableSource {
+class TruyenGG :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "FoxTruyen"
 
@@ -46,8 +48,7 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
         .build()
 
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
@@ -103,11 +104,10 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".content_detail img")
-            .mapIndexed { idx, it ->
-                Page(idx, imageUrl = it.absUrl("src"))
-            }
+    override fun pageListParse(document: Document): List<Page> = document.select(".content_detail img")
+        .mapIndexed { idx, it ->
+            Page(idx, imageUrl = it.absUrl("src"))
+        }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -149,53 +149,59 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
         name: String,
         private val query: String,
         private val vals: Array<Pair<String, String>>,
-    ) : UriFilter, Filter.Select<String>(name, vals.map { it.first }.toTypedArray()) {
+    ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray()),
+        UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             builder.addQueryParameter(query, vals[state].second)
         }
     }
 
-    class CountryFilter : UriPartFilter(
-        "Quốc gia",
-        "country",
-        arrayOf(
-            "Tất cả" to "0",
-            "Trung Quốc" to "1",
-            "Việt Nam" to "2",
-            "Hàn Quốc" to "3",
-            "Nhật Bản" to "4",
-            "Mỹ" to "5",
-        ),
-    )
+    class CountryFilter :
+        UriPartFilter(
+            "Quốc gia",
+            "country",
+            arrayOf(
+                "Tất cả" to "0",
+                "Trung Quốc" to "1",
+                "Việt Nam" to "2",
+                "Hàn Quốc" to "3",
+                "Nhật Bản" to "4",
+                "Mỹ" to "5",
+            ),
+        )
 
-    class StatusFilter : UriPartFilter(
-        "Tình trạng",
-        "status",
-        arrayOf(
-            "Tất cả" to "-1",
-            "Đang tiến hành" to "0",
-            "Hoàn thành" to "2",
-        ),
-    )
+    class StatusFilter :
+        UriPartFilter(
+            "Tình trạng",
+            "status",
+            arrayOf(
+                "Tất cả" to "-1",
+                "Đang tiến hành" to "0",
+                "Hoàn thành" to "2",
+            ),
+        )
 
-    class ChapterCountFilter : UriPartFilter(
-        "Số lượng chương",
-        "minchapter",
-        arrayOf(
-            "0" to "0",
-            ">= 100" to "100",
-            ">= 200" to "200",
-            ">= 300" to "300",
-            ">= 400" to "400",
-            ">= 500" to "500",
-        ),
-    )
+    class ChapterCountFilter :
+        UriPartFilter(
+            "Số lượng chương",
+            "minchapter",
+            arrayOf(
+                "0" to "0",
+                ">= 100" to "100",
+                ">= 200" to "200",
+                ">= 300" to "300",
+                ">= 400" to "400",
+                ">= 500" to "500",
+            ),
+        )
 
-    class SortByFilter : UriFilter, Filter.Sort(
-        "Sắp xếp",
-        arrayOf("Ngày đăng", "Ngày cập nhật", "Lượt xem"),
-        Selection(1, false),
-    ) {
+    class SortByFilter :
+        Filter.Sort(
+            "Sắp xếp",
+            arrayOf("Ngày đăng", "Ngày cập nhật", "Lượt xem"),
+            Selection(1, false),
+        ),
+        UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val index = state?.index ?: 2
             val ascending = if (state?.ascending == true) 1 else 0
@@ -205,7 +211,9 @@ class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
     class Genre(name: String, val id: String) : Filter.TriState(name)
 
-    class GenreList(state: List<Genre>) : UriFilter, Filter.Group<Genre>("Thể loại", state) {
+    class GenreList(state: List<Genre>) :
+        Filter.Group<Genre>("Thể loại", state),
+        UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val genres = mutableListOf<String>()
             val genresEx = mutableListOf<String>()

@@ -64,9 +64,7 @@ class ScantradUnion : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesSelector() = ".dernieresmaj .colonne"
 
@@ -87,25 +85,23 @@ class ScantradUnion : ParsedHttpSource() {
         return manga
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#webtoon a img")
-            .map { imgElem: Element ->
-                // In webtoon mode, images have an src attribute only.
-                // In manga mode, images have a data-src attribute that contains the src
-                val imgElemDataSrc = imgElem.attr("data-src")
-                val imgElemSrc = imgElem.attr("src")
+    override fun pageListParse(document: Document): List<Page> = document.select("#webtoon a img")
+        .map { imgElem: Element ->
+            // In webtoon mode, images have an src attribute only.
+            // In manga mode, images have a data-src attribute that contains the src
+            val imgElemDataSrc = imgElem.attr("data-src")
+            val imgElemSrc = imgElem.attr("src")
 
-                if (imgElemDataSrc.isNullOrBlank()) imgElemSrc else imgElemDataSrc
-            }
-            // Since June 2021, webtoon html has both elements sometimes (data-src and src)
-            // So there are duplicates when fetching pages
-            // https://github.com/tachiyomiorg/tachiyomi-extensions/issues/7694
-            // The distinct() prevent this problem when it happens
-            .distinct()
-            .mapIndexed { index: Int, imgUrl: String ->
-                Page(index, "", imgUrl)
-            }
-    }
+            if (imgElemDataSrc.isNullOrBlank()) imgElemSrc else imgElemDataSrc
+        }
+        // Since June 2021, webtoon html has both elements sometimes (data-src and src)
+        // So there are duplicates when fetching pages
+        // https://github.com/tachiyomiorg/tachiyomi-extensions/issues/7694
+        // The distinct() prevent this problem when it happens
+        .distinct()
+        .mapIndexed { index: Int, imgUrl: String ->
+            Page(index, "", imgUrl)
+        }
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -116,9 +112,7 @@ class ScantradUnion : ParsedHttpSource() {
         return manga
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/projets/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/projets/", headers)
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -143,29 +137,23 @@ class ScantradUnion : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = "article.post-outer"
 
-    private fun formatMangaNumber(value: String): String {
-        return value.removePrefix("#").trim()
-    }
+    private fun formatMangaNumber(value: String): String = value.removePrefix("#").trim()
 
     private fun formatMangaTitle(value: String): String {
         // Translations produced by Scantrad Union partners are prefixed with "[Partenaire] ".
         return value.removePrefix("[Partenaire]").trim()
     }
 
-    private fun parseFrenchDateFromString(value: String): Long {
-        return try {
-            frenchDateFormat.parse(value)?.time ?: 0L
-        } catch (ex: ParseException) {
-            0L
-        }
+    private fun parseFrenchDateFromString(value: String): Long = try {
+        frenchDateFormat.parse(value)?.time ?: 0L
+    } catch (ex: ParseException) {
+        0L
     }
 
-    private fun mapMangaStatusStringToConst(status: String): Int {
-        return when (status.trim().lowercase(Locale.FRENCH)) {
-            "en cours" -> SManga.ONGOING
-            "terminé" -> SManga.COMPLETED
-            "licencié" -> SManga.LICENSED
-            else -> SManga.UNKNOWN
-        }
+    private fun mapMangaStatusStringToConst(status: String): Int = when (status.trim().lowercase(Locale.FRENCH)) {
+        "en cours" -> SManga.ONGOING
+        "terminé" -> SManga.COMPLETED
+        "licencié" -> SManga.LICENSED
+        else -> SManga.UNKNOWN
     }
 }

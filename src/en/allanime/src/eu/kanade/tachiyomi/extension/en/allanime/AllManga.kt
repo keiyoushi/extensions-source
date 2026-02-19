@@ -21,7 +21,9 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class AllManga : ConfigurableSource, HttpSource() {
+class AllManga :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "AllManga"
 
@@ -155,13 +157,11 @@ class AllManga : ConfigurableSource, HttpSource() {
     }
 
     /* Chapters */
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response, manga)
+        }
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.split("/")[2]
@@ -191,9 +191,7 @@ class AllManga : ConfigurableSource, HttpSource() {
         return chapters.map { it.toSChapter(mangaUrl) }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException("Not used")
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
 
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterUrlParts = chapter.url.split("/")
@@ -255,9 +253,7 @@ class AllManga : ConfigurableSource, HttpSource() {
         return GET(newUrl, headers)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {

@@ -48,12 +48,11 @@ class MangaKuro : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = mangaRequestBuilder("search", page, "keyword", query)
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst(".mg_name a")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst(".mg_name a")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+    }
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -69,6 +68,7 @@ class MangaKuro : ParsedHttpSource() {
 
     private fun parseStatus(status: String) = when {
         status.contains("進行中") -> SManga.ONGOING
+
         // status.contains("Completed") -> SManga.COMPLETED / I only found OnGoing Titles and i have no idea what string they would use
         else -> SManga.UNKNOWN
     }

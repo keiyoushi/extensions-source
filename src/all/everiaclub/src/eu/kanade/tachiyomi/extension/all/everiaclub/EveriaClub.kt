@@ -13,7 +13,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class EveriaClub() : ParsedHttpSource() {
+class EveriaClub : ParsedHttpSource() {
     override val baseUrl = "https://everia.club"
     override val lang = "all"
     override val name = "Everia.club"
@@ -37,9 +37,7 @@ class EveriaClub() : ParsedHttpSource() {
     }
 
     override fun latestUpdatesNextPageSelector() = ".next"
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page/")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/")
 
     override fun latestUpdatesSelector() = "#blog-entries > article"
 
@@ -111,8 +109,7 @@ class EveriaClub() : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList(
@@ -129,19 +126,20 @@ class EveriaClub() : ParsedHttpSource() {
         fun toUriPart() = valuePair[state].second
     }
 
-    class CategoryFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Gravure", "/gravure"),
-            Pair("Aidol", "/aidol"),
-            Pair("Magazine", "/magazine"),
-            Pair("Korea", "/korea"),
-            Pair("Thailand", "/thailand"),
-            Pair("Chinese", "/chinese"),
-            Pair("Cosplay", "/cosplay"),
-        ),
-    )
+    class CategoryFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Gravure", "/gravure"),
+                Pair("Aidol", "/aidol"),
+                Pair("Magazine", "/magazine"),
+                Pair("Korea", "/korea"),
+                Pair("Thailand", "/thailand"),
+                Pair("Chinese", "/chinese"),
+                Pair("Cosplay", "/cosplay"),
+            ),
+        )
 
     class TagFilter : Filter.Text("Tag")
 

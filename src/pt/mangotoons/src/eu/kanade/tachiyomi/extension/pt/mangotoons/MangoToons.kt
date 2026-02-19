@@ -32,7 +32,9 @@ import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class MangoToons : HttpSource(), ConfigurableSource {
+class MangoToons :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Mango Toons"
 
@@ -89,28 +91,26 @@ class MangoToons : HttpSource(), ConfigurableSource {
         return login(email, password)
     }
 
-    private fun login(email: String, password: String): String {
-        return try {
-            val payload = AuthRequestDto(email, password)
-            val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
-            val request = POST("$baseUrl/api/auth/login", headers, body)
-            val response = network.client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val loginResponse = response.parseAs<LoginResponseDto>()
-                if (loginResponse.sucesso && loginResponse.token != null) {
-                    preferences.edit().putString(PREF_TOKEN, loginResponse.token).apply()
-                    loginResponse.token
-                } else {
-                    response.close()
-                    ""
-                }
+    private fun login(email: String, password: String): String = try {
+        val payload = AuthRequestDto(email, password)
+        val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
+        val request = POST("$baseUrl/api/auth/login", headers, body)
+        val response = network.client.newCall(request).execute()
+        if (response.isSuccessful) {
+            val loginResponse = response.parseAs<LoginResponseDto>()
+            if (loginResponse.sucesso && loginResponse.token != null) {
+                preferences.edit().putString(PREF_TOKEN, loginResponse.token).apply()
+                loginResponse.token
             } else {
                 response.close()
                 ""
             }
-        } catch (e: Exception) {
+        } else {
+            response.close()
             ""
         }
+    } catch (e: Exception) {
+        ""
     }
 
     private fun checkLogin(email: String, password: String) {
@@ -137,9 +137,7 @@ class MangoToons : HttpSource(), ConfigurableSource {
         .add("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
 
     // ================= Popular ===================
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/obras/top10/views?periodo=total", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/obras/top10/views?periodo=total", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val encrypted = response.body.string()
@@ -153,9 +151,7 @@ class MangoToons : HttpSource(), ConfigurableSource {
     }
 
     // ================= Latest ===================
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/capitulos/recentes?pagina=$page&limite=24", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/capitulos/recentes?pagina=$page&limite=24", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val encrypted = response.body.string()
@@ -242,17 +238,11 @@ class MangoToons : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not used.")
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // ========================= Preferences ================================
 

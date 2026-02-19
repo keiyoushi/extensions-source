@@ -33,7 +33,8 @@ abstract class Keyoapp(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-) : ParsedHttpSource(), ConfigurableSource {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -168,16 +169,14 @@ abstract class Keyoapp(
 
     protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
 
-    override fun getFilterList(): FilterList {
-        return if (genresList.isNotEmpty()) {
-            FilterList(
-                GenreList("Genres", genresList),
-            )
-        } else {
-            FilterList(
-                Filter.Header("Press 'Reset' to attempt to show the genres"),
-            )
-        }
+    override fun getFilterList(): FilterList = if (genresList.isNotEmpty()) {
+        FilterList(
+            GenreList("Genres", genresList),
+        )
+    } else {
+        FilterList(
+            Filter.Header("Press 'Reset' to attempt to show the genres"),
+        )
     }
 
     /**
@@ -203,12 +202,10 @@ abstract class Keyoapp(
      *
      * @param document The search page document
      */
-    protected open fun parseGenres(document: Document): List<Genre> {
-        return document.select("#series_tags_page > button")
-            .map { btn ->
-                Genre(btn.text(), btn.attr("tag"))
-            }
-    }
+    protected open fun parseGenres(document: Document): List<Genre> = document.select("#series_tags_page > button")
+        .map { btn ->
+            Genre(btn.text(), btn.attr("tag"))
+        }
 
     // Details
     protected open val descriptionSelector: String = "div:containsOwn(Synopsis) ~ div"
@@ -292,16 +289,14 @@ abstract class Keyoapp(
             }
     }
 
-    protected open fun getCdnUrl(document: Document): String? {
-        return document.select("script")
-            .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
-            ?.let {
-                val cdnHost = CDN_HOST_REGEX.find(it.html())
-                    ?.groups?.get(1)?.value
-                    ?.replace(CDN_CLEAN_REGEX, "")
-                "https://$cdnHost/uploads"
-            }
-    }
+    protected open fun getCdnUrl(document: Document): String? = document.select("script")
+        .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
+        ?.let {
+            val cdnHost = CDN_HOST_REGEX.find(it.html())
+                ?.groups?.get(1)?.value
+                ?.replace(CDN_CLEAN_REGEX, "")
+            "https://$cdnHost/uploads"
+        }
 
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
@@ -319,27 +314,23 @@ abstract class Keyoapp(
         return url
     }
 
-    protected open fun Element.getImageUrl(selector: String): String? {
-        return this.selectFirst(selector)?.let { element ->
-            IMG_REGEX.find(element.attr("style"))?.groups?.get(1)?.value
-                ?.toHttpUrlOrNull()?.let {
-                    it.newBuilder()
-                        .setQueryParameter("w", "480") // Keyoapp returns the dynamic size of the thumbnail to any size
-                        .build()
-                        .toString()
-                }
-        }
+    protected open fun Element.getImageUrl(selector: String): String? = this.selectFirst(selector)?.let { element ->
+        IMG_REGEX.find(element.attr("style"))?.groups?.get(1)?.value
+            ?.toHttpUrlOrNull()?.let {
+                it.newBuilder()
+                    .setQueryParameter("w", "480") // Keyoapp returns the dynamic size of the thumbnail to any size
+                    .build()
+                    .toString()
+            }
     }
 
-    private fun String.parseDate(): Long {
-        return if (this.contains("ago")) {
-            this.parseRelativeDate()
-        } else {
-            try {
-                dateFormat.parse(this)!!.time
-            } catch (_: ParseException) {
-                0L
-            }
+    private fun String.parseDate(): Long = if (this.contains("ago")) {
+        this.parseRelativeDate()
+    } else {
+        try {
+            dateFormat.parse(this)!!.time
+        } catch (_: ParseException) {
+            0L
         }
     }
 
@@ -356,20 +347,30 @@ abstract class Keyoapp(
             ?: return 0L
 
         when {
-            "second" in this -> now.add(Calendar.SECOND, -relativeDate) // parse: 30 seconds ago
-            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate) // parses: "42 minutes ago"
-            "hour" in this -> now.add(Calendar.HOUR, -relativeDate) // parses: "1 hour ago" and "2 hours ago"
-            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate) // parses: "2 days ago"
-            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate) // parses: "2 weeks ago"
-            "month" in this -> now.add(Calendar.MONTH, -relativeDate) // parses: "2 months ago"
+            "second" in this -> now.add(Calendar.SECOND, -relativeDate)
+
+            // parse: 30 seconds ago
+            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate)
+
+            // parses: "42 minutes ago"
+            "hour" in this -> now.add(Calendar.HOUR, -relativeDate)
+
+            // parses: "1 hour ago" and "2 hours ago"
+            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate)
+
+            // parses: "2 days ago"
+            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate)
+
+            // parses: "2 weeks ago"
+            "month" in this -> now.add(Calendar.MONTH, -relativeDate)
+
+            // parses: "2 months ago"
             "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
         }
         return now.timeInMillis
     }
 
-    private fun selector(selector: String, contains: List<String>): String {
-        return contains.joinToString { selector.replace("%s", it) }
-    }
+    private fun selector(selector: String, contains: List<String>): String = contains.joinToString { selector.replace("%s", it) }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {

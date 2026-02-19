@@ -32,7 +32,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
+class Readcomiconline :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "ReadComicOnline"
 
@@ -70,25 +72,17 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/ComicList/MostPopular?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ComicList/MostPopular?page=$page", headers)
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ComicList/LatestUpdate?page=$page", headers)
+
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        title = element.text()
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/ComicList/LatestUpdate?page=$page", headers)
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            title = element.text()
-            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        }
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = "ul.pager > li > a:contains(Next)"
 
@@ -100,7 +94,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         filters: FilterList,
     ): Request { // publisher > writer > artist + sorting for both if else
         if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>()
-            .all { it.included.isEmpty() && it.excluded.isEmpty() }
+                .all { it.included.isEmpty() && it.excluded.isEmpty() }
         ) {
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
@@ -168,9 +162,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -189,18 +181,15 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         return manga
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(realMangaDetailsRequest(manga)).asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(realMangaDetailsRequest(manga)).asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     private fun realMangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga)
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-            ?: super.mangaDetailsRequest(manga)
+    override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
+        ?: super.mangaDetailsRequest(manga)
 
     private fun parseStatus(status: String) = when {
         status.contains("Ongoing") -> SManga.ONGOING
@@ -308,15 +297,16 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     private class PublisherFilter : Filter.Text("Publisher")
     private class WriterFilter : Filter.Text("Writer")
     private class ArtistFilter : Filter.Text("Artist")
-    private class SortFilter : SelectFilter(
-        "Sort By",
-        arrayOf(
-            Pair("Alphabet", ""),
-            Pair("Popularity", "MostPopular"),
-            Pair("Latest Update", "LatestUpdate"),
-            Pair("New Comic", "Newest"),
-        ),
-    )
+    private class SortFilter :
+        SelectFilter(
+            "Sort By",
+            arrayOf(
+                Pair("Alphabet", ""),
+                Pair("Popularity", "MostPopular"),
+                Pair("Latest Update", "LatestUpdate"),
+                Pair("New Comic", "Newest"),
+            ),
+        )
 
     override fun getFilterList() = FilterList(
         Status(),
@@ -466,9 +456,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             }
         }
 
-    private fun String.addBustQuery(): String {
-        return "$this?bust=${Calendar.getInstance().time.time}"
-    }
+    private fun String.addBustQuery(): String = "$this?bust=${Calendar.getInstance().time.time}"
 
     @Serializable
     private class RemoteConfigDTO(

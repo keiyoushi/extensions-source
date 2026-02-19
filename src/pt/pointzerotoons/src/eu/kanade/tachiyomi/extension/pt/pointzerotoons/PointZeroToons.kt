@@ -7,17 +7,16 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PointZeroToons : MangaThemesia(
-    "Point Zero Toons",
-    "https://pointzerotoons.com",
-    "pt-BR",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
-) {
+class PointZeroToons :
+    MangaThemesia(
+        "Point Zero Toons",
+        "https://pointzerotoons.com",
+        "pt-BR",
+        dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 }

@@ -29,7 +29,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class UngTyComics : ParsedHttpSource(), ConfigurableSource {
+class UngTyComics :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Ưng Tỷ Comics"
 
@@ -52,12 +54,13 @@ class UngTyComics : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-        }
+        val naiveTrustManager =
+            @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+            }
         val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
             val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
             init(null, trustAllCerts, SecureRandom())
@@ -173,10 +176,9 @@ class UngTyComics : ParsedHttpSource(), ConfigurableSource {
 
     private fun chapterNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun pageListParse(document: Document) =
-        document.select("img.chapter-img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document) = document.select("img.chapter-img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("data-src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -207,10 +209,11 @@ private const val PREF_BASE_URL = "baseUrl"
 private val MIRRORS = arrayOf("https://ungtycomicsa.com")
 private val DATE_FORMAT = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
 
-private class GenreFilter(val genres: List<Genre>) : Filter.Select<String>(
-    "Thể loại",
-    genres.map { it.name }.toTypedArray(),
-)
+private class GenreFilter(val genres: List<Genre>) :
+    Filter.Select<String>(
+        "Thể loại",
+        genres.map { it.name }.toTypedArray(),
+    )
 
 private class Genre(val name: String, val path: String)
 

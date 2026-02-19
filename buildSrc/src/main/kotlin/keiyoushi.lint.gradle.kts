@@ -3,16 +3,12 @@ plugins {
 }
 
 spotless {
-    ratchetFrom = "68ed874a42038f4efd001c555cba9bf7de8474d7"
-
     kotlin {
         target("**/*.kt", "**/*.kts")
         targetExclude("**/build/**/*.kt")
         ktlint()
             .editorConfigOverride(mapOf(
-                "ktlint_standard_discouraged-comment-location" to "disabled",
-                "ktlint_function_signature_body_expression_wrapping" to "default",
-                "ktlint_standard_chain-method-continuation" to "disable"
+                "max_line_length" to 2147483647,
             ))
         trimTrailingWhitespace()
         endWithNewline()

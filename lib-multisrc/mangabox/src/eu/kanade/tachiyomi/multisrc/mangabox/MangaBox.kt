@@ -41,7 +41,8 @@ abstract class MangaBox(
     ).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     },
-) : ParsedHttpSource(), ConfigurableSource {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -51,8 +52,7 @@ abstract class MangaBox(
         .addInterceptor(::useAltCdnInterceptor)
         .build()
 
-    private fun SharedPreferences.getMirrorPref(): String =
-        getString(PREF_USE_MIRROR, mirrorEntries[0])!!
+    private fun SharedPreferences.getMirrorPref(): String = getString(PREF_USE_MIRROR, mirrorEntries[0])!!
 
     private val preferences: SharedPreferences by getPreferencesLazy {
         // if current mirror is not in mirrorEntries, set default
@@ -82,13 +82,12 @@ abstract class MangaBox(
 
     private class MangaBoxFallBackTag // Custom empty class tag to use as an identifier that the specific request is fallback-able
 
-    private fun HttpUrl.getBaseUrl(): String =
-        "${URL_PREFIX}${this.host}${
+    private fun HttpUrl.getBaseUrl(): String = "${URL_PREFIX}${this.host}${
         when (this.port) {
             80, 443 -> ""
             else -> ":${this.port}"
         }
-        }"
+    }"
 
     private fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -164,33 +163,26 @@ abstract class MangaBox(
 
     override fun popularMangaSelector() = "div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/$popularUrlPath$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$popularUrlPath$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/$latestUrlPath$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$latestUrlPath$page", headers)
 
-    private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga {
-        return SManga.create().apply {
-            element.select(urlSelector).first()!!.let {
-                url = it.attr("abs:href")
-                    .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
-                title = it.text()
-            }
-            thumbnail_url = element.select("img").first()!!.attr("abs:src")
+    private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga = SManga.create().apply {
+        element.select(urlSelector).first()!!.let {
+            url = it.attr("abs:href")
+                .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
+            title = it.text()
         }
+        thumbnail_url = element.select("img").first()!!.attr("abs:src")
     }
 
     override fun popularMangaFromElement(element: Element): SManga = mangaFromElement(element)
 
     override fun latestUpdatesFromElement(element: Element): SManga = mangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() =
-        "div.group_page, div.group-page a:not([href]) + a:not(:contains(Last))"
+    override fun popularMangaNextPageSelector() = "div.group_page, div.group-page a:not([href]) + a:not(:contains(Last))"
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -222,8 +214,7 @@ abstract class MangaBox(
 
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
-    override fun searchMangaNextPageSelector() =
-        "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
+    override fun searchMangaNextPageSelector() = "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
 
     open val mangaDetailsMainSelector = "div.manga-info-top, div.panel-story-info"
 
@@ -244,33 +235,31 @@ abstract class MangaBox(
         }
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            document.select(mangaDetailsMainSelector).firstOrNull()?.let { infoElement ->
-                title = infoElement.select("h1, h2").first()!!.text()
-                author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
-                    .eachText().joinToString()
-                status = parseStatus(
-                    infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
-                )
-                genre = infoElement.select("div.manga-info-top li:contains(genres)").firstOrNull()
-                    ?.select("a")?.joinToString { it.text() } // kakalot
-                    ?: infoElement.select("td:containsOwn(genres) + td a")
-                        .joinToString { it.text() } // nelo
-            } ?: checkForRedirectMessage(document)
-            description = document.select(descriptionSelector).firstOrNull()?.ownText()
-                ?.replace("""^$title summary:\s""".toRegex(), "")
-                ?.replace("""<\s*br\s*/?>""".toRegex(), "\n")
-                ?.replace("<[^>]*>".toRegex(), "")
-            thumbnail_url = document.select(thumbnailSelector).attr("abs:src")
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.select(mangaDetailsMainSelector).firstOrNull()?.let { infoElement ->
+            title = infoElement.select("h1, h2").first()!!.text()
+            author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
+                .eachText().joinToString()
+            status = parseStatus(
+                infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
+            )
+            genre = infoElement.select("div.manga-info-top li:contains(genres)").firstOrNull()
+                ?.select("a")?.joinToString { it.text() } // kakalot
+                ?: infoElement.select("td:containsOwn(genres) + td a")
+                    .joinToString { it.text() } // nelo
+        } ?: checkForRedirectMessage(document)
+        description = document.select(descriptionSelector).firstOrNull()?.ownText()
+            ?.replace("""^$title summary:\s""".toRegex(), "")
+            ?.replace("""<\s*br\s*/?>""".toRegex(), "\n")
+            ?.replace("<[^>]*>".toRegex(), "")
+        thumbnail_url = document.select(thumbnailSelector).attr("abs:src")
 
-            // add alternative name to manga description
-            document.select(altNameSelector).firstOrNull()?.ownText()?.let {
-                if (it.isBlank().not()) {
-                    description = when {
-                        description.isNullOrBlank() -> altName + it
-                        else -> description + "\n\n$altName" + it
-                    }
+        // add alternative name to manga description
+        document.select(altNameSelector).firstOrNull()?.ownText()?.let {
+            if (it.isBlank().not()) {
+                description = when {
+                    description.isNullOrBlank() -> altName + it
+                    else -> description + "\n\n$altName" + it
                 }
             }
         }
@@ -344,17 +333,15 @@ abstract class MangaBox(
         ).last()!!
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            element.select("a").let {
-                url = it.attr("abs:href")
-                    .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
-                name = it.text()
-                scanlator =
-                    it.attr("abs:href").toHttpUrl().host // show where chapters are actually from
-            }
-            date_upload = dateFormat.tryParse(element.selectDateFromElement().attr("title"))
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("a").let {
+            url = it.attr("abs:href")
+                .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
+            name = it.text()
+            scanlator =
+                it.attr("abs:href").toHttpUrl().host // show where chapters are actually from
         }
+        date_upload = dateFormat.tryParse(element.selectDateFromElement().attr("title"))
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -417,10 +404,8 @@ abstract class MangaBox(
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers).newBuilder()
-            .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag()).build()
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers).newBuilder()
+        .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag()).build()
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -513,8 +498,7 @@ abstract class MangaBox(
         Pair("yuri", "Yuri"),
     )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
     }
 

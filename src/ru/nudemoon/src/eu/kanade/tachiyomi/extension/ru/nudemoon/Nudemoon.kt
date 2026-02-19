@@ -26,7 +26,9 @@ import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
-class Nudemoon : ParsedHttpSource(), ConfigurableSource {
+class Nudemoon :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Nude-Moon"
 
@@ -58,10 +60,9 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         buildCookies(cookies)
     }
 
-    private fun buildCookies(cookies: Map<String, String>) =
-        cookies.entries.joinToString(separator = "; ", postfix = ";") {
-            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-        }
+    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
+        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
@@ -75,11 +76,9 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
             chain.proceed(newReq)
         }.build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/all_manga?views&rowstart=${30 * (page - 1)}", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/all_manga?views&rowstart=${30 * (page - 1)}", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/all_manga?date&rowstart=${30 * (page - 1)}", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/all_manga?date&rowstart=${30 * (page - 1)}", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Search by query on this site works really badly, i don't even sure of the need to implement it
@@ -141,11 +140,9 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = "a.small:contains(>)"
 
@@ -165,9 +162,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         return manga
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun chapterListSelector() = popularMangaSelector()
     protected fun chapterListNextPageSelector() = popularMangaNextPageSelector()
@@ -237,13 +232,11 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
     }
 
-    private fun dateParseWithReplace(textDate: String): Long {
-        return textDate.replace("Май", "Мая").let {
-            try {
-                dateParseRu.parse(it)?.time ?: 0L
-            } catch (_: Exception) {
-                0L
-            }
+    private fun dateParseWithReplace(textDate: String): Long = textDate.replace("Май", "Мая").let {
+        try {
+            dateParseRu.parse(it)?.time ?: 0L
+        } catch (_: Exception) {
+            0L
         }
     }
 
@@ -262,11 +255,12 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
 
     private class Genre(name: String, val id: String = name.replace(' ', '_')) : Filter.CheckBox(name.replaceFirstChar { it.uppercaseChar() })
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)
-    private class OrderBy : Filter.Sort(
-        "Сортировка",
-        arrayOf("Дата", "Просмотры", "Лайки"),
-        Selection(1, false),
-    )
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("Дата", "Просмотры", "Лайки"),
+            Selection(1, false),
+        )
 
     override fun getFilterList() = FilterList(
         OrderBy(),

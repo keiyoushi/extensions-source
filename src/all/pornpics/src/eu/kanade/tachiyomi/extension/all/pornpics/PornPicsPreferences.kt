@@ -13,27 +13,25 @@ object PornPicsPreferences {
 
     const val DEFAULT_CATEGORY_OPTION = "/default"
 
-    private fun buildCategoryOption(intl: Intl): Map<String, String> {
-        return linkedMapOf(
-            intl["config-category-option-default"] to DEFAULT_CATEGORY_OPTION,
-            intl["config-category-option-asian"] to "asian",
-            intl["config-category-option-chinese"] to "chinese",
-            intl["config-category-option-korean"] to "korean",
-            intl["config-category-option-japanese"] to "japanese",
-            intl["config-category-option-russian"] to "russian",
-            intl["config-category-option-ukrainian"] to "ukrainian",
-            intl["config-category-option-big-tits"] to "big-tits",
-            intl["config-category-option-natural-tits"] to "natural-tits",
-            intl["config-category-option-cosplay"] to "cosplay",
-            intl["config-category-option-cute"] to "cute",
-            intl["config-category-option-glasses"] to "glasses",
-            intl["config-category-option-maid"] to "maid",
-            intl["config-category-option-nurse"] to "nurse",
-            intl["config-category-option-nun"] to "nun",
-            intl["config-category-option-stockings"] to "stockings",
-            intl["config-category-option-twins"] to "twins",
-        )
-    }
+    private fun buildCategoryOption(intl: Intl): Map<String, String> = linkedMapOf(
+        intl["config-category-option-default"] to DEFAULT_CATEGORY_OPTION,
+        intl["config-category-option-asian"] to "asian",
+        intl["config-category-option-chinese"] to "chinese",
+        intl["config-category-option-korean"] to "korean",
+        intl["config-category-option-japanese"] to "japanese",
+        intl["config-category-option-russian"] to "russian",
+        intl["config-category-option-ukrainian"] to "ukrainian",
+        intl["config-category-option-big-tits"] to "big-tits",
+        intl["config-category-option-natural-tits"] to "natural-tits",
+        intl["config-category-option-cosplay"] to "cosplay",
+        intl["config-category-option-cute"] to "cute",
+        intl["config-category-option-glasses"] to "glasses",
+        intl["config-category-option-maid"] to "maid",
+        intl["config-category-option-nurse"] to "nurse",
+        intl["config-category-option-nun"] to "nun",
+        intl["config-category-option-stockings"] to "stockings",
+        intl["config-category-option-twins"] to "twins",
+    )
 
     fun buildPreferences(content: Context, intl: Intl): List<ListPreference> {
         val options = buildCategoryOption(intl)

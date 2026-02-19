@@ -86,11 +86,9 @@ abstract class GigaViewer(
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // The search returns 404 when there's no results.
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableIgnoreCode(404)
-            .map(::searchMangaParse)
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
+        .asObservableIgnoreCode(404)
+        .map(::searchMangaParse)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -229,12 +227,10 @@ abstract class GigaViewer(
         return chapters
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return if (isPaginated) {
-            chapterListParsePaginated(response)
-        } else {
-            chapterListParseSinglePage(response)
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = if (isPaginated) {
+        chapterListParsePaginated(response)
+    } else {
+        chapterListParseSinglePage(response)
     }
 
     override fun chapterListSelector() = "li.episode"
@@ -299,10 +295,11 @@ abstract class GigaViewer(
         override fun toString(): String = name
     }
 
-    private class CollectionFilter(val collections: List<Collection>) : Filter.Select<Collection>(
-        "コレクション",
-        collections.toTypedArray(),
-    ) {
+    private class CollectionFilter(val collections: List<Collection>) :
+        Filter.Select<Collection>(
+            "コレクション",
+            collections.toTypedArray(),
+        ) {
         val selected: Collection
             get() = collections[state]
     }
@@ -366,12 +363,10 @@ abstract class GigaViewer(
         return output.toByteArray()
     }
 
-    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> {
-        return asObservable().doOnNext { response ->
-            if (!response.isSuccessful && response.code != code) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
+    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> = asObservable().doOnNext { response ->
+        if (!response.isSuccessful && response.code != code) {
+            response.close()
+            throw Exception("HTTP error ${response.code}")
         }
     }
 

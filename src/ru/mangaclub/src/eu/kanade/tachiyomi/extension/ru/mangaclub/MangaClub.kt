@@ -66,20 +66,24 @@ class MangaClub : ParsedHttpSource() {
                         filter.state.forEach { genre -> if (genre.state) genresIDs += genre.id }
                         if (genresIDs.isNotEmpty()) url += "/n.l.tags=${genresIDs.joinToString(",")}"
                     }
+
                     is CategoryList -> {
                         val categoriesIDs = mutableListOf<String>()
                         filter.state.forEach { category -> if (category.state) categoriesIDs += category.id }
                         if (categoriesIDs.isNotEmpty()) url += "/o.cat=${categoriesIDs.joinToString(",")}"
                     }
+
                     is Status -> {
                         val statusID = arrayOf("Не выбрано", "Завершен", "Продолжается", "Заморожено/Заброшено")[filter.state]
                         if (filter.state > 0) url += "/status_translation=$statusID"
                     }
+
                     is OrderBy -> {
                         val orderState = if (filter.state!!.ascending) "asc" else "desc"
                         val orderID = arrayOf("date", "editdate", "title", "comm_num", "news_read", "rating")[filter.state!!.index]
                         url += "/sort=$orderID/order=$orderState"
                     }
+
                     else -> {}
                 }
             }
@@ -138,15 +142,17 @@ class MangaClub : ParsedHttpSource() {
     private class Genre(name: String, val id: String) : Filter.CheckBox(name)
     private class CategoryList(categories: List<Category>) : Filter.Group<Category>("Категория", categories)
     private class Category(name: String, val id: String) : Filter.CheckBox(name)
-    private class Status : Filter.Select<String>(
-        "Статус",
-        arrayOf("Не выбрано", "Завершен", "Продолжается", "Заморожено/Заброшено"),
-    )
-    private class OrderBy : Filter.Sort(
-        "Сортировка",
-        arrayOf("По дате добавления", "По дате обновления", "В алфавитном порядке", "По количеству комментариев", "По количеству просмотров", "По рейтингу"),
-        Selection(5, false),
-    )
+    private class Status :
+        Filter.Select<String>(
+            "Статус",
+            arrayOf("Не выбрано", "Завершен", "Продолжается", "Заморожено/Заброшено"),
+        )
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("По дате добавления", "По дате обновления", "В алфавитном порядке", "По количеству комментариев", "По количеству просмотров", "По рейтингу"),
+            Selection(5, false),
+        )
 
     override fun getFilterList() = FilterList(
         GenreList(getGenreList()),

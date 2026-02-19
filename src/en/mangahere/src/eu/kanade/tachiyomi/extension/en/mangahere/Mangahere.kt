@@ -56,13 +56,9 @@ class Mangahere : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = ".manga-list-1-list li"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/directory/$page.htm", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/directory/$page.htm", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/directory/$page.htm?latest", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/$page.htm?latest", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -76,9 +72,7 @@ class Mangahere : ParsedHttpSource() {
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = "div.pager-list-left a:last-child"
 
@@ -90,11 +84,14 @@ class Mangahere : ParsedHttpSource() {
         filters.forEach { filter ->
             when (filter) {
                 is TypeList -> url.addEncodedQueryParameter("type", types[filter.values[filter.state]].toString())
+
                 is CompletionList -> url.addEncodedQueryParameter("st", filter.state.toString())
+
                 is RatingList -> {
                     url.addEncodedQueryParameter("rating_method", "gt")
                     url.addEncodedQueryParameter("rating", filter.state.toString())
                 }
+
                 is GenreList -> {
                     val includeGenres = mutableSetOf<Int>()
                     val excludeGenres = mutableSetOf<Int>()
@@ -107,18 +104,22 @@ class Mangahere : ParsedHttpSource() {
                         addEncodedQueryParameter("nogenres", excludeGenres.joinToString(","))
                     }
                 }
+
                 is ArtistFilter -> {
                     url.addEncodedQueryParameter("artist_method", "cw")
                     url.addEncodedQueryParameter("artist", filter.state)
                 }
+
                 is AuthorFilter -> {
                     url.addEncodedQueryParameter("author_method", "cw")
                     url.addEncodedQueryParameter("author", filter.state)
                 }
+
                 is YearFilter -> {
                     url.addEncodedQueryParameter("released_method", "eq")
                     url.addEncodedQueryParameter("released", filter.state)
                 }
+
                 else -> {}
             }
         }
@@ -180,28 +181,26 @@ class Mangahere : ParsedHttpSource() {
         return chapter
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return if ("Today" in date || " ago" in date) {
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        } else if ("Yesterday" in date) {
-            Calendar.getInstance().apply {
-                add(Calendar.DATE, -1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        } else {
-            try {
-                SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
-            } catch (e: ParseException) {
-                0L
-            }
+    private fun parseChapterDate(date: String): Long = if ("Today" in date || " ago" in date) {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    } else if ("Yesterday" in date) {
+        Calendar.getInstance().apply {
+            add(Calendar.DATE, -1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    } else {
+        try {
+            SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
+        } catch (e: ParseException) {
+            0L
         }
     }
 

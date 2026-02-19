@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 
-class Armageddon : MangaThemesia(
-    name = "Armageddon",
-    baseUrl = "https://www.silentquill.net",
-    lang = "en",
-) {
+class Armageddon :
+    MangaThemesia(
+        name = "Armageddon",
+        baseUrl = "https://www.silentquill.net",
+        lang = "en",
+    ) {
     override fun pageListParse(document: Document): List<Page> {
         val scriptContent = document.selectFirst("script:containsData(WyJodHRw)")?.data()
             ?: return super.pageListParse(document)

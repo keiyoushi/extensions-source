@@ -86,6 +86,7 @@ class ZettaHQ : ParsedHttpSource() {
 
                         isGenreEnable = isGenreEnable.not()
                     }
+
                     is SelectFilter -> {
                         val selected = filter.selected()
                         if (selected.isBlank()) return@forEach
@@ -102,12 +103,15 @@ class ZettaHQ : ParsedHttpSource() {
                             filter.query.equals("autor", true) -> {
                                 isAuthorEnable = isAuthorEnable.not()
                             }
+
                             filter.query.equals("category", true) -> {
                                 isCategoryEnable = isCategoryEnable.not()
                             }
+
                             else -> {}
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -159,10 +163,8 @@ class ZettaHQ : ParsedHttpSource() {
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".content-container article img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".content-container article img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.absUrl("src"))
     }
 
     override fun imageUrlParse(document: Document) = ""
@@ -207,15 +209,13 @@ class ZettaHQ : ParsedHttpSource() {
         genreList = parseGenres(document)
     }
 
-    private fun parseGenres(document: Document): List<Genre> {
-        return document.select(".cat-item > label")
-            .map { label ->
-                Genre(
-                    name = label.text(),
-                    id = label.text().normalize(),
-                )
-            }
-    }
+    private fun parseGenres(document: Document): List<Genre> = document.select(".cat-item > label")
+        .map { label ->
+            Genre(
+                name = label.text(),
+                id = label.text().normalize(),
+            )
+        }
 
     private fun parseOptions(document: Document, attr: String): Array<Pair<String, String>> {
         val options = mutableListOf("Todos" to "")
@@ -242,13 +242,15 @@ class ZettaHQ : ParsedHttpSource() {
     }
 
     private class GenreList(title: String, genres: List<Genre>, override val priority: Int = 0) :
-        Sort, Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
+        Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) }),
+        Sort
 
     private class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
     private class Genre(val name: String, val id: String = name)
 
     private open class SelectFilter(title: String, private val vals: Array<Pair<String, String>>, state: Int = 0, val query: String = "", override val priority: Int = 0) :
-        Sort, Filter.Select<String>(title, vals.map { it.first }.toTypedArray(), state) {
+        Filter.Select<String>(title, vals.map { it.first }.toTypedArray(), state),
+        Sort {
         fun selected() = vals[state].second
     }
 

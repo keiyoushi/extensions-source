@@ -11,14 +11,12 @@ class WeebDexHelper {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    fun parseStatus(status: String?): Int {
-        return when (status?.lowercase(Locale.ROOT)) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "hiatus" -> SManga.ON_HIATUS
-            "cancelled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    fun parseStatus(status: String?): Int = when (status?.lowercase(Locale.ROOT)) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String): String? {
@@ -31,9 +29,7 @@ class WeebDexHelper {
         return "${WeebDexConstants.CDN_COVER_URL}/$mangaId/${cover.id}$ext"
     }
 
-    fun parseDate(dateStr: String): Long {
-        return dateFormat.tryParse(dateStr)
-    }
+    fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
 
     fun parseChapterNumber(chapter: String?): Float {
         if (chapter.isNullOrBlank()) return -2F

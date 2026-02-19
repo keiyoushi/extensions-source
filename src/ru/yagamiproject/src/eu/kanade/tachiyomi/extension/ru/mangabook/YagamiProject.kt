@@ -28,19 +28,20 @@ class YagamiProject : ParsedHttpSource() {
         .add("Referer", baseUrl)
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/list-new/$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-new/$page", headers)
     override fun popularMangaNextPageSelector() = ".panel_nav .button a"
     override fun popularMangaSelector() = ".list .group"
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select(".title a").first()!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                val baseTitle = it.attr("title")
-                title = if (baseTitle.isNullOrEmpty()) { it.text() } else baseTitle.split(" / ").min()
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select(".title a").first()!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            val baseTitle = it.attr("title")
+            title = if (baseTitle.isNullOrEmpty()) {
+                it.text()
+            } else {
+                baseTitle.split(" / ").min()
             }
-            thumbnail_url = element.select(".cover_mini > img").attr("src").replace("thumb_", "")
         }
+        thumbnail_url = element.select(".cover_mini > img").attr("src").replace("thumb_", "")
     }
 
     // Latest
@@ -62,12 +63,14 @@ class YagamiProject : ParsedHttpSource() {
                         return GET("$baseUrl/tags/$catQ", headers)
                     }
                 }
+
                 is FormatList -> {
                     if (filter.state > 0) {
                         val formN = getFormatList()[filter.state].query
                         return GET("$baseUrl/$formN", headers)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -77,9 +80,7 @@ class YagamiProject : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaSelector(): String = popularMangaSelector()
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga {
@@ -129,12 +130,10 @@ class YagamiProject : ParsedHttpSource() {
             null
         }
     }
-    private fun parseDate(date: String): Long {
-        return when (date) {
-            "Сегодня" -> System.currentTimeMillis()
-            "Вчера" -> System.currentTimeMillis() - 24 * 60 * 60 * 1000
-            else -> SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: 0
-        }
+    private fun parseDate(date: String): Long = when (date) {
+        "Сегодня" -> System.currentTimeMillis()
+        "Вчера" -> System.currentTimeMillis() - 24 * 60 * 60 * 1000
+        else -> SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: 0
     }
 
     // Pages

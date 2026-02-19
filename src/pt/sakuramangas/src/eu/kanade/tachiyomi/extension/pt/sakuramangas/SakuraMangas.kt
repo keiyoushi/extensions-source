@@ -33,7 +33,9 @@ import java.security.MessageDigest
 import java.util.Calendar
 import kotlin.concurrent.thread
 
-class SakuraMangas : HttpSource(), ConfigurableSource {
+class SakuraMangas :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -76,15 +78,13 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Popular =======================================
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList())
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // ================================ Latest =======================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/dist/sakura/models/home/__.home_ultimos.php", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/dist/sakura/models/home/__.home_ultimos.php", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<List<String>>()
@@ -128,8 +128,11 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
                 }
 
                 is DemographyFilter -> demography = filter.getValue().ifEmpty { null }
+
                 is ClassificationFilter -> classification = filter.getValue().ifEmpty { null }
+
                 is OrderByFilter -> orderBy = filter.getValue().ifEmpty { null }
+
                 else -> {}
             }
         }

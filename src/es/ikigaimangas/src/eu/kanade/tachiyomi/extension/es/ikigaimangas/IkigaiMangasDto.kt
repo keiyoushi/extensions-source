@@ -56,13 +56,11 @@ class QwikData(
         return results
     }
 
-    fun unwrapJson(el: JsonElement?): JsonElement {
-        return when (el) {
-            is JsonPrimitive -> el
-            is JsonObject -> el
-            is JsonArray -> JsonArray(el.map { unwrapJson(it) })
-            else -> JsonNull
-        }
+    fun unwrapJson(el: JsonElement?): JsonElement = when (el) {
+        is JsonPrimitive -> el
+        is JsonObject -> el
+        is JsonArray -> JsonArray(el.map { unwrapJson(it) })
+        else -> JsonNull
     }
 }
 

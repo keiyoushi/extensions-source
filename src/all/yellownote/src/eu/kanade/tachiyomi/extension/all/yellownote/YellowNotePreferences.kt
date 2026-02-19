@@ -47,16 +47,12 @@ object YellowNotePreferences {
             .removeSuffix("/")
     }
 
-    internal fun SharedPreferences.language(): String {
-        return getString(PS_KEY_LANGUAGE, "")!!.ifBlank { LanguageUtils.getDefaultLanguage() }
-    }
+    internal fun SharedPreferences.language(): String = getString(PS_KEY_LANGUAGE, "")!!.ifBlank { LanguageUtils.getDefaultLanguage() }
 
-    internal fun buildPreferences(context: Context, intl: Intl): List<Preference> {
-        return listOf(
-            buildDomainPreference(context, intl),
-            buildLanguagePreference(context, intl),
-        )
-    }
+    internal fun buildPreferences(context: Context, intl: Intl): List<Preference> = listOf(
+        buildDomainPreference(context, intl),
+        buildLanguagePreference(context, intl),
+    )
 
     internal fun buildDomainPreference(context: Context, intl: Intl): Preference {
         return EditTextPreference(context).apply {
@@ -89,22 +85,20 @@ object YellowNotePreferences {
         }
     }
 
-    internal fun buildLanguagePreference(context: Context, intl: Intl): Preference {
-        return ListPreference(context).apply {
-            key = PS_KEY_LANGUAGE
-            title = intl["config.language.title"]
-            summary = intl["config.language.summary"]
-            entries = LanguageUtils.getSupportedLanguageDisplayNames()
-            entryValues = LanguageUtils.getSupportedLanguageKeys()
-            setDefaultValue("")
-            setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(
-                    context,
-                    intl["config.language.changed-success"],
-                    Toast.LENGTH_LONG,
-                ).show()
-                true
-            }
+    internal fun buildLanguagePreference(context: Context, intl: Intl): Preference = ListPreference(context).apply {
+        key = PS_KEY_LANGUAGE
+        title = intl["config.language.title"]
+        summary = intl["config.language.summary"]
+        entries = LanguageUtils.getSupportedLanguageDisplayNames()
+        entryValues = LanguageUtils.getSupportedLanguageKeys()
+        setDefaultValue("")
+        setOnPreferenceChangeListener { _, newValue ->
+            Toast.makeText(
+                context,
+                intl["config.language.changed-success"],
+                Toast.LENGTH_LONG,
+            ).show()
+            true
         }
     }
 }

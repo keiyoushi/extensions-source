@@ -34,8 +34,7 @@ abstract class MultiChan(
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", baseUrl)
     }
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/mostfavorites?offset=${20 * (page - 1)}", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mostfavorites?offset=${20 * (page - 1)}", headers)
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/new?offset=${20 * (page - 1)}")
 
@@ -55,8 +54,7 @@ abstract class MultiChan(
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -138,9 +136,7 @@ abstract class MultiChan(
         return pageUrls.mapIndexed { i, url -> Page(i, "", url) }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        throw Exception("Not used")
-    }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
     override fun imageUrlParse(document: Document) = ""
 

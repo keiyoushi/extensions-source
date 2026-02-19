@@ -70,6 +70,7 @@ private fun parseDate(date: String?): Long {
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
         }
+
         WordSet("today", "just now").startsWith(date) -> {
             Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0)
@@ -78,6 +79,7 @@ private fun parseDate(date: String?): Long {
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
         }
+
         WordSet("يومين").startsWith(date) -> {
             Calendar.getInstance().apply {
                 add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
@@ -87,12 +89,15 @@ private fun parseDate(date: String?): Long {
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
         }
+
         WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
             parseRelativeDate(date)
         }
+
         WordSet("hace").startsWith(date) -> {
             parseRelativeDate(date)
         }
+
         else -> 0L
     }
 }
@@ -111,28 +116,33 @@ private fun parseRelativeDate(date: String): Long {
     return when {
         WordSet("detik", "segundo", "second", "วินาที").anyWordIn(date) ->
             now.apply { add(Calendar.SECOND, -number) }.timeInMillis
+
         WordSet("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").anyWordIn(date) ->
             now.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+
         WordSet("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة", "小时").anyWordIn(date) ->
             now.apply { add(Calendar.HOUR, -number) }.timeInMillis
+
         WordSet("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام", "天").anyWordIn(date) ->
             now.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+
         WordSet("week", "semana").anyWordIn(date) ->
             now.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
+
         WordSet("month", "mes").anyWordIn(date) ->
             now.apply { add(Calendar.MONTH, -number) }.timeInMillis
+
         WordSet("year", "año").anyWordIn(date) ->
             now.apply { add(Calendar.YEAR, -number) }.timeInMillis
+
         else -> 0L
     }
 }
 
-private fun SimpleDateFormat.tryParse(string: String): Long {
-    return try {
-        parse(string)?.time ?: 0L
-    } catch (_: ParseException) {
-        0L
-    }
+private fun SimpleDateFormat.tryParse(string: String): Long = try {
+    parse(string)?.time ?: 0L
+} catch (_: ParseException) {
+    0L
 }
 
 class WordSet(private vararg val words: String) {

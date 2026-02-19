@@ -15,7 +15,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class EveriaClubCom() : HttpSource() {
+class EveriaClubCom : HttpSource() {
     override val baseUrl = "https://www.everiaclub.com"
     override val lang = "all"
     override val name = "EveriaClub (unoriginal)"
@@ -73,12 +73,15 @@ class EveriaClubCom() : HttpSource() {
                 .addPathSegment("tags")
                 .addPathSegment(tagFilter.state)
                 .addPathSegment(page.toString())
+
             categoryFilter.state != 0 -> "$baseUrl/${categoryFilter.toUriPart()}?page=$page".toHttpUrl().newBuilder()
+
             query.isNotBlank() -> baseUrl.toHttpUrl().newBuilder()
                 .addPathSegment("search")
                 .addPathSegment("")
                 .addQueryParameter("keyword", query)
                 .addQueryParameter("page", page.toString())
+
             else -> "$baseUrl/?page=$page".toHttpUrl().newBuilder()
         }
         return GET(url.build(), headers)
@@ -117,8 +120,7 @@ class EveriaClubCom() : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList(
@@ -135,18 +137,19 @@ class EveriaClubCom() : HttpSource() {
         fun toUriPart() = valuePair[state].second
     }
 
-    class CategoryFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Gravure", "Gravure.html"),
-            Pair("Japan", "Japan.html"),
-            Pair("Korea", "Korea.html"),
-            Pair("Thailand", "Thailand.html"),
-            Pair("Chinese", "Chinese.html"),
-            Pair("Cosplay", "Cosplay.html"),
-        ),
-    )
+    class CategoryFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Gravure", "Gravure.html"),
+                Pair("Japan", "Japan.html"),
+                Pair("Korea", "Korea.html"),
+                Pair("Thailand", "Thailand.html"),
+                Pair("Chinese", "Chinese.html"),
+                Pair("Cosplay", "Cosplay.html"),
+            ),
+        )
 
     class TagFilter : Filter.Text("Tag")
 }

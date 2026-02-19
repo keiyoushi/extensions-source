@@ -45,17 +45,13 @@ class ExHentaiNetBR : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".content-pagination li[class='active'] + li:not([class='next'])"
 
-    override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
@@ -122,13 +118,11 @@ class ExHentaiNetBR : ParsedHttpSource() {
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun chapterListParse(response: Response) =
-        super.chapterListParse(response).reversed()
+    override fun chapterListParse(response: Response) = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document) =
-        document.select("div.manga_image > img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.imgAttr())
-        }
+    override fun pageListParse(document: Document) = document.select("div.manga_image > img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -148,17 +142,18 @@ class ExHentaiNetBR : ParsedHttpSource() {
         )
     }
 
-    private fun Element.imgAttr(): String {
-        return when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            else -> attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        else -> attr("abs:src")
     }
 
-    private fun String.toDate(): Long =
-        try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+    private fun String.toDate(): Long = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     companion object {
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
@@ -166,8 +161,7 @@ class ExHentaiNetBR : ParsedHttpSource() {
         const val DEFAULT_FILTER_VALUE = "Padrão"
     }
 
-    class AlphabetFilter(displayName: String, private val vals: List<String>, state: Int = 0) :
-        Filter.Select<String>(displayName, vals.toTypedArray(), state) {
+    class AlphabetFilter(displayName: String, private val vals: List<String>, state: Int = 0) : Filter.Select<String>(displayName, vals.toTypedArray(), state) {
         fun selected() = vals[state]
     }
 }

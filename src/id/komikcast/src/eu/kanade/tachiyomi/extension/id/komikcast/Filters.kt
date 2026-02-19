@@ -12,11 +12,12 @@ open class UriPartFilter(
     private val param: String,
     private val vals: Array<Pair<String, String>>,
     private val default: String = "",
-) : UriFilter, Filter.Select<String>(
+) : Filter.Select<String>(
     name,
     vals.map { it.first }.toTypedArray(),
     vals.indexOfFirst { it.second == default }.takeIf { it != -1 } ?: 0,
-) {
+),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val selected = vals[state].second
         if (selected.isNotEmpty()) {
@@ -31,10 +32,11 @@ open class UriMultiSelectFilter(
     name: String,
     private val param: String,
     private val options: Array<Pair<String, String>>,
-) : UriFilter, Filter.Group<UriMultiSelectOption>(
+) : Filter.Group<UriMultiSelectOption>(
     name,
     options.map { UriMultiSelectOption(it.first, it.second) },
-) {
+),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         state.filter { it.state }.forEach {
             builder.addQueryParameter(param, it.value)
@@ -49,10 +51,11 @@ open class UriMultiTriSelectFilter(
     private val includeParam: String,
     private val excludeParam: String,
     private val options: Array<Pair<String, String>>,
-) : UriFilter, Filter.Group<UriMultiTriSelectOption>(
+) : Filter.Group<UriMultiTriSelectOption>(
     name,
     options.map { UriMultiTriSelectOption(it.first, it.second) },
-) {
+),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         state.forEach {
             if (it.isIncluded()) {
@@ -65,56 +68,61 @@ open class UriMultiTriSelectFilter(
     }
 }
 
-class SortFilter(default: String = "") : UriPartFilter(
-    "Sort",
-    "sort",
-    arrayOf(
-        Pair("Popularitas", "popular"),
-        Pair("Terbaru", "latest"),
-        Pair("Rating", "rating"),
-    ),
-    default,
-)
+class SortFilter(default: String = "") :
+    UriPartFilter(
+        "Sort",
+        "sort",
+        arrayOf(
+            Pair("Popularitas", "popular"),
+            Pair("Terbaru", "latest"),
+            Pair("Rating", "rating"),
+        ),
+        default,
+    )
 
-class SortOrderFilter : UriPartFilter(
-    "Sort Order",
-    "sortOrder",
-    arrayOf(
-        Pair("Desc", "desc"),
-        Pair("Asc", "asc"),
-    ),
-)
+class SortOrderFilter :
+    UriPartFilter(
+        "Sort Order",
+        "sortOrder",
+        arrayOf(
+            Pair("Desc", "desc"),
+            Pair("Asc", "asc"),
+        ),
+    )
 
-class StatusFilter : UriMultiSelectFilter(
-    "Status",
-    "status",
-    arrayOf(
-        Pair("On Going", "ongoing"),
-        Pair("Completed", "completed"),
-        Pair("Hiatus", "hiatus"),
-        Pair("Cancelled", "cancelled"),
-    ),
-)
+class StatusFilter :
+    UriMultiSelectFilter(
+        "Status",
+        "status",
+        arrayOf(
+            Pair("On Going", "ongoing"),
+            Pair("Completed", "completed"),
+            Pair("Hiatus", "hiatus"),
+            Pair("Cancelled", "cancelled"),
+        ),
+    )
 
-class FormatFilter : UriMultiSelectFilter(
-    "Format",
-    "format",
-    arrayOf(
-        Pair("Manga", "manga"),
-        Pair("Manhwa", "manhwa"),
-        Pair("Manhua", "manhua"),
-        Pair("Webtoon", "webtoon"),
-    ),
-)
+class FormatFilter :
+    UriMultiSelectFilter(
+        "Format",
+        "format",
+        arrayOf(
+            Pair("Manga", "manga"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Manhua", "manhua"),
+            Pair("Webtoon", "webtoon"),
+        ),
+    )
 
-class TypeFilter : UriMultiSelectFilter(
-    "Type",
-    "type",
-    arrayOf(
-        Pair("Project", "project"),
-        Pair("Mirror", "mirror"),
-    ),
-)
+class TypeFilter :
+    UriMultiSelectFilter(
+        "Type",
+        "type",
+        arrayOf(
+            Pair("Project", "project"),
+            Pair("Mirror", "mirror"),
+        ),
+    )
 
 fun getGenres(): Array<Pair<String, String>> = arrayOf(
     Pair("4-Koma", "4-Koma"),
@@ -166,9 +174,10 @@ fun getGenres(): Array<Pair<String, String>> = arrayOf(
     Pair("Yuri", "Yuri"),
 )
 
-class GenreFilter(genres: Array<Pair<String, String>>) : UriMultiTriSelectFilter(
-    "Genre",
-    "genreIds",
-    "genreIds",
-    genres,
-)
+class GenreFilter(genres: Array<Pair<String, String>>) :
+    UriMultiTriSelectFilter(
+        "Genre",
+        "genreIds",
+        "genreIds",
+        genres,
+    )

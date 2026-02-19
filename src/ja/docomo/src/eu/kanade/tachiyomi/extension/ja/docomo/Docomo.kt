@@ -204,9 +204,7 @@ class Docomo : HttpSource() {
         return generatePages(pageContent, result.keys, cPhp)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        return response.request.url.toString()
-    }
+    override fun imageUrlParse(response: Response): String = response.request.url.toString()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()

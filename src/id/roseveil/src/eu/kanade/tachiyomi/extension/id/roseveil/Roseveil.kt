@@ -12,22 +12,21 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Roseveil : Madara(
-    "Roseveil",
-    "https://roseveil.org",
-    "id",
-    SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) {
+class Roseveil :
+    Madara(
+        "Roseveil",
+        "https://roseveil.org",
+        "id",
+        SimpleDateFormat("MMMM dd, yyyy", Locale.US),
+    ) {
     override val mangaSubString = "comic"
 
     // ============================== Popular & Latest ==============================
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/$mangaSubString/${searchPage(page)}?manga_order=views", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$mangaSubString/${searchPage(page)}?manga_order=views", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/$mangaSubString/${searchPage(page)}?manga_order=latest", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$mangaSubString/${searchPage(page)}?manga_order=latest", headers)
 
     override fun popularMangaSelector() = "article"
     override fun latestUpdatesSelector() = popularMangaSelector()
@@ -86,47 +85,51 @@ class Roseveil : Madara(
                 is OrderByFilter -> {
                     url.addQueryParameter("manga_order", filter.toUriPart())
                 }
+
                 is StatusSelectFilter -> {
                     if (filter.toUriPart().isNotBlank()) {
                         url.addQueryParameter("manga_status", filter.toUriPart())
                     }
                 }
+
                 is TypeSelectFilter -> {
                     if (filter.toUriPart().isNotBlank()) {
                         url.addQueryParameter("manga_type", filter.toUriPart())
                     }
                 }
+
                 is TagSelectFilter -> {
                     if (filter.toUriPart().isNotBlank()) {
                         url.addQueryParameter("manga_tag", filter.toUriPart())
                     }
                 }
+
                 is GenreSelectFilter -> {
                     if (filter.toUriPart().isNotBlank()) {
                         url.addQueryParameter("manga_genre", filter.toUriPart())
                     }
                 }
+
                 is AuthorSelectFilter -> {
                     if (filter.toUriPart().isNotBlank()) {
                         url.addQueryParameter("manga_author", filter.toUriPart())
                     }
                 }
+
                 else -> {}
             }
         }
         return GET(url.build(), headers)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            AuthorSelectFilter("Translator", getAuthorList()),
-            OrderByFilter("Urutkan Berdasarkan", getOrderList()),
-            StatusSelectFilter("Status", getStatusList()),
-            TypeSelectFilter("Tipe", getTypeList()),
-            TagSelectFilter("Tags", getTagList()),
-            GenreSelectFilter("Genre", getGenreList()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        AuthorSelectFilter("Translator", getAuthorList()),
+        OrderByFilter("Urutkan Berdasarkan", getOrderList()),
+        StatusSelectFilter("Status", getStatusList()),
+        TypeSelectFilter("Tipe", getTypeList()),
+        TagSelectFilter("Tags", getTagList()),
+        GenreSelectFilter("Genre", getGenreList()),
+    )
 
     private fun getOrderList() = listOf(
         Pair("Latest Update", "latest"),

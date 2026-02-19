@@ -21,12 +21,8 @@ class Ikuhentai : ParsedHttpSource() {
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page?s&post_type=wp-manga&m_orderby=views", headers)
-    }
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page?s&post_type=wp-manga&m_orderby=latest", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/page/$page?s&post_type=wp-manga&m_orderby=views", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page?s&post_type=wp-manga&m_orderby=latest", headers)
 
     //    LIST SELECTOR
     override fun popularMangaSelector() = "div.c-tabs-item__content"
@@ -81,6 +77,7 @@ class Ikuhentai : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is StatusList -> {
                     val statuses = mutableListOf<String>()
                     filter.state.forEach {
@@ -99,7 +96,9 @@ class Ikuhentai : ParsedHttpSource() {
                     orderBy = filter.toUriPart()
                     url.addQueryParameter("m_orderby", orderBy)
                 }
+
                 is TextField -> url.addQueryParameter(filter.key, filter.state)
+
                 else -> {}
             }
         }
@@ -186,18 +185,19 @@ class Ikuhentai : ParsedHttpSource() {
 
     //    private class Status : Filter.TriState("Completed")
     private class TextField(name: String, val key: String) : Filter.Text(name)
-    private class SortBy : UriPartFilter(
-        "Ordenar por",
-        arrayOf(
-            Pair("Relevance", ""),
-            Pair("Latest", "latest"),
-            Pair("A-Z", "alphabet"),
-            Pair("Calificación", "rating"),
-            Pair("Tendencia", "trending"),
-            Pair("Más visto", "views"),
-            Pair("Nuevo", "new-manga"),
-        ),
-    )
+    private class SortBy :
+        UriPartFilter(
+            "Ordenar por",
+            arrayOf(
+                Pair("Relevance", ""),
+                Pair("Latest", "latest"),
+                Pair("A-Z", "alphabet"),
+                Pair("Calificación", "rating"),
+                Pair("Tendencia", "trending"),
+                Pair("Más visto", "views"),
+                Pair("Nuevo", "new-manga"),
+            ),
+        )
 
     private class Genre(name: String, val id: String = name) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
@@ -263,8 +263,7 @@ class Ikuhentai : ParsedHttpSource() {
         Genre("Yaoi", "yaoi"),
         Genre("Yuri", "yuri"),
     )
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }
