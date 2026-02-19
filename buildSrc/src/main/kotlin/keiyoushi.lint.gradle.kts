@@ -8,9 +8,7 @@ spotless {
         targetExclude("**/build/**/*.kt")
         ktlint()
             .editorConfigOverride(mapOf(
-                "ktlint_standard_discouraged-comment-location" to "disabled",
-                "ktlint_function_signature_body_expression_wrapping" to "default",
-                "ktlint_standard_chain-method-continuation" to "disable"
+                "max_line_length" to 2147483647,
             ))
         trimTrailingWhitespace()
         endWithNewline()
