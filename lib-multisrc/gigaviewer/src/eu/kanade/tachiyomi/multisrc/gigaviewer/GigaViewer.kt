@@ -34,9 +34,10 @@ abstract class GigaViewer(
 ) : HttpSource(),
     ConfigurableSource {
     protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
+    protected open val dayTimeZone = TimeZone.getTimeZone("Asia/Tokyo")!!
     protected open val preferences: SharedPreferences by getPreferencesLazy()
     protected open val dayOfWeek: String by lazy {
-        Calendar.getInstance()
+        Calendar.getInstance(dayTimeZone)
             .getDisplayName(Calendar.DAY_OF_WEEK, Calendar.LONG, Locale.US)!!
             .lowercase(Locale.US)
     }
@@ -100,9 +101,12 @@ abstract class GigaViewer(
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .build()
+            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder().apply {
+                addQueryParameter("q", query)
+                if (page > 1) {
+                    addQueryParameter("page", page.toString())
+                }
+            }.build()
             return GET(url, headers)
         }
 
@@ -120,7 +124,8 @@ abstract class GigaViewer(
         if (response.request.url.pathSegments.contains(searchPathSegment)) {
             val document = response.asJsoup()
             val mangas = document.select(searchMangaSelector).map(::searchMangaFromElement)
-            return MangasPage(mangas, searchMangaNextPageSelector != null)
+            val hasNextPage = searchMangaNextPageSelector?.let { document.selectFirst(it) != null } ?: false
+            return MangasPage(mangas, hasNextPage)
         }
         return popularMangaParse(response)
     }
