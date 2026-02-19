@@ -29,5 +29,4 @@ class ComicBorder :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
