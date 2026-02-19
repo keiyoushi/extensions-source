@@ -25,7 +25,9 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-class ComicsKingdom(override val lang: String) : ConfigurableSource, HttpSource() {
+class ComicsKingdom(override val lang: String) :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Comics Kingdom"
     override val baseUrl = "https://wp.comicskingdom.com"
@@ -39,14 +41,13 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, HttpSource(
     private val mangaPerPage = 20
     private val chapterPerPage = 100
 
-    private fun mangaApiUrl(): HttpUrl.Builder =
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("wp-json/wp/v2")
-            addPathSegment("ck_feature")
-            addQueryParameter("per_page", mangaPerPage.toString())
-            addQueryParameter("_fields", MangaFields)
-            addQueryParameter("ck_language", if (lang == "es") "spanish" else "english")
-        }
+    private fun mangaApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegments("wp-json/wp/v2")
+        addPathSegment("ck_feature")
+        addQueryParameter("per_page", mangaPerPage.toString())
+        addQueryParameter("_fields", MangaFields)
+        addQueryParameter("ck_language", if (lang == "es") "spanish" else "english")
+    }
 
     private fun chapterApiUrl(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegments("wp-json/wp/v2")
@@ -65,41 +66,40 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, HttpSource(
 
     override fun popularMangaRequest(page: Int): Request = getReq("relevance", page)
     override fun latestUpdatesRequest(page: Int): Request = getReq("modified", page)
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET(
-            mangaApiUrl().apply {
-                addQueryParameter("search", query)
-                addQueryParameter("page", page.toString())
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
+        mangaApiUrl().apply {
+            addQueryParameter("search", query)
+            addQueryParameter("page", page.toString())
 
-                if (!filters.isEmpty()) {
-                    for (filter in filters) {
-                        when (filter) {
-                            is OrderFilter -> {
-                                addQueryParameter("orderby", filter.getValue())
-                            }
-
-                            is GenreList -> {
-                                if (filter.included.isNotEmpty()) {
-                                    addQueryParameter(
-                                        "ck_genre",
-                                        filter.included.joinToString(","),
-                                    )
-                                }
-                                if (filter.excluded.isNotEmpty()) {
-                                    addQueryParameter(
-                                        "ck_genre_exclude",
-                                        filter.excluded.joinToString(","),
-                                    )
-                                }
-                            }
-
-                            else -> {}
+            if (!filters.isEmpty()) {
+                for (filter in filters) {
+                    when (filter) {
+                        is OrderFilter -> {
+                            addQueryParameter("orderby", filter.getValue())
                         }
+
+                        is GenreList -> {
+                            if (filter.included.isNotEmpty()) {
+                                addQueryParameter(
+                                    "ck_genre",
+                                    filter.included.joinToString(","),
+                                )
+                            }
+                            if (filter.excluded.isNotEmpty()) {
+                                addQueryParameter(
+                                    "ck_genre_exclude",
+                                    filter.excluded.joinToString(","),
+                                )
+                            }
+                        }
+
+                        else -> {}
                     }
                 }
-            }.build(),
-            headers,
-        )
+            }
+        }.build(),
+        headers,
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val list = json.decodeFromString<List<Manga>>(response.body.string())
@@ -133,8 +133,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, HttpSource(
         thumbnail_url = thumbnailUrlRegex.find(mangaData.yoast_head)?.groupValues?.get(1)
     }
 
-    override fun getMangaUrl(manga: SManga): String =
-        "$baseUrl/${(baseUrl + manga.url).toHttpUrl().queryParameter("slug")}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${(baseUrl + manga.url).toHttpUrl().queryParameter("slug")}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaData = json.decodeFromString<Manga>(response.body.string())

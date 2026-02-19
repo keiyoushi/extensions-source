@@ -34,7 +34,8 @@ import java.util.TimeZone
 class Akuma(
     override val lang: String,
     private val akumaLang: String,
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Akuma"
 
@@ -153,7 +154,9 @@ class Akuma(
 
         if (document.text().contains("Max keywords of 3 exceeded.")) {
             throw Exception("Login required for more than 3 filters")
-        } else if (document.text().contains("Max keywords of 8 exceeded.")) throw Exception("Only max of 8 filters are allowed")
+        } else if (document.text().contains("Max keywords of 8 exceeded.")) {
+            throw Exception("Only max of 8 filters are allowed")
+        }
 
         val mangas = document.select(popularMangaSelector()).map { element ->
             popularMangaFromElement(element)
@@ -166,30 +169,26 @@ class Akuma(
         return MangasPage(mangas, !nextHash.isNullOrEmpty())
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select(".overlay-title").text().replace("\"", "").let {
-                if (displayFullTitle) it.trim() else it.shortenTitle()
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        title = element.select(".overlay-title").text().replace("\"", "").let {
+            if (displayFullTitle) it.trim() else it.shortenTitle()
         }
+        thumbnail_url = element.select("img").attr("abs:src")
     }
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID)) {
-            val url = "/g/${query.substringAfter(PREFIX_ID)}"
-            val manga = SManga.create().apply { this.url = url }
-            fetchMangaDetails(manga).map {
-                MangasPage(listOf(it.apply { this.url = url }), false)
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID)) {
+        val url = "/g/${query.substringAfter(PREFIX_ID)}"
+        val manga = SManga.create().apply { this.url = url }
+        fetchMangaDetails(manga).map {
+            MangasPage(listOf(it.apply { this.url = url }), false)
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -211,9 +210,11 @@ class Akuma(
                         )
                     }
                 }
+
                 is OptionFilter -> {
                     if (filter.state > 0) finalQuery.add("opt:${filter.getValue()}")
                 }
+
                 is CategoryFilter -> {
                     filter.state.forEach {
                         when {
@@ -222,6 +223,7 @@ class Akuma(
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -318,9 +320,7 @@ class Akuma(
         return pageList
     }
 
-    override fun imageUrlParse(document: Document): String {
-        return document.select(".entry-content img").attr("abs:src")
-    }
+    override fun imageUrlParse(document: Document): String = document.select(".entry-content img").attr("abs:src")
 
     override fun getFilterList(): FilterList = getFilters()
 

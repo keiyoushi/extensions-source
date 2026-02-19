@@ -8,12 +8,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class KuroiManga : Madara(
-    "Kuroi Manga",
-    "https://www.kuroimanga.com",
-    "tr",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
+class KuroiManga :
+    Madara(
+        "Kuroi Manga",
+        "https://www.kuroimanga.com",
+        "tr",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
@@ -29,9 +30,7 @@ class KuroiManga : Madara(
         return pageList
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            name = element.selectFirst("li > a")!!.text()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        name = element.selectFirst("li > a")!!.text()
     }
 }

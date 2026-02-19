@@ -115,14 +115,12 @@ class ComposedImageInterceptor(
      *   val typeface: TypeFace? = loadFont("filename.ttf")
      * }</pre>
      */
-    private fun loadFont(fontName: String): Typeface? {
-        return try {
-            this::class.java.classLoader!!
-                .getResourceAsStream("assets/fonts/$fontName")
-                .toTypeface(fontName)
-        } catch (e: Exception) {
-            null
-        }
+    private fun loadFont(fontName: String): Typeface? = try {
+        this::class.java.classLoader!!
+            .getResourceAsStream("assets/fonts/$fontName")
+            .toTypeface(fontName)
+    } catch (e: Exception) {
+        null
     }
 
     private fun InputStream.toTypeface(fontName: String): Typeface? {
@@ -139,9 +137,7 @@ class ComposedImageInterceptor(
 
         val dialogBoxLineCount = dialog.height / fontHeight
 
-        /**
-         * Centers text in y for dialogues smaller than the dialog box
-         */
+        // Centers text in y for dialogues smaller than the dialog box
         return when {
             dialogBox.lineCount < dialogBoxLineCount -> dialog.centerY - dialogBox.lineCount / 2f * fontHeight
             else -> dialog.y
@@ -151,9 +147,7 @@ class ComposedImageInterceptor(
     private fun createDialogBox(dialog: Dialog, textPaint: TextPaint): StaticLayout {
         var dialogBox = createBoxLayout(dialog, textPaint)
 
-        /**
-         * The best way I've found to adjust the text in the dialog box (Especially in long dialogues)
-         */
+        // The best way I've found to adjust the text in the dialog box (Especially in long dialogues)
         while (dialogBox.height > dialog.height) {
             textPaint.textSize -= 0.5f
             dialogBox = createBoxLayout(dialog, textPaint)

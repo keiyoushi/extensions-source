@@ -53,12 +53,14 @@ class GanganOnline : HttpSource() {
                     ?.filter { it.isNovel != true }
                     ?.map { it.toSManga(baseUrl) }
             }
+
             "/rensai" in url || "/finish" in url -> {
                 val data = response.parseAsNextData<MangaListDto>()
                 data.titleSections?.flatMap { it.titles }
                     ?.filter { it.isNovel != true }
                     ?.map { it.toSManga(baseUrl) }
             }
+
             "/ga" in url -> {
                 val data = response.parseAsNextData<MangaListDto>()
                 val ongoing = data.ongoingTitleSection?.titles!!
@@ -67,18 +69,18 @@ class GanganOnline : HttpSource() {
                     .filter { it.isNovel != true }
                     .map { it.toSManga(baseUrl) }
             }
+
             "/pixiv" in url -> {
                 val data = response.parseAsNextData<PixivPageDto>()
                 data.ganganTitles?.map { it.toSManga(baseUrl) }
             }
+
             else -> null
         }
         return MangasPage(mangas!!, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAsNextData<MangaDetailDto>().default.toSManga(baseUrl)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAsNextData<MangaDetailDto>().default.toSManga(baseUrl)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url.toString()
@@ -103,8 +105,7 @@ class GanganOnline : HttpSource() {
         CategoryFilter(getCategoryList()),
     )
 
-    private class CategoryFilter(private val category: Array<Pair<String, String>>) :
-        Filter.Select<String>("Category", category.map { it.first }.toTypedArray()) {
+    private class CategoryFilter(private val category: Array<Pair<String, String>>) : Filter.Select<String>("Category", category.map { it.first }.toTypedArray()) {
         fun toUriPart() = category[state].second
     }
 

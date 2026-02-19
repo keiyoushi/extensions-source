@@ -51,9 +51,7 @@ fun decrypt(response: Response): String {
     return aesDecrypt(res.data, key, iv)
 }
 
-inline fun <reified T> Response.decryptAs(): T {
-    return decrypt(this).parseAs()
-}
+inline fun <reified T> Response.decryptAs(): T = decrypt(this).parseAs()
 
 fun decryptImageUrl(url: String, requestToken: String): String {
     val inner = md5(requestToken)

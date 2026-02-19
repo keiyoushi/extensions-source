@@ -155,11 +155,9 @@ class RavenManga : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
+    )
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0

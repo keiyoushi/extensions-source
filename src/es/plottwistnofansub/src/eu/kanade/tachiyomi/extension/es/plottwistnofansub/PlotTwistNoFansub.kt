@@ -34,7 +34,9 @@ import org.jsoup.nodes.Entities
 import org.jsoup.select.Elements
 import uy.kohesive.injekt.injectLazy
 
-class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
+class PlotTwistNoFansub :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Plot Twist No Fansub"
 
@@ -198,26 +200,20 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Haga click en \"Filtrar\" para ver todos los mangas."),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Haga click en \"Filtrar\" para ver todos los mangas."),
+    )
 
-    private fun Element.imgAttr(): String {
-        return when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
-            else -> this.attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+        this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
+        else -> this.attr("abs:src")
     }
 
     private fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     private fun getKey(document: Document): String {
         val customPriorityWant = listOf("custom")

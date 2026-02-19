@@ -33,42 +33,35 @@ class LOLUniverse(
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", UNIVERSE_URL).set("Referer", "$UNIVERSE_URL/")
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$MEEPS_URL/$siteLang/comics/index.json", headers)
+    override fun popularMangaRequest(page: Int) = GET("$MEEPS_URL/$siteLang/comics/index.json", headers)
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json", headers)
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$COMICS_URL/$siteLang/${chapter.url}/index.json", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("$COMICS_URL/$siteLang/${chapter.url}/index.json", headers)
 
-    override fun popularMangaParse(response: Response) =
-        response.decode<LOLHub>().mapNotNull {
-            SManga.create().apply {
-                title = it.title ?: return@mapNotNull null
-                url = it.toString()
-                description = it.description!!.clean()
-                thumbnail_url = it.background.toString()
-                genre = it.subtitle ?: it.champions?.joinToString()
-            }
-        }.run { MangasPage(this, false) }
-
-    override fun chapterListParse(response: Response) =
-        response.decode<LOLIssues>().map {
-            SChapter.create().apply {
-                name = it.title!!
-                url = it.toString()
-                chapter_number = it.index ?: -1f
-                fetchPageList()
-            }
+    override fun popularMangaParse(response: Response) = response.decode<LOLHub>().mapNotNull {
+        SManga.create().apply {
+            title = it.title ?: return@mapNotNull null
+            url = it.toString()
+            description = it.description!!.clean()
+            thumbnail_url = it.background.toString()
+            genre = it.subtitle ?: it.champions?.joinToString()
         }
+    }.run { MangasPage(this, false) }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        client.newCall(popularMangaRequest(page)).asObservableSuccess()
-            .map { popularMangaParse(it).filter(query) }!!
+    override fun chapterListParse(response: Response) = response.decode<LOLIssues>().map {
+        SChapter.create().apply {
+            name = it.title!!
+            url = it.toString()
+            chapter_number = it.index ?: -1f
+            fetchPageList()
+        }
+    }
 
-    override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(manga.apply { initialized = true })!!
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = client.newCall(popularMangaRequest(page)).asObservableSuccess()
+        .map { popularMangaParse(it).filter(query) }!!
+
+    override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         if ('/' !in manga.url) return super.fetchChapterList(manga)
@@ -81,44 +74,31 @@ class LOLUniverse(
         return Observable.just(listOf(chapter))
     }
 
-    override fun fetchPageList(chapter: SChapter) =
-        Observable.just(pageCache[chapter.url].orEmpty())!!
+    override fun fetchPageList(chapter: SChapter) = Observable.just(pageCache[chapter.url].orEmpty())!!
 
-    override fun getMangaUrl(manga: SManga) =
-        "$UNIVERSE_URL/$siteLang/comic/${manga.url}"
+    override fun getMangaUrl(manga: SManga) = "$UNIVERSE_URL/$siteLang/comic/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter) =
-        "$UNIVERSE_URL/$siteLang/comic/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter) = "$UNIVERSE_URL/$siteLang/comic/${chapter.url}"
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.decode() =
-        json.decodeFromString<T>(body.string())
+    private inline fun <reified T> Response.decode() = json.decodeFromString<T>(body.string())
 
-    private fun String.clean() =
-        replace("</p> ", "</p>").replace("</p>", "\n").replace("<p>", "")
+    private fun String.clean() = replace("</p> ", "</p>").replace("</p>", "\n").replace("<p>", "")
 
     private fun SChapter.fetchPageList() {
         client.newCall(pageListRequest(this)).execute().decode<LOLPages>().let {

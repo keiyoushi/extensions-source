@@ -11,12 +11,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MGKomik : Madara(
-    "MG Komik",
-    "https://id.mgkomik.cc",
-    "id",
-    SimpleDateFormat("dd MMM yy", Locale.US),
-) {
+class MGKomik :
+    Madara(
+        "MG Komik",
+        "https://id.mgkomik.cc",
+        "id",
+        SimpleDateFormat("dd MMM yy", Locale.US),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val useNewChapterEndpoint = false
@@ -45,13 +46,11 @@ class MGKomik : Madara(
 
     // ================================== Popular ======================================
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("div.item-thumb a").let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                title = it.attr("title")
-                thumbnail_url = it.select("img").attr("abs:src")
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("div.item-thumb a").let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.attr("title")
+            thumbnail_url = it.select("img").attr("abs:src")
         }
     }
 
@@ -84,10 +83,11 @@ class MGKomik : Madara(
         return FilterList(filters)
     }
 
-    private class GenreContentFilter(title: String, options: List<Pair<String, String>>) : UriPartFilter(
-        title,
-        options.toTypedArray(),
-    )
+    private class GenreContentFilter(title: String, options: List<Pair<String, String>>) :
+        UriPartFilter(
+            title,
+            options.toTypedArray(),
+        )
 
     override fun genresRequest() = GET("$baseUrl/$mangaSubString", headers)
 

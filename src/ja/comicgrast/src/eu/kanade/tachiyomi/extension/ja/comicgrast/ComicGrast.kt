@@ -28,9 +28,7 @@ class ComicGrast : HttpSource() {
         .addInterceptor(ImageInterceptor())
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comic/serial/$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comic/serial/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -53,9 +51,7 @@ class ComicGrast : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()

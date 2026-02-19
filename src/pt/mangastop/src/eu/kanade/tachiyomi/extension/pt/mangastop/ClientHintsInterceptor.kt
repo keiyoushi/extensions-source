@@ -31,49 +31,43 @@ class ClientHintsInterceptor : Interceptor {
         return chain.proceed(newRequest)
     }
 
-    private fun detectBrowser(userAgent: String): BrowserInfo? {
-        return when {
-            userAgent.contains("Firefox/") && !userAgent.contains("Chrome") -> null
+    private fun detectBrowser(userAgent: String): BrowserInfo? = when {
+        userAgent.contains("Firefox/") && !userAgent.contains("Chrome") -> null
 
-            userAgent.contains("Safari/") &&
-                !userAgent.contains("Chrome") &&
-                !userAgent.contains("Chromium") -> null
+        userAgent.contains("Safari/") &&
+            !userAgent.contains("Chrome") &&
+            !userAgent.contains("Chromium") -> null
 
-            userAgent.contains("Edg/") || userAgent.contains("EdgA/") || userAgent.contains("EdgiOS/") -> {
-                val edgeVersion = EDGE_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
-                val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: edgeVersion
-                BrowserInfo("Microsoft Edge", edgeVersion, chromiumVersion)
-            }
-
-            userAgent.contains("OPR/") -> {
-                val operaVersion = OPERA_REGEX.find(userAgent)?.groupValues?.get(1) ?: "118"
-                val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
-                BrowserInfo("Opera", operaVersion, chromiumVersion)
-            }
-
-            userAgent.contains("Chrome/") -> {
-                val chromeVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
-                BrowserInfo("Google Chrome", chromeVersion, chromeVersion)
-            }
-
-            else -> null
+        userAgent.contains("Edg/") || userAgent.contains("EdgA/") || userAgent.contains("EdgiOS/") -> {
+            val edgeVersion = EDGE_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+            val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: edgeVersion
+            BrowserInfo("Microsoft Edge", edgeVersion, chromiumVersion)
         }
-    }
 
-    private fun detectPlatform(userAgent: String): String {
-        return when {
-            userAgent.contains("Windows") -> "\"Windows\""
-            userAgent.contains("Android") -> "\"Android\""
-            userAgent.contains("iPhone") || userAgent.contains("iPad") -> "\"iOS\""
-            userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> "\"macOS\""
-            userAgent.contains("Linux") -> "\"Linux\""
-            else -> "\"Windows\""
+        userAgent.contains("OPR/") -> {
+            val operaVersion = OPERA_REGEX.find(userAgent)?.groupValues?.get(1) ?: "118"
+            val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+            BrowserInfo("Opera", operaVersion, chromiumVersion)
         }
+
+        userAgent.contains("Chrome/") -> {
+            val chromeVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+            BrowserInfo("Google Chrome", chromeVersion, chromeVersion)
+        }
+
+        else -> null
     }
 
-    private fun buildSecChUa(info: BrowserInfo): String {
-        return "\"${info.name}\";v=\"${info.version}\", \"Chromium\";v=\"${info.chromiumVersion}\", \"Not A(Brand\";v=\"24\""
+    private fun detectPlatform(userAgent: String): String = when {
+        userAgent.contains("Windows") -> "\"Windows\""
+        userAgent.contains("Android") -> "\"Android\""
+        userAgent.contains("iPhone") || userAgent.contains("iPad") -> "\"iOS\""
+        userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> "\"macOS\""
+        userAgent.contains("Linux") -> "\"Linux\""
+        else -> "\"Windows\""
     }
+
+    private fun buildSecChUa(info: BrowserInfo): String = "\"${info.name}\";v=\"${info.version}\", \"Chromium\";v=\"${info.chromiumVersion}\", \"Not A(Brand\";v=\"24\""
 
     private data class BrowserInfo(
         val name: String,

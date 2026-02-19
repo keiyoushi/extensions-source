@@ -8,12 +8,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class StrayFansub : Madara(
-    "Stray Fansub",
-    "https://strayfansub.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-) {
+class StrayFansub :
+    Madara(
+        "Stray Fansub",
+        "https://strayfansub.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

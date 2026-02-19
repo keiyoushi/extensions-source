@@ -9,8 +9,7 @@ class YellowNoteFilters {
         override fun toString() = this.name
     }
 
-    class SortSelector(name: String, private val vals: Array<SortOption>) :
-        Filter.Select<SortOption>(name, vals) {
+    class SortSelector(name: String, private val vals: Array<SortOption>) : Filter.Select<SortOption>(name, vals) {
         fun toUriPart() = vals[state].urlPart
     }
 

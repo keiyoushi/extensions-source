@@ -60,9 +60,7 @@ class ZerosumOnline : HttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/")
@@ -78,13 +76,9 @@ class ZerosumOnline : HttpSource() {
         return result.title.toSManga()
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAsProto<TitleDetailView>()
@@ -92,9 +86,7 @@ class ZerosumOnline : HttpSource() {
         return result.chapters.map { it.toSChapter(slug) }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url.substringBeforeLast("/")
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("/")
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfterLast("/")
@@ -118,14 +110,10 @@ class ZerosumOnline : HttpSource() {
     }
 
     // Helpers
-    private inline fun <reified T> Response.parseAsProto(): T {
-        return ProtoBuf.decodeFromByteArray(body.bytes())
-    }
+    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
-    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody {
-        return ProtoBuf.encodeToByteArray(this)
-            .toRequestBody("application/protobuf".toMediaType())
-    }
+    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody = ProtoBuf.encodeToByteArray(this)
+        .toRequestBody("application/protobuf".toMediaType())
 
     // Filter
     override fun getFilterList() = FilterList(
@@ -139,8 +127,7 @@ class ZerosumOnline : HttpSource() {
         ),
     )
 
-    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         val selectedValue: String get() = vals[state].second
     }
 

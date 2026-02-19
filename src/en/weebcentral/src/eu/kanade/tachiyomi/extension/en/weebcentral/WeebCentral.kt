@@ -185,12 +185,10 @@ class WeebCentral : ParsedHttpSource() {
         }
     }
 
-    private fun String.parseDate(): Long {
-        return try {
-            dateFormat.parse(this)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun String.parseDate(): Long = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: ParseException) {
+        0L
     }
     // =============================== Pages ================================
 
@@ -207,18 +205,13 @@ class WeebCentral : ParsedHttpSource() {
         return GET(newUrl, headers)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+
+    override fun pageListParse(document: Document): List<Page> = document.select("section[x-data~=scroll] > img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.attr("abs:src"))
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("section[x-data~=scroll] > img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.attr("abs:src"))
-        }
-    }
-
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
@@ -231,10 +224,8 @@ class WeebCentral : ParsedHttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun Element.sourceImg(): String? {
-        return selectFirst("source")?.attr("srcset")?.replace("small", "normal")
-            ?: selectFirst("img")?.absUrl("src")
-    }
+    private fun Element.sourceImg(): String? = selectFirst("source")?.attr("srcset")?.replace("small", "normal")
+        ?: selectFirst("img")?.absUrl("src")
 
     private fun defaultFilterList(sortFilter: SortFilter): FilterList = FilterList(
         sortFilter,

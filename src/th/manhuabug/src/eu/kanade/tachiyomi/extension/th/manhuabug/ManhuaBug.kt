@@ -19,12 +19,13 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhuaBug : Madara(
-    "ManhuaBug",
-    "https://www.manhuabug.com",
-    "th",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("en")),
-) {
+class ManhuaBug :
+    Madara(
+        "ManhuaBug",
+        "https://www.manhuabug.com",
+        "th",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("en")),
+    ) {
     override val supportsLatest = false
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

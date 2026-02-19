@@ -12,12 +12,13 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SirenKomik : MangaThemesia(
-    "Siren Komik",
-    "https://sirenkomik.xyz",
-    "id",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
-) {
+class SirenKomik :
+    MangaThemesia(
+        "Siren Komik",
+        "https://sirenkomik.xyz",
+        "id",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
+    ) {
     override val id = 8457447675410081142
 
     override val hasProjectPage = true

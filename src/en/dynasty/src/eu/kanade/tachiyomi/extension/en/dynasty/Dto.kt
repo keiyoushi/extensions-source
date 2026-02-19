@@ -61,13 +61,9 @@ class MangaEntry(
         thumbnail_url = cover
     }
 
-    override fun equals(other: Any?): Boolean {
-        return this.url == (other as MangaEntry?)?.url
-    }
+    override fun equals(other: Any?): Boolean = this.url == (other as MangaEntry?)?.url
 
-    override fun hashCode(): Int {
-        return this.url.hashCode()
-    }
+    override fun hashCode(): Int = this.url.hashCode()
 }
 
 @Serializable
@@ -111,21 +107,20 @@ class MangaChapter(
 ) : ChapterItem()
 
 object ChapterItemListSerializer : JsonTransformingSerializer<List<ChapterItem>>(ListSerializer(ChapterItem.serializer())) {
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        return JsonArray(
-            element.jsonArray.map { jsonElement ->
-                val jsonObject = jsonElement.jsonObject
-                when {
-                    "header" in jsonObject -> JsonObject(
-                        jsonObject + ("type" to JsonPrimitive("header")),
-                    )
-                    else -> JsonObject(
-                        jsonObject + ("type" to JsonPrimitive("chapter")),
-                    )
-                }
-            },
-        )
-    }
+    override fun transformDeserialize(element: JsonElement): JsonElement = JsonArray(
+        element.jsonArray.map { jsonElement ->
+            val jsonObject = jsonElement.jsonObject
+            when {
+                "header" in jsonObject -> JsonObject(
+                    jsonObject + ("type" to JsonPrimitive("header")),
+                )
+
+                else -> JsonObject(
+                    jsonObject + ("type" to JsonPrimitive("chapter")),
+                )
+            }
+        },
+    )
 }
 
 @Serializable

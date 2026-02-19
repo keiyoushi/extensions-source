@@ -179,9 +179,7 @@ class Buttsmithy : HttpSource() {
         return listOf(alfieChapters, cyoaComics, otherComics).flatten()
     }
 
-    private fun String.lowercase(): String {
-        return this.lowercase(Locale.getDefault())
-    }
+    private fun String.lowercase(): String = this.lowercase(Locale.getDefault())
 
     /**
      * Fetches all chapters of Alfie (one of InCases comics) as separate SManga because this comic
@@ -214,23 +212,17 @@ class Buttsmithy : HttpSource() {
         return chaptersAsSManga
     }
 
-    private fun decideAlfieStatusFromTitle(chapTitle: String, mostRecentChapTitle: String): Int {
-        return if (chapTitle == mostRecentChapTitle) {
-            SManga.UNKNOWN
-        } else {
-            SManga.COMPLETED
-        }
+    private fun decideAlfieStatusFromTitle(chapTitle: String, mostRecentChapTitle: String): Int = if (chapTitle == mostRecentChapTitle) {
+        SManga.UNKNOWN
+    } else {
+        SManga.COMPLETED
     }
 
-    private fun extractChapterTitleFromPageDoc(doc: Document): String {
-        return doc.select(".comic-chapter a").first()!!.text().lowercase()
-    }
+    private fun extractChapterTitleFromPageDoc(doc: Document): String = doc.select(".comic-chapter a").first()!!.text().lowercase()
 
-    private fun chapterTitleToChapterUrlName(chapTitle: String): String {
-        return when (chapTitle.lowercase()) {
-            "chapter 1" -> "chapter-1v2"
-            else -> chapTitle.replace(" ", "-").replace(".", "-")
-        }
+    private fun chapterTitleToChapterUrlName(chapTitle: String): String = when (chapTitle.lowercase()) {
+        "chapter 1" -> "chapter-1v2"
+        else -> chapTitle.replace(" ", "-").replace(".", "-")
     }
 
     private fun convertMenuElementToSManga(menuElement: Elements): List<SManga> {
@@ -258,13 +250,9 @@ class Buttsmithy : HttpSource() {
             }
     }
 
-    private fun generateImageUrlWithText(text: String): String {
-        return TextInterceptorHelper.createUrl(text, "")
-    }
+    private fun generateImageUrlWithText(text: String): String = TextInterceptorHelper.createUrl(text, "")
 
-    private fun generateMangasPage(): MangasPage {
-        return MangasPage(fetchAllComics(), false)
-    }
+    private fun generateMangasPage(): MangasPage = MangasPage(fetchAllComics(), false)
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
@@ -277,27 +265,25 @@ class Buttsmithy : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(
-            if (manga.title.contains(alfieTitle)) {
-                val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
-                val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
-                val chapTitle = manga.title.substringAfter("Alfie - ").trim()
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(
+        if (manga.title.contains(alfieTitle)) {
+            val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
+            val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
+            val chapTitle = manga.title.substringAfter("Alfie - ").trim()
 
-                SManga.create().apply {
-                    url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
-                    title = "$alfieTitle - $chapTitle"
-                    author = inCase
-                    artist = inCase
-                    status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
-                    genre = "fantasy, NSFW"
-                    thumbnail_url = generateImageUrlWithText(alfieTitle)
-                }
-            } else {
-                manga
-            },
-        )
-    }
+            SManga.create().apply {
+                url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
+                title = "$alfieTitle - $chapTitle"
+                author = inCase
+                artist = inCase
+                status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
+                genre = "fantasy, NSFW"
+                thumbnail_url = generateImageUrlWithText(alfieTitle)
+            }
+        } else {
+            manga
+        },
+    )
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
@@ -313,9 +299,7 @@ class Buttsmithy : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(generateMangasPage())
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(generateMangasPage())
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -323,6 +307,5 @@ class Buttsmithy : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

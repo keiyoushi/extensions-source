@@ -23,7 +23,9 @@ import rx.Observable
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
+class Pixiv(override val lang: String) :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Pixiv"
     override val baseUrl = "https://www.pixiv.net"
     override val supportsLatest = true
@@ -32,8 +34,7 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
     private open inner class HttpCall(href: String?) {
         val url: HttpUrl.Builder = baseUrl.toHttpUrl()
@@ -42,8 +43,7 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
         val request: Request.Builder = Request.Builder()
             .headers(headersBuilder().build())
 
-        fun execute(): Response =
-            client.newCall(request.url(url.build()).build()).execute()
+        fun execute(): Response = client.newCall(request.url(url.build()).build()).execute()
     }
 
     class PixivApiException(message: String? = null) : Exception(message, null)
@@ -130,12 +130,14 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
             is PixivTarget.Illustration -> {
                 singleResult(getIllustCached(target.illustId)?.toSManga())
             }
+
             is PixivTarget.Series -> {
                 // TODO: caching!
                 val series = ApiCall("/touch/ajax/illust/series/${target.seriesId}")
                     .executeApi<PixivSeriesDetails>().getOrNull()?.series
                 singleResult(series?.toSManga())
             }
+
             else -> {
                 null
             }
@@ -567,33 +569,23 @@ class Pixiv(override val lang: String) : ConfigurableSource, HttpSource() {
         private const val MAX_WINDOW_SIZE = 1000 // roughly 25 pages
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

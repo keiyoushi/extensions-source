@@ -31,12 +31,10 @@ class MadaraUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun getSLUG(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 2) {
-            val slug = pathSegments[1]
-            "${Madara.URL_SEARCH_PREFIX}$slug"
-        } else {
-            null
-        }
+    private fun getSLUG(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 2) {
+        val slug = pathSegments[1]
+        "${Madara.URL_SEARCH_PREFIX}$slug"
+    } else {
+        null
     }
 }

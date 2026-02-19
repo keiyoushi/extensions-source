@@ -50,13 +50,11 @@ class PhenixScans : HttpSource() {
         return GET(apiUrl, headers)
     }
 
-    private fun parseMangaList(mangaList: List<LatestMangaItemDto>): List<SManga> {
-        return mangaList.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75
-                url = it.slug
-            }
+    private fun parseMangaList(mangaList: List<LatestMangaItemDto>): List<SManga> = mangaList.map {
+        SManga.create().apply {
+            title = it.title
+            thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75
+            url = it.slug
         }
     }
 
@@ -87,6 +85,7 @@ class PhenixScans : HttpSource() {
                 is SortFilter -> {
                     url.addQueryParameter("sort", filter.toUriPart())
                 }
+
                 is GenreFilter -> {
                     val genres = filter.state
                         .filter { it.state }
@@ -94,12 +93,15 @@ class PhenixScans : HttpSource() {
 
                     url.addQueryParameter("genre", genres.joinToString(","))
                 }
+
                 is TypeFilter -> {
                     url.addQueryParameter("type", filter.toUriPart())
                 }
+
                 is StatusFilter -> {
                     url.addQueryParameter("status", filter.toUriPart())
                 }
+
                 else -> {}
             }
         }
@@ -146,9 +148,7 @@ class PhenixScans : HttpSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/manga/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     // ============================== Chapters ==============================
 
@@ -177,9 +177,7 @@ class PhenixScans : HttpSource() {
 
     // =============================== Pages ================================
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request {
         val slug = chapter.url.substringBeforeLast("/")

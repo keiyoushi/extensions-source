@@ -57,13 +57,9 @@ class CosplayTele : ParsedHttpSource() {
     override fun latestUpdatesSelector() = "main div.box"
 
     // Popular
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
     private val popularPageLimit = 20
 
@@ -100,11 +96,13 @@ class CosplayTele : ParsedHttpSource() {
                     }
                 }.build(),
             )
+
             query.isNotEmpty() -> GET(
                 "$baseUrl/page/$page/".toHttpUrl().newBuilder().apply {
                     addQueryParameter("s", query)
                 }.build(),
             )
+
             else -> latestUpdatesRequest(page)
         }
     }
@@ -153,8 +151,7 @@ class CosplayTele : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList {
@@ -189,7 +186,9 @@ class CosplayTele : ParsedHttpSource() {
     private var filterAttempts = 0
 
     private enum class FilterState {
-        Fetching, Fetched, Unfetched
+        Fetching,
+        Fetched,
+        Unfetched,
     }
 
     private suspend fun fetchFilters() {

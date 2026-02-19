@@ -64,14 +64,12 @@ class Comico : HttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .cookieJar(
             object : CookieJar {
-                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) =
-                    cookies.filter { it.matches(url) }.forEach {
-                        cookieManager.setCookie(url.toString(), it.toString())
-                    }
+                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = cookies.filter { it.matches(url) }.forEach {
+                    cookieManager.setCookie(url.toString(), it.toString())
+                }
 
-                override fun loadForRequest(url: HttpUrl) =
-                    cookieManager.getCookie(url.toString())?.split("; ")
-                        ?.mapNotNull { Cookie.parse(url, it) } ?: emptyList()
+                override fun loadForRequest(url: HttpUrl) = cookieManager.getCookie(url.toString())?.split("; ")
+                    ?.mapNotNull { Cookie.parse(url, it) } ?: emptyList()
             },
         ).build()
 
@@ -80,30 +78,23 @@ class Comico : HttpSource() {
         .set("User-Agent", userAgent)
         .set("Referer", "$baseUrl/")
 
-    override fun latestUpdatesRequest(page: Int) =
-        paginate("all_comic/daily/$day", page)
+    override fun latestUpdatesRequest(page: Int) = paginate("all_comic/daily/$day", page)
 
-    override fun popularMangaRequest(page: Int) =
-        paginate("all_comic/ranking/trending", page)
+    override fun popularMangaRequest(page: Int) = paginate("all_comic/ranking/trending", page)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        if (query.isEmpty()) {
-            paginate("all_comic/read_for_free", page)
-        } else {
-            POST("$apiUrl/search", apiHeaders, search(query, page))
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.isEmpty()) {
+        paginate("all_comic/read_for_free", page)
+    } else {
+        POST("$apiUrl/search", apiHeaders, search(query, page))
+    }
 
-    override fun chapterListRequest(manga: SManga) =
-        GET(apiUrl + manga.url + "/episode", apiHeaders)
+    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url + "/episode", apiHeaders)
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET(apiUrl + chapter.url, apiHeaders)
+    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, apiHeaders)
 
-    override fun imageRequest(page: Page) =
-        GET(page.imageUrl!!, imgHeaders)
+    override fun imageRequest(page: Page) = GET(page.imageUrl!!, imgHeaders)
 
-    override fun latestUpdatesParse(response: Response) =
-        popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.data
@@ -131,8 +122,7 @@ class Comico : HttpSource() {
         return MangasPage(mangas, hasNext.jsonPrimitive.boolean)
     }
 
-    override fun searchMangaParse(response: Response) =
-        popularMangaParse(response)
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val content = response.data["episode"]["content"]
@@ -147,31 +137,25 @@ class Comico : HttpSource() {
         }.reversed()
     }
 
-    override fun pageListParse(response: Response) =
-        response.data["chapter"].map<ChapterImage, Page>("images") {
-            Page(it.sort, "", it.url.decrypt() + "?" + it.parameter)
-        }
+    override fun pageListParse(response: Response) = response.data["chapter"].map<ChapterImage, Page>("images") {
+        Page(it.sort, "", it.url.decrypt() + "?" + it.parameter)
+    }
 
-    override fun fetchMangaDetails(manga: SManga) =
-        rx.Observable.just(manga.apply { initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga) = rx.Observable.just(manga.apply { initialized = true })!!
 
-    override fun fetchPageList(chapter: SChapter) =
-        if (!chapter.name.endsWith(LOCK)) {
-            super.fetchPageList(chapter)
-        } else {
-            throw Exception("You are not authorized to view this!")
-        }
+    override fun fetchPageList(chapter: SChapter) = if (!chapter.name.endsWith(LOCK)) {
+        super.fetchPageList(chapter)
+    } else {
+        throw Exception("You are not authorized to view this!")
+    }
 
-    private fun search(query: String, page: Int) =
-        FormBody.Builder().add("query", query)
-            .add("pageNo", (page - 1).toString())
-            .add("pageSize", "25").build()
+    private fun search(query: String, page: Int) = FormBody.Builder().add("query", query)
+        .add("pageNo", (page - 1).toString())
+        .add("pageSize", "25").build()
 
-    private fun paginate(route: String, page: Int) =
-        GET("$apiUrl/$route?pageNo=${page - 1}&pageSize=25", apiHeaders)
+    private fun paginate(route: String, page: Int) = GET("$apiUrl/$route?pageNo=${page - 1}&pageSize=25", apiHeaders)
 
-    private fun String.decrypt() =
-        CryptoAES.decrypt(this, keyBytes, ivBytes)
+    private fun String.decrypt() = CryptoAES.decrypt(this, keyBytes, ivBytes)
 
     private val Response.data: JsonElement?
         get() = json.parseToJsonElement(body.string()).jsonObject.also {
@@ -179,19 +163,16 @@ class Comico : HttpSource() {
             if (code != 200) throw Exception(status(code))
         }["data"]
 
-    private operator fun JsonElement?.get(key: String) =
-        this!!.jsonObject[key]!!
+    private operator fun JsonElement?.get(key: String) = this!!.jsonObject[key]!!
 
     private inline fun <reified T, R> JsonElement?.map(
         key: String,
         transform: (T) -> R,
     ) = json.decodeFromJsonElement<List<T>>(this[key]).map(transform)
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val ANON_IP = "0.0.0.0"

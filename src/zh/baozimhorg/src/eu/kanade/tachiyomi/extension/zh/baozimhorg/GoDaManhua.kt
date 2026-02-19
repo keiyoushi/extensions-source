@@ -17,7 +17,9 @@ import okio.IOException
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
+class GoDaManhua :
+    GoDa("GoDa漫画", "", "zh"),
+    ConfigurableSource {
 
     override val id get() = 774030471139699415
 
@@ -50,9 +52,7 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
         return GET("https://api-get-v3.mgsearcher.com/api/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info.images.images.map { it.toPage() }
-    }
+    override fun pageListParse(response: Response): List<Page> = json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info.images.images.map { it.toPage() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {

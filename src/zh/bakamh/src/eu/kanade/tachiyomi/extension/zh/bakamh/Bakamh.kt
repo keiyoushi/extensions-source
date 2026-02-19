@@ -33,11 +33,9 @@ class Bakamh :
         .addInterceptor(UserAgentClientHintsInterceptor())
         .build()
 
-    override fun headersBuilder(): Headers.Builder {
-        return super.headersBuilder()
-            .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
-            .add("Referer", "$baseUrl/")
-    }
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+        .add("Referer", "$baseUrl/")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         BakamhPreferences.buildPreferences(screen.context)
@@ -45,8 +43,7 @@ class Bakamh :
     }
 
     override val mangaDetailsSelectorStatus = ".post-content_item:contains(状态) .summary-content"
-    override fun chapterListSelector() =
-        ".chapter-loveYou a, li:not(.menu-item) a[onclick], li:not(.menu-item) a"
+    override fun chapterListSelector() = ".chapter-loveYou a, li:not(.menu-item) a[onclick], li:not(.menu-item) a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url.toString().lowercase()

@@ -107,6 +107,7 @@ abstract class TerraScan(
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -223,21 +224,23 @@ abstract class TerraScan(
         else -> absUrl("src")
     }
 
-    private fun String.toDate() = try { dateFormat.parse(trim())!!.time } catch (_: Exception) { 0L }
+    private fun String.toDate() = try {
+        dateFormat.parse(trim())!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     open val genreFilterSelector: String = "form div > div:has(input) div"
 
-    private fun parseGenres(document: Document): List<Genre> {
-        return document.select(genreFilterSelector)
-            .map { element ->
-                val input = element.selectFirst("input")!!
-                Genre(
-                    name = element.selectFirst("label")!!.ownText(),
-                    query = input.attr("name"),
-                    value = input.attr("value"),
-                )
-            }
-    }
+    private fun parseGenres(document: Document): List<Genre> = document.select(genreFilterSelector)
+        .map { element ->
+            val input = element.selectFirst("input")!!
+            Genre(
+                name = element.selectFirst("label")!!.ownText(),
+                query = input.attr("name"),
+                value = input.attr("value"),
+            )
+        }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"

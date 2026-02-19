@@ -15,12 +15,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class LeitorDeManga : Madara(
-    "Leitor de Mangá",
-    "https://leitordemanga.com",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class LeitorDeManga :
+    Madara(
+        "Leitor de Mangá",
+        "https://leitordemanga.com",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
     override val mangaSubString = "ler-manga"
 
     override val client: OkHttpClient = super.client.newBuilder()
@@ -28,9 +29,7 @@ class LeitorDeManga : Madara(
         .addInterceptor(::jsChallengeInterceptor)
         .build()
 
-    override fun imageFromElement(element: Element): String? {
-        return super.imageFromElement(element)?.replace("http://", "https://")
-    }
+    override fun imageFromElement(element: Element): String? = super.imageFromElement(element)?.replace("http://", "https://")
 
     // Linked to src/en/yakshascans
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {
@@ -71,12 +70,10 @@ class LeitorDeManga : Madara(
         }
     }
 
-    private fun String.sha256(): String {
-        return MessageDigest
-            .getInstance("SHA-256")
-            .digest(toByteArray())
-            .fold("", { str, it -> str + "%02x".format(it) })
-    }
+    private fun String.sha256(): String = MessageDigest
+        .getInstance("SHA-256")
+        .digest(toByteArray())
+        .fold("", { str, it -> str + "%02x".format(it) })
 
     companion object {
         private const val MAX_ATTEMPT = 5

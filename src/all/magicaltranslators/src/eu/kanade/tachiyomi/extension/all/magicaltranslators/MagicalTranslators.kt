@@ -13,22 +13,17 @@ class MagicalTranslatorsFactory : SourceFactory {
     )
 }
 
-abstract class MagicalTranslatorsCommon(lang: String) :
-    Guya("Magical Translators", "https://mahoushoujobu.com", lang) {
+abstract class MagicalTranslatorsCommon(lang: String) : Guya("Magical Translators", "https://mahoushoujobu.com", lang) {
 
     protected abstract fun filterMangasPage(mangasPage: MangasPage): MangasPage
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        filterMangasPage(super.popularMangaParse(response))
+    override fun popularMangaParse(response: Response): MangasPage = filterMangasPage(super.popularMangaParse(response))
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        filterMangasPage(super.latestUpdatesParse(response))
+    override fun latestUpdatesParse(response: Response): MangasPage = filterMangasPage(super.latestUpdatesParse(response))
 
-    override fun searchMangaParseWithSlug(response: Response, slug: String): MangasPage =
-        filterMangasPage(super.searchMangaParseWithSlug(response, slug))
+    override fun searchMangaParseWithSlug(response: Response, slug: String): MangasPage = filterMangasPage(super.searchMangaParseWithSlug(response, slug))
 
-    override fun searchMangaParse(response: Response, query: String): MangasPage =
-        filterMangasPage(super.searchMangaParse(response, query))
+    override fun searchMangaParse(response: Response, query: String): MangasPage = filterMangasPage(super.searchMangaParse(response, query))
 }
 
 class MagicalTranslatorsEN : MagicalTranslatorsCommon("en") {

@@ -127,12 +127,10 @@ class DreComics : ClipStudioReader() {
         }
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            LabelFilter(getLabelList()),
-            GenreFilter(getGenreList()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        LabelFilter(getLabelList()),
+        GenreFilter(getGenreList()),
+    )
 
     private class Label(name: String, val value: String) : Filter.CheckBox(name)
     private class LabelFilter(labels: List<Label>) : Filter.Group<Label>("Label", labels)

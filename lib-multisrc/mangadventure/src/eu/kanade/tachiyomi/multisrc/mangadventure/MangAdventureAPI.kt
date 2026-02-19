@@ -24,8 +24,7 @@ internal data class MAPage(
     val number: Int,
     val url: String,
 ) {
-    override fun equals(other: Any?) =
-        this === other || other is MAPage && id == other.id
+    override fun equals(other: Any?) = ((this === other) || ((other is MAPage) && id == other.id))
 
     override fun hashCode() = id
 }
@@ -43,8 +42,7 @@ internal data class Chapter(
     val groups: List<String>,
     @SerialName("full_title") val fullTitle: String,
 ) {
-    override fun equals(other: Any?) =
-        this === other || other is Chapter && id == other.id
+    override fun equals(other: Any?) = (this === other) || ((other is Chapter) && (id == other.id))
 
     override fun hashCode() = id
 }
@@ -63,8 +61,7 @@ internal data class Series(
     val artists: List<String>? = null,
     val categories: List<String>? = null,
 ) {
-    override fun equals(other: Any?) =
-        this === other || other is Series && slug == other.slug
+    override fun equals(other: Any?) = (this === other) || ((other is Series) && slug == other.slug)
 
     override fun hashCode() = slug.hashCode()
 }

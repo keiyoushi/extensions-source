@@ -21,13 +21,14 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RizzComic : MangaThemesiaAlt(
-    "Rizz Comic",
-    "https://rizzfables.com",
-    "en",
-    mangaUrlDirectory = "/series",
-    dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
-) {
+class RizzComic :
+    MangaThemesiaAlt(
+        "Rizz Comic",
+        "https://rizzfables.com",
+        "en",
+        mangaUrlDirectory = "/series",
+        dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(1, 3)
@@ -86,15 +87,13 @@ class RizzComic : MangaThemesiaAlt(
         return POST("$baseUrl/Index/filter_series", apiHeaders, form)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Filters don't work with text search"),
-            SortFilter(),
-            StatusFilter(),
-            TypeFilter(),
-            GenreFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Filters don't work with text search"),
+        SortFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        GenreFilter(),
+    )
 
     @Serializable
     class Comic(
@@ -128,10 +127,13 @@ class RizzComic : MangaThemesiaAlt(
 
         listOf("ongoing", "new season", "mass released")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+
         listOf("completed")
             .any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+
         listOf("dropped")
             .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
+
         listOf("hiatus", "season end")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
@@ -163,11 +165,9 @@ class RizzComic : MangaThemesiaAlt(
         return MangasPage(entries, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it).apply { description = manga.description } }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it).apply { description = manga.description } }
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -178,8 +178,7 @@ class RizzComic : MangaThemesiaAlt(
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { it.body.string() }.let(json::decodeFromString)
+    private inline fun <reified T> Response.parseAs(): T = use { it.body.string() }.let(json::decodeFromString)
 
     private fun String.capitalize() = replaceFirstChar {
         if (it.isLowerCase()) {

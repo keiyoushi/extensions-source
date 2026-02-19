@@ -89,19 +89,15 @@ class YomuMangas : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$API_URL${manga.url.substringBeforeLast("/")}", apiHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$API_URL${manga.url.substringBeforeLast("/")}", apiHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<YomuMangasDetailsDto>().manga.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<YomuMangasDetailsDto>().manga.toSManga()
 
     // ================================ Chapters =======================================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    private fun chapterListApiRequest(mangaId: Int): Request {
-        return GET("$API_URL/mangas/$mangaId/chapters", apiHeaders)
-    }
+    private fun chapterListApiRequest(mangaId: Int): Request = GET("$API_URL/mangas/$mangaId/chapters", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val series = response.parseAs<YomuMangasDetailsDto>().manga

@@ -58,10 +58,10 @@ class MangaDexFilters {
             state.filter(OriginalLanguage::state)
                 .forEach { lang ->
                     // dex has zh and zh-hk for chinese manhua
-                    if (lang.isoCode == MDConstants.originalLanguagePrefValChinese) {
+                    if (lang.isoCode == MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE) {
                         url.addQueryParameter(
                             "originalLanguage[]",
-                            MDConstants.originalLanguagePrefValChineseHk,
+                            MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE_HK,
                         )
                     }
 
@@ -86,24 +86,24 @@ class MangaDexFilters {
                     "original_language_filter_japanese",
                     intl.languageDisplayName(MangaDexIntl.JAPANESE),
                 ),
-                isoCode = MDConstants.originalLanguagePrefValJapanese,
-                state = MDConstants.originalLanguagePrefValJapanese in originalLanguages,
+                isoCode = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE,
+                state = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE in originalLanguages,
             ),
             OriginalLanguage(
                 name = intl.format(
                     "original_language_filter_chinese",
                     intl.languageDisplayName(MangaDexIntl.CHINESE),
                 ),
-                isoCode = MDConstants.originalLanguagePrefValChinese,
-                state = MDConstants.originalLanguagePrefValChinese in originalLanguages,
+                isoCode = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE,
+                state = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE in originalLanguages,
             ),
             OriginalLanguage(
                 name = intl.format(
                     "original_language_filter_korean",
                     intl.languageDisplayName(MangaDexIntl.KOREAN),
                 ),
-                isoCode = MDConstants.originalLanguagePrefValKorean,
-                state = MDConstants.originalLanguagePrefValKorean in originalLanguages,
+                isoCode = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN,
+                state = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN in originalLanguages,
             ),
         )
     }
@@ -131,16 +131,16 @@ class MangaDexFilters {
 
         return listOf(
             ContentRating(intl["content_rating_safe"], ContentRatingDto.SAFE.value).apply {
-                state = contentRatings?.contains(MDConstants.contentRatingPrefValSafe) ?: true
+                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SAFE) ?: true
             },
             ContentRating(intl["content_rating_suggestive"], ContentRatingDto.SUGGESTIVE.value).apply {
-                state = contentRatings?.contains(MDConstants.contentRatingPrefValSuggestive) ?: true
+                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SUGGESTIVE) ?: true
             },
             ContentRating(intl["content_rating_erotica"], ContentRatingDto.EROTICA.value).apply {
-                state = contentRatings?.contains(MDConstants.contentRatingPrefValErotica) ?: false
+                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_EROTICA) ?: false
             },
             ContentRating(intl["content_rating_pornographic"], ContentRatingDto.PORNOGRAPHIC.value).apply {
-                state = contentRatings?.contains(MDConstants.contentRatingPrefValPornographic) ?: false
+                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC) ?: false
             },
         )
     }
@@ -337,9 +337,7 @@ class MangaDexFilters {
     }
 
     // to get all tags from dex https://api.mangadex.org/manga/tag
-    internal fun getTags(intl: Intl): List<Tag> {
-        return getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
-    }
+    internal fun getTags(intl: Intl): List<Tag> = getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
 
     private data class TagMode(val title: String, val value: String) {
         override fun toString(): String = title

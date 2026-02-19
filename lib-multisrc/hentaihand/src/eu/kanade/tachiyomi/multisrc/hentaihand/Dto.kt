@@ -50,16 +50,15 @@ class ChapterDto(
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     }
 
-    private fun parseDate(date: String?): Long =
-        if (date == null) {
-            0
-        } else if (date.contains("day")) {
-            Calendar.getInstance().apply {
-                add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
-            }.timeInMillis
-        } else {
-            DATE_FORMAT.parse(date)?.time ?: 0
-        }
+    private fun parseDate(date: String?): Long = if (date == null) {
+        0
+    } else if (date.contains("day")) {
+        Calendar.getInstance().apply {
+            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
+        }.timeInMillis
+    } else {
+        DATE_FORMAT.parse(date)?.time ?: 0
+    }
 
     fun toSChapter(slug: String) = SChapter.create().also { chapter ->
         chapter.url = "$slug/${this.slug}"

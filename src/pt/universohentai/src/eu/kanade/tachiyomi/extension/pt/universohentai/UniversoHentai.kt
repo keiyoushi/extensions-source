@@ -11,11 +11,12 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
 
-class UniversoHentai : Gattsu(
-    "Universo Hentai",
-    "https://universohentai.com",
-    "pt-BR",
-) {
+class UniversoHentai :
+    Gattsu(
+        "Universo Hentai",
+        "https://universohentai.com",
+        "pt-BR",
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
