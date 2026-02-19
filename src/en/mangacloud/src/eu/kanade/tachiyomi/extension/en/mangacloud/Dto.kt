@@ -192,6 +192,7 @@ class Links(
 class Chapter(
     val id: String,
     val number: Float,
+    val name: String? = null,
     @SerialName("created_date")
     private val createdDate: String,
 ) {

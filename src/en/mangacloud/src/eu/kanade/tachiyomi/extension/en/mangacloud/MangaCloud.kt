@@ -252,7 +252,15 @@ class MangaCloud : HttpSource() {
         return data.data.chapters.map { chapter ->
             SChapter.create().apply {
                 url = ChapterUrl(data.data.id, chapter.id).toJsonString()
-                name = "Chapter ${chapter.number}".substringBefore(".0")
+                name = buildString {
+                    append("Chapter ")
+                    append(chapter.number.toString().substringBefore(".0"))
+                    chapter.name?.also {
+                        append(" - ")
+                        append(it)
+                    }
+                }
+                chapter_number = chapter.number
                 date_upload = chapter.date
             }
         }
