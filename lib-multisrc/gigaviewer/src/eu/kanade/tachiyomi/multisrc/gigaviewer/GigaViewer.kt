@@ -72,7 +72,8 @@ abstract class GigaViewer(
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(popularMangaSelector).map(::popularMangaFromElement)
-        return MangasPage(mangas, popularMangaNextPageSelector != null)
+        val hasNextPage = popularMangaNextPageSelector?.let { document.selectFirst(it) != null } ?: false
+        return MangasPage(mangas, hasNextPage)
     }
 
     protected open val popularMangaSelector: String = "ul.series-list li a"
@@ -90,7 +91,8 @@ abstract class GigaViewer(
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(latestUpdatesSelector).map(::latestUpdatesFromElement)
-        return MangasPage(mangas, latestUpdatesNextPageSelector != null)
+        val hasNextPage = latestUpdatesNextPageSelector?.let { document.selectFirst(it) != null } ?: false
+        return MangasPage(mangas, hasNextPage)
     }
 
     protected open val latestUpdatesSelector: String = "h2.series-list-date-week.$dayOfWeek + ul.series-list li a"
