@@ -472,8 +472,8 @@ abstract class GroupLe(
         val translatorElement = chapterLinkElement.attr("title")
         return if (translatorElement.isNotBlank()) {
             translatorElement
-                .replace("(\u041F\u0435\u0440\u0435\u0432\u043E\u0434\u0447\u0438\u043A),", "&")
-                .removeSuffix(" (\u041F\u0435\u0440\u0435\u0432\u043E\u0434\u0447\u0438\u043A)")
+                .replace("(Переводчик),", "&")
+                .removeSuffix(" (Переводчик)")
         } else {
             ""
         }
