@@ -252,7 +252,7 @@ abstract class GigaViewer(
     }
 
     protected open class CollectionFilter(val collections: List<Collection>) : Filter.Select<Collection>("コレクション", collections.toTypedArray()) {
-        val selected: Collection
+        open val selected: Collection
             get() = collections[state]
     }
 
