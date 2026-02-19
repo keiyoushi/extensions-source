@@ -32,9 +32,7 @@ class MangaHen : HttpSource() {
     private var tagsList: List<String> = listOf()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$advSearchURL/?search=1&type=0&sort=1&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$advSearchURL/?search=1&type=0&sort=1&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -46,18 +44,14 @@ class MangaHen : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.selectFirst("h2")!!.ownText()
-            setUrlWithoutDomain(element.absUrl("href"))
-            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
-        }
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2")!!.ownText()
+        setUrlWithoutDomain(element.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$advSearchURL/?search=1&type=0&sort=2&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$advSearchURL/?search=1&type=0&sort=2&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -107,6 +101,7 @@ class MangaHen : HttpSource() {
                             }
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -157,16 +152,14 @@ class MangaHen : HttpSource() {
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Chapter"
-                    setUrlWithoutDomain(manga.url)
-                },
-            ),
-        )
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = "Chapter"
+                setUrlWithoutDomain(manga.url)
+            },
+        ),
+    )
 
     // Pages
 

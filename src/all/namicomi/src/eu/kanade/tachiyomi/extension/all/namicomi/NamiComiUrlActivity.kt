@@ -25,7 +25,7 @@ class NamiComiUrlActivity : Activity() {
             val titleId = pathSegments[2]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", NamiComiConstants.prefixIdSearch + titleId)
+                putExtra("query", NamiComiConstants.PREFIX_ID_SEARCH + titleId)
                 putExtra("filter", packageName)
             }
 

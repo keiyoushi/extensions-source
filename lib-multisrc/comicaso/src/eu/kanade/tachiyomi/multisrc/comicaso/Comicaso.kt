@@ -94,11 +94,13 @@ abstract class Comicaso(
                         url.addQueryParameter("genre", genreSlug)
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.state == 1) {
                         url.addQueryParameter("completed", "1")
                     }
                 }
+
                 else -> {}
             }
         }
@@ -106,153 +108,148 @@ abstract class Comicaso(
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
-            query.startsWith(URL_SEARCH_PREFIX) -> {
-                val url = query.removePrefix(URL_SEARCH_PREFIX).trim().replace(baseUrl, "")
-                val mangaUrl = if (url.startsWith("/")) url else "/$url"
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        this.url = mangaUrl
-                    },
-                )
-                    .map { MangasPage(listOf(it), false) }
-            }
-            query.startsWith("http://") || query.startsWith("https://") -> {
-                val url = query.trim().replace(baseUrl, "")
-                val mangaUrl = if (url.startsWith("/")) url else "/$url"
-                fetchMangaDetails(
-                    SManga.create().apply {
-                        this.url = mangaUrl
-                    },
-                )
-                    .map { MangasPage(listOf(it), false) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(URL_SEARCH_PREFIX) -> {
+            val url = query.removePrefix(URL_SEARCH_PREFIX).trim().replace(baseUrl, "")
+            val mangaUrl = if (url.startsWith("/")) url else "/$url"
+            fetchMangaDetails(
+                SManga.create().apply {
+                    this.url = mangaUrl
+                },
+            )
+                .map { MangasPage(listOf(it), false) }
         }
+
+        query.startsWith("http://") || query.startsWith("https://") -> {
+            val url = query.trim().replace(baseUrl, "")
+            val mangaUrl = if (url.startsWith("/")) url else "/$url"
+            fetchMangaDetails(
+                SManga.create().apply {
+                    this.url = mangaUrl
+                },
+            )
+                .map { MangasPage(listOf(it), false) }
+        }
+
+        else -> super.fetchSearchManga(page, query, filters)
     }
 
-    protected open fun genreToSlug(genre: String): String {
-        return when (genre) {
-            "Action" -> "action"
-            "Adaptation" -> "adaptation"
-            "Adult" -> "adult"
-            "Adventure" -> "adventure"
-            "Age Gap" -> "age-gap"
-            "Aliens" -> "aliens"
-            "Animals" -> "animals"
-            "Anthology" -> "anthology"
-            "BDSM" -> "bdsm"
-            "Beasts" -> "beasts"
-            "Bloody" -> "bloody"
-            "Bodyswap" -> "bodyswap"
-            "Boys" -> "boys"
-            "Cheating/Infidelity", "Cheating Infidelity" -> "cheating-infidelity"
-            "Childhood Friends" -> "childhood-friends"
-            "College life", "College Life" -> "college-life"
-            "Comedy" -> "comedy"
-            "Contest winning", "Contest Winning" -> "contest-winning"
-            "Cooking" -> "cooking"
-            "Crime" -> "crime"
-            "Crossdressing" -> "crossdressing"
-            "Delinquents" -> "delinquents"
-            "Demons" -> "demons"
-            "Drama" -> "drama"
-            "Dungeons" -> "dungeons"
-            "Ecchi" -> "ecchi"
-            "Emperor's daughte", "Emperors Daughte" -> "emperors-daughte"
-            "Fantasy" -> "fantasy"
-            "Fetish" -> "fetish"
-            "Fighting" -> "fighting"
-            "Full Color" -> "full-color"
-            "Game" -> "game"
-            "Gender Bender" -> "gender-bender"
-            "Genderswap" -> "genderswap"
-            "Ghosts" -> "ghosts"
-            "Girl" -> "girl"
-            "Girls" -> "girls"
-            "Gore" -> "gore"
-            "Harem" -> "harem"
-            "Hentai" -> "hentai"
-            "Historical" -> "historical"
-            "Horror", "Horrow" -> "horrow"
-            "Incest" -> "incest"
-            "Isekai" -> "isekai"
-            "Josei(W)", "Joseiw" -> "joseiw"
-            "Kids" -> "kids"
-            "Magic" -> "magic"
-            "Magical Girls" -> "magical-girls"
-            "Manga" -> "manga"
-            "Manhua" -> "manhua"
-            "Manhwa" -> "manhwa"
-            "Martial Arts" -> "martial-arts"
-            "Mature" -> "mature"
-            "Medical" -> "medical"
-            "Military" -> "military"
-            "Monster Girls" -> "monster-girls"
-            "Monsters" -> "monsters"
-            "Music" -> "music"
-            "Mystery" -> "mystery"
-            "NTR", "Ntr" -> "ntr"
-            "Non-human", "Non Human" -> "non-human"
-            "Office Workers" -> "office-workers"
-            "Omegaverse" -> "omegaverse"
-            "Oneshot" -> "oneshot"
-            "Philosophical" -> "philosophical"
-            "Police" -> "police"
-            "Psychological" -> "psychological"
-            "Regression" -> "regression"
-            "Reincarnation" -> "reincarnation"
-            "Revenge" -> "revenge"
-            "Reverse Harem" -> "reverse-harem"
-            "Reverse Isekai" -> "reverse-isekai"
-            "Romance" -> "romance"
-            "Royal family", "Royal Family" -> "royal-family"
-            "Royalty" -> "royalty"
-            "School Life" -> "school-life"
-            "Sci-Fi", "Sci Fi" -> "sci-fi"
-            "Seinen(M)", "Seinenm" -> "seinenm"
-            "Sejarah" -> "sejarah"
-            "Shoujo(G)", "Shoujog" -> "shoujog"
-            "Shoujo ai", "Shoujo Ai" -> "shoujo-ai"
-            "Shounen ai", "Shounen Ai" -> "shounen-ai"
-            "Shounen(B)", "Shounenb" -> "shounenb"
-            "Showbiz" -> "showbiz"
-            "Slice of Life", "Slice Of Life" -> "slice-of-life"
-            "SM/BDSM/SUB-DOM", "SM Bdsm Sub Dom" -> "sm-bdsm-sub-dom"
-            "Smut" -> "smut"
-            "Space" -> "space"
-            "Sports" -> "sports"
-            "Super Power" -> "super-power"
-            "Superhero" -> "superhero"
-            "Supernatural" -> "supernatural"
-            "Survival" -> "survival"
-            "Thriller" -> "thriller"
-            "Time Travel" -> "time-travel"
-            "Tower Climbing" -> "tower-climbing"
-            "Tragedy" -> "tragedy"
-            "Transmigration" -> "transmigration"
-            "Vampires" -> "vampires"
-            "Video Games" -> "video-games"
-            "Villainess" -> "villainess"
-            "Violence" -> "violence"
-            "Western" -> "western"
-            "Wuxia" -> "wuxia"
-            "Yakuzas" -> "yakuzas"
-            "Yaoi(BL)", "Yaoibl" -> "yaoibl"
-            "Yuri(GL)", "Yurigl" -> "yurigl"
-            "Zombies" -> "zombies"
-            else -> genre.lowercase()
-        }
+    protected open fun genreToSlug(genre: String): String = when (genre) {
+        "Action" -> "action"
+        "Adaptation" -> "adaptation"
+        "Adult" -> "adult"
+        "Adventure" -> "adventure"
+        "Age Gap" -> "age-gap"
+        "Aliens" -> "aliens"
+        "Animals" -> "animals"
+        "Anthology" -> "anthology"
+        "BDSM" -> "bdsm"
+        "Beasts" -> "beasts"
+        "Bloody" -> "bloody"
+        "Bodyswap" -> "bodyswap"
+        "Boys" -> "boys"
+        "Cheating/Infidelity", "Cheating Infidelity" -> "cheating-infidelity"
+        "Childhood Friends" -> "childhood-friends"
+        "College life", "College Life" -> "college-life"
+        "Comedy" -> "comedy"
+        "Contest winning", "Contest Winning" -> "contest-winning"
+        "Cooking" -> "cooking"
+        "Crime" -> "crime"
+        "Crossdressing" -> "crossdressing"
+        "Delinquents" -> "delinquents"
+        "Demons" -> "demons"
+        "Drama" -> "drama"
+        "Dungeons" -> "dungeons"
+        "Ecchi" -> "ecchi"
+        "Emperor's daughte", "Emperors Daughte" -> "emperors-daughte"
+        "Fantasy" -> "fantasy"
+        "Fetish" -> "fetish"
+        "Fighting" -> "fighting"
+        "Full Color" -> "full-color"
+        "Game" -> "game"
+        "Gender Bender" -> "gender-bender"
+        "Genderswap" -> "genderswap"
+        "Ghosts" -> "ghosts"
+        "Girl" -> "girl"
+        "Girls" -> "girls"
+        "Gore" -> "gore"
+        "Harem" -> "harem"
+        "Hentai" -> "hentai"
+        "Historical" -> "historical"
+        "Horror", "Horrow" -> "horrow"
+        "Incest" -> "incest"
+        "Isekai" -> "isekai"
+        "Josei(W)", "Joseiw" -> "joseiw"
+        "Kids" -> "kids"
+        "Magic" -> "magic"
+        "Magical Girls" -> "magical-girls"
+        "Manga" -> "manga"
+        "Manhua" -> "manhua"
+        "Manhwa" -> "manhwa"
+        "Martial Arts" -> "martial-arts"
+        "Mature" -> "mature"
+        "Medical" -> "medical"
+        "Military" -> "military"
+        "Monster Girls" -> "monster-girls"
+        "Monsters" -> "monsters"
+        "Music" -> "music"
+        "Mystery" -> "mystery"
+        "NTR", "Ntr" -> "ntr"
+        "Non-human", "Non Human" -> "non-human"
+        "Office Workers" -> "office-workers"
+        "Omegaverse" -> "omegaverse"
+        "Oneshot" -> "oneshot"
+        "Philosophical" -> "philosophical"
+        "Police" -> "police"
+        "Psychological" -> "psychological"
+        "Regression" -> "regression"
+        "Reincarnation" -> "reincarnation"
+        "Revenge" -> "revenge"
+        "Reverse Harem" -> "reverse-harem"
+        "Reverse Isekai" -> "reverse-isekai"
+        "Romance" -> "romance"
+        "Royal family", "Royal Family" -> "royal-family"
+        "Royalty" -> "royalty"
+        "School Life" -> "school-life"
+        "Sci-Fi", "Sci Fi" -> "sci-fi"
+        "Seinen(M)", "Seinenm" -> "seinenm"
+        "Sejarah" -> "sejarah"
+        "Shoujo(G)", "Shoujog" -> "shoujog"
+        "Shoujo ai", "Shoujo Ai" -> "shoujo-ai"
+        "Shounen ai", "Shounen Ai" -> "shounen-ai"
+        "Shounen(B)", "Shounenb" -> "shounenb"
+        "Showbiz" -> "showbiz"
+        "Slice of Life", "Slice Of Life" -> "slice-of-life"
+        "SM/BDSM/SUB-DOM", "SM Bdsm Sub Dom" -> "sm-bdsm-sub-dom"
+        "Smut" -> "smut"
+        "Space" -> "space"
+        "Sports" -> "sports"
+        "Super Power" -> "super-power"
+        "Superhero" -> "superhero"
+        "Supernatural" -> "supernatural"
+        "Survival" -> "survival"
+        "Thriller" -> "thriller"
+        "Time Travel" -> "time-travel"
+        "Tower Climbing" -> "tower-climbing"
+        "Tragedy" -> "tragedy"
+        "Transmigration" -> "transmigration"
+        "Vampires" -> "vampires"
+        "Video Games" -> "video-games"
+        "Villainess" -> "villainess"
+        "Violence" -> "violence"
+        "Western" -> "western"
+        "Wuxia" -> "wuxia"
+        "Yakuzas" -> "yakuzas"
+        "Yaoi(BL)", "Yaoibl" -> "yaoibl"
+        "Yuri(GL)", "Yurigl" -> "yurigl"
+        "Zombies" -> "zombies"
+        else -> genre.lowercase()
     }
 
     // Details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -323,16 +320,19 @@ abstract class Comicaso(
                 calendar.add(Calendar.DAY_OF_MONTH, -days)
                 calendar.timeInMillis
             }
+
             dateStr.contains("minggu", ignoreCase = true) -> {
                 val weeks = dateStr.replace(Regex("\\D"), "").toIntOrNull() ?: 1
                 calendar.add(Calendar.WEEK_OF_YEAR, -weeks)
                 calendar.timeInMillis
             }
+
             dateStr.contains("bulan", ignoreCase = true) -> {
                 val months = dateStr.replace(Regex("\\D"), "").toIntOrNull() ?: 1
                 calendar.add(Calendar.MONTH, -months)
                 calendar.timeInMillis
             }
+
             else -> dateFormat.tryParse(dateStr)
         }
     }
@@ -359,10 +359,11 @@ abstract class Comicaso(
         )
     }
 
-    protected class GenreFilter(genres: Array<String>) : Filter.Select<String>(
-        "Genre",
-        genres,
-    )
+    protected class GenreFilter(genres: Array<String>) :
+        Filter.Select<String>(
+            "Genre",
+            genres,
+        )
 
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
@@ -482,8 +483,9 @@ abstract class Comicaso(
         )
     }
 
-    protected class StatusFilter : Filter.Select<String>(
-        "Status",
-        arrayOf("All", "Completed"),
-    )
+    protected class StatusFilter :
+        Filter.Select<String>(
+            "Status",
+            arrayOf("All", "Completed"),
+        )
 }

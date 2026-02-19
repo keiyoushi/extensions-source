@@ -46,8 +46,7 @@ class MomonGA : HttpSource() {
 
     // LatestUpdate (Not supported)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -139,16 +138,17 @@ class MomonGA : HttpSource() {
         CategoryGroupFiler(),
     )
 
-    private class CategoryGroupFiler : UriPartFilter(
-        "カテゴリーグループ",
-        arrayOf(
-            Pair("同人誌", "fanzine"),
-            Pair("商業誌", "magazine"),
-            Pair("急上昇", "trend"),
-            Pair("人気", "popularity"),
-            Pair("高評価", "rated"),
-        ),
-    )
+    private class CategoryGroupFiler :
+        UriPartFilter(
+            "カテゴリーグループ",
+            arrayOf(
+                Pair("同人誌", "fanzine"),
+                Pair("商業誌", "magazine"),
+                Pair("急上昇", "trend"),
+                Pair("人気", "popularity"),
+                Pair("高評価", "rated"),
+            ),
+        )
 
     private open class UriPartFilter(
         displayName: String,

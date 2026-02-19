@@ -23,40 +23,37 @@ object KoharuFilters {
      */
     internal var tagsFetchAttempts: Int = 0
 
-    fun getFilters(): FilterList {
-        return FilterList(
-            SortFilter("Sort by", getSortsList),
-            CategoryFilter("Category"),
-            Filter.Separator(),
-            TagFilter("Tags", genreList),
-            TagFilter("Female Tags", femaleList),
-            TagFilter("Male Tags", maleList),
-            TagFilter("Artists", artistList),
-            TagFilter("Circles", circleList),
-            TagFilter("Parodies", parodyList),
-            TagFilter("Mixed", mixedList),
-            TagFilter("Other", otherList),
-            GenreConditionFilter("Include condition", tagsConditionIncludeFilterOptions, "i"),
-            GenreConditionFilter("Exclude condition", tagsConditionExcludeFilterOptions, "e"),
-            Filter.Separator(),
-            Filter.Header("Separate tags with commas (,)"),
-            Filter.Header("Prepend with dash (-) to exclude"),
-            TextFilter("Magazines", "magazine"),
-            TextFilter("Publishers", "publisher"),
-            TextFilter("Characters", "character"),
-            TextFilter("Cosplayers", "cosplayer"),
-            Filter.Header("Filter by pages, for example: (>20)"),
-            TextFilter("Pages", "pages"),
-        )
-    }
+    fun getFilters(): FilterList = FilterList(
+        SortFilter("Sort by", getSortsList),
+        CategoryFilter("Category"),
+        Filter.Separator(),
+        TagFilter("Tags", genreList),
+        TagFilter("Female Tags", femaleList),
+        TagFilter("Male Tags", maleList),
+        TagFilter("Artists", artistList),
+        TagFilter("Circles", circleList),
+        TagFilter("Parodies", parodyList),
+        TagFilter("Mixed", mixedList),
+        TagFilter("Other", otherList),
+        GenreConditionFilter("Include condition", tagsConditionIncludeFilterOptions, "i"),
+        GenreConditionFilter("Exclude condition", tagsConditionExcludeFilterOptions, "e"),
+        Filter.Separator(),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        TextFilter("Magazines", "magazine"),
+        TextFilter("Publishers", "publisher"),
+        TextFilter("Characters", "character"),
+        TextFilter("Cosplayers", "cosplayer"),
+        Filter.Header("Filter by pages, for example: (>20)"),
+        TextFilter("Pages", "pages"),
+    )
 
     internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
     internal open class SortFilter(
         name: String,
         private val vals: List<Pair<String, String>>,
         state: Int = 0,
-    ) :
-        Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+    ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
         fun getValue() = vals[state].second
     }
 
@@ -70,8 +67,7 @@ object KoharuFilters {
             ).map { CheckBoxFilter(it.first, it.second, true) },
         )
 
-    internal open class CheckBoxFilter(name: String, val value: Int, state: Boolean) :
-        Filter.CheckBox(name, state)
+    internal open class CheckBoxFilter(name: String, val value: Int, state: Boolean) : Filter.CheckBox(name, state)
 
     private val getSortsList: List<Pair<String, String>> = listOf(
         Pair("Recently Posted", "4"),
@@ -100,8 +96,7 @@ object KoharuFilters {
     class Mixed(id: Int, name: String) : Tag(id, name, namespace = 10)
     class Other(id: Int, name: String) : Tag(id, name, namespace = 12)
 
-    internal class TagFilter(title: String, tags: List<Tag>) :
-        Filter.Group<TagTriState>(title, tags.map { TagTriState(it.name, it.id) })
+    internal class TagFilter(title: String, tags: List<Tag>) : Filter.Group<TagTriState>(title, tags.map { TagTriState(it.name, it.id) })
 
     internal class TagTriState(name: String, val id: Int) : Filter.TriState(name)
 
@@ -109,8 +104,7 @@ object KoharuFilters {
         displayName: String,
         private val vals: Array<Pair<String, String>>,
         state: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
 

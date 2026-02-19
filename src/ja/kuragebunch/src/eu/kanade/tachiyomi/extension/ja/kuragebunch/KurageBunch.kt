@@ -7,13 +7,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class KurageBunch : GigaViewer(
-    "Kurage Bunch",
-    "https://kuragebunch.com",
-    "ja",
-    "https://cdn-img.kuragebunch.com",
-    isPaginated = true,
-) {
+class KurageBunch :
+    GigaViewer(
+        "Kurage Bunch",
+        "https://kuragebunch.com",
+        "ja",
+        "https://cdn-img.kuragebunch.com",
+        isPaginated = true,
+    ) {
 
     override val supportsLatest: Boolean = false
 

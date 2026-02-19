@@ -42,12 +42,11 @@ class HQNow : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    private fun genericComicBookFromObject(comicBook: HqNowComicBookDto): SManga =
-        SManga.create().apply {
-            title = comicBook.name
-            url = "/hq/${comicBook.id}/${comicBook.name.toSlug()}"
-            thumbnail_url = comicBook.cover
-        }
+    private fun genericComicBookFromObject(comicBook: HqNowComicBookDto): SManga = SManga.create().apply {
+        title = comicBook.name
+        url = "/hq/${comicBook.id}/${comicBook.name.toSlug()}"
+        thumbnail_url = comicBook.cover
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val query = buildQuery {
@@ -222,13 +221,12 @@ class HQNow : HttpSource() {
             .reversed()
     }
 
-    private fun chapterFromObject(chapter: HqNowChapterDto, comicBook: HqNowComicBookDto): SChapter =
-        SChapter.create().apply {
-            name = "#" + chapter.number +
-                (if (chapter.name.isNotEmpty()) " - " + chapter.name else "")
-            url = "/hq-reader/${comicBook.id}/${comicBook.name.toSlug()}" +
-                "/chapter/${chapter.id}/page/1"
-        }
+    private fun chapterFromObject(chapter: HqNowChapterDto, comicBook: HqNowComicBookDto): SChapter = SChapter.create().apply {
+        name = "#" + chapter.number +
+            (if (chapter.name.isNotEmpty()) " - " + chapter.name else "")
+        url = "/hq-reader/${comicBook.id}/${comicBook.name.toSlug()}" +
+            "/chapter/${chapter.id}/page/1"
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
@@ -299,14 +297,12 @@ class HQNow : HttpSource() {
         return POST(GRAPHQL_URL, newHeaders, body)
     }
 
-    private fun String.toSlug(): String {
-        return Normalizer
-            .normalize(this, Normalizer.Form.NFD)
-            .replace("[^\\p{ASCII}]".toRegex(), "")
-            .replace("[^a-zA-Z0-9\\s]+".toRegex(), "").trim()
-            .replace("\\s+".toRegex(), "-")
-            .lowercase(Locale("pt", "BR"))
-    }
+    private fun String.toSlug(): String = Normalizer
+        .normalize(this, Normalizer.Form.NFD)
+        .replace("[^\\p{ASCII}]".toRegex(), "")
+        .replace("[^a-zA-Z0-9\\s]+".toRegex(), "").trim()
+        .replace("\\s+".toRegex(), "-")
+        .lowercase(Locale("pt", "BR"))
 
     private fun String.toStatus(): Int = when (this) {
         "Concluído" -> SManga.COMPLETED

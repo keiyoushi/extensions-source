@@ -20,14 +20,11 @@ abstract class SimpleParsedHttpSource : ParsedHttpSource() {
     // endregion
 
     // region last
-    override fun latestUpdatesSelector() =
-        if (supportsLatest) simpleMangaSelector() else throw throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = if (supportsLatest) simpleMangaSelector() else throw throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) =
-        if (supportsLatest) simpleMangaFromElement(element) else throw throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = if (supportsLatest) simpleMangaFromElement(element) else throw throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector() =
-        if (supportsLatest) simpleNextPageSelector() else throw throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = if (supportsLatest) simpleNextPageSelector() else throw throw UnsupportedOperationException()
     // endregion
 
     // region search
@@ -37,8 +34,6 @@ abstract class SimpleParsedHttpSource : ParsedHttpSource() {
     // endregion
 
     override fun chapterListSelector() = simpleMangaSelector()
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
     // endregion
 }

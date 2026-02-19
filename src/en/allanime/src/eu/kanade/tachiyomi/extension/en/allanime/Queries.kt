@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.allanime
 
-private fun buildQuery(queryAction: () -> String): String {
-    return queryAction()
-        .trimIndent()
-        .replace("%", "$")
-}
+private fun buildQuery(queryAction: () -> String): String = queryAction()
+    .trimIndent()
+    .replace("%", "$")
 
 val POPULAR_QUERY: String = buildQuery {
     """

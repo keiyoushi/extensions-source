@@ -20,11 +20,12 @@ private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
 class Dilar :
-    ConfigurableSource, Gmanga(
-    "Dilar",
-    MIRROR_PREF_DEFAULT_VALUE,
-    "ar",
-) {
+    Gmanga(
+        "Dilar",
+        MIRROR_PREF_DEFAULT_VALUE,
+        "ar",
+    ),
+    ConfigurableSource {
     override fun chaptersRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("/")
         return GET("$baseUrl/api/mangas/$mangaId/releases", headers)

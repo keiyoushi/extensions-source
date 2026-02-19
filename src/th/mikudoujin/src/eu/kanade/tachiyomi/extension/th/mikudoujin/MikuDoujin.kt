@@ -34,9 +34,7 @@ class MikuDoujin : ParsedHttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
 
     override fun popularMangaSelector() = "div.col-6.inz-col"
 
@@ -60,22 +58,18 @@ class MikuDoujin : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
-    private fun genre(name: String): String {
-        return if (name != "สาวใหญ่/แม่บ้าน") {
-            URLEncoder.encode(name, "UTF-8")
-        } else {
-            name
-        }
+    private fun genre(name: String): String = if (name != "สาวใหญ่/แม่บ้าน") {
+        URLEncoder.encode(name, "UTF-8")
+    } else {
+        name
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -168,45 +162,40 @@ class MikuDoujin : ParsedHttpSource() {
         return chapter
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(GET("$baseUrl/${manga.url}"))
-            .asObservableSuccess()
-            .map {
-                val chList: List<SChapter>
-                val mangaDocument = it.asJsoup()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(GET("$baseUrl/${manga.url}"))
+        .asObservableSuccess()
+        .map {
+            val chList: List<SChapter>
+            val mangaDocument = it.asJsoup()
 
-                if (mangaDocument.select(chapterListSelector()).isEmpty()) {
-                    manga.status = SManga.COMPLETED
-                    val createdChapter = SChapter.create().apply {
-                        url = manga.url
-                        name = "Chapter 1"
-                        chapter_number = 1.0f
-                    }
-                    chList = listOf(createdChapter)
-                } else {
-                    chList =
-                        mangaDocument.select(chapterListSelector()).mapIndexed { idx, Chapter ->
-                            chapterFromElementWithIndex(Chapter, idx, manga)
-                        }
+            if (mangaDocument.select(chapterListSelector()).isEmpty()) {
+                manga.status = SManga.COMPLETED
+                val createdChapter = SChapter.create().apply {
+                    url = manga.url
+                    name = "Chapter 1"
+                    chapter_number = 1.0f
                 }
-                chList
+                chList = listOf(createdChapter)
+            } else {
+                chList =
+                    mangaDocument.select(chapterListSelector()).mapIndexed { idx, Chapter ->
+                        chapterFromElementWithIndex(Chapter, idx, manga)
+                    }
             }
-    }
+            chList
+        }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
-            if (img.hasAttr("data-src")) {
-                Page(i, "", img.attr("abs:data-src"))
-            } else {
-                Page(i, "", img.attr("abs:src"))
-            }
+    override fun pageListParse(document: Document): List<Page> = document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
+        if (img.hasAttr("data-src")) {
+            Page(i, "", img.attr("abs:data-src"))
+        } else {
+            Page(i, "", img.attr("abs:src"))
         }
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }

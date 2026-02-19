@@ -28,7 +28,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
+class VlogTruyen :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val lang = "vi"
 
@@ -172,23 +174,25 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         GenreList(getGenreList()),
     )
 
-    private class OrderByFilter : Filter.Select<Genre>(
-        "Sắp xếp theo",
-        arrayOf(
-            Genre("Mới nhất", "moi-nhat"),
-            Genre("Đang hot", "dang-hot"),
-            Genre("Cũ nhất", "cu-nhat"),
-        ),
-    )
+    private class OrderByFilter :
+        Filter.Select<Genre>(
+            "Sắp xếp theo",
+            arrayOf(
+                Genre("Mới nhất", "moi-nhat"),
+                Genre("Đang hot", "dang-hot"),
+                Genre("Cũ nhất", "cu-nhat"),
+            ),
+        )
 
-    private class StatusByFilter : Filter.Select<Genre>(
-        "Trạng thái",
-        arrayOf(
-            Genre("Trạng thái", "Trang-thai"),
-            Genre("Đã hoàn thành", "1"),
-            Genre("Chưa hoàn thành", "2"),
-        ),
-    )
+    private class StatusByFilter :
+        Filter.Select<Genre>(
+            "Trạng thái",
+            arrayOf(
+                Genre("Trạng thái", "Trang-thai"),
+                Genre("Đã hoàn thành", "1"),
+                Genre("Chưa hoàn thành", "2"),
+            ),
+        )
 
     private class GenreList(genre: Array<Genre>) : Filter.Select<Genre>("Thể loại", genre)
 

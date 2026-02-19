@@ -36,7 +36,8 @@ import java.net.URLEncoder
 abstract class EHentai(
     override val lang: String,
     private val ehLang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "E-Hentai"
 
@@ -151,9 +152,7 @@ abstract class EHentai(
         if (it.text() == ">") it.attr("href") else null
     }
 
-    private fun languageTag(enforceLanguageFilter: Boolean = false): String {
-        return if (enforceLanguageFilter || getEnforceLanguagePref()) "language:$ehLang" else ""
-    }
+    private fun languageTag(enforceLanguageFilter: Boolean = false): String = if (enforceLanguageFilter || getEnforceLanguagePref()) "language:$ehLang" else ""
 
     override fun popularMangaRequest(page: Int) = if (isLangNatural()) {
         exGet("$baseUrl/?f_search=${languageTag()}&f_srdd=5&f_sr=on", page)
@@ -279,13 +278,18 @@ abstract class EHentai(
                                             .lowercase()
                                     ) {
                                         "posted" -> datePosted = EX_DATE_FORMAT.parse(right)?.time ?: 0
+
                                         "visible" -> visible = right.nullIfBlank()
+
                                         "language" -> {
                                             language = right.removeSuffix(TR_SUFFIX).trim().nullIfBlank()
                                             translated = right.endsWith(TR_SUFFIX, true)
                                         }
+
                                         "file size" -> size = parseHumanReadableByteCount(right)?.toLong()
+
                                         "length" -> length = right.removeSuffix("pages").trim().nullIfBlank()?.toInt()
+
                                         "favorited" -> favorites = right.removeSuffix("times").trim().nullIfBlank()?.toInt()
                                     }
                                 }
@@ -337,24 +341,20 @@ abstract class EHentai(
         return MangasPage(listOf(details), false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client.newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String {
-        return imageUrlParse(response, true)
-    }
+    override fun imageUrlParse(response: Response): String = imageUrlParse(response, true)
 
     private fun imageUrlParse(response: Response, isGetBakImageUrl: Boolean): String {
         val doc = response.asJsoup()
@@ -477,7 +477,9 @@ abstract class EHentai(
 
     internal open class TextFilter(name: String, val type: String, val specific: String = "") : Filter.Text(name)
 
-    class Watched : CheckBox("Watched List"), UriFilter {
+    class Watched :
+        CheckBox("Watched List"),
+        UriFilter {
         override fun addToUri(builder: Uri.Builder) {
             if (state) {
                 builder.appendPath("watched")
@@ -485,7 +487,9 @@ abstract class EHentai(
         }
     }
 
-    class Favorites : CheckBox("Favorites"), UriFilter {
+    class Favorites :
+        CheckBox("Favorites"),
+        UriFilter {
         override fun addToUri(builder: Uri.Builder) {
             if (state) {
                 builder.appendPath("favorites.php")
@@ -493,29 +497,34 @@ abstract class EHentai(
         }
     }
 
-    class GenreOption(name: String, private val genreId: String) : CheckBox(name, false), UriFilter {
+    class GenreOption(name: String, private val genreId: String) :
+        CheckBox(name, false),
+        UriFilter {
         override fun addToUri(builder: Uri.Builder) {
             builder.appendQueryParameter("f_$genreId", if (state) "1" else "0")
         }
     }
 
-    class GenreGroup : UriGroup<GenreOption>(
-        "Genres",
-        listOf(
-            GenreOption("Dōjinshi", "doujinshi"),
-            GenreOption("Manga", "manga"),
-            GenreOption("Artist CG", "artistcg"),
-            GenreOption("Game CG", "gamecg"),
-            GenreOption("Western", "western"),
-            GenreOption("Non-H", "non-h"),
-            GenreOption("Image Set", "imageset"),
-            GenreOption("Cosplay", "cosplay"),
-            GenreOption("Asian Porn", "asianporn"),
-            GenreOption("Misc", "misc"),
-        ),
-    )
+    class GenreGroup :
+        UriGroup<GenreOption>(
+            "Genres",
+            listOf(
+                GenreOption("Dōjinshi", "doujinshi"),
+                GenreOption("Manga", "manga"),
+                GenreOption("Artist CG", "artistcg"),
+                GenreOption("Game CG", "gamecg"),
+                GenreOption("Western", "western"),
+                GenreOption("Non-H", "non-h"),
+                GenreOption("Image Set", "imageset"),
+                GenreOption("Cosplay", "cosplay"),
+                GenreOption("Asian Porn", "asianporn"),
+                GenreOption("Misc", "misc"),
+            ),
+        )
 
-    class AdvancedOption(name: String, private val param: String, defValue: Boolean = false) : CheckBox(name, defValue), UriFilter {
+    class AdvancedOption(name: String, private val param: String, defValue: Boolean = false) :
+        CheckBox(name, defValue),
+        UriFilter {
         override fun addToUri(builder: Uri.Builder) {
             if (state) {
                 builder.appendQueryParameter(param, "on")
@@ -523,7 +532,9 @@ abstract class EHentai(
         }
     }
 
-    open class PageOption(name: String, private val queryKey: String) : Text(name), UriFilter {
+    open class PageOption(name: String, private val queryKey: String) :
+        Text(name),
+        UriFilter {
         override fun addToUri(builder: Uri.Builder) {
             if (state.isNotBlank()) {
                 if (builder.build().getQueryParameters("f_sp").isEmpty()) {
@@ -559,22 +570,23 @@ abstract class EHentai(
     }
 
     // Explicit type arg for listOf() to workaround this: KT-16570
-    class AdvancedGroup : UriGroup<Filter<*>>(
-        "Advanced Options",
-        listOf(
-            AdvancedOption("Search Gallery Name", "f_sname", true),
-            AdvancedOption("Search Gallery Tags", "f_stags", true),
-            AdvancedOption("Search Gallery Description", "f_sdesc"),
-            AdvancedOption("Search Torrent Filenames", "f_storr"),
-            AdvancedOption("Only Show Galleries With Torrents", "f_sto"),
-            AdvancedOption("Search Low-Power Tags", "f_sdt1"),
-            AdvancedOption("Search Downvoted Tags", "f_sdt2"),
-            AdvancedOption("Show Expunged Galleries", "f_sh"),
-            RatingOption(),
-            MinPagesOption(),
-            MaxPagesOption(),
-        ),
-    )
+    class AdvancedGroup :
+        UriGroup<Filter<*>>(
+            "Advanced Options",
+            listOf(
+                AdvancedOption("Search Gallery Name", "f_sname", true),
+                AdvancedOption("Search Gallery Tags", "f_stags", true),
+                AdvancedOption("Search Gallery Description", "f_sdesc"),
+                AdvancedOption("Search Torrent Filenames", "f_storr"),
+                AdvancedOption("Only Show Galleries With Torrents", "f_sto"),
+                AdvancedOption("Search Low-Power Tags", "f_sdt1"),
+                AdvancedOption("Search Downvoted Tags", "f_sdt2"),
+                AdvancedOption("Show Expunged Galleries", "f_sh"),
+                RatingOption(),
+                MinPagesOption(),
+                MaxPagesOption(),
+            ),
+        )
 
     private class EnforceLanguageFilter(default: Boolean) : CheckBox("Enforce language", default)
 
@@ -718,19 +730,11 @@ abstract class EHentai(
         return value
     }
 
-    private fun getPassHashPref(): String {
-        return getCookieValue(PASS_HASH_PREF_TITLE, PASS_HASH_PREF_DEFAULT_VALUE, PASS_HASH_PREF_KEY)
-    }
+    private fun getPassHashPref(): String = getCookieValue(PASS_HASH_PREF_TITLE, PASS_HASH_PREF_DEFAULT_VALUE, PASS_HASH_PREF_KEY)
 
-    private fun getMemberIdPref(): String {
-        return getCookieValue(MEMBER_ID_PREF_TITLE, MEMBER_ID_PREF_DEFAULT_VALUE, MEMBER_ID_PREF_KEY)
-    }
+    private fun getMemberIdPref(): String = getCookieValue(MEMBER_ID_PREF_TITLE, MEMBER_ID_PREF_DEFAULT_VALUE, MEMBER_ID_PREF_KEY)
 
-    private fun getIgneousPref(): String {
-        return getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
-    }
+    private fun getIgneousPref(): String = getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
 
-    private fun getForceEhPref(): Boolean {
-        return preferences.getBoolean(FORCE_EH, FORCE_EH_DEFAULT_VALUE)
-    }
+    private fun getForceEhPref(): Boolean = preferences.getBoolean(FORCE_EH, FORCE_EH_DEFAULT_VALUE)
 }

@@ -6,13 +6,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Zenon : GigaViewer(
-    "Zenon",
-    "https://comic-zenon.com",
-    "ja",
-    "https://cdn-img.comic-zenon.com/public/page",
-    true,
-) {
+class Zenon :
+    GigaViewer(
+        "Zenon",
+        "https://comic-zenon.com",
+        "ja",
+        "https://cdn-img.comic-zenon.com/public/page",
+        true,
+    ) {
 
     override val supportsLatest: Boolean = false
 

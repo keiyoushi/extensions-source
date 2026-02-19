@@ -25,7 +25,9 @@ import org.json.JSONObject
 import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
-class MediocreToons : HttpSource(), ConfigurableSource {
+class MediocreToons :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Mediocre Toons"
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
@@ -222,14 +224,17 @@ class MediocreToons : HttpSource(), ConfigurableSource {
                         url.addQueryParameter("formato", filter.selected)
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.selected.isNotEmpty()) {
                         url.addQueryParameter("status", filter.selected)
                     }
                 }
+
                 is SortFilter -> {
                     url.addQueryParameter("ordenarPor", filter.selected)
                 }
+
                 else -> {}
             }
         }
@@ -254,99 +259,103 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         SortFilter(),
     )
 
-    private class FormatoFilter : UriSelectFilter(
-        "Formato",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("Novel", "3"),
-            Pair("Shoujo", "4"),
-            Pair("Comic", "5"),
-            Pair("Yaoi", "8"),
-            Pair("Yuri", "9"),
-            Pair("Hentai", "10"),
-        ),
-    )
+    private class FormatoFilter :
+        UriSelectFilter(
+            "Formato",
+            arrayOf(
+                Pair("Todos", ""),
+                Pair("Novel", "3"),
+                Pair("Shoujo", "4"),
+                Pair("Comic", "5"),
+                Pair("Yaoi", "8"),
+                Pair("Yuri", "9"),
+                Pair("Hentai", "10"),
+            ),
+        )
 
-    private class StatusFilter : UriSelectFilter(
-        "Status",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("Ativo", "1"),
-            Pair("Em Andamento", "2"),
-            Pair("Cancelada", "3"),
-            Pair("Concluído", "4"),
-            Pair("Hiato", "6"),
-        ),
-    )
+    private class StatusFilter :
+        UriSelectFilter(
+            "Status",
+            arrayOf(
+                Pair("Todos", ""),
+                Pair("Ativo", "1"),
+                Pair("Em Andamento", "2"),
+                Pair("Cancelada", "3"),
+                Pair("Concluído", "4"),
+                Pair("Hiato", "6"),
+            ),
+        )
 
-    private class TagsFilter : Filter.Group<TagCheckBox>(
-        "Tags",
-        listOf(
-            TagCheckBox("Ação", "2"),
-            TagCheckBox("Aventura", "3"),
-            TagCheckBox("Fantasia", "4"),
-            TagCheckBox("Romance", "5"),
-            TagCheckBox("Comédia", "6"),
-            TagCheckBox("Drama", "7"),
-            TagCheckBox("Terror", "8"),
-            TagCheckBox("Horror", "9"),
-            TagCheckBox("Suspense", "10"),
-            TagCheckBox("Histórico", "11"),
-            TagCheckBox("Vida escolar", "12"),
-            TagCheckBox("Sobrenatural", "13"),
-            TagCheckBox("Militar", "14"),
-            TagCheckBox("Shounen", "15"),
-            TagCheckBox("Shoujo", "16"),
-            TagCheckBox("Josei", "17"),
-            TagCheckBox("One-shot", "18"),
-            TagCheckBox("Isekai", "19"),
-            TagCheckBox("Retorno", "20"),
-            TagCheckBox("Reencarnação", "21"),
-            TagCheckBox("Sistema", "22"),
-            TagCheckBox("Cultivo", "23"),
-            TagCheckBox("Artes Marciais", "24"),
-            TagCheckBox("Dungeon", "25"),
-            TagCheckBox("Tragédia", "26"),
-            TagCheckBox("Psicológico", "27"),
-            TagCheckBox("Culinaria", "28"),
-            TagCheckBox("Magia", "29"),
-            TagCheckBox("SuperPoder", "30"),
-            TagCheckBox("Murim", "31"),
-            TagCheckBox("Necromante", "32"),
-            TagCheckBox("Apocalipse", "33"),
-            TagCheckBox("Seinen", "34"),
-            TagCheckBox("Luta", "35"),
-            TagCheckBox("máfia", "36"),
-            TagCheckBox("Monstros", "37"),
-            TagCheckBox("Esportes", "38"),
-            TagCheckBox("Demônios", "39"),
-            TagCheckBox("Ficção Científica", "40"),
-            TagCheckBox("Fatia da Vida/Slice of Life", "41"),
-            TagCheckBox("Ecchi", "42"),
-            TagCheckBox("Mistério", "43"),
-            TagCheckBox("Harém", "44"),
-            TagCheckBox("manhua", "45"),
-            TagCheckBox("Jogo", "46"),
-            TagCheckBox("Regressão", "47"),
-            TagCheckBox("+18", "48"),
-            TagCheckBox("Oneshot", "49"),
-            TagCheckBox("Yuri", "50"),
-            TagCheckBox("Crime", "51"),
-            TagCheckBox("Policial", "52"),
-            TagCheckBox("Viagem no Tempo", "53"),
-            TagCheckBox("Moderno", "54"),
-        ),
-    )
+    private class TagsFilter :
+        Filter.Group<TagCheckBox>(
+            "Tags",
+            listOf(
+                TagCheckBox("Ação", "2"),
+                TagCheckBox("Aventura", "3"),
+                TagCheckBox("Fantasia", "4"),
+                TagCheckBox("Romance", "5"),
+                TagCheckBox("Comédia", "6"),
+                TagCheckBox("Drama", "7"),
+                TagCheckBox("Terror", "8"),
+                TagCheckBox("Horror", "9"),
+                TagCheckBox("Suspense", "10"),
+                TagCheckBox("Histórico", "11"),
+                TagCheckBox("Vida escolar", "12"),
+                TagCheckBox("Sobrenatural", "13"),
+                TagCheckBox("Militar", "14"),
+                TagCheckBox("Shounen", "15"),
+                TagCheckBox("Shoujo", "16"),
+                TagCheckBox("Josei", "17"),
+                TagCheckBox("One-shot", "18"),
+                TagCheckBox("Isekai", "19"),
+                TagCheckBox("Retorno", "20"),
+                TagCheckBox("Reencarnação", "21"),
+                TagCheckBox("Sistema", "22"),
+                TagCheckBox("Cultivo", "23"),
+                TagCheckBox("Artes Marciais", "24"),
+                TagCheckBox("Dungeon", "25"),
+                TagCheckBox("Tragédia", "26"),
+                TagCheckBox("Psicológico", "27"),
+                TagCheckBox("Culinaria", "28"),
+                TagCheckBox("Magia", "29"),
+                TagCheckBox("SuperPoder", "30"),
+                TagCheckBox("Murim", "31"),
+                TagCheckBox("Necromante", "32"),
+                TagCheckBox("Apocalipse", "33"),
+                TagCheckBox("Seinen", "34"),
+                TagCheckBox("Luta", "35"),
+                TagCheckBox("máfia", "36"),
+                TagCheckBox("Monstros", "37"),
+                TagCheckBox("Esportes", "38"),
+                TagCheckBox("Demônios", "39"),
+                TagCheckBox("Ficção Científica", "40"),
+                TagCheckBox("Fatia da Vida/Slice of Life", "41"),
+                TagCheckBox("Ecchi", "42"),
+                TagCheckBox("Mistério", "43"),
+                TagCheckBox("Harém", "44"),
+                TagCheckBox("manhua", "45"),
+                TagCheckBox("Jogo", "46"),
+                TagCheckBox("Regressão", "47"),
+                TagCheckBox("+18", "48"),
+                TagCheckBox("Oneshot", "49"),
+                TagCheckBox("Yuri", "50"),
+                TagCheckBox("Crime", "51"),
+                TagCheckBox("Policial", "52"),
+                TagCheckBox("Viagem no Tempo", "53"),
+                TagCheckBox("Moderno", "54"),
+            ),
+        )
 
-    private class SortFilter : UriSelectFilter(
-        "Ordenar Por",
-        arrayOf(
-            Pair("Mais Recentes", "criada_em_desc"),
-            Pair("Mais Populares", "view_geral"),
-            Pair("A-Z", "nome"),
-        ),
-        defaultValue = 0,
-    )
+    private class SortFilter :
+        UriSelectFilter(
+            "Ordenar Por",
+            arrayOf(
+                Pair("Mais Recentes", "criada_em_desc"),
+                Pair("Mais Populares", "view_geral"),
+                Pair("A-Z", "nome"),
+            ),
+            defaultValue = 0,
+        )
 
     private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
@@ -386,9 +395,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         return finalUrl
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val manga = response.parseAs<MediocreMangaDto>()

@@ -9,7 +9,7 @@ typealias MangaListDto = PaginatedResponseDto<MangaDataDto>
 typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
-@SerialName(NamiComiConstants.manga)
+@SerialName(NamiComiConstants.MANGA)
 class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
 
 @Serializable
@@ -55,15 +55,15 @@ enum class StatusDto(val value: String) {
 sealed class AbstractTagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
 
 @Serializable
-@SerialName(NamiComiConstants.tag)
+@SerialName(NamiComiConstants.TAG)
 class TagDto : AbstractTagDto()
 
 @Serializable
-@SerialName(NamiComiConstants.primaryTag)
+@SerialName(NamiComiConstants.PRIMARY_TAG)
 class PrimaryTagDto : AbstractTagDto()
 
 @Serializable
-@SerialName(NamiComiConstants.secondaryTag)
+@SerialName(NamiComiConstants.SECONDARY_TAG)
 class SecondaryTagDto : AbstractTagDto()
 
 @Serializable

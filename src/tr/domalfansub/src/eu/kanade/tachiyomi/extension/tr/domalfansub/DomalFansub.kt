@@ -9,12 +9,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DomalFansub : Madara(
-    "Domal Fansub",
-    "https://dom4lfansub.online",
-    "tr",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
+class DomalFansub :
+    Madara(
+        "Domal Fansub",
+        "https://dom4lfansub.online",
+        "tr",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
+    ) {
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Durum) + div.summary-content"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

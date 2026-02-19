@@ -48,8 +48,7 @@ class DarkScience : HttpSource() {
         ),
     )
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(initTheManga(manga))
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(initTheManga(manga))
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = mutableListOf<SChapter>()
@@ -64,7 +63,9 @@ class DarkScience : HttpSource() {
                 ?.attr("href")
             val nextArchivePage = if (nextArchivePageUrl != null) {
                 client.newCall(GET(nextArchivePageUrl, headers)).execute().asJsoup()
-            } else { null }
+            } else {
+                null
+            }
 
             archivePage.select("""#content article header > h2 > a""").forEach {
                 val chTitle = it.text()
@@ -93,25 +94,22 @@ class DarkScience : HttpSource() {
         return Observable.just(chapters)
     }
 
-    private fun getDate(url: String): Long {
-        return try {
-            dateFormat.parse(
-                chapterDateRegex.find(url)!!.groupValues[1],
-            )!!.time
-        } catch (_: Exception) {
-            0L
-        }
+    private fun getDate(url: String): Long = try {
+        dateFormat.parse(
+            chapterDateRegex.find(url)!!.groupValues[1],
+        )!!.time
+    } catch (_: Exception) {
+        0L
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        listOf(
-            Page(
-                0,
-                imageUrl = response.asJsoup()
-                    .selectFirst("article.post img.aligncenter")!!
-                    .attr("src"),
-            ),
-        )
+    override fun pageListParse(response: Response): List<Page> = listOf(
+        Page(
+            0,
+            imageUrl = response.asJsoup()
+                .selectFirst("article.post img.aligncenter")!!
+                .attr("src"),
+        ),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()

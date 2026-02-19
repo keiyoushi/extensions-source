@@ -3,43 +3,34 @@ package eu.kanade.tachiyomi.extension.en.manhwa18
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList {
-    return FilterList(
-        Filter.Header(name = "The filter is ignored when using text search."),
-        CategoryFilter("Category", Categories),
-        StatusFilter("Status", Statuses),
-        SortFilter("Sort", getSortsList),
-        NationFilter("Nation", Nations),
-        GenreFilter("Type", getTypesList),
-    )
-}
+fun getFilters(): FilterList = FilterList(
+    Filter.Header(name = "The filter is ignored when using text search."),
+    CategoryFilter("Category", Categories),
+    StatusFilter("Status", Statuses),
+    SortFilter("Sort", getSortsList),
+    NationFilter("Nation", Nations),
+    GenreFilter("Type", getTypesList),
+)
 
 /** Filters **/
-internal class CategoryFilter(name: String, categoryList: Map<Int, String>) :
-    GroupFilter(name, categoryList.map { (value, name) -> Pair(name, value.toString()) })
+internal class CategoryFilter(name: String, categoryList: Map<Int, String>) : GroupFilter(name, categoryList.map { (value, name) -> Pair(name, value.toString()) })
 
-internal class StatusFilter(name: String, statusList: Map<Int, String>) :
-    SelectFilter(name, statusList.map { (value, name) -> Pair(name, value.toString()) })
+internal class StatusFilter(name: String, statusList: Map<Int, String>) : SelectFilter(name, statusList.map { (value, name) -> Pair(name, value.toString()) })
 
-internal class SortFilter(name: String, sortList: List<Pair<String, String>>) :
-    SelectFilter(name, sortList)
+internal class SortFilter(name: String, sortList: List<Pair<String, String>>) : SelectFilter(name, sortList)
 
-internal class NationFilter(name: String, nationList: Map<Int, String>) :
-    GroupFilter(name, nationList.map { (value, name) -> Pair(name, value.toString()) })
+internal class NationFilter(name: String, nationList: Map<Int, String>) : GroupFilter(name, nationList.map { (value, name) -> Pair(name, value.toString()) })
 
-internal class GenreFilter(name: String, genreList: List<Genre>) :
-    GroupFilter(name, genreList.map { Pair(it.name, it.id.toString()) })
+internal class GenreFilter(name: String, genreList: List<Genre>) : GroupFilter(name, genreList.map { Pair(it.name, it.id.toString()) })
 
-internal open class GroupFilter(name: String, vals: List<Pair<String, String>>) :
-    Filter.Group<CheckBoxFilter>(name, vals.map { CheckBoxFilter(it.first, it.second) }) {
+internal open class GroupFilter(name: String, vals: List<Pair<String, String>>) : Filter.Group<CheckBoxFilter>(name, vals.map { CheckBoxFilter(it.first, it.second) }) {
 
     val checked get() = state.filter { it.state }.joinToString(",") { it.value }
 }
 
 internal open class CheckBoxFilter(name: String, val value: String = "") : Filter.CheckBox(name)
 
-internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>) :
-    Filter.Select<String>(name, vals.map { it.first }.toTypedArray()) {
+internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray()) {
     fun getValue() = vals[state].second
 }
 

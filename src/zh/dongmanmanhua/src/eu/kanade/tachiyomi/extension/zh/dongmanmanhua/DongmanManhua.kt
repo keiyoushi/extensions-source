@@ -41,16 +41,13 @@ class DongmanManhua : HttpSource() {
         return MangasPage(entries, false)
     }
 
-    private fun mangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            title = element.selectFirst("p.subj")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        title = element.selectFirst("p.subj")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/dailySchedule?sortOrder=UPDATE&webtoonCompleteType=ONGOING", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/dailySchedule?sortOrder=UPDATE&webtoonCompleteType=ONGOING", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -147,12 +144,10 @@ class DongmanManhua : HttpSource() {
         return chapters
     }
 
-    private fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            name = element.selectFirst("span.subj span")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            date_upload = dateFormat.tryParse(element.selectFirst("span.date")?.text())
-        }
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        name = element.selectFirst("span.subj span")!!.text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        date_upload = dateFormat.tryParse(element.selectFirst("span.date")?.text())
     }
 
     private val dateFormat = SimpleDateFormat("yyyy-M-d", Locale.ENGLISH)
@@ -165,7 +160,5 @@ class DongmanManhua : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

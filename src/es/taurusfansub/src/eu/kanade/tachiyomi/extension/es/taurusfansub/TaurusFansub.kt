@@ -8,12 +8,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TaurusFansub : Madara(
-    "Taurus Fansub",
-    "https://lectortaurus.com",
-    "es",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class TaurusFansub :
+    Madara(
+        "Taurus Fansub",
+        "https://lectortaurus.com",
+        "es",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
@@ -27,14 +28,12 @@ class TaurusFansub : Madara(
     override val mangaDetailsSelectorStatus = "div.manga-status span:last-child"
     override val mangaDetailsSelectorDescription = "div.summary__content p"
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return document.select(".genres-filter .options a")
-            .mapNotNull { element ->
-                val id = element.absUrl("href").toHttpUrlOrNull()?.queryParameter("genre")
-                val name = element.text()
+    override fun parseGenres(document: Document): List<Genre> = document.select(".genres-filter .options a")
+        .mapNotNull { element ->
+            val id = element.absUrl("href").toHttpUrlOrNull()?.queryParameter("genre")
+            val name = element.text()
 
-                id?.takeIf { it.isNotEmpty() && name.isNotBlank() }
-                    ?.let { Genre(name, it) }
-            }
-    }
+            id?.takeIf { it.isNotEmpty() && name.isNotBlank() }
+                ?.let { Genre(name, it) }
+        }
 }

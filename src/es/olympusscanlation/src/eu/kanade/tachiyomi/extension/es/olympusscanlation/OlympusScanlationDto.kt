@@ -25,12 +25,10 @@ class HomeDto(
 )
 
 object PopularComicsSerializer : JsonTransformingSerializer<List<MangaDto>>(ListSerializer(MangaDto.serializer())) {
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        return if (element is JsonPrimitive && element.isString) {
-            Json.parseToJsonElement(element.content)
-        } else {
-            element
-        }
+    override fun transformDeserialize(element: JsonElement): JsonElement = if (element is JsonPrimitive && element.isString) {
+        Json.parseToJsonElement(element.content)
+    } else {
+        element
     }
 }
 

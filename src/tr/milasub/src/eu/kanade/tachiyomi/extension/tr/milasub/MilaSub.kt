@@ -6,12 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MilaSub : Madara(
-    "MilaSub",
-    "https://www.milascan.com",
-    "tr",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
+class MilaSub :
+    Madara(
+        "MilaSub",
+        "https://www.milascan.com",
+        "tr",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 

@@ -40,14 +40,12 @@ class OhtaWebComic : ParsedHttpSource() {
 
     private lateinit var directory: List<Element>
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(popularMangaRequest(page))
-                .asObservableSuccess()
-                .map { popularMangaParse(it) }
-        } else {
-            Observable.just(parseDirectory(page, ::popularMangaFromElement))
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
+        client.newCall(popularMangaRequest(page))
+            .asObservableSuccess()
+            .map { popularMangaParse(it) }
+    } else {
+        Observable.just(parseDirectory(page, ::popularMangaFromElement))
     }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/", headers)
@@ -85,14 +83,12 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, query) }
-        } else {
-            Observable.just(parseDirectory(page, ::searchMangaFromElement))
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (page == 1) {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, query) }
+    } else {
+        Observable.just(parseDirectory(page, ::searchMangaFromElement))
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = popularMangaRequest(page)
@@ -170,8 +166,7 @@ class OhtaWebComic : ParsedHttpSource() {
 
     private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("https://www.yondemill.jp${chapter.url}?view=1&u0=1", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("https://www.yondemill.jp${chapter.url}?view=1&u0=1", headers)
 
     override fun pageListParse(document: Document): List<Page> {
         val readerUrl = document.selectFirst("script:containsData(location.href)")!!
@@ -189,7 +184,6 @@ class OhtaWebComic : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }
 
-private fun Element.getChapterId(): String =
-    attr("onclick")
-        .substringAfter("openBook('")
-        .substringBefore("')")
+private fun Element.getChapterId(): String = attr("onclick")
+    .substringAfter("openBook('")
+    .substringBefore("')")

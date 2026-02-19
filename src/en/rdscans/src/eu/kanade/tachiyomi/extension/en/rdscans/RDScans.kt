@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class RDScans : Madara(
-    "RD Scans",
-    "https://rdscans.com",
-    "en",
-) {
+class RDScans :
+    Madara(
+        "RD Scans",
+        "https://rdscans.com",
+        "en",
+    ) {
     override val mangaSubString = "new"
     override val mangaEntrySelector = ""
     override val useNewChapterEndpoint = true
@@ -31,17 +32,11 @@ class RDScans : Madara(
         return MangasPage(filteredMangas, mangasPage.hasNextPage)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return parseBrowsePage(super.popularMangaParse(response))
-    }
+    override fun popularMangaParse(response: Response): MangasPage = parseBrowsePage(super.popularMangaParse(response))
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return parseBrowsePage(super.latestUpdatesParse(response))
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = parseBrowsePage(super.latestUpdatesParse(response))
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return filterWebNovels(super.searchMangaParse(response))
-    }
+    override fun searchMangaParse(response: Response): MangasPage = filterWebNovels(super.searchMangaParse(response))
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }

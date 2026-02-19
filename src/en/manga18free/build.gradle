@@ -1,6 +1,6 @@
 ext {
     extName = 'Manga18Free'
-    extClass = '.manga18free'
+    extClass = '.Manga18Free'
     themePkg = 'madara'
     baseUrl = 'https://manga18free.com'
     overrideVersionCode = 1

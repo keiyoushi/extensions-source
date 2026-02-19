@@ -3,28 +3,26 @@ package eu.kanade.tachiyomi.extension.all.pururin
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList {
-    return FilterList(
-        SelectFilter("Sort by", getSortsList),
-        TypeFilter("Types"),
-        Filter.Separator(),
-        Filter.Header("Separate tags with commas (,)"),
-        Filter.Header("Prepend with dash (-) to exclude"),
-        TextFilter("Tags", "[Content]"),
-        TextFilter("Artists", "[Artist]"),
-        TextFilter("Circles", "[Circle]"),
-        TextFilter("Parodies", "[Parody]"),
-        TextFilter("Languages", "[Language]"),
-        TextFilter("Scanlators", "[Scanlator]"),
-        TextFilter("Conventions", "[Convention]"),
-        TextFilter("Collections", "[Collections]"),
-        TextFilter("Categories", "[Category]"),
-        TextFilter("Uploaders", "[Uploader]"),
-        Filter.Separator(),
-        Filter.Header("Filter by pages, for example: (>20)"),
-        PageFilter("Pages"),
-    )
-}
+fun getFilters(): FilterList = FilterList(
+    SelectFilter("Sort by", getSortsList),
+    TypeFilter("Types"),
+    Filter.Separator(),
+    Filter.Header("Separate tags with commas (,)"),
+    Filter.Header("Prepend with dash (-) to exclude"),
+    TextFilter("Tags", "[Content]"),
+    TextFilter("Artists", "[Artist]"),
+    TextFilter("Circles", "[Circle]"),
+    TextFilter("Parodies", "[Parody]"),
+    TextFilter("Languages", "[Language]"),
+    TextFilter("Scanlators", "[Scanlator]"),
+    TextFilter("Conventions", "[Convention]"),
+    TextFilter("Collections", "[Collections]"),
+    TextFilter("Categories", "[Category]"),
+    TextFilter("Uploaders", "[Uploader]"),
+    Filter.Separator(),
+    Filter.Header("Filter by pages, for example: (>20)"),
+    PageFilter("Pages"),
+)
 internal class TypeFilter(name: String) :
     Filter.Group<CheckBoxFilter>(
         name,
@@ -44,8 +42,7 @@ internal open class PageFilter(name: String) : Filter.Text(name)
 
 internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
 
-internal open class SelectFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 0) :
-    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+internal open class SelectFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     fun getValue() = vals[state].second
 }
 private val getSortsList: List<Pair<String, String>> = listOf(

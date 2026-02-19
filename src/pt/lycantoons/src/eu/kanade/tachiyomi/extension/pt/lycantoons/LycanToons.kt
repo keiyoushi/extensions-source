@@ -44,15 +44,13 @@ class LycanToons : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = metricsRequest("popular", page)
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        response.parseAs<PopularResponse>().data.toMangasPage()
+    override fun popularMangaParse(response: Response): MangasPage = response.parseAs<PopularResponse>().data.toMangasPage()
 
     // =====================Latest=====================
 
     override fun latestUpdatesRequest(page: Int): Request = metricsRequest("recently-updated", page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        response.parseAs<PopularResponse>().data.toMangasPage()
+    override fun latestUpdatesParse(response: Response): MangasPage = response.parseAs<PopularResponse>().data.toMangasPage()
 
     // =====================Search=====================
 
@@ -70,8 +68,7 @@ class LycanToons : HttpSource() {
         return POST("$baseUrl/api/series", headers, body)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        response.parseAs<SearchResponse>().series.toMangasPage()
+    override fun searchMangaParse(response: Response): MangasPage = response.parseAs<SearchResponse>().series.toMangasPage()
 
     override fun getFilterList(): FilterList = LycanToonsFilters.get()
 
@@ -90,12 +87,11 @@ class LycanToons : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request = seriesRequest(manga.slug())
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<SeriesDto>().let { series ->
-            series.capitulos!!
-                .map { it.toSChapter(series.slug) }
-                .sortedByDescending { it.chapter_number }
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<SeriesDto>().let { series ->
+        series.capitulos!!
+            .map { it.toSChapter(series.slug) }
+            .sortedByDescending { it.chapter_number }
+    }
 
     // =====================Pages========================
 
@@ -130,11 +126,9 @@ class LycanToons : HttpSource() {
 
     // =====================Utils=====================
 
-    private fun metricsRequest(path: String, page: Int): Request =
-        GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
+    private fun metricsRequest(path: String, page: Int): Request = GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
 
-    private fun List<SeriesDto>.toMangasPage(): MangasPage =
-        MangasPage(map { it.toSManga() }, false)
+    private fun List<SeriesDto>.toMangasPage(): MangasPage = MangasPage(map { it.toSManga() }, false)
 
     private fun seriesRequest(slug: String): Request = GET("$baseUrl/api/series/$slug", headers)
 

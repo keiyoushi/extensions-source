@@ -10,12 +10,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class PinkSeaUnicorn : Madara(
-    "Pink Sea Unicorn",
-    "https://psunicorn.com",
-    "pt-BR",
-    SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
-) {
+class PinkSeaUnicorn :
+    Madara(
+        "Pink Sea Unicorn",
+        "https://psunicorn.com",
+        "pt-BR",
+        SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addNetworkInterceptor(::checkPasswordProtectedIntercept)

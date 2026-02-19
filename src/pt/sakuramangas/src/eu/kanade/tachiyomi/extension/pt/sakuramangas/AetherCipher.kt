@@ -11,33 +11,31 @@ object AetherCipher {
 
     private data class KeystreamResult(val keystream: ByteArray, val finalState: LongArray)
 
-    fun decrypt(data: String, key: String): String {
-        return try {
-            val encryptedBytes = Base64.decode(data, Base64.DEFAULT)
+    fun decrypt(data: String, key: String): String = try {
+        val encryptedBytes = Base64.decode(data, Base64.DEFAULT)
 
-            val scheduledKey = generateScheduledKey(key)
+        val scheduledKey = generateScheduledKey(key)
 
-            val sha256Digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
-            val buffer = ByteBuffer.wrap(sha256Digest).order(ByteOrder.LITTLE_ENDIAN)
-            val initialState = LongArray(8) {
-                buffer.getInt(it * 4).toLong() and 0xFFFFFFFFL
-            }
-
-            val keystreamResult = generateKeystream(encryptedBytes.size, initialState, scheduledKey)
-            val keystream = keystreamResult.keystream
-            val finalState = keystreamResult.finalState
-            val lastStateValue = finalState[7]
-
-            val reversedXORBytes = reverseAetherXORChain(encryptedBytes, lastStateValue.toInt())
-
-            val decryptedBytes = ByteArray(encryptedBytes.size)
-            for (i in encryptedBytes.indices) {
-                decryptedBytes[i] = reversedXORBytes[i] xor keystream[i]
-            }
-            String(decryptedBytes, Charsets.UTF_8)
-        } catch (_: Exception) {
-            throw Error("Could not decrypt chapter data.")
+        val sha256Digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
+        val buffer = ByteBuffer.wrap(sha256Digest).order(ByteOrder.LITTLE_ENDIAN)
+        val initialState = LongArray(8) {
+            buffer.getInt(it * 4).toLong() and 0xFFFFFFFFL
         }
+
+        val keystreamResult = generateKeystream(encryptedBytes.size, initialState, scheduledKey)
+        val keystream = keystreamResult.keystream
+        val finalState = keystreamResult.finalState
+        val lastStateValue = finalState[7]
+
+        val reversedXORBytes = reverseAetherXORChain(encryptedBytes, lastStateValue.toInt())
+
+        val decryptedBytes = ByteArray(encryptedBytes.size)
+        for (i in encryptedBytes.indices) {
+            decryptedBytes[i] = reversedXORBytes[i] xor keystream[i]
+        }
+        String(decryptedBytes, Charsets.UTF_8)
+    } catch (_: Exception) {
+        throw Error("Could not decrypt chapter data.")
     }
 
     private fun generateScheduledKey(key: String): IntArray {
@@ -91,7 +89,5 @@ object AetherCipher {
         return result
     }
 
-    private fun Long.rotateLeft(bits: Int): Long {
-        return ((this shl bits) or (this ushr (32 - bits))) and 0xFFFFFFFFL
-    }
+    private fun Long.rotateLeft(bits: Int): Long = ((this shl bits) or (this ushr (32 - bits))) and 0xFFFFFFFFL
 }

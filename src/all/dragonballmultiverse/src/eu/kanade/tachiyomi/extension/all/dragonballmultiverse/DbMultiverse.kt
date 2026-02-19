@@ -34,25 +34,21 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
 
     override fun chapterListSelector(): String = ".cadrelect.chapter p a[href*=-]"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#balloonsimg")
-            .let { e ->
-                listOf(
-                    if (e.hasAttr("src")) {
-                        Page(1, "", e.attr("abs:src"))
-                    } else {
-                        e.attr("style")
-                            .substringAfter("(")
-                            .substringBefore(")")
-                            .let { Page(1, "", baseUrl + it) }
-                    },
-                )
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("#balloonsimg")
+        .let { e ->
+            listOf(
+                if (e.hasAttr("src")) {
+                    Page(1, "", e.attr("abs:src"))
+                } else {
+                    e.attr("style")
+                        .substringAfter("(")
+                        .substringBefore(")")
+                        .let { Page(1, "", baseUrl + it) }
+                },
+            )
+        }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         // site hosts three titles that can be read by the app
@@ -74,11 +70,9 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
         thumbnail_url = "$baseUrl/imgs/read/$type.jpg"
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return manga.apply {
-            initialized = true
-        }.let { Observable.just(it) }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = manga.apply {
+        initialized = true
+    }.let { Observable.just(it) }
 
     override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 

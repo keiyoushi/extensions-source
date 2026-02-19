@@ -99,29 +99,23 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "#list_catalog > div"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.select(".card-title").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select(".card-title").text()
+        setUrlWithoutDomain(element.select("a").attr("href"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     override fun popularMangaNextPageSelector(): String = "#list_pagination > a.bg-sky-900 + a"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesSelector() = "#containerAjoutsScans > div"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.select(".card-title").text()
-            setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select(".card-title").text()
+        setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     override fun latestUpdatesNextPageSelector() = "#list_pagination > a.bg-sky-900 + a"
@@ -167,24 +161,22 @@ class AnimeSama : ParsedHttpSource() {
         return manga
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith("ID:")) {
-            val id = query.substringAfterLast("ID:")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("ID:")) {
+        val id = query.substringAfterLast("ID:")
 
-            val mangaUrl = "$baseUrl/catalogue".toHttpUrl()
-                .newBuilder()
-                .addPathSegment(id)
-                .build()
-            val requestToCheckManga = GET(mangaUrl, headers)
-            client.newCall(requestToCheckManga).asObservableSuccess().map {
-                MangasPage(
-                    listOfNotNull(detailsParse(it)),
-                    false,
-                )
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+        val mangaUrl = "$baseUrl/catalogue".toHttpUrl()
+            .newBuilder()
+            .addPathSegment(id)
+            .build()
+        val requestToCheckManga = GET(mangaUrl, headers)
+        client.newCall(requestToCheckManga).asObservableSuccess().map {
+            MangasPage(
+                listOfNotNull(detailsParse(it)),
+                false,
+            )
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -249,6 +241,7 @@ class AnimeSama : ParsedHttpSource() {
                             )
                         }
                     }
+
                     specialRegex.find(command) != null -> {
                         val chapterTitle = specialRegex.find(command)!!.groupValues[1]
                         parsedChapterList.add(
@@ -345,15 +338,9 @@ class AnimeSama : ParsedHttpSource() {
         return GET(page.imageUrl!!, imgHeaders)
     }
 
-    fun convertUrlToLatestDomain(url: String): String {
-        return "${interceptor.getBaseUrl()!!}$url"
-    }
+    fun convertUrlToLatestDomain(url: String): String = "${interceptor.getBaseUrl()!!}$url"
 
-    override fun getMangaUrl(manga: SManga): String {
-        return convertUrlToLatestDomain(manga.url)
-    }
+    override fun getMangaUrl(manga: SManga): String = convertUrlToLatestDomain(manga.url)
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return convertUrlToLatestDomain(chapter.url)
-    }
+    override fun getChapterUrl(chapter: SChapter): String = convertUrlToLatestDomain(chapter.url)
 }
