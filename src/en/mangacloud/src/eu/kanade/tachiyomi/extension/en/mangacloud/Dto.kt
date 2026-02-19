@@ -25,22 +25,20 @@ class DataList<T>(
 class BrowseManga(
     private val id: String,
     private val title: String,
-    private val cover: Cover,
+    private val cover: Image,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id
         title = this@BrowseManga.title
-        thumbnail_url = cover.createUrl(id)
+        thumbnail_url = "$CDN_URL/$id/${cover.id}.${cover.format}"
     }
 }
 
 @Serializable
-class Cover(
-    private val id: String,
-    @SerialName("f") private val format: String,
-) {
-    fun createUrl(mangaId: String) = "$CDN_URL/$mangaId/$id.$format"
-}
+class Image(
+    val id: String,
+    @SerialName("f") val format: String,
+)
 
 @Serializable
 class Tag(
@@ -73,7 +71,7 @@ class Manga(
     private val links: Links,
     private val tags: List<Tag>,
     val chapters: List<Chapter>,
-    val cover: Cover,
+    private val cover: Image,
 ) {
     fun toSManga(): SManga {
         val app = Injekt.get<Application>().packageName
@@ -85,15 +83,17 @@ class Manga(
         return SManga.create().apply {
             url = id
             title = this@Manga.title
-            artist = artists.commaSeparate()
-            author = authors.commaSeparate()
+            artist = artists?.split("•")
+                ?.joinToString(transform = String::trim)
+            author = authors?.split("•")
+                ?.joinToString(transform = String::trim)
             description = buildString {
                 this@Manga.description?.also { append(it.trim(), "\n\n") }
 
                 startYear?.also { start ->
                     append("Year: ", start)
                     endYear?.also { end ->
-                        append("-", end)
+                        append(" - ", end)
                     }
                     append("\n\n")
                 }
@@ -142,7 +142,7 @@ class Manga(
                         }
                     }
                 }
-            }
+            }.trim()
             genre = buildList {
                 type?.also {
                     if (groupTags) {
@@ -174,13 +174,10 @@ class Manga(
                 "Hiatus" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = cover.createUrl(id)
+            thumbnail_url = "$CDN_URL/$id/${cover.id}.${cover.format}"
             initialized = true
         }
     }
-
-    private fun String?.commaSeparate() = this?.split("•")
-        ?.joinToString(transform = String::trim)
 }
 
 @Serializable
@@ -201,15 +198,15 @@ class Chapter(
     val date get() = dateFormat.tryParse(createdDate)
 }
 
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
+    timeZone = SimpleTimeZone.getTimeZone("UTC")
+}
+
 @Serializable
 data class ChapterUrl(
     val comicId: String,
     val chapterId: String,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
-    timeZone = SimpleTimeZone.getTimeZone("UTC")
-}
 
 @Serializable
 class ChapterContent(
@@ -217,10 +214,4 @@ class ChapterContent(
     @SerialName("comic_id")
     val comicId: String,
     val images: List<Image>,
-)
-
-@Serializable
-class Image(
-    val id: String,
-    @SerialName("f") val format: String,
 )

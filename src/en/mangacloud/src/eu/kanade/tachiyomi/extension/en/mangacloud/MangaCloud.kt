@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -50,23 +49,27 @@ class MangaCloud : HttpSource() {
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val time = when (page) {
-            1 -> "today"
-            2 -> "week"
-            3 -> "month"
-            else -> throw Exception()
-        }
+        return if (page > 3) {
+            searchMangaRequest(page - 3, "", FilterList())
+        } else {
+            val time = when (page) {
+                1 -> "today"
+                2 -> "week"
+                else -> "month"
+            }
 
-        return GET("$API_URL/comic-popular-view/$time", headers)
+            return GET("$API_URL/comic-popular-view/$time", headers)
+        }
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun popularMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments.last() == "browse") {
+        searchMangaParse(response)
+    } else {
         val data = response.parseAs<Data<DataList<BrowseManga>>>()
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
-        val hasNextPage = response.request.url.pathSegments.last() != "month"
 
-        return MangasPage(mangas, hasNextPage)
+        MangasPage(mangas, true)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -88,12 +91,11 @@ class MangaCloud : HttpSource() {
     }
 
     private fun fetchCachedTags(): List<Tag> {
-        val cacheDir = Injekt.get<Application>()
+        val tagsFile = Injekt.get<Application>()
             .cacheDir
             .resolve("${name}_${id}_tmp")
             .also { it.mkdirs() }
-
-        val tagsFile = cacheDir.resolve("tags.json")
+            .resolve("tags.json")
 
         if (tagsFile.exists()) {
             val tags = tagsFile.readText().parseAs<Data<List<Tag>>>().data
@@ -113,11 +115,9 @@ class MangaCloud : HttpSource() {
     }
 
     private val fetchingOnlineTags = AtomicBoolean(false)
-    private val fetchingOnlineTagsFailed = AtomicBoolean(false)
 
     private fun fetchOnlineTags(tagsFile: File) {
         if (!fetchingOnlineTags.compareAndSet(false, true)) return
-        if (fetchingOnlineTagsFailed.get()) return
 
         val request = GET("$API_URL/tag/list", headers)
 
@@ -133,11 +133,7 @@ class MangaCloud : HttpSource() {
                                 }
                             }
                             tmpFile.renameTo(tagsFile)
-                        } else {
-                            fetchingOnlineTagsFailed.set(true)
                         }
-                    } catch (_: Exception) {
-                        fetchingOnlineTagsFailed.set(true)
                     } finally {
                         fetchingOnlineTags.set(false)
                     }
@@ -145,7 +141,6 @@ class MangaCloud : HttpSource() {
                 override fun onFailure(call: Call, e: IOException) {
                     Log.e(name, "Failed to fetch tags", e)
                     fetchingOnlineTags.set(false)
-                    fetchingOnlineTagsFailed.set(true)
                 }
             },
         )
@@ -161,16 +156,10 @@ class MangaCloud : HttpSource() {
         val tags = fetchCachedTags()
 
         if (tags.isEmpty()) {
-            val message = if (fetchingOnlineTagsFailed.get()) {
-                "Failed to fetch tags"
-            } else {
-                "Press `refresh` to fetch tags"
-            }
-
             filters.addAll(
                 listOf(
                     Filter.Separator(),
-                    Filter.Header(message),
+                    Filter.Header("Press 'refresh' to fetch tags"),
                 ),
             )
         } else {
@@ -199,13 +188,17 @@ class MangaCloud : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$API_URL/comic/browse"
 
+        if (query.isNotBlank() && query.length < 3) {
+            throw Exception("Search query must be more than 3 characters!")
+        }
+
         val payload = SearchPayload(
             title = query.takeIf(String::isNotBlank),
-            type = filters.firstInstance<TypeFilter>().selected,
-            sort = filters.firstInstance<SortFilter>().selected,
-            status = filters.firstInstance<StatusFilter>().selected,
-            includes = filters.firstInstanceOrNull<TriStateGroupFilter>()?.included.orEmpty(),
-            excludes = filters.firstInstanceOrNull<TriStateGroupFilter>()?.excluded.orEmpty(),
+            type = filters.firstInstanceOrNull<TypeFilter>()?.selected,
+            sort = filters.firstInstanceOrNull<SortFilter>()?.selected,
+            status = filters.firstInstanceOrNull<StatusFilter>()?.selected,
+            includes = filters.filterIsInstance<TriStateGroupFilter>().flatMap { it.included },
+            excludes = filters.filterIsInstance<TriStateGroupFilter>().flatMap { it.excluded },
             page = page,
         )
             .toJsonString()
