@@ -64,18 +64,3 @@ class MediaRequestDto(
     val token: String,
     val quality: String,
 )
-
-@Serializable
-data class UserResponseDto(
-    val data: UserDataDto? = null,
-)
-
-@Serializable
-data class UserDataDto(
-    val premium: PremiumDto? = null,
-)
-
-@Serializable
-data class PremiumDto(
-    val active: Boolean = false,
-)
