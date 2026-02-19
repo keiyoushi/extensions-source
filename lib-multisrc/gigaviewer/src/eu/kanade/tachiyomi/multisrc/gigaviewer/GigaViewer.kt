@@ -100,7 +100,7 @@ abstract class GigaViewer(
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .build()
             return GET(url, headers)
