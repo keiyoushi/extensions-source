@@ -83,7 +83,8 @@ class MangaDetailsDto(
 @Serializable
 class ChapterDto(
     val _id: String,
-    val number: String,
+    val name: String? = "",
+    val number: String = "",
     val iso_date: String? = null,
     val owners: List<OwnerDto> = emptyList(),
 )
