@@ -81,9 +81,7 @@ class MangoChapterDto(
         date_upload = dateFormat.tryParse(data)
     }
 
-    private fun formatChapterNumber(numero: Float): String {
-        return numero.toString().removeSuffix(".0")
-    }
+    private fun formatChapterNumber(numero: Float): String = numero.toString().removeSuffix(".0")
 
     companion object {
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {

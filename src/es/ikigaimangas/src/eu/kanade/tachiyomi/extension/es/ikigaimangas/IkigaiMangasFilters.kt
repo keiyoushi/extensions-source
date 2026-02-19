@@ -8,11 +8,12 @@ class GenreFilter(title: String, genres: List<Genre>) : Filter.Group<Genre>(titl
 class Status(title: String, val id: Long) : Filter.CheckBox(title)
 class StatusFilter(title: String, statuses: List<Status>) : Filter.Group<Status>(title, statuses)
 
-class SortByFilter(title: String, private val sortProperties: List<SortProperty>) : Filter.Sort(
-    title,
-    sortProperties.map { it.name }.toTypedArray(),
-    Selection(0, ascending = true),
-) {
+class SortByFilter(title: String, private val sortProperties: List<SortProperty>) :
+    Filter.Sort(
+        title,
+        sortProperties.map { it.name }.toTypedArray(),
+        Selection(0, ascending = true),
+    ) {
     val selected: String
         get() = sortProperties[state!!.index].value
 }

@@ -36,27 +36,25 @@ data class Manga(
     // korea / japan
     val nation: Nation?,
 ) {
-    fun toSManga(): SManga {
-        return SManga.create().apply {
-            // compatible with old theme
-            url = "/manga/$slug"
-            title = name
-            description = desc?.trim()?.removePrefix("<p>")
-                ?.removeSuffix("</p>")?.trim()
-            genre = listOfNotNull(
-                types?.joinToString { it.name },
-                nation?.name,
-                category_id?.let { Categories[it] },
-            )
-                .joinToString()
+    fun toSManga(): SManga = SManga.create().apply {
+        // compatible with old theme
+        url = "/manga/$slug"
+        title = name
+        description = desc?.trim()?.removePrefix("<p>")
+            ?.removeSuffix("</p>")?.trim()
+        genre = listOfNotNull(
+            types?.joinToString { it.name },
+            nation?.name,
+            category_id?.let { Categories[it] },
+        )
+            .joinToString()
 
-            status = when (is_end) {
-                1 -> SManga.COMPLETED
-                0 -> SManga.ONGOING
-                else -> SManga.UNKNOWN
-            }
-            thumbnail_url = url_avatar
+        status = when (is_end) {
+            1 -> SManga.COMPLETED
+            0 -> SManga.ONGOING
+            else -> SManga.UNKNOWN
         }
+        thumbnail_url = url_avatar
     }
 }
 

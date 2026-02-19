@@ -7,11 +7,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 
-class OsakaScan : ZeistManga(
-    "Osaka Scan",
-    "https://www.osakascan.com",
-    "pt-BR",
-) {
+class OsakaScan :
+    ZeistManga(
+        "Osaka Scan",
+        "https://www.osakascan.com",
+        "pt-BR",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
@@ -30,17 +31,15 @@ class OsakaScan : ZeistManga(
         genre = document.select("dt:contains(Gênero) + dd a").joinToString { it.text() }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response)
-            .map { chapter ->
-                chapter.apply {
-                    CHAPTER_NUMBER_REGEX.find(name)?.groups?.get(0)?.value?.let {
-                        chapter_number = it.toFloat()
-                    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response)
+        .map { chapter ->
+            chapter.apply {
+                CHAPTER_NUMBER_REGEX.find(name)?.groups?.get(0)?.value?.let {
+                    chapter_number = it.toFloat()
                 }
             }
-            .sortedBy(SChapter::chapter_number).reversed()
-    }
+        }
+        .sortedBy(SChapter::chapter_number).reversed()
 
     override val pageListSelector = "#reader div.separator"
 

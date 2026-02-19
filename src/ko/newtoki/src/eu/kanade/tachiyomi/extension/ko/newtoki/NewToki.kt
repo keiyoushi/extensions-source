@@ -33,7 +33,8 @@ abstract class NewToki(
     override val name: String,
     private val boardName: String,
     private val preferences: SharedPreferences,
-) : ParsedHttpSource(), ConfigurableSource {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     override val lang: String = "ko"
     override val supportsLatest = true
@@ -41,12 +42,11 @@ abstract class NewToki(
     override val client by lazy { buildClient(withRateLimit = false) }
     private val rateLimitedClient by lazy { buildClient(withRateLimit = true) }
 
-    private fun buildClient(withRateLimit: Boolean) =
-        network.cloudflareClient.newBuilder()
-            .apply { if (withRateLimit) rateLimit(1, preferences.rateLimitPeriod.toLong()) }
-            .addInterceptor(DomainInterceptor) // not rate-limited
-            .connectTimeout(10, TimeUnit.SECONDS) // fail fast
-            .build()
+    private fun buildClient(withRateLimit: Boolean) = network.cloudflareClient.newBuilder()
+        .apply { if (withRateLimit) rateLimit(1, preferences.rateLimitPeriod.toLong()) }
+        .addInterceptor(DomainInterceptor) // not rate-limited
+        .connectTimeout(10, TimeUnit.SECONDS) // fail fast
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -71,20 +71,18 @@ abstract class NewToki(
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_ID_SEARCH)
-            val urlPath = "/$boardName/$realQuery"
-            rateLimitedClient.newCall(GET("$baseUrl$urlPath", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    // the id is matches any of 'post' from their CMS board.
-                    // Includes Manga Details Page, Chapters, Comments, and etcs...
-                    actualMangaParseById(urlPath, response)
-                }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_ID_SEARCH)
+        val urlPath = "/$boardName/$realQuery"
+        rateLimitedClient.newCall(GET("$baseUrl$urlPath", headers))
+            .asObservableSuccess()
+            .map { response ->
+                // the id is matches any of 'post' from their CMS board.
+                // Includes Manga Details Page, Chapters, Comments, and etcs...
+                actualMangaParseById(urlPath, response)
+            }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun actualMangaParseById(urlPath: String, response: Response): MangasPage {
@@ -101,12 +99,14 @@ abstract class NewToki(
                 details.url = urlPath
                 listOf(details)
             }
+
             fullListButton?.text()?.contains("전체목록") == true -> { // Check this page is chapter page
                 val url = fullListButton.attr("abs:href")
                 val details = mangaDetailsParse(rateLimitedClient.newCall(GET(url, headers)).execute())
                 details.url = getUrlPath(url)
                 listOf(details)
             }
+
             else -> emptyList()
         }
 
@@ -131,6 +131,7 @@ abstract class NewToki(
             val text = it.text()
             when {
                 "작가" in text -> manga.author = it.getElementsByTag("a").text()
+
                 "분류" in text -> {
                     val genres = mutableListOf<String>()
                     it.getElementsByTag("a").forEach { item ->
@@ -138,6 +139,7 @@ abstract class NewToki(
                     }
                     manga.genre = genres.joinToString(", ")
                 }
+
                 "발행구분" in text -> manga.status = parseStatus(it.getElementsByTag("a").text())
             }
         }
@@ -179,64 +181,57 @@ abstract class NewToki(
         }
     }
 
-    private fun mangaDetailsParseWithTitleCheck(manga: SManga, document: Document) =
-        mangaDetailsParse(document).apply {
-            // TODO: don't throw when there is download folder rename feature
-            if (manga.description.isNullOrEmpty() && title.removeSuffix("…") !in manga.title) {
-                throw Exception(titleNotMatch(title))
-            }
+    private fun mangaDetailsParseWithTitleCheck(manga: SManga, document: Document) = mangaDetailsParse(document).apply {
+        // TODO: don't throw when there is download folder rename feature
+        if (manga.description.isNullOrEmpty() && title.removeSuffix("…") !in manga.title) {
+            throw Exception(titleNotMatch(title))
+        }
+    }
+
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = rateLimitedClient.newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            val document = response.asJsoup()
+            mangaDetailsParseWithTitleCheck(manga, document).apply { initialized = true }
         }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return rateLimitedClient.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                val document = response.asJsoup()
-                mangaDetailsParseWithTitleCheck(manga, document).apply { initialized = true }
-            }
-    }
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return rateLimitedClient.newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                val document = response.asJsoup()
-                val title = mangaDetailsParseWithTitleCheck(manga, document).title
-                document.select(chapterListSelector()).map {
-                    chapterFromElement(it).apply {
-                        name = name.removePrefix(title).trimStart()
-                    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = rateLimitedClient.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            val document = response.asJsoup()
+            val title = mangaDetailsParseWithTitleCheck(manga, document).title
+            document.select(chapterListSelector()).map {
+                chapterFromElement(it).apply {
+                    name = name.removePrefix(title).trimStart()
                 }
             }
-    }
+        }
 
     // not thread-safe
     private val dateFormat by lazy { SimpleDateFormat("yyyy.MM.dd", Locale.ENGLISH) }
 
-    private fun parseChapterDate(date: String): Long {
-        return try {
-            if (date.contains(":")) {
-                val calendar = Calendar.getInstance()
-                val splitDate = date.split(":")
+    private fun parseChapterDate(date: String): Long = try {
+        if (date.contains(":")) {
+            val calendar = Calendar.getInstance()
+            val splitDate = date.split(":")
 
-                val hours = splitDate.first().toInt()
-                val minutes = splitDate.last().toInt()
+            val hours = splitDate.first().toInt()
+            val minutes = splitDate.last().toInt()
 
-                val calendarHours = calendar.get(Calendar.HOUR)
-                val calendarMinutes = calendar.get(Calendar.MINUTE)
+            val calendarHours = calendar.get(Calendar.HOUR)
+            val calendarMinutes = calendar.get(Calendar.MINUTE)
 
-                if (calendarHours >= hours && calendarMinutes > minutes) {
-                    calendar.add(Calendar.DATE, -1)
-                }
-
-                calendar.timeInMillis
-            } else {
-                dateFormat.parse(date)?.time ?: 0
+            if (calendarHours >= hours && calendarMinutes > minutes) {
+                calendar.add(Calendar.DATE, -1)
             }
-        } catch (e: Exception) {
-            Log.e("NewToki", "failed to parse chapter date '$date'", e)
-            0
+
+            calendar.timeInMillis
+        } else {
+            dateFormat.parse(date)?.time ?: 0
         }
+    } catch (e: Exception) {
+        Log.e("NewToki", "failed to parse chapter date '$date'", e)
+        0
     }
 
     override fun pageListParse(document: Document): List<Page> {

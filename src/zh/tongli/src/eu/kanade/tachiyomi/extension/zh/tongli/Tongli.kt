@@ -25,7 +25,9 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-class Tongli : HttpSource(), ConfigurableSource {
+class Tongli :
+    HttpSource(),
+    ConfigurableSource {
     override val name: String = "東立"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
@@ -48,8 +50,7 @@ class Tongli : HttpSource(), ConfigurableSource {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$apiUrl/SellShelf/6e7e5b75-1acd-4b7c-0097-08d6179fc10a/$page?pageSize=20", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/SellShelf/6e7e5b75-1acd-4b7c-0097-08d6179fc10a/$page?pageSize=20", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val responseDto = response.parseAs<LatestResponseDto>()
@@ -84,9 +85,7 @@ class Tongli : HttpSource(), ConfigurableSource {
         return GET("$apiUrl/Book?bookGroupID=$bookGroupID&isSerial=$isSerial", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<DetailsDto>().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsDto>().toSManga()
 
     // Chapters
 
@@ -97,11 +96,9 @@ class Tongli : HttpSource(), ConfigurableSource {
         return GET("$apiUrl/Book/BookVol/$bookGroupID?bookID=null&isSerial=$isSerial", newHeaders)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<List<ChapterDto>>().mapNotNull {
-            it.toSChapter()
-        }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<ChapterDto>>().mapNotNull {
+        it.toSChapter()
+    }.reversed()
 
     override fun getMangaUrl(manga: SManga): String {
         val bookGroupID = manga.url.substringBefore(",")
@@ -116,10 +113,8 @@ class Tongli : HttpSource(), ConfigurableSource {
         return GET("$apiUrl/Comic/sas/${chapter.url}", newHeaders)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListResponseDto>().pages.mapIndexed { index, it ->
-            Page(index, imageUrl = it.imageURL)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().pages.mapIndexed { index, it ->
+        Page(index, imageUrl = it.imageURL)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

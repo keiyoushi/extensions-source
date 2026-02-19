@@ -102,7 +102,8 @@ internal open class UriPartMultiSelectFilter(
     name: String,
     val param: String,
     genres: List<MultiSelectOption>,
-) : Filter.Group<MultiSelectOption>(name, genres), UriPartFilter {
+) : Filter.Group<MultiSelectOption>(name, genres),
+    UriPartFilter {
     override fun toUriPart(): String {
         val whatToInclude = state.filter { it.state }.map { it.id }
 

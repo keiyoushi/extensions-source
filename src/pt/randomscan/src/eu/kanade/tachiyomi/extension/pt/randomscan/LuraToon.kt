@@ -33,7 +33,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon : HttpSource(), ConfigurableSource {
+class LuraToon :
+    HttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://luratoons.net"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
@@ -83,9 +85,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
         description = "Tipo: $category\n\n$synopsis"
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString<T>(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
@@ -101,13 +101,11 @@ class LuraToon : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                chapterListParse(manga, response)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservable()
+        .map { response ->
+            chapterListParse(manga, response)
+        }
 
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         if (response.code == 404) {

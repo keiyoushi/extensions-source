@@ -32,9 +32,7 @@ class Yomonga : HttpSource() {
         .addInterceptor(SpeedBinbInterceptor(json))
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/titles/?page_num=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/titles/?page_num=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -99,9 +97,7 @@ class Yomonga : HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return reader.pageListParse(response)
-    }
+    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
@@ -111,59 +107,60 @@ class Yomonga : HttpSource() {
         FilterGroup(),
     )
 
-    private class FilterGroup : Filter.Select<FilterOption>(
-        "カテゴリ・キーワード",
-        arrayOf(
-            FilterOption("指定なし", "", ""),
-            FilterOption("試し読み", "category_id", "3"),
-            FilterOption("連載中", "category_id", "1"),
-            FilterOption("リバイバル連載", "category_id", "2"),
-            FilterOption("連載終了", "category_id", "4"),
-            FilterOption("今だけ無料", "tag_id", "147"),
-            FilterOption("オリジナル作品", "tag_id", "1"),
-            FilterOption("ドラマ化", "tag_id", "8"),
-            FilterOption("女性向け", "tag_id", "2"),
-            FilterOption("グルメ", "tag_id", "49"),
-            FilterOption("男性向け", "tag_id", "3"),
-            FilterOption("エッセイ", "tag_id", "4"),
-            FilterOption("TL", "tag_id", "5"),
-            FilterOption("BL", "tag_id", "6"),
-            FilterOption("コミカライズ", "tag_id", "152"),
-            FilterOption("美少女", "tag_id", "12"),
-            FilterOption("異世界", "tag_id", "20"),
-            FilterOption("#DOELO", "tag_id", "26"),
-            FilterOption("転生", "tag_id", "29"),
-            FilterOption("闘病", "tag_id", "35"),
-            FilterOption("オフィスラブ", "tag_id", "36"),
-            FilterOption("H", "tag_id", "38"),
-            FilterOption("水商売", "tag_id", "45"),
-            FilterOption("感動", "tag_id", "51"),
-            FilterOption("ドS", "tag_id", "59"),
-            FilterOption("夫婦問題", "tag_id", "63"),
-            FilterOption("結婚", "tag_id", "65"),
-            FilterOption("コメディ", "tag_id", "72"),
-            FilterOption("実録", "tag_id", "75"),
-            FilterOption("家族", "tag_id", "80"),
-            FilterOption("育児", "tag_id", "85"),
-            FilterOption("サスペンス", "tag_id", "88"),
-            FilterOption("心霊", "tag_id", "90"),
-            FilterOption("ホラー", "tag_id", "151"),
-            FilterOption("虐待", "tag_id", "93"),
-            FilterOption("復讐", "tag_id", "102"),
-            FilterOption("恋愛", "tag_id", "110"),
-            FilterOption("ファンタジー", "tag_id", "114"),
-            FilterOption("調教", "tag_id", "117"),
-            FilterOption("OL", "tag_id", "122"),
-            FilterOption("イケメン", "tag_id", "127"),
-            FilterOption("ラブコメ", "tag_id", "131"),
-            FilterOption("学園", "tag_id", "132"),
-            FilterOption("BKコミックス", "tag_id", "138"),
-            FilterOption("読み切り", "tag_id", "143"),
-            FilterOption("スカッと", "tag_id", "148"),
-            FilterOption("ボイスコミックあり", "tag_id", "149"),
-            FilterOption("広告掲載中", "tag_id", "150"),
-        ),
-    )
+    private class FilterGroup :
+        Filter.Select<FilterOption>(
+            "カテゴリ・キーワード",
+            arrayOf(
+                FilterOption("指定なし", "", ""),
+                FilterOption("試し読み", "category_id", "3"),
+                FilterOption("連載中", "category_id", "1"),
+                FilterOption("リバイバル連載", "category_id", "2"),
+                FilterOption("連載終了", "category_id", "4"),
+                FilterOption("今だけ無料", "tag_id", "147"),
+                FilterOption("オリジナル作品", "tag_id", "1"),
+                FilterOption("ドラマ化", "tag_id", "8"),
+                FilterOption("女性向け", "tag_id", "2"),
+                FilterOption("グルメ", "tag_id", "49"),
+                FilterOption("男性向け", "tag_id", "3"),
+                FilterOption("エッセイ", "tag_id", "4"),
+                FilterOption("TL", "tag_id", "5"),
+                FilterOption("BL", "tag_id", "6"),
+                FilterOption("コミカライズ", "tag_id", "152"),
+                FilterOption("美少女", "tag_id", "12"),
+                FilterOption("異世界", "tag_id", "20"),
+                FilterOption("#DOELO", "tag_id", "26"),
+                FilterOption("転生", "tag_id", "29"),
+                FilterOption("闘病", "tag_id", "35"),
+                FilterOption("オフィスラブ", "tag_id", "36"),
+                FilterOption("H", "tag_id", "38"),
+                FilterOption("水商売", "tag_id", "45"),
+                FilterOption("感動", "tag_id", "51"),
+                FilterOption("ドS", "tag_id", "59"),
+                FilterOption("夫婦問題", "tag_id", "63"),
+                FilterOption("結婚", "tag_id", "65"),
+                FilterOption("コメディ", "tag_id", "72"),
+                FilterOption("実録", "tag_id", "75"),
+                FilterOption("家族", "tag_id", "80"),
+                FilterOption("育児", "tag_id", "85"),
+                FilterOption("サスペンス", "tag_id", "88"),
+                FilterOption("心霊", "tag_id", "90"),
+                FilterOption("ホラー", "tag_id", "151"),
+                FilterOption("虐待", "tag_id", "93"),
+                FilterOption("復讐", "tag_id", "102"),
+                FilterOption("恋愛", "tag_id", "110"),
+                FilterOption("ファンタジー", "tag_id", "114"),
+                FilterOption("調教", "tag_id", "117"),
+                FilterOption("OL", "tag_id", "122"),
+                FilterOption("イケメン", "tag_id", "127"),
+                FilterOption("ラブコメ", "tag_id", "131"),
+                FilterOption("学園", "tag_id", "132"),
+                FilterOption("BKコミックス", "tag_id", "138"),
+                FilterOption("読み切り", "tag_id", "143"),
+                FilterOption("スカッと", "tag_id", "148"),
+                FilterOption("ボイスコミックあり", "tag_id", "149"),
+                FilterOption("広告掲載中", "tag_id", "150"),
+            ),
+        )
 
     private class FilterOption(private val name: String, val queryParam: String, val value: String) {
         override fun toString() = name

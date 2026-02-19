@@ -8,12 +8,13 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.Response
 
-class NyxScans : Iken(
-    "Nyx Scans",
-    "en",
-    "https://nyxscans.com",
-    "https://api.nyxscans.com",
-) {
+class NyxScans :
+    Iken(
+        "Nyx Scans",
+        "en",
+        "https://nyxscans.com",
+        "https://api.nyxscans.com",
+    ) {
     // ============================== Popular ===============================
 
     override fun popularMangaParse(response: Response): MangasPage {

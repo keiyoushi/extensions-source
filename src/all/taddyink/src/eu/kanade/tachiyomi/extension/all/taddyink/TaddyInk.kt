@@ -23,7 +23,8 @@ import uy.kohesive.injekt.injectLazy
 open class TaddyInk(
     override val lang: String,
     private val taddyLang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     final override val baseUrl = "https://taddy.org"
     override val name = "Taddy INK (Webtoons)"
@@ -107,18 +108,14 @@ open class TaddyInk(
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val comicObj = json.decodeFromString<Comic>(response.body.string())
         return TaddyUtils.getManga(comicObj)
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val comic = json.decodeFromString<Comic>(response.body.string())
@@ -136,9 +133,7 @@ open class TaddyInk(
         return chapters.reversed()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val requestUrl = response.request.url.toString()
@@ -166,13 +161,13 @@ open class TaddyInk(
     class TagFilter : AdvSearchEntryFilter("Tags")
     open class AdvSearchEntryFilter(name: String) : Filter.Text(name)
 
-    private class GenreFilter : UriPartFilter(
-        "Filter By Genre",
-        TaddyUtils.genrePairs,
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Filter By Genre",
+            TaddyUtils.genrePairs,
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: List<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: List<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

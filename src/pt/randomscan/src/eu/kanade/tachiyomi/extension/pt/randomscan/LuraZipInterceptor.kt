@@ -31,9 +31,7 @@ class LuraZipInterceptor : ZipInterceptor() {
         return decryptedData
     }
 
-    override fun requestIsZipImage(request: Request): Boolean {
-        return request.url.pathSegments.contains("cap-download")
-    }
+    override fun requestIsZipImage(request: Request): Boolean = request.url.pathSegments.contains("cap-download")
 
     override fun zipGetByteStream(request: Request, response: Response): InputStream {
         val keyData = listOf("obra_id", "slug", "cap_id", "cap_slug").joinToString("") {

@@ -15,7 +15,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class oots : ParsedHttpSource() {
+class OOTS : ParsedHttpSource() {
     override val name = "The Order Of The Stick (OOTS)"
 
     override val baseUrl = "https://www.giantitp.com"
@@ -45,8 +45,7 @@ class oots : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = super.chapterListParse(response).distinct()
-        return chapterList.mapIndexed {
-                i, ch ->
+        return chapterList.mapIndexed { i, ch ->
             ch.apply { chapter_number = chapterList.size.toFloat() - i }
         }
     }

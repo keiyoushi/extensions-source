@@ -7,13 +7,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Comiplex : GigaViewer(
-    "Comiplex",
-    "https://viewer.heros-web.com",
-    "ja",
-    "https://cdn-img.viewer.heros-web.com/public/page",
-    isPaginated = true,
-) {
+class Comiplex :
+    GigaViewer(
+        "Comiplex",
+        "https://viewer.heros-web.com",
+        "ja",
+        "https://cdn-img.viewer.heros-web.com/public/page",
+        isPaginated = true,
+    ) {
 
     override val supportsLatest: Boolean = false
 

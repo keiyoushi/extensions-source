@@ -32,32 +32,26 @@ class HentaiHere : ParsedHttpSource() {
     private val json: Json by injectLazy()
 
     // Popular
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", getFilterList())
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
 
-    override fun popularMangaSelector() =
-        searchMangaSelector()
+    override fun popularMangaSelector() = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
     // Search
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client.newCall(searchMangaByIdRequest(id))
+            .asObservableSuccess()
+            .map { response -> searchMangaByIdParse(response, id) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/m/$id")
@@ -92,16 +86,19 @@ class HentaiHere : ParsedHttpSource() {
                     addQueryParameter("page", page.toString())
                 }.toString()
             }
+
             // category + sort_min + alphabet (optional) ~ /search/t34/newest/a
             categoryFilter.state != 0 -> {
                 val category = categoryFilterList[categoryFilter.state].first
                 "$baseUrl/search/$category/$sortMin$alphabet?page=$page"
             }
+
             // status + alphabet  (optional) ~ /directory/ongoing/a
             statusFilter.state != 0 -> {
                 val status = statusFilterList[statusFilter.state].first
                 "$baseUrl/directory/$status$alphabet?page=$page"
             }
+
             // sort + alphabet (optional) ~ /directory/staff-pick/a
             else -> {
                 val sort = sortItem.first
@@ -132,20 +129,16 @@ class HentaiHere : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaNextPageSelector() =
-        ".pagination > li:last-child:not(.disabled)"
+    override fun searchMangaNextPageSelector() = ".pagination > li:last-child:not(.disabled)"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/directory/newest?page=$page")
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/newest?page=$page")
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -160,7 +153,9 @@ class HentaiHere : ParsedHttpSource() {
         description = document.select("#info > div:has(> .text-info:contains(Brief Summary:))")
             .first()
             ?.ownText()
-        if (description == "Nothing yet!") { description = "" }
+        if (description == "Nothing yet!") {
+            description = ""
+        }
 
         genre = (categories + contents).joinToString { it.text() }
         status = when (licensed) {
@@ -169,6 +164,7 @@ class HentaiHere : ParsedHttpSource() {
                 ?.text()
                 ?.toStatus()
                 ?: SManga.UNKNOWN
+
             else -> SManga.LICENSED
         }
         thumbnail_url = document.select("#cover img")
@@ -196,38 +192,33 @@ class HentaiHere : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> =
-        json.decodeFromString<List<String>>(
-            response.body.string()
-                .substringAfter("var rff_imageList = ")
-                .substringBefore(";"),
-        ).mapIndexed { i, imagePath ->
-            Page(i, "", "$IMAGE_SERVER_URL/hentai$imagePath")
-        }
+    override fun pageListParse(response: Response): List<Page> = json.decodeFromString<List<String>>(
+        response.body.string()
+            .substringAfter("var rff_imageList = ")
+            .substringBefore(";"),
+    ).mapIndexed { i, imagePath ->
+        Page(i, "", "$IMAGE_SERVER_URL/hentai$imagePath")
+    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        throw UnsupportedOperationException()
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Note: Some ignored for text search, category!"),
-            Filter.Header("Note: Ignored when used with status!"),
-            SortFilter(sortFilterList.map { it.second }.toTypedArray()),
-            Filter.Separator(),
-            Filter.Header("Note: Ignored for text search!"),
-            AlphabetFilter(alphabetFilterList.map { it.second }.toTypedArray()),
-            Filter.Separator(),
-            Filter.Header("Note: Ignored for text search, category!"),
-            StatusFilter(statusFilterList.map { it.second }.toTypedArray()),
-            Filter.Separator(),
-            Filter.Header("Note: Ignored for text search!"),
-            CategoryFilter(categoryFilterList.map { it.second }.toTypedArray()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Some ignored for text search, category!"),
+        Filter.Header("Note: Ignored when used with status!"),
+        SortFilter(sortFilterList.map { it.second }.toTypedArray()),
+        Filter.Separator(),
+        Filter.Header("Note: Ignored for text search!"),
+        AlphabetFilter(alphabetFilterList.map { it.second }.toTypedArray()),
+        Filter.Separator(),
+        Filter.Header("Note: Ignored for text search, category!"),
+        StatusFilter(statusFilterList.map { it.second }.toTypedArray()),
+        Filter.Separator(),
+        Filter.Header("Note: Ignored for text search!"),
+        CategoryFilter(categoryFilterList.map { it.second }.toTypedArray()),
+    )
 
     val sortFilterList = listOf(
         Pair("newest", "Newest"),
@@ -317,17 +308,13 @@ class HentaiHere : ParsedHttpSource() {
         Pair("t28", "Yuri"),
     )
 
-    class SortFilter(sortables: Array<String>, state: Int = 1) :
-        Filter.Select<String>("Sort", sortables, state)
+    class SortFilter(sortables: Array<String>, state: Int = 1) : Filter.Select<String>("Sort", sortables, state)
 
-    class AlphabetFilter(alphabet: Array<String>) :
-        Filter.Select<String>("Starts With", alphabet, 0)
+    class AlphabetFilter(alphabet: Array<String>) : Filter.Select<String>("Starts With", alphabet, 0)
 
-    class StatusFilter(statuses: Array<String>) :
-        Filter.Select<String>("Status", statuses, 0)
+    class StatusFilter(statuses: Array<String>) : Filter.Select<String>("Status", statuses, 0)
 
-    class CategoryFilter(categories: Array<String>) :
-        Filter.Select<String>("Category", categories, 0)
+    class CategoryFilter(categories: Array<String>) : Filter.Select<String>("Category", categories, 0)
 
     private fun String.toStatus(): Int = when (this) {
         "Completed" -> SManga.COMPLETED

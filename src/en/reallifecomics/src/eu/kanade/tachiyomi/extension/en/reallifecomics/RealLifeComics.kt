@@ -46,10 +46,9 @@ class RealLifeComics : ParsedHttpSource() {
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        fetchPopularManga(1).map { mangaList ->
-            mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1).map { mangaList ->
+        mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
+    }
 
     // Details
 
@@ -61,10 +60,8 @@ class RealLifeComics : ParsedHttpSource() {
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).distinct().mapIndexed { index, chapter ->
-            chapter.apply { chapter_number = index.toFloat() }
-        }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).distinct().mapIndexed { index, chapter ->
+        chapter.apply { chapter_number = index.toFloat() }
     }
 
     override fun chapterListSelector() = ".calendar tbody tr td a"

@@ -26,9 +26,7 @@ class Shqqaa : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga", headers)
 
     override fun popularMangaSelector() = "div.card"
 
@@ -45,9 +43,7 @@ class Shqqaa : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String? = null
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga/chapters/", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/chapters/", headers)
 
     override fun latestUpdatesSelector(): String = "div.row > div.col-xl-3"
 

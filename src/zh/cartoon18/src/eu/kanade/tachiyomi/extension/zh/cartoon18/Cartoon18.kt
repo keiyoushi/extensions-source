@@ -22,7 +22,9 @@ import okhttp3.Request
 import okhttp3.Response
 import java.net.URLDecoder
 
-class Cartoon18 : HttpSource(), ConfigurableSource {
+class Cartoon18 :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Cartoon18"
     override val lang = "zh"
     override val supportsLatest = true
@@ -139,28 +141,29 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
         private val queryValues: Array<String>,
         state: Int = 0,
     ) : Filter.Select<String>(name, values, state) {
-        fun addQueryTo(builder: HttpUrl.Builder) =
-            builder.addQueryParameter(queryName, queryValues[state])
+        fun addQueryTo(builder: HttpUrl.Builder) = builder.addQueryParameter(queryName, queryValues[state])
     }
 
-    private class SortFilter : QueryFilter(
-        "Sort by",
-        arrayOf("Latest", "Popular", "Recommended", "Best"),
-        "sort",
-        arrayOf("created", "hits", "score", "likes"),
-        state = 2,
-    )
+    private class SortFilter :
+        QueryFilter(
+            "Sort by",
+            arrayOf("Latest", "Popular", "Recommended", "Best"),
+            "sort",
+            arrayOf("created", "hits", "score", "likes"),
+            state = 2,
+        )
 
     class Keyword(val name: String, val value: String)
 
     private var keywordsList: List<Keyword> = emptyList()
 
-    private class KeywordFilter(keywords: List<Keyword>) : QueryFilter(
-        "Keyword",
-        keywords.map { it.name }.toTypedArray(),
-        "q",
-        keywords.map { it.value }.toTypedArray(),
-    )
+    private class KeywordFilter(keywords: List<Keyword>) :
+        QueryFilter(
+            "Keyword",
+            keywords.map { it.name }.toTypedArray(),
+            "q",
+            keywords.map { it.value }.toTypedArray(),
+        )
 
     /**
      * Inner variable to control how much tries the keywords request was called.

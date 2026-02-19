@@ -9,9 +9,7 @@ class WolfFactory : SourceFactory {
         Wolf("웹툰", "ing", "list", "view"), // webtoon
         Wolf("만화책", "cm", "cl", "cv"), // comic book
         object : Wolf("포토툰", "pt", "list", "view") { // phototoon
-            override fun getFilterList(): FilterList {
-                return FilterList()
-            }
+            override fun getFilterList(): FilterList = FilterList()
 
             override fun parseSearchFilters(document: Document) {
                 return

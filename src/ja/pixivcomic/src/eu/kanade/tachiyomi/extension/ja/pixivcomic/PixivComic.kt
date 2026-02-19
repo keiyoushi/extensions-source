@@ -119,12 +119,14 @@ class PixivComic : HttpSource() {
                     .addPathSegments("works/v2")
                     .addQueryParameter("page", page.toString())
             }
+
             query.isNotBlank() -> {
                 apiBuilder
                     .addPathSegments("works/search/v2")
                     .addPathSegment(query)
                     .addQueryParameter("page", page.toString())
             }
+
             else -> {
                 var tagIsBlank = true
                 filters.forEach { filter ->
@@ -141,6 +143,7 @@ class PixivComic : HttpSource() {
                                 tagIsBlank = false
                             }
                         }
+
                         is Category -> {
                             if (tagIsBlank) {
                                 apiBuilder
@@ -151,6 +154,7 @@ class PixivComic : HttpSource() {
                                     .build()
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -271,9 +275,7 @@ class PixivComic : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val header = headers.newBuilder()
@@ -283,11 +285,9 @@ class PixivComic : HttpSource() {
         return GET(page.imageUrl!!, header)
     }
 
-    private fun apiBuilder(): HttpUrl.Builder {
-        return baseUrl.toHttpUrl()
-            .newBuilder()
-            .addPathSegments("api/app")
-    }
+    private fun apiBuilder(): HttpUrl.Builder = baseUrl.toHttpUrl()
+        .newBuilder()
+        .addPathSegments("api/app")
 
     companion object {
         private const val POPULAR_MANGA_COUNT_PER_PAGE = 30

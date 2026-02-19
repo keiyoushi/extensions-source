@@ -89,22 +89,18 @@ abstract class MangaEsp(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (comicsList.isEmpty()) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it, page, query, filters) }
-        } else {
-            Observable.just(parseComicsList(page, query, filters))
-        }
+    ): Observable<MangasPage> = if (comicsList.isEmpty()) {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, page, query, filters) }
+    } else {
+        Observable.just(parseComicsList(page, query, filters))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (useApiSearch) {
-            GET("$apiBaseUrl$apiPath/comics", headers)
-        } else {
-            GET("$baseUrl/comics", headers)
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (useApiSearch) {
+        GET("$apiBaseUrl$apiPath/comics", headers)
+    } else {
+        GET("$baseUrl/comics", headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
@@ -122,9 +118,7 @@ abstract class MangaEsp(
         return parseComicsList(page, query, filters)
     }
 
-    protected open fun List<SeriesDto>.additionalParse(): List<SeriesDto> {
-        return this
-    }
+    protected open fun List<SeriesDto>.additionalParse(): List<SeriesDto> = this
 
     private var filteredList = mutableListOf<SeriesDto>()
 
@@ -222,19 +216,21 @@ abstract class MangaEsp(
         override fun toString(): String = name
     }
 
-    class SortByFilter(title: String, private val sortProperties: List<SortProperty>) : Filter.Sort(
-        title,
-        sortProperties.map { it.name }.toTypedArray(),
-        Selection(2, ascending = false),
-    ) {
+    class SortByFilter(title: String, private val sortProperties: List<SortProperty>) :
+        Filter.Sort(
+            title,
+            sortProperties.map { it.name }.toTypedArray(),
+            Selection(2, ascending = false),
+        ) {
         val selected: String
             get() = sortProperties[state!!.index].value
     }
 
-    private class StatusFilter(title: String, statusList: Array<Pair<String, Int>>) : UriPartFilter(
-        title,
-        statusList,
-    )
+    private class StatusFilter(title: String, statusList: Array<Pair<String, Int>>) :
+        UriPartFilter(
+            title,
+            statusList,
+        )
 
     protected open fun getStatusList() = arrayOf(
         Pair(intl["status_filter_all"], 0),
@@ -244,13 +240,11 @@ abstract class MangaEsp(
         Pair(intl["status_filter_completed"], 4),
     )
 
-    private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -261,9 +255,7 @@ abstract class MangaEsp(
         else -> attr("abs:src")
     }
 
-    fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()

@@ -6,12 +6,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class EsMi2Manga : Madara(
-    "Es.Mi2Manga",
-    "https://es.mi2manga.com",
-    "es",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class EsMi2Manga :
+    Madara(
+        "Es.Mi2Manga",
+        "https://es.mi2manga.com",
+        "es",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()

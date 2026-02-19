@@ -13,10 +13,11 @@ fun getFilters() = FilterList(
     GenreFilter(getGenreList()),
 )
 
-class SortFilter : Filter.Select<String>(
-    "Ordenar por",
-    SORT_OPTIONS.map { it.first }.toTypedArray(),
-) {
+class SortFilter :
+    Filter.Select<String>(
+        "Ordenar por",
+        SORT_OPTIONS.map { it.first }.toTypedArray(),
+    ) {
     val selected get() = SORT_OPTIONS[state].second
 
     companion object {
@@ -29,10 +30,11 @@ class SortFilter : Filter.Select<String>(
     }
 }
 
-class TypeFilter(types: List<Pair<String, String>>) : Filter.Group<TypeCheckBox>(
-    "Tipos",
-    types.map { TypeCheckBox(it.first, it.second) },
-)
+class TypeFilter(types: List<Pair<String, String>>) :
+    Filter.Group<TypeCheckBox>(
+        "Tipos",
+        types.map { TypeCheckBox(it.first, it.second) },
+    )
 
 class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name, false)
 
@@ -44,10 +46,11 @@ private fun getTypeList() = listOf(
     "Novel" to "Novel",
 )
 
-class GenreFilter(genres: List<Pair<String, String>>) : Filter.Group<GenreCheckBox>(
-    "Gêneros",
-    genres.map { GenreCheckBox(it.first, it.second) },
-)
+class GenreFilter(genres: List<Pair<String, String>>) :
+    Filter.Group<GenreCheckBox>(
+        "Gêneros",
+        genres.map { GenreCheckBox(it.first, it.second) },
+    )
 
 class GenreCheckBox(name: String, val value: String) : Filter.CheckBox(name, false)
 

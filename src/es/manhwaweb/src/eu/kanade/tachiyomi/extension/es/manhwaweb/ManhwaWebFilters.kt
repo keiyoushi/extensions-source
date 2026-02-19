@@ -2,44 +2,48 @@ package eu.kanade.tachiyomi.extension.es.manhwaweb
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class TypeFilter : UriPartFilter(
-    "Tipo",
-    arrayOf(
-        Pair("Ver todo", ""),
-        Pair("Manhwa", "manhwa"),
-        Pair("Manga", "manga"),
-        Pair("Manhua", "manhua"),
-    ),
-)
+class TypeFilter :
+    UriPartFilter(
+        "Tipo",
+        arrayOf(
+            Pair("Ver todo", ""),
+            Pair("Manhwa", "manhwa"),
+            Pair("Manga", "manga"),
+            Pair("Manhua", "manhua"),
+        ),
+    )
 
-class DemographyFilter : UriPartFilter(
-    "Demografía",
-    arrayOf(
-        Pair("Ver todo", ""),
-        Pair("Seinen", "seinen"),
-        Pair("Shonen", "shonen"),
-        Pair("Josei", "josei"),
-        Pair("Shojo", "shojo"),
-    ),
-)
+class DemographyFilter :
+    UriPartFilter(
+        "Demografía",
+        arrayOf(
+            Pair("Ver todo", ""),
+            Pair("Seinen", "seinen"),
+            Pair("Shonen", "shonen"),
+            Pair("Josei", "josei"),
+            Pair("Shojo", "shojo"),
+        ),
+    )
 
-class StatusFilter : UriPartFilter(
-    "Estado",
-    arrayOf(
-        Pair("Ver todo", ""),
-        Pair("Publicándose", "publicandose"),
-        Pair("Finalizado", "finalizado"),
-    ),
-)
+class StatusFilter :
+    UriPartFilter(
+        "Estado",
+        arrayOf(
+            Pair("Ver todo", ""),
+            Pair("Publicándose", "publicandose"),
+            Pair("Finalizado", "finalizado"),
+        ),
+    )
 
-class EroticFilter : UriPartFilter(
-    "Erótico",
-    arrayOf(
-        Pair("Ver todo", ""),
-        Pair("Sí", "si"),
-        Pair("No", "no"),
-    ),
-)
+class EroticFilter :
+    UriPartFilter(
+        "Erótico",
+        arrayOf(
+            Pair("Ver todo", ""),
+            Pair("Sí", "si"),
+            Pair("No", "no"),
+        ),
+    )
 
 class Genre(title: String, val id: Int) : Filter.CheckBox(title)
 
@@ -85,16 +89,16 @@ fun getSortProperties(): List<SortProperty> = listOf(
     SortProperty("Num. Capítulos", "num_chapter"),
 )
 
-class SortByFilter(title: String, private val sortProperties: List<SortProperty>) : Filter.Sort(
-    title,
-    sortProperties.map { it.name }.toTypedArray(),
-    Selection(0, ascending = false),
-) {
+class SortByFilter(title: String, private val sortProperties: List<SortProperty>) :
+    Filter.Sort(
+        title,
+        sortProperties.map { it.name }.toTypedArray(),
+        Selection(0, ascending = false),
+    ) {
     val selected: String
         get() = sortProperties[state!!.index].value
 }
 
-open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-    Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart() = vals[state].second
 }

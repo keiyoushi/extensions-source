@@ -9,22 +9,26 @@ interface UriFilter {
     fun addToUri(builder: HttpUrl.Builder)
 }
 
-internal class TypeSelect : Filter.Select<String>(
-    "Search for",
-    arrayOf(
-        Komga.TYPE_SERIES,
-        Komga.TYPE_READLISTS,
-        Komga.TYPE_BOOKS,
-    ),
-)
+internal class TypeSelect :
+    Filter.Select<String>(
+        "Search for",
+        arrayOf(
+            Komga.TYPE_SERIES,
+            Komga.TYPE_READLISTS,
+            Komga.TYPE_BOOKS,
+        ),
+    )
 
-internal class SeriesSort(selection: Selection? = null) : Filter.Sort(
-    "Sort",
-    arrayOf("Relevance", "Alphabetically", "Date added", "Date updated", "Random"),
-    selection ?: Selection(0, true),
-)
+internal class SeriesSort(selection: Selection? = null) :
+    Filter.Sort(
+        "Sort",
+        arrayOf("Relevance", "Alphabetically", "Date added", "Date updated", "Random"),
+        selection ?: Selection(0, true),
+    )
 
-internal class UnreadFilter : Filter.CheckBox("Unread", false), UriFilter {
+internal class UnreadFilter :
+    Filter.CheckBox("Unread", false),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (!state) {
             return
@@ -35,7 +39,9 @@ internal class UnreadFilter : Filter.CheckBox("Unread", false), UriFilter {
     }
 }
 
-internal class InProgressFilter : Filter.CheckBox("In Progress", false), UriFilter {
+internal class InProgressFilter :
+    Filter.CheckBox("In Progress", false),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (!state) {
             return
@@ -45,7 +51,9 @@ internal class InProgressFilter : Filter.CheckBox("In Progress", false), UriFilt
     }
 }
 
-internal class ReadFilter : Filter.CheckBox("Read", false), UriFilter {
+internal class ReadFilter :
+    Filter.CheckBox("Read", false),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (!state) {
             return
@@ -74,7 +82,8 @@ internal open class UriMultiSelectFilter(
     name: String,
     private val param: String,
     genres: List<UriMultiSelectOption>,
-) : Filter.Group<UriMultiSelectOption>(name, genres), UriFilter {
+) : Filter.Group<UriMultiSelectOption>(name, genres),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val whatToInclude = state.filter { it.state }.map { it.id }
 
@@ -89,7 +98,8 @@ internal class AuthorFilter(val author: AuthorDto) : Filter.CheckBox(author.name
 internal class AuthorGroup(
     role: String,
     authors: List<AuthorFilter>,
-) : Filter.Group<AuthorFilter>(role.replaceFirstChar { it.titlecase() }, authors), UriFilter {
+) : Filter.Group<AuthorFilter>(role.replaceFirstChar { it.titlecase() }, authors),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val authorToInclude = state.filter { it.state }.map { it.author }
 

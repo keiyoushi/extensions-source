@@ -146,10 +146,9 @@ abstract class ManhwaZ(
         }
     }
 
-    override fun pageListParse(document: Document) =
-        document.select("div.page-break img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.imgAttr())
-        }
+    override fun pageListParse(document: Document) = document.select("div.page-break img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -181,15 +180,16 @@ abstract class ManhwaZ(
         genres: List<SelectOption>,
     ) : SelectFilter(intl["genre_filter_title"], genres)
 
-    private class OrderByFilter(intl: Intl) : SelectFilter(
-        intl["order_by_filter_title"],
-        listOf(
-            SelectOption(intl["order_by_latest"], "latest"),
-            SelectOption(intl["order_by_rating"], "rating"),
-            SelectOption(intl["order_by_most_views"], "views"),
-            SelectOption(intl["order_by_new"], "new"),
-        ),
-    )
+    private class OrderByFilter(intl: Intl) :
+        SelectFilter(
+            intl["order_by_filter_title"],
+            listOf(
+                SelectOption(intl["order_by_latest"], "latest"),
+                SelectOption(intl["order_by_rating"], "rating"),
+                SelectOption(intl["order_by_most_views"], "views"),
+                SelectOption(intl["order_by_new"], "new"),
+            ),
+        )
 
     private var genres = emptyList<SelectOption>()
     private var fetchGenreStatus = FetchGenreStatus.NOT_FETCHED

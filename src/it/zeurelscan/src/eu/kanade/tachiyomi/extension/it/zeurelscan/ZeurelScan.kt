@@ -12,7 +12,6 @@ import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 

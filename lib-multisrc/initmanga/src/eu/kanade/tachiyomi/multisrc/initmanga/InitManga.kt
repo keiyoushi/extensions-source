@@ -96,18 +96,14 @@ abstract class InitManga(
         return super.latestUpdatesParse(response)
     }
 
-    protected open fun parseGenres(document: Document): List<GenreData>? {
-        return document.selectFirst("ul.uk-list.uk-text-small, div#uk-tab-3")?.select("li a, a")?.map { element ->
-            GenreData(
-                name = element.text(),
-                url = element.attr("href"),
-            )
-        }
+    protected open fun parseGenres(document: Document): List<GenreData>? = document.selectFirst("ul.uk-list.uk-text-small, div#uk-tab-3")?.select("li a, a")?.map { element ->
+        GenreData(
+            name = element.text(),
+            url = element.attr("href"),
+        )
     }
 
-    protected open fun getGenreList(): List<Genre> {
-        return genrelist?.map { Genre(it.name, it.url) }.orEmpty()
-    }
+    protected open fun getGenreList(): List<Genre> = genrelist?.map { Genre(it.name, it.url) }.orEmpty()
 
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
@@ -189,9 +185,7 @@ abstract class InitManga(
         return GET(url, headers)
     }
 
-    private inline fun <reified T> Iterable<*>.findInstance(): T? {
-        return firstOrNull { it is T } as? T
-    }
+    private inline fun <reified T> Iterable<*>.findInstance(): T? = firstOrNull { it is T } as? T
 
     override fun searchMangaParse(response: Response): MangasPage {
         val bodyText = response.body.string()
@@ -253,9 +247,7 @@ abstract class InitManga(
         title = if (!mangaTitle.isNullOrBlank()) mangaTitle else siteTitle!!
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -387,8 +379,10 @@ abstract class InitManga(
                     val src = el.jsonPrimitive.content
                     val finalSrc = when {
                         src.startsWith("//") -> "https:$src"
+
                         src.startsWith("/") -> baseUrl.toHttpUrlOrNull()?.resolve(src)?.toString()
                             ?: (baseUrl.trimEnd('/') + src)
+
                         else -> src
                     }
                     Page(i, imageUrl = finalSrc)
@@ -397,11 +391,9 @@ abstract class InitManga(
         }
     }
 
-    private fun fallbackPages(document: Document): List<Page> {
-        return document.select("div#chapter-content img[src]").mapIndexed { i, img ->
-            val src = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-            Page(i, "", src)
-        }
+    private fun fallbackPages(document: Document): List<Page> = document.select("div#chapter-content img[src]").mapIndexed { i, img ->
+        val src = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
+        Page(i, "", src)
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()

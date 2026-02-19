@@ -18,12 +18,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // The site isn't actually based on Madara but reproduces it very well
-class Manga18fx : Madara(
-    "Manga18fx",
-    "https://manga18fx.com",
-    "en",
-    SimpleDateFormat("dd MMM yy", Locale.ENGLISH),
-) {
+class Manga18fx :
+    Madara(
+        "Manga18fx",
+        "https://manga18fx.com",
+        "en",
+        SimpleDateFormat("dd MMM yy", Locale.ENGLISH),
+    ) {
     override val id = 3157287889751723714
 
     override val fetchGenres = false
@@ -58,11 +59,11 @@ class Manga18fx : Madara(
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        super.fetchSearchManga(page, query, filters).doOnNext {
-            for (manga in it.mangas)
-                manga.url = manga.url.removeSuffix("/")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = super.fetchSearchManga(page, query, filters).doOnNext {
+        for (manga in it.mangas) {
+            manga.url = manga.url.removeSuffix("/")
         }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isEmpty()) {
@@ -94,8 +95,7 @@ class Manga18fx : Madara(
 
     override fun chapterDateSelector() = "span.chapter-time"
 
-    class GenreFilter(val vals: List<Genre>) :
-        Filter.Select<String>("Genre", vals.map { it.name }.toTypedArray())
+    class GenreFilter(val vals: List<Genre>) : Filter.Select<String>("Genre", vals.map { it.name }.toTypedArray())
 
     private fun loadGenres(document: Document) {
         genresList = document.select(".header-bottom li a").map {

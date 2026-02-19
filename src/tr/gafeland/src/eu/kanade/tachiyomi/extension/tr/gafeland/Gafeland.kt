@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 
-class gafeland : MangaThemesia(
-    "gafeland",
-    "https://gafeland.com",
-    "tr",
-) {
+class Gafeland :
+    MangaThemesia(
+        "gafeland",
+        "https://gafeland.com",
+        "tr",
+    ) {
 
     override fun pageListParse(document: Document): List<Page> {
         // dHNfcmVhZGVyLnJ1bih7 is "ts_reader.run({" in base64

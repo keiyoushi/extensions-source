@@ -21,12 +21,10 @@ class FairyScans :
 
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        super.chapterListSelector(),
+        preferences,
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)

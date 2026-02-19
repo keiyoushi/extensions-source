@@ -15,8 +15,7 @@ class MangaPlusResponse(
 @Serializable
 class ErrorResult(val popups: List<Popup> = emptyList()) {
 
-    fun langPopup(lang: Language): Popup? =
-        popups.firstOrNull { it.language == lang }
+    fun langPopup(lang: Language): Popup? = popups.firstOrNull { it.language == lang }
 }
 
 @Serializable

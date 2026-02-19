@@ -4,16 +4,16 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class TraducoesDoLipe : ZeistManga(
-    "Traduções do Lipe",
-    "https://traducoesdolipe.blogspot.com",
-    "pt-BR",
-) {
+class TraducoesDoLipe :
+    ZeistManga(
+        "Traduções do Lipe",
+        "https://traducoesdolipe.blogspot.com",
+        "pt-BR",
+    ) {
     override val supportsLatest = false
     override val mangaCategory = "Projeto"
     override val chapterCategory = "Capítulo"
@@ -45,7 +45,7 @@ class TraducoesDoLipe : ZeistManga(
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
-            .addQueryParameter("max-results", maxChapterResults.toString())
+            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
             .build().toString()
     }
 

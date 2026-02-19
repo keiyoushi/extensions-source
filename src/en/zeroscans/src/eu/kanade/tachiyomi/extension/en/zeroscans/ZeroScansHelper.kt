@@ -64,24 +64,31 @@ class ZeroScansHelper {
             "sec" -> Calendar.getInstance().apply {
                 add(Calendar.SECOND, -value)
             }.timeInMillis
+
             "min" -> Calendar.getInstance().apply {
                 add(Calendar.MINUTE, -value)
             }.timeInMillis
+
             "hour" -> Calendar.getInstance().apply {
                 add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
+
             "day" -> Calendar.getInstance().apply {
                 add(Calendar.DATE, -value)
             }.timeInMillis
+
             "week" -> Calendar.getInstance().apply {
                 add(Calendar.DATE, -value * 7)
             }.timeInMillis
+
             "month" -> Calendar.getInstance().apply {
                 add(Calendar.MONTH, -value)
             }.timeInMillis
+
             "year" -> Calendar.getInstance().apply {
                 add(Calendar.YEAR, -value)
             }.timeInMillis
+
             else -> {
                 return 0
             }

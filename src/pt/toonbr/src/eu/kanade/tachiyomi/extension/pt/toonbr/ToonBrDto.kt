@@ -44,9 +44,7 @@ internal data class ChapterDto(
         date_upload = createdAt?.let { dateFormat.tryParse(it) } ?: 0L
     }
 
-    private fun Float.formatNumber(): String {
-        return if (this % 1 == 0f) this.toInt().toString() else this.toString()
-    }
+    private fun Float.formatNumber(): String = if (this % 1 == 0f) this.toInt().toString() else this.toString()
 }
 
 @Serializable

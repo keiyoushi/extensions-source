@@ -99,12 +99,10 @@ class OnePieceBerwarna : ParsedHttpSource() {
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".entry-content img[data-src]:not(a img)")
-            .mapIndexed { index, img ->
-                Page(index, "", img.attr("data-src"))
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".entry-content img[data-src]:not(a img)")
+        .mapIndexed { index, img ->
+            Page(index, "", img.attr("data-src"))
+        }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

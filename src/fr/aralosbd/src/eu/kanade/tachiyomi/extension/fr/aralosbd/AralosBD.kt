@@ -29,15 +29,13 @@ class AralosBD : HttpSource() {
         val PAGE_REGEX = "page:([0-9]+)".toRegex()
     }
 
-    private fun cleanString(string: String): String {
-        return Parser.unescapeEntities(string, false)
-            .substringBefore("---")
-            .replace(LINK_REGEX, "$2")
-            .replace(BOLD_REGEX, "$1")
-            .replace(ITALIC_REGEX, "$1")
-            .replace(ICON_REGEX, "")
-            .trim()
-    }
+    private fun cleanString(string: String): String = Parser.unescapeEntities(string, false)
+        .substringBefore("---")
+        .replace(LINK_REGEX, "$2")
+        .replace(BOLD_REGEX, "$1")
+        .replace(ITALIC_REGEX, "$1")
+        .replace(ICON_REGEX, "")
+        .trim()
 
     override val name = "AralosBD"
     override val baseUrl = "https://aralosbd.fr"
@@ -126,9 +124,7 @@ class AralosBD : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url.replace("display?id", "api?get=chapters&manga"), headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url.replace("display?id", "api?get=chapters&manga"), headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val searchResult = json.decodeFromString<List<AralosBDChapter>>(response.body.string())
@@ -139,9 +135,7 @@ class AralosBD : HttpSource() {
         return validSearchResults.map(::chapterToSChapter)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val responseBody = client.newCall(GET(response.request.url.toString().replace("chapter?id", "api?get=pages&chapter"), headers)).execute().body
@@ -162,27 +156,27 @@ class AralosBD : HttpSource() {
     private fun authorToString(author: AralosBDAuthor) = author.name
     private fun tagToString(tag: AralosBDTag) = tag.tag
 
-    private fun searchMangaToSManga(manga: AralosBDSearchManga): SManga {
-        return SManga.create().apply {
-            // No need to trim, it's already done by the server
-            title = manga.title
+    private fun searchMangaToSManga(manga: AralosBDSearchManga): SManga = SManga.create().apply {
+        // No need to trim, it's already done by the server
+        title = manga.title
 
-            // Just need to append the base url to the relative link returned
-            thumbnail_url = "$baseUrl/${manga.icon}"
+        // Just need to append the base url to the relative link returned
+        thumbnail_url = "$baseUrl/${manga.icon}"
 
-            // The url of the manga is simply based on the manga ID for now
-            url = "$baseUrl/manga/display?id=${manga.id}"
-        }
+        // The url of the manga is simply based on the manga ID for now
+        url = "$baseUrl/manga/display?id=${manga.id}"
     }
 
-    private fun chapterToSChapter(chapter: AralosBDChapter): SChapter {
-        return SChapter.create().apply {
-            url = "$baseUrl/manga/chapter?id=${chapter.chapter_id}"
-            name = chapter.chapter_number + " - " + chapter.chapter_title
-            date_upload = try { DATE_FORMAT.parse(chapter.chapter_release_time)!!.time } catch (e: Exception) { System.currentTimeMillis() }
-            // chapter_number = // This is a string and it can be 2.5.1 for example
-            scanlator = chapter.chapter_translator
+    private fun chapterToSChapter(chapter: AralosBDChapter): SChapter = SChapter.create().apply {
+        url = "$baseUrl/manga/chapter?id=${chapter.chapter_id}"
+        name = chapter.chapter_number + " - " + chapter.chapter_title
+        date_upload = try {
+            DATE_FORMAT.parse(chapter.chapter_release_time)!!.time
+        } catch (e: Exception) {
+            System.currentTimeMillis()
         }
+        // chapter_number = // This is a string and it can be 2.5.1 for example
+        scanlator = chapter.chapter_translator
     }
 }
 

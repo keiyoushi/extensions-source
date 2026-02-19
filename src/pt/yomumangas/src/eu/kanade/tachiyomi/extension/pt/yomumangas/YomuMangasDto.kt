@@ -82,17 +82,15 @@ data class YomuMangasGenreDto(val name: String)
 private object YomuMangasGenreDtoSerializer : JsonTransformingSerializer<List<YomuMangasGenreDto>>(
     ListSerializer(YomuMangasGenreDto.serializer()),
 ) {
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        return JsonArray(
-            element.jsonArray.map { jsonElement ->
-                jsonElement.takeIf { it.isObject } ?: buildJsonObject {
-                    genresList.firstOrNull { it.id.equals(jsonElement.jsonPrimitive.intOrNull) }?.let {
-                        put("name", JsonPrimitive(it.name))
-                    } ?: put("name", JsonPrimitive("unknown"))
-                }
-            },
-        )
-    }
+    override fun transformDeserialize(element: JsonElement): JsonElement = JsonArray(
+        element.jsonArray.map { jsonElement ->
+            jsonElement.takeIf { it.isObject } ?: buildJsonObject {
+                genresList.firstOrNull { it.id.equals(jsonElement.jsonPrimitive.intOrNull) }?.let {
+                    put("name", JsonPrimitive(it.name))
+                } ?: put("name", JsonPrimitive("unknown"))
+            }
+        },
+    )
 
     private val JsonElement.isObject get() = this is JsonObject
 }

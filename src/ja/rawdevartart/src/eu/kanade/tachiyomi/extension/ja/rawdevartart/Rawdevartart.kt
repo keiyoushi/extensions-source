@@ -113,6 +113,5 @@ class Rawdevartart : HttpSource() {
         GenreFilter(genres),
     )
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }
