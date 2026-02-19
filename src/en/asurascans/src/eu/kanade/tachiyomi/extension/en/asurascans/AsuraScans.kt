@@ -284,7 +284,8 @@ class AsuraScans :
         val chNumber = element.selectFirst("h3")!!.ownText()
         val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
         val isPremiumChapter = element.selectFirst("svg") != null
-        this.name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        val baseName = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        name = if (isPremiumChapter) "🔒 $baseName" else baseName
 
         date_upload = try {
             val text = element.selectFirst("h3 + h3")!!.ownText()
