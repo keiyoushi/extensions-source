@@ -80,7 +80,7 @@ class Submanhwa : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".widget-title")!!.text()
+        title = document.selectFirst(".manga-title-centered")!!.text()
         thumbnail_url = document.selectFirst("img")?.absUrl("src")
         description = document.selectFirst("h5:contains(Resumen) + p")?.text()
 
@@ -97,21 +97,20 @@ class Submanhwa : ParsedHttpSource() {
         genre = box?.select("dt:contains(Categor) + dd a")?.joinToString { a -> a!!.text() }
     }
 
-    override fun chapterListSelector(): String = ".chapters li"
+    override fun chapterListSelector(): String = ".chapters-grid .chapter-card-item"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val a = element.selectFirst("a")
         name = a!!.text()
         setUrlWithoutDomain(a.absUrl("href"))
 
-        val date = element.selectFirst(".date-chapter-title-rtl")!!.text()
+        val date = element.selectFirst("span:has(i.glyphicon-time)")!!.ownText().trim()
         date_upload = dateFormat.tryParse(date)
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("#all img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#all img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("data-src"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }
