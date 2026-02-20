@@ -20,11 +20,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -53,9 +52,9 @@ class GeassComics :
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    override val versionId: Int = 2
 
-    private val json: Json = Injekt.get<Json>()
+    private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
@@ -103,7 +102,7 @@ class GeassComics :
     }
 
     private fun login(email: String, password: String): String {
-        val payload = json.encodeToString(LoginRequest(email, password))
+        val payload = LoginRequest(email, password).toJsonString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/api/auth/login", headers, requestBody)
         val response = network.cloudflareClient.newCall(request).execute()
@@ -136,16 +135,12 @@ class GeassComics :
     // ============================= Popular ================================
 
     override fun popularMangaRequest(page: Int): Request {
-        val showNsfw = runCatching {
-            preferences.getBoolean(PREF_ADULT_KEY, false)
-        }.getOrDefault(false)
-
         val url = "$apiUrl/api/mangas/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("sort", "views")
             addQueryParameter("order", "desc")
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", PAGE_LIMIT.toString())
-            if (!showNsfw) {
+            if (!showNsfwPref()) {
                 addQueryParameter("nsfw", "false")
             }
         }.build()
@@ -157,16 +152,12 @@ class GeassComics :
     // ============================= Latest =================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val showNsfw = runCatching {
-            preferences.getBoolean(PREF_ADULT_KEY, false)
-        }.getOrDefault(false)
-
         val url = "$apiUrl/api/mangas/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("sort", "updatedAt")
             addQueryParameter("order", "desc")
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", PAGE_LIMIT.toString())
-            if (!showNsfw) {
+            if (!showNsfwPref()) {
                 addQueryParameter("nsfw", "false")
             }
         }.build()
@@ -231,11 +222,8 @@ class GeassComics :
             }
         }
 
-        val showNsfwPref = runCatching {
-            preferences.getBoolean(PREF_ADULT_KEY, false)
-        }.getOrDefault(false)
-
-        if (!showNsfwPref) {
+        // Never show nsfw content if is disabled in preferences
+        if (!showNsfwPref()) {
             showNsfw = false
         }
 
@@ -366,9 +354,7 @@ class GeassComics :
     override fun getFilterList(): FilterList {
         launchIO { fetchFilters() }
 
-        val showNsfw = runCatching {
-            preferences.getBoolean(PREF_ADULT_KEY, false)
-        }.getOrDefault(false)
+        val showNsfw = showNsfwPref()
 
         val filteredGenres = (if (showNsfw) cachedGenres else cachedGenres.filter { !it.isNsfw })
             .map { it.name to it.id }
@@ -426,6 +412,8 @@ class GeassComics :
             setDefaultValue(false)
         }.let(screen::addPreference)
     }
+
+    private fun showNsfwPref() = preferences.getBoolean(PREF_ADULT_KEY, false)
 
     companion object {
         private const val PAGE_LIMIT = 24
