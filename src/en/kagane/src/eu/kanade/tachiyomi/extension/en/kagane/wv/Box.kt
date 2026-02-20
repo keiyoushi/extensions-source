@@ -50,6 +50,7 @@ fun parsePssh(data: ByteArray): Pssh {
 
     val content = when (type) {
         "pssh" -> parsePsshBox(type, buffer)
+
         else -> {
             val remainingSize = buffer.remaining()
             val remainingArr = ByteArray(remainingSize)

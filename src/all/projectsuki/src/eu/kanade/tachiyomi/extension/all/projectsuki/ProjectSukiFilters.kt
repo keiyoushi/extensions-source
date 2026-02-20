@@ -98,7 +98,9 @@ object ProjectSukiFilters {
         }
     }
 
-    class SearchModeFilter(default: SearchMode) : Filter.Select<SearchMode>("Search Mode", SearchMode.values(), state = default.ordinal), ProjectSukiFilter {
+    class SearchModeFilter(default: SearchMode) :
+        Filter.Select<SearchMode>("Search Mode", SearchMode.values(), state = default.ordinal),
+        ProjectSukiFilter {
         override val headers: List<Header> = headers {
             """
             See Extensions > Project Suki > Gear icon
@@ -109,7 +111,9 @@ object ProjectSukiFilters {
         override fun HttpUrl.Builder.applyFilter() = Unit
     }
 
-    class Author : Filter.Text("Author"), ProjectSukiFilter {
+    class Author :
+        Filter.Text("Author"),
+        ProjectSukiFilter {
         override val headers: List<Header> = headers {
             """
             Search by a single author:
@@ -123,7 +127,9 @@ object ProjectSukiFilters {
         }
     }
 
-    class Artist : Filter.Text("Artist"), ProjectSukiFilter {
+    class Artist :
+        Filter.Text("Artist"),
+        ProjectSukiFilter {
         override val headers: List<Header> = headers {
             """
             Search by a single artist:
@@ -137,19 +143,27 @@ object ProjectSukiFilters {
         }
     }
 
-    class Status : Filter.Select<StatusValue>("Status", StatusValue.values()), ProjectSukiFilter {
+    class Status :
+        Filter.Select<StatusValue>("Status", StatusValue.values()),
+        ProjectSukiFilter {
         override fun HttpUrl.Builder.applyFilter() {
-            when (val state = StatusValue[state /* ordinal */]) {
-                StatusValue.ANY -> {} // default, do nothing
+            when (val state = StatusValue[state]) {
+                StatusValue.ANY -> {}
+
+                // default, do nothing
                 else -> ensureAdv().addQueryParameter("status", state.query)
             }
         }
     }
 
-    class Origin : Filter.Select<OriginValue>("Origin", OriginValue.values()), ProjectSukiFilter {
+    class Origin :
+        Filter.Select<OriginValue>("Origin", OriginValue.values()),
+        ProjectSukiFilter {
         override fun HttpUrl.Builder.applyFilter() {
-            when (val state = OriginValue[state /* ordinal */]) {
-                OriginValue.ANY -> {} // default, do nothing
+            when (val state = OriginValue[state]) {
+                OriginValue.ANY -> {}
+
+                // default, do nothing
                 else -> ensureAdv().addQueryParameter("origin", state.query)
             }
         }

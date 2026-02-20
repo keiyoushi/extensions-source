@@ -27,12 +27,12 @@ class MangadexUrlActivity : Activity() {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 with(pathSegments[0]) {
                     when {
-                        equals("chapter") -> putExtra("query", MDConstants.prefixChSearch + titleId)
-                        equals("group") -> putExtra("query", MDConstants.prefixGrpSearch + titleId)
-                        equals("user") -> putExtra("query", MDConstants.prefixUsrSearch + titleId)
-                        equals("author") -> putExtra("query", MDConstants.prefixAuthSearch + titleId)
-                        equals("list") -> putExtra("query", MDConstants.prefixListSearch + titleId)
-                        else -> putExtra("query", MDConstants.prefixIdSearch + titleId)
+                        equals("chapter") -> putExtra("query", MDConstants.PREFIX_CH_SEARCH + titleId)
+                        equals("group") -> putExtra("query", MDConstants.PREFIX_GRP_SEARCH + titleId)
+                        equals("user") -> putExtra("query", MDConstants.PREFIX_USER_SEARCH + titleId)
+                        equals("author") -> putExtra("query", MDConstants.PREFIX_AUTHOR_SEARCH + titleId)
+                        equals("list") -> putExtra("query", MDConstants.PREFIX_LIST_SEARCH + titleId)
+                        else -> putExtra("query", MDConstants.PREFIX_ID_SEARCH + titleId)
                     }
                 }
                 putExtra("filter", packageName)

@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.en.kaynscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
-class KaynScans : Keyoapp(
-    "Kayn Scans",
-    "https://kaynscan.com",
-    "en",
-) {
+class KaynScans :
+    Keyoapp(
+        "Kayn Scans",
+        "https://kaynscan.com",
+        "en",
+    ) {
     override val descriptionSelector: String = "div.grid > div.overflow-hidden > p"
     override val statusSelector: String = "div[alt=Status]"
     override val authorSelector: String = "div[alt=Author]"

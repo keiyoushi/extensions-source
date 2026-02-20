@@ -51,26 +51,25 @@ class ArgosComics : HttpSource() {
             .sortedDescending()
 
         urls.forEach {
-            try { return@lazy getActionNextToken(it) } catch (_: Exception) { /* ignored */ }
+            try {
+                return@lazy getActionNextToken(it)
+            } catch (_: Exception) { /* ignored */ }
         }
 
         throw IOException("Não foi possível encontrar token para pesquisar")
     }
 
     private var detailsToken: String? = null
-    private fun getDetailsToken(pageUrl: String): String =
-        detailsToken.takeIf { !it.isNullOrBlank() }
-            ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]")).also { detailsToken = it }
+    private fun getDetailsToken(pageUrl: String): String = detailsToken.takeIf { !it.isNullOrBlank() }
+        ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]")).also { detailsToken = it }
 
     private var chaptersToken: String? = null
-    private fun getChaptersToken(pageUrl: String): String =
-        chaptersToken.takeIf { !it.isNullOrBlank() }
-            ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]"), CHAPTERS_TOKEN_REGEX).also { chaptersToken = it }
+    private fun getChaptersToken(pageUrl: String): String = chaptersToken.takeIf { !it.isNullOrBlank() }
+        ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]"), CHAPTERS_TOKEN_REGEX).also { chaptersToken = it }
 
     private var pagesToken: String? = null
-    private fun getPagesToken(pageUrl: String): String =
-        pagesToken.takeIf { !it.isNullOrBlank() }
-            ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=capitulo]")).also { pagesToken = it }
+    private fun getPagesToken(pageUrl: String): String = pagesToken.takeIf { !it.isNullOrBlank() }
+        ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=capitulo]")).also { pagesToken = it }
 
     // ======================== Popular =============================
 
@@ -90,8 +89,7 @@ class ArgosComics : HttpSource() {
         return POST(url.toString(), popularHeaders, payload)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        getJsonBody(response).parseAs<MangasListDto>().toMangasPage()
+    override fun popularMangaParse(response: Response): MangasPage = getJsonBody(response).parseAs<MangasListDto>().toMangasPage()
 
     // ======================== Latest =============================
 
@@ -148,8 +146,7 @@ class ArgosComics : HttpSource() {
         return POST(getMangaUrl(manga), detailsHeaders, payload)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        getJsonBody(response).parseAs<MangaDetailsDto>().toSManga()
+    override fun mangaDetailsParse(response: Response) = getJsonBody(response).parseAs<MangaDetailsDto>().toSManga()
 
     // ======================== Chapters =============================
 
@@ -186,8 +183,7 @@ class ArgosComics : HttpSource() {
         return POST(getChapterUrl(chapter), pagesHeaders, payload)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        getJsonBody(response).parseAs<PagesDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> = getJsonBody(response).parseAs<PagesDto>().toPageList()
 
     override fun imageUrlParse(response: Response) = ""
 
@@ -201,10 +197,8 @@ class ArgosComics : HttpSource() {
             ?: throw IOException("Não foi possível encontrar token")
     }
 
-    private fun getJsonBody(response: Response): String {
-        return MANGA_DATA_REGEX.find(response.body.string())?.groupValues?.last(String::isNotBlank)
-            ?: throw IOException("Não foi possível encontrar a lista de mangás")
-    }
+    private fun getJsonBody(response: Response): String = MANGA_DATA_REGEX.find(response.body.string())?.groupValues?.last(String::isNotBlank)
+        ?: throw IOException("Não foi possível encontrar a lista de mangás")
 
     private fun getScriptUrlFrom(url: String, cssSelector: String): String? {
         val document = client.newCall(GET(url)).execute().asJsoup()

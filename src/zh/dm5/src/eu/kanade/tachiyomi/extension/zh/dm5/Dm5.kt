@@ -26,7 +26,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Dm5 : ParsedHttpSource(), ConfigurableSource {
+class Dm5 :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫屋"
@@ -56,9 +58,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search?title=$query&language=1&page=$page", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/search?title=$query&language=1&page=$page", headers)
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
     override fun searchMangaSelector(): String = "ul.mh-list > li, div.banner_detail_form"
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {

@@ -34,7 +34,8 @@ open class Webtoons(
     override val lang: String,
     private val langCode: String = lang,
     localeForCookie: String = lang,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "Webtoons.com"
     override val baseUrl = "https://www.webtoons.com"
     private val mobileUrl = "https://m.webtoons.com"
@@ -93,12 +94,10 @@ open class Webtoons(
         return MangasPage(entries, hasNextPage)
     }
 
-    private fun mangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.selectFirst(".title")!!.text()
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        }
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst(".title")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -149,11 +148,9 @@ open class Webtoons(
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SearchType(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SearchType(),
+    )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -181,11 +178,9 @@ open class Webtoons(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { mangaDetailsParse(it, manga) }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { mangaDetailsParse(it, manga) }
 
     private fun mangaDetailsParse(response: Response, oldManga: SManga): SManga {
         val document = response.asJsoup()
@@ -233,9 +228,7 @@ open class Webtoons(
         }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request {
         val webtoonUrl = getMangaUrl(manga).toHttpUrl()
@@ -251,8 +244,10 @@ open class Webtoons(
                 when (path[0]) {
                     // "/episodeList?titleNo=1049"
                     "episodeList" -> "webtoon"
+
                     // "/challenge/episodeList?titleNo=304446"
                     "challenge" -> "canvas"
+
                     else -> throw Exception("Migrate from $name to $name")
                 }
             } else {
@@ -441,9 +436,7 @@ open class Webtoons(
         }.also(screen::addPreference)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"

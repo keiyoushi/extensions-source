@@ -7,11 +7,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-class Kiryuu : NatsuId(
-    "Kiryuu",
-    "id",
-    "https://kiryuu03.com",
-) {
+class Kiryuu :
+    NatsuId(
+        "Kiryuu",
+        "id",
+        "https://kiryuu03.com",
+    ) {
     // Formerly "Kiryuu (WP Manga Stream)"
     override val id = 3639673976007021338
 

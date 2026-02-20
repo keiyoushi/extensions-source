@@ -24,18 +24,14 @@ class ScanR : HttpSource() {
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            TypeFilter(),
-            StatusFilter(),
-            AdultFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        TypeFilter(),
+        StatusFilter(),
+        AdultFilter(),
+    )
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$cdnUrl/index.json", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$cdnUrl/index.json", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -75,9 +71,9 @@ class ScanR : HttpSource() {
 
             if (searchQuery.isBlank() || serie.title.contains(searchQuery, ignoreCase = true)) {
                 val details = serie.toDetailedSManga()
-                if (((serie.os && types.contains("os")) || (!serie.os && types.contains("series")) || types.contains("all")) &&
-                    (details.status == SManga.ONGOING && status.contains("ongoing") || (details.status == SManga.COMPLETED && status.contains("completed")) || status.contains("all")) &&
-                    (serie.konami && adult.contains("18") || (!serie.konami && adult.contains("normal")) || adult.contains("all"))
+                if ((((serie.os && types.contains("os")) || (!serie.os && types.contains("series")) || types.contains("all"))) &&
+                    ((((details.status == SManga.ONGOING) && status.contains("ongoing")) || (((details.status == SManga.COMPLETED) && status.contains("completed"))) || status.contains("all"))) &&
+                    ((serie.konami && adult.contains("18")) || (!serie.konami && adult.contains("normal")) || adult.contains("all"))
                 ) {
                     mangaList.add(details)
                 }
@@ -193,23 +189,13 @@ class ScanR : HttpSource() {
     }
 
     // Unsupported stuff
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }

@@ -5,7 +5,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-@SerialName(MDConstants.scanlationGroup)
+@SerialName(MDConstants.SCANLATION_GROUP)
 data class ScanlationGroupDto(override val attributes: ScanlationGroupAttributes? = null) : EntityDto()
 
 @Serializable

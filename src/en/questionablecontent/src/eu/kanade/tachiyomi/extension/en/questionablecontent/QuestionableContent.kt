@@ -21,7 +21,9 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Date
 
-class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
+class QuestionableContent :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Questionable Content"
     override val baseUrl = "https://www.questionablecontent.net"
@@ -66,8 +68,7 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
         return chapters
     }
 
-    override fun chapterListSelector() =
-        """div#container a[href^="view.php?comic="]"""
+    override fun chapterListSelector() = """div#container a[href^="view.php?comic="]"""
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlregex =

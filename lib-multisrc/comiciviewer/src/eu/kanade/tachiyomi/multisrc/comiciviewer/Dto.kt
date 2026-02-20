@@ -58,10 +58,12 @@ class SeriesData(
                         name = "➡\uFE0F $name"
                         url = "/episodes/${it.id}#$LOGIN_SUFFIX"
                     }
+
                     isLocked -> {
                         name = "🔒 $name"
                         url = "/episodes/${it.id}"
                     }
+
                     else -> {
                         url = "/episodes/${it.id}"
                     }

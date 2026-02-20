@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class ApenasUmaFa : ZeistManga(
-    "Apenas Uma Fã",
-    "https://apenasuma-fa.blogspot.com",
-    "pt-BR",
-) {
+class ApenasUmaFa :
+    ZeistManga(
+        "Apenas Uma Fã",
+        "https://apenasuma-fa.blogspot.com",
+        "pt-BR",
+    ) {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int) = fetchLatestUpdates(page)
@@ -36,7 +37,7 @@ class ApenasUmaFa : ZeistManga(
         val feed = doc.selectFirst(".chapter_get")!!.attr("data-labelchapter")
         return apiUrl(feed)
             .addQueryParameter("start-index", "1")
-            .addQueryParameter("max-results", maxChapterResults.toString())
+            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
             .build().toString()
     }
 

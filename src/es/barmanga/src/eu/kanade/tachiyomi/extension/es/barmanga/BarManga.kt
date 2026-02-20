@@ -7,12 +7,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BarManga : Madara(
-    "BarManga",
-    "https://libribar.com",
-    "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class BarManga :
+    Madara(
+        "BarManga",
+        "https://libribar.com",
+        "es",
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val mangaDetailsSelectorDescription = "div.flamesummary > div.manga-excerpt"

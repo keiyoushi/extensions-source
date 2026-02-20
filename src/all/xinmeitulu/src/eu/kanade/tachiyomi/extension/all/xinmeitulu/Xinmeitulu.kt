@@ -49,17 +49,14 @@ class Xinmeitulu : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/page/$page?s=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/page/$page?s=$query", headers)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith("SLUG:")) {
-            val slug = query.removePrefix("SLUG:")
-            client.newCall(GET("$baseUrl/photo/$slug", headers)).asObservableSuccess()
-                .map { response -> MangasPage(listOf(mangaDetailsParse(response.asJsoup())), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("SLUG:")) {
+        val slug = query.removePrefix("SLUG:")
+        client.newCall(GET("$baseUrl/photo/$slug", headers)).asObservableSuccess()
+            .map { response -> MangasPage(listOf(mangaDetailsParse(response.asJsoup())), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     // Details
@@ -81,10 +78,9 @@ class Xinmeitulu : ParsedHttpSource() {
         name = element.select(".container > h1").text()
     }
 
-    override fun pageListParse(document: Document) =
-        document.select(".container > div > figure img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.attr("abs:data-original"))
-        }
+    override fun pageListParse(document: Document) = document.select(".container > div > figure img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.attr("abs:data-original"))
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

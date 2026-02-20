@@ -6,12 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FreeMangaTop : Madara(
-    "FreeMangaTop",
-    "https://freemangatop.com",
-    "en",
-    dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
-) {
+class FreeMangaTop :
+    Madara(
+        "FreeMangaTop",
+        "https://freemangatop.com",
+        "en",
+        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
+    ) {
     override val filterNonMangaItems = false
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always

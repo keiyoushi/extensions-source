@@ -31,7 +31,9 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class Mangamo : ConfigurableSource, HttpSource() {
+class Mangamo :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Mangamo"
 
@@ -263,9 +265,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
 
     // Manga details
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val uri = getMangaUrl(manga).toHttpUrl()
@@ -359,16 +359,13 @@ class Mangamo : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    private fun getPagesImagesRequest(series: Int, chapter: Int): Request {
-        return POST(
-            "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page/$series/$chapter",
-            helper.jsonHeaders,
-            "{\"idToken\":\"${auth.getIdToken()}\"}".toRequestBody(),
-        )
-    }
+    private fun getPagesImagesRequest(series: Int, chapter: Int): Request = POST(
+        "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page/$series/$chapter",
+        helper.jsonHeaders,
+        "{\"idToken\":\"${auth.getIdToken()}\"}".toRequestBody(),
+    )
 
     override fun pageListRequest(chapter: SChapter): Request {
         val uri = (baseUrl + chapter.url).toHttpUrl()

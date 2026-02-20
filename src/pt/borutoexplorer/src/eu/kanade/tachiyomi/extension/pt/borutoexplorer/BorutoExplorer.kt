@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class BorutoExplorer : Madara(
-    "Boruto Explorer",
-    "https://leitor.borutoexplorer.com.br",
-    "pt-BR",
-    SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
-) {
+class BorutoExplorer :
+    Madara(
+        "Boruto Explorer",
+        "https://leitor.borutoexplorer.com.br",
+        "pt-BR",
+        SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)

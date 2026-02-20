@@ -7,9 +7,7 @@ import java.security.interfaces.RSAPrivateKey
 import java.security.spec.MGF1ParameterSpec
 import java.security.spec.PSSParameterSpec
 
-fun String.decodeBase64(): ByteArray {
-    return Base64.decode(this, Base64.DEFAULT)
-}
+fun String.decodeBase64(): ByteArray = Base64.decode(this, Base64.DEFAULT)
 
 fun generateRandomBytes(size: Int): ByteArray {
     val bytes = ByteArray(size)
@@ -17,9 +15,7 @@ fun generateRandomBytes(size: Int): ByteArray {
     return bytes
 }
 
-fun ByteArray.toHexString(): String {
-    return joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
-}
+fun ByteArray.toHexString(): String = joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
 
 @Suppress("SpellCheckingInspection")
 fun sign(message: ByteArray, privateKey: RSAPrivateKey): ByteArray {

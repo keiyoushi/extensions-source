@@ -43,8 +43,7 @@ open class TodayManga : ParsedHttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/category/most-popular".addPage(page), headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/most-popular".addPage(page), headers)
 
     override fun popularMangaSelector(): String = "section div.serie"
 
@@ -54,13 +53,11 @@ open class TodayManga : ParsedHttpSource() {
         title = element.selectFirst("h2")!!.text()
     }
 
-    override fun popularMangaNextPageSelector(): String =
-        ".pagination > ul > li.active + li:has(a)"
+    override fun popularMangaNextPageSelector(): String = ".pagination > ul > li.active + li:has(a)"
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/category/recent".addPage(page), headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/recent".addPage(page), headers)
 
     override fun latestUpdatesSelector(): String = "ul.series > li"
 
@@ -72,8 +69,7 @@ open class TodayManga : ParsedHttpSource() {
         thumbnail_url = element.selectFirst("img")!!.imgAttr()
     }
 
-    override fun latestUpdatesNextPageSelector(): String =
-        popularMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // =============================== Search ===============================
 
@@ -88,14 +84,17 @@ open class TodayManga : ParsedHttpSource() {
                     addPathSegment("category")
                     addPathSegments(categoryFilter.toUriPart())
                 }
+
                 genreFilter.state != 0 -> {
                     addPathSegment("genre")
                     addPathSegment(genreFilter.toUriPart())
                 }
+
                 query.isNotBlank() -> {
                     addPathSegment("search")
                     addQueryParameter("q", query)
                 }
+
                 else -> { // Default to popular
                     addPathSegments("category/most-popular")
                 }
@@ -111,11 +110,9 @@ open class TodayManga : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaNextPageSelector(): String =
-        popularMangaNextPageSelector()
+    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -141,63 +138,64 @@ open class TodayManga : ParsedHttpSource() {
         GenreFilter(),
     )
 
-    class CategoryFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("<select>", ""),
-            Pair("Most Popular Manga", "most-popular"),
-            Pair("Highest Rated Manga", "highest-rated"),
-            Pair("Trending This Week", "trending"),
-            Pair("Recent Updated Manga", "recent"),
-            Pair("Editors' Choices", "editor-pick"),
-            Pair("Completed Comedy Manga", "completed-comedy-manga"),
-            Pair("Completed Drama Manga", "completed-drama-manga"),
-            Pair("Completed Fantasy Manga", "completed-fantasy-manga"),
-            Pair("Completed Romance Manga", "completed-romance-manga"),
-        ),
-    )
+    class CategoryFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("<select>", ""),
+                Pair("Most Popular Manga", "most-popular"),
+                Pair("Highest Rated Manga", "highest-rated"),
+                Pair("Trending This Week", "trending"),
+                Pair("Recent Updated Manga", "recent"),
+                Pair("Editors' Choices", "editor-pick"),
+                Pair("Completed Comedy Manga", "completed-comedy-manga"),
+                Pair("Completed Drama Manga", "completed-drama-manga"),
+                Pair("Completed Fantasy Manga", "completed-fantasy-manga"),
+                Pair("Completed Romance Manga", "completed-romance-manga"),
+            ),
+        )
 
     // The site doesn't seem to list all available genres, so instead the genres
     // were sampled from the first 5 pages of recently updated
-    class GenreFilter : UriPartFilter(
-        "Genre",
-        arrayOf(
-            Pair("<select>", ""),
-            Pair("Action", "action"),
-            Pair("Adventure", "adventure"),
-            Pair("Comedy", "comedy"),
-            Pair("Drama", "drama"),
-            Pair("Ecchi", "ecchi"),
-            Pair("Fantasy", "fantasy"),
-            Pair("Gender Bender", "gender-bender"),
-            Pair("Harem", "harem"),
-            Pair("Historical", "historical"),
-            Pair("Horror", "horror"),
-            Pair("Martial Arts", "martial-arts"),
-            Pair("Mature", "mature"),
-            Pair("Music", "music"),
-            Pair("Mystery", "mystery"),
-            Pair("One Shot", "one-shot"),
-            Pair("Psychological", "psychological"),
-            Pair("Reverse Harem", "reverse-harem"),
-            Pair("Romance", "romance"),
-            Pair("School Life", "school-life"),
-            Pair("Sci fi", "sci-fi"),
-            Pair("Seinen", "seinen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Shounen Ai", "shounen-ai"),
-            Pair("Shounen", "shounen"),
-            Pair("Slice Of Life", "slice-of-life"),
-            Pair("Sports", "sports"),
-            Pair("Supernatural", "supernatural"),
-            Pair("Tragedy", "tragedy"),
-            Pair("Vampire", "vampire"),
-            Pair("Webtoons", "webtoons"),
-        ),
-    )
+    class GenreFilter :
+        UriPartFilter(
+            "Genre",
+            arrayOf(
+                Pair("<select>", ""),
+                Pair("Action", "action"),
+                Pair("Adventure", "adventure"),
+                Pair("Comedy", "comedy"),
+                Pair("Drama", "drama"),
+                Pair("Ecchi", "ecchi"),
+                Pair("Fantasy", "fantasy"),
+                Pair("Gender Bender", "gender-bender"),
+                Pair("Harem", "harem"),
+                Pair("Historical", "historical"),
+                Pair("Horror", "horror"),
+                Pair("Martial Arts", "martial-arts"),
+                Pair("Mature", "mature"),
+                Pair("Music", "music"),
+                Pair("Mystery", "mystery"),
+                Pair("One Shot", "one-shot"),
+                Pair("Psychological", "psychological"),
+                Pair("Reverse Harem", "reverse-harem"),
+                Pair("Romance", "romance"),
+                Pair("School Life", "school-life"),
+                Pair("Sci fi", "sci-fi"),
+                Pair("Seinen", "seinen"),
+                Pair("Shoujo", "shoujo"),
+                Pair("Shounen Ai", "shounen-ai"),
+                Pair("Shounen", "shounen"),
+                Pair("Slice Of Life", "slice-of-life"),
+                Pair("Sports", "sports"),
+                Pair("Supernatural", "supernatural"),
+                Pair("Tragedy", "tragedy"),
+                Pair("Vampire", "vampire"),
+                Pair("Webtoons", "webtoons"),
+            ),
+        )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
@@ -263,12 +261,10 @@ open class TodayManga : ParsedHttpSource() {
         }
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)!!.time
+    } catch (_: ParseException) {
+        0L
     }
 
     // From OppaiStream
@@ -287,12 +283,24 @@ open class TodayManga : ParsedHttpSource() {
             ?: return 0L
 
         when {
-            "second" in this -> now.add(Calendar.SECOND, -relativeDate) // parse: 30 seconds ago
-            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate) // parses: "42 minutes ago"
-            "hour" in this -> now.add(Calendar.HOUR, -relativeDate) // parses: "1 hour ago" and "2 hours ago"
-            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate) // parses: "2 days ago"
-            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate) // parses: "2 weeks ago"
-            "month" in this -> now.add(Calendar.MONTH, -relativeDate) // parses: "2 months ago"
+            "second" in this -> now.add(Calendar.SECOND, -relativeDate)
+
+            // parse: 30 seconds ago
+            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate)
+
+            // parses: "42 minutes ago"
+            "hour" in this -> now.add(Calendar.HOUR, -relativeDate)
+
+            // parses: "1 hour ago" and "2 hours ago"
+            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate)
+
+            // parses: "2 days ago"
+            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate)
+
+            // parses: "2 weeks ago"
+            "month" in this -> now.add(Calendar.MONTH, -relativeDate)
+
+            // parses: "2 months ago"
             "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
         }
         return now.timeInMillis
@@ -300,13 +308,11 @@ open class TodayManga : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".chapter-content > img[data-index]").map { img ->
-            val index = img.attr("data-index").toInt()
-            val url = img.imgAttr()
-            Page(index, imageUrl = url)
-        }.sortedBy { it.index }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".chapter-content > img[data-index]").map { img ->
+        val index = img.attr("data-index").toInt()
+        val url = img.imgAttr()
+        Page(index, imageUrl = url)
+    }.sortedBy { it.index }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -320,13 +326,11 @@ open class TodayManga : ParsedHttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun String.addPage(page: Int): HttpUrl {
-        return this.toHttpUrl().newBuilder().apply {
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
-        }.build()
-    }
+    private fun String.addPage(page: Int): HttpUrl = this.toHttpUrl().newBuilder().apply {
+        if (page > 1) {
+            addQueryParameter("page", page.toString())
+        }
+    }.build()
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")

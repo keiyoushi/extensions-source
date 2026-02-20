@@ -50,12 +50,9 @@ class Megatokyo : ParsedHttpSource() {
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
         .map { it.mangas.first().apply { initialized = true } }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun chapterListSelector() =
-        "div.content h2:contains(Comics by Date) + div ul li a[name]"
+    override fun chapterListSelector() = "div.content h2:contains(Comics by Date) + div ul li a[name]"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
@@ -66,11 +63,10 @@ class Megatokyo : ParsedHttpSource() {
         return chapter
     }
 
-    override fun pageListParse(document: Document) =
-        document.select("#strip img")
-            .mapIndexed { i, element ->
-                Page(i, "", "https://megatokyo.com/" + element.attr("src"))
-            }
+    override fun pageListParse(document: Document) = document.select("#strip img")
+        .mapIndexed { i, element ->
+            Page(i, "", "https://megatokyo.com/" + element.attr("src"))
+        }
 
     // certificate wasn't trusted for some reason so trusted all certificates
     private fun getUnsafeOkHttpClient(): OkHttpClient {
@@ -113,8 +109,7 @@ class Megatokyo : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
@@ -130,8 +125,6 @@ class Megatokyo : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    private fun String.toDate(): Long {
-        return runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }
-            .onFailure { print("Something wrong happened: ${it.message}") }.getOrNull() ?: 0L
-    }
+    private fun String.toDate(): Long = runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }
+        .onFailure { print("Something wrong happened: ${it.message}") }.getOrNull() ?: 0L
 }

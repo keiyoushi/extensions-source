@@ -7,7 +7,9 @@ interface UrlQueryFilter {
     fun addQueryParameter(url: HttpUrl.Builder)
 }
 
-class NsfwContentFilter : Filter.CheckBox("Conteúdo NSFW"), UrlQueryFilter {
+class NsfwContentFilter :
+    Filter.CheckBox("Conteúdo NSFW"),
+    UrlQueryFilter {
     override fun addQueryParameter(url: HttpUrl.Builder) {
         if (state) {
             url.addQueryParameter("nsfw", "true")
@@ -15,7 +17,9 @@ class NsfwContentFilter : Filter.CheckBox("Conteúdo NSFW"), UrlQueryFilter {
     }
 }
 
-class AdultContentFilter : Filter.CheckBox("Conteúdo adulto"), UrlQueryFilter {
+class AdultContentFilter :
+    Filter.CheckBox("Conteúdo adulto"),
+    UrlQueryFilter {
     override fun addQueryParameter(url: HttpUrl.Builder) {
         if (state) {
             url.addQueryParameter("hentai", "true")

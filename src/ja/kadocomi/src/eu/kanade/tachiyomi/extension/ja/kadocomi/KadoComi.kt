@@ -62,9 +62,7 @@ class KadoComi : HttpSource() {
 
     // ============================== Manga Details ===============================
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/detail/${getWorkCode(manga)}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/detail/${getWorkCode(manga)}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -88,9 +86,11 @@ class KadoComi : HttpSource() {
                 in AUTHOR_ROLES -> {
                     mangaAuthor = it.name
                 }
+
                 in ARTIST_ROLES -> {
                     mangaArtist = it.name
                 }
+
                 in COMBINED_ROLES -> {
                     mangaAuthor = it.name
                     mangaArtist = it.name
@@ -114,11 +114,9 @@ class KadoComi : HttpSource() {
         }
     }
 
-    private fun getGenres(work: KadoComiWork): String {
-        return listOfNotNull(work.genre?.name, work.subGenre?.name)
-            .plus(work.tags.orEmpty().map { it.name })
-            .joinToString()
-    }
+    private fun getGenres(work: KadoComiWork): String = listOfNotNull(work.genre?.name, work.subGenre?.name)
+        .plus(work.tags.orEmpty().map { it.name })
+        .joinToString()
 
     // ============================== Chapters ===============================
 
@@ -232,13 +230,9 @@ class KadoComi : HttpSource() {
 
     // ============================= Utilities ==============================
 
-    private fun getWorkCode(manga: SManga): String {
-        return manga.url.substringAfterLast("/")
-    }
+    private fun getWorkCode(manga: SManga): String = manga.url.substringAfterLast("/")
 
-    private fun getThumbnailUrl(work: KadoComiWork): String {
-        return work.bookCover ?: work.thumbnail
-    }
+    private fun getThumbnailUrl(work: KadoComiWork): String = work.bookCover ?: work.thumbnail
 
     // https://stackoverflow.com/a/66614516
     private fun String.decodeHex(): ByteArray {
@@ -249,19 +243,15 @@ class KadoComi : HttpSource() {
             .toByteArray()
     }
 
-    private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray {
-        return imageByteArray.mapIndexed { idx, byte ->
-            byte xor hashByteArray[idx % hashByteArray.size]
-        }.toByteArray()
-    }
+    private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray = imageByteArray.mapIndexed { idx, byte ->
+        byte xor hashByteArray[idx % hashByteArray.size]
+    }.toByteArray()
 
-    private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> {
-        return results.result.map {
-            SManga.create().apply {
-                url = "/detail/${it.code}"
-                title = it.title
-                thumbnail_url = getThumbnailUrl(it)
-            }
+    private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> = results.result.map {
+        SManga.create().apply {
+            url = "/detail/${it.code}"
+            title = it.title
+            thumbnail_url = getThumbnailUrl(it)
         }
     }
 
@@ -270,12 +260,10 @@ class KadoComi : HttpSource() {
         private const val LOCK = "🔒 "
 
         // date formatting
-        private fun parseDate(dateStr: String): Long {
-            return try {
-                dateFormat.parse(dateStr)!!.time
-            } catch (_: ParseException) {
-                0L
-            }
+        private fun parseDate(dateStr: String): Long = try {
+            dateFormat.parse(dateStr)!!.time
+        } catch (_: ParseException) {
+            0L
         }
 
         private val dateFormat by lazy {

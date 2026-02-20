@@ -86,18 +86,17 @@ abstract class SinMH(
     override fun searchMangaNextPageSelector(): String? = nextPageSelector
     override fun searchMangaSelector(): String = comicItemSelector
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        if (query.isNotEmpty()) {
-            GET("$baseUrl/search/?keywords=$query&page=$page", headers)
-        } else {
-            val categories = filters.filterIsInstance<UriPartFilter>().map { it.toUriPart() }
-                .filter { it.isNotEmpty() }
-            val sort = filters.filterIsInstance<SortFilter>().firstOrNull()?.toUriPart().orEmpty()
-            val url = StringBuilder(baseUrl).append("/list/").apply {
-                categories.joinTo(this, separator = "-", postfix = "-/")
-            }.append(sort).append("?page=").append(page).toString()
-            GET(url, headers)
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.isNotEmpty()) {
+        GET("$baseUrl/search/?keywords=$query&page=$page", headers)
+    } else {
+        val categories = filters.filterIsInstance<UriPartFilter>().map { it.toUriPart() }
+            .filter { it.isNotEmpty() }
+        val sort = filters.filterIsInstance<SortFilter>().firstOrNull()?.toUriPart().orEmpty()
+        val url = StringBuilder(baseUrl).append("/list/").apply {
+            categories.joinTo(this, separator = "-", postfix = "-/")
+        }.append(sort).append("?page=").append(page).toString()
+        GET(url, headers)
+    }
 
     // Details
 
@@ -157,9 +156,7 @@ abstract class SinMH(
     protected open fun List<SChapter>.sortedDescending() = this.asReversed()
     protected open fun Elements.sectionsDescending() = this.asReversed()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return chapterListParse(response, chapterListSelector(), dateSelector)
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = chapterListParse(response, chapterListSelector(), dateSelector)
 
     protected fun chapterListParse(response: Response, listSelector: String, dateSelector: String): List<SChapter> {
         val document = response.asJsoup()
@@ -213,17 +210,15 @@ abstract class SinMH(
     }
 
     // default parsing of ["...","..."]
-    protected open fun parsePageImages(chapterImages: String): List<String> =
-        if (chapterImages.length > 4) {
-            chapterImages.run { substring(2, length - 2) }.replace("""\/""", "/").split("\",\"")
-        } else {
-            emptyList() // []
-        }
+    protected open fun parsePageImages(chapterImages: String): List<String> = if (chapterImages.length > 4) {
+        chapterImages.run { substring(2, length - 2) }.replace("""\/""", "/").split("\",\"")
+    } else {
+        emptyList() // []
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    protected class UriPartFilter(displayName: String, values: Array<String>, private val uriParts: Array<String>) :
-        Filter.Select<String>(displayName, values) {
+    protected class UriPartFilter(displayName: String, values: Array<String>, private val uriParts: Array<String>) : Filter.Select<String>(displayName, values) {
         fun toUriPart(): String = uriParts[state]
     }
 

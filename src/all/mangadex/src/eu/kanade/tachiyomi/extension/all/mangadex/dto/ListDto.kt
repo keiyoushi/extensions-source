@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 typealias ListDto = ResponseDto<ListDataDto>
 
 @Serializable
-@SerialName(MDConstants.list)
+@SerialName(MDConstants.LIST)
 data class ListDataDto(override val attributes: ListAttributesDto? = null) : EntityDto()
 
 @Serializable

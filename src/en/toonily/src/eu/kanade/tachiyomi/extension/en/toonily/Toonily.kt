@@ -11,15 +11,17 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val domain = "toonily.com"
-class Toonily : Madara(
-    "Toonily",
-    "https://$domain",
-    "en",
-    SimpleDateFormat("MMM d, yy", Locale.US),
-) {
+private const val DOMAIN = "toonily.com"
+
+class Toonily :
+    Madara(
+        "Toonily",
+        "https://$DOMAIN",
+        "en",
+        SimpleDateFormat("MMM d, yy", Locale.US),
+    ) {
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(domain, "toonily-mature" to "1"))
+        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "toonily-mature" to "1"))
         .addInterceptor(::hdCoverInterceptor)
         .build()
 
@@ -31,17 +33,13 @@ class Toonily : Madara(
 
     override fun searchMangaSelector() = "div.page-item-detail.manga"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return super.searchMangaRequest(
-            page,
-            query.replace(titleSpecialCharactersRegex, " ").trim(),
-            filters,
-        )
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = super.searchMangaRequest(
+        page,
+        query.replace(titleSpecialCharactersRegex, " ").trim(),
+        filters,
+    )
 
-    override fun genresRequest(): Request {
-        return GET("$baseUrl/search/?post_type=wp-manga", headers)
-    }
+    override fun genresRequest(): Request = GET("$baseUrl/search/?post_type=wp-manga", headers)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val newManga = SManga.create().apply {
@@ -50,9 +48,7 @@ class Toonily : Madara(
         return super.mangaDetailsRequest(newManga)
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun parseChapterDate(date: String?): Long {
         val formattedDate = if (date?.contains("UP") == true) "today" else date

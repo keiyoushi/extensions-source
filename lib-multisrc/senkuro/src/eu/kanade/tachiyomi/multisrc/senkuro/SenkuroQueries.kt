@@ -8,11 +8,9 @@ data class GraphQL<T>(
     val variables: T,
 )
 
-private fun buildQuery(queryAction: () -> String): String {
-    return queryAction()
-        .trimIndent()
-        .replace("%", "$")
-}
+private fun buildQuery(queryAction: () -> String): String = queryAction()
+    .trimIndent()
+    .replace("%", "$")
 
 @Serializable
 data class SearchVariables(

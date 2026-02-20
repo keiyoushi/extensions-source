@@ -27,17 +27,13 @@ class VyvyManga : ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("MMM dd, yyy", Locale.US)
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/search" + if (page != 1) "?page=$page" else "", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search" + if (page != 1) "?page=$page" else "", headers)
 
-    override fun popularMangaSelector(): String =
-        searchMangaSelector()
+    override fun popularMangaSelector(): String = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector(): String =
-        searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector(): String = searchMangaNextPageSelector()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -47,17 +43,25 @@ class VyvyManga : ParsedHttpSource() {
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is SearchType -> url.addQueryParameter("search_po", filter.selected)
+
                 is SearchDescription -> if (filter.state) url.addQueryParameter("check_search_desc", "1")
+
                 is AuthorSearchType -> url.addQueryParameter("author_po", filter.selected)
+
                 is AuthorFilter -> url.addQueryParameter("author", filter.state)
+
                 is StatusFilter -> url.addQueryParameter("completed", filter.selected)
+
                 is SortFilter -> url.addQueryParameter("sort", filter.selected)
+
                 is SortType -> url.addQueryParameter("sort_type", filter.selected)
+
                 is GenreFilter -> {
                     filter.state.forEach {
                         if (!it.isIgnored()) url.addQueryParameter(if (it.isIncluded()) "genre[]" else "exclude_genre[]", it.id)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -75,17 +79,13 @@ class VyvyManga : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String = "[rel=next]"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/search?sort=updated_at" + if (page != 1) "&page=$page" else "", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/search?sort=updated_at" + if (page != 1) "&page=$page" else "", headers)
 
-    override fun latestUpdatesSelector(): String =
-        searchMangaSelector()
+    override fun latestUpdatesSelector(): String = searchMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -103,8 +103,7 @@ class VyvyManga : ParsedHttpSource() {
     }
 
     // Chapters
-    override fun chapterListSelector(): String =
-        ".list-group > a"
+    override fun chapterListSelector(): String = ".list-group > a"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.absUrl("href")
@@ -113,36 +112,30 @@ class VyvyManga : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.d-block").mapIndexed { index, element ->
-            Page(index, "", element.absUrl("data-src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img.d-block").mapIndexed { index, element ->
+        Page(index, "", element.absUrl("data-src"))
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Other
     // Date logic lifted from Madara
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long {
-            return try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
+        fun SimpleDateFormat.tryParse(string: String): Long = try {
+            parse(string)?.time ?: 0
+        } catch (_: ParseException) {
+            0
         }
 
         return when {
             "ago".endsWith(date) -> {
                 parseRelativeDate(date)
             }
+
             else -> dateFormat.tryParse(date)
         }
     }

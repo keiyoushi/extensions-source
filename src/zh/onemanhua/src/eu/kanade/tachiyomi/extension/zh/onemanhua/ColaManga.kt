@@ -40,7 +40,8 @@ abstract class ColaManga(
     final override val name: String,
     final override val baseUrl: String,
     final override val lang: String,
-) : ParsedHttpSource(), ConfigurableSource {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -60,8 +61,7 @@ abstract class ColaManga(
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
@@ -73,8 +73,7 @@ abstract class ColaManga(
         thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=update&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -110,16 +109,14 @@ abstract class ColaManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val url = "/$slug/"
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+        val url = "/$slug/"
 
-            fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map { MangasPage(listOf(it.apply { this.url = url }), false) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        fetchMangaDetails(SManga.create().apply { this.url = url })
+            .map { MangasPage(listOf(it.apply { this.url = url }), false) }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaSelector() = "dl.fed-deta-info, ${popularMangaSelector()}"

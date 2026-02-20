@@ -138,10 +138,8 @@ abstract class ToomicsGlobal(
 
     // ================================== Chapters =====================================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return super.fetchChapterList(manga)
-            .map { it.reversed() }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = super.fetchChapterList(manga)
+        .map { it.reversed() }
 
     // coin-type1 - free chapter, coin-type6 - already read chapter
     override fun chapterListSelector(): String = "li.normal_ep:has(.coin-type1, .coin-type6)"
@@ -191,24 +189,18 @@ abstract class ToomicsGlobal(
         class Html(@SerialName("sHtml") val data: String)
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseChapterDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
     }
 
-    fun String.clearHtml(): String {
-        return this.unicode().replace(ESCAPE_CHAR_REGEX, "")
-    }
+    fun String.clearHtml(): String = this.unicode().replace(ESCAPE_CHAR_REGEX, "")
 
-    fun String.unicode(): String {
-        return UNICODE_REGEX.replace(this) { match ->
-            val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
-            val value = hex.toInt(16)
-            value.toChar().toString()
-        }
+    fun String.unicode(): String = UNICODE_REGEX.replace(this) { match ->
+        val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
+        val value = hex.toInt(16)
+        value.toChar().toString()
     }
 
     companion object {

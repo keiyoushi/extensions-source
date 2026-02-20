@@ -28,9 +28,7 @@ abstract class ColorlibAnime(
         .rateLimit(3)
         .build()
 
-    private fun Element.toThumbnail(): String {
-        return this.select(".set-bg").attr("abs:data-setbg").substringBeforeLast("?")
-    }
+    private fun Element.toThumbnail(): String = this.select(".set-bg").attr("abs:data-setbg").substringBeforeLast("?")
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -46,21 +44,17 @@ abstract class ColorlibAnime(
 
     override fun searchMangaSelector(): String = ".product__page__content > [style]:has(.col-6) .product__item"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.select("a.img-link").attr("abs:href"))
-            title = element.select("h5").text()
-            thumbnail_url = element.toThumbnail()
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.select("a.img-link").attr("abs:href"))
+        title = element.select("h5").text()
+        thumbnail_url = element.toThumbnail()
     }
 
     override fun searchMangaNextPageSelector(): String? = ".fa-angle-right"
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(OrderFilter(0)))
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(0)))
 
     override fun popularMangaSelector(): String = searchMangaSelector()
 
@@ -70,9 +64,7 @@ abstract class ColorlibAnime(
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(OrderFilter(1)))
-    }
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(1)))
 
     override fun latestUpdatesSelector(): String = searchMangaSelector()
 
@@ -115,20 +107,16 @@ abstract class ColorlibAnime(
 
     override fun chapterListSelector(): String = ".anime__details__episodes a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.text()
-            date_upload = 0L
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.text()
+        date_upload = 0L
     }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".container .read-img > img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".container .read-img > img").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -138,21 +126,21 @@ abstract class ColorlibAnime(
         OrderFilter(),
     )
 
-    class OrderFilter(state: Int = 0) : UriPartFilter(
-        "Order By",
-        arrayOf(
-            Pair("Views", "view"),
-            Pair("Updated", "updated"),
-        ),
-        state,
-    )
+    class OrderFilter(state: Int = 0) :
+        UriPartFilter(
+            "Order By",
+            arrayOf(
+                Pair("Views", "view"),
+                Pair("Updated", "updated"),
+            ),
+            state,
+        )
 
     open class UriPartFilter(
         displayName: String,
         private val vals: Array<Pair<String, String>>,
         state: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
 

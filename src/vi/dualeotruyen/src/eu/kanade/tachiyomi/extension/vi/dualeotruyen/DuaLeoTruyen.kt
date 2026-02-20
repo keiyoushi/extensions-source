@@ -24,7 +24,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class DuaLeoTruyen : ParsedHttpSource(), ConfigurableSource {
+class DuaLeoTruyen :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Dưa Leo Truyện"
 
@@ -193,10 +195,11 @@ class DuaLeoTruyen : ParsedHttpSource(), ConfigurableSource {
 
     private class Genre(val name: String, val path: String)
 
-    private class GenreFilter(val genre: List<Genre>) : Filter.Select<String>(
-        "Thể loại",
-        genre.map { it.name }.toTypedArray(),
-    )
+    private class GenreFilter(val genre: List<Genre>) :
+        Filter.Select<String>(
+            "Thể loại",
+            genre.map { it.name }.toTypedArray(),
+        )
 
     // copy([...document.querySelectorAll(".sub_menu .li_sub a")].map((e) => `Genre("${e.textContent.trim()}", "${new URL(e).pathname.replace("/", "")}"),`).join("\n"))
     // "Tất cả" and "Truyện full" are custom genres that are lumped in to make my life easier.
