@@ -3,7 +3,7 @@ ext {
     extClass = ".MangaBang"
     themePkg = 'comiciviewer'
     baseUrl = "https://comics.manga-bang.com"
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
