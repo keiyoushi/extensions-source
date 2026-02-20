@@ -178,7 +178,8 @@ abstract class GigaViewer(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val referer = response.request.url.toString()
-        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
+        val aggregateId = document.selectFirst("script.js-valve")?.attr("data-giga_series")
+            ?: document.selectFirst(".js-readable-products-pagination")!!.attr("data-aggregate-id")
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val hideUnavailable = preferences.getBoolean(HIDE_UNAVAILABLE_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
