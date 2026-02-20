@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.drecomics
 
-import eu.kanade.tachiyomi.lib.clipstudioreader.ClipStudioReader
+import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

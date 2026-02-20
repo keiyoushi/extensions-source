@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.firecross
 
-import eu.kanade.tachiyomi.lib.clipstudioreader.ClipStudioReader
+import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
