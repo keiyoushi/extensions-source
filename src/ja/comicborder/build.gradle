@@ -1,0 +1,10 @@
+ext {
+    extName = 'Comic Border'
+    extClass = '.ComicBorder'
+    themePkg = 'gigaviewer'
+    baseUrl = 'https://comicborder.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
