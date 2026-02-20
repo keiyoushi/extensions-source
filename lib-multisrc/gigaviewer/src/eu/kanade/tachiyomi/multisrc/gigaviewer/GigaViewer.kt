@@ -1,384 +1,294 @@
 package eu.kanade.tachiyomi.multisrc.gigaviewer
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Rect
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Call
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import kotlin.math.floor
+import java.util.TimeZone
 
+// GigaViewer Sources: https://hatena.co.jp/solutions/gigaviewer
 abstract class GigaViewer(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val cdnUrl: String = "",
-    private val isPaginated: Boolean = false,
-) : ParsedHttpSource() {
-
-    override val supportsLatest = true
-
-    protected val dayOfWeek: String by lazy {
-        Calendar.getInstance()
+) : HttpSource(),
+    ConfigurableSource {
+    protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
+    protected open val dayTimeZone = TimeZone.getTimeZone("Asia/Tokyo")!!
+    protected open val preferences: SharedPreferences by getPreferencesLazy()
+    protected open val dayOfWeek: String by lazy {
+        Calendar.getInstance(dayTimeZone)
             .getDisplayName(Calendar.DAY_OF_WEEK, Calendar.LONG, Locale.US)!!
             .lowercase(Locale.US)
     }
 
-    protected open val publisher: String = ""
+    override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(ImageInterceptor())
+        .addInterceptor {
+            // Search returns 404 when no results are found.
+            val request = it.request()
+            val response = it.proceed(request)
+            if (response.code == 404 && request.url.pathSegments.contains(searchPathSegment)) {
+                response.close()
+                return@addInterceptor response.newBuilder()
+                    .code(200)
+                    .message("OK")
+                    .body("".toResponseBody("text/html".toMediaType()))
+                    .build()
+            }
+            response
+        }
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
 
-    private val json: Json by injectLazy()
-
+    // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", headers)
 
-    override fun popularMangaSelector(): String = "ul.series-list li a"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h2.series-list-title")!!.text()
-        thumbnail_url = element.selectFirst("div.series-list-thumb img")!!
-            .attr("data-src")
-        setUrlWithoutDomain(element.attr("href"))
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector).map(::popularMangaFromElement)
+        val hasNextPage = popularMangaNextPageSelector?.let { document.selectFirst(it) != null } ?: false
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
+    protected open val popularMangaSelector: String = "ul.series-list li a"
+    protected open val popularMangaNextPageSelector: String? = null
 
+    protected open fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2.series-list-title")!!.text()
+        thumbnail_url = element.selectFirst("div.series-list-thumb img")?.absUrl("data-src")
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
+
+    // Latest
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-    override fun latestUpdatesSelector(): String = "h2.series-list-date-week.$dayOfWeek + ul.series-list li a"
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(latestUpdatesSelector).map(::latestUpdatesFromElement)
+        val hasNextPage = latestUpdatesNextPageSelector?.let { document.selectFirst(it) != null } ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    protected open val latestUpdatesSelector: String = "h2.series-list-date-week.$dayOfWeek + ul.series-list li a"
+    protected open val latestUpdatesNextPageSelector: String? = null
 
-    override fun latestUpdatesNextPageSelector(): String? = null
+    protected open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    // The search returns 404 when there's no results.
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
-        .asObservableIgnoreCode(404)
-        .map(::searchMangaParse)
-
+    // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-
-            return GET(url.build(), headers)
+            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder().apply {
+                addQueryParameter("q", query)
+                if (page > 1) {
+                    addQueryParameter("page", page.toString())
+                }
+            }.build()
+            return GET(url, headers)
         }
 
-        val collectionSelected = (filters[0] as CollectionFilter).selected
-        val collectionPath = if (collectionSelected.path.isBlank()) "" else "/" + collectionSelected.path
-        return GET("$baseUrl/series$collectionPath", headers)
+        val path = filters.firstInstance<CollectionFilter>().selected.path
+        val url = "$baseUrl/series".toHttpUrl().newBuilder().apply {
+            if (path.isNotBlank()) {
+                addPathSegments(path)
+            }
+        }
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("search")) {
-            return super.searchMangaParse(response)
+        if (response.request.url.pathSegments.contains(searchPathSegment)) {
+            val document = response.asJsoup()
+            val mangas = document.select(searchMangaSelector).map(::searchMangaFromElement)
+            val hasNextPage = searchMangaNextPageSelector?.let { document.selectFirst(it) != null } ?: false
+            return MangasPage(mangas, hasNextPage)
         }
-
         return popularMangaParse(response)
     }
 
-    override fun searchMangaSelector() = "ul.search-series-list li, ul.series-list li"
+    protected open val searchMangaSelector = "ul.search-series-list li, ul.series-list li"
+    protected open val searchPathSegment = "search"
+    protected open val searchMangaNextPageSelector: String? = null
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+    protected open fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("div.title-box p.series-title")!!.text()
-        thumbnail_url = element.selectFirst("div.thmb-container a img")!!.attr("src")
-        setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.attr("href"))
+        thumbnail_url = element.selectFirst("div.thmb-container a img")?.absUrl("src")
+        setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.absUrl("href"))
     }
 
-    override fun searchMangaNextPageSelector(): String? = null
+    // Details
+    protected open val mangaDetailsInfoSelector: String = "section.series-information div.series-header"
 
-    protected open fun mangaDetailsInfoSelector(): String = "section.series-information div.series-header"
-
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoElement = document.selectFirst(mangaDetailsInfoSelector())!!
-
-        title = infoElement.selectFirst("h1.series-header-title")!!.text()
-        author = infoElement.selectFirst("h2.series-header-author")!!.text()
-        artist = author
-        description = infoElement.selectFirst("p.series-header-description")!!.text()
-        thumbnail_url = infoElement.selectFirst("div.series-header-image-wrapper img")!!
-            .attr("data-src")
-    }
-
-    protected fun chapterListParseSinglePage(response: Response): List<SChapter> {
+    override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
-
-        val newHeaders = headers.newBuilder()
-            .set("Referer", response.request.url.toString())
-            .build()
-
-        var readMoreEndpoint = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("api")
-            .addPathSegment("viewer")
-            .addPathSegment("readable_products")
-            .addQueryParameter("aggregate_id", aggregateId)
-            .addQueryParameter("number_since", Int.MAX_VALUE.toString())
-            .addQueryParameter("number_until", "0")
-            .addQueryParameter("read_more_num", "150")
-            .addQueryParameter("type", "episode")
-            .build()
-            .toString()
-
-        val chapters = mutableListOf<SChapter>()
-
-        var request = GET(readMoreEndpoint, newHeaders)
-        var result = client.newCall(request).execute()
-
-        while (result.code != 404) {
-            val jsonResult = json.parseToJsonElement(result.body.string()).jsonObject
-            readMoreEndpoint = jsonResult["nextUrl"]!!.jsonPrimitive.content
-            val tempDocument = Jsoup.parse(
-                jsonResult["html"]!!.jsonPrimitive.content,
-                response.request.url.toString(),
-            )
-
-            tempDocument
-                .select("ul.series-episode-list " + chapterListSelector())
-                .mapTo(chapters) { element -> chapterFromElement(element) }
-
-            request = GET(readMoreEndpoint, newHeaders)
-            result = client.newCall(request).execute()
+        return SManga.create().apply {
+            val infoElement = document.selectFirst(mangaDetailsInfoSelector)!!
+            title = infoElement.selectFirst("h1.series-header-title")!!.text()
+            author = infoElement.selectFirst("h2.series-header-author")?.text()
+            description = infoElement.selectFirst("p.series-header-description")?.text()
+            thumbnail_url = infoElement.selectFirst("div.series-header-image-wrapper img")?.absUrl("data-src")
         }
-
-        result.close()
-
-        return chapters
     }
 
-    protected fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int): Response {
-        val headers = headers.newBuilder()
+    // Chapters
+    protected open fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int, type: String = "episode"): Response {
+        val newHeaders = super.headersBuilder()
             .set("Referer", referer)
             .build()
 
-        val apiUrl = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("api")
-            .addPathSegment("viewer")
-            .addPathSegment("pagination_readable_products")
-            .addQueryParameter("type", "episode")
+        val apiUrl = "$baseUrl/api/viewer/pagination_readable_products".toHttpUrl().newBuilder()
+            .addQueryParameter("type", type)
             .addQueryParameter("aggregate_id", aggregateId)
             .addQueryParameter("sort_order", "desc")
             .addQueryParameter("offset", offset.toString())
             .build()
-            .toString()
 
-        val request = GET(apiUrl, headers)
-        return client.newCall(request).execute()
+        val request = GET(apiUrl, newHeaders)
+        val response = client.newCall(request).execute()
+        return response
     }
 
-    protected fun chapterListParsePaginated(response: Response): List<SChapter> {
+    override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val referer = response.request.url.toString()
-        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
-
+        val aggregateId = document.selectFirst("script.js-valve")?.attr("data-giga_series")
+            ?: document.selectFirst(".js-readable-products-pagination")!!.attr("data-aggregate-id")
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val hideUnavailable = preferences.getBoolean(HIDE_UNAVAILABLE_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
 
-        var offset = 0
+        fun fetchChapters(type: String) {
+            var offset = 0
+            val isVolume = type == "volume"
 
-        // repeat until the offset is too large to return any chapters, resulting in an empty list
-        while (true) {
-            // make request
-            val result = paginatedChaptersRequest(referer, aggregateId, offset)
-            val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
-            if (resultData.isEmpty()) {
-                break
+            // repeat until the offset is too large to return any chapters, resulting in an empty list
+            while (true) {
+                // make request
+                val result = paginatedChaptersRequest(referer, aggregateId, offset, type)
+                val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
+
+                if (resultData.isEmpty()) break
+
+                resultData.asSequence().filter {
+                    when (it.status?.label) {
+                        "unpublished" -> !hideUnavailable
+                        "is_rentable", "is_purchasable", "is_rentable_and_subscribable" -> !hideLocked
+                        else -> true
+                    }
+                }.map {
+                    it.toSChapter(dateFormat, isVolume)
+                }.toCollection(chapters)
+
+                // increase offset
+                offset += resultData.size
             }
-            resultData.mapTo(chapters) { element ->
-                element.toSChapter(chapterListMode, publisher)
-            }
-            // increase offset
-            offset += resultData.size
         }
+
+        // Fetch both types
+        fetchChapters("episode")
+        fetchChapters("volume")
 
         return chapters
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = if (isPaginated) {
-        chapterListParsePaginated(response)
-    } else {
-        chapterListParseSinglePage(response)
-    }
-
-    override fun chapterListSelector() = "li.episode"
-
-    protected open val chapterListMode = CHAPTER_LIST_PAID
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val info = element.selectFirst("a.series-episode-list-container") ?: element
-        val mangaUrl = element.ownerDocument()!!.location()
-
-        return SChapter.create().apply {
-            name = info.selectFirst("h4.series-episode-list-title")!!.text()
-            if (chapterListMode == CHAPTER_LIST_PAID && element.selectFirst("span.series-episode-list-is-free") == null) {
-                name = YEN_BANKNOTE + name
-            } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.hasClass("private")) {
-                name = LOCK + name
-            }
-            date_upload = DATE_PARSER_SIMPLE.tryParse(info.selectFirst("span.series-episode-list-date")?.text().orEmpty())
-            scanlator = publisher
-            setUrlWithoutDomain(if (info.tagName() == "a") info.attr("href") else mangaUrl)
+    // Pages
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val episode = document.selectFirst("script#episode-json")!!.attr("data-value")
+        val results = episode.parseAs<GigaViewerEpisodeDto>()
+        val page = results.readableProduct.pageStructure
+        if (page == null || page.pages.isEmpty()) {
+            throw Exception("This chapter is either unavailable or must be purchased.")
         }
-    }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val episode = document.selectFirst("script#episode-json")!!
-            .attr("data-value")
-            .let {
-                try {
-                    json.decodeFromString<GigaViewerEpisodeDto>(it)
-                } catch (e: SerializationException) {
-                    throw Exception("このチャプターは非公開です\nChapter is not available!")
-                }
-            }
+        val isScrambled = page.choJuGiga == "baku"
 
-        val isScrambled = episode.readableProduct.pageStructure.choJuGiga == "baku"
-
-        return episode.readableProduct.pageStructure.pages
-            .filter { it.type == "main" }
+        return page.pages
+            .filter { it.type == "main" && !it.src.isNullOrBlank() }
             .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrl().newBuilder().apply {
-                    addQueryParameter("width", page.width.toString())
-                    addQueryParameter("height", page.height.toString())
+                val imageUrl = page.src!!.toHttpUrl().newBuilder().apply {
                     if (isScrambled) {
-                        addQueryParameter("baku", "true")
+                        fragment("scramble")
                     }
-                }.toString()
+                }.build().toString()
                 Page(i, document.location(), imageUrl)
             }
     }
 
-    override fun imageUrlParse(document: Document) = ""
-
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
+        val newHeaders = super.headersBuilder()
             .set("Referer", page.url)
             .build()
-
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    protected data class Collection(val name: String, val path: String) {
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // Filters
+    override fun getFilterList(): FilterList {
+        val collections = getCollections()
+        return if (collections.isNotEmpty()) {
+            FilterList(CollectionFilter(collections))
+        } else {
+            FilterList()
+        }
+    }
+
+    protected open class Collection(val name: String, val path: String) {
         override fun toString(): String = name
     }
 
-    private class CollectionFilter(val collections: List<Collection>) :
-        Filter.Select<Collection>(
-            "コレクション",
-            collections.toTypedArray(),
-        ) {
-        val selected: Collection
+    protected open class CollectionFilter(val collections: List<Collection>) : Filter.Select<Collection>("コレクション", collections.toTypedArray()) {
+        open val selected: Collection
             get() = collections[state]
     }
 
-    override fun getFilterList(): FilterList = FilterList(CollectionFilter(getCollections()))
-
     protected open fun getCollections(): List<Collection> = emptyList()
 
-    protected open fun imageIntercept(chain: Interceptor.Chain): Response {
-        var request = chain.request()
+    // Preferences
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Paid Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
 
-        if (!request.url.toString().startsWith(cdnUrl) || request.url.queryParameter("baku") != "true") {
-            return chain.proceed(request)
-        }
-
-        val width = request.url.queryParameter("width")!!.toInt()
-        val height = request.url.queryParameter("height")!!.toInt()
-
-        val newUrl = request.url.newBuilder()
-            .removeAllQueryParameters("width")
-            .removeAllQueryParameters("height")
-            .removeAllQueryParameters("baku")
-            .build()
-        request = request.newBuilder().url(newUrl).build()
-
-        val response = chain.proceed(request)
-        val image = decodeImage(response.body.byteStream(), width, height)
-        val body = image.toResponseBody(jpegMediaType)
-
-        response.close()
-
-        return response.newBuilder().body(body).build()
-    }
-
-    protected open fun decodeImage(image: InputStream, width: Int, height: Int): ByteArray {
-        val input = BitmapFactory.decodeStream(image)
-        val cWidth = (floor(width.toDouble() / (DIVIDE_NUM * MULTIPLE)) * MULTIPLE).toInt()
-        val cHeight = (floor(height.toDouble() / (DIVIDE_NUM * MULTIPLE)) * MULTIPLE).toInt()
-
-        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-
-        val imageRect = Rect(0, 0, width, height)
-        canvas.drawBitmap(input, imageRect, imageRect, null)
-
-        for (e in 0 until DIVIDE_NUM * DIVIDE_NUM) {
-            val x = e % DIVIDE_NUM * cWidth
-            val y = (floor(e.toFloat() / DIVIDE_NUM) * cHeight).toInt()
-            val cellSrc = Rect(x, y, x + cWidth, y + cHeight)
-
-            val row = floor(e.toFloat() / DIVIDE_NUM).toInt()
-            val dstE = e % DIVIDE_NUM * DIVIDE_NUM + row
-            val dstX = dstE % DIVIDE_NUM * cWidth
-            val dstY = (floor(dstE.toFloat() / DIVIDE_NUM) * cHeight).toInt()
-            val cellDst = Rect(dstX, dstY, dstX + cWidth, dstY + cHeight)
-            canvas.drawBitmap(input, cellSrc, cellDst, null)
-        }
-
-        val output = ByteArrayOutputStream()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        return output.toByteArray()
-    }
-
-    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> = asObservable().doOnNext { response ->
-        if (!response.isSuccessful && response.code != code) {
-            response.close()
-            throw Exception("HTTP error ${response.code}")
-        }
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_UNAVAILABLE_PREF_KEY
+            title = "Hide Unavailable Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     companion object {
-        private const val DIVIDE_NUM = 4
-        private const val MULTIPLE = 8
-        private val jpegMediaType = "image/jpeg".toMediaType()
-
-        const val CHAPTER_LIST_PAID = 0
-        const val CHAPTER_LIST_LOCKED = 1
-
-        const val YEN_BANKNOTE = "💴 "
-        const val LOCK = "🔒 "
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val HIDE_UNAVAILABLE_PREF_KEY = "hide_unavailable"
     }
 }

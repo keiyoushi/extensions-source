@@ -5,8 +5,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.firstInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
@@ -15,50 +15,38 @@ class Ichicomi :
         "Ichicomi",
         "https://ichicomi.com",
         "ja",
-        "https://cdn-img.ichicomi.com",
-        isPaginated = true,
     ) {
     override val supportsLatest = false
 
-    override val publisher: String = "一迅社"
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(::imageIntercept)
-        .build()
-
-    override fun popularMangaSelector(): String = "div[class^=Series_series__]"
+    override val popularMangaSelector: String = "div[class^=Series_series__]"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("href"))
+        setUrlWithoutDomain(link.absUrl("href"))
         title = link.selectFirst("h4[class^=Series_title__]")!!.text()
-        thumbnail_url = link.selectFirst("img[class^=Series_thumbnail__]")?.attr("src")
+        thumbnail_url = link.selectFirst("img[class^=Series_thumbnail__]")?.absUrl("src")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
-            return GET(url.build(), headers)
+                .build()
+            return GET(url, headers)
         }
 
-        val filter = filters.firstOrNull() as? CollectionFilter
-        if (filter != null && filter.state != 0) {
-            val path = filter.getPath()
-            if (path.isNotEmpty()) {
-                return GET("$baseUrl/$path", headers)
-            }
-        }
-        return popularMangaRequest(page)
+        val filter = filters.firstInstance<CollectionFilter>()
+        val url = "$baseUrl/${filter.getPath()}"
+        return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String = "li[class^=SearchResultItem_li__]"
+    override val searchMangaSelector: String = "li[class^=SearchResultItem_li__]"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("href"))
+        setUrlWithoutDomain(link.absUrl("href"))
         title = element.selectFirst("p[class^=SearchResultItem_series_title__]")!!.text()
-        thumbnail_url = link.selectFirst("img")?.attr("src")
+        thumbnail_url = link.selectFirst("img")?.absUrl("src")
     }
 
     private class CollectionFilter(filters: List<Pair<String, String>>) : Filter.Select<String>("フィルター", filters.map { it.first }.toTypedArray()) {

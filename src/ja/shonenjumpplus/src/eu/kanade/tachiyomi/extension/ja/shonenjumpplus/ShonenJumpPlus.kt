@@ -1,22 +1,14 @@
 package eu.kanade.tachiyomi.extension.ja.shonenjumpplus
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import okhttp3.OkHttpClient
 
 class ShonenJumpPlus :
     GigaViewer(
         "Shonen Jump+",
         "https://shonenjumpplus.com",
         "ja",
-        "https://cdn-ak-img.shonenjumpplus.com",
-        isPaginated = true,
     ) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::imageIntercept)
-        .build()
-
-    override val publisher: String = "集英社"
+    override val searchMangaNextPageSelector = "a.pager-next"
 
     override fun getCollections(): List<Collection> = listOf(
         Collection("ジャンプ＋連載一覧", ""),
