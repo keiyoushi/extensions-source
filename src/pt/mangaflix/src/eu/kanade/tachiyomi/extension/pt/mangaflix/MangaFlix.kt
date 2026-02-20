@@ -134,6 +134,8 @@ class MangaFlix : HttpSource() {
     }
 
     // =========================== Manga Details ============================
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("/")
         return GET("$apiUrl/mangas/$id", headers)
@@ -159,9 +161,11 @@ class MangaFlix : HttpSource() {
         val result = response.parseAs<MangaDetailsResponseDto>()
         return result.data.chapters.map { chapter ->
             SChapter.create().apply {
-                name = "Capítulo ${chapter.number}"
+                chapter_number = chapter.number.toFloatOrNull() ?: 0F
+                name = chapter.name?.ifBlank { null } ?: "Capítulo ${chapter.number}"
                 url = "/br/manga/${chapter._id}"
                 date_upload = chapter.iso_date?.let { dateFormat.tryParse(it) } ?: 0L
+                scanlator = chapter.owners.joinToString(separator = ",", transform = { it.name })
             }
         }
     }
@@ -191,7 +195,7 @@ class MangaFlix : HttpSource() {
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
+            timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
         }
     }
 }
