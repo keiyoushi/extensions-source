@@ -159,7 +159,7 @@ class MangaCloud : HttpSource() {
             filters.addAll(
                 listOf(
                     Filter.Separator(),
-                    Filter.Header("Press 'refresh' to fetch tags"),
+                    Filter.Header("Press 'reset' to fetch tags"),
                 ),
             )
         } else {
