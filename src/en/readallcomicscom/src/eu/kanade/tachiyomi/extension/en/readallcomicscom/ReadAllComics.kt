@@ -19,6 +19,7 @@ import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class ReadAllComics : ParsedHttpSource() {
 
@@ -127,10 +128,9 @@ class ReadAllComics : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        val elementText = element.text()
-        name = elementText
+        name = element.text()
         // can only get the year from chapter title
-        val year = elementText.substring(elementText.lastIndexOf('(') + 1, elementText.lastIndexOf(')'))
+        val year = name.substringAfterLast('(').substringBefore(')')
         date_upload = dateFormat.tryParse("$year-1-1")
     }
 
@@ -150,6 +150,6 @@ class ReadAllComics : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     companion object {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
     }
 }
