@@ -158,13 +158,13 @@ abstract class GigaViewer(
     }
 
     // Chapters
-    protected open fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int): Response {
+    protected open fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int, type: String = "episode"): Response {
         val newHeaders = super.headersBuilder()
             .set("Referer", referer)
             .build()
 
         val apiUrl = "$baseUrl/api/viewer/pagination_readable_products".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "episode")
+            .addQueryParameter("type", type)
             .addQueryParameter("aggregate_id", aggregateId)
             .addQueryParameter("sort_order", "desc")
             .addQueryParameter("offset", offset.toString())
@@ -183,31 +183,36 @@ abstract class GigaViewer(
         val hideUnavailable = preferences.getBoolean(HIDE_UNAVAILABLE_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
 
-        var offset = 0
+        fun fetchChapters(type: String) {
+            var offset = 0
+            val isVolume = type == "volume"
 
-        // repeat until the offset is too large to return any chapters, resulting in an empty list
-        while (true) {
-            // make request
-            val result = paginatedChaptersRequest(referer, aggregateId, offset)
-            val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
+            // repeat until the offset is too large to return any chapters, resulting in an empty list
+            while (true) {
+                // make request
+                val result = paginatedChaptersRequest(referer, aggregateId, offset, type)
+                val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
 
-            if (resultData.isEmpty()) {
-                break
+                if (resultData.isEmpty()) break
+
+                resultData.asSequence().filter {
+                    when (it.status?.label) {
+                        "unpublished" -> !hideUnavailable
+                        "is_rentable", "is_purchasable", "is_rentable_and_subscribable" -> !hideLocked
+                        else -> true
+                    }
+                }.map {
+                    it.toSChapter(dateFormat, isVolume)
+                }.toCollection(chapters)
+
+                // increase offset
+                offset += resultData.size
             }
-
-            resultData.asSequence().filter {
-                when (it.status?.label) {
-                    "unpublished" -> !hideUnavailable
-                    "is_rentable", "is_purchasable", "is_rentable_and_subscribable" -> !hideLocked
-                    else -> true
-                }
-            }.map {
-                it.toSChapter(dateFormat)
-            }.toCollection(chapters)
-
-            // increase offset
-            offset += resultData.size
         }
+
+        // Fetch both types
+        fetchChapters("episode")
+        fetchChapters("volume")
 
         return chapters
     }

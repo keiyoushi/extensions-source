@@ -37,15 +37,16 @@ class GigaViewerPaginationReadableProduct(
     val status: GigaViewerPaginationReadableProductStatus?,
     private val title: String,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(dateFormat: SimpleDateFormat, isVolume: Boolean = false) = SChapter.create().apply {
+        val volPrefix = if (isVolume) "(Volume) " else ""
         val prefix = when (status?.label) {
             "unpublished" -> "🔒 "
             "is_rentable", "is_purchasable", "is_rentable_and_subscribable" -> "💴 "
             else -> ""
         }
-        name = prefix + title
+        name = prefix + volPrefix + title
         date_upload = dateFormat.tryParse(displayOpenAt)
-        url = "/episode/$readableProductId"
+        url = if (isVolume) "/volume/$readableProductId" else "/episode/$readableProductId"
     }
 }
 
