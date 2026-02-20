@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.docomo
 
-import eu.kanade.tachiyomi.lib.publus.Publus.Decoder
-import eu.kanade.tachiyomi.lib.publus.Publus.PublusInterceptor
-import eu.kanade.tachiyomi.lib.publus.Publus.generatePages
-import eu.kanade.tachiyomi.lib.publus.PublusPage
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +9,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.publus.Publus.Decoder
+import keiyoushi.lib.publus.Publus.PublusInterceptor
+import keiyoushi.lib.publus.Publus.generatePages
+import keiyoushi.lib.publus.PublusPage
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody

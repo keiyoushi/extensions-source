@@ -7,10 +7,6 @@ import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.MainPage
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -21,6 +17,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json

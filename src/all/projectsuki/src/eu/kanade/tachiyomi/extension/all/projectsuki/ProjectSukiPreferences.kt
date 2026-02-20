@@ -5,7 +5,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
 import java.util.Locale
 
 /**

@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.mangaplus
 
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

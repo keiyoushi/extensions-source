@@ -23,11 +23,6 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.PublusConfiguration
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.PublusPageConfig
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SingleDto
-import eu.kanade.tachiyomi.lib.publus.Publus.Decoder
-import eu.kanade.tachiyomi.lib.publus.Publus.PublusInterceptor
-import eu.kanade.tachiyomi.lib.publus.Publus.generatePages
-import eu.kanade.tachiyomi.lib.publus.PublusFragment
-import eu.kanade.tachiyomi.lib.publus.PublusPage
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
@@ -39,6 +34,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.publus.Publus.Decoder
+import keiyoushi.lib.publus.Publus.PublusInterceptor
+import keiyoushi.lib.publus.Publus.generatePages
+import keiyoushi.lib.publus.PublusFragment
+import keiyoushi.lib.publus.PublusPage
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineDispatcher
