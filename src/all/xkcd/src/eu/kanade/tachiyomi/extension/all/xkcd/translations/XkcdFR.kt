@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.xkcd.translations
 
 import eu.kanade.tachiyomi.extension.all.xkcd.Xkcd
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import okhttp3.Response
 
 class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {

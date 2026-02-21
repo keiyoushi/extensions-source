@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.ja.gaugaumonsterplus
 
-import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
-import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
+import keiyoushi.lib.speedbinb.SpeedBinbReader
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request

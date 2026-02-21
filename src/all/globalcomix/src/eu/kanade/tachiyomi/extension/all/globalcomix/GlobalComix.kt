@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangaDataDto.Companion.
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangasDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.UnknownEntity
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -21,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json

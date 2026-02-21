@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mmlook
 
-import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.unpacker.Unpacker
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Request

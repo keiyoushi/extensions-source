@@ -6,7 +6,7 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
-import eu.kanade.tachiyomi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 object YellowNotePreferences {

@@ -2,9 +2,6 @@ package eu.kanade.tachiyomi.extension.all.webtoons
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -16,6 +13,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs

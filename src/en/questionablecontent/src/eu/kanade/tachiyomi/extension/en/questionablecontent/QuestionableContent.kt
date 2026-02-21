@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.en.questionablecontent
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.lib.textinterceptor.TextInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
 import okhttp3.Request

@@ -3,11 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.sakuramangas
 import android.util.Base64
 import android.util.Log
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -20,6 +15,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody

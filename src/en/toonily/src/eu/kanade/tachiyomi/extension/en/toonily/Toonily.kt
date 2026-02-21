@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.toonily
 
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response

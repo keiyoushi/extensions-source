@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.all.pornpics
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
-import eu.kanade.tachiyomi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl
 
 object PornPicsPreferences {
 
