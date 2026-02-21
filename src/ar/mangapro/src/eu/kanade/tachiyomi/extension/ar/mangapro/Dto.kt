@@ -1,0 +1,108 @@
+package eu.kanade.tachiyomi.extension.ar.mangapro
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+class Data<T>(
+    val data: T,
+)
+
+@Serializable
+class BrowseManga(
+    val id: Int,
+    val title: String,
+    val slug: String,
+    val type: String,
+    val progress: String? = null,
+    val metadata: MetaData,
+    val coverImage: String? = null,
+    val coverImageApp: CoverImage? = null,
+) {
+    @Serializable
+    class MetaData(
+        val genres: Set<String> = emptySet(),
+    )
+
+    @Serializable
+    class CoverImage(
+        val desktop: String? = null,
+    )
+}
+
+@Serializable
+class Manga(
+    val id: Int,
+    val title: String,
+    val slug: String,
+    val type: String,
+    val description: String? = null,
+    val progress: String? = null,
+    val metadata: MetaData,
+) {
+    @Serializable
+    class MetaData(
+        val originalTitle: String? = null,
+        val altTitles: List<String> = emptyList(),
+        val author: String? = null,
+        val artist: String? = null,
+        val year: String? = null,
+        val genres: List<String> = emptyList(),
+        val origin: String? = null,
+        val coverImage: String? = null,
+    )
+}
+
+@Serializable
+class ChapterList(
+    val id: Int,
+    val slug: String,
+    val type: String,
+    val chapters: List<Chapter>,
+) {
+    @Serializable
+    class Chapter(
+        val id: Int,
+        @SerialName("chapter_number")
+        val number: String,
+        val language: String,
+        val title: String? = null,
+        @SerialName("coins_required")
+        val coins: Int? = null,
+        @SerialName("uploader_nickname")
+        val uploader: String? = null,
+        @SerialName("created_at")
+        val createdAt: String? = null,
+        val metadata: MetaData,
+    ) {
+        @Serializable
+        class MetaData(
+            val driveFileId: String? = null,
+        )
+    }
+}
+
+@Serializable
+class ChapterUrl(
+    val url: String,
+    val driveFileId: String? = null,
+)
+
+@Serializable
+class MappedImage(
+    val mode: String,
+    val order: List<Int>,
+    val pieces: List<String>,
+    val dim: List<Int>,
+)
+
+@Serializable
+class Url(
+    val url: String,
+)
+
+@Serializable
+class Token(
+    val token: String,
+    val expires: Long,
+)
