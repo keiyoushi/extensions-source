@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -43,14 +44,14 @@ class Hentara : HttpSource() {
     // ===============================
     // Popular
     // ===============================
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 1 }))
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList().apply { firstInstance<SortFilter>().state = 1 })
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // ===============================
     // Latest
     // ===============================
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 0 }))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList().apply { firstInstance<SortFilter>().state = 0 })
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -58,11 +59,10 @@ class Hentara : HttpSource() {
     // Search
     // ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val sortIdx = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
-        val genreIdx = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
+        val sortIdx = filters.firstInstance<SortFilter>().state
+        val genreIdx = filters.firstInstance<GenreFilter>().state
 
         val url = Api.index().toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
             .addQueryParameter("query", query)
             .addQueryParameter("sort", sortIdx.toString())
             .addQueryParameter("genre", genreIdx.toString())
@@ -77,7 +77,6 @@ class Hentara : HttpSource() {
         val query = url.queryParameter("query")
         val genreIdx = url.queryParameter("genre")?.toIntOrNull() ?: 0
         val sortIdx = url.queryParameter("sort")?.toIntOrNull() ?: 0
-        val page = url.queryParameter("page")?.toIntOrNull() ?: 1
 
         val genre = GENRES.getOrNull(genreIdx) ?: "Any"
 
@@ -95,29 +94,16 @@ class Hentara : HttpSource() {
                     else -> filtered
                 }
             }
+            .map { it.toSManga() }
             .toList()
 
-        return parseMangasPage(mangas, page)
+        return MangasPage(mangas, false)
     }
 
     override fun getFilterList(): FilterList = FilterList(
         SortFilter(),
         GenreFilter(),
     )
-
-    private fun parseMangasPage(mangas: List<HentaraComicDto>, page: Int): MangasPage {
-        val fromIndex = (page - 1) * PAGE_SIZE
-        val toIndex = minOf(fromIndex + PAGE_SIZE, mangas.size)
-
-        if (fromIndex >= mangas.size) {
-            return MangasPage(emptyList(), false)
-        }
-
-        val pageMangas = mangas.subList(fromIndex, toIndex).map { it.toSManga() }
-        val hasNextPage = toIndex < mangas.size
-
-        return MangasPage(pageMangas, hasNextPage)
-    }
 
     // ===============================
     // Filters
@@ -208,8 +194,6 @@ class Hentara : HttpSource() {
     }
 
     companion object {
-        private const val PAGE_SIZE = 30
-
         private val GENRES = arrayOf(
             "Any", "Action", "BL", "Cheating", "Detective", "Drama", "Harem",
             "In-Law", "MILF", "Married", "Office", "Romance", "Spin-Off",
