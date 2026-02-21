@@ -1,6 +1,5 @@
-package eu.kanade.tachiyomi.extension.en.hentara.dto
+package eu.kanade.tachiyomi.extension.en.hentara
 
-import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -16,14 +15,7 @@ data class HentaraComicDto(
     val view_count: Int = 0,
     val latest_episode_date: String? = null,
     val genres: List<HentaraGenreDto> = emptyList(),
-) {
-    fun toSManga() = SManga.create().apply {
-        url = "/manhwa/$slug"
-        title = this@HentaraComicDto.title
-        thumbnail_url = this@HentaraComicDto.thumbnail_url
-        genre = genres.joinToString { it.name }
-    }
-}
+)
 
 @Serializable
 data class HentaraGenreDto(
@@ -43,15 +35,7 @@ data class HentaraComicFullDto(
     val description: String,
     val thumbnail_url: String,
     val genres: List<HentaraGenreDto>,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = "/manhwa/$slug"
-        title = this@HentaraComicFullDto.title
-        thumbnail_url = this@HentaraComicFullDto.thumbnail_url
-        description = this@HentaraComicFullDto.description
-        genre = genres.joinToString { it.name }
-    }
-}
+)
 
 @Serializable
 data class HentaraEpisodeShortDto(

@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentara
 
-import eu.kanade.tachiyomi.extension.en.hentara.dto.HentaraComicDto
-import eu.kanade.tachiyomi.extension.en.hentara.dto.HentaraEpisodeDto
-import eu.kanade.tachiyomi.extension.en.hentara.dto.HentaraIndexDto
-import eu.kanade.tachiyomi.extension.en.hentara.dto.HentaraMangaDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -29,7 +25,13 @@ class Hentara : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    private val apiUrl = "https://cdn.hentara.com/data"
+    private object Api {
+        const val BASE = "https://cdn.hentara.com/data"
+
+        fun index() = "$BASE/index.json"
+        fun comic(slug: String) = "$BASE/comics/$slug.json"
+        fun episode(slug: String, ep: Int) = "$BASE/episodes/$slug/$ep.json"
+    }
 
     override val client = network.client.newBuilder()
         .rateLimit(2)
@@ -59,7 +61,7 @@ class Hentara : HttpSource() {
         val sortIdx = filters.filterIsInstance<SortFilter>().firstOrNull()?.state ?: 0
         val genreIdx = filters.filterIsInstance<GenreFilter>().firstOrNull()?.state ?: 0
 
-        val url = "$apiUrl/index.json".toHttpUrl().newBuilder()
+        val url = Api.index().toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("query", query)
             .addQueryParameter("sort", sortIdx.toString())
@@ -104,9 +106,8 @@ class Hentara : HttpSource() {
     )
 
     private fun parseMangasPage(mangas: List<HentaraComicDto>, page: Int): MangasPage {
-        val itemsPerPage = 30
-        val fromIndex = (page - 1) * itemsPerPage
-        val toIndex = minOf(fromIndex + itemsPerPage, mangas.size)
+        val fromIndex = (page - 1) * PAGE_SIZE
+        val toIndex = minOf(fromIndex + PAGE_SIZE, mangas.size)
 
         if (fromIndex >= mangas.size) {
             return MangasPage(emptyList(), false)
@@ -134,7 +135,7 @@ class Hentara : HttpSource() {
     // ===============================
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/comics/$slug.json", headers)
+        return GET(Api.comic(slug), headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<HentaraMangaDto>().comic.toSManga()
@@ -151,7 +152,7 @@ class Hentara : HttpSource() {
         return data.episodes.map {
             SChapter.create().apply {
                 url = "/manhwa/$slug/chapter-${it.episode_number}"
-                name = "Chapter ${it.episode_number}${it.title.takeIf { t -> t.isNotBlank() }?.let { t -> " - $t" } ?: ""}"
+                name = it.chapterName()
                 chapter_number = it.episode_number.toFloat()
                 date_upload = dateFormat.tryParse(it.created_at.substringBefore("."))
             }
@@ -170,7 +171,7 @@ class Hentara : HttpSource() {
         val ep = pathSegments[2].substringAfter("chapter-").toIntOrNull()
             ?: throw IllegalArgumentException("Malformed chapter URL: ${chapter.url}")
 
-        return GET("$apiUrl/episodes/$slug/$ep.json", headers)
+        return GET(Api.episode(slug, ep), headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -186,15 +187,37 @@ class Hentara : HttpSource() {
     // ===============================
     // Helpers
     // ===============================
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
+    private fun HentaraEpisodeShortDto.chapterName() = buildString {
+        append("Chapter $episode_number")
+        if (title.isNotBlank()) append(" - $title")
+    }
+
+    private fun HentaraComicDto.toSManga(): SManga = SManga.create().apply {
+        url = "/manhwa/$slug"
+        title = this@toSManga.title
+        thumbnail_url = this@toSManga.thumbnail_url
+        genre = genres.joinToString { it.name }
+    }
+
+    private fun HentaraComicFullDto.toSManga(): SManga = SManga.create().apply {
+        url = "/manhwa/$slug"
+        title = this@toSManga.title
+        thumbnail_url = this@toSManga.thumbnail_url
+        description = this@toSManga.description
+        genre = genres.joinToString { it.name }
     }
 
     companion object {
+        private const val PAGE_SIZE = 30
+
         private val GENRES = arrayOf(
             "Any", "Action", "BL", "Cheating", "Detective", "Drama", "Harem",
             "In-Law", "MILF", "Married", "Office", "Romance", "Spin-Off",
             "Thriller", "University", "College", "Nerd",
         )
+
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 }
