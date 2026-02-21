@@ -163,7 +163,7 @@ class Honeytoon(
                     date_upload = dateFormat.tryParse(element.selectFirst(".comic-list__title-date")?.text())
                     setUrlWithoutDomain(
                         element.absUrl("href")?.takeIf { !isLocked }
-                            ?: (document.location() + "/$index#locked#"),
+                            ?: (document.location() + "/$index#locked"),
                     )
                 }
             }.reversed()
