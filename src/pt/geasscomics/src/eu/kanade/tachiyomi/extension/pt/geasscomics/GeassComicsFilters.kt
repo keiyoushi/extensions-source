@@ -3,72 +3,88 @@ package eu.kanade.tachiyomi.extension.pt.geasscomics
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters() = FilterList(
-    GenreList(getGenresList),
-    TagList(getTagsList),
+fun getFilters(
+    genres: List<Pair<String, String>> = emptyList(),
+    tags: List<Pair<String, String>> = emptyList(),
+    showNsfw: Boolean = false,
+): FilterList = FilterList(
+    listOf(
+        SortFilter(),
+        StatusFilter(),
+    ) + when {
+        !showNsfw -> listOf(Filter.Header("Não Mostrar conteúdo +18"))
+        else -> listOf(NsfwFilter())
+    } + listOf(
+        Filter.Separator(),
+    ) + when {
+        genres.isEmpty() && tags.isEmpty() -> listOf(Filter.Header("Clique em 'Redefinir' para carregar os filtros"))
+        genres.isEmpty() -> listOf(Filter.Header("Clique em 'Redefinir' para carregar os gêneros"))
+        else -> listOf(GenreFilter(genres))
+    } + when {
+        genres.isEmpty() && tags.isEmpty() -> emptyList()
+        tags.isEmpty() -> listOf(Filter.Header("Clique em 'Redefinir' para carregar as tags"))
+        else -> listOf(TagFilter(tags))
+    },
 )
 
-open class Tag(name: String) : Filter.CheckBox(name)
+class SortFilter :
+    Filter.Select<String>(
+        "Ordenar por",
+        SORT_OPTIONS.map { it.first }.toTypedArray(),
+    ) {
+    val selected: String get() = SORT_OPTIONS[state].second
 
-class GenreList(genres: List<Tag>) : Filter.Group<Tag>("Gêneros", genres)
+    val order: String
+        get() = when (state) {
+            3 -> "asc"
 
-class TagList(tags: List<Tag>) : Filter.Group<Tag>("Tags", tags)
+            // Title A-Z
+            else -> "desc"
+        }
 
-private val getGenresList = listOf(
-    Tag("Academia"),
-    Tag("Ação"),
-    Tag("ahegao"),
-    Tag("Animais"),
-    Tag("Apocalipse"),
-    Tag("Artes Maciais"),
-    Tag("Aventura"),
-    Tag("boquete"),
-    Tag("Campus"),
-    Tag("Comédia"),
-    Tag("creampie"),
-    Tag("Cultivação"),
-    Tag("Drama"),
-    Tag("Esportes"),
-    Tag("Fantasia"),
-    Tag("Ficção Científica"),
-    Tag("Garotas Magicas"),
-    Tag("grupal"),
-    Tag("gyaru"),
-    Tag("Harém"),
-    Tag("Histórico"),
-    Tag("Horror"),
-    Tag("Isekai"),
-    Tag("Loli"),
-    Tag("Magia"),
-    Tag("Masmorra"),
-    Tag("Milf"),
-    Tag("Mistério"),
-    Tag("Monstros"),
-    Tag("MURIM"),
-    Tag("Oriental"),
-    Tag("Peitões"),
-    Tag("Psicológico"),
-    Tag("Psychological"),
-    Tag("Regressão"),
-    Tag("Romance"),
-    Tag("Seinen"),
-    Tag("Shojo"),
-    Tag("Shonen"),
-    Tag("Sistema"),
-    Tag("Slice of Life"),
-    Tag("Supernatural"),
-    Tag("Terror"),
-    Tag("Vida Escolar"),
-    Tag("Vingança"),
-    Tag("Zumbi"),
-)
+    companion object {
+        private val SORT_OPTIONS = listOf(
+            "Mais Recentes" to "updatedAt",
+            "Mais Vistos" to "views",
+            "Melhor Avaliados" to "rating",
+            "Título (A-Z)" to "title",
+            "Qtd. de Capítulos" to "chapterCount",
+        )
+    }
+}
 
-private val getTagsList = listOf(
-    Tag("Doujin"),
-    Tag("Ecchi"),
-    Tag("Loli"),
-    Tag("Manga"),
-    Tag("Manhua"),
-    Tag("Manhwa"),
-    Tag("Sugestivo"),
-)
+class StatusFilter :
+    Filter.Select<String>(
+        "Status",
+        STATUS_OPTIONS.map { it.first }.toTypedArray(),
+    ) {
+    val selected: String? get() = STATUS_OPTIONS[state].second
+
+    companion object {
+        private val STATUS_OPTIONS = listOf(
+            "Todos" to null,
+            "Em Andamento" to "ongoing",
+            "Completo" to "completed",
+            "Hiato" to "hiatus",
+            "Cancelado" to "cancelled",
+        )
+    }
+}
+
+class NsfwFilter : Filter.TriState("Mostrar conteúdo +18", TriState.STATE_IGNORE)
+
+class GenreFilter(genres: List<Pair<String, String>>) :
+    Filter.Group<GenreCheckBox>(
+        "Gêneros",
+        genres.map { GenreCheckBox(it.first, it.second) },
+    )
+
+class GenreCheckBox(name: String, val id: String) : Filter.CheckBox(name, false)
+
+class TagFilter(tags: List<Pair<String, String>>) :
+    Filter.Group<TagCheckBox>(
+        "Tags",
+        tags.map { TagCheckBox(it.first, it.second) },
+    )
+
+class TagCheckBox(name: String, val id: String) : Filter.CheckBox(name, false)
