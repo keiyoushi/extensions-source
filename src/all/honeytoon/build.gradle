@@ -8,6 +8,6 @@ ext {
 apply from: "$rootDir/common.gradle"
 
 dependencies {
-    api(project(":lib:cookieinterceptor"))
-    api(project(":lib:i18n"))
+    implementation(project(":lib:cookieinterceptor"))
+    implementation(project(":lib:i18n"))
 }
