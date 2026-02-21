@@ -22,7 +22,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -94,10 +94,9 @@ class Honeytoon(
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val path = query.substringAfter(URL_SEARCH_PREFIX)
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegments(path)
+        val url = query.toHttpUrlOrNull()
+        if (url != null) {
+            val url = url.newBuilder()
                 .fragment("deeplink")
                 .build()
             return Observable.fromCallable {
@@ -134,11 +133,17 @@ class Honeytoon(
         val document = response.asJsoup()
         title = document.selectFirst("h1")!!.text()
 
-        author = document.selectFirst(".comic-book__story-art a")?.text()
+        author = document.select(".comic-book__story-art a")?.joinToString { it.text() }
         description = document.selectFirst(".comic-book__desc")?.text()
         genre = document.select(".comic-book-content a[href*=genre], .comic-tag").joinToString { it.text() }
+        status = when {
+            document.selectFirst(".comic-book-content .label__item--complete") != null -> SManga.COMPLETED
+            document.selectFirst(".comic-book-content .label__item--dayofpublication") != null -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
 
-        // Handling deeplink
+        // The manga page has really large cover images,
+        // so I'm prioritizing covers from the 'popular', 'latest' and 'search'.
         if (!fragment.isNullOrBlank()) {
             thumbnail_url = document.selectFirst(".comic-book-img img")?.absUrl("src")
             setUrlWithoutDomain(document.location())
@@ -246,6 +251,5 @@ class Honeytoon(
 
     companion object {
         private const val PREF_ADULT_KEY = "prefAdultKey"
-        const val URL_SEARCH_PREFIX = ":id"
     }
 }

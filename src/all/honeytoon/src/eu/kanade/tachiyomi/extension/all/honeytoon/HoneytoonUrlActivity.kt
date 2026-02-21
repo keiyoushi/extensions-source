@@ -12,10 +12,10 @@ class HoneytoonUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
 
-        if (pathSegments != null && pathSegments.size >= 2) {
+        if (pathSegments != null && pathSegments.size >= 3) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${getPath(pathSegments)}")
+                putExtra("query", intent?.data?.toString())
                 putExtra("filter", packageName)
             }
             try {
@@ -30,6 +30,4 @@ class HoneytoonUrlActivity : Activity() {
         finish()
         exitProcess(0)
     }
-
-    private fun getPath(pathSegments: MutableList<String>): String = "${Honeytoon.URL_SEARCH_PREFIX}${pathSegments[pathSegments.size - 2]}/${pathSegments[pathSegments.size - 1]}"
 }

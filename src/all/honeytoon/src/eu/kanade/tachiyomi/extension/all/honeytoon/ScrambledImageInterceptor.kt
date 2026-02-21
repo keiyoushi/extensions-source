@@ -7,7 +7,7 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import okio.Buffer
+import java.io.ByteArrayOutputStream
 
 class ScrambledImageInterceptor : Interceptor {
 
@@ -21,19 +21,15 @@ class ScrambledImageInterceptor : Interceptor {
 
         val xPartSizes = response.header("X-Part-Sizes") ?: return response
         val sizes = xPartSizes.split(",").map { it.trim().toInt() }
-        val bytes = response.body.bytes()
-        val bitmaps = decodeImages(bytes, sizes)
 
+        val bitmaps = decodeImages(response.body.bytes(), sizes)
         val image = mergeImages(bitmaps)
 
-        val buffer = Buffer()
-        image.compress(Bitmap.CompressFormat.WEBP, 100, buffer.outputStream())
-
-        val newBody = buffer.readByteString()
-            .toResponseBody("image/webp".toMediaType())
+        val outputStream = ByteArrayOutputStream()
+        image.compress(Bitmap.CompressFormat.WEBP, 100, outputStream)
 
         return response.newBuilder()
-            .body(newBody)
+            .body(outputStream.toByteArray().toResponseBody("image/webp".toMediaType()))
             .build()
     }
 
