@@ -9,7 +9,7 @@ import java.util.Locale
 class MilaSub :
     Madara(
         "MilaSub",
-        "https://www.milascan.com",
+        "https://www.millascan.com",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     ) {

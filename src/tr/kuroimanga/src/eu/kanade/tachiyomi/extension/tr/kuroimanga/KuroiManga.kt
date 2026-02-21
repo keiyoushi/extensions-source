@@ -11,7 +11,7 @@ import java.util.Locale
 class KuroiManga :
     Madara(
         "Kuroi Manga",
-        "https://www.kuroimanga.com",
+        "https://www.kuroimanga.top",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     ) {
