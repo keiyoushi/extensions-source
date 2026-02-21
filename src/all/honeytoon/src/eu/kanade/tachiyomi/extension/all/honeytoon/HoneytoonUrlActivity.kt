@@ -21,10 +21,10 @@ class HoneytoonUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("MadaraUrl", e.toString())
+                Log.e("HoneytoonUrlActivity", e.toString())
             }
         } else {
-            Log.e("MadaraUrl", "could not parse uri from intent $intent")
+            Log.e("HoneytoonUrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
