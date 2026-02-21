@@ -31,6 +31,5 @@ class HoneytoonUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun getPath(pathSegments: MutableList<String>): String =
-        "${Honeytoon.URL_SEARCH_PREFIX}${pathSegments[pathSegments.size - 2]}/${pathSegments[pathSegments.size - 1]}"
+    private fun getPath(pathSegments: MutableList<String>): String = "${Honeytoon.URL_SEARCH_PREFIX}${pathSegments[pathSegments.size - 2]}/${pathSegments[pathSegments.size - 1]}"
 }
