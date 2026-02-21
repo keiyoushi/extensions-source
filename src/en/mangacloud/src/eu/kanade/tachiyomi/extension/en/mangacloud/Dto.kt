@@ -74,11 +74,11 @@ class Manga(
     private val cover: Image,
 ) {
     fun toSManga(): SManga {
-        val app = Injekt.get<Application>().packageName
+        val app = runCatching { Injekt.get<Application>().packageName }.getOrNull()
         val groupTags = listOf("eu.kanade.tachiyomi.sy", "app.komikku")
-            .any { app.startsWith(it) }
+            .any { app?.startsWith(it) == true }
         val markdownDescription = listOf("app.mihon", "eu.kanade.tachiyomi.sy", "app.komikku")
-            .any { app.startsWith(it) }
+            .any { app?.startsWith(it) == true }
 
         return SManga.create().apply {
             url = id
