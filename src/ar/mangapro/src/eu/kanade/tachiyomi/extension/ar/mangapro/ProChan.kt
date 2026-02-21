@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
+import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -16,6 +20,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -23,13 +28,21 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
+import okio.buffer
+import okio.source
 import rx.Observable
 import tachiyomi.decoder.ImageDecoder
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.File
+import java.io.IOException
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.zip.ZipFile
 
 class ProChan : HttpSource() {
     override val name = "ProChan"
@@ -39,6 +52,7 @@ class ProChan : HttpSource() {
     override val versionId = 5
 
     override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::zipFileInterceptor)
         .addInterceptor(::scrambledImageInterceptor)
         .build()
 
@@ -218,6 +232,108 @@ class ProChan : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val chapterUrl = chapter.url.parseAs<ChapterUrl>()
+
+        return if (chapterUrl.driveFileId != null) {
+            Observable.just(zipPageList(chapterUrl.driveFileId))
+        } else {
+            super.fetchPageList(chapter)
+        }
+    }
+
+    private fun zipPageList(driveFileId: String): List<Page> {
+        val driveLink = "https://drive.google.com/uc".toHttpUrl().newBuilder()
+            .addQueryParameter("export", "download")
+            .addQueryParameter("id", driveFileId)
+            .build()
+
+        val context = Injekt.get<Application>()
+
+        val cacheDir = context.cacheDir
+            .resolve("source_$id")
+            .also { it.mkdirs() }
+        val zipFile = File(cacheDir, "$driveFileId.zip")
+
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context, "$name: Loading Chapter...\nMay take a few minutes!!", Toast.LENGTH_LONG).show()
+        }
+
+        client.newCall(GET(driveLink)).execute().let { response ->
+            if (response.header("Content-Type").orEmpty().contains("text/html")) {
+                val document = response.asJsoup()
+                val actionUrl = document.selectFirst("#download-form")!!.attr("action")
+                    .toHttpUrl().newBuilder().apply {
+                        document.select("#download-form input[type=hidden]").forEach {
+                            addQueryParameter(it.attr("name"), it.attr("value"))
+                        }
+                    }.build()
+
+                val headers = Headers.headersOf("Referer", response.request.url.toString())
+                client.newCall(GET(actionUrl, headers)).execute()
+            } else {
+                response
+            }
+        }.use { zipResponse ->
+            zipResponse.body.byteStream().use { input ->
+                zipFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+
+        val files = ZipFile(zipFile).use { file ->
+            file.entries().asSequence()
+                .map { entry -> entry.name }
+                .filterNot { it.endsWith(".xml") }
+                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
+                .toList()
+        }
+
+        return files.map {
+            val url = "http://${ZIP_FILE_HOST}/".toHttpUrl().newBuilder()
+                .addQueryParameter("path", zipFile.absolutePath)
+                .addQueryParameter("filename", it)
+                .build().toString()
+            Page(0, driveLink.toString(), url)
+        }
+    }
+
+    private fun zipFileInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.host != ZIP_FILE_HOST) return chain.proceed(request)
+
+        val path = request.url.queryParameter("path")!!
+        val filename = request.url.queryParameter("filename")!!
+        val zipFile = File(path)
+
+        if (!zipFile.exists()) throw IOException("File not found")
+
+        val zip = ZipFile(zipFile)
+        val entry = zip.getEntry(filename) ?: throw IOException("Entry not found")
+
+        val source = object : okio.ForwardingSource(
+            zip.getInputStream(entry).source(),
+        ) {
+            override fun close() {
+                super.close()
+                zip.close()
+            }
+        }
+
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(object : ResponseBody() {
+                override fun contentType() = "image/jpeg".toMediaType()
+                override fun contentLength() = entry.size
+                override fun source() = source.buffer()
+            })
+            .build()
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
@@ -380,3 +496,5 @@ private val IMAGES_REGEX = """self\.__next_f\.push\(.*images\\":(\[[^]]+])""".to
 private val MAP_IMAGES_REGEX = """self\.__next_f\.push\(.*maps\\":(\[.*]),\\"app""".toRegex()
 private const val MAPPED_IMAGE_HOST = "127.0.0.1"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
+private const val ZIP_FILE_HOST = "127.0.0.2"
