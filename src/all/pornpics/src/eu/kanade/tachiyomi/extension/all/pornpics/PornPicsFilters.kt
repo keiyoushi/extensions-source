@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.pornpics
 
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.Serializable
 import java.util.Locale
 

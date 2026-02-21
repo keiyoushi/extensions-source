@@ -305,7 +305,7 @@ open class MangaTaro(
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = getChapterUrl(chapter).toHttpUrl()
             .pathSegments.last()
-            .substringAfter("-")
+            .substringAfterLast("-")
 
         val url = "$baseUrl/auth/chapter-content".toHttpUrl().newBuilder()
             .addQueryParameter("chapter_id", chapterId)

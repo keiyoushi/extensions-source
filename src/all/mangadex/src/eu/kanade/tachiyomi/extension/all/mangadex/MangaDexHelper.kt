@@ -29,11 +29,11 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.TagDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.UnknownEntity
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserAttributes
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserDto
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus

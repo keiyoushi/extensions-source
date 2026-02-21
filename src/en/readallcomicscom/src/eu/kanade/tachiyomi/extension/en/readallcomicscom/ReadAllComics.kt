@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -16,6 +17,9 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class ReadAllComics : ParsedHttpSource() {
 
@@ -124,7 +128,10 @@ class ReadAllComics : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        name = element.attr("title")
+        name = element.text()
+        // can only get the year from chapter title
+        val year = name.substringAfterLast('(').substringBefore(')')
+        date_upload = dateFormat.tryParse("$year-1-1")
     }
 
     override fun pageListParse(document: Document): List<Page> = document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
@@ -141,4 +148,8 @@ class ReadAllComics : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+
+    companion object {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+    }
 }

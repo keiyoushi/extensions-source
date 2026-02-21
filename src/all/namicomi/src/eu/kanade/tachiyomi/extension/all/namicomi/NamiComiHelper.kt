@@ -9,9 +9,9 @@ import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.OrganizationDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.UnknownEntity
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus

@@ -68,3 +68,38 @@ jobs:
           MODULES: ${{ join(matrix.chunk.modules, ' ') }}
         run: |
           ./gradlew $MODULES
+
+      - name: Upload APKs (${{ matrix.chunk.number }})
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: "github.repository == 'keiyoushi/extensions-source'"
+        with:
+          name: "individual-apks-${{ matrix.chunk.number }}"
+          path: "**/*.apk"
+          retention-days: 1
+
+  inspect:
+    name: Inspect extensions
+    needs: [prepare, build]
+    if: "github.repository == 'keiyoushi/extensions-source'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: ~/apk-artifacts
+
+      - name: Set up JDK
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Run inspector
+        run: |
+          mkdir -p apk
+          find ~/apk-artifacts -name "*.apk" -type f -exec mv {} apk/ \;
+          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
+          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
+          java -jar ./Inspector.jar "apk" "output.json" "tmp"
+          jq . output.json
