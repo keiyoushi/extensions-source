@@ -1,4 +1,5 @@
 [versions]
+gson = "2.13.2"
 kotlin = "2.3.0"
 coroutines = "1.10.2"
 
@@ -13,6 +14,7 @@ gradle-agp = { module = "com.android.tools.build:gradle", version = "9.0.1" }
 gradle-kotlin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 gradle-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 spotless-gradle = { group = "com.diffplug.spotless", name = "spotless-plugin-gradle", version = "8.2.1" }
 
 tachiyomi-lib = { module = "com.github.keiyoushi:extensions-lib", version = "v1.4.2.1" }

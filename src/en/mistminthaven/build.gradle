@@ -1,0 +1,13 @@
+ext {
+    extName = 'Mistmint Haven'
+    extClass = '.MistmintHaven'
+    themePkg = 'mangadventure'
+    baseUrl = 'https://www.mistminthaven.com'
+    isNsfw = true
+    overrideVersionCode=1
+}
+
+apply from: "$rootDir/common.gradle"
+dependencies {
+    implementation libs.gson
+}
