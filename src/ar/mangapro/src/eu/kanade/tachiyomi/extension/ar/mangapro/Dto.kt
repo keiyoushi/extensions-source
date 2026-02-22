@@ -89,11 +89,22 @@ class ChapterUrl(
 )
 
 @Serializable
+data class ImagesData(
+    val images: List<String>,
+    val maps: List<MappedImage>,
+)
+
+@Serializable
 class MappedImage(
     val mode: String,
     val order: List<Int>,
     val pieces: List<String>,
     val dim: List<Int>,
+)
+
+@Serializable
+class Coins(
+    val coins: Int,
 )
 
 @Serializable

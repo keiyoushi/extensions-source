@@ -16,10 +16,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -347,27 +349,29 @@ class ProChan : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val script = response.asJsoup()
-            .select("script:containsData(self.__next_f.push)")
-            .joinToString(";") { it.data() }
+        val document = response.asJsoup()
+        val imageData = document
+            .extractNextJs<ImagesData> { it is JsonObject && "images" in it }
 
-        val images = IMAGES_REGEX.find(script)!!.groupValues[1]
-            .unescape()
-            .parseAs<List<String>>()
+        if (imageData == null) {
+            val coins = document.extractNextJs<Coins> { it is JsonObject && "coins" in it }?.coins
 
-        val maps = MAP_IMAGES_REGEX.find(script)!!.groupValues[1]
-            .unescape()
-            .parseAs<List<MappedImage>>()
+            if (coins != null && coins > 0) {
+                throw Exception("Locked Chapter")
+            } else {
+                return emptyList()
+            }
+        }
 
         val chapterUrl = response.request.url.toString()
 
         val pages = mutableListOf<Page>()
 
-        images.mapTo(pages) { imageUrl ->
+        imageData.images.mapTo(pages) { imageUrl ->
             Page(0, chapterUrl, imageUrl)
         }
 
-        maps.mapTo(pages) { mapped ->
+        imageData.maps.mapTo(pages) { mapped ->
             Page(0, chapterUrl, "http://$MAPPED_IMAGE_HOST/#${mapped.toJsonString()}")
         }
 
@@ -381,8 +385,6 @@ class ProChan : HttpSource() {
 
         return GET(page.imageUrl!!, headers)
     }
-
-    fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -491,9 +493,6 @@ class ProChan : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
-private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-private val IMAGES_REGEX = """self\.__next_f\.push\(.*images\\":(\[[^]]+])""".toRegex()
-private val MAP_IMAGES_REGEX = """self\.__next_f\.push\(.*maps\\":(\[.*]),\\"app""".toRegex()
 private const val MAPPED_IMAGE_HOST = "127.0.0.1"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
