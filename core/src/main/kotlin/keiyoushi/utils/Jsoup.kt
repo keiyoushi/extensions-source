@@ -40,15 +40,25 @@ private fun <T> extractValueNextJS(
 private fun Document.extractNextJSPayloads(): List<JsonElement> = select("script:not([src])")
     .map { it.data() }
     .filter { "self.__next_f.push" in it }
-    .mapNotNull { script ->
+    .flatMap { script ->
         try {
-            val raw = NEXT_F_REGEX.find(script)?.groupValues?.get(1) ?: return@mapNotNull null
+            val raw = NEXT_F_REGEX.find(script)?.groupValues?.get(1) ?: return@flatMap emptyList()
             val arr = jsonInstance.parseToJsonElement(raw).jsonArray
-            val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            val afterColon = content.substring(content.indexOf(':') + 1)
-            jsonInstance.parseToJsonElement(afterColon)
+            val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@flatMap emptyList()
+
+            content.lines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { line ->
+                    val colonIndex = line.indexOf(':')
+                    if (colonIndex == -1) return@mapNotNull null
+                    try {
+                        jsonInstance.parseToJsonElement(line.substring(colonIndex + 1))
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
         } catch (_: Exception) {
-            null
+            emptyList()
         }
     }
 
