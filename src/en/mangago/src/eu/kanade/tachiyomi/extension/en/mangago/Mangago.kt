@@ -46,7 +46,7 @@ class Mangago :
     ParsedHttpSource(),
     ConfigurableSource {
 
-    private data class ChapterJsDecryptCache(
+    private class ChapterJsDecryptCache(
         val deobfChapterJs: String,
         val key: ByteArray,
         val iv: ByteArray,
@@ -238,7 +238,6 @@ class Mangago :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pageURLTemplate = document.selectFirst("input#curl")?.attr("value")?.trim().orEmpty()
         val pageDataScript =
             document.selectFirst("script:containsData(total_pages=), script:containsData(mid=), script:containsData(cid=)")
                 ?.data().orEmpty()
@@ -250,35 +249,15 @@ class Mangago :
             chapterJsCache.remove(chapterKey)
         }
 
-        if (pageURLTemplate.isBlank() || totalPages <= 0) {
-            throw Exception("Mangago: pageListParse failed - missing curl template or total_pages in ${document.location()}")
-        }
-
-        val baseUrl = document.location().toHttpUrl()
-        val sourcePath = baseUrl.encodedPath
-
-        val cleanTemplate = pageURLTemplate.removePrefix("/")
-        val escapedTemplate = Regex.escape(cleanTemplate.replace("{page}", "__PAGE__"))
-            .replace("__PAGE__", "\\d+")
-
-        val curlPattern = runCatching { Regex(escapedTemplate) }.getOrNull()
-        val match = curlPattern?.find(sourcePath)
-
-        val prefix = if (match != null) {
-            sourcePath.substring(0, match.range.first).removeSuffix("/")
-        } else {
-            ""
-        }
+        val urlTemplate = mergeUrlWithTemplate(
+            document.location().toHttpUrl().encodedPath,
+            document.selectFirst("input#curl")!!.attr("value").trim(),
+        )
 
         val pageLinks = (1..totalPages).map { pageNumber ->
-            val relative = pageURLTemplate.replace("{page}", pageNumber.toString())
+            val path = urlTemplate.replace("{page}", pageNumber.toString())
 
-            val normalizedPath = when {
-                prefix.isBlank() -> relative
-                else -> "$prefix/${relative.removePrefix("/")}"
-            }
-            val href = baseUrl.newBuilder().encodedPath(normalizedPath).build().toString()
-            (pageNumber - 1) to href
+            (pageNumber - 1) to baseUrl + path
         }
 
         // Gets the first array of image URLs from the base chapter URL
@@ -288,7 +267,7 @@ class Mangago :
         val hasEmptyUrls = firstUrls.any { it.isBlank() }
         if (!hasEmptyUrls) {
             // Mangas have the full array of image URLs in the first request
-            return pageLinks.mapIndexed { idx, (pageIndex, href) ->
+            return pageLinks.mapIndexed { idx, (pageIndex, _) ->
                 val resolved = firstUrls.getOrNull(pageIndex)
                     ?: firstUrls.getOrNull(idx)
                 if (resolved.isNullOrBlank()) {
@@ -320,6 +299,48 @@ class Mangago :
         }
 
         return pages
+    }
+
+    private fun mergeUrlWithTemplate(url: String, template: String): String {
+        val urlSegments = url.trim('/').split("/")
+        val templateSegments = template.trim('/').split("/")
+
+        // Convert a template segment pattern to a regex (replace {placeholder} with .+)
+        fun templateSegmentMatches(templateSeg: String, urlSeg: String): Boolean {
+            val regex = templateSeg.replace(Regex("""\{[^}]+\}"""), ".+")
+            return urlSeg.matches(Regex(regex))
+        }
+
+        // Find the best (longest) overlap where url suffix matches template prefix
+        var bestOverlapUrl = -1
+        var bestOverlapLen = 0
+
+        for (i in urlSegments.indices) {
+            var matchLen = 0
+            while (matchLen < templateSegments.size &&
+                i + matchLen < urlSegments.size
+            ) {
+                val tSeg = templateSegments[matchLen]
+                val uSeg = urlSegments[i + matchLen]
+                if (templateSegmentMatches(tSeg, uSeg)) {
+                    matchLen++
+                } else {
+                    break
+                }
+            }
+            if (matchLen > bestOverlapLen) {
+                bestOverlapLen = matchLen
+                bestOverlapUrl = i
+            }
+        }
+
+        return if (bestOverlapUrl != -1) {
+            val baseSegments = urlSegments.take(bestOverlapUrl)
+            val trailing = if (template.endsWith("/")) "/" else ""
+            "/" + (baseSegments + templateSegments).joinToString("/") + trailing
+        } else {
+            url.trimEnd('/') + "/" + template.trimStart('/')
+        }
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> = Observable.fromCallable {
