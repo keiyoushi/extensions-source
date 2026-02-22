@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 
 import android.content.SharedPreferences
+import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -17,6 +18,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -54,7 +56,7 @@ class DuaLeoTruyen :
         }
     }
 
-    private val defaultBaseUrl: String = "https://dualeotruyenp.com"
+    private val defaultBaseUrl: String = "https://dualeotruyenvh.com"
 
     override val lang = "vi"
 
@@ -139,11 +141,29 @@ class DuaLeoTruyen :
         date_upload = element.selectFirst(".chap_update")?.let { parseDate(it.text()) } ?: 0L
     }
 
+    private fun decodeImageUrl(url: String): String {
+        val httpUrl = url.toHttpUrlOrNull() ?: return url
+        val filename = httpUrl.pathSegments.lastOrNull() ?: return url
+        val filenameStem = filename.substringBeforeLast('.')
+        val filenameExt = filename.substringAfterLast('.')
+
+        val decryptedFilenameStem = runCatching { Base64.decode(filenameStem, Base64.URL_SAFE or Base64.NO_PADDING) }
+            .getOrElse { return url }
+            .mapIndexed { i, byte -> (byte.toInt() xor XOR_KEY[i % XOR_KEY.size].toInt()).toChar() }
+            .joinToString("")
+
+        return httpUrl.newBuilder()
+            .setPathSegment(httpUrl.pathSize - 1, "$decryptedFilenameStem.$filenameExt")
+            .build()
+            .toString()
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         countView(document)
 
-        return document.select(".content_view_chap img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("data-original"))
+        return document.select(".content_view_chap img").mapIndexed { i, img ->
+            val url = img.absUrl("data-img").ifEmpty { img.absUrl("src") }
+            Page(i, imageUrl = if (img.hasAttr("data-img")) decodeImageUrl(url) else url)
         }
     }
 
@@ -264,5 +284,6 @@ class DuaLeoTruyen :
         private const val URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting. Leave blank to use the default URL"
         private const val RESTART_APP_MESSAGE = "Restart app to apply new setting."
         private val DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        private val XOR_KEY = "dualeo_salt_2025".toByteArray()
     }
 }
