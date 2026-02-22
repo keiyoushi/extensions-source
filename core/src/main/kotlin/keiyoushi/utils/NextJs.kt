@@ -78,6 +78,23 @@ private fun extractRscPayloads(body: String): List<JsonElement> = body.lines()
         }
     }
 
+/**
+ * Builds a [JsonElement] predicate inferred from [T]'s serial descriptor, matching any
+ * [JsonObject] that contains all non-optional, non-nullable fields of [T].
+ *
+ * Used internally by the no-predicate overloads of [Document.extractNextJs],
+ * [String.extractNextJsRsc], and [Response.extractNextJs].
+ */
+@PublishedApi
+internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Boolean {
+    val descriptor = serializer<T>().descriptor
+    val requiredKeys = (0 until descriptor.elementsCount)
+        .filter { !descriptor.getElementDescriptor(it).isNullable && !descriptor.isElementOptional(it) }
+        .map { descriptor.getElementName(it) }
+        .toSet()
+    return { element -> element is JsonObject && requiredKeys.all { it in element } }
+}
+
 // ---- Document ----
 
 /**
@@ -128,6 +145,21 @@ fun <T> Document.extractNextJs(
 inline fun <reified T> Document.extractNextJs(
     noinline predicate: (JsonElement) -> Boolean,
 ): T? = extractNextJs(predicate, serializer<T>())
+
+/**
+ * Extracts all Next.js hydrated flight data payloads from the inline `<script>` tags of this
+ * [Document] and returns the first nested element deserialized as [T], or `null` if none was
+ * found. The matching predicate is inferred from [T]'s serial descriptor via [inferredNextJsPredicate].
+ *
+ * Supports both the App Router (Next.js >= 13, RSC flight data via `self.__next_f.push`) and
+ * the Pages Router (Next.js <= 12, JSON hydration via `<script id="__NEXT_DATA__">`).
+ *
+ * @param T The target type to deserialize the matched element into. Must be serializable via
+ * [kotlinx.serialization].
+ * @return The first matching element deserialized as [T], or `null` if no match was found or
+ * deserialization failed.
+ */
+inline fun <reified T> Document.extractNextJs(): T? = extractNextJs(inferredNextJsPredicate<T>(), serializer<T>())
 
 // ---- String (RSC) ----
 
@@ -181,6 +213,22 @@ inline fun <reified T> String.extractNextJsRsc(
     noinline predicate: (JsonElement) -> Boolean,
 ): T? = extractNextJsRsc(predicate, serializer<T>())
 
+/**
+ * Parses this string as a raw RSC (React Server Components) flight response body and returns
+ * the first nested element deserialized as [T], or `null` if none was found.
+ * The matching predicate is inferred from [T]'s serial descriptor via [inferredNextJsPredicate].
+ *
+ * Use this when the RSC payload is fetched directly as a `text/x-component` response rather
+ * than embedded in an HTML document, which occurs when Next.js performs client-side navigation
+ * via fetch rather than a full page load.
+ *
+ * @param T The target type to deserialize the matched element into. Must be serializable via
+ * [kotlinx.serialization].
+ * @return The first matching element deserialized as [T], or `null` if no match was found or
+ * deserialization failed.
+ */
+inline fun <reified T> String.extractNextJsRsc(): T? = extractNextJsRsc(inferredNextJsPredicate<T>(), serializer<T>())
+
 // ---- OkHttp Response ----
 
 /**
@@ -233,3 +281,20 @@ fun <T> Response.extractNextJs(
 inline fun <reified T> Response.extractNextJs(
     noinline predicate: (JsonElement) -> Boolean,
 ): T? = extractNextJs(predicate, serializer<T>())
+
+/**
+ * Consumes this [Response] body and extracts the first nested element deserialized as [T],
+ * or `null` if none was found. The matching predicate is inferred from [T]'s serial descriptor
+ * via [inferredNextJsPredicate].
+ *
+ * Automatically dispatches to the appropriate extractor based on the `Content-Type` header:
+ * - `text/x-component` — parsed as a raw RSC flight response via [String.extractNextJsRsc]
+ * - `text/html` — parsed as an HTML document via [Document.extractNextJs]
+ *
+ * @param T The target type to deserialize the matched element into. Must be serializable via
+ * [kotlinx.serialization].
+ * @return The first matching element deserialized as [T], or `null` if no match was found,
+ * deserialization failed, or the response body was null.
+ * @throws IllegalStateException if the `Content-Type` is neither `text/html` nor `text/x-component`.
+ */
+inline fun <reified T> Response.extractNextJs(): T? = extractNextJs(inferredNextJsPredicate<T>(), serializer<T>())
