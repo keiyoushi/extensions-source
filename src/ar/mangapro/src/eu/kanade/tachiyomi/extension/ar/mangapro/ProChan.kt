@@ -26,7 +26,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -415,9 +414,9 @@ class ProChan : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val responseBody = response.body.string()
         val imageData = responseBody
-            .extractNextJsRsc<ImagesData> { it is JsonObject && "images" in it }
+            .extractNextJsRsc<ImagesData>()
         if (imageData == null) {
-            val coins = responseBody.extractNextJsRsc<Coins> { it is JsonObject && "coins" in it }?.coins
+            val coins = responseBody.extractNextJsRsc<Coins>()?.coins
             if (coins != null && coins > 0) {
                 throw Exception("Locked Chapter")
             } else {
