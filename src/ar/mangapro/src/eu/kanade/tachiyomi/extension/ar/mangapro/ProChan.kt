@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
-import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -399,6 +399,9 @@ class ProChan : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
+        val headers = headersBuilder()
+            .set("rsc", "1")
+            .build()
 
         return GET("$baseUrl${chapterUrl.url}", headers)
     }
@@ -410,11 +413,11 @@ class ProChan : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val imageData = document
-            .extractNextJs<ImagesData> { it is JsonObject && "images" in it }
+        val responseBody = response.body.string()
+        val imageData = responseBody
+            .extractNextJsRsc<ImagesData> { it is JsonObject && "images" in it }
         if (imageData == null) {
-            val coins = document.extractNextJs<Coins> { it is JsonObject && "coins" in it }?.coins
+            val coins = responseBody.extractNextJsRsc<Coins> { it is JsonObject && "coins" in it }?.coins
             if (coins != null && coins > 0) {
                 throw Exception("Locked Chapter")
             } else {
