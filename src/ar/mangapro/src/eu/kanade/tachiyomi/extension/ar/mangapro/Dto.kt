@@ -24,6 +24,7 @@ class BrowseManga(
     @Serializable
     class MetaData(
         val genres: Set<String> = emptySet(),
+        val tags: Set<String> = emptySet(),
     )
 }
 
@@ -53,6 +54,7 @@ class Manga(
         val artist: String? = null,
         val year: String? = null,
         val genres: List<String> = emptyList(),
+        val tags: List<String> = emptyList(),
         val origin: String? = null,
         val coverImage: String? = null,
     )

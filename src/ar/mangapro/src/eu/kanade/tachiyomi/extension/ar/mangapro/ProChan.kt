@@ -120,6 +120,7 @@ class ProChan : HttpSource() {
             .map { response ->
                 val statusFilter = filters.firstInstance<StatusFilter>().selected
                 val genreFilter = filters.firstInstance<GenreFilter>()
+                val tagFilter = filters.firstInstance<TagFilter>()
 
                 val mangas = response.parseAs<Data<List<BrowseManga>>>().data.asSequence()
                     .filter { manga ->
@@ -134,6 +135,13 @@ class ProChan : HttpSource() {
                     }
                     .filter { manga ->
                         genreFilter.excluded.none { it in manga.metadata.genres }
+                    }
+                    .filter { manga ->
+                        tagFilter.included.isEmpty() ||
+                            manga.metadata.tags.containsAll(tagFilter.included)
+                    }
+                    .filter { manga ->
+                        tagFilter.excluded.none { it in manga.metadata.tags }
                     }
                     .map { manga ->
                         SManga.create().apply {
@@ -182,6 +190,7 @@ class ProChan : HttpSource() {
         YearFilter(),
         StatusFilter(),
         GenreFilter(),
+        TagFilter(),
     )
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -232,8 +241,14 @@ class ProChan : HttpSource() {
                     "manhwa" -> add("مانها")
                     "manhua" -> add("مانهوا")
                 }
-                val genreMap = genres.associate { it.second to it.first }
-                manga.metadata.genres.mapTo(this) { genreMap[it] ?: it }
+                if (manga.metadata.genres.isNotEmpty()) {
+                    val genreMap = genres.associate { it.second to it.first }
+                    manga.metadata.genres.mapTo(this) { genreMap[it] ?: it }
+                }
+                if (manga.metadata.tags.isNotEmpty()) {
+                    val tagsMap = tags.associate { it.second to it.first }
+                    manga.metadata.tags.mapTo(this) { tagsMap[it] ?: it }
+                }
             }.joinToString()
             status = when (manga.progress?.trim()) {
                 "مستمر" -> SManga.ONGOING
