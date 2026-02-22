@@ -96,7 +96,7 @@ class ChapterUrl(
 )
 
 @Serializable
-data class ImagesData(
+class ImagesData(
     val images: List<String>,
     val maps: List<ScrambledImage>,
 )
