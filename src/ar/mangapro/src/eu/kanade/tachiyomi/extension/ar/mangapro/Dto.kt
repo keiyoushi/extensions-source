@@ -91,11 +91,11 @@ class ChapterUrl(
 @Serializable
 data class ImagesData(
     val images: List<String>,
-    val maps: List<MappedImage>,
+    val maps: List<ScrambledImage>,
 )
 
 @Serializable
-class MappedImage(
+class ScrambledImage(
     val mode: String,
     val order: List<Int>,
     val pieces: List<String>,

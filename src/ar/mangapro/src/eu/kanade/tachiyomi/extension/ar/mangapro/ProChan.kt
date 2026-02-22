@@ -3,12 +3,10 @@ package eu.kanade.tachiyomi.extension.ar.mangapro
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +19,12 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,7 +34,6 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.buffer
@@ -249,37 +252,31 @@ class ProChan : HttpSource() {
             .addQueryParameter("export", "download")
             .addQueryParameter("id", driveFileId)
             .build()
-
-        val context = Injekt.get<Application>()
-
-        val cacheDir = context.cacheDir
+        val cacheDir = Injekt.get<Application>().cacheDir
             .resolve("source_$id")
             .also { it.mkdirs() }
         val zipFile = File(cacheDir, "$driveFileId.zip")
 
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, "$name: Loading Chapter...\nMay take a few minutes!!", Toast.LENGTH_LONG).show()
-        }
-
-        client.newCall(GET(driveLink)).execute().let { response ->
-            if (response.header("Content-Type").orEmpty().contains("text/html")) {
-                val document = response.asJsoup()
-                val actionUrl = document.selectFirst("#download-form")!!.attr("action")
-                    .toHttpUrl().newBuilder().apply {
-                        document.select("#download-form input[type=hidden]").forEach {
-                            addQueryParameter(it.attr("name"), it.attr("value"))
-                        }
-                    }.build()
-
-                val headers = Headers.headersOf("Referer", response.request.url.toString())
-                client.newCall(GET(actionUrl, headers)).execute()
-            } else {
-                response
-            }
-        }.use { zipResponse ->
-            zipResponse.body.byteStream().use { input ->
-                zipFile.outputStream().use { output ->
-                    input.copyTo(output)
+        if (!zipFile.exists()) {
+            client.newCall(GET(driveLink)).execute().let { response ->
+                if (response.header("Content-Type").orEmpty().contains("text/html")) {
+                    val document = response.asJsoup()
+                    val actionUrl = document.selectFirst("#download-form")!!.attr("action")
+                        .toHttpUrl().newBuilder().apply {
+                            document.select("#download-form input[type=hidden]").forEach {
+                                addQueryParameter(it.attr("name"), it.attr("value"))
+                            }
+                        }.build()
+                    val headers = Headers.headersOf("Referer", response.request.url.toString())
+                    client.newCall(GET(actionUrl, headers)).execute()
+                } else {
+                    response
+                }
+            }.use { zipResponse ->
+                zipResponse.body.byteStream().use { input ->
+                    zipFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
             }
         }
@@ -292,12 +289,12 @@ class ProChan : HttpSource() {
                 .toList()
         }
 
-        return files.map {
+        return files.mapIndexed { index, filename ->
             val url = "http://${ZIP_FILE_HOST}/".toHttpUrl().newBuilder()
                 .addQueryParameter("path", zipFile.absolutePath)
-                .addQueryParameter("filename", it)
+                .addQueryParameter("filename", filename)
                 .build().toString()
-            Page(0, driveLink.toString(), url)
+            Page(index, driveLink.toString(), url)
         }
     }
 
@@ -308,31 +305,33 @@ class ProChan : HttpSource() {
         val path = request.url.queryParameter("path")!!
         val filename = request.url.queryParameter("filename")!!
         val zipFile = File(path)
-
         if (!zipFile.exists()) throw IOException("File not found")
 
         val zip = ZipFile(zipFile)
         val entry = zip.getEntry(filename) ?: throw IOException("Entry not found")
 
-        val source = object : okio.ForwardingSource(
+        val buffer = object : okio.ForwardingSource(
             zip.getInputStream(entry).source(),
         ) {
             override fun close() {
                 super.close()
                 zip.close()
             }
-        }
+        }.buffer()
+
+        val contentType = when {
+            filename.endsWith(".png", ignoreCase = true) -> "image/png"
+            filename.endsWith(".webp", ignoreCase = true) -> "image/webp"
+            filename.endsWith(".gif", ignoreCase = true) -> "image/gif"
+            else -> "image/jpeg"
+        }.toMediaType()
 
         return Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(200)
             .message("OK")
-            .body(object : ResponseBody() {
-                override fun contentType() = "image/jpeg".toMediaType()
-                override fun contentLength() = entry.size
-                override fun source() = source.buffer()
-            })
+            .body(buffer.asResponseBody(contentType, entry.size))
             .build()
     }
 
@@ -352,27 +351,22 @@ class ProChan : HttpSource() {
         val document = response.asJsoup()
         val imageData = document
             .extractNextJs<ImagesData> { it is JsonObject && "images" in it }
-
         if (imageData == null) {
             val coins = document.extractNextJs<Coins> { it is JsonObject && "coins" in it }?.coins
-
             if (coins != null && coins > 0) {
                 throw Exception("Locked Chapter")
             } else {
                 return emptyList()
             }
         }
-
         val chapterUrl = response.request.url.toString()
-
         val pages = mutableListOf<Page>()
 
-        imageData.images.mapTo(pages) { imageUrl ->
-            Page(0, chapterUrl, imageUrl)
+        imageData.images.mapIndexedTo(pages) { index, imageUrl ->
+            Page(index, chapterUrl, imageUrl)
         }
-
-        imageData.maps.mapTo(pages) { mapped ->
-            Page(0, chapterUrl, "http://$MAPPED_IMAGE_HOST/#${mapped.toJsonString()}")
+        imageData.maps.mapIndexedTo(pages) { index, scrambledImage ->
+            Page(pages.size + index, chapterUrl, "http://$SCRAMBLED_IMAGE_HOST/#${scrambledImage.toJsonString()}")
         }
 
         return pages
@@ -389,100 +383,103 @@ class ProChan : HttpSource() {
     private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url
-
-        if (request.url.host != MAPPED_IMAGE_HOST) {
+        if (url.host != SCRAMBLED_IMAGE_HOST) {
             return chain.proceed(request)
         }
 
         val chapterUrl = request.header("Referer")!!
+        val scrambledImage = url.fragment!!.parseAs<ScrambledImage>()
+        val (puzzleMode, layout) = scrambledImage.mode.split("_", limit = 2)
 
-        val mappedImage = url.fragment!!.parseAs<MappedImage>()
-        val (puzzleMode, layout) = mappedImage.mode.split("_", limit = 2)
+        require(scrambledImage.dim.size >= 2) { "Invalid dim: ${scrambledImage.dim}" }
 
-        val orderedPieces = mappedImage.order.map { mappedImage.pieces[it] }
-        val pieceBitmaps = orderedPieces.map { pieceUrl ->
-            var imgUrl = pieceUrl.toHttpUrl()
+        val width = scrambledImage.dim[0]
+        val height = scrambledImage.dim[1]
 
-            if (imgUrl.host.startsWith("cdn")) {
-                val payload = Url(url = pieceUrl)
-                    .toJsonString()
-                    .toRequestBody(JSON_MEDIA_TYPE)
-                val headers = headersBuilder()
-                    .set("Sec-Fetch-Site", "same-origin")
-                    .set("Referer", chapterUrl)
-                    .build()
-                val request = POST("$baseUrl/api/cdn-image/sign", headers, payload)
-
-                val token = client.newCall(request).execute().parseAs<Token>()
-
-                imgUrl = imgUrl.newBuilder()
-                    .setQueryParameter("token", token.token)
-                    .setQueryParameter("expires", token.expires.toString())
-                    .build()
-            }
-
-            val pieceRequest = request.newBuilder().url(imgUrl).build()
-            val response = chain.proceed(pieceRequest)
-
-            // use Tachiyomi ImageDecoder because android.graphics.BitmapFactory doesn't handle avif
-            response.body.use { body ->
-                val decoder = ImageDecoder.newInstance(body.byteStream())
-                    ?: throw Exception("Failed to create decoder")
-                try {
-                    decoder.decode() ?: throw Exception("Failed to decode piece")
-                } finally {
-                    decoder.recycle()
+        val orderedPieces = scrambledImage.order.map { scrambledImage.pieces[it] }
+        val pieceBitmaps = runBlocking {
+            val semaphore = Semaphore(3)
+            orderedPieces.map { pieceUrl ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        var imgUrl = pieceUrl.toHttpUrl()
+                        if (imgUrl.host.startsWith("cdn")) {
+                            val payload = Url(url = pieceUrl).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+                            val signHeaders = headersBuilder()
+                                .set("Sec-Fetch-Site", "same-origin")
+                                .set("Referer", chapterUrl)
+                                .build()
+                            val signRequest = POST("$baseUrl/api/cdn-image/sign", signHeaders, payload)
+                            val token = client.newCall(signRequest).await().parseAs<Token>()
+                            imgUrl = imgUrl.newBuilder()
+                                .setQueryParameter("token", token.token)
+                                .setQueryParameter("expires", token.expires.toString())
+                                .build()
+                        }
+                        val pieceRequest = request.newBuilder().url(imgUrl).build()
+                        val response = client.newCall(pieceRequest).await()
+                        response.body.use { body ->
+                            // use Tachiyomi ImageDecoder because android.graphics.BitmapFactory doesn't handle avif
+                            val decoder = ImageDecoder.newInstance(body.byteStream())
+                                ?: throw Exception("Failed to create decoder")
+                            try {
+                                decoder.decode() ?: throw Exception("Failed to decode piece")
+                            } finally {
+                                decoder.recycle()
+                            }
+                        }
+                    }
                 }
-            }
+            }.awaitAll()
         }
 
-        val width = mappedImage.dim[0]
-        val height = mappedImage.dim[1]
         val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(resultBitmap)
 
-        when (puzzleMode) {
-            "vertical" -> {
-                var x = 0f
-                for (bitmap in pieceBitmaps) {
-                    canvas.drawBitmap(bitmap, x, 0f, null)
-                    x += bitmap.width
-                }
-            }
-
-            "grid" -> {
-                val (cols, rows) = layout.split('x', limit = 2)
-                    .map { it.toInt() }
-
-                var y = 0f
-                for (r in 0 until rows) {
+        try {
+            when (puzzleMode) {
+                "vertical" -> {
                     var x = 0f
-                    var maxHeightInRow = 0f
-                    for (c in 0 until cols) {
-                        val index = r * cols + c
-                        if (index < pieceBitmaps.size) {
-                            val bitmap = pieceBitmaps[index]
-                            canvas.drawBitmap(bitmap, x, y, null)
-                            x += bitmap.width
-                            maxHeightInRow = maxOf(maxHeightInRow, bitmap.height.toFloat())
-                        }
+                    for (bitmap in pieceBitmaps) {
+                        canvas.drawBitmap(bitmap, x, 0f, null)
+                        x += bitmap.width
                     }
-                    y += maxHeightInRow
                 }
+                "grid" -> {
+                    val (cols, rows) = layout.split('x', limit = 2).map { it.toInt() }
+                    var y = 0f
+                    for (r in 0 until rows) {
+                        var x = 0f
+                        var maxHeightInRow = 0f
+                        for (c in 0 until cols) {
+                            val index = r * cols + c
+                            if (index < pieceBitmaps.size) {
+                                val bitmap = pieceBitmaps[index]
+                                canvas.drawBitmap(bitmap, x, y, null)
+                                x += bitmap.width
+                                maxHeightInRow = maxOf(maxHeightInRow, bitmap.height.toFloat())
+                            }
+                        }
+                        y += maxHeightInRow
+                    }
+                }
+                else -> throw IOException("Unknown puzzle mode: $puzzleMode")
             }
-        }
 
-        val buffer = Buffer().apply {
-            resultBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream())
+            val buffer = Buffer().apply {
+                resultBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream())
+            }
+            return Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(buffer.asResponseBody("image/png".toMediaType(), buffer.size))
+                .build()
+        } finally {
+            pieceBitmaps.forEach { it.recycle() }
+            resultBitmap.recycle()
         }
-
-        return Response.Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_1_1)
-            .code(200)
-            .message("OK")
-            .body(buffer.asResponseBody("image/png".toMediaType(), buffer.size))
-            .build()
     }
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -493,7 +490,6 @@ class ProChan : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
-private const val MAPPED_IMAGE_HOST = "127.0.0.1"
+private const val SCRAMBLED_IMAGE_HOST = "127.0.0.1"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-
 private const val ZIP_FILE_HOST = "127.0.0.2"
