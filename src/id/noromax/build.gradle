@@ -2,7 +2,7 @@ ext {
     extName = 'Noromax'
     extClass = '.Noromax'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://noromax01.my.id'
+    baseUrl = 'https://noromax02.my.id'
     overrideVersionCode = 2
     isNsfw = true
 }
