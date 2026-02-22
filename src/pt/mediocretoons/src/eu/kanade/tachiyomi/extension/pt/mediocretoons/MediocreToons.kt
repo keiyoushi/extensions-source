@@ -405,7 +405,7 @@ class MediocreToons :
             val url = "$apiUrl/capitulos".toHttpUrl().newBuilder()
                 .addQueryParameter("obr_id", id)
                 .addQueryParameter("page", page.toString())
-                .addQueryParameter("limite", "50")
+                .addQueryParameter("limite", "100")
                 .addQueryParameter("order", "desc")
                 .build()
 
