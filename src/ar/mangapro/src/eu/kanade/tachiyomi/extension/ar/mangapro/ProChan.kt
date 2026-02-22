@@ -227,6 +227,11 @@ class ProChan : HttpSource() {
                 manga.metadata.origin?.also { origin ->
                     add(origin.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() })
                 }
+                when (manga.type) {
+                    "manga" -> add("مانجا")
+                    "manhwa" -> add("مانها")
+                    "manhua" -> add("مانهوا")
+                }
                 val genreMap = genres.associate { it.second to it.first }
                 manga.metadata.genres.mapTo(this) { genreMap[it] ?: it }
             }.joinToString()

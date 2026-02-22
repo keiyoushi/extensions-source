@@ -28,37 +28,37 @@ abstract class TriStateGroupFilter(
 
 class TypeFilter :
     SelectFilter<String?>(
-        name = "Type",
+        name = "النوع",
         options = listOf(
-            "All" to null,
-            "Manga" to "manga",
-            "Manhua" to "manhua",
-            "Manhwa" to "manhwa",
+            "الكل" to null,
+            "مانجا" to "manga",
+            "مانها" to "manhua",
+            "مانهوا" to "manhwa",
         ),
     )
 
 class SortFilter :
     SelectFilter<String>(
-        name = "Sort by",
+        name = "الفرز",
         options = listOf(
-            "Latest Series" to "latest",
-            "Latest Chapters" to "latest_chapter",
-            "Most Popular" to "popular",
-            "Overall Popularity" to "total_popularity",
-            "Oldest" to "oldest",
-            "A-Z" to "az",
-            "Z-A" to "za",
+            "أحدث السلاسل" to "latest",
+            "أحدث الفصول" to "latest_chapter",
+            "الأكثر شهرة" to "popular",
+            "الشعبية الإجمالية" to "total_popularity",
+            "الأقدم" to "oldest",
+            "أبجدي (أ-ي)" to "az",
+            "أبجدي (ي-أ)" to "za",
         ),
     )
 
 class StatusFilter :
     SelectFilter<String?>(
-        name = "Status",
+        name = "الحالة",
         options = listOf(
-            "All Status" to null,
-            "Ongoing" to "مستمر",
-            "Completed" to "مكتمل",
-            "Paused" to "متوقف",
+            "جميع الحالات" to null,
+            "مستمر" to "مستمر",
+            "مكتمل" to "مكتمل",
+            "متوقف" to "متوقف",
         ),
     )
 
@@ -66,16 +66,16 @@ private val currentYear = Calendar.getInstance()[Calendar.YEAR]
 
 class YearFilter :
     SelectFilter<String?>(
-        name = "Year",
+        name = "السنة",
         options = buildList {
-            add("All Years" to null)
+            add("جميع السنوات" to null)
             (currentYear downTo 1970).mapTo(this) { it.toString() to it.toString() }
         },
     )
 
 class GenreFilter :
     TriStateGroupFilter(
-        name = "Genre",
+        name = "التصنيف",
         options = genres,
     )
 
