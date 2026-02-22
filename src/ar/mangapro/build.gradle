@@ -9,4 +9,5 @@ apply from: "$rootDir/common.gradle"
 
 dependencies {
     compileOnly("com.github.tachiyomiorg:image-decoder:41c059e540")
+    implementation("org.apache.commons:commons-compress:1.28.0")
 }

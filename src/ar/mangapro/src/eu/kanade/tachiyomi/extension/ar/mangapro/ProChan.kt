@@ -38,6 +38,7 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.buffer
 import okio.source
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import rx.Observable
 import tachiyomi.decoder.ImageDecoder
 import uy.kohesive.injekt.Injekt
@@ -47,7 +48,6 @@ import java.io.IOException
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.zip.ZipInputStream
 
 class ProChan : HttpSource() {
     override val name = "ProChan"
@@ -264,7 +264,7 @@ class ProChan : HttpSource() {
         client.newCall(GET(driveLink)).execute()
             .let { handleDriveRedirect(it) }
             .use { response ->
-                ZipInputStream(response.body.byteStream().buffered()).use { zis ->
+                ZipArchiveInputStream(response.body.byteStream().buffered()).use { zis ->
                     var entry = zis.nextEntry
                     while (entry != null) {
                         if (!entry.name.endsWith(".xml")) {
