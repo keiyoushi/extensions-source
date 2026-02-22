@@ -47,7 +47,7 @@ import java.io.IOException
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 class ProChan : HttpSource() {
     override val name = "ProChan"
@@ -248,90 +248,88 @@ class ProChan : HttpSource() {
     }
 
     private fun zipPageList(driveFileId: String): List<Page> {
+        val context = Injekt.get<Application>()
+        val cacheDir = context.cacheDir
+            .resolve("source_$id/$driveFileId")
+            .also {
+                it.deleteRecursively()
+                it.mkdirs()
+            }
+
         val driveLink = "https://drive.google.com/uc".toHttpUrl().newBuilder()
             .addQueryParameter("export", "download")
             .addQueryParameter("id", driveFileId)
             .build()
-        val cacheDir = Injekt.get<Application>().cacheDir
-            .resolve("source_$id")
-            .also { it.mkdirs() }
-        val zipFile = File(cacheDir, "$driveFileId.zip")
 
-        if (!zipFile.exists()) {
-            client.newCall(GET(driveLink)).execute().let { response ->
-                if (response.header("Content-Type").orEmpty().contains("text/html")) {
-                    val document = response.asJsoup()
-                    val actionUrl = document.selectFirst("#download-form")!!.attr("action")
-                        .toHttpUrl().newBuilder().apply {
-                            document.select("#download-form input[type=hidden]").forEach {
-                                addQueryParameter(it.attr("name"), it.attr("value"))
-                            }
-                        }.build()
-                    val headers = Headers.headersOf("Referer", response.request.url.toString())
-                    client.newCall(GET(actionUrl, headers)).execute()
-                } else {
-                    response
-                }
-            }.use { zipResponse ->
-                zipResponse.body.byteStream().use { input ->
-                    zipFile.outputStream().use { output ->
-                        input.copyTo(output)
+        client.newCall(GET(driveLink)).execute()
+            .let { handleDriveRedirect(it) }
+            .use { response ->
+                ZipInputStream(response.body.byteStream().buffered()).use { zis ->
+                    var entry = zis.nextEntry
+                    while (entry != null) {
+                        if (!entry.name.endsWith(".xml")) {
+                            val name = entry.name.substringAfterLast("/")
+                            File(cacheDir, name).outputStream().use { zis.copyTo(it) }
+                        }
+                        entry = zis.nextEntry
                     }
                 }
             }
-        }
 
-        val files = ZipFile(zipFile).use { file ->
-            file.entries().asSequence()
-                .map { entry -> entry.name }
-                .filterNot { it.endsWith(".xml") }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
-                .toList()
-        }
+        return cacheDir.listFiles()!!
+            .filter { it.isFile }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            .mapIndexed { index, file ->
+                val url = "http://$ZIP_FILE_HOST/".toHttpUrl().newBuilder()
+                    .addQueryParameter("path", file.absolutePath)
+                    .build().toString()
+                Page(index, "", url)
+            }
+    }
 
-        return files.mapIndexed { index, filename ->
-            val url = "http://${ZIP_FILE_HOST}/".toHttpUrl().newBuilder()
-                .addQueryParameter("path", zipFile.absolutePath)
-                .addQueryParameter("filename", filename)
-                .build().toString()
-            Page(index, driveLink.toString(), url)
-        }
+    private fun handleDriveRedirect(response: Response): Response {
+        if (!response.header("Content-Type").orEmpty().contains("text/html")) return response
+        val document = response.asJsoup()
+        val actionUrl = document.selectFirst("#download-form")!!.attr("action")
+            .toHttpUrl().newBuilder().apply {
+                document.select("#download-form input[type=hidden]").forEach {
+                    addQueryParameter(it.attr("name"), it.attr("value"))
+                }
+            }.build()
+        val headers = Headers.headersOf("Referer", response.request.url.toString())
+        return client.newCall(GET(actionUrl, headers)).execute()
     }
 
     private fun zipFileInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.host != ZIP_FILE_HOST) return chain.proceed(request)
 
-        val path = request.url.queryParameter("path")!!
-        val filename = request.url.queryParameter("filename")!!
-        val zipFile = File(path)
-        if (!zipFile.exists()) throw IOException("File not found")
-
-        val zip = ZipFile(zipFile)
-        val entry = zip.getEntry(filename) ?: throw IOException("Entry not found")
-
-        val buffer = object : okio.ForwardingSource(
-            zip.getInputStream(entry).source(),
-        ) {
-            override fun close() {
-                super.close()
-                zip.close()
-            }
-        }.buffer()
+        val file = File(request.url.queryParameter("path")!!)
+        if (!file.exists()) throw IOException("File not found: ${file.name}")
 
         val contentType = when {
-            filename.endsWith(".png", ignoreCase = true) -> "image/png"
-            filename.endsWith(".webp", ignoreCase = true) -> "image/webp"
-            filename.endsWith(".gif", ignoreCase = true) -> "image/gif"
+            file.name.endsWith(".png", ignoreCase = true) -> "image/png"
+            file.name.endsWith(".webp", ignoreCase = true) -> "image/webp"
+            file.name.endsWith(".gif", ignoreCase = true) -> "image/gif"
             else -> "image/jpeg"
         }.toMediaType()
+
+        val buffer = object : okio.ForwardingSource(file.source()) {
+            override fun close() {
+                super.close()
+                file.delete()
+                file.parentFile?.let { parent ->
+                    if (parent.listFiles().isNullOrEmpty()) parent.delete()
+                }
+            }
+        }.buffer()
 
         return Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(200)
             .message("OK")
-            .body(buffer.asResponseBody(contentType, entry.size))
+            .body(buffer.asResponseBody(contentType, file.length()))
             .build()
     }
 
