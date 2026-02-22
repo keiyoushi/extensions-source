@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
@@ -52,13 +53,23 @@ import java.util.Locale
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    override val baseUrl = "https://prochan.net"
+    private val domain = "prochan.net"
+    override val baseUrl = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::zipFileInterceptor)
         .addInterceptor(::scrambledImageInterceptor)
+        .addNetworkInterceptor(
+            CookieInterceptor(
+                domain,
+                listOf(
+                    "safe_browsing" to "off",
+                    "language" to "ar",
+                ),
+            ),
+        )
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -82,20 +93,37 @@ class ProChan : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
-            // TODO
-            throw Exception("not implemented")
+            val url = query.toHttpUrl()
+            val path = url.pathSegments
+            if (url.host == domain && path.size >= 4 && path[0] == "series") {
+                val type = path[1]
+                if (type !in SUPPORTED_TYPES) {
+                    throw Exception("Unsupported type: $type")
+                }
+                val mangaId = path[2]
+                val slug = path[3]
+
+                val manga = SManga.create().apply {
+                    this@apply.url = "/series/$type/$mangaId/$slug"
+                }
+
+                return fetchMangaDetails(manga).map {
+                    MangasPage(listOf(it), false)
+                }
+            } else {
+                throw Exception("Unsupported url")
+            }
         }
 
         return client.newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map { response ->
-                val types = setOf("manga", "manhwa", "manhua")
                 val statusFilter = filters.firstInstance<StatusFilter>().selected
                 val genreFilter = filters.firstInstance<GenreFilter>()
 
                 val mangas = response.parseAs<Data<List<BrowseManga>>>().data.asSequence()
                     .filter { manga ->
-                        manga.type in types
+                        manga.type in SUPPORTED_TYPES
                     }
                     .filter { manga ->
                         statusFilter == null || manga.progress == statusFilter
@@ -111,7 +139,15 @@ class ProChan : HttpSource() {
                         SManga.create().apply {
                             url = "/series/${manga.type}/${manga.id}/${manga.slug}"
                             title = manga.title
-                            thumbnail_url = manga.coverImageApp?.desktop ?: manga.coverImage
+                            thumbnail_url = (manga.coverImageApp?.desktop ?: manga.coverImage)?.let {
+                                if (it.startsWith("/")) {
+                                    manga.cdn?.let { cdn ->
+                                        "https//$cdn.$domain$it"
+                                    }
+                                } else {
+                                    it
+                                }
+                            }
                         }
                     }
                     .toList()
@@ -200,7 +236,15 @@ class ProChan : HttpSource() {
                 "متوقف" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = manga.metadata.coverImage
+            thumbnail_url = (manga.coverImageApp?.desktop ?: manga.metadata.coverImage)?.let {
+                if (it.startsWith("/")) {
+                    manga.cdn?.let { cdn ->
+                        "https//$cdn.$domain$it"
+                    }
+                } else {
+                    it
+                }
+            }
             initialized = true
         }
     }
@@ -488,6 +532,7 @@ class ProChan : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
+private val SUPPORTED_TYPES = setOf("manga", "manhwa", "manhua")
 private const val SCRAMBLED_IMAGE_HOST = "127.0.0.1"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private const val ZIP_FILE_HOST = "127.0.0.2"

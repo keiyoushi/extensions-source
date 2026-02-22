@@ -18,17 +18,19 @@ class BrowseManga(
     val metadata: MetaData,
     val coverImage: String? = null,
     val coverImageApp: CoverImage? = null,
+    @SerialName("cdn_path")
+    val cdn: String? = null,
 ) {
     @Serializable
     class MetaData(
         val genres: Set<String> = emptySet(),
     )
-
-    @Serializable
-    class CoverImage(
-        val desktop: String? = null,
-    )
 }
+
+@Serializable
+class CoverImage(
+    val desktop: String? = null,
+)
 
 @Serializable
 class Manga(
@@ -39,6 +41,9 @@ class Manga(
     val description: String? = null,
     val progress: String? = null,
     val metadata: MetaData,
+    @SerialName("cdn_path")
+    val cdn: String? = null,
+    val coverImageApp: CoverImage? = null,
 ) {
     @Serializable
     class MetaData(
