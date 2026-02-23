@@ -11,8 +11,6 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -46,7 +44,7 @@ class LesPoroiniens :
                 }
             }
 
-            if (response.code == 200 && isSeriesJson) {
+            if (response.isSuccessful && isSeriesJson) {
                 val bodyString = response.body.string()
                 try {
                     val element = jsonInstance.parseToJsonElement(bodyString)
@@ -86,23 +84,14 @@ class LesPoroiniens :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val chapterNumber = document.location().substringAfterLast("/")
+        val chapterNumber = response.request.url.pathSegments.last { it.isNotEmpty() }
         val jsonData = document.selectFirst("#reader-data-placeholder")!!.html()
 
-        val jsonElement = jsonInstance.parseToJsonElement(jsonData).jsonObject
-        val series = jsonElement["series"]!!.jsonObject
-        val chaptersElement = series["chapters"]!!
+        val readerData = jsonData.parseAs<LocalReaderData>()
+        val chapterData = readerData.series.chapters?.get(chapterNumber)
+            ?: throw NoSuchElementException("Chapter data not found for chapter $chapterNumber")
 
-        val chapterData = if (chaptersElement is JsonArray) {
-            // Assume 1-based index mapping if it's an array
-            val index = (chapterNumber.toIntOrNull() ?: 1) - 1
-            chaptersElement.getOrNull(index)?.jsonObject
-        } else {
-            chaptersElement.jsonObject[chapterNumber]?.jsonObject
-        } ?: throw NoSuchElementException("Chapter data not found for chapter $chapterNumber")
-
-        val groups = chapterData["groups"]!!.jsonObject
-        val chapterUrl = groups.values.firstOrNull()?.jsonPrimitive?.content
+        val chapterUrl = chapterData.groups?.values?.firstOrNull()
             ?: throw NoSuchElementException("Chapter URL not found for chapter $chapterNumber")
 
         if (chapterUrl.contains("imgchest")) {
