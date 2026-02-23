@@ -20,7 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class Pixiv(override val lang: String) :
@@ -105,6 +104,10 @@ class Pixiv(override val lang: String) :
     private lateinit var searchIterator: Iterator<PixivIllust>
     private lateinit var searchPredicates: List<(PixivIllust) -> Boolean>
 
+    private var userSearchNextPage = 1
+    private var userSearchHash: Int? = null
+    private lateinit var userSearchIterator: Iterator<SManga>
+
     override fun fetchSearchManga(
         page: Int,
         query: String,
@@ -128,22 +131,45 @@ class Pixiv(override val lang: String) :
         // Deeplink selection of specific IDs: simply fetch the single object and return
         when (target) {
             is PixivTarget.Illustration -> {
-                singleResult(getIllustCached(target.illustId)?.toSManga())
+                return singleResult(getIllustCached(target.illustId)?.toSManga())
             }
 
             is PixivTarget.Series -> {
                 // TODO: caching!
                 val series = ApiCall("/touch/ajax/illust/series/${target.seriesId}")
                     .executeApi<PixivSeriesDetails>().getOrNull()?.series
-                singleResult(series?.toSManga())
+                return singleResult(series?.toSManga())
             }
 
-            else -> {
-                null
+            is PixivTarget.User -> {
+                val user = getUserCached(target.userId)
+                val manga = SManga.create().apply {
+                    url = "/users/${target.userId}"
+                    title = user?.name ?: "User ${target.userId}"
+                    thumbnail_url = user?.imageBig
+                }
+                return singleResult(manga)
             }
-        }?.let { return it }
+
+            else -> {}
+        }
 
         val filters = filters.list as PixivFilters
+
+        if (filters.users.isNotBlank()) {
+            val hash = filters.users.hashCode()
+            if (hash != userSearchHash || page == 1) {
+                userSearchHash = hash
+                userSearchIterator = makeUserSearchSequence(nick = filters.users).iterator()
+                userSearchNextPage = 2
+            } else {
+                require(page == userSearchNextPage++)
+            }
+
+            val mangas = userSearchIterator.truncateToList(TARGET_RESULTS)
+            return Observable.just(MangasPage(mangas, hasNextPage = mangas.isNotEmpty()))
+        }
+
         val hash = Pair(query, filters.toList()).hashCode()
 
         if (hash != searchHash || page == 1) {
@@ -153,20 +179,7 @@ class Pixiv(override val lang: String) :
             // clear predicates
             searchPredicates = emptyList()
 
-            // TODO: it would be useful to allow multiple user: tags in the query
-            // NOTE: probably wouldn't be terribly hard, make makeUserIdIllustSearchSequence accept a
-            // list of ids, make PixivTarget.fromSearchQuery handle returning a list of targets or
-            // make User target a list (it's just that then you think about supporting mixed lists of
-            // multiples of all types, and then have to deal with how to return a mixed list of user
-            // results and singletons...)
-            if (target is PixivTarget.User) {
-                searchSequence = makeUserIdIllustSearchSequence(id = target.userId, type = filters.type)
-
-                searchPredicates = buildList {
-                    filters.makeTagsPredicate()?.let(::add)
-                    filters.makeRatingPredicate()?.let(::add)
-                }
-            } else if (query.isNotBlank()) {
+            if (query.isNotBlank()) {
                 searchSequence = makeIllustSearchSequence(
                     word = query,
                     order = filters.order,
@@ -180,12 +193,6 @@ class Pixiv(override val lang: String) :
                 searchPredicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
                     filters.makeUsersPredicate()?.let(::add)
-                }
-            } else if (filters.users.isNotBlank()) {
-                searchSequence = makeUserIllustSearchSequence(nick = filters.users, type = filters.type)
-                searchPredicates = buildList {
-                    filters.makeTagsPredicate()?.let(::add)
-                    filters.makeRatingPredicate()?.let(::add)
                 }
             } else {
                 searchSequence = makeIllustSearchSequence(
@@ -286,7 +293,7 @@ class Pixiv(override val lang: String) :
     }
 
     // search by username
-    private fun makeUserIllustSearchSequence(nick: String, type: String?) = sequence<PixivIllust> {
+    private fun makeUserSearchSequence(nick: String) = sequence<SManga> {
         val searchUsers = HttpCall("/search/users")
             .apply {
                 url.addQueryParameter("s_mode", "s_usr")
@@ -312,23 +319,16 @@ class Pixiv(override val lang: String) :
 
             if (userIds.isEmpty()) break
 
-            // users is Map<String (userId as string), PixivUserInfo>, userIds is List<Long>
             val users = pageProps.userData?.users
-            val exactMatchUserId = users?.let { userData ->
-                userIds.find { userId ->
-                    userData[userId.toString()]?.name?.equals(nick, ignoreCase = true) == true
-                }
-            }
-
-            if (exactMatchUserId != null) {
-                // found exact match, fetch and return works from this exact user
-                yieldAll(makeUserIdIllustSearchSequence(exactMatchUserId.toString(), type))
-                break
-            } else {
-                // return works from all users
-                for (userId in userIds) {
-                    yieldAll(makeUserIdIllustSearchSequence(userId.toString(), type))
-                }
+            for (userId in userIds) {
+                val user = users?.get(userId.toString())
+                yield(
+                    SManga.create().apply {
+                        url = "/users/$userId"
+                        title = user?.name ?: "User $userId"
+                        thumbnail_url = user?.imageBig
+                    },
+                )
             }
         }
     }
@@ -434,6 +434,13 @@ class Pixiv(override val lang: String) :
         }
     }
 
+    private val getUserCached by lazy {
+        lruCached<String, PixivUserInfo?>(25) { userId ->
+            val call = ApiCall("/ajax/user/$userId?full=1")
+            return@lruCached call.executeApi<PixivUserInfo>().getOrNull()
+        }
+    }
+
     private val getSeriesIllustsCached by lazy {
         lruCached<String, List<PixivIllust>?>(25) { seriesId ->
             val call = ApiCall("/touch/ajax/illust/series_content/$seriesId")
@@ -455,56 +462,66 @@ class Pixiv(override val lang: String) :
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val (id, isSeries) = parseSMangaUrl(manga.url)
+        val target = PixivTarget.fromUri(baseUrl + manga.url) ?: return Observable.just(manga)
 
-        if (isSeries) {
-            val series = ApiCall("/touch/ajax/illust/series/$id")
-                .executeApi<PixivSeriesDetails>().getOrThrow().series!!
+        when (target) {
+            is PixivTarget.User -> {
+                val response = getUserCached(target.userId)
 
-            val illusts = getSeriesIllustsCached(id)!!
-
-            if (series.id != null && series.userId != null) {
-                manga.setUrlWithoutDomain("/user/${series.userId}/series/${series.id}")
+                response?.name?.let {
+                    manga.title = it
+                    manga.author = it
+                    manga.artist = it
+                }
+                response?.comment?.let { manga.description = it }
+                response?.imageBig?.let { manga.thumbnail_url = it }
             }
+            is PixivTarget.Series -> {
+                val series = ApiCall("/touch/ajax/illust/series/${target.seriesId}")
+                    .executeApi<PixivSeriesDetails>().getOrThrow().series!!
 
-            series.title?.let { manga.title = it }
-            series.caption?.let { manga.description = it }
+                val illusts = getSeriesIllustsCached(target.seriesId)!!
 
-            illusts.firstOrNull()?.author_details?.user_name?.let {
-                manga.artist = it
-                manga.author = it
+                series.title?.let { manga.title = it }
+                series.caption?.let { manga.description = it }
+
+                illusts.firstOrNull()?.author_details?.user_name?.let {
+                    manga.artist = it
+                    manga.author = it
+                }
+
+                val tags = illusts.flatMap { it.tags ?: emptyList() }.toSet()
+                if (tags.isNotEmpty()) manga.genre = tags.joinToString()
+
+                val coverImage = series.coverImage?.let { if (it.isString) it.content else null }
+                (coverImage ?: illusts.firstOrNull()?.url)?.let { manga.thumbnail_url = it }
             }
+            is PixivTarget.Illustration -> {
+                val illust = getIllustCached(target.illustId)!!
 
-            val tags = illusts.flatMap { it.tags ?: emptyList() }.toSet()
-            if (tags.isNotEmpty()) manga.genre = tags.joinToString()
+                illust.title?.let { manga.title = it }
 
-            val coverImage = series.coverImage?.let { if (it.isString) it.content else null }
-            (coverImage ?: illusts.firstOrNull()?.url)?.let { manga.thumbnail_url = it }
-        } else {
-            val illust = getIllustCached(id)!!
+                illust.author_details?.user_name?.let {
+                    manga.artist = it
+                    manga.author = it
+                }
 
-            illust.id?.let { manga.setUrlWithoutDomain("/artworks/$it") }
-            illust.title?.let { manga.title = it }
-
-            illust.author_details?.user_name?.let {
-                manga.artist = it
-                manga.author = it
+                illust.comment?.let { manga.description = it }
+                illust.tags?.let { manga.genre = it.joinToString() }
+                illust.url?.let { manga.thumbnail_url = it }
             }
-
-            illust.comment?.let { manga.description = it }
-            illust.tags?.let { manga.genre = it.joinToString() }
-            illust.url?.let { manga.thumbnail_url = it }
         }
 
         return Observable.just(manga)
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val (id, isSeries) = parseSMangaUrl(manga.url)
+        val target = PixivTarget.fromUri(baseUrl + manga.url) ?: return Observable.just(emptyList())
 
-        val illusts = when (isSeries) {
-            true -> getSeriesIllustsCached(id)!!
-            false -> listOf(getIllustCached(id)!!)
+        val illusts = when (target) {
+            is PixivTarget.User -> makeUserIdIllustSearchSequence(target.userId, type = null).toList()
+            is PixivTarget.Series -> getSeriesIllustsCached(target.seriesId)!!
+            is PixivTarget.Illustration -> listOf(getIllustCached(target.illustId)!!)
         }
 
         val chapters = illusts.mapIndexed { i, illust ->
