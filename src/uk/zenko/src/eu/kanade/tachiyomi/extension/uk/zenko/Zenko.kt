@@ -185,7 +185,7 @@ class Zenko : HttpSource() {
     }
 
     companion object {
-        private const val API_URL = "https://zenko-api.onrender.com"
+        private const val API_URL = "https://api.zenko.online"
         private const val IMAGE_STORAGE_URL = "https://zenko.b-cdn.net"
 
         private val json: Json by injectLazy()
