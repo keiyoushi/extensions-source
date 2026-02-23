@@ -22,6 +22,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
+import rx.Observable
 import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
@@ -395,18 +396,32 @@ class MediocreToons :
         return finalUrl
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val id = manga.url.substringAfter("/obra/")
+        val allChapters = mutableListOf<SChapter>()
+        var page = 1
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = response.parseAs<MediocreMangaDto>()
+        do {
+            val url = "$apiUrl/capitulos".toHttpUrl().newBuilder()
+                .addQueryParameter("obr_id", id)
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("limite", "100")
+                .addQueryParameter("order", "desc")
+                .build()
 
-        val chapters = manga.chapters
-            .map { it.toSChapter() }
-            .distinctBy { it.url }
-            .sortedByDescending { it.chapter_number }
+            val response = client.newCall(GET(url, headers)).execute()
+            val dto = response.parseAs<MediocreListDto<List<MediocreChapterSimpleDto>>>()
 
-        return chapters
+            allChapters.addAll(dto.data.map { it.toSChapter() })
+
+            val hasNext = dto.pagination?.hasNextPage ?: false
+            page++
+        } while (hasNext)
+
+        return Observable.just(allChapters.distinctBy { it.url }.sortedByDescending { it.chapter_number })
     }
+
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =============================== Pages =================================
     override fun pageListRequest(chapter: SChapter): Request {
