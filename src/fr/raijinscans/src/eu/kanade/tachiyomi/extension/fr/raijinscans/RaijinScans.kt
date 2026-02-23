@@ -155,7 +155,9 @@ class RaijinScans : HttpSource() {
     }
 
     // ========================= Chapter List ==========================
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("ul.scroll-sm li.item").map(::chapterFromElement)
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("ul.scroll-sm li.item")
+        .filterNot { it.selectFirst("a.cairo-premium") != null }
+        .map(::chapterFromElement)
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val link = element.selectFirst("a")!!
