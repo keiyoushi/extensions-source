@@ -15,7 +15,7 @@ data class PaginationData(
 )
 
 @Serializable
-data class PaginatedMangaList(
-    @SerialName("manga_list") val mangaList: List<MangaDto>,
+data class MangaListResponseDto(
+    @SerialName("manga_list") val mangaList: List<MangaDetailDto>,
     val pagi: PaginationData,
 )

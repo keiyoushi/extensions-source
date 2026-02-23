@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.rawdevartart
 
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.ChapterDetailsDto
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaDetailsDto
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.PaginatedMangaList
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.ChapterResponseDto
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaListResponseDto
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaResponseDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -25,8 +24,6 @@ class Rawdevartart : HttpSource() {
     override val lang = "ja"
 
     override val baseUrl = "https://rawdevart.art"
-
-    private val pageUrl = "https://s1.rawuwu.com"
 
     override val supportsLatest = true
 
@@ -71,7 +68,11 @@ class Rawdevartart : HttpSource() {
             (if (filters.isEmpty()) getFilterList() else filters).forEach { f ->
                 when (f) {
                     is UriFilter -> f.addToUri(this)
-                    is GenreFilter -> addPathSegments(f.values[f.state].path)
+                    is GenreFilter -> {
+                        addPathSegment("genre")
+                        addPathSegment(f.values[f.state].path)
+                    }
+
                     else -> {}
                 }
             }
@@ -81,27 +82,27 @@ class Rawdevartart : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<PaginatedMangaList>()
+        val data = response.parseAs<MangaListResponseDto>()
 
         return data.toMangasPage()
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<MangaDetailsDto>()
+        val data = response.parseAs<MangaResponseDto>()
 
         return data.toSManga()
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<MangaDetailsDto>()
+        val data = response.parseAs<MangaResponseDto>()
 
         return data.toSChapterList()
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ChapterDetailsDto>()
+        val data = response.parseAs<ChapterResponseDto>()
 
-        return data.toPageList(pageUrl)
+        return data.toPageList()
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
