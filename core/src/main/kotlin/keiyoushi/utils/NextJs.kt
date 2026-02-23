@@ -2,7 +2,6 @@ package keiyoushi.utils
 
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -23,11 +22,7 @@ private fun <T> extractValueNextJS(
 ): T? {
     if (payload !is JsonObject && payload !is JsonArray) return null
     if (predicate(payload)) {
-        return try {
-            jsonInstance.decodeFromJsonElement(deserializer, payload)
-        } catch (_: SerializationException) {
-            null
-        }
+        return jsonInstance.decodeFromJsonElement(deserializer, payload)
     }
     val children: Iterable<JsonElement> = when (payload) {
         is JsonObject -> payload.values
@@ -66,17 +61,105 @@ private fun Document.extractPagesRouterPayloads(): List<JsonElement> {
     }
 }
 
-private fun extractRscPayloads(body: String): List<JsonElement> = body.lines()
-    .filter { it.isNotBlank() }
-    .mapNotNull { line ->
-        val colonIndex = line.indexOf(':')
-        if (colonIndex == -1) return@mapNotNull null
-        try {
-            jsonInstance.parseToJsonElement(line.substring(colonIndex + 1))
-        } catch (_: Exception) {
-            null
+private fun extractRscPayloads(body: String): List<JsonElement> {
+    val results = mutableListOf<JsonElement>()
+    var pos = 0
+
+    while (pos < body.length) {
+        // Find next `<hex>:` chunk header
+        val colonIdx = body.indexOf(':', pos)
+        if (colonIdx == -1) break
+
+        // Validate everything before colon is hex digits
+        val id = body.substring(pos, colonIdx)
+        if (id.isEmpty() || !id.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }) {
+            pos++
+            continue
+        }
+
+        pos = colonIdx + 1
+        if (pos >= body.length) break
+
+        if (body[pos] == 'T') {
+            // Binary chunk: T<hexLen>,<content>
+            pos++
+            val commaIdx = body.indexOf(',', pos)
+            if (commaIdx == -1) break
+            val byteLen = body.substring(pos, commaIdx).toIntOrNull(16) ?: break
+            pos = commaIdx + 1
+            // Advance exactly byteLen UTF-8 bytes
+            var bytes = 0
+            val start = pos
+            while (pos < body.length && bytes < byteLen) {
+                bytes += when {
+                    body[pos].code < 0x80 -> 1
+                    body[pos].code < 0x800 -> 2
+                    else -> 3
+                }
+                pos++
+            }
+            try {
+                results.add(jsonInstance.parseToJsonElement(body.substring(start, pos)))
+            } catch (_: Exception) {}
+        } else {
+            // JSON chunk — parse by bracket depth
+            val (element, end) = parseJsonAt(body, pos)
+            if (element != null) results.add(element)
+            pos = end
         }
     }
+
+    return results
+}
+
+/**
+ * Attempts to parse a JSON value at [start] in [body], returning the parsed element
+ * and the position immediately after the JSON value ends.
+ */
+private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
+    if (start >= body.length) return Pair(null, start)
+
+    var depth = 0
+    var inString = false
+    var escape = false
+    var i = start
+
+    while (i < body.length) {
+        val c = body[i++]
+        if (escape) {
+            escape = false
+            continue
+        }
+        if (c == '\\' && inString) {
+            escape = true
+            continue
+        }
+        if (c == '"') {
+            inString = !inString
+            continue
+        }
+        if (inString) continue
+        when (c) {
+            '{', '[' -> depth++
+            '}', ']' -> if (--depth == 0) {
+                return try {
+                    Pair(jsonInstance.parseToJsonElement(body.substring(start, i)), i)
+                } catch (_: Exception) {
+                    Pair(null, i)
+                }
+            }
+        }
+        // Primitives (no brackets): stop at next chunk boundary
+        if (depth == 0 && (c.isWhitespace() || c == '\n')) {
+            return try {
+                Pair(jsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
+            } catch (_: Exception) {
+                Pair(null, i)
+            }
+        }
+    }
+    return Pair(null, i)
+}
 
 /**
  * Builds a [JsonElement] predicate inferred from [T]'s serial descriptor, matching any
