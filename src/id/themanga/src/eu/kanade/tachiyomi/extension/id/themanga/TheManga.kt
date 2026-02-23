@@ -16,6 +16,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -23,11 +24,8 @@ import java.util.Locale
 class TheManga : HttpSource() {
 
     override val name = "TheManga"
-
     override val baseUrl = "https://themanga.my.id"
-
     override val lang = "id"
-
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()
@@ -52,29 +50,28 @@ class TheManga : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val document = response.document()
 
         val mangas = document.select("a.manga-card").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
-                title = element.selectFirst(".card-title")?.text() ?: ""
+                title = element.selectFirst(".card-title")?.text().orEmpty()
                 thumbnail_url = element.selectFirst(".cover img")?.absUrl("src")
             }
         }
 
         val hasNextPage = document.selectFirst("a[rel=next]") != null
-
         return MangasPage(mangas, hasNextPage)
     }
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val document = response.document()
 
         return SManga.create().apply {
-            title = document.selectFirst(".hero-title")?.text() ?: ""
-            author = document.selectFirst(".meta-item-label:contains(Author) + .meta-item-value")?.text()
-            artist = document.selectFirst(".meta-item-label:contains(Artist) + .meta-item-value")?.text()
+            title = document.selectFirst(".hero-title")?.text().orEmpty()
+            author = document.meta("Author")
+            artist = document.meta("Artist")
             description = document.selectFirst(".synopsis-text")?.text()
             thumbnail_url = document.selectFirst(".hero-cover img")?.absUrl("src")
 
@@ -84,27 +81,29 @@ class TheManga : HttpSource() {
                 else -> SManga.UNKNOWN
             }
 
-            val genres = document.select(".meta-pill-row .meta-pill").map { it.text() }.toMutableList()
-            document.selectFirst(".meta-item-label:contains(Type) + .meta-item-value")?.text()?.let {
-                if (it.isNotBlank()) genres.add(it)
-            }
+            val genres = document.select(".meta-pill-row .meta-pill")
+                .map { it.text() }
+                .toMutableList()
+
+            document.meta("Type")?.takeIf { it.isNotBlank() }?.let(genres::add)
+
             genre = genres.joinToString()
         }
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "?all=1", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}?all=1", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val document = response.document()
 
         return document.select(".chapter-row").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("data-href"))
-                name = element.selectFirst(".chapter-title")?.text() ?: ""
-                date_upload = element.selectFirst("[data-local-time]")?.attr("data-local-time")?.let {
-                    dateFormat.tryParse(it)
-                } ?: 0L
+                name = element.selectFirst(".chapter-title")?.text().orEmpty()
+                date_upload = element.selectFirst("[data-local-time]")
+                    ?.attr("data-local-time")
+                    ?.let(dateFormat::tryParse) ?: 0L
             }
         }
     }
@@ -112,35 +111,32 @@ class TheManga : HttpSource() {
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
         if (!chapter.url.contains("/chapter/")) {
-            // transform old Madara URLs
             OLD_URL_REGEX.find(chapter.url)?.let {
                 val mangaSlug = it.groupValues[1]
                 val number = it.groupValues[2].replace("-", ".")
-                val formattedNumber = if (number.contains(".")) {
-                    number.padEnd(number.indexOf(".") + 3, '0')
+                val dotIndex = number.indexOf(".")
+                val formatted = if (dotIndex >= 0) {
+                    number.padEnd(dotIndex + 3, '0')
                 } else {
                     "$number.00"
                 }
-                return GET("$baseUrl/manga/$mangaSlug/chapter/$formattedNumber", headers)
+                return GET("$baseUrl/manga/$mangaSlug/chapter/$formatted", headers)
             }
         }
-
         return super.pageListRequest(chapter)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val document = response.document()
+
         val script = document.selectFirst("script:containsData(const pages =)")?.data()
             ?: throw Exception("Script yang berisi data halaman tidak ditemukan")
 
-        val pagesJson = PAGES_REGEX.find(script)?.groupValues?.get(1)
+        val json = PAGES_REGEX.find(script)?.groupValues?.get(1)
             ?: throw Exception("Data JSON halaman tidak ditemukan dalam script")
 
-        val pages = pagesJson.parseAs<List<PageDto>>()
-
-        return pages.map {
-            Page(it.number - 1, "", it.url)
-        }
+        return json.parseAs<List<PageDto>>()
+            .map { Page(it.number - 1, "", it.url) }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -156,6 +152,11 @@ class TheManga : HttpSource() {
         Filter.Separator(),
         OtherFilterGroup(),
     )
+
+    // ============================== Utils ===============================
+    private fun Response.document(): Document = Jsoup.parse(body.string(), request.url.toString())
+
+    private fun Document.meta(label: String): String? = selectFirst(".meta-item-label:matchesOwn(^$label$) + .meta-item-value")?.text()
 
     @Serializable
     data class PageDto(
