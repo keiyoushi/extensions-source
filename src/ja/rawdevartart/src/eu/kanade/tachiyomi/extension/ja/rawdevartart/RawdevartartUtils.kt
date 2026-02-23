@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.rawdevartart
 
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.ChapterDetailsDto
 import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.ChapterDto
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaDetailsDto
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaDto
-import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.PaginatedMangaList
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.ChapterResponseDto
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaDetailDto
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaListResponseDto
+import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaResponseDto
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -17,14 +17,14 @@ import java.util.Locale
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
-fun PaginatedMangaList.toMangasPage(): MangasPage {
+fun MangaListResponseDto.toMangasPage(): MangasPage {
     val manga = mangaList.map { it.toSManga() }
     val hasNextPage = (pagi.button?.next ?: 0) != 0
 
     return MangasPage(manga, hasNextPage)
 }
 
-private fun MangaDto.toSManga() = SManga.create().apply {
+private fun MangaDetailDto.toSManga() = SManga.create().apply {
     // The website URL is manually calculated using a slugify function that I am too
     // lazy to reimplement.
     url = "/spa/manga/$id"
@@ -32,7 +32,7 @@ private fun MangaDto.toSManga() = SManga.create().apply {
     thumbnail_url = coverImage
 }
 
-fun MangaDetailsDto.toSManga() = SManga.create().apply {
+fun MangaResponseDto.toSManga() = SManga.create().apply {
     title = detail.name
     author = authors.joinToString { it.name }
     description = buildString {
@@ -51,7 +51,7 @@ fun MangaDetailsDto.toSManga() = SManga.create().apply {
     thumbnail_url = detail.coverImageFull ?: detail.coverImage
 }
 
-fun MangaDetailsDto.toSChapterList() = chapters.map { it.toSChapter(detail.id) }
+fun MangaResponseDto.toSChapterList() = chapters.map { it.toSChapter(detail.id) }
 
 private fun ChapterDto.toSChapter(mangaId: Int) = SChapter.create().apply {
     url = "/spa/manga/$mangaId/$number"
@@ -70,11 +70,11 @@ private fun ChapterDto.toSChapter(mangaId: Int) = SChapter.create().apply {
     }.getOrDefault(0L)
 }
 
-fun ChapterDetailsDto.toPageList(baseUrl: String): List<Page> {
-    val document = Jsoup.parseBodyFragment(detail.content!!, baseUrl)
+fun ChapterResponseDto.toPageList(): List<Page> {
+    val document = Jsoup.parseBodyFragment(detail.content!!, detail.server)
 
-    return document.select("div.chapter-img canvas").mapIndexed { i, it ->
-        Page(i, imageUrl = it.absUrl("data-srcset"))
+    return document.select("img[data-src]").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("data-src"))
     }
 }
 
