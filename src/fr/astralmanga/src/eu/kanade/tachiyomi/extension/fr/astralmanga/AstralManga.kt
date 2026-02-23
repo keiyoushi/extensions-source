@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -122,11 +123,11 @@ class AstralManga : HttpSource() {
 
     // ========================== Details ==========================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers.newBuilder().add("RSC", "1").build())
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return parseMangaDetailsFromRsc(document, response.request.url.toString())
+        val rscData = response.body.string()
+        return parseMangaDetailsFromRsc(rscData, response.request.url)
     }
 
     // ========================== Chapters ==========================
@@ -134,14 +135,14 @@ class AstralManga : HttpSource() {
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val mangaUrl = response.getMangaUrlFromRequest()
+        val rscData = response.body.string()
+        val url = response.request.url
 
-        val chapters = parseChaptersFromRsc(document, mangaUrl)
+        val chapters = parseChaptersFromRsc(rscData, url)
         if (chapters.isNotEmpty()) return chapters
 
         // RSC data can be partial on first load; retry with cache-busting
-        val retryUrl = response.request.url.newBuilder()
+        val retryUrl = url.newBuilder()
             .addQueryParameter("_", System.currentTimeMillis().toString())
             .build()
         val retryRequest = response.request.newBuilder()
@@ -149,7 +150,7 @@ class AstralManga : HttpSource() {
             .header("Cache-Control", "no-cache")
             .build()
         val retryResponse = client.newCall(retryRequest).execute()
-        return parseChaptersFromRsc(retryResponse.asJsoup(), mangaUrl)
+        return parseChaptersFromRsc(retryResponse.body.string(), url)
     }
 
     // ========================== Pages ==========================
@@ -166,8 +167,6 @@ class AstralManga : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    private fun Response.getMangaUrlFromRequest(): String = request.url.toString()
 
     // ========================== Parsing ==========================
 
@@ -190,63 +189,36 @@ class AstralManga : HttpSource() {
      * The RSC data contains all manga, so we scope extraction to the
      * specific manga's JSON block using its UUID from the URL.
      */
-    private fun parseMangaDetailsFromRsc(document: Document, url: String): SManga {
-        val rawRsc = extractRscData(document)
-        val normalized = normalizeRscData(rawRsc)
+    private fun parseMangaDetailsFromRsc(rscData: String, url: HttpUrl): SManga {
+        val normalized = normalizeRscData(rscData)
 
-        val mangaUuid = url.substringAfter("/manga/").substringBefore("/").substringBefore("?")
+        val mangaUuid = url.pathSegments[1]
         val mangaContext = findMangaContext(normalized, mangaUuid)
         return SManga.create().apply {
-            this.url = url.removePrefix(baseUrl)
+            setUrlWithoutDomain(url.toString())
 
-            title = (mangaContext?.let { FIELD_TITLE_REGEX.find(it)?.groupValues?.get(1) })
-                ?: document.selectFirst("main h1")?.text()?.trim()
-                ?: "Unknown"
+            title = mangaContext?.let { FIELD_TITLE_REGEX.find(it)?.groupValues?.get(1) }
+                ?: throw Exception("Title not found")
 
             val rscDescription = mangaContext?.let { FIELD_DESCRIPTION_REGEX.find(it)?.groupValues?.get(1) }
-            description = (resolveRscReference(normalized, rscDescription))
-                ?: document.selectFirst("main p")?.text()?.trim()
+            description = resolveRscReference(normalized, rscDescription)
 
             val s3Key = mangaContext?.let { RSC_S3_LINK_REGEX.find(it)?.groupValues?.get(1) }
-            if (s3Key != null) {
-                thumbnail_url = presignS3Key(s3Key)
-            } else {
-                thumbnail_url = document.selectFirst("main img[alt*=cover]")?.let { img ->
-                    img.absUrl("src").ifEmpty { img.attr("src") }
-                }
-            }
+            thumbnail_url = s3Key?.let { presignS3Key(it) }
 
             val rscStatus = mangaContext?.let { FIELD_STATUS_REGEX.find(it)?.groupValues?.get(1) }
             status = when (rscStatus?.uppercase()) {
                 "ON_GOING" -> SManga.ONGOING
-
                 "COMPLETED" -> SManga.COMPLETED
-
                 "CANCELLED" -> SManga.CANCELLED
-
                 "HIATUS" -> SManga.ON_HIATUS
-
-                else -> {
-                    val pageText = document.selectFirst("main")?.text().orEmpty()
-                    when {
-                        pageText.contains("En cours") -> SManga.ONGOING
-                        pageText.contains("Terminé") -> SManga.COMPLETED
-                        pageText.contains("Annulé") -> SManga.CANCELLED
-                        pageText.contains("En pause") -> SManga.ON_HIATUS
-                        else -> SManga.UNKNOWN
-                    }
-                }
+                else -> SManga.UNKNOWN
             }
 
             val mangaType = mangaContext?.let { FIELD_TYPE_REGEX.find(it)?.groupValues?.get(1) }
 
             val rscGenres = mangaContext?.let { extractGenresFromRsc(it) } ?: emptyList()
-            genre = if (rscGenres.isNotEmpty()) {
-                (listOfNotNull(mangaType) + rscGenres).joinToString()
-            } else {
-                val htmlGenres = document.select("a[href*=/catalog?tags=]").map { it.text().trim() }
-                (listOfNotNull(mangaType) + htmlGenres).joinToString()
-            }
+            genre = (listOfNotNull(mangaType) + rscGenres).joinToString()
 
             // --- Metadata extraction (Authors, Artists, Teams, Year) ---
             val rscAuthors = mangaContext?.let { extractListFromRsc(it, FIELD_AUTHORS_REGEX) } ?: emptyList()
@@ -260,31 +232,12 @@ class AstralManga : HttpSource() {
             author = rscAuthors.joinToString().ifBlank { null }
             artist = rscArtists.joinToString().ifBlank { author }
 
-            var htmlTeams = emptyList<String>()
-            var htmlYear: String? = null
-
-            val infoBoxes = document.select("main div.border")
-            infoBoxes.forEach { box ->
-                val label = box.selectFirst("h3")?.text()?.trim()?.lowercase() ?: return@forEach
-                val value = box.selectFirst("h2")?.text()?.trim() ?: return@forEach
-                when {
-                    label.contains("auteur") -> if (author.isNullOrBlank()) author = value
-                    label.contains("artiste") -> if (artist.isNullOrBlank()) artist = value
-                    label.contains("studio") -> if (artist.isNullOrBlank()) artist = value
-                    label.contains("team") -> htmlTeams = listOf(value)
-                    label.contains("année") -> htmlYear = value
-                }
-            }
-
-            val finalTeams = rscTeams.ifEmpty { htmlTeams }
-            val finalYear = rscYear ?: htmlYear
-
             val extraInfo = StringBuilder()
-            if (finalTeams.isNotEmpty()) {
-                extraInfo.append("\n\nTeams: ").append(finalTeams.joinToString())
+            if (rscTeams.isNotEmpty()) {
+                extraInfo.append("\n\nTeams: ").append(rscTeams.joinToString())
             }
-            if (!finalYear.isNullOrBlank()) {
-                extraInfo.append("\nAnnée: ").append(finalYear)
+            if (!rscYear.isNullOrBlank()) {
+                extraInfo.append("\nAnnée: ").append(rscYear)
             }
             if (extraInfo.isNotEmpty()) {
                 description = (description ?: "") + extraInfo.toString()
@@ -334,11 +287,10 @@ class AstralManga : HttpSource() {
     /**
      * Parse chapters from RSC data. The RSC "chapters" array contains ALL chapters
      */
-    private fun parseChaptersFromRsc(document: Document, mangaUrl: String): List<SChapter> {
-        val rawRsc = extractRscData(document)
-        if (rawRsc.isEmpty()) return emptyList()
+    private fun parseChaptersFromRsc(rscData: String, url: HttpUrl): List<SChapter> {
+        if (rscData.isEmpty()) return emptyList()
 
-        val normalized = normalizeRscData(rawRsc)
+        val normalized = normalizeRscData(rscData)
 
         val chaptersIdx = normalized.indexOf("\"chapters\":[{")
         if (chaptersIdx < 0) return emptyList()
@@ -350,7 +302,7 @@ class AstralManga : HttpSource() {
             normalized.substring(chaptersIdx)
         }
 
-        val urlId = mangaUrl.substringAfter("/manga/").substringBefore("/").substringBefore("?")
+        val urlId = url.pathSegments[1]
         val mangaContext = findMangaContext(normalized, urlId)
         val internalMangaId = mangaContext?.let { FIELD_ID_REGEX.find(it)?.groupValues?.get(1) }
 
@@ -372,7 +324,7 @@ class AstralManga : HttpSource() {
 
             chapters.add(
                 SChapter.create().apply {
-                    url = "/manga/$urlId/chapter/$chapterId"
+                    this.url = "/manga/$urlId/chapter/$chapterId"
                     name = "Chapitre $orderId"
                     chapter_number = orderId.toFloat()
                     date_upload = DATE_FORMAT.tryParse(publishDate)
