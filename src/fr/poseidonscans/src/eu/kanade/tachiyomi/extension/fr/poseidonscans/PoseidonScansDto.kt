@@ -59,6 +59,11 @@ class PageDataRoot(
 )
 
 @Serializable
+class CurrentChapterData(
+    val isPremium: Boolean?,
+)
+
+@Serializable
 class PageDataChapter(
     val images: JsonArray? = null,
 )

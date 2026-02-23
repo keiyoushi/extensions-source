@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
+import android.content.SharedPreferences
 import android.util.Log
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
@@ -23,8 +28,11 @@ import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.getValue
 
-class PoseidonScans : HttpSource() {
+class PoseidonScans :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Poseidon Scans"
     override val baseUrl = "https://poseidon-scans.co"
@@ -34,6 +42,8 @@ class PoseidonScans : HttpSource() {
     private val nextFPushRegex = Regex("""self\.__next_f\.push\(\s*\[\s*1\s*,\s*"(.*)"\s*\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
 
     override val client = network.cloudflareClient
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun String.toAbsoluteUrl(): String = if (this.startsWith("http")) this else baseUrl + this
 
@@ -101,6 +111,62 @@ class PoseidonScans : HttpSource() {
             }
 
         return MangasPage(mangas, false)
+    }
+
+    // Extracts Next.js page data, trying __NEXT_DATA__ script first, then self.__next_f.push.
+    // same as bottom but that function does too much stuff for me to edit sorry x)
+    private fun extractNextJsPageCurrentChapterData(document: Document): JsonObject? {
+        try {
+            var foundRelevantObject: JsonObject? = null
+            scriptLoop@ for (script in document.select("script")) {
+                val scriptContent = script.data()
+                if (!scriptContent.contains("self.__next_f.push")) continue
+                var objectFoundInThisScript = false
+
+                nextFPushRegex.findAll(scriptContent).forEach nextFPushMatch@{ matchResult ->
+                    if (objectFoundInThisScript || foundRelevantObject != null) return@nextFPushMatch
+                    if (matchResult.groupValues.size < 2) return@nextFPushMatch
+
+                    val rawDataString = matchResult.groupValues[1]
+                    val cleanedDataString = rawDataString.replace("\\\\", "\\").replace("\\\"", "\"")
+
+                    fun tryParseAndValidate(marker: String, data: String): JsonObject? {
+                        var searchIndex = -1
+                        while (true) {
+                            searchIndex = data.indexOf(marker, startIndex = searchIndex + 1)
+                            if (searchIndex == -1) break
+                            val objectStartIndex = searchIndex + marker.length - 1
+                            val potentialJson = extractJsonObjectString(data, objectStartIndex) ?: continue
+                            try {
+                                val parsedObject = potentialJson.parseAs<JsonObject>()
+                                val isSane = when (marker) {
+                                    "\"currentChapter\":{" -> parsedObject.containsKey("isPremium") || parsedObject.containsKey("mangaId") || parsedObject.containsKey("previousChapter")
+                                    else -> true
+                                }
+                                if (isSane) return parsedObject
+                            } catch (e: Exception) {
+                                Log.e("PoseidonScans", "Error parsing validation JSON data: ${e.message}")
+                            }
+                        }
+                        return null
+                    }
+
+                    if (foundRelevantObject == null) foundRelevantObject = tryParseAndValidate("\"currentChapter\":{", cleanedDataString)
+
+                    if (foundRelevantObject != null) {
+                        objectFoundInThisScript = true
+                        return@nextFPushMatch
+                    }
+                }
+                if (objectFoundInThisScript || foundRelevantObject != null) break@scriptLoop
+            }
+            Log.e("Poseidon foundRelevant", foundRelevantObject.toString())
+            if (foundRelevantObject != null) return foundRelevantObject
+        } catch (e: Exception) {
+            Log.e("PoseidonScans", "General error in extractNextJsPageData: ${e.message}")
+            return null
+        }
+        return null
     }
 
     // Extracts Next.js page data, trying __NEXT_DATA__ script first, then self.__next_f.push.
@@ -390,7 +456,11 @@ class PoseidonScans : HttpSource() {
         return mangaDto.chapters
             ?.mapNotNull { ch ->
                 // If chapter is premium, check if premium period has expired
-                if (ch.isPremium == true) {
+                val showPremium = preferences.getBoolean(
+                    SHOW_PREMIUM_KEY,
+                    SHOW_PREMIUM_DEFAULT,
+                )
+                if (ch.isPremium == true && !showPremium) {
                     ch.premiumUntil?.let { premiumUntilString ->
                         val premiumUntilDate = parseIsoDate(premiumUntilString)
                         if (premiumUntilDate > 0) {
@@ -418,8 +488,16 @@ class PoseidonScans : HttpSource() {
                     }
 
                     name = ch.title?.trim()?.takeIf { it.isNotBlank() }
-                        ?.let { title -> "$baseName - $title" }
-                        ?: baseName
+                        ?.let { title ->
+                            buildString {
+                                if (ch.isPremium == true) append("🔒 ")
+                                append("$baseName - $title")
+                            }
+                        }
+                        ?: buildString {
+                            if (ch.isPremium == true) append("🔒 ")
+                            append(baseName)
+                        }
                     setUrlWithoutDomain("/serie/${mangaDto.slug}/chapter/$chapterNumberString")
                     date_upload = parseIsoDate(ch.createdAt)
                     chapter_number = ch.number
@@ -448,8 +526,16 @@ class PoseidonScans : HttpSource() {
         val pageData = extractNextJsPageData(document)
             ?: throw Exception("Could not extract Next.js data for page list.")
 
+        val currentChapterData = extractNextJsPageCurrentChapterData(document)
+            ?: throw Exception("Could not extract Next.js data for page list.")
+
         val pageDataDto = pageData.toString().parseAs<PageDataRoot>()
+        val currentChapterDataDto = currentChapterData.toString().parseAs<CurrentChapterData>()
         val chapterPageUrl = document.location()
+
+        if (currentChapterDataDto.isPremium == true) {
+            throw Exception("This chapter is premium. Please read it on the website.")
+        }
 
         val imagesListJson = pageDataDto.images
             ?: pageDataDto.chapter?.images
@@ -530,4 +616,20 @@ class PoseidonScans : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
     override fun getFilterList(): FilterList = FilterList()
+
+    // ========================== Preference =============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = SHOW_PREMIUM_KEY
+            title = "Show premium chapters"
+            summary = "Show paid chapters (identified by 🔒) in the list."
+            setDefaultValue(SHOW_PREMIUM_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val SHOW_PREMIUM_KEY = "show_premium_chapters"
+        private const val SHOW_PREMIUM_DEFAULT = false
+    }
 }
