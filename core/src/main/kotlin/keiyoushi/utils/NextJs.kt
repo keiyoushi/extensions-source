@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import kotlin.reflect.typeOf
 
 private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
 
@@ -170,12 +171,35 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
  */
 @PublishedApi
 internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Boolean {
-    val descriptor = serializer<T>().descriptor
-    val requiredKeys = (0 until descriptor.elementsCount)
-        .filter { !descriptor.getElementDescriptor(it).isNullable && !descriptor.isElementOptional(it) }
-        .map { descriptor.getElementName(it) }
+    val kType = typeOf<T>()
+    val isList = kType.classifier == List::class
+
+    val elementDescriptor = if (isList) {
+        serializer<T>().descriptor.getElementDescriptor(0)
+    } else {
+        serializer<T>().descriptor
+    }
+
+    val requiredKeys = (0 until elementDescriptor.elementsCount)
+        .filterNot { elementDescriptor.isElementOptional(it) || elementDescriptor.getElementDescriptor(it).isNullable }
+        .map { elementDescriptor.getElementName(it) }
         .toSet()
-    return { element -> element is JsonObject && requiredKeys.all { it in element } }
+
+    return if (isList) {
+        { element ->
+            element is JsonArray &&
+                requiredKeys.isNotEmpty() &&
+                element.isNotEmpty() &&
+                element.first() is JsonObject &&
+                requiredKeys.all { it in element.first().jsonObject }
+        }
+    } else {
+        { element ->
+            element is JsonObject &&
+                requiredKeys.isNotEmpty() &&
+                requiredKeys.all { it in element }
+        }
+    }
 }
 
 // ---- Document ----
