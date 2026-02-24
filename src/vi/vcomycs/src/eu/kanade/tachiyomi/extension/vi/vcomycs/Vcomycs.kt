@@ -22,7 +22,7 @@ import java.util.TimeZone
 class Vcomycs : HttpSource() {
     override val name = "Vcomycs"
     override val lang = "vi"
-    override val baseUrl = "https://vivicomi15.info"
+    override val baseUrl = "https://vivicomi16.info"
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
