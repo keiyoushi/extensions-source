@@ -233,7 +233,7 @@ class RaijinScans :
         // so i made it so it goes to /{mangaurl}/{chapter number} which should show in almost all case the buy premium page and if it doesnt whatever it throw a 404
         val isPremium = document.select(".subscription-required-message").isNotEmpty() || response.request.url.toString().contains("connexion")
         if (isPremium) {
-            throw Exception("This chapter is premium. Please read it on the website.")
+            throw Exception("This chapter is premium. Please connect via the webview to view.")
         }
 
         val result = document.select("div.protected-image-data")
