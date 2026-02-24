@@ -10,36 +10,23 @@ import java.util.Locale
 class BarManga :
     Madara(
         "BarManga",
-        "https://libribar.com",
+        "https://archiviumbar.com",
         "es",
         SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
-    override val mangaDetailsSelectorDescription = "div.flamesummary > div.manga-excerpt"
+    override val mangaDetailsSelectorTitle = ".breadcrumb > li:last-child > a"
 
-    override val pageListParseSelector = "div.page-break"
-
-    private val imageSegmentsRegex = """var\s+imageSegments\s*=\s*\[\s*(['"][A-Za-z0-9+/=]+['"](?:\s*,\s*['"][A-Za-z0-9+/=]+['"])*)\s*];""".toRegex()
-    private val base64ItemRegex = """['"]([A-Za-z0-9+/=]+)['"]""".toRegex()
+    override val pageListParseSelector = ".manga-reader-container > .manga-page-container"
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
         return document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
-            val scriptData = element.select("script").firstNotNullOfOrNull { script ->
-                val data = script.data()
-                if (data.contains("var imageSegments")) data else null
-            } ?: return@mapIndexedNotNull null
-
-            val match = imageSegmentsRegex.find(scriptData) ?: return@mapIndexedNotNull null
-            val arrayContent = match.groupValues[1]
-
-            val segments = base64ItemRegex.findAll(arrayContent).map { it.groupValues[1] }.toList()
-            if (segments.isEmpty()) return@mapIndexedNotNull null
-
-            val joinedBase64 = segments.joinToString("")
-            val imageUrl = String(Base64.decode(joinedBase64, Base64.DEFAULT))
+            // The site tries to use a proxy first, but requires additional work to use. Fallback (no proxy) still works
+            val encodedImageUrl = element.attr("data-url")
+            val imageUrl = String(Base64.decode(encodedImageUrl, Base64.DEFAULT))
 
             Page(index, document.location(), imageUrl)
         }

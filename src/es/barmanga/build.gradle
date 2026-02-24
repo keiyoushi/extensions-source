@@ -2,8 +2,8 @@ ext {
     extName = 'BarManga'
     extClass = '.BarManga'
     themePkg = 'madara'
-    baseUrl = 'https://libribar.com'
-    overrideVersionCode = 7
+    baseUrl = 'https://archiviumbar.com'
+    overrideVersionCode = 8
     isNsfw = true
 }
 
