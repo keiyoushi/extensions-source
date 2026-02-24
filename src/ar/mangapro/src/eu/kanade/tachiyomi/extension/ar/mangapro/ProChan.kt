@@ -100,7 +100,7 @@ class ProChan : HttpSource() {
             if (url.host == domain && path.size >= 4 && path[0] == "series") {
                 val type = path[1]
                 if (type !in SUPPORTED_TYPES) {
-                    throw Exception("Unsupported type: $type")
+                    throw Exception("نوع غير مدعوم")
                 }
                 val mangaId = path[2]
                 val slug = path[3]
@@ -113,7 +113,7 @@ class ProChan : HttpSource() {
                     MangasPage(listOf(it), false)
                 }
             } else {
-                throw Exception("Unsupported url")
+                throw Exception("رابط غير مدعوم")
             }
         }
 
@@ -350,7 +350,7 @@ class ProChan : HttpSource() {
             .addQueryParameter("id", driveFileId)
             .build()
 
-        client.newCall(GET(driveLink)).execute()
+        client.newCall(GET(driveLink, super.headers)).execute()
             .let { handleDriveRedirect(it) }
             .use { response ->
                 ZipArchiveInputStream(response.body.byteStream().buffered()).use { zis ->
@@ -385,7 +385,9 @@ class ProChan : HttpSource() {
                     addQueryParameter(it.attr("name"), it.attr("value"))
                 }
             }.build()
-        val headers = Headers.headersOf("Referer", response.request.url.toString())
+        val headers = super.headersBuilder()
+            .set("Referer", response.request.url.toString())
+            .build()
         return client.newCall(GET(actionUrl, headers)).execute()
     }
 
@@ -441,7 +443,7 @@ class ProChan : HttpSource() {
         if (imageData == null) {
             val coins = responseBody.extractNextJsRsc<Coins>()?.coins
             if (coins != null && coins > 0) {
-                throw Exception("Locked Chapter")
+                throw Exception("فصل مدفوع")
             } else {
                 return emptyList()
             }
