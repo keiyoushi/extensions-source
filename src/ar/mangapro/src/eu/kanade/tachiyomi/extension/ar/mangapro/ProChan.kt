@@ -331,19 +331,29 @@ class ProChan : HttpSource() {
         val canUseZip = driveFileId != null
 
         return if (isDownloader && canUseZip) {
-            Observable.just(zipPageList(driveFileId))
+            Observable.fromCallable { zipPageList(driveFileId) }
+                .doOnError { cacheDir(driveFileId).deleteRecursively() }
+                .onErrorResumeNext {
+                    super.fetchPageList(chapter)
+                }
         } else {
             super.fetchPageList(chapter)
                 .onErrorResumeNext { e ->
                     if (canUseZip) {
-                        Observable.just(zipPageList(driveFileId))
+                        Observable.fromCallable { zipPageList(driveFileId) }
+                            .doOnError { cacheDir(driveFileId).deleteRecursively() }
+                            .onErrorResumeNext {
+                                Observable.error(e)
+                            }
                     } else {
                         Observable.error(e)
                     }
                 }
                 .flatMap { pages ->
                     if (pages.isEmpty() && canUseZip) {
-                        Observable.just(zipPageList(driveFileId))
+                        Observable.fromCallable { zipPageList(driveFileId) }
+                            .doOnError { cacheDir(driveFileId).deleteRecursively() }
+                            .onErrorReturn { pages }
                     } else {
                         Observable.just(pages)
                     }
@@ -351,10 +361,13 @@ class ProChan : HttpSource() {
         }
     }
 
-    private fun zipPageList(driveFileId: String): List<Page> {
+    private fun cacheDir(driveFileId: String): File {
         val context = Injekt.get<Application>()
-        val cacheDir = context.cacheDir
-            .resolve("source_$id/$driveFileId")
+        return context.cacheDir.resolve("source_$id/$driveFileId")
+    }
+
+    private fun zipPageList(driveFileId: String): List<Page> {
+        val cacheDir = cacheDir(driveFileId)
             .also {
                 it.deleteRecursively()
                 it.mkdirs()
@@ -368,15 +381,30 @@ class ProChan : HttpSource() {
         client.newCall(GET(driveLink)).execute()
             .let { handleDriveRedirect(it) }
             .use { response ->
+                check(response.isSuccessful) { "HTTP ${response.code}" }
                 ZipArchiveInputStream(response.body.byteStream().buffered()).use { zis ->
-                    var entry = zis.nextEntry
-                    while (entry != null) {
-                        if (!entry.name.endsWith(".xml")) {
-                            val name = entry.name.substringAfterLast("/")
+                    val seenNames = mutableSetOf<String>()
+                    generateSequence { zis.nextEntry }
+                        .filterNot { it.name.endsWith(".xml") || it.name.endsWith("/") }
+                        .forEach { entry ->
+                            val baseName = entry.name.substringAfterLast("/")
+                            if (baseName.isBlank()) return@forEach
+
+                            val name = if (seenNames.add(baseName)) {
+                                baseName
+                            } else {
+                                val stem = baseName.substringBeforeLast(".")
+                                val ext = baseName.substringAfterLast(".", missingDelimiterValue = "")
+                                val candidate = if (ext.isEmpty()) {
+                                    "${stem}_${seenNames.size}"
+                                } else {
+                                    "${stem}_${seenNames.size}.$ext"
+                                }
+                                seenNames.add(candidate)
+                                candidate
+                            }
                             File(cacheDir, name).outputStream().use { zis.copyTo(it) }
                         }
-                        entry = zis.nextEntry
-                    }
                 }
             }
 
