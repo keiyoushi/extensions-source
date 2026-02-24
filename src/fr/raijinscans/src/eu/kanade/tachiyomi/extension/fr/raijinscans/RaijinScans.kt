@@ -184,7 +184,7 @@ class RaijinScans :
         val link = element.selectFirst("a")!!
         val title = link.attr("title")
         var endUrl: String
-        if (!premium) {
+        if (!link.toString().contains("connexion")) {
             endUrl = link.attr("abs:href")
         } else {
             val titleSplit = title.split(" ")
