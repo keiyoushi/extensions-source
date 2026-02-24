@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -13,7 +12,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.net.URLDecoder
 
 class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
@@ -38,22 +36,12 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "main#main-content a[href*='/series/']:has([style*='background-image'])"
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val href = element.attr("abs:href")
-        setUrlWithoutDomain(href)
-        title = element.attr("title").ifBlank { element.selectFirst("h3")!!.text() }
-        thumbnail_url = element.getImageUrl("*[style*=background-image]")
-    }
+    override fun searchMangaSelector() = "main#main-content [wire:key*='serie']"
 
     override fun searchMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
-        val main = response.asJsoup().selectFirst("main#main-content") ?: return MangasPage(emptyList(), false)
-        val links = main.select("a[href*='/series/']")
-        val mangas = links.map(::searchMangaFromElement)
-            .filter { it.title.isNotBlank() && it.url.isNotBlank() }
-            .distinctBy { it.url }
+        val document = response.asJsoup()
+        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
         return MangasPage(mangas, hasNextPage = mangas.size >= 20)
     }
 
@@ -69,10 +57,21 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val xData = document.selectFirst("[x-data*=pages]")!!.attr("x-data").replace(spaces, "")
-        val pages = URLDecoder.decode(pagesRegex.find(xData)!!.groupValues[1], "UTF-8").parseAs<List<Path>>()
-        val baseLink = linkRegex.find(xData)!!.groupValues[2]
-        return pages.mapIndexed { i, img -> Page(i, document.location(), baseLink + img.path) }
+        val (pages, baseLink) = document.selectFirst("[x-data*=pages]")!!.attr("x-data")
+            .replace(spaces, "")
+            .let {
+                val pages = pagesRegex.find(it)!!.groupValues[1]
+                    .let { encoded -> URLDecoder.decode(encoded, "UTF-8") }
+                    .parseAs<List<Path>>()
+
+                val baseLink = linkRegex.find(it)!!.groupValues[2]
+
+                pages to baseLink
+            }
+
+        return pages.mapIndexed { i, img ->
+            Page(i, document.location(), baseLink + img.path)
+        }
     }
 }
 
