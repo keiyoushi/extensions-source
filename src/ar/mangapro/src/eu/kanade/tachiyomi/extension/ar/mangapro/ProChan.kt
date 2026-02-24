@@ -156,7 +156,7 @@ class ProChan : HttpSource() {
                             thumbnail_url = (manga.coverImageApp?.desktop ?: manga.coverImage)?.let {
                                 if (it.startsWith("/")) {
                                     manga.cdn?.let { cdn ->
-                                        "https//$cdn.$domain$it"
+                                        "https://$cdn.$domain$it"
                                     }
                                 } else {
                                     it
@@ -259,7 +259,7 @@ class ProChan : HttpSource() {
             thumbnail_url = (manga.coverImageApp?.desktop ?: manga.metadata.coverImage)?.let {
                 if (it.startsWith("/")) {
                     manga.cdn?.let { cdn ->
-                        "https//$cdn.$domain$it"
+                        "https://$cdn.$domain$it"
                     }
                 } else {
                     it
@@ -635,4 +635,4 @@ private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private const val ZIP_FILE_HOST = "127.0.0.2"
 
 private val MOBILE_REGEX = Regex("mobile|android|iphone|ipad|ipod", RegexOption.IGNORE_CASE)
-val TABLES_REGEX = Regex("tablet", RegexOption.IGNORE_CASE)
+private val TABLES_REGEX = Regex("tablet", RegexOption.IGNORE_CASE)
