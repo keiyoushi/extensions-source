@@ -16,7 +16,7 @@ import kotlin.reflect.typeOf
 
 private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
 
-private fun <T> extractValueNextJS(
+private fun <T> extractValueNextJs(
     payload: JsonElement,
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
@@ -30,7 +30,7 @@ private fun <T> extractValueNextJS(
         is JsonArray -> payload
     }
     for (child in children) {
-        val result = extractValueNextJS(child, predicate, deserializer)
+        val result = extractValueNextJs(child, predicate, deserializer)
         if (result != null) return result
     }
     return null
@@ -83,19 +83,25 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
 
         if (body[pos] == 'T') {
             // Binary chunk: T<hexLen>,<content>
+            // byteLen is the UTF-8 byte length of the content, not the char count.
             pos++
             val commaIdx = body.indexOf(',', pos)
             if (commaIdx == -1) break
             val byteLen = body.substring(pos, commaIdx).toIntOrNull(16) ?: break
             pos = commaIdx + 1
-            // Advance exactly byteLen UTF-8 bytes
             var bytes = 0
             val start = pos
             while (pos < body.length && bytes < byteLen) {
-                bytes += when {
-                    body[pos].code < 0x80 -> 1
-                    body[pos].code < 0x800 -> 2
-                    else -> 3
+                // Count UTF-8 bytes per code point. Surrogate pairs (supplementary characters,
+                // e.g. emoji) occupy 4 UTF-8 bytes; we consume both surrogate chars in one step.
+                when {
+                    body[pos].code < 0x80 -> bytes += 1
+                    body[pos].code < 0x800 -> bytes += 2
+                    Character.isHighSurrogate(body[pos]) -> {
+                        bytes += 4
+                        pos++ // consume the high surrogate; the loop increment handles the low
+                    }
+                    else -> bytes += 3
                 }
                 pos++
             }
@@ -150,8 +156,7 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
                 }
             }
         }
-        // Primitives (no brackets): stop at next chunk boundary
-        if (depth == 0 && (c.isWhitespace() || c == '\n')) {
+        if (depth == 0 && c.isWhitespace()) {
             return try {
                 Pair(jsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
             } catch (_: Exception) {
@@ -166,8 +171,11 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
  * Builds a [JsonElement] predicate inferred from [T]'s serial descriptor, matching any
  * [JsonObject] that contains all non-optional, non-nullable fields of [T].
  *
- * Used internally by the no-predicate overloads of [Document.extractNextJs],
+ * Used internally by the predicate-free overloads of [Document.extractNextJs],
  * [String.extractNextJsRsc], and [Response.extractNextJs].
+ *
+ * @throws IllegalArgumentException if all fields of [T] are optional or nullable, as no
+ * meaningful predicate can be inferred. Provide an explicit predicate in that case.
  */
 @PublishedApi
 internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Boolean {
@@ -185,10 +193,13 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
         .map { elementDescriptor.getElementName(it) }
         .toSet()
 
+    require(requiredKeys.isNotEmpty()) {
+        "Cannot infer a predicate for ${elementDescriptor.serialName}: all fields are optional or nullable. Provide an explicit predicate instead."
+    }
+
     return if (isList) {
         { element ->
             element is JsonArray &&
-                requiredKeys.isNotEmpty() &&
                 element.isNotEmpty() &&
                 element.first() is JsonObject &&
                 requiredKeys.all { it in element.first().jsonObject }
@@ -196,7 +207,6 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
     } else {
         { element ->
             element is JsonObject &&
-                requiredKeys.isNotEmpty() &&
                 requiredKeys.all { it in element }
         }
     }
@@ -227,29 +237,28 @@ fun <T> Document.extractNextJs(
 ): T? {
     val payloads = extractAppRouterPayloads().ifEmpty { extractPagesRouterPayloads() }
     for (payload in payloads) {
-        val result = extractValueNextJS(payload, predicate, deserializer)
+        val result = extractValueNextJs(payload, predicate, deserializer)
         if (result != null) return result
     }
     return null
 }
 
 /**
- * Reified overload of [Document.extractNextJs] that infers [deserializer] from [T].
+ * Reified overload; infers [deserializer] from [T]. See the
+ * [explicit-deserializer overload][Document.extractNextJs] for full documentation.
  *
  * @param T Must be serializable via [kotlinx.serialization].
- * @see Document.extractNextJs
  */
 inline fun <reified T> Document.extractNextJs(
     noinline predicate: (JsonElement) -> Boolean,
 ): T? = extractNextJs(predicate, serializer<T>())
 
 /**
- * Predicate-free overload of [Document.extractNextJs] that infers both the [deserializer]
- * and the matching predicate from [T]'s serial descriptor via [inferredNextJsPredicate].
+ * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
+ * descriptor via [inferredNextJsPredicate]. See the
+ * [explicit-deserializer overload][Document.extractNextJs] for full documentation.
  *
  * @param T Must be serializable via [kotlinx.serialization].
- * @see Document.extractNextJs
- * @see inferredNextJsPredicate
  */
 inline fun <reified T> Document.extractNextJs(): T? = extractNextJs(inferredNextJsPredicate<T>(), serializer<T>())
 
@@ -278,29 +287,28 @@ fun <T> String.extractNextJsRsc(
     deserializer: DeserializationStrategy<T>,
 ): T? {
     for (payload in extractRscPayloads(this)) {
-        val result = extractValueNextJS(payload, predicate, deserializer)
+        val result = extractValueNextJs(payload, predicate, deserializer)
         if (result != null) return result
     }
     return null
 }
 
 /**
- * Reified overload of [String.extractNextJsRsc] that infers [deserializer] from [T].
+ * Reified overload; infers [deserializer] from [T]. See the
+ * [explicit-deserializer overload][String.extractNextJsRsc] for full documentation.
  *
  * @param T Must be serializable via [kotlinx.serialization].
- * @see String.extractNextJsRsc
  */
 inline fun <reified T> String.extractNextJsRsc(
     noinline predicate: (JsonElement) -> Boolean,
 ): T? = extractNextJsRsc(predicate, serializer<T>())
 
 /**
- * Predicate-free overload of [String.extractNextJsRsc] that infers both the [deserializer]
- * and the matching predicate from [T]'s serial descriptor via [inferredNextJsPredicate].
+ * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
+ * descriptor via [inferredNextJsPredicate]. See the
+ * [explicit-deserializer overload][String.extractNextJsRsc] for full documentation.
  *
  * @param T Must be serializable via [kotlinx.serialization].
- * @see String.extractNextJsRsc
- * @see inferredNextJsPredicate
  */
 inline fun <reified T> String.extractNextJsRsc(): T? = extractNextJsRsc(inferredNextJsPredicate<T>(), serializer<T>())
 
@@ -337,22 +345,20 @@ fun <T> Response.extractNextJs(
 }
 
 /**
- * Reified overload of [Response.extractNextJs] that infers [deserializer] from [T].
+ * Reified overload; infers [deserializer] from [T]. See the
+ * [explicit-deserializer overload][Response.extractNextJs] for full documentation.
  *
  * @param T Must be serializable via [kotlinx.serialization].
- * @see Response.extractNextJs
  */
 inline fun <reified T> Response.extractNextJs(
     noinline predicate: (JsonElement) -> Boolean,
 ): T? = extractNextJs(predicate, serializer<T>())
 
-
 /**
- * Predicate-free overload of [Response.extractNextJs] that infers both the [deserializer]
- * and the matching predicate from [T]'s serial descriptor via [inferredNextJsPredicate].
+ * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
+ * descriptor via [inferredNextJsPredicate]. See the
+ * [explicit-deserializer overload][Response.extractNextJs] for full documentation.
  *
  * @param T Must be serializable via [kotlinx.serialization].
- * @see Response.extractNextJs
- * @see inferredNextJsPredicate
  */
 inline fun <reified T> Response.extractNextJs(): T? = extractNextJs(inferredNextJsPredicate<T>(), serializer<T>())
