@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.all.kodoku.eu.kanade.tachiyomi.extension.a
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class `KodokuStudio.kt` :
+class `KodokuStudio` :
     Madara(
         "Kodoku Studio",
         "https://kodokustudio.com",
