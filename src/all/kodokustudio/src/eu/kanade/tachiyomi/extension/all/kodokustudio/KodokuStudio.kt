@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.kodoku.eu.kanade.tachiyomi.extension.all.kodokustudio
+package eu.kanade.tachiyomi.extension.all.kodokustudio
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
