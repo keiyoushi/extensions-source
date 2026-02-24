@@ -127,13 +127,10 @@ class TheManga : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val script = document.selectFirst("script:containsData(const pages =)")?.data()
+        val script = document.select("script").firstNotNullOfOrNull { PAGES_REGEX.find(it.data())?.groupValues?.get(1) }
             ?: throw Exception("Script yang berisi data halaman tidak ditemukan")
 
-        val json = PAGES_REGEX.find(script)?.groupValues?.get(1)?.substringBefore(".slice")?.trim()
-            ?: throw Exception("Data JSON halaman tidak ditemukan dalam script")
-
-        return json.parseAs<List<PageDto>>()
+        return script.parseAs<List<PageDto>>()
             .map { Page(it.number - 1, "", it.url) }
     }
 
@@ -162,7 +159,7 @@ class TheManga : HttpSource() {
 
     companion object {
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
-        private val PAGES_REGEX = Regex("""const pages\s*=\s*(\[.*?\]);""", RegexOption.DOT_MATCHES_ALL)
+        private val PAGES_REGEX = Regex("""pages\s*=\s*(\[[\s\S]*?])""")
         private val OLD_URL_REGEX = Regex("""/manga/([^/]+)/chapter-(\d+(?:-\d+)?)""")
     }
 }
