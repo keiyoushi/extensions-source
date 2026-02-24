@@ -5,12 +5,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SummerToon : Madara(
-    "SummerToon",
-    "https://summertoons.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
-) {
+class SummerToon :
+    Madara(
+        "SummerToon",
+        "https://summertoons.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(1, 1)
         .build()

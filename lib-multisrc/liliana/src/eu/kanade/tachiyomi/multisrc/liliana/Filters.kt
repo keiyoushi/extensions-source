@@ -11,10 +11,11 @@ abstract class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
     private val urlParameter: String,
-) : UrlPartFilter, Filter.Select<String>(
+) : Filter.Select<String>(
     name,
     options.map { it.first }.toTypedArray(),
-) {
+),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         url.addQueryParameter(urlParameter, options[state].second)
     }
@@ -27,10 +28,11 @@ abstract class TriStateGroupFilter(
     options: List<Pair<String, String>>,
     private val includeUrlParameter: String,
     private val excludeUrlParameter: String,
-) : UrlPartFilter, Filter.Group<TriStateFilter>(
+) : Filter.Group<TriStateFilter>(
     name,
     options.map { TriStateFilter(it.first, it.second) },
-) {
+),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         url.addQueryParameter(
             includeUrlParameter,

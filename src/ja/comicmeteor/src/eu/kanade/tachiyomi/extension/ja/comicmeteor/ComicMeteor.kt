@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.comicmeteor
 
-import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
-import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
+import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -52,13 +52,9 @@ class ComicMeteor : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList())
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -194,9 +190,7 @@ class ComicMeteor : HttpSource() {
 
     private val reader by lazy { SpeedBinbReader(client, headers, json) }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return reader.pageListParse(response)
-    }
+    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response)
 
     private class FilterOption(val name: String, val key: String, val value: String)
     private class AllFilter(options: Array<String>) : Filter.Select<String>("Filter by", options)

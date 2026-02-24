@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.yellownote
 
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
+import keiyoushi.lib.i18n.Intl
 
 class YellowNoteFilters {
 
@@ -9,8 +9,7 @@ class YellowNoteFilters {
         override fun toString() = this.name
     }
 
-    class SortSelector(name: String, private val vals: Array<SortOption>) :
-        Filter.Select<SortOption>(name, vals) {
+    class SortSelector(name: String, private val vals: Array<SortOption>) : Filter.Select<SortOption>(name, vals) {
         fun toUriPart() = vals[state].urlPart
     }
 

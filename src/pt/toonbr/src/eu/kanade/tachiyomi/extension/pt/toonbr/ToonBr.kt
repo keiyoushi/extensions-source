@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.toonbr
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,7 +22,9 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ToonBr : HttpSource(), ConfigurableSource {
+class ToonBr :
+    HttpSource(),
+    ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
 
@@ -60,9 +62,7 @@ class ToonBr : HttpSource(), ConfigurableSource {
     }
 
     // ===== Popular =====
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/api/manga/popular?limit=$PAGE_LIMIT", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/api/manga/popular?limit=$PAGE_LIMIT", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaList = response.parseAs<List<MangaDto>>()
@@ -71,9 +71,7 @@ class ToonBr : HttpSource(), ConfigurableSource {
     }
 
     // ===== Latest =====
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/api/manga/latest?limit=$PAGE_LIMIT", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/manga/latest?limit=$PAGE_LIMIT", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangaList = response.parseAs<List<MangaDto>>()
@@ -107,9 +105,7 @@ class ToonBr : HttpSource(), ConfigurableSource {
         return GET("$apiUrl/api/manga/$slug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaDto>().toSManga(cdnUrl)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(cdnUrl)
 
     // ===== Chapters =====
     override fun chapterListRequest(manga: SManga): Request {
@@ -140,9 +136,7 @@ class ToonBr : HttpSource(), ConfigurableSource {
             ?: emptyList()
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException("Not used")
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     // ====== Utils ======
 

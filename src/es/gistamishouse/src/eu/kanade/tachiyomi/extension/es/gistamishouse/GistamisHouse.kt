@@ -13,11 +13,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 
-class GistamisHouse : ZeistManga(
-    "Gistamis House",
-    "https://gistamishousefansub.blogspot.com",
-    "es",
-) {
+class GistamisHouse :
+    ZeistManga(
+        "Gistamis House",
+        "https://gistamishousefansub.blogspot.com",
+        "es",
+    ) {
     override val useNewChapterFeed = true
     override val hasFilters = true
     override val hasLanguageFilter = false

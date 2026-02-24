@@ -20,13 +20,15 @@ import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Toonkor : ConfigurableSource, ParsedHttpSource() {
+class Toonkor :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Toonkor"
 
     private val defaultBaseUrl = "https://tkor.dog"
 
-    private val BASE_URL_PREF = "overrideBaseUrl_v${AppInfo.getVersionName()}"
+    private val baseUrlPref = "overrideBaseUrl_v${AppInfo.getVersionName()}"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -40,20 +42,16 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     private val webtoonsRequestPath = "/%EC%9B%B9%ED%88%B0"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl + webtoonsRequestPath, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl + webtoonsRequestPath, headers)
 
     override fun popularMangaSelector() = "div.section-item-inner"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("div.section-item-title a").let {
-                title = it.select("h3").text()
-                url = it.attr("href")
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("div.section-item-title a").let {
+            title = it.select("h3").text()
+            url = it.attr("href")
         }
+        thumbnail_url = element.select("img").attr("abs:src")
     }
 
     override fun popularMangaNextPageSelector(): String? = null
@@ -62,9 +60,7 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     private val latestRequestModifier = "?fil=%EC%B5%9C%EC%8B%A0"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl + webtoonsRequestPath + latestRequestModifier, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl + webtoonsRequestPath + latestRequestModifier, headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -100,14 +96,12 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            with(document.select("table.bt_view1")) {
-                title = select("td.bt_title").text()
-                author = select("td.bt_label span.bt_data").text()
-                description = select("td.bt_over").text()
-                thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
-            }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        with(document.select("table.bt_view1")) {
+            title = select("td.bt_title").text()
+            author = select("td.bt_label span.bt_data").text()
+            description = select("td.bt_over").text()
+            thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
         }
     }
 
@@ -115,21 +109,17 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     override fun chapterListSelector() = "table.web_list tr:has(td.content__title)"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            element.select("td.content__title").let {
-                url = it.attr("data-role")
-                name = it.text()
-            }
-            date_upload = element.select("td.episode__index").text().toDate()
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        element.select("td.content__title").let {
+            url = it.attr("data-role")
+            name = it.text()
         }
+        date_upload = element.select("td.episode__index").text().toDate()
     }
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
-    private fun String.toDate(): Long {
-        return dateFormat.parse(this)?.time ?: 0
-    }
+    private fun String.toDate(): Long = dateFormat.parse(this)?.time ?: 0
 
     // Pages
 
@@ -150,14 +140,12 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Note: can't combine with text search!"),
-            Filter.Separator(),
-            TypeFilter(getTypeList()),
-            SortFilter(getSortList()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: can't combine with text search!"),
+        Filter.Separator(),
+        TypeFilter(getTypeList()),
+        SortFilter(getSortList()),
+    )
 
     private class TypeFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Type", vals)
     private class SortFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Sort", vals)
@@ -174,8 +162,7 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
         Pair("Completed", "/%EC%99%84%EA%B2%B0"),
     )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun isSelection(name: String): Boolean = name == vals[state].first
         fun toUriPart() = vals[state].second
     }
@@ -197,7 +184,7 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
 
             setOnPreferenceChangeListener { _, newValue ->
                 try {
-                    val res = preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
+                    val res = preferences.edit().putString(baseUrlPref, newValue as String).commit()
                     res
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -209,7 +196,7 @@ class Toonkor : ConfigurableSource, ParsedHttpSource() {
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getPrefBaseUrl(): String = preferences.getString(baseUrlPref, defaultBaseUrl)!!
 
     companion object {
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"

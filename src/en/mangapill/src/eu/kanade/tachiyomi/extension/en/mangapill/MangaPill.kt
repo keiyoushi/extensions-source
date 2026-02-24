@@ -25,9 +25,7 @@ class MangaPill : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/chapters", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/chapters", headers)
 
     override fun popularMangaSelector() = latestUpdatesSelector()
     override fun latestUpdatesSelector() = ".grid > div:not([class])"
@@ -114,41 +112,46 @@ class MangaPill : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is Status -> url.addQueryParameter("status", filter.toUriPart())
+
                 is Type -> url.addQueryParameter("type", filter.toUriPart())
+
                 else -> {}
             }
         }
         return GET(url.build(), headers)
     }
 
-    private class Type : UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "manga"),
-            Pair("Novel", "novel"),
-            Pair("One-Shot", "one-shot"),
-            Pair("Doujinshi", "doujinshi"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Manhua", "manhua"),
-            Pair("Oel", "oel"),
-        ),
-    )
+    private class Type :
+        UriPartFilter(
+            "Type",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Manga", "manga"),
+                Pair("Novel", "novel"),
+                Pair("One-Shot", "one-shot"),
+                Pair("Doujinshi", "doujinshi"),
+                Pair("Manhwa", "manhwa"),
+                Pair("Manhua", "manhua"),
+                Pair("Oel", "oel"),
+            ),
+        )
 
     private class Genre(name: String, val id: String = name) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
-    private class Status : UriPartFilter(
-        "Status",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Publishing", "publishing"),
-            Pair("Finished", "finished"),
-            Pair("On Hiatus", "on hiatus"),
-            Pair("Discontinued", "discontinued"),
-            Pair("Not yet Published", "not yet published"),
-        ),
-    )
+    private class Status :
+        UriPartFilter(
+            "Status",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Publishing", "publishing"),
+                Pair("Finished", "finished"),
+                Pair("On Hiatus", "on hiatus"),
+                Pair("Discontinued", "discontinued"),
+                Pair("Not yet Published", "not yet published"),
+            ),
+        )
 
     override fun getFilterList() = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
@@ -204,8 +207,7 @@ class MangaPill : ParsedHttpSource() {
         Genre("Yuri"),
     )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

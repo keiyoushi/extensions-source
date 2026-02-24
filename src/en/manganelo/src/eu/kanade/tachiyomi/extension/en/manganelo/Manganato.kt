@@ -4,15 +4,16 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 
-class Manganato : MangaBox(
-    "Manganato",
-    arrayOf(
-        "www.natomanga.com",
-        "www.nelomanga.com",
-        "www.manganato.gg",
-    ),
-    "en",
-) {
+class Manganato :
+    MangaBox(
+        "Manganato",
+        arrayOf(
+            "www.natomanga.com",
+            "www.nelomanga.com",
+            "www.manganato.gg",
+        ),
+        "en",
+    ) {
 
     override val id: Long = 1024627298672457456
 

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.pornpics
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -26,7 +26,8 @@ import rx.Observable
 
 class PornPics(
     override val lang: String,
-) : SimpleParsedHttpSource(), ConfigurableSource {
+) : SimpleParsedHttpSource(),
+    ConfigurableSource {
 
     override val id get() = when (lang) {
         "en" -> 1459635082044256286
@@ -146,30 +147,24 @@ class PornPics(
     }
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(manga)
-            .map {
-                SChapter.create().apply {
-                    chapter_number = 0F
-                    setUrlWithoutDomain(it.url)
-                    name = intl["chapter.name.default"]
-                }.let { listOf(it) }
-            }
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(simpleMangaSelector())
-            .mapIndexed { index, element ->
-                Page(index, imageUrl = element.absUrl("href"))
-            }
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isBlank()) {
-            buildCategoryRequest(page, filters)
-        } else {
-            buildSearchRequest(page, query, filters)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(manga)
+        .map {
+            SChapter.create().apply {
+                chapter_number = 0F
+                setUrlWithoutDomain(it.url)
+                name = intl["chapter.name.default"]
+            }.let { listOf(it) }
         }
+
+    override fun pageListParse(document: Document): List<Page> = document.select(simpleMangaSelector())
+        .mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("href"))
+        }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isBlank()) {
+        buildCategoryRequest(page, filters)
+    } else {
+        buildSearchRequest(page, query, filters)
     }
 
     private fun buildCategoryRequest(

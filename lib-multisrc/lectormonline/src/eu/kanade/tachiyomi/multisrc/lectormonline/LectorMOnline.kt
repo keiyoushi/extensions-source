@@ -24,15 +24,11 @@ open class LectorMOnline(
 
     override val supportsLatest = true
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comics?sort=views&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comics?sort=views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/comics?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comics?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -52,12 +48,14 @@ open class LectorMOnline(
                         url.addQueryParameter("isDesc", "false")
                     }
                 }
+
                 is GenreFilter -> {
                     val selectedGenre = filter.toUriPart()
                     if (selectedGenre.isNotEmpty()) {
                         return GET("$baseUrl/genres/$selectedGenre?page=$page", headers)
                     }
                 }
+
                 else -> { }
             }
         }
@@ -91,13 +89,9 @@ open class LectorMOnline(
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/app/comic/${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/app/comic/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<ComicDto>().toSMangaDetails()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<ComicDto>().toSMangaDetails()
 
     override fun getChapterUrl(chapter: SChapter): String {
         val mangaSlug = chapter.url.substringBefore("/")
@@ -107,9 +101,7 @@ open class LectorMOnline(
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<ComicDto>().getChapters()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ComicDto>().getChapters()
 
     override fun pageListRequest(chapter: SChapter): Request {
         val mangaSlug = chapter.url.substringBefore("/")
@@ -182,9 +174,7 @@ open class LectorMOnline(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()

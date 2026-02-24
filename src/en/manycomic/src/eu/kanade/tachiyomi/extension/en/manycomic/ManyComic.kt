@@ -49,19 +49,17 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         return GET(url.build(), headers)
     }
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return document.selectFirst(".manga-genres-class-name div.genres")
-            ?.select("li>a")
-            .orEmpty()
-            .map { a ->
-                Genre(
-                    name = a.ownText(),
-                    id = a.attr("abs:href")
-                        .removeSuffix("/")
-                        .substringAfterLast("/"),
-                )
-            }
-    }
+    override fun parseGenres(document: Document): List<Genre> = document.selectFirst(".manga-genres-class-name div.genres")
+        ?.select("li>a")
+        .orEmpty()
+        .map { a ->
+            Genre(
+                name = a.ownText(),
+                id = a.attr("abs:href")
+                    .removeSuffix("/")
+                    .substringAfterLast("/"),
+            )
+        }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -105,6 +103,5 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         intl["order_by_filter_new"] to "new-manga",
     )
 
-    private class GenreFilter(title: String, options: List<Genre>, state: Int = 0) :
-        UriPartFilter(title, options.map { Pair(it.name, it.id) }.toTypedArray(), state)
+    private class GenreFilter(title: String, options: List<Genre>, state: Int = 0) : UriPartFilter(title, options.map { Pair(it.name, it.id) }.toTypedArray(), state)
 }

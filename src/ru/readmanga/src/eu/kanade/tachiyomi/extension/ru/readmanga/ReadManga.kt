@@ -5,6 +5,7 @@ import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
+import org.jsoup.nodes.Element
 
 class ReadManga : GroupLe("ReadManga", "https://a.zazaza.me", "ru") {
 
@@ -23,6 +24,41 @@ class ReadManga : GroupLe("ReadManga", "https://a.zazaza.me", "ru") {
         AdditionalFilterList(getAdditionalFilterList()),
     )
 
+    override fun chapterScanlatorFromElement(chapterLinkElement: Element, chapterRowElement: Element): String {
+        val document = chapterRowElement.ownerDocument()
+            ?: return super.chapterScanlatorFromElement(chapterLinkElement, chapterRowElement)
+
+        val selectedTranslator = document
+            .selectFirst(".translator-selection-item.selected.best-choice[id^=tr-]")
+            ?: return super.chapterScanlatorFromElement(chapterLinkElement, chapterRowElement)
+
+        val selectedTranslatorId = selectedTranslator.id()
+            .removePrefix("tr-")
+            .toLongOrNull()
+            ?: return super.chapterScanlatorFromElement(chapterLinkElement, chapterRowElement)
+
+        val selectedTranslatorName = selectedTranslator
+            .selectFirst(".translator-selection-name")
+            ?.text()
+            ?.trim()
+            .orEmpty()
+
+        if (selectedTranslatorName.isBlank()) {
+            return super.chapterScanlatorFromElement(chapterLinkElement, chapterRowElement)
+        }
+
+        val rawTranslations = chapterLinkElement.attr("data-translations")
+        if (rawTranslations.isBlank()) {
+            return super.chapterScanlatorFromElement(chapterLinkElement, chapterRowElement)
+        }
+
+        val normalizedTranslations = rawTranslations.replace("&quot;", "\"")
+        val translationIds = Regex(""""(?:personId|secondPersonId)":\s*(\d+)""").findAll(normalizedTranslations)
+            .mapNotNull { it.groupValues.getOrNull(1)?.toLongOrNull() }
+            .toSet()
+
+        return if (selectedTranslatorId in translationIds) selectedTranslatorName else ""
+    }
     private fun getAdditionalFilterList() = listOf(
         Genre("Высокий рейтинг", "s_high_rate"),
         Genre("Сингл", "s_single"),

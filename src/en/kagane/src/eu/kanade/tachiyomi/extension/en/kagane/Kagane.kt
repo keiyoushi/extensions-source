@@ -155,16 +155,49 @@ class Kagane :
             if (query.isNotBlank()) {
                 put("title", query)
             }
+
+            val displayMode = preferences.sourceDisplayMode
+            val sourceTypes = if (displayMode == "official") {
+                listOf("Official")
+            } else {
+                listOf("Official", "Unofficial", "Mixed")
+            }
+            putJsonArray("source_type") {
+                sourceTypes.forEach { add(it) }
+            }
+
+            var genresMatchAll: Boolean? = null
+            var tagsMatchAll: Boolean? = null
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is MatchAllGenresFilter -> {
+                        genresMatchAll = if (filter.state) true else null
+                    }
+
+                    is MatchAllTagsFilter -> {
+                        tagsMatchAll = if (filter.state) true else null
+                    }
+
+                    else -> { }
+                }
+            }
+
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
-                        filter.addToJsonObject(this, "genres", preferences.excludedGenres.toList())
+                        val excludedGenreIds = preferences.excludedGenres.mapNotNull { genreName ->
+                            metadata?.genres?.entries?.firstOrNull {
+                                it.value.equals(genreName, ignoreCase = true)
+                            }?.key
+                        }
+                        filter.addToJsonObject(this, "genres", excludedGenreIds, genresMatchAll)
                     }
 
                     is TagsSearchFilter -> {
                         val rawInput = filter.state.trim()
                         if (rawInput.isNotBlank()) {
-                            val metadata = cachedMetadata
+                            val metadata = metadata
                             if (metadata != null) {
                                 val tagEntries = rawInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -184,7 +217,9 @@ class Kagane :
 
                                 if (includeIds.isNotEmpty() || excludeIds.isNotEmpty()) {
                                     putJsonObject("tags") {
-                                        put("match_all", false)
+                                        if (tagsMatchAll == true) {
+                                            put("match_all", true)
+                                        }
                                         if (includeIds.isNotEmpty()) {
                                             putJsonArray("values") {
                                                 includeIds.forEach { add(it) }
@@ -202,7 +237,7 @@ class Kagane :
                     }
 
                     is SourcesFilter -> {
-                        filter.addToJsonObject(this, "source_id")
+                        filter.addToJsonObject(this)
                     }
 
                     is JsonFilter -> {
@@ -222,19 +257,15 @@ class Kagane :
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
-                        filter.toUriPart().takeIf { it.isNotEmpty() }
-                            ?.let { uriPart -> addQueryParameter("sort", uriPart) }
-                            ?: run {
-                                if (query.isBlank()) {
-                                    addQueryParameter("sort", "updated_at,desc")
-                                }
-                            }
+                        val sortParam = filter.toUriPart()
+                        when {
+                            sortParam.isNotEmpty() -> addQueryParameter("sort", sortParam)
+                        }
                     }
 
                     else -> {}
                 }
             }
-            addQueryParameter("scanlations", preferences.showScanlations.toString())
         }
 
         return POST(url.toString(), headers, body)
@@ -242,51 +273,31 @@ class Kagane :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<SearchDto>()
-        val sources = try {
-            val sourceResponse = metadataClient.newCall(
-                POST(
-                    "$apiUrl/api/v2/sources/list",
-                    apiHeaders,
-                    buildJsonObject { put("source_types", null) }.toJsonString()
-                        .toRequestBody("application/json".toMediaType()),
-                ),
-            ).execute()
-
-            if (sourceResponse.isSuccessful) {
-                sourceResponse.parseAs<List<SourceDto>>().associate { it.sourceId to it.title }
-            } else {
-                emptyMap()
-            }
-        } catch (e: Exception) {
-            Log.w(name, "Failed to load sources", e)
+        val sources = if (!preferences.showSource) {
             emptyMap()
-        }
-        val mangas = dto.content.filter {
-            if (!preferences.showDuplicates) {
-                val alternateSeries =
-                    client.newCall(GET("$apiUrl/api/v2/alternate_series/${it.id}", apiHeaders))
-                        .execute()
-                        .parseAs<List<AlternateSeries>>()
+        } else {
+            metadata?.sources?.associate { it.sourceId to it.title }
+                ?: try {
+                    val sourceResponse = metadataClient.newCall(
+                        POST(
+                            "$apiUrl/api/v2/sources/list",
+                            apiHeaders,
+                            buildJsonObject { put("source_types", null) }.toJsonString()
+                                .toRequestBody("application/json".toMediaType()),
+                        ),
+                    ).execute()
 
-                if (alternateSeries.isEmpty()) return@filter true
-
-                val startYear = it.startYear ?: 0
-                for (alt in alternateSeries) {
-                    val altYear = alt.startYear ?: 0
-
-                    when {
-                        it.booksCount < alt.booksCount -> return@filter false
-
-                        it.booksCount == alt.booksCount -> {
-                            if (startYear < altYear) return@filter false
-                        }
+                    if (sourceResponse.isSuccessful) {
+                        sourceResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
+                    } else {
+                        emptyMap()
                     }
+                } catch (e: Exception) {
+                    Log.w(name, "Failed to load sources", e)
+                    emptyMap()
                 }
-                true
-            } else {
-                true
-            }
-        }.map { it.toSManga(apiUrl, preferences.showSource, sources) }
+        }
+        val mangas = dto.content.map { it.toSManga(apiUrl, preferences.showSource, sources) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
@@ -319,7 +330,7 @@ class Kagane :
         )
 
         return dto.seriesBooks.map { book ->
-            book.toSChapter(seriesId, useSourceChapterNumber)
+            book.toSChapter(seriesId, useSourceChapterNumber, preferences.chapterTitleMode)
         }.reversed()
     }
 
@@ -374,10 +385,10 @@ class Kagane :
 
     private fun getIntegrityToken(): String {
         if (integrityExp < System.currentTimeMillis()) {
-            val res = metadataClient.newCall(
+            val res = client.newCall(
                 POST(
                     "https://kagane.org/api/integrity",
-                    apiHeaders,
+                    headers,
                     body = "".toRequestBody("application/json".toMediaType()),
                 ),
             ).execute().parseAs<IntegrityDto>()
@@ -604,20 +615,20 @@ class Kagane :
     private val SharedPreferences.excludedGenres: Set<String>
         get() = this.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
 
-    private val SharedPreferences.showScanlations: Boolean
-        get() = this.getBoolean(SHOW_SCANLATIONS, SHOW_SCANLATIONS_DEFAULT)
+    private val SharedPreferences.sourceDisplayMode: String
+        get() = this.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
 
     private val SharedPreferences.showSource: Boolean
         get() = this.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
-
-    private val SharedPreferences.showDuplicates: Boolean
-        get() = this.getBoolean(SHOW_DUPLICATES, SHOW_DUPLICATES_DEFAULT)
 
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
     private val SharedPreferences.wvd
         get() = this.getString(WVD_KEY, WVD_DEFAULT)!!
+
+    private val SharedPreferences.chapterTitleMode
+        get() = this.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -646,24 +657,18 @@ class Kagane :
             }
         }.let(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_SCANLATIONS
-            title = "Show scanlations"
-            setDefaultValue(SHOW_SCANLATIONS_DEFAULT)
-        }.let(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_DUPLICATES
-            title = "Show duplicates"
-            summary =
-                "Show duplicate entries.\nPicks the entry with most chapters if disabled\nThis switch isn't always accurate\nNOTE: Enabling this option will slow your search speed down"
-            setDefaultValue(SHOW_DUPLICATES_DEFAULT)
+        ListPreference(screen.context).apply {
+            key = SOURCE_DISPLAY_MODE
+            title = "Source Display Selection"
+            summary = "%s"
+            entries = arrayOf("Official Sources Only", "Show All (Official + Scanlations)")
+            entryValues = arrayOf("official", "all")
+            setDefaultValue(SOURCE_DISPLAY_MODE_DEFAULT)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_SOURCE
-            title = "Show source name"
-            summary = "Show source name in title"
+            title = "Show source name in title"
             setDefaultValue(SHOW_SOURCE_DEFAULT)
         }.let(screen::addPreference)
 
@@ -678,6 +683,15 @@ class Kagane :
             title = "WVD file"
             summary = "Enter contents as base64 string"
             setDefaultValue(WVD_DEFAULT)
+        }.let(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = CHAPTER_TITLE_MODE
+            title = "Chapter title format"
+            entries = CHAPTER_TITLE_MODE_NAMES
+            entryValues = CHAPTER_TITLE_MODES
+            summary = "How the chapter title should be displayed"
+            setDefaultValue(CHAPTER_TITLE_MODE_DEFAULT)
         }.let(screen::addPreference)
     }
 
@@ -694,25 +708,33 @@ class Kagane :
         )
 
         private const val GENRES_PREF = "pref_genres_exclude"
-        private const val SHOW_SCANLATIONS = "pref_show_scanlations"
-        private const val SHOW_SCANLATIONS_DEFAULT = true
+
+        private const val SOURCE_DISPLAY_MODE = "pref_source_display_mode"
+        private const val SOURCE_DISPLAY_MODE_DEFAULT = "all"
 
         private const val SHOW_SOURCE = "pref_show_source"
         private const val SHOW_SOURCE_DEFAULT = false
-
-        private const val SHOW_DUPLICATES = "pref_show_duplicates"
-        private const val SHOW_DUPLICATES_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
 
         private const val WVD_KEY = "wvd_key"
         private const val WVD_DEFAULT = ""
 
-        private var cachedMetadata: MetadataDto? = null
+        private const val CHAPTER_TITLE_MODE = "chapter_title_mode"
+        private const val CHAPTER_TITLE_MODE_DEFAULT = "optional"
+        internal val CHAPTER_TITLE_MODES = arrayOf(
+            "optional",
+            "always",
+        )
+        internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
+            "Default (Hide numbers)",
+            "Include chapter numbers",
+        )
     }
 
     // ============================= Filters ==============================
 
+    private var metadata: MetadataDto? = null
     private val metadataClient = client.newBuilder()
         .addNetworkInterceptor { chain ->
             chain.proceed(chain.request()).newBuilder()
@@ -731,23 +753,33 @@ class Kagane :
             Filter.Separator(),
         )
 
-        val metadata = cachedMetadata
+        fetchMetadata()
 
-        if (metadata != null) {
-            // Metadata exists in memory, create the filters
+        val meta = metadata
+
+        if (meta != null) {
+            val displayMode = preferences.sourceDisplayMode
+
+            val validSources = meta.sources.filter { source ->
+                when (displayMode) {
+                    "official" -> source.sourceType.equals("Official", ignoreCase = true)
+                    else -> true
+                }
+            }
+            val sourceFilters = validSources
+                .map { FilterData(it.sourceId, it.title) }
+                .sortedBy { it.name }
+
             filters.addAll(
                 listOf(
-                    GenresFilter(metadata.getGenresList()),
+                    MatchAllGenresFilter(),
+                    GenresFilter(meta.getGenresList()),
+                    MatchAllTagsFilter(),
                     TagsSearchFilter(),
-                    SourcesFilter(
-                        metadata.getSourcesList().filter {
-                            !(!preferences.showScanlations && !isOfficialSource(it.id, metadata))
-                        },
-                    ),
+                    SourcesFilter(sourceFilters),
                 ),
             )
         } else {
-            fetchMetadata()
             filters.add(0, Filter.Header("Press 'Reset' to load more filters"))
             filters.add(1, Filter.Separator())
         }
@@ -755,13 +787,7 @@ class Kagane :
         return FilterList(filters)
     }
 
-    private fun isOfficialSource(sourceId: String, metadata: MetadataDto): Boolean {
-        val sourceName = metadata.sources[sourceId]?.lowercase() ?: return false
-        return officialSources.any { sourceName.contains(it) }
-    }
-
     private fun fetchMetadata() {
-        // Can't use direct metadataClient cache because of POST request
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
                 val genreResponse = metadataClient.newCall(
@@ -782,10 +808,10 @@ class Kagane :
                 if (genreResponse.isSuccessful && tagsResponse.isSuccessful && sourcesResponse.isSuccessful) {
                     val genres = genreResponse.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
                     val tags = tagsResponse.parseAs<List<TagDto>>().associate { it.id to it.tagName }
-                    val sources = sourcesResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
+                    val sources = sourcesResponse.parseAs<SourcesDto>().sources
 
-                    cachedMetadata = MetadataDto(genres, tags, sources)
-                    Log.d(name, "Metadata fetched and cached in memory")
+                    metadata = MetadataDto(genres, tags, sources)
+                    Log.d(name, "Metadata fetched and updated")
                 } else {
                     Log.e(name, "Failed to fetch metadata: One or more requests failed")
                 }

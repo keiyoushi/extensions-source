@@ -37,8 +37,8 @@ class MangaToshokanZ : HttpSource() {
         getKeys()
     }
 
-    private val _serial by lazy {
-        getSerial()
+    private val serial by lazy {
+        fetchSerial()
     }
 
     private var isR18 = false
@@ -109,9 +109,11 @@ class MangaToshokanZ : HttpSource() {
                         url.host("r18.mangaz.com")
                     }
                 }
+
                 is Sort -> {
                     url.addQueryParameter("sort", sortBy[filter.state].lowercase())
                 }
+
                 else -> {}
             }
         }
@@ -121,21 +123,19 @@ class MangaToshokanZ : HttpSource() {
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
-    private fun Response.toMangas(selector: String): List<SManga> {
-        return asJsoup().selectFirst(selector)!!.children().filter { child ->
-            child.`is`("li")
-        }.filterNot { li ->
-            // discard manga that in the middle of asking for license progress, it can't be read
-            li.selectFirst(".iconConsent") != null
-        }.map { li ->
-            SManga.create().apply {
-                val a = li.selectFirst("h4 > a")!!
-                url = a.attr("href").substringAfterLast("/")
-                title = a.text()
+    private fun Response.toMangas(selector: String): List<SManga> = asJsoup().selectFirst(selector)!!.children().filter { child ->
+        child.`is`("li")
+    }.filterNot { li ->
+        // discard manga that in the middle of asking for license progress, it can't be read
+        li.selectFirst(".iconConsent") != null
+    }.map { li ->
+        SManga.create().apply {
+            val a = li.selectFirst("h4 > a")!!
+            url = a.attr("href").substringAfterLast("/")
+            title = a.text()
 
-                thumbnail_url = li.selectFirst("a > img")!!.attr("data-src").ifBlank {
-                    li.selectFirst("a > img")!!.attr("src")
-                }
+            thumbnail_url = li.selectFirst("a > img")!!.attr("data-src").ifBlank {
+                li.selectFirst("a > img")!!.attr("src")
             }
         }
     }
@@ -181,6 +181,7 @@ class MangaToshokanZ : HttpSource() {
                             author += ", ${li.child(0).text()}"
                         }
                     }
+
                     li.ownText().contains("作画") || li.ownText().contains("マンガ") -> {
                         if (artist.isNullOrEmpty()) {
                             artist = li.child(0).text()
@@ -252,7 +253,7 @@ class MangaToshokanZ : HttpSource() {
             .build()
 
         val body = FormBody.Builder()
-            .add("__serial", _serial)
+            .add("__serial", serial)
             .add("__ticket", ticket)
             .add("pub", pem)
             .build()
@@ -283,7 +284,7 @@ class MangaToshokanZ : HttpSource() {
         }?.value ?: throw Exception("Fail to retrieve ticket from cookie")
     }
 
-    private fun getSerial(): String {
+    private fun fetchSerial(): String {
         val url = virgoBuilder()
             .addPathSegment("app.js")
             .build()
@@ -298,11 +299,9 @@ class MangaToshokanZ : HttpSource() {
         return appJsString.substringAfter("__serial = \"").substringBefore("\";")
     }
 
-    private fun virgoBuilder(): HttpUrl.Builder {
-        return baseUrl.toHttpUrl().newBuilder()
-            .host("vw.mangaz.com")
-            .addPathSegment("virgo")
-    }
+    private fun virgoBuilder(): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder()
+        .host("vw.mangaz.com")
+        .addPathSegment("virgo")
 
     override fun pageListParse(response: Response): List<Page> {
         val decrypted = response.decryptPages(keys.private)
@@ -317,9 +316,7 @@ class MangaToshokanZ : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private val categories = arrayOf(

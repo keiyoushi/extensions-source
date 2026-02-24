@@ -111,13 +111,11 @@ object NexusDecrypt {
         return String(output, Charsets.UTF_8)
     }
 
-    fun isEncryptedResponse(body: String): Boolean {
-        return try {
-            val enc = body.parseAs<EncryptedResponse>()
-            (enc.v == 1 || enc.v == 2)
-        } catch (_: Exception) {
-            false
-        }
+    fun isEncryptedResponse(body: String): Boolean = try {
+        val enc = body.parseAs<EncryptedResponse>()
+        (enc.v == 1 || enc.v == 2)
+    } catch (_: Exception) {
+        false
     }
 
     fun decryptResponse(body: String): String {

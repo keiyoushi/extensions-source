@@ -24,7 +24,9 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import kotlin.collections.sortedByDescending
 
-class Tranh18 : ParsedHttpSource(), ConfigurableSource {
+class Tranh18 :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val lang: String = "vi"
 
     override val name: String = "Tranh18"
@@ -42,9 +44,7 @@ class Tranh18 : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/update" + if (page > 1) "?page=$page" else "", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/update" + if (page > 1) "?page=$page" else "", headers)
 
     override fun latestUpdatesSelector(): String = ".box-body ul li, .manga-list ul li"
 
@@ -60,9 +60,7 @@ class Tranh18 : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesNextPageSelector(): String = ".mt20"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaFromElement(element: Element): SManga = latestUpdatesFromElement(element)
 
@@ -109,24 +107,21 @@ class Tranh18 : ParsedHttpSource(), ConfigurableSource {
         chapter_number = number
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        chapterListSelector()
-            .let(response.asJsoup()::select)
-            .map { element -> chapterFromElement(element) }
-            .sortedByDescending { it.chapter_number }
+    override fun chapterListParse(response: Response): List<SChapter> = chapterListSelector()
+        .let(response.asJsoup()::select)
+        .map { element -> chapterFromElement(element) }
+        .sortedByDescending { it.chapter_number }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.lazy").mapIndexed { index, it ->
-            val url = it.absUrl("data-original")
-            val finalUrl = if (url.startsWith("https://external-content.duckduckgo.com/iu/")) {
-                url.toHttpUrl().queryParameter("u")
-            } else {
-                url
-            }
-            Page(index, imageUrl = finalUrl)
+    override fun pageListParse(document: Document): List<Page> = document.select("img.lazy").mapIndexed { index, it ->
+        val url = it.absUrl("data-original")
+        val finalUrl = if (url.startsWith("https://external-content.duckduckgo.com/iu/")) {
+            url.toHttpUrl().queryParameter("u")
+        } else {
+            url
         }
+        Page(index, imageUrl = finalUrl)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -163,24 +158,26 @@ class Tranh18 : ParsedHttpSource(), ConfigurableSource {
         KeywordList(getGenreList()),
     )
 
-    private class GenreList : Filter.Select<Genre>(
-        "Thể loại",
-        arrayOf(
-            Genre("Tất cả", "-1"),
-            Genre("Manhua", "1"),
-            Genre("Manhwa", "2"),
-            Genre("Manga", "3"),
-        ),
-    )
+    private class GenreList :
+        Filter.Select<Genre>(
+            "Thể loại",
+            arrayOf(
+                Genre("Tất cả", "-1"),
+                Genre("Manhua", "1"),
+                Genre("Manhwa", "2"),
+                Genre("Manga", "3"),
+            ),
+        )
 
-    private class StatusList : Filter.Select<Genre>(
-        "Tiến độ",
-        arrayOf(
-            Genre("Tất cả", "-1"),
-            Genre("Đang tiến thành", "2"),
-            Genre("Đã hoàn tất", "1"),
-        ),
-    )
+    private class StatusList :
+        Filter.Select<Genre>(
+            "Tiến độ",
+            arrayOf(
+                Genre("Tất cả", "-1"),
+                Genre("Đang tiến thành", "2"),
+                Genre("Đã hoàn tất", "1"),
+            ),
+        )
 
     private class KeywordList(genre: Array<Genre>) : Filter.Select<Genre>("Từ khóa", genre)
 

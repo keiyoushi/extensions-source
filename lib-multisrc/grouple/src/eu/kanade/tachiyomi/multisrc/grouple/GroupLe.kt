@@ -437,15 +437,7 @@ abstract class GroupLe(
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href") + chapterSearchParams)
 
-        val translatorElement = urlElement.attr("title")
-
-        chapter.scanlator = if (translatorElement.isNotBlank()) {
-            translatorElement
-                .replace("(Переводчик),", "&")
-                .removeSuffix(" (Переводчик)")
-        } else {
-            ""
-        }
+        chapter.scanlator = chapterScanlatorFromElement(urlElement, element)
 
         chapter.name = urlText.removeSuffix(" новое").trim()
         if (manga.title.length > 25) {
@@ -474,6 +466,17 @@ abstract class GroupLe(
             }
         } ?: 0
         return chapter
+    }
+
+    protected open fun chapterScanlatorFromElement(chapterLinkElement: Element, chapterRowElement: Element): String {
+        val translatorElement = chapterLinkElement.attr("title")
+        return if (translatorElement.isNotBlank()) {
+            translatorElement
+                .replace("(Переводчик),", "&")
+                .removeSuffix(" (Переводчик)")
+        } else {
+            ""
+        }
     }
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()

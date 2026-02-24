@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.all.namicomi
 
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ContentRatingDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.lib.i18n.Intl
 import okhttp3.HttpUrl
 
 class NamiComiFilters {
@@ -226,9 +226,7 @@ class NamiComiFilters {
     }
 
     // Tags taken from: https://api.namicomi.com/title/tags
-    internal fun getTags(intl: Intl): List<Tag> {
-        return getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
-    }
+    internal fun getTags(intl: Intl): List<Tag> = getContents(intl) + getFormats(intl) + getGenres(intl) + getThemes(intl)
 
     private data class TagMode(val title: String, val value: String) {
         override fun toString(): String = title
@@ -280,7 +278,7 @@ class NamiComiFilters {
     }
 
     private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
-        if (intl.chosenLanguage == NamiComiConstants.english) {
+        if (intl.chosenLanguage == NamiComiConstants.ENGLISH) {
             return this
         }
 

@@ -41,26 +41,26 @@ class UniComics : ParsedHttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.1185.50")
         .add("Referer", baseDefaultUrl)
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseDefaultUrl/comics/series/page/$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseDefaultUrl/comics/series/page/$page", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseDefaultUrl/comics/online/page/$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseDefaultUrl/comics/online/page/$page", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is GetEventsList -> {
                     if (filter.state > 0) {
-                        return GET("$baseDefaultUrl$PATH_events", headers)
+                        return GET("$baseDefaultUrl$PATH_EVENTS", headers)
                     }
                 }
+
                 is Publishers -> {
                     if (filter.state > 0) {
                         val publisherName = getPublishersList()[filter.state].url
-                        return GET("$baseDefaultUrl$PATH_publishers/$publisherName/page/$page", headers)
+                        return GET("$baseDefaultUrl$PATH_PUBLISHERS/$publisherName/page/$page", headers)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -72,43 +72,40 @@ class UniComics : ParsedHttpSource() {
         }
         return popularMangaRequest(page)
     }
-    override fun searchMangaSelector() =
-        ".b-serp-item__content:has(.b-serp-url__item:contains(/comics/):not(:contains($PATH_events)):not(:contains($PATH_publishers)):not(:contains(/page/))):has(.b-serp-item__title-link:not(:contains(Комиксы читать онлайн бесплатно)))"
+    override fun searchMangaSelector() = ".b-serp-item__content:has(.b-serp-url__item:contains(/comics/):not(:contains($PATH_EVENTS)):not(:contains($PATH_PUBLISHERS)):not(:contains(/page/))):has(.b-serp-item__title-link:not(:contains(Комиксы читать онлайн бесплатно)))"
 
     override fun searchMangaNextPageSelector() = ".b-pager__next"
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("a.b-serp-item__title-link").first()!!.let {
-                val originUrl = it.attr("href")
-                val urlString =
-                    "/characters$|/creators$".toRegex().replace(
-                        "/page$".toRegex().replace(
-                            "/[0-9]+/?$".toRegex().replace(
-                                originUrl.replace(PATH_online, PATH_URL).replace(PATH_issue, PATH_URL),
-                                "",
-                            ),
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("a.b-serp-item__title-link").first()!!.let {
+            val originUrl = it.attr("href")
+            val urlString =
+                "/characters$|/creators$".toRegex().replace(
+                    "/page$".toRegex().replace(
+                        "/[0-9]+/?$".toRegex().replace(
+                            originUrl.replace(PATH_ONLINE, PATH_URL).replace(PATH_ISSUE, PATH_URL),
                             "",
                         ),
                         "",
-                    )
-                val issueNumber = "-[0-9]+/?$".toRegex()
-                setUrlWithoutDomain(
-                    if (issueNumber.containsMatchIn(urlString) && (originUrl.contains(PATH_online) || originUrl.contains(PATH_issue))) {
-                        issueNumber.replace(urlString, "")
-                    } else {
-                        urlString
-                    },
+                    ),
+                    "",
                 )
+            val issueNumber = "-[0-9]+/?$".toRegex()
+            setUrlWithoutDomain(
+                if (issueNumber.containsMatchIn(urlString) && (originUrl.contains(PATH_ONLINE) || originUrl.contains(PATH_ISSUE))) {
+                    issueNumber.replace(urlString, "")
+                } else {
+                    urlString
+                },
+            )
 
-                title = it.text().substringBefore(" (").substringBefore(" №")
-            }
+            title = it.text().substringBefore(" (").substringBefore(" №")
         }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        if (document.location().contains("$baseDefaultUrl$PATH_events")) {
+        if (document.location().contains("$baseDefaultUrl$PATH_EVENTS")) {
             val mangas = document.select(".list_events").map { element ->
                 SManga.create().apply {
                     element.select("a").first()!!.let {
@@ -145,27 +142,23 @@ class UniComics : ParsedHttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, hasNextPage)
     }
 
-    private fun searchMangaByIdRequest(id: String): Request {
-        return GET("$baseDefaultUrl$PATH_URL$id", headers)
-    }
+    private fun searchMangaByIdRequest(id: String): Request = GET("$baseDefaultUrl$PATH_URL$id", headers)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client.newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = PATH_URL + realQuery
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+        client.newCall(searchMangaByIdRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = PATH_URL + realQuery
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
     }
 
     override fun popularMangaSelector() = "div.list_comics"
@@ -190,9 +183,7 @@ class UniComics : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseDefaultUrl + manga.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseDefaultUrl + manga.url, headers)
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val infoElement = document.select(".left_container div").first()!!
@@ -224,9 +215,7 @@ class UniComics : ParsedHttpSource() {
         )
     }
 
-    private fun chapterPageListRequest(manga: SManga, page: Int): Request {
-        return GET("$baseDefaultUrl${manga.url}/page/$page", headers)
-    }
+    private fun chapterPageListRequest(manga: SManga, page: Int): Request = GET("$baseDefaultUrl${manga.url}/page/$page", headers)
 
     override fun chapterListSelector() = "div.right_comics:has(td:contains(Читать))"
 
@@ -255,9 +244,7 @@ class UniComics : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseDefaultUrl + chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseDefaultUrl + chapter.url, headers)
 
     override fun pageListParse(document: Document): List<Page> {
         val dataStrArray = document.toString()
@@ -268,19 +255,18 @@ class UniComics : ParsedHttpSource() {
             Page(i, document.location() + "/$page")
         }
     }
-    override fun imageUrlParse(document: Document): String {
-        return document.select(".image_online").attr("src")
-    }
+    override fun imageUrlParse(document: Document): String = document.select(".image_online").attr("src")
     private class Publishers(publishers: Array<String>) : Filter.Select<String>("Издательства (только)", publishers)
 
     override fun getFilterList() = FilterList(
         Publishers(publishersName),
         GetEventsList(),
     )
-    private class GetEventsList : Filter.Select<String>(
-        "События (только)",
-        arrayOf("Нет", "в комиксах"),
-    )
+    private class GetEventsList :
+        Filter.Select<String>(
+            "События (только)",
+            arrayOf("Нет", "в комиксах"),
+        )
 
     private data class Publisher(val name: String, val url: String)
 
@@ -335,9 +321,9 @@ class UniComics : ParsedHttpSource() {
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
         private const val PATH_URL = "/comics/series/"
-        private const val PATH_online = "/comics/online/"
-        private const val PATH_issue = "/comics/issue/"
-        private const val PATH_publishers = "/comics/publishers"
-        private const val PATH_events = "/comics/events"
+        private const val PATH_ONLINE = "/comics/online/"
+        private const val PATH_ISSUE = "/comics/issue/"
+        private const val PATH_PUBLISHERS = "/comics/publishers"
+        private const val PATH_EVENTS = "/comics/events"
     }
 }

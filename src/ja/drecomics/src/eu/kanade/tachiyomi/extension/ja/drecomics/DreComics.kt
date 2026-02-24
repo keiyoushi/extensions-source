@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.drecomics
 
-import eu.kanade.tachiyomi.lib.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -127,12 +127,10 @@ class DreComics : ClipStudioReader() {
         }
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            LabelFilter(getLabelList()),
-            GenreFilter(getGenreList()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        LabelFilter(getLabelList()),
+        GenreFilter(getGenreList()),
+    )
 
     private class Label(name: String, val value: String) : Filter.CheckBox(name)
     private class LabelFilter(labels: List<Label>) : Filter.Group<Label>("Label", labels)

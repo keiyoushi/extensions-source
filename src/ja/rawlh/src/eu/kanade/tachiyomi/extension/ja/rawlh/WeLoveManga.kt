@@ -14,9 +14,7 @@ class WeLoveManga : FMReader("WeLoveManga", "https://weloma.art", "ja") {
 
     override val chapterUrlSelector = ""
     override fun pageListParse(document: Document): List<Page> {
-        fun Element.decoded(): String {
-            return this.attr("data-src").trimEnd()
-        }
+        fun Element.decoded(): String = this.attr("data-src").trimEnd()
 
         return document.select(pageListImageSelector).mapIndexed { i, img ->
             Page(i, document.location(), img.decoded())

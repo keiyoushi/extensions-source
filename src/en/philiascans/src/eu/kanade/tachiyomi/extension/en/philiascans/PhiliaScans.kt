@@ -13,11 +13,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class PhiliaScans : Madara(
-    "Philia Scans",
-    "https://philiascans.org",
-    "en",
-) {
+class PhiliaScans :
+    Madara(
+        "Philia Scans",
+        "https://philiascans.org",
+        "en",
+    ) {
     override val versionId: Int = 3
 
     override fun popularMangaRequest(page: Int): Request {
@@ -35,9 +36,7 @@ class PhiliaScans : Madara(
     override val popularMangaUrlSelectorImg = ".poster img:not(.flag-icon)"
     override fun popularMangaNextPageSelector() = ".pagination li:not(.disabled) .page-link[rel=next]"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/recently-updated/?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently-updated/?page=$page", headers)
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
@@ -51,24 +50,29 @@ class PhiliaScans : Madara(
                         url.addQueryParameter("type[$index]", item.value)
                     }
                 }
+
                 is YearFilter -> {
                     filter.state.filter { it.state }.forEachIndexed { index, item ->
                         url.addQueryParameter("release[$index]", item.value)
                     }
                 }
+
                 is OrderByFilter -> {
                     url.addQueryParameter("sort", filter.toUriPart())
                 }
+
                 is GenreConditionFilter -> {
                     if (filter.toUriPart().isNotEmpty()) {
                         url.addQueryParameter("genre_mode", filter.toUriPart())
                     }
                 }
+
                 is GenreList -> {
                     filter.state.filter { it.state }.forEachIndexed { index, item ->
                         url.addQueryParameter("genre[$index]", item.id)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -186,20 +190,22 @@ class PhiliaScans : Madara(
 
     private class CheckBoxVal(name: String, val value: String) : Filter.CheckBox(name)
 
-    private class TypeFilter : Filter.Group<CheckBoxVal>(
-        "Type",
-        listOf(
-            Pair("Manga", "manga"),
-            Pair("Manhua", "manhua"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Seinen", "seinen"),
-        ).map { CheckBoxVal(it.first, it.second) },
-    )
+    private class TypeFilter :
+        Filter.Group<CheckBoxVal>(
+            "Type",
+            listOf(
+                Pair("Manga", "manga"),
+                Pair("Manhua", "manhua"),
+                Pair("Manhwa", "manhwa"),
+                Pair("Seinen", "seinen"),
+            ).map { CheckBoxVal(it.first, it.second) },
+        )
 
-    private class YearFilter(title: String, years: List<Pair<String, String>>) : Filter.Group<CheckBoxVal>(
-        title,
-        years.map { CheckBoxVal(it.first, it.second) },
-    )
+    private class YearFilter(title: String, years: List<Pair<String, String>>) :
+        Filter.Group<CheckBoxVal>(
+            title,
+            years.map { CheckBoxVal(it.first, it.second) },
+        )
 
     override val orderByFilterOptions: Map<String, String> = mapOf(
         intl["order_by_filter_relevance"] to "",

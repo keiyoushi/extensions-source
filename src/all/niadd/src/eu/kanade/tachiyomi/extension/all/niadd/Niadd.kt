@@ -34,29 +34,26 @@ open class Niadd(
         private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
     }
 
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder()
-            // Hardcoded User-Agent required to bypass Niadd hotlink protection for cover images.
-            .set(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            )
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        // Hardcoded User-Agent required to bypass Niadd hotlink protection for cover images.
+        .set(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        )
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Popular
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/list/Hot-Manga.html", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/Hot-Manga.html", headers)
 
     override fun popularMangaSelector() = "div.manga-item"
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.selectFirst("div.manga-name")!!.text()
-            val rawUrl = element.selectFirst("a")!!.absUrl("href")
-            setUrlWithoutDomain(rawUrl)
-            element.selectFirst("div.manga-img img")?.attr("abs:src")?.also { thumbnail_url = it }
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div.manga-name")!!.text()
+        val rawUrl = element.selectFirst("a")!!.absUrl("href")
+        setUrlWithoutDomain(rawUrl)
+        element.selectFirst("div.manga-img img")?.attr("abs:src")?.also { thumbnail_url = it }
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -70,19 +67,16 @@ open class Niadd(
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector(): String? = null
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list/New-Update.html", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list/New-Update.html", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
@@ -177,21 +171,20 @@ open class Niadd(
     }
 
     // Pages
-    override fun chapterFromElement(element: Element): SChapter =
-        SChapter.create().apply {
-            val rawUrl = element.attr("abs:href")
-            setUrlWithoutDomain(rawUrl)
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val rawUrl = element.attr("abs:href")
+        setUrlWithoutDomain(rawUrl)
 
-            name = element.selectFirst("span.chapter-name, span.name")?.text()
-                ?.takeIf(String::isNotBlank)
-                ?: element.text()
+        name = element.selectFirst("span.chapter-name, span.name")?.text()
+            ?.takeIf(String::isNotBlank)
+            ?: element.text()
 
-            element.selectFirst("span.chapter-time, span.time")?.text()
-                ?.also { date_upload = parseDate(it) }
+        element.selectFirst("span.chapter-time, span.time")?.text()
+            ?.also { date_upload = parseDate(it) }
 
-            chapter_number = CHAPTER_NUMBER_REGEX.find(name)
-                ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
-        }
+        chapter_number = CHAPTER_NUMBER_REGEX.find(name)
+            ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
+    }
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()

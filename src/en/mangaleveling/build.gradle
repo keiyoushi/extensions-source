@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Leveling'
-    extClass = '.MangaLeveling'
-    themePkg = 'madara'
-    baseUrl = 'https://mangaleveling.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

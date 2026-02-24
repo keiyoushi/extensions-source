@@ -28,7 +28,9 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class HangTruyen : ParsedHttpSource(), ConfigurableSource {
+class HangTruyen :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "HangTruyen"
     override val lang = "vi"
     override val supportsLatest = true
@@ -74,23 +76,19 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     // Popular
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return super.fetchPopularManga(page)
-            .map {
-                if (page == 1) {
-                    MangasPage(it.mangas, true)
-                } else {
-                    it
-                }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = super.fetchPopularManga(page)
+        .map {
+            if (page == 1) {
+                MangasPage(it.mangas, true)
+            } else {
+                it
             }
-    }
-
-    override fun popularMangaRequest(page: Int): Request {
-        return if (page == 1) {
-            GET("$baseUrl/hot-nhat?type=week")
-        } else {
-            searchMangaRequest(page - 1, "", FilterList(SortFilter(Filter.Sort.Selection(1, false))))
         }
+
+    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
+        GET("$baseUrl/hot-nhat?type=week")
+    } else {
+        searchMangaRequest(page - 1, "", FilterList(SortFilter(Filter.Sort.Selection(1, false))))
     }
 
     override fun popularMangaSelector() = searchMangaSelector()
@@ -98,8 +96,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(SortFilter(Filter.Sort.Selection(2, false))))
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter(Filter.Sort.Selection(2, false))))
 
     override fun latestUpdatesSelector() = searchMangaSelector()
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
@@ -122,12 +119,14 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
                             addQueryParameter("orderBy", uriPart)
                         }
                     }
+
                     is UriPartMultiSelectFilter -> {
                         val uriPart = filter.toUriPart()
                         if (uriPart.isNotEmpty()) {
                             addQueryParameter(filter.param, uriPart)
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -171,15 +170,13 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#read-chaps .mi-item img.reading-img").mapIndexed { index, element ->
-            val img = when {
-                element.hasAttr("data-src") -> element.attr("abs:data-src")
-                else -> element.attr("abs:src")
-            }
-            Page(index, imageUrl = img)
-        }.distinctBy { it.imageUrl }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("#read-chaps .mi-item img.reading-img").mapIndexed { index, element ->
+        val img = when {
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            else -> element.attr("abs:src")
+        }
+        Page(index, imageUrl = img)
+    }.distinctBy { it.imageUrl }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

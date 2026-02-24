@@ -41,8 +41,7 @@ class Brakeout : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/top", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/top", headers)
 
     override fun popularMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -74,18 +73,14 @@ class Brakeout : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (mangaList.isEmpty()) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess().map { response -> searchMangaParse(response, query) }
-        } else {
-            Observable.just(parseMangaList(query))
-        }
+    ): Observable<MangasPage> = if (mangaList.isEmpty()) {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess().map { response -> searchMangaParse(response, query) }
+    } else {
+        Observable.just(parseMangaList(query))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/comics", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", headers)
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
@@ -121,19 +116,15 @@ class Brakeout : ParsedHttpSource() {
         date_upload = parseRelativeDate(element.selectFirst("p")!!.text())
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("section > div > img.readImg").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("section > div > img.readImg").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
+    )
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0

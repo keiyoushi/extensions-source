@@ -62,12 +62,14 @@ data class SearchItem(
     val magId: String,
     val magName: String,
     val magDate: String,
-    val pubdate: String,
+    val magCover: String?,
+    val pubdate: String?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@SearchItem.magName
-        author = this@SearchItem.magName.split(" ")[0]
+        author = this@SearchItem.magName.split(" ").firstOrNull()
         url = "/show.php?a=${this@SearchItem.magId}"
+        thumbnail_url = magCover
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 }

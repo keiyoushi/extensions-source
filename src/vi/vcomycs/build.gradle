@@ -1,7 +1,7 @@
 ext {
     extName = 'Vcomycs'
     extClass = '.Vcomycs'
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = true
 }
 
