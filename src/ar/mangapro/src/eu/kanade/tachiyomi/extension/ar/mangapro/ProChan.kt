@@ -350,7 +350,7 @@ class ProChan : HttpSource() {
             .addQueryParameter("id", driveFileId)
             .build()
 
-        client.newCall(GET(driveLink, super.headers)).execute()
+        client.newCall(GET(driveLink)).execute()
             .let { handleDriveRedirect(it) }
             .use { response ->
                 ZipArchiveInputStream(response.body.byteStream().buffered()).use { zis ->
@@ -385,9 +385,7 @@ class ProChan : HttpSource() {
                     addQueryParameter(it.attr("name"), it.attr("value"))
                 }
             }.build()
-        val headers = super.headersBuilder()
-            .set("Referer", response.request.url.toString())
-            .build()
+        val headers = Headers.headersOf("Referer", response.request.url.toString())
         return client.newCall(GET(actionUrl, headers)).execute()
     }
 

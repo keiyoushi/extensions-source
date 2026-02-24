@@ -37,7 +37,6 @@ class CoverImage(
 class Series(
     val series: Manga,
 ) {
-
     @Serializable
     class Manga(
         val id: Int,
