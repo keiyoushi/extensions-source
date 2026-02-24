@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaDto(
+data class MangaDetailDto(
     @SerialName("manga_name") val name: String,
     @SerialName("manga_cover_img") val coverImage: String,
     @SerialName("manga_id") val id: Int,

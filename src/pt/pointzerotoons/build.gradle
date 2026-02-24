@@ -2,8 +2,8 @@ ext {
     extName = 'Point Zero Toons'
     extClass = '.PointZeroToons'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://pointzerotoons.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://kitsuneyako.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

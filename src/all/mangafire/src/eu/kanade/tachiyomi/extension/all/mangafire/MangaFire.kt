@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -49,6 +50,7 @@ class MangaFire(
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor)
+        .rateLimit(2)
         .apply {
             val naiveTrustManager =
                 @SuppressLint("CustomX509TrustManager")
