@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ulas Comic'
+    extClass = '.UlasComic'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.ulascomic01.xyz'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
