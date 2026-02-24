@@ -383,27 +383,10 @@ class ProChan : HttpSource() {
             .use { response ->
                 check(response.isSuccessful) { "HTTP ${response.code}" }
                 ZipArchiveInputStream(response.body.byteStream().buffered()).use { zis ->
-                    val seenNames = mutableSetOf<String>()
                     generateSequence { zis.nextEntry }
-                        .filterNot { it.name.endsWith(".xml") || it.name.endsWith("/") }
+                        .filterNot { it.name.endsWith(".xml") }
                         .forEach { entry ->
-                            val baseName = entry.name.substringAfterLast("/")
-                            if (baseName.isBlank()) return@forEach
-
-                            val name = if (seenNames.add(baseName)) {
-                                baseName
-                            } else {
-                                val stem = baseName.substringBeforeLast(".")
-                                val ext = baseName.substringAfterLast(".", missingDelimiterValue = "")
-                                val candidate = if (ext.isEmpty()) {
-                                    "${stem}_${seenNames.size}"
-                                } else {
-                                    "${stem}_${seenNames.size}.$ext"
-                                }
-                                seenNames.add(candidate)
-                                candidate
-                            }
-                            File(cacheDir, name).outputStream().use { zis.copyTo(it) }
+                            File(cacheDir, entry.name).outputStream().use { zis.copyTo(it) }
                         }
                 }
             }
