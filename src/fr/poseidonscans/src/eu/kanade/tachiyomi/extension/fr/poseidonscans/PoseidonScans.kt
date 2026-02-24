@@ -532,8 +532,22 @@ class PoseidonScans :
         val currentChapterDataDto = currentChapterData.toString().parseAs<CurrentChapterData>()
         val chapterPageUrl = document.location()
 
+        Log.e("Poseidon", pageData.toString())
+
+        val isPremiumUser = pageDataDto.isPremiumUser
+            ?: pageDataDto.initialData?.isPremiumUser
+            ?: throw Exception("isPremiumUser not found. Data: ${pageData.toString().take(500)}")
+        val sessionStatus = pageDataDto.sessionStatus
+            ?: pageDataDto.initialData?.sessionStatus
+            ?: throw Exception("sessionStatus not found. Data: ${pageData.toString().take(500)}")
+
         if (currentChapterDataDto.isPremium == true) {
-            throw Exception("This chapter is premium. Please read it on the website.")
+            if (sessionStatus == "unauthenticated") {
+                throw Exception("This chapter is premium. Please connect via the webview to view.")
+            }
+            if (!isPremiumUser) {
+                throw Exception("This chapter is premium. You are not a premium user.")
+            }
         }
 
         val imagesListJson = pageDataDto.images

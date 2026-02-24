@@ -56,6 +56,8 @@ class PageDataRoot(
     val images: JsonArray? = null,
     val chapter: PageDataChapter? = null,
     val initialData: PageDataInitialData? = null,
+    var isPremiumUser: Boolean? = null,
+    var sessionStatus: String? = null,
 )
 
 @Serializable
@@ -72,4 +74,6 @@ class PageDataChapter(
 class PageDataInitialData(
     val images: JsonArray? = null,
     val chapter: PageDataChapter? = null,
+    var isPremiumUser: Boolean? = null,
+    var sessionStatus: String? = null,
 )
