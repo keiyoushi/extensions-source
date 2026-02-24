@@ -160,7 +160,6 @@ class PoseidonScans :
                 }
                 if (objectFoundInThisScript || foundRelevantObject != null) break@scriptLoop
             }
-            Log.e("Poseidon foundRelevant", foundRelevantObject.toString())
             if (foundRelevantObject != null) return foundRelevantObject
         } catch (e: Exception) {
             Log.e("PoseidonScans", "General error in extractNextJsPageData: ${e.message}")
