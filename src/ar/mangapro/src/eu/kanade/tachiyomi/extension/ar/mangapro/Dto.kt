@@ -121,3 +121,11 @@ class Token(
     val token: String,
     val expires: Long,
 )
+
+@Serializable
+class ViewsDto(
+    val chapterId: Int? = null,
+    val contentId: Int,
+    val deviceType: String,
+    val surface: String,
+)

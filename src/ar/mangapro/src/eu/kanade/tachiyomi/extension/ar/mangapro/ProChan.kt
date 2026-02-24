@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ar.mangapro
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -25,6 +26,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -34,6 +37,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
+import okhttp3.internal.closeQuietly
 import okio.Buffer
 import okio.buffer
 import okio.source
@@ -280,6 +284,8 @@ class ProChan : HttpSource() {
         val id = response.request.url.pathSegments[3]
         val slug = response.request.url.fragment!!
 
+        countViews(id)
+
         return data.data
             .filter { it.language == "AR" }
             .map { chapter ->
@@ -446,6 +452,14 @@ class ProChan : HttpSource() {
                 return emptyList()
             }
         }
+
+        with(response.request.url) {
+            countViews(
+                seriesId = pathSegments[2],
+                chapterId = pathSegments[4],
+            )
+        }
+
         val chapterUrl = response.request.url.toString()
         val pages = mutableListOf<Page>()
 
@@ -566,6 +580,38 @@ class ProChan : HttpSource() {
         }
     }
 
+    private fun countViews(seriesId: String, chapterId: String? = null) {
+        val userAgent = headers["User-Agent"]!!
+        val payload = ViewsDto(
+            chapterId = chapterId?.toInt(),
+            contentId = seriesId.toInt(),
+            deviceType = when {
+                MOBILE_REGEX.containsMatchIn(userAgent) -> "mobile"
+                TABLES_REGEX.containsMatchIn(userAgent) -> "tablet"
+                else -> "desktop"
+            },
+            surface = when {
+                chapterId == null -> "series"
+                else -> "chapter"
+            },
+        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+
+        client.newCall(POST("$baseUrl/api/views", headers, payload))
+            .enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        if (!response.isSuccessful) {
+                            Log.e(name, "Failed to count views, HTTP ${response.code}")
+                        }
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: Call, e: okio.IOException) {
+                        Log.e(name, "Failed to count views", e)
+                    }
+                },
+            )
+    }
+
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -578,3 +624,6 @@ private val SUPPORTED_TYPES = setOf("manga", "manhwa", "manhua")
 private const val SCRAMBLED_IMAGE_HOST = "127.0.0.1"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private const val ZIP_FILE_HOST = "127.0.0.2"
+
+private val MOBILE_REGEX = Regex("mobile|android|iphone|ipad|ipod", RegexOption.IGNORE_CASE)
+val TABLES_REGEX = Regex("tablet", RegexOption.IGNORE_CASE)
