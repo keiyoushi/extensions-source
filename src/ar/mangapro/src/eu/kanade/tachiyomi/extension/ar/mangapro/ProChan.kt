@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
@@ -24,8 +25,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -74,6 +73,10 @@ class ProChan : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
+
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val filters = getFilterList().apply {
             firstInstance<SortFilter>().state = 2
@@ -84,7 +87,7 @@ class ProChan : HttpSource() {
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
         val filters = getFilterList().apply {
-            firstInstance<SortFilter>().state = 0
+            firstInstance<SortFilter>().state = 1
         }
 
         return fetchSearchManga(page, "", filters)
@@ -192,18 +195,12 @@ class ProChan : HttpSource() {
         TagFilter(),
     )
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaUrl = getMangaUrl(manga).toHttpUrl()
-        val type = mangaUrl.pathSegments[1]
-        val id = mangaUrl.pathSegments[2]
-
-        return GET("$baseUrl/api/public/$type/$id", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseAs<Manga>()
+        val manga = response.extractNextJs<Series>()!!.series
 
         return SManga.create().apply {
             url = "/series/${manga.type}/${manga.id}/${manga.slug}"
@@ -268,17 +265,27 @@ class ProChan : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaUrl = getMangaUrl(manga).toHttpUrl()
+        val type = mangaUrl.pathSegments[1]
+        val id = mangaUrl.pathSegments[2]
+        val slug = mangaUrl.pathSegments[3]
+
+        return GET("$baseUrl/api/public/$type/$id/chapters?page=1&limit=9999&order=desc#$slug", headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<ChapterList>()
+        val data = response.parseAs<Data<List<Chapter>>>()
+        val type = response.request.url.pathSegments[2]
+        val id = response.request.url.pathSegments[3]
+        val slug = response.request.url.fragment!!
 
-        return data.chapters
+        return data.data
             .filter { it.language == "AR" }
             .map { chapter ->
                 SChapter.create().apply {
                     url = ChapterUrl(
-                        url = "/series/${data.type}/${data.id}/${data.slug}/${chapter.id}/${chapter.number}",
+                        url = "/series/$type/$id/$slug/${chapter.id}/${chapter.number}",
                         driveFileId = chapter.metadata.driveFileId,
                     ).toJsonString()
                     name = buildString {
@@ -295,7 +302,7 @@ class ProChan : HttpSource() {
                     chapter_number = chapter.number.toFloat()
                     date_upload = dateFormat.tryParse(chapter.createdAt)
                 }
-            }.asReversed()
+            }
     }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
@@ -398,11 +405,8 @@ class ProChan : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
-        val headers = headersBuilder()
-            .set("rsc", "1")
-            .build()
 
-        return GET("$baseUrl${chapterUrl.url}", headers)
+        return GET("$baseUrl${chapterUrl.url}", rscHeaders)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -462,35 +466,32 @@ class ProChan : HttpSource() {
 
         val orderedPieces = scrambledImage.order.map { scrambledImage.pieces[it] }
         val pieceBitmaps = runBlocking {
-            val semaphore = Semaphore(3)
             orderedPieces.map { pieceUrl ->
-                async(Dispatchers.IO) {
-                    semaphore.withPermit {
-                        var imgUrl = pieceUrl.toHttpUrl()
-                        if (imgUrl.host.startsWith("cdn")) {
-                            val payload = Url(url = pieceUrl).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
-                            val signHeaders = headersBuilder()
-                                .set("Sec-Fetch-Site", "same-origin")
-                                .set("Referer", chapterUrl)
-                                .build()
-                            val signRequest = POST("$baseUrl/api/cdn-image/sign", signHeaders, payload)
-                            val token = client.newCall(signRequest).await().parseAs<Token>()
-                            imgUrl = imgUrl.newBuilder()
-                                .setQueryParameter("token", token.token)
-                                .setQueryParameter("expires", token.expires.toString())
-                                .build()
-                        }
-                        val pieceRequest = request.newBuilder().url(imgUrl).build()
-                        val response = client.newCall(pieceRequest).await()
-                        response.body.use { body ->
-                            // use Tachiyomi ImageDecoder because android.graphics.BitmapFactory doesn't handle avif
-                            val decoder = ImageDecoder.newInstance(body.byteStream())
-                                ?: throw Exception("Failed to create decoder")
-                            try {
-                                decoder.decode() ?: throw Exception("Failed to decode piece")
-                            } finally {
-                                decoder.recycle()
-                            }
+                async(Dispatchers.IO.limitedParallelism(2)) {
+                    var imgUrl = pieceUrl.toHttpUrl()
+                    if (imgUrl.host.startsWith("cdn")) {
+                        val payload = Url(url = pieceUrl).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+                        val signHeaders = headersBuilder()
+                            .set("Sec-Fetch-Site", "same-origin")
+                            .set("Referer", chapterUrl)
+                            .build()
+                        val signRequest = POST("$baseUrl/api/cdn-image/sign", signHeaders, payload)
+                        val token = client.newCall(signRequest).await().parseAs<Token>()
+                        imgUrl = imgUrl.newBuilder()
+                            .setQueryParameter("token", token.token)
+                            .setQueryParameter("expires", token.expires.toString())
+                            .build()
+                    }
+                    val pieceRequest = request.newBuilder().url(imgUrl).build()
+                    val response = client.newCall(pieceRequest).await()
+                    response.body.use { body ->
+                        // use Tachiyomi ImageDecoder because android.graphics.BitmapFactory doesn't handle avif
+                        val decoder = ImageDecoder.newInstance(body.byteStream())
+                            ?: throw Exception("Failed to create decoder")
+                        try {
+                            decoder.decode() ?: throw Exception("Failed to decode piece")
+                        } finally {
+                            decoder.recycle()
                         }
                     }
                 }
