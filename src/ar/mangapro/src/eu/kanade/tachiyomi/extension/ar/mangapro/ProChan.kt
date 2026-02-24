@@ -295,13 +295,22 @@ class ProChan : HttpSource() {
                         driveFileId = chapter.metadata.driveFileId,
                     ).toJsonString()
                     name = buildString {
+                        append("\u200F") // rtl marker
+
                         if (chapter.coins != null && chapter.coins > 0) {
                             append("🔒 ")
                         }
+
                         append("الفصل ")
-                        append(chapter.number)
-                        chapter.title?.also {
-                            append(" - ", it.trim())
+                        append(
+                            chapter.number.toFloat().toString().substringBefore(".0"),
+                        )
+
+                        chapter.title?.trim()?.takeIf { it.isNotBlank() }?.let { trimmedTitle ->
+                            if (trimmedTitle != chapter.number.trim() && trimmedTitle != chapter.number) {
+                                append(" \u200F- ")
+                                append(trimmedTitle)
+                            }
                         }
                     }
                     scanlator = chapter.uploader ?: "\u200B"
