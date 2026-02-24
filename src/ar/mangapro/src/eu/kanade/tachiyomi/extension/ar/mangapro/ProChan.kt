@@ -308,12 +308,31 @@ class ProChan : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val chapterUrl = chapter.url.parseAs<ChapterUrl>()
+        val isDownloader = Exception().stackTrace.any {
+            it.className.contains("downloader", ignoreCase = true)
+        }
 
-        return if (chapterUrl.driveFileId != null) {
-            Observable.just(zipPageList(chapterUrl.driveFileId))
+        val driveFileId = chapter.url.parseAs<ChapterUrl>().driveFileId
+        val canUseZip = driveFileId != null
+
+        return if (isDownloader && canUseZip) {
+            Observable.just(zipPageList(driveFileId))
         } else {
             super.fetchPageList(chapter)
+                .onErrorResumeNext { e ->
+                    if (canUseZip) {
+                        Observable.just(zipPageList(driveFileId))
+                    } else {
+                        Observable.error(e)
+                    }
+                }
+                .flatMap { pages ->
+                    if (pages.isEmpty() && canUseZip) {
+                        Observable.just(zipPageList(driveFileId))
+                    } else {
+                        Observable.just(pages)
+                    }
+                }
         }
     }
 
