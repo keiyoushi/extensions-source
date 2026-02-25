@@ -2,7 +2,7 @@ ext {
     extName = 'Mangax Core'
     extClass = '.MangaxCore'
     themePkg = 'madara'
-    baseUrl = 'https://xsaiko.fun'
+    baseUrl = 'https://mangaxcore.xyz'
     overrideVersionCode = 1
     isNsfw = false
 }
