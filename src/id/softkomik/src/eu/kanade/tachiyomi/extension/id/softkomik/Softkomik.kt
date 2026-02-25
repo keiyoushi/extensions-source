@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.softkomik
 
-import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,9 +15,8 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 class Softkomik : HttpSource() {
     override val name = "Softkomik"
@@ -25,8 +24,11 @@ class Softkomik : HttpSource() {
     override val lang = "id"
     override val supportsLatest = true
 
+    private var session: SessionDto? = null
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageInterceptor)
+        .addInterceptor(::apiAuthInterceptor)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -57,14 +59,17 @@ class Softkomik : HttpSource() {
 
     // ======================== Search ========================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotEmpty()) {
-            "$baseUrl/komik/list".toHttpUrl().newBuilder()
+        if (query.isNotEmpty()) {
+            val url = "$apiUrl/komik".toHttpUrl().newBuilder()
                 .addQueryParameter("name", query)
+                .addQueryParameter("search", "true")
+                .addQueryParameter("limit", "20")
                 .addQueryParameter("page", page.toString())
-        } else {
-            "$baseUrl/komik/library".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
+            return GET(url.build(), headers)
         }
+
+        val url = "$baseUrl/komik/library".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
 
         filters.forEach { filter ->
             when (filter) {
@@ -77,22 +82,21 @@ class Softkomik : HttpSource() {
             }
         }
 
-        if (query.isNotEmpty()) {
-            url.setQueryParameter("sortBy", "")
-        }
-
         return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val libData = response.extractNextJs<LibDataDto>()
-            ?: throw Exception("Could not find library data")
+        val libData = if (response.request.url.toString().contains(apiUrl)) {
+            response.parseAs<LibDataDto>()
+        } else {
+            response.extractNextJs<LibDataDto>()
+        } ?: throw Exception("Could not find library data")
 
         val mangas = libData.data.map { manga ->
             SManga.create().apply {
-                setUrlWithoutDomain(manga.title_slug)
-                title = manga.title
-                thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
+                setUrlWithoutDomain(manga.title_slug!!)
+                title = manga.title!!
+                thumbnail_url = "$coverUrl/${manga.gambar!!.removePrefix("/")}"
             }
         }
         return MangasPage(mangas, libData.page < libData.maxPage)
@@ -108,7 +112,7 @@ class Softkomik : HttpSource() {
         val slug = response.request.url.pathSegments.lastOrNull()!!
         return SManga.create().apply {
             setUrlWithoutDomain(slug)
-            title = manga.title
+            title = manga.title!!
             author = manga.author
             description = manga.sinopsis
             genre = manga.Genre?.joinToString()
@@ -117,7 +121,7 @@ class Softkomik : HttpSource() {
                 "tamat" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
+            thumbnail_url = "$coverUrl/${manga.gambar!!.removePrefix("/")}"
         }
     }
 
@@ -126,17 +130,18 @@ class Softkomik : HttpSource() {
     // ======================== Chapters ========================
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$apiUrl/komik/${manga.url}/chapter?limit=9999999"
-        return GET(url, apiHeaders())
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterListDto>()
         val slug = response.request.url.pathSegments[1]
         return dto.chapter.map { chapter ->
-            val chapterNum = chapter.chapter.toFloatOrNull() ?: -1f
-            val displayNum = formatChapterDisplay(chapter.chapter)
+            val chapterNumStr = chapter.chapter!!
+            val chapterNum = chapterNumStr.toFloatOrNull() ?: -1f
+            val displayNum = formatChapterDisplay(chapterNumStr)
             SChapter.create().apply {
-                url = "/$slug/chapter/${chapter.chapter}"
+                url = "/$slug/chapter/$chapterNumStr"
                 name = "Chapter $displayNum"
                 chapter_number = chapterNum
             }
@@ -160,19 +165,19 @@ class Softkomik : HttpSource() {
         val imageSrc = if (data.imageSrc.isEmpty()) {
             val slug = response.request.url.pathSegments[0]
             val chapter = response.request.url.pathSegments[2]
-            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id}"
-            client.newCall(GET(url, apiHeaders())).execute().use {
-                it.parseAs<ChapterPageImagesDto>().imageSrc
+            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id!!}"
+            client.newCall(GET(url, headers)).execute().use {
+                it.parseAs<ChapterPageImagesDto>().imageSrc!!
             }
         } else {
-            data.imageSrc
+            data.imageSrc!!
         }
 
         if (imageSrc.isEmpty()) {
             throw Exception("No pages found")
         }
 
-        val imageBaseUrl = if (data.storageInter2) cdnUrls[2] else cdnUrls[0]
+        val imageBaseUrl = if (data.storageInter2 == true) cdnUrls[2] else cdnUrls[0]
 
         return imageSrc.mapIndexed { i, img ->
             Page(i, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}")
@@ -214,18 +219,40 @@ class Softkomik : HttpSource() {
         return latestResponse
     }
 
-    private fun apiHeaders(): Headers {
-        val exp = System.currentTimeMillis() + 300_000
-        val token = Base64.encodeToString("{\"exp\":$exp}".toByteArray(), Base64.NO_WRAP)
-        val mac = Mac.getInstance("HmacSHA256")
-        val secretKey = SecretKeySpec("Bt9kCNItFPPHWCsHjz7LwNB7".toByteArray(), "HmacSHA256")
-        mac.init(secretKey)
-        val sign = mac.doFinal(token.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (!request.url.host.contains("softdevices.my.id")) {
+            return chain.proceed(request)
+        }
 
-        return headersBuilder()
-            .add("X-Token", token)
-            .add("X-Sign", sign)
+        val session = getSession()
+        val newRequest = request.newBuilder()
+            .addHeader("X-Token", session.token!!)
+            .addHeader("X-Sign", session.sign!!)
             .build()
+        return chain.proceed(newRequest)
+    }
+
+    private fun getSession(): SessionDto {
+        val currentSession = session
+        if (currentSession != null && currentSession.ex!! > System.currentTimeMillis()) {
+            return currentSession
+        }
+
+        synchronized(this) {
+            val currentSessionSync = session
+            if (currentSessionSync != null && currentSessionSync.ex!! > System.currentTimeMillis()) {
+                return currentSessionSync
+            }
+
+            client.newCall(POST("$baseUrl/api/me", headers, "".toRequestBody())).execute().close()
+
+            val newSession = client.newCall(GET("$baseUrl/api/sessions", headers)).execute().use {
+                it.parseAs<SessionDto>()
+            }
+            session = newSession
+            return newSession
+        }
     }
 
     override fun getFilterList() = FilterList(

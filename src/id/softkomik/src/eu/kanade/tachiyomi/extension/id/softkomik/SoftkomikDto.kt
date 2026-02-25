@@ -4,46 +4,56 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class LibDataDto(
-    val page: Int,
-    val maxPage: Int,
     val data: List<MangaDto>,
+    val maxPage: Int,
+    val page: Int,
 )
 
 @Serializable
 data class MangaDto(
+    val gambar: String,
     val title: String,
+    val title_slug: String,
     val status: String? = null,
     val type: String? = null,
-    val gambar: String,
-    val title_slug: String,
 )
 
 @Serializable
 data class MangaDetailsDto(
+    val gambar: String,
     val title: String,
-    val title_alt: String? = null,
-    val sinopsis: String? = null,
     val author: String? = null,
+    val Genre: List<String>? = emptyList(),
+    val sinopsis: String? = null,
     val status: String? = null,
     val type: String? = null,
-    val gambar: String,
-    val updated_at: String? = null,
-    val Genre: List<String>? = emptyList(),
 )
 
 @Serializable
-data class ChapterDto(val chapter: String)
+data class ChapterDto(
+    val chapter: String,
+)
 
 @Serializable
-data class ChapterPageImagesDto(val imageSrc: List<String> = emptyList())
+data class ChapterPageImagesDto(
+    val imageSrc: List<String>,
+)
 
 @Serializable
 data class ChapterPageDataDto(
     val _id: String,
-    val chapter: String,
-    val storageInter2: Boolean = false,
-    val imageSrc: List<String> = emptyList(),
+    val imageSrc: List<String>,
+    val storageInter2: Boolean? = false,
 )
 
 @Serializable
-data class ChapterListDto(val chapter: List<ChapterDto>)
+data class ChapterListDto(
+    val chapter: List<ChapterDto>,
+)
+
+@Serializable
+data class SessionDto(
+    val ex: Long,
+    val sign: String,
+    val token: String,
+)
