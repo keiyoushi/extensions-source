@@ -136,12 +136,12 @@ class PoseidonScans :
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaDto = response.extractNextJs<MangaDetailsData>()
             ?: throw Exception("Cant scape data from nextjs")
+        val showPremium = preferences.getBoolean(
+            SHOW_PREMIUM_KEY,
+            SHOW_PREMIUM_DEFAULT,
+        )
         return mangaDto.chapters
             .mapNotNull { ch ->
-                val showPremium = preferences.getBoolean(
-                    SHOW_PREMIUM_KEY,
-                    SHOW_PREMIUM_DEFAULT,
-                )
                 // If chapter is premium, check if premium period has expired
                 if (ch.isPremium == true && !showPremium) {
                     ch.premiumUntil?.let { premiumUntilString ->
@@ -173,11 +173,11 @@ class PoseidonScans :
                     if (ch.isPremium == true) {
                         val splittedDate = formatTimestamp(parseIsoDate(ch.premiumUntil)).split(" ")
                         scanlator = buildString {
-                            append("Gratuit le ")
+                            append("Free the ")
                             append(splittedDate[0])
                             append(" ")
                             append(splittedDate[1])
-                            append(" à ")
+                            append(" at ")
                             append(splittedDate[2])
                         }
                     }
@@ -223,9 +223,6 @@ class PoseidonScans :
     override fun pageListParse(response: Response): List<Page> {
         val pageDataDto = response.extractNextJs<PageData>()
             ?: throw Exception("Cant scape data from nextjs")
-        Log.e("Poseidon", pageDataDto.currentChapter.isPremium.toString())
-        Log.e("Poseidon", pageDataDto.sessionStatus)
-        Log.e("Poseidon", pageDataDto.isPremiumUser.toString())
         if (pageDataDto.currentChapter.isPremium) {
             if (pageDataDto.sessionStatus == "unauthenticated") {
                 throw Exception("This chapter is premium. Please connect via the webview to view.")
