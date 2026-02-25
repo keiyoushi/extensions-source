@@ -51,7 +51,7 @@ class PageImageUrlData(
 @Serializable
 class PageData(
     val currentChapter: CurrentChapterData,
-    val initialData: InitalData,
+    val initialData: InitialData,
     var isPremiumUser: Boolean,
     var sessionStatus: String,
 )
@@ -62,6 +62,6 @@ class CurrentChapterData(
 )
 
 @Serializable
-class InitalData(
+class InitialData(
     val images: JsonArray,
 )
