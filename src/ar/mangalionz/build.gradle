@@ -2,7 +2,7 @@ ext {
     extName = 'MangaLionz'
     extClass = '.MangaLionz'
     themePkg = 'madara'
-    baseUrl = 'https://manga-lionz.com'
+    baseUrl = 'https://manga-lionz.org'
     overrideVersionCode = 5
     isNsfw = false
 }
