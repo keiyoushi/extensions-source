@@ -104,7 +104,8 @@ class PoseidonScans :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val mangaDto = response.extractNextJs<MangaDetailsData>()
+        val document = response.asJsoup()
+        val mangaDto = document.extractNextJs<MangaDetailsData>()
             ?: throw Exception("Cant scape data from nextjs")
 
         return SManga.create().apply {
@@ -120,7 +121,32 @@ class PoseidonScans :
 
             status = parseStatus(mangaDto.status)
 
-            description = mangaDto.description
+            var potentialDescription: String? = null
+            val descriptionSelector = "p.text-gray-300.leading-relaxed"
+
+            try {
+                val htmlDescriptionElement = document.selectFirst(descriptionSelector)
+                if (htmlDescriptionElement != null) {
+                    val htmlText = htmlDescriptionElement.text()?.trim()
+                    if (!htmlText.isNullOrBlank()) {
+                        potentialDescription = htmlText
+                            .replaceFirst("Dans : ${mangaDto.title}", "")
+                            .trim()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("PoseidonScans", "Error fetching HTML description: ${e.message}")
+            }
+
+            if (potentialDescription.isNullOrBlank()) {
+                val jsonDescription = mangaDto.description?.trim()
+                if (!jsonDescription.isNullOrBlank() && jsonDescription.length > 5 && !jsonDescription.startsWith("$")) {
+                    potentialDescription = jsonDescription
+                }
+            }
+
+            var finalDesc = potentialDescription?.takeIf { it.isNotBlank() } ?: "Aucune description."
+            description = finalDesc
             setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }
     }
