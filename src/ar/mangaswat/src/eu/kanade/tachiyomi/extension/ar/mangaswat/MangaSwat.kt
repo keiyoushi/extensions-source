@@ -37,7 +37,7 @@ class MangaSwat :
 
     private val preferences by getPreferencesLazy()
 
-    private val apiBaseUrl = "https://appswat.com/v2/api/v2"
+    private val apiBaseUrl = "https://meshmanga.com/v2/api/v2"
 
     override val versionId = 2
 
