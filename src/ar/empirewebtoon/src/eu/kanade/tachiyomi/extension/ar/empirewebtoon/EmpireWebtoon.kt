@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.empirewebtoon
+nopackage eu.kanade.tachiyomi.extension.ar.empirewebtoon
 
 import android.content.SharedPreferences
 import android.widget.Toast
