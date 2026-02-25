@@ -2,7 +2,7 @@ ext {
     extName = 'Empire Webtoon'
     extClass = '.EmpireWebtoon'
     themePkg = 'madara'
-    baseUrl = 'https://webtoonempire-bl.com'
+    baseUrl = 'https://webtoonempire-ron.com'
     overrideVersionCode = 6
     isNsfw = true
 }
