@@ -21,15 +21,12 @@ class LatestApiResponse(
 class MangaDetailsData(
     val title: String,
     val slug: String,
-    val description: String?,
-    val coverImage: String?,
-    val type: String?,
-    val status: String?,
+    val description: String,
+    val status: String,
     val artist: String?,
     val author: String?,
-    val alternativeNames: String?,
-    val categories: List<CategoryData>? = emptyList(),
-    val chapters: List<ChapterData>? = emptyList(),
+    val categories: List<CategoryData> = emptyList(),
+    val chapters: List<ChapterData> = emptyList(),
 )
 
 @Serializable
@@ -52,19 +49,19 @@ class PageImageUrlData(
 )
 
 @Serializable
-class PageDataRoot(
-    val images: JsonArray? = null,
-    val chapter: PageDataChapter? = null,
-    val initialData: PageDataInitialData? = null,
+class PageData(
+    val currentChapter: CurrentChapterData,
+    val initialData: InitalData,
+    var isPremiumUser: Boolean,
+    var sessionStatus: String,
 )
 
 @Serializable
-class PageDataChapter(
-    val images: JsonArray? = null,
+class CurrentChapterData(
+    val isPremium: Boolean,
 )
 
 @Serializable
-class PageDataInitialData(
-    val images: JsonArray? = null,
-    val chapter: PageDataChapter? = null,
+class InitalData(
+    val images: JsonArray,
 )
