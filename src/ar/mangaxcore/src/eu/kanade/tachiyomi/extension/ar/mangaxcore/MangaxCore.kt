@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 class MangaxCore :
     Madara(
         "Mangax Core",
-        "https://mangaxcore.xyz",
+        "https://xsaiko.fun",
         "ar",
     ) {
     override val client = super.client.newBuilder()
