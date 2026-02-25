@@ -35,40 +35,15 @@ data class MangaDetailsDto(
 data class ChapterDto(val chapter: String)
 
 @Serializable
-data class NextDataDto(val buildId: String)
+data class ChapterPageImagesDto(val imageSrc: List<String> = emptyList())
 
 @Serializable
-data class ChapterPageImagesDto(val imageSrc: List<String>)
-
-@Serializable
-data class LibraryDto(val pageProps: LibraryPagePropsDto)
-
-@Serializable
-data class LibraryPagePropsDto(val libData: LibDataDto)
-
-@Serializable
-data class ListDto(val pageProps: ListPagePropsDto)
-
-@Serializable
-data class ListPagePropsDto(val data: LibDataDto)
-
-@Serializable
-data class DetailsDto(val pageProps: DetailsPagePropsDto)
-
-@Serializable
-data class DetailsPagePropsDto(val data: MangaDetailsDto)
+data class ChapterPageDataDto(
+    val _id: String,
+    val chapter: String,
+    val storageInter2: Boolean = false,
+    val imageSrc: List<String> = emptyList(),
+)
 
 @Serializable
 data class ChapterListDto(val chapter: List<ChapterDto>)
-
-@Serializable
-data class ChapterPageDto(val props: ChapterPagePropsDto)
-
-@Serializable
-data class ChapterPagePropsDto(val pageProps: ChapterPageDataWrapperDto)
-
-@Serializable
-data class ChapterPageDataWrapperDto(val data: ChapterPageContentDto)
-
-@Serializable
-data class ChapterPageContentDto(val data: ChapterPageImagesDto)
