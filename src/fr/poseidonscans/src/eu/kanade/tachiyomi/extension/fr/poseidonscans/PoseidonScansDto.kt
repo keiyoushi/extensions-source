@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
 
 @Serializable
 class LatestApiManga(
@@ -20,7 +19,7 @@ class LatestApiResponse(
 @Serializable
 class MangaPageDetailsData(
     val isPremiumUser: Boolean,
-    val mangaDetailsData: MangaDetailsData
+    val mangaDetailsData: MangaDetailsData,
 )
 
 @Serializable
@@ -69,5 +68,5 @@ class InitialData(
 @Serializable
 class ImageData(
     val originalUrl: String,
-    val order: Int
+    val order: Int,
 )
