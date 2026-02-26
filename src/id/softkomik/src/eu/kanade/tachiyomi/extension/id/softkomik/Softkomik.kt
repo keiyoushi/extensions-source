@@ -41,7 +41,7 @@ class Softkomik : HttpSource() {
             .addQueryParameter("sortBy", "popular")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        return GET(url, headersBuilder().add("rsc", "1").build())
     }
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
@@ -52,7 +52,7 @@ class Softkomik : HttpSource() {
             .addQueryParameter("sortBy", "newKomik")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        return GET(url, headersBuilder().add("rsc", "1").build())
     }
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
@@ -77,12 +77,17 @@ class Softkomik : HttpSource() {
                 is TypeFilter -> url.addQueryParameter("type", filter.selected)
                 is GenreFilter -> url.addQueryParameter("genre", filter.selected)
                 is SortFilter -> url.addQueryParameter("sortBy", filter.selected)
-                is MinChapterFilter -> url.addQueryParameter("min", filter.state)
+                is MinChapterFilter -> {
+                    val minValue = filter.state.toIntOrNull()
+                    if (minValue != null && minValue > 0) {
+                        url.addQueryParameter("min", minValue.toString())
+                    }
+                }
                 else -> {}
             }
         }
 
-        return GET(url.build(), headers)
+        return GET(url.build(), headersBuilder().add("rsc", "1").build())
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -103,7 +108,7 @@ class Softkomik : HttpSource() {
     }
 
     // ======================== Details ========================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", headersBuilder().add("rsc", "1").build())
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.extractNextJs<MangaDetailsDto>()
@@ -158,6 +163,8 @@ class Softkomik : HttpSource() {
     }
 
     // ======================== Pages ========================
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headersBuilder().add("rsc", "1").build())
+
     override fun pageListParse(response: Response): List<Page> {
         val data = response.extractNextJs<ChapterPageDataDto>()
             ?: throw Exception("Could not find chapter data")
