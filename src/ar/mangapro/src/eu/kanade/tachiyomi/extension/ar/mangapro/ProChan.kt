@@ -463,7 +463,7 @@ class ProChan : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val responseBody = response.body.string()
         val imageData = responseBody
-            .extractNextJsRsc<ImagesData>()
+            .extractNextJsRsc<Images>()
         if (imageData == null) {
             val coins = responseBody.extractNextJsRsc<Coins>()?.coins
             if (coins != null && coins > 0) {
@@ -473,20 +473,35 @@ class ProChan : HttpSource() {
             }
         }
 
-        with(response.request.url) {
-            countViews(
-                seriesId = pathSegments[2],
-                chapterId = pathSegments[4],
-            )
+        val seriesId = response.request.url.pathSegments[2]
+        val chapterId = response.request.url.pathSegments[4]
+
+        val images = imageData.images.toMutableList()
+        val maps = imageData.maps.toMutableList()
+
+        if (imageData.deferredMedia != null) {
+            val deferredUrl = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("chapter-deferred-media")
+                .addPathSegment(chapterId)
+                .addQueryParameter("token", imageData.deferredMedia.token)
+                .build()
+
+            val deferredImages = client.newCall(GET(deferredUrl, headers))
+                .execute().parseAs<Data<DeferredImages>>()
+
+            images.addAll(deferredImages.data.images)
+            maps.addAll(deferredImages.data.maps)
         }
+
+        countViews(seriesId, chapterId)
 
         val chapterUrl = response.request.url.toString()
         val pages = mutableListOf<Page>()
 
-        imageData.images.mapIndexedTo(pages) { index, imageUrl ->
+        images.mapIndexedTo(pages) { index, imageUrl ->
             Page(index, chapterUrl, imageUrl)
         }
-        imageData.maps.mapIndexedTo(pages) { index, scrambledImage ->
+        maps.mapIndexedTo(pages) { index, scrambledImage ->
             Page(pages.size + index, chapterUrl, "http://$SCRAMBLED_IMAGE_HOST/#${scrambledImage.toJsonString()}")
         }
 

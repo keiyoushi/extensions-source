@@ -1,10 +1,14 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
@@ -116,7 +120,41 @@ class ChapterUrl(
 )
 
 @Serializable
-class ImagesData(
+class Images(
+    val images: List<String>,
+    val maps: List<ScrambledImage>,
+    @Serializable(DeferredMediaSerializer::class)
+    val deferredMedia: DeferredMediaToken? = null,
+)
+
+@Serializable
+class DeferredMediaToken(
+    val token: String,
+)
+
+object DeferredMediaSerializer : KSerializer<DeferredMediaToken?> {
+    override val descriptor = DeferredMediaToken.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): DeferredMediaToken? {
+        val jsonDecoder = decoder as JsonDecoder
+        val element = jsonDecoder.decodeJsonElement()
+        return when {
+            element is JsonPrimitive -> null
+            else -> jsonDecoder.json.decodeFromJsonElement(DeferredMediaToken.serializer(), element)
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: DeferredMediaToken?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            DeferredMediaToken.serializer().serialize(encoder, value)
+        }
+    }
+}
+
+@Serializable
+class DeferredImages(
     val images: List<String>,
     val maps: List<ScrambledImage>,
 )
