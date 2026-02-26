@@ -209,12 +209,8 @@ class ProChan : HttpSource() {
         return SManga.create().apply {
             url = "/series/${manga.type}/${manga.id}/${manga.slug}"
             title = manga.title
-            artist = manga.metadata.artist
-                ?.split("\n")
-                ?.joinToString(transform = String::trim)
-            author = manga.metadata.author
-                ?.split("\n")
-                ?.joinToString(transform = String::trim)
+            artist = manga.metadata.artist.joinToString()
+            author = manga.metadata.author.joinToString()
             description = buildString {
                 manga.description?.also { append(it.trim(), "\n\n") }
                 buildList {

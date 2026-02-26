@@ -2,6 +2,13 @@ package eu.kanade.tachiyomi.extension.ar.mangapro
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.contentOrNull
 
 @Serializable
 class Data<T>(
@@ -54,14 +61,30 @@ class Series(
         class MetaData(
             val originalTitle: String? = null,
             val altTitles: List<String> = emptyList(),
-            val author: String? = null,
-            val artist: String? = null,
+            @Serializable(with = StringListSerializer::class)
+            val author: List<String> = emptyList(),
+            @Serializable(with = StringListSerializer::class)
+            val artist: List<String> = emptyList(),
             val year: String? = null,
             val genres: List<String> = emptyList(),
             val tags: List<String> = emptyList(),
             val origin: String? = null,
             val coverImage: String? = null,
         )
+    }
+}
+
+object StringListSerializer : JsonTransformingSerializer<List<String>>(ListSerializer(String.serializer())) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = when {
+        element is JsonPrimitive -> {
+            val elements = element.contentOrNull
+                ?.split("\n")
+                ?.map { JsonPrimitive(it.trim()) }
+                .orEmpty()
+
+            JsonArray(elements)
+        }
+        else -> element
     }
 }
 
