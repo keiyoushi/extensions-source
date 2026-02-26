@@ -120,13 +120,9 @@ class MangaDto(
 }
 
 @Serializable
-class ChapterListDto(
+class AllChaptersDto(
     val chapters: List<ChapterDto>,
-    val pages: Int,
-    val page: Int,
-) {
-    fun hasNextPage(): Boolean = page + 1 < pages
-}
+)
 
 @Serializable
 class ChapterDto(

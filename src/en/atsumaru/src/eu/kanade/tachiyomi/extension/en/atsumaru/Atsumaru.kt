@@ -172,37 +172,24 @@ class Atsumaru : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    private fun fetchChaptersRequest(mangaId: String, page: Int): Request = GET("$baseUrl/api/manga/chapters?id=$mangaId&filter=all&sort=desc&page=$page", apiHeaders)
-
-    override fun chapterListRequest(manga: SManga): Request = fetchChaptersRequest(manga.url, 0)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.queryParameter("id")!!
+        val mangaId = response.request.url.queryParameter("mangaId")!!
 
-        val mangaPage = try {
+        val scanlatorMap = try {
             val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
             client.newCall(detailsRequest).execute().use {
-                it.parseAs<MangaObjectDto>().mangaPage
-            }
+                it.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
+            }.orEmpty()
         } catch (_: Exception) {
-            null
+            emptyMap()
         }
 
-        val scanlatorMap = mangaPage?.scanlators?.associate { it.id to it.name }.orEmpty()
-        val chapterToScanlator = mangaPage?.chapters?.associate { it.id to it.scanlationMangaId }.orEmpty()
+        val data = response.parseAs<AllChaptersDto>()
 
-        val chapters = mutableListOf<ChapterDto>()
-        var result = response.parseAs<ChapterListDto>()
-        chapters.addAll(result.chapters)
-
-        while (result.hasNextPage()) {
-            result = client.newCall(fetchChaptersRequest(mangaId, result.page + 1)).execute().parseAs()
-            chapters.addAll(result.chapters)
-        }
-
-        return chapters.map {
-            val scanlatorId = it.scanlationMangaId ?: chapterToScanlator[it.id]
-            it.toSChapter(mangaId, scanlatorId?.let { id -> scanlatorMap[id] })
+        return data.chapters.map {
+            it.toSChapter(mangaId, it.scanlationMangaId?.let { id -> scanlatorMap[id] })
         }
     }
 
