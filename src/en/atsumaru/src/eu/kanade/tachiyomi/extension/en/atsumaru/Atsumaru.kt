@@ -36,7 +36,7 @@ class Atsumaru : HttpSource() {
 
     private fun apiHeadersBuilder() = headersBuilder().apply {
         add("Accept", "*/*")
-        add("Host", "atsu.moe")
+        add("Referer", baseUrl)
         add("Content-Type", "application/json")
     }
 
@@ -212,16 +212,16 @@ class Atsumaru : HttpSource() {
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
         val imageUrl = when {
             page.image.startsWith("http") -> page.image
-            page.image.startsWith("//") -> "https:$page.image"
-            else -> "$baseUrl/static/$page.image"
+            page.image.startsWith("//") -> "https:${page.image}"
+            else -> "$baseUrl/static/${page.image.removePrefix("/").removePrefix("static/")}"
         }
-        Page(index, imageUrl = imageUrl)
+        Page(index, imageUrl = imageUrl.replaceFirst(Regex("^https?:?//"), "https://"))
     }
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
             add("Accept", "image/avif,image/webp,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
+            add("Referer", baseUrl)
         }.build()
 
         return GET(page.imageUrl!!, imgHeaders)
