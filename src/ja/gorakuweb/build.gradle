@@ -1,0 +1,8 @@
+ext {
+    extName = 'Goraku Web'
+    extClass = '.GorakuWeb'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
