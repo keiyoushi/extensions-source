@@ -208,7 +208,12 @@ class Atsumaru : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
-        Page(index, imageUrl = baseUrl + page.image)
+        val imageUrl = when {
+            page.image.startsWith("http") -> page.image
+            page.image.startsWith("//") -> "https:$page.image"
+            else -> "$baseUrl/static/$page.image"
+        }
+        Page(index, imageUrl = imageUrl)
     }
 
     override fun imageRequest(page: Page): Request {

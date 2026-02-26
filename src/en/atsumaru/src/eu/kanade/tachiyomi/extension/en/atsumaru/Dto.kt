@@ -75,7 +75,13 @@ class MangaDto(
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = id
         title = this@MangaDto.title
-        thumbnail_url = getImagePath().let { it -> "$baseUrl/static/$it" }
+        thumbnail_url = getImagePath()?.let {
+            when {
+                it.startsWith("http") -> it
+                it.startsWith("//") -> "https:$it"
+                else -> "$baseUrl/static/$it"
+            }
+        }
         description = synopsis
         genre = buildList {
             type?.let { add(it) }
