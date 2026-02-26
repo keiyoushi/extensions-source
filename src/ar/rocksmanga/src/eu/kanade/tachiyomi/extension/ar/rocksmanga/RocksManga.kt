@@ -15,42 +15,25 @@ class RocksManga :
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
     ) {
 
-    override fun popularMangaSelector() = "div.page-content-listing > .manga"
-    override val popularMangaUrlSelector = "div.manga-poster a"
+    override fun popularMangaSelector() = ".unit .inner"
+    override val popularMangaUrlSelector = ".info a"
+    override fun popularMangaNextPageSelector() = "li.page-item:not(.disabled) > a.page-link[rel=next]"
 
-    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
-        title = element.selectFirst(popularMangaUrlSelector)!!.attr("title")
-    }
+    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaSelector() = "#manga-search-results .manga-item"
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        with(element) {
-            selectFirst("a.cover")!!.let {
-                manga.setUrlWithoutDomain(it.attr("abs:href"))
-                manga.title = it.attr("title")
-            }
-            selectFirst("img")?.let {
-                manga.thumbnail_url = imageFromElement(it)
-            }
-        }
-
-        return manga
-    }
-
-    override val mangaDetailsSelectorTitle = ".manga-title"
-    override val mangaDetailsSelectorAuthor = "div.meta span:contains(المؤلف:) + span a"
-    override val mangaDetailsSelectorArtist = "div.meta span:contains(الرسام:) + span a"
-    override val mangaDetailsSelectorStatus = ".status"
+    override val mangaDetailsSelectorTitle = ".info h1"
+    override val mangaDetailsSelectorAuthor = "div.meta span:contains(المؤلف:) + a"
+    override val mangaDetailsSelectorArtist = "div.meta span:contains(الرسام:) + a"
+    override val mangaDetailsSelectorStatus = ".info p"
     override val mangaDetailsSelectorDescription = "div.description"
     override val mangaDetailsSelectorThumbnail = ".manga-poster img"
-    override val mangaDetailsSelectorGenre = "div.meta span:contains(التصنيف:) + span a"
-    override val altNameSelector = "div.alternative"
-    override fun chapterListSelector() = "li.chapter-item"
-    override fun chapterDateSelector() = ".chapter-release-date"
-    override val pageListParseSelector = ".chapter-reading-page img"
+    override val mangaDetailsSelectorGenre = "div.meta span:contains(التصنيفات:) ~ a"
+    override val altNameSelector = ".info h6"
+    override fun chapterListSelector() = "div.list-body-hh ul li"
+    override fun chapterDateSelector() = "span.time"
+    override val pageListParseSelector = "#ch-images .img"
+    override val chapterUrlSuffix = ""
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
@@ -59,7 +42,8 @@ class RocksManga :
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = super.chapterFromElement(element)
-        chapter.name = element.selectFirst(".num")!!.text()
+        chapter.name = element.selectFirst("zebi")!!.text()
+        chapter.scanlator = element.selectFirst(".username span")?.text()
         return chapter
     }
 }
