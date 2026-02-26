@@ -26,6 +26,10 @@ class Softkomik : HttpSource() {
 
     private var session: SessionDto? = null
 
+    private val rscHeaders = headersBuilder()
+        .add("rsc", "1")
+        .build()
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageInterceptor)
         .addInterceptor(::apiAuthInterceptor)
@@ -41,7 +45,7 @@ class Softkomik : HttpSource() {
             .addQueryParameter("sortBy", "popular")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headersBuilder().add("rsc", "1").build())
+        return GET(url, rscHeaders)
     }
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
@@ -52,7 +56,7 @@ class Softkomik : HttpSource() {
             .addQueryParameter("sortBy", "newKomik")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headersBuilder().add("rsc", "1").build())
+        return GET(url, rscHeaders)
     }
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
@@ -87,7 +91,7 @@ class Softkomik : HttpSource() {
             }
         }
 
-        return GET(url.build(), headersBuilder().add("rsc", "1").build())
+        return GET(url.build(), rscHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -108,7 +112,7 @@ class Softkomik : HttpSource() {
     }
 
     // ======================== Details ========================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", headersBuilder().add("rsc", "1").build())
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.extractNextJs<MangaDetailsDto>()
@@ -163,7 +167,7 @@ class Softkomik : HttpSource() {
     }
 
     // ======================== Pages ========================
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headersBuilder().add("rsc", "1").build())
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.extractNextJs<ChapterPageDataDto>()
