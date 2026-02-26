@@ -1,0 +1,10 @@
+ext {
+    extName = 'TCB Scans (Unoriginal)'
+    extClass = '.TCBScansUnoriginal'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://tcbscanonepiecechapters.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
