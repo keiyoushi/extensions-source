@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -60,11 +61,7 @@ class PoseidonScans :
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga/lastchapters?limit=16&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val apiResponse = try {
-            response.parseAs<LatestApiResponse>()
-        } catch (e: Exception) {
-            return MangasPage(emptyList(), false)
-        }
+        val apiResponse = response.parseAs<LatestApiResponse>()
 
         val mangas = apiResponse.data.mapNotNull { apiManga ->
             if (apiManga.slug.isBlank()) {
@@ -159,14 +156,35 @@ class PoseidonScans :
         else -> SManga.UNKNOWN
     }
 
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers.newBuilder().add("RSC", "1").build())
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaDto = response.extractNextJs<MangaDetailsData>()
+        val url = response.request.url
+        val rscBody = response.body.string()
+        val chapters = chapterListRsc(rscBody)
+        if (chapters.isNotEmpty()) return chapters
+
+        // RSC data can be partial on first load; retry with cache-busting
+        val retryUrl = url.newBuilder()
+            .addQueryParameter("_", System.currentTimeMillis().toString())
+            .build()
+        val retryRequest = response.request.newBuilder()
+            .url(retryUrl)
+            .header("Cache-Control", "no-cache")
+            .build()
+        val retryResponse = client.newCall(retryRequest).execute()
+        return chapterListRsc(retryResponse.body.string())
+    }
+
+    fun chapterListRsc(rscBody: String): List<SChapter> {
+        val mangaPageDto = rscBody.extractNextJsRsc<MangaPageDetailsData>()
             ?: throw Exception("Cant scape data from nextjs")
+
         val showPremium = preferences.getBoolean(
             SHOW_PREMIUM_KEY,
             SHOW_PREMIUM_DEFAULT,
         )
-        return mangaDto.chapters
+        return mangaPageDto.mangaDetailsData.chapters
             .mapNotNull { ch ->
                 // If chapter is premium, check if premium period has expired
                 if (ch.isPremium == true && !showPremium) {
@@ -196,30 +214,27 @@ class PoseidonScans :
                         "Chapitre $chapterNumberString"
                     }
 
-                    if (ch.isPremium == true) {
-                        val splittedDate = formatTimestamp(parseIsoDate(ch.premiumUntil)).split(" ")
-                        scanlator = buildString {
-                            append("Free the ")
-                            append(splittedDate[0])
-                            append(" ")
-                            append(splittedDate[1])
-                            append(" at ")
-                            append(splittedDate[2])
-                        }
-                    }
-
                     name = ch.title?.trim()?.takeIf { it.isNotBlank() }
                         ?.let { title ->
                             buildString {
-                                if (ch.isPremium == true) append("🔒 ")
+                                if (ch.isPremium == true && !mangaPageDto.isPremiumUser) append("🔒 ")
                                 append("$baseName - $title")
+                                if (ch.isPremium == true && !mangaPageDto.isPremiumUser) {
+                                    val splittedDate = formatTimestamp(parseIsoDate(ch.premiumUntil)).split(" ")
+                                    append(" - Free the ")
+                                    append(splittedDate[0])
+                                    append(" ")
+                                    append(splittedDate[1])
+                                    append(" at ")
+                                    append(splittedDate[2])
+                                }
                             }
                         }
                         ?: buildString {
                             if (ch.isPremium == true) append("🔒 ")
                             append(baseName)
                         }
-                    setUrlWithoutDomain("/serie/${mangaDto.slug}/chapter/$chapterNumberString")
+                    setUrlWithoutDomain("/serie/${mangaPageDto.mangaDetailsData.slug}/chapter/$chapterNumberString")
                     date_upload = parseIsoDate(ch.createdAt)
                     chapter_number = ch.number
                 }
@@ -257,15 +272,7 @@ class PoseidonScans :
                 throw Exception("This chapter is premium. You are not a premium user.")
             }
         }
-
-        val imagesListJson = pageDataDto.initialData.images
-        val imagesDataList = try {
-            imagesListJson.toString().parseAs<List<PageImageUrlData>>()
-        } catch (e: Exception) {
-            throw Exception("Error parsing image list: ${e.message}. JSON: $imagesListJson")
-        }
-
-        return imagesDataList.map { pageDto ->
+        return pageDataDto.initialData.images.map { pageDto ->
             Page(
                 index = pageDto.order,
                 imageUrl = pageDto.originalUrl.toAbsoluteUrl(),

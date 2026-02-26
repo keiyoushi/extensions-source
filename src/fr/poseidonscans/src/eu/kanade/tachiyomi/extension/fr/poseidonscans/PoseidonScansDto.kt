@@ -18,6 +18,12 @@ class LatestApiResponse(
 )
 
 @Serializable
+class MangaPageDetailsData(
+    val isPremiumUser: Boolean,
+    val mangaDetailsData: MangaDetailsData
+)
+
+@Serializable
 class MangaDetailsData(
     val title: String,
     val slug: String,
@@ -43,12 +49,6 @@ class ChapterData(
 )
 
 @Serializable
-class PageImageUrlData(
-    val originalUrl: String,
-    val order: Int,
-)
-
-@Serializable
 class PageData(
     val currentChapter: CurrentChapterData,
     val initialData: InitialData,
@@ -63,5 +63,11 @@ class CurrentChapterData(
 
 @Serializable
 class InitialData(
-    val images: JsonArray,
+    val images: List<ImageData>,
+)
+
+@Serializable
+class ImageData(
+    val originalUrl: String,
+    val order: Int
 )
