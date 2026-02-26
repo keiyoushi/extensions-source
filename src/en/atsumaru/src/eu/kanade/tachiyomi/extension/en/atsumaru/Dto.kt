@@ -59,6 +59,7 @@ class MangaDto(
     private val tags: List<TagDto>? = null,
     private val status: String? = null,
     private val type: String? = null,
+    val scanlators: List<ScanlatorDto>? = null,
 
     // Chapters
     val chapters: List<ChapterDto>? = null,
@@ -110,6 +111,12 @@ class MangaDto(
     class AuthorDto(
         val name: String,
     )
+
+    @Serializable
+    class ScanlatorDto(
+        val id: String,
+        val name: String,
+    )
 }
 
 @Serializable
@@ -123,15 +130,17 @@ class ChapterListDto(
 
 @Serializable
 class ChapterDto(
-    private val id: String,
+    val id: String,
     private val number: Float,
     private val title: String,
+    val scanlationMangaId: String? = null,
     @SerialName("createdAt") private val date: JsonElement? = null,
 ) {
-    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
+    fun toSChapter(slug: String, scanlatorName: String? = null): SChapter = SChapter.create().apply {
         url = "$slug/$id"
         chapter_number = number
         name = title
+        scanlator = scanlatorName
         date?.let {
             date_upload = parseDate(it)
         }

@@ -178,17 +178,32 @@ class Atsumaru : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaId = response.request.url.queryParameter("id")!!
-        val chapterList = mutableListOf<ChapterDto>()
 
+        val mangaPage = try {
+            val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
+            client.newCall(detailsRequest).execute().use {
+                it.parseAs<MangaObjectDto>().mangaPage
+            }
+        } catch (_: Exception) {
+            null
+        }
+
+        val scanlatorMap = mangaPage?.scanlators?.associate { it.id to it.name }.orEmpty()
+        val chapterToScanlator = mangaPage?.chapters?.associate { it.id to it.scanlationMangaId }.orEmpty()
+
+        val chapters = mutableListOf<ChapterDto>()
         var result = response.parseAs<ChapterListDto>()
-        chapterList.addAll(result.chapters)
+        chapters.addAll(result.chapters)
 
         while (result.hasNextPage()) {
             result = client.newCall(fetchChaptersRequest(mangaId, result.page + 1)).execute().parseAs()
-            chapterList.addAll(result.chapters)
+            chapters.addAll(result.chapters)
         }
 
-        return chapterList.map { it.toSChapter(mangaId) }
+        return chapters.map {
+            val scanlatorId = it.scanlationMangaId ?: chapterToScanlator[it.id]
+            it.toSChapter(mangaId, scanlatorId?.let { id -> scanlatorMap[id] })
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
