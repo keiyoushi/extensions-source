@@ -172,23 +172,25 @@ class Atsumaru : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    private fun fetchChaptersRequest(mangaId: String, page: Int): Request = GET("$baseUrl/api/manga/chapters?id=$mangaId&filter=all&sort=desc&page=$page", apiHeaders)
-
-    override fun chapterListRequest(manga: SManga): Request = fetchChaptersRequest(manga.url, 0)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.queryParameter("id")!!
-        val chapterList = mutableListOf<ChapterDto>()
+        val mangaId = response.request.url.queryParameter("mangaId")!!
 
-        var result = response.parseAs<ChapterListDto>()
-        chapterList.addAll(result.chapters)
-
-        while (result.hasNextPage()) {
-            result = client.newCall(fetchChaptersRequest(mangaId, result.page + 1)).execute().parseAs()
-            chapterList.addAll(result.chapters)
+        val scanlatorMap = try {
+            val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
+            client.newCall(detailsRequest).execute().use {
+                it.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
+            }.orEmpty()
+        } catch (_: Exception) {
+            emptyMap()
         }
 
-        return chapterList.map { it.toSChapter(mangaId) }
+        val data = response.parseAs<AllChaptersDto>()
+
+        return data.chapters.map {
+            it.toSChapter(mangaId, it.scanlationMangaId?.let { id -> scanlatorMap[id] })
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -208,7 +210,12 @@ class Atsumaru : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
-        Page(index, imageUrl = baseUrl + page.image)
+        val imageUrl = when {
+            page.image.startsWith("http") -> page.image
+            page.image.startsWith("//") -> "https:$page.image"
+            else -> "$baseUrl/static/$page.image"
+        }
+        Page(index, imageUrl = imageUrl)
     }
 
     override fun imageRequest(page: Page): Request {
