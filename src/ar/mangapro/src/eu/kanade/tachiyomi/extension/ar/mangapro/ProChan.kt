@@ -41,7 +41,6 @@ import okhttp3.internal.closeQuietly
 import okio.Buffer
 import okio.buffer
 import okio.source
-import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import rx.Observable
 import tachiyomi.decoder.ImageDecoder
 import uy.kohesive.injekt.Injekt
@@ -51,6 +50,7 @@ import java.io.IOException
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.zip.ZipInputStream
 
 class ProChan : HttpSource() {
     override val name = "ProChan"
@@ -382,9 +382,9 @@ class ProChan : HttpSource() {
             .let { handleDriveRedirect(it) }
             .use { response ->
                 check(response.isSuccessful) { "HTTP ${response.code}" }
-                ZipArchiveInputStream(response.body.byteStream().buffered()).use { zis ->
+                ZipInputStream(response.body.byteStream().buffered()).use { zis ->
                     generateSequence { zis.nextEntry }
-                        .filterNot { it.name.endsWith(".xml") }
+                        .filter { !it.isDirectory && !it.name.contains('/') && !it.name.endsWith(".xml") }
                         .forEach { entry ->
                             File(cacheDir, entry.name).outputStream().use { zis.copyTo(it) }
                         }
@@ -403,7 +403,10 @@ class ProChan : HttpSource() {
     }
 
     private fun handleDriveRedirect(response: Response): Response {
-        if (!response.header("Content-Type").orEmpty().contains("text/html")) return response
+        if (!response.header("Content-Type").orEmpty().contains("text/html")) {
+            return response
+        }
+
         val document = response.asJsoup()
         val actionUrl = document.selectFirst("#download-form")!!.attr("action")
             .toHttpUrl().newBuilder().apply {
@@ -412,6 +415,7 @@ class ProChan : HttpSource() {
                 }
             }.build()
         val headers = Headers.headersOf("Referer", response.request.url.toString())
+
         return client.newCall(GET(actionUrl, headers)).execute()
     }
 
