@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -42,8 +42,7 @@ class GorakuWeb :
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, rscHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val responseBody = response.body.string()
-        val data = responseBody.extractNextJsRsc<List<Entries>>()
+        val data = response.extractNextJs<List<Entries>>()
         val mangas = data.orEmpty().map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
@@ -78,8 +77,7 @@ class GorakuWeb :
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.tag() == "series") {
-            val responseBody = response.body.string()
-            val data = responseBody.extractNextJsRsc<SeriesList>()
+            val data = response.extractNextJs<SeriesList>()
             val mangas = data?.cardList?.flatten().orEmpty().map { it.toSManga(baseUrl) }
             return MangasPage(mangas, false)
         }
@@ -98,13 +96,12 @@ class GorakuWeb :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/episode/${manga.url}", rscHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.body.string().extractNextJsRsc<EpisodeProps>()!!.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<EpisodeProps>()!!.toSManga()
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val responseBody = response.body.string()
-        val data = responseBody.extractNextJsRsc<EpisodeProps>()!!
+        val data = response.extractNextJs<EpisodeProps>()!!
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         return data.episodeList
             .filter { !hideLocked || it.disabled != true }
@@ -113,8 +110,7 @@ class GorakuWeb :
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val responseBody = response.body.string()
-        val data = responseBody.extractNextJsRsc<EpisodeProps>() ?: throw Exception("This chapter is not available.")
+        val data = response.extractNextJs<EpisodeProps>() ?: throw Exception("This chapter is not available.")
         val pagesData = data.metadata
         val base = data.base
         val token = data.accessKey
