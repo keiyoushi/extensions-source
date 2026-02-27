@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.azora
+package eu.kanade.tachiyomi.extension.ar.despair-manga
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.network.GET
@@ -7,12 +7,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Azora :
+class despair-manga :
     Iken(
-        "Azora",
+        "despair-manga",
         "ar",
-        "https://azoramoon.com",
-        "https://api.azoramoon.com",
+        "https://despair-manga.net",
+        "https://api.despair-manga.net/",
     ) {
     override val versionId = 2
     val perPage = 18
