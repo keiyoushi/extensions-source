@@ -38,6 +38,7 @@ class Softkomik : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
+        .add("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
 
     // ======================== Popular ========================
     override fun popularMangaRequest(page: Int): Request {
@@ -189,21 +190,25 @@ class Softkomik : HttpSource() {
         }
 
         val imageBaseUrl = if (data.storageInter2 == true) cdnUrls[2] else cdnUrls[0]
+        val referer = response.request.url.newBuilder().query(null).build().toString()
 
         return imageSrc.mapIndexed { i, img ->
-            Page(i, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}")
+            Page(i, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}#$referer")
         }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
+        val url = page.imageUrl!!.toHttpUrl()
+        val referer = url.fragment ?: "$baseUrl/"
+
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("Referer", "$baseUrl/")
+            .set("Referer", referer)
             .set("Origin", baseUrl)
             .build()
-        return GET(page.imageUrl!!, newHeaders)
+        return GET(url.newBuilder().fragment(null).build(), newHeaders)
     }
 
     // ============================= Utilities ==============================
@@ -212,19 +217,23 @@ class Softkomik : HttpSource() {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        if (response.isSuccessful || !request.url.encodedPath.contains("img-file")) {
+        if (response.isSuccessful) {
             return response
         }
 
-        val imgPath = request.url.toString().substringAfter("img-file/")
-        val otherHosts = cdnUrls.filter { !request.url.toString().contains(it) }
+        val url = request.url.toString()
+        val currentCdn = cdnUrls.find { url.contains(it) } ?: return response
+        val path = url.substringAfter(currentCdn)
 
         var latestResponse = response
-        for (newHost in otherHosts) {
+        cdnUrls.filter { !url.contains(it) }.forEach { cdn ->
             latestResponse.close()
-            val newUrl = "$newHost/img-file/$imgPath".toHttpUrl()
+            val newUrl = "$cdn$path".toHttpUrl()
             latestResponse = chain.proceed(request.newBuilder().url(newUrl).build())
-            if (latestResponse.isSuccessful) return latestResponse
+
+            if (latestResponse.isSuccessful) {
+                return latestResponse
+            }
         }
 
         return latestResponse
