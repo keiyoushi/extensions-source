@@ -1,8 +1,8 @@
 ext {
-    extName = 'Mangalek'
-    extClass = '.Mangalek'
+    extName = 'despair-manga'
+    extClass = '.despair-manga'
     themePkg = 'madara'
-    baseUrl = 'https://lekmanga.net'
+    baseUrl = 'https://despair-manga.net'
     overrideVersionCode = 8
     isNsfw = false
 }
