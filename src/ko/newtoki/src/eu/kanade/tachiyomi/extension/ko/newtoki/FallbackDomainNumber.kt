@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.ko.newtoki
 
 /**
- * This value will be automatically overwritten when building the extension.
- * After building, this file will be restored.
- *
- * Even if this value is built into the extension, the network call will fail
- * because of underscore character and the extension will update it on its own.
+ * Update this value when the domain changes. Version bump is not required.
+ * The latest value should be available at:
+ * https://github.com/stevenyomi/source-domains/blob/gh-pages/newtoki.txt
  */
-const val FALLBACK_DOMAIN_NUMBER = "_failed_to_fetch_domain_number"
+const val FALLBACK_DOMAIN_NUMBER = "469"
