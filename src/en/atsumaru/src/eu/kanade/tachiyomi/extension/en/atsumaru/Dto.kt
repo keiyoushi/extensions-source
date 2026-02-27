@@ -77,11 +77,12 @@ class MangaDto(
         url = id
         title = this@MangaDto.title
         thumbnail_url = getImagePath()?.let {
-            when {
+            val url = when {
                 it.startsWith("http") -> it
                 it.startsWith("//") -> "https:$it"
                 else -> "$baseUrl/static/$it"
             }
+            url.replaceFirst(Regex("^https?:?//"), "https://")
         }
         description = synopsis
         genre = buildList {
