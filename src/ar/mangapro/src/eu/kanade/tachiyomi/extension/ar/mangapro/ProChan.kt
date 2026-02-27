@@ -76,6 +76,7 @@ class ProChan : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
 
     private val rscHeaders = headersBuilder()
         .set("rsc", "1")
@@ -544,11 +545,16 @@ class ProChan : HttpSource() {
                             .set("Referer", chapterUrl)
                             .build()
                         val signRequest = POST("$baseUrl/api/cdn-image/sign", signHeaders, payload)
-                        val token = client.newCall(signRequest).await().parseAs<Token>()
-                        imgUrl = imgUrl.newBuilder()
-                            .setQueryParameter("token", token.token)
-                            .setQueryParameter("expires", token.expires.toString())
-                            .build()
+                        val response = client.newCall(signRequest).await()
+                        if (response.isSuccessful) {
+                            val token = response.parseAs<Token>()
+                            imgUrl = imgUrl.newBuilder()
+                                .setQueryParameter("token", token.token)
+                                .setQueryParameter("expires", token.expires.toString())
+                                .build()
+                        } else {
+                            response.close()
+                        }
                     }
                     val pieceRequest = request.newBuilder().url(imgUrl).build()
                     val response = client.newCall(pieceRequest).await()
