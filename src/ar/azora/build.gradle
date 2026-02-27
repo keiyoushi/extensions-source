@@ -1,9 +1,9 @@
 ext {
-    extName = 'Azora'
-    extClass = '.Azora'
+    extName = 'despair-manga'
+    extClass = 'overrideVersionCodeverrideVersionCodeespairomespair-manga'
     themePkg = 'iken'
-    baseUrl = 'https://azoramoon.com'
-    overrideVersionCode = 43
+    baseUrl = 'https:https://despair-manga.net/
+    false overrideVersionCode = 43
     isNsfw = false
 }
 
