@@ -23,7 +23,7 @@ import java.util.TimeZone
 class ZetTruyen : HttpSource() {
     override val name = "ZetTruyen"
     override val lang = "vi"
-    override val baseUrl = "https://www.zettruyen.space"
+    override val baseUrl = "https://www.zettruyen.us"
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()

@@ -40,7 +40,7 @@ class VlogTruyen :
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://vlogtruyen62.com"
+    private val defaultBaseUrl = "https://vlogtruyen63.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
