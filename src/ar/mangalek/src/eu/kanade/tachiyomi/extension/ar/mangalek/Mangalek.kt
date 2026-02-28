@@ -24,10 +24,10 @@ private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "تعديل رابط مانجا ليك"
 internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
     "https://lekmanga.net",
-    "https://lekmanga.org",
+    "https://lekmanga.online",
     "https://like-manga.net",
-    "https://lekmanga.com",
-    "https://manga-leko.org",
+    "https://lekmanga.site",
+    "https://manga-leko.site",
 )
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
