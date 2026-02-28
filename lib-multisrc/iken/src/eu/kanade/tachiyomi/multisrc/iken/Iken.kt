@@ -100,13 +100,21 @@ abstract class Iken(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        val page = response.request.url.queryParameter("page")!!.toInt()
+        var page = response.request.url.queryParameter("page")!!.toInt()
 
         val entries = data.posts
             .filterNot { it.isNovel }
             .map { it.toSManga() }
 
         val hasNextPage = data.totalCount > (page * PER_PAGE)
+        if (entries.isEmpty() && hasNextPage) {
+            page += 1
+            val newUrl = response.request.url.newBuilder()
+                .setQueryParameter("page", page.toString())
+                .build()
+            val newResponse = client.newCall(GET(newUrl)).execute()
+            return searchMangaParse(newResponse)
+        }
 
         return MangasPage(entries, hasNextPage)
     }
