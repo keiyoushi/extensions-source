@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.weebcentral
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -30,7 +30,7 @@ class WeebCentral : ParsedHttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
+        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
