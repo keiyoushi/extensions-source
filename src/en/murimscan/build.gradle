@@ -1,9 +1,9 @@
 ext {
     extName = 'MurimScan'
     extClass = '.MurimScan'
-    themePkg = 'madara'
-    baseUrl = 'https://inkreads.com'
-    overrideVersionCode = 1
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.murimscans.site'
+    overrideVersionCode = 36
     isNsfw = true
 }
 
