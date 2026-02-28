@@ -21,6 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 private const val BASE_URL_PREF_KEY = "customBaseUrl"
+private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
 private const val BASE_URL_PREF_TITLE = "رابط مخصص لمانجا ليك"
 private const val SUMMARY_MIRROR = "يُستخدم عنوان الوصول حاليًا. أدخل رابطًا مخصصًا لتجاوزه"
 private const val SUMMARY_CUSTOM = "الرابط المخصص نشط. قم بإفراغ هذا الحقل للعودة لاستخدام عنوان الوصول"
@@ -98,6 +99,21 @@ class Mangalek :
 
         screen.addPreference(mirrorPref)
         screen.addPreference(baseUrlPref)
+    }
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != MIRROR_PREF_DEFAULT_VALUE) {
+                preferences.edit()
+                    // clear custom base URL
+                    .putString(BASE_URL_PREF_KEY, "")
+                    // reset mirror to first entry
+                    .putString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)
+                    // store new default mirror
+                    .putString(DEFAULT_BASE_URL_PREF, MIRROR_PREF_DEFAULT_VALUE)
+                    .apply()
+            }
+        }
     }
 
     private val formatOne = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
