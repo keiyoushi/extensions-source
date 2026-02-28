@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.infernalvoidscans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.utils.extractNextJs
 import okhttp3.Response
 
 class HiveScans :
@@ -26,9 +27,7 @@ class HiveScans :
     override fun headersBuilder() = super.headersBuilder()
         .set("Cache-Control", "max-age=0")
 
-    val pageRegex = Regex(""""(http\S+?/public//upload/series/\S+?)\\"""")
-
-    override fun pageListParse(response: Response): List<Page> = pageRegex.findAll(response.body.string()).mapIndexed { index, element ->
-        Page(index, imageUrl = element.groupValues[1])
-    }.toList()
+    override fun pageListParse(response: Response): List<Page> = response.extractNextJs<Images>()?.images.orEmpty().mapIndexed { index, element ->
+        Page(index, imageUrl = element.url)
+    }
 }
