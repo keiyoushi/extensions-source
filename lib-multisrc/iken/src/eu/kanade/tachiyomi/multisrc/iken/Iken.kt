@@ -224,8 +224,10 @@ abstract class Iken(
 
         return "\"${data.substring(start, i)}\"".parseAs<String>()
     }
-}
 
-private const val PER_PAGE = 18
-private const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
-private val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+    companion object {
+        const val PER_PAGE = 18
+        const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+    }
+}
