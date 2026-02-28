@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -187,16 +186,9 @@ class LeituraManga : HttpSource() {
             ?.let { CryptoAES.decrypt(it, password) }
             ?: return emptyList()
 
-        return content.parseAs<List<Image>>().mapIndexed { index, image ->
+        return content.parseAs<List<ImageDto>>().mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl(cdnUrl))
         }
-    }
-
-    @Serializable
-    class Image(
-        private val url: String,
-    ) {
-        fun absUrl(cdnUrl: String) = "$cdnUrl/$url"
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

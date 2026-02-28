@@ -88,3 +88,10 @@ class ChapterDto(
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
     }
 }
+
+@Serializable
+class ImageDto(
+    private val url: String,
+) {
+    fun absUrl(cdnUrl: String) = "$cdnUrl/$url"
+}
