@@ -103,3 +103,12 @@ private object DialogListSerializer :
     private val JsonElement.isObject get() = this is JsonObject
     private val JsonElement.isString get() = this.isObject.not() && this.isArray.not() && this.jsonPrimitive.isString
 }
+
+@Serializable
+data class OcrDataDto(
+    val a: String,
+    val b: String,
+    val c: Long,
+    val d: String,
+    val e: String,
+)

@@ -298,16 +298,25 @@ class Manhuarm(
         val jsonHeaders = Headers.Builder()
             .add("Referer", chapterUrl.toString())
             .add("Accept", "*/*")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .add("Cache-Control", "no-cache")
             .build()
 
-        val encoded = Regex("""_0xraw\s*=\s*"([^"]+)"""")
+        val encoded = Regex("""_0xdata\s*=\s*(\{.+\})""")
             .find(document.html())
             ?.groupValues
             ?.get(1)
             ?: return pages
 
         val ocrUrl = try {
-            String(Base64.getDecoder().decode(encoded))
+            val data = encoded.parseAs<OcrDataDto>()
+            val ch = String(Base64.getDecoder().decode(data.a))
+            data.e.toHttpUrl().newBuilder()
+                .addQueryParameter("ch", ch)
+                .addQueryParameter("tk", data.b)
+                .addQueryParameter("ts", data.c.toString())
+                .addQueryParameter("nc", data.d)
+                .build().toString()
         } catch (_: Exception) {
             return pages
         }
