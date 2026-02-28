@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.kmanga
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,24 +13,17 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okio.ByteString.Companion.encodeUtf8
 import rx.Observable
+import java.io.IOException
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -37,38 +32,45 @@ import java.util.GregorianCalendar
 import java.util.Locale
 import java.util.TimeZone
 
-class KManga : HttpSource() {
-
+class KManga :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "K Manga"
-    override val baseUrl = "https://kmanga.kodansha.com"
+    private val domain = "kmanga.kodansha.com"
+    override val baseUrl = "https://$domain"
     override val lang = "en"
     override val supportsLatest = true
 
-    private val apiUrl = "https://api.kmanga.kodansha.com"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    private val apiUrl = "https://api.$domain"
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     private val pageLimit = 25
-    private val searchLimit = 25
+    private val jst = TimeZone.getTimeZone("Asia/Tokyo")
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "XMLHttpRequest")
         .add("x-kmanga-platform", "3")
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code == 400 && request.url.pathSegments.last().contains("viewer")) {
+                throw IOException("Log in via WebView and rent or purchase this chapter to read.")
+            }
+            response
+        }
         .build()
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         val offset = (page - 1) * pageLimit
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("ranking/all")
+        val url = "$apiUrl/ranking/all".toHttpUrl().newBuilder()
             .addQueryParameter("ranking_id", "12")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", (pageLimit + 1).toString())
             .build()
-
         return hashedGet(url)
     }
 
@@ -83,196 +85,153 @@ class KManga : HttpSource() {
         val hasNextPage = titleIds.size > pageLimit
         val mangaIdsToFetch = if (hasNextPage) titleIds.dropLast(1) else titleIds
 
-        val detailsUrl = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("title/list")
+        val detailsUrl = "$apiUrl/title/list".toHttpUrl().newBuilder()
             .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString(","))
             .build()
 
         val detailsRequest = hashedGet(detailsUrl)
         val detailsResponse = client.newCall(detailsRequest).execute()
-
-        if (!detailsResponse.isSuccessful) {
-            throw Exception("Failed to fetch title details: ${detailsResponse.code} - ${detailsResponse.body.string()}")
-        }
-
-        val detailsResult = detailsResponse.parseAs<TitleListResponse>()
-        val mangas = detailsResult.titleList.map { manga ->
-            SManga.create().apply {
-                url = "/title/${manga.titleId}"
-                title = manga.titleName
-                thumbnail_url = manga.thumbnailImageUrl ?: manga.bannerImageUrl
-            }
-        }
+        val result = detailsResponse.parseAs<TitleListResponse>()
+        val mangas = result.titleList.map { it.toSManga() }.reversed()
         return MangasPage(mangas, hasNextPage)
     }
 
     // Latest
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        if (page > 1) return Observable.just(MangasPage(emptyList(), false))
+        return Observable.fromCallable {
+            val mangas = ArrayList<SManga>()
+            var dayOffset = 0
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val calendar = GregorianCalendar(TimeZone.getTimeZone("Asia/Tokyo")).apply {
-            time = Date()
+            while (true) {
+                val calendar = GregorianCalendar(jst).apply {
+                    time = Date()
+                    add(Calendar.DAY_OF_MONTH, -dayOffset)
 
-            add(Calendar.DAY_OF_MONTH, -(page - 1))
+                    // Manga seems to usually update at 10 AM JST, so if we're before that time we should go
+                    // back a day since we don't expect there to have been any updates today yet.
+                    if (get(Calendar.HOUR_OF_DAY) < 10) {
+                        add(Calendar.DAY_OF_MONTH, -1)
+                    }
+                }
 
-            // Manga seems to usually update at 10 AM JST, so if we're before that time we should go
-            // back a day since we don't expect there to have been any updates today yet.
-            if (get(Calendar.HOUR_OF_DAY) < 10) {
-                add(Calendar.DAY_OF_MONTH, -1)
+                val dateString = buildString {
+                    append(calendar.get(Calendar.YEAR))
+                    append('-')
+                    append((calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
+                    append('-')
+                    append(calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0'))
+                }
+
+                val url = "$apiUrl/web/top/updated/title".toHttpUrl().newBuilder()
+                    .addQueryParameter("base_date", dateString)
+                    .build()
+
+                val request = hashedGet(url)
+                val response = client.newCall(request).execute()
+                val result = response.parseAs<TitleListResponse>().titleList
+
+                if (result.isEmpty()) break
+
+                mangas.addAll(result.map { it.toSManga() }.reversed())
+                dayOffset++
             }
+
+            MangasPage(mangas, false)
         }
-
-        val dateString = buildString {
-            append(calendar.get(Calendar.YEAR))
-            append('-')
-            append((calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
-            append('-')
-            append(calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0'))
-        }
-
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("web/top/updated/title")
-            .addQueryParameter("base_date", dateString)
-            .build()
-
-        return hashedGet(url)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<LatestTitleListResponse>()
-        val manga = result.titleList.map { manga ->
-            SManga.create().apply {
-                url = "/title/${manga.titleId}"
-                title = manga.titleName
-                thumbnail_url = manga.thumbnailImageUrl
-            }
-        }
-        return MangasPage(manga, true)
     }
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) {
-        val titleId = query.removePrefix(PREFIX_SEARCH)
-        fetchMangaDetails(
-            SManga.create().apply { url = "/title/$titleId" },
-        ).map { manga ->
-            MangasPage(listOf(manga.apply { url = "/title/$titleId" }), false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(PREFIX_SEARCH)) {
+            val titleId = query.removePrefix(PREFIX_SEARCH)
+            fetchMangaDetails(
+                SManga.create().apply { url = "/title/$titleId" },
+            ).map {
+                MangasPage(listOf(it.apply { url = "/title/$titleId" }), false)
+            }
         }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val genreFilter = filters.firstInstance<GenreFilter>()
-
+        val searchUrl = "$apiUrl/search/title".toHttpUrl()
         if (query.isNotBlank()) {
-            val offset = (page - 1) * searchLimit
-            val url = apiUrl.toHttpUrl().newBuilder()
-                .addPathSegments("search/title")
+            val url = searchUrl.newBuilder()
                 .addQueryParameter("keyword", query)
-                .addQueryParameter("offset", offset.toString())
-                .addQueryParameter("limit", searchLimit.toString())
+                .addQueryParameter("limit", "99999")
                 .build()
             return hashedGet(url)
         }
 
-        if (genreFilter.state != 0) {
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegments(genreFilter.toUriPart().removePrefix("/"))
-                .build()
-            return GET(url, headers)
-        }
-        return popularMangaRequest(page)
+        val filters = filters.firstInstance<GenreFilter>()
+        val url = searchUrl.newBuilder()
+            .addQueryParameter("genre_id", filters.value)
+            .addQueryParameter("limit", "99999")
+            .build()
+        return hashedGet(url)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.host.contains("api.")) {
-            val result = response.parseAs<SearchApiResponse>()
-            val mangas = result.titleList.map { manga ->
-                SManga.create().apply {
-                    url = "/title/${manga.titleId}"
-                    title = manga.titleName
-                    thumbnail_url = manga.thumbnailImageUrl
-                }
-            }
-            return MangasPage(mangas, mangas.size >= searchLimit)
-        }
+        val result = response.parseAs<TitleListResponse>()
+        val mangas = result.titleList.map { it.toSManga() }
+        return MangasPage(mangas, false)
+    }
 
-        if (response.request.url.toString().contains("/search/genre/")) {
-            val document = response.asJsoup()
-            val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
-                ?: return MangasPage(emptyList(), false)
-
-            val rootArray = nuxtData.parseAs<JsonArray>()
-            fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
-
-            val genreResultObject = rootArray.firstOrNull { it is JsonObject && "title_list" in it.jsonObject }
-                ?: return MangasPage(emptyList(), false)
-
-            val mangaRefs = resolve(genreResultObject.jsonObject["title_list"]!!).jsonArray
-
-            val mangas = mangaRefs.map { ref ->
-                val mangaObject = resolve(ref).jsonObject
-                SManga.create().apply {
-                    url = "/title/${resolve(mangaObject["title_id"]!!).jsonPrimitive.content}"
-                    title = resolve(mangaObject["title_name"]!!).jsonPrimitive.content
-                    thumbnail_url = mangaObject["thumbnail_image_url"]?.let { resolve(it).jsonPrimitive.content }
-                }
-            }
-            return MangasPage(mangas, false)
-        }
-        return popularMangaParse(response)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val titleId = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
+        val url = "$apiUrl/web/title/detail".toHttpUrl().newBuilder()
+            .addQueryParameter("title_id", titleId)
+            .build()
+        return hashedGet(url)
     }
 
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
-            ?: throw Exception("Could not find Nuxt data")
+        val result = response.parseAs<DetailResponse>().webTitle
+        return SManga.create().apply {
+            title = result.titleName
+            author = result.authorText
+            description = buildString {
+                append(result.introductionText)
+                if (!result.nextUpdatedText.isNullOrBlank()) {
+                    append("\n\n${result.nextUpdatedText}")
+                }
+                if (!result.titleInJapanese.isNullOrBlank()) {
+                    append("\n\nJapanese Title: ${result.titleInJapanese}")
+                }
+            }
+            thumbnail_url = result.thumbnailImageUrl ?: result.bannerImageUrl ?: result.thumbnailRectImageUrl
+            result.genreIdList?.let { genres ->
+                if (genres.isNotEmpty()) {
+                    val genreApiUrl = "$apiUrl/genre/list".toHttpUrl().newBuilder()
+                        .addQueryParameter("genre_id_list", result.genreIdList.joinToString())
+                        .build()
 
-        val rootArray = nuxtData.parseAs<JsonArray>()
-        fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
+                    val genreRequest = hashedGet(genreApiUrl)
+                    val genreResponse = client.newCall(genreRequest).execute()
 
-        val titleDetailsObject = rootArray.first { it is JsonObject && it.jsonObject.containsKey("title_in_japanese") }.jsonObject
-
-        val genreMap = buildMap {
-            rootArray.forEach { element ->
-                if (element is JsonObject && element.jsonObject.containsKey("genre_id")) {
-                    val genreObject = element.jsonObject
-                    val id = resolve(genreObject["genre_id"]!!).jsonPrimitive.content.toInt()
-                    val name = resolve(genreObject["genre_name"]!!).jsonPrimitive.content
-                    put(id, name)
+                    if (genreResponse.isSuccessful) {
+                        val genreResult = genreResponse.parseAs<GenreListResponse>()
+                        genre = genreResult.genreList?.joinToString { it.genreName }
+                    }
                 }
             }
         }
-
-        return SManga.create().apply {
-            title = resolve(titleDetailsObject["title_name"]!!).jsonPrimitive.content
-            author = resolve(titleDetailsObject["author_text"]!!).jsonPrimitive.content
-            description = resolve(titleDetailsObject["introduction_text"]!!).jsonPrimitive.content
-            thumbnail_url = titleDetailsObject["thumbnail_image_url"]?.let { resolve(it).jsonPrimitive.content }
-            val genreIdRefs = resolve(titleDetailsObject["genre_id_list"]!!).jsonArray
-            val genreIds = genreIdRefs.map { resolve(it).jsonPrimitive.content.toInt() }
-            genre = genreIds.mapNotNull { genreMap[it] }.joinToString()
-        }
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
-            ?: throw Exception("Could not find Nuxt data")
+        val resultIds = response.parseAs<DetailResponse>()
+        val episodeIds = resultIds.webTitle.episodeIdList.map { it.toString() }
 
-        val rootArray = nuxtData.parseAs<JsonArray>()
-        fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
-
-        val titleDetailsObject = rootArray.first { it is JsonObject && it.jsonObject.containsKey("episode_id_list") }.jsonObject
-        val episodeIdRefs = resolve(titleDetailsObject["episode_id_list"]!!).jsonArray
-        val episodeIds = episodeIdRefs.map { resolve(it).jsonPrimitive.content }
+        if (episodeIds.isEmpty()) return emptyList()
 
         val (birthday, expires) = getBirthdayCookie(response.request.url)
-
         val formBody = FormBody.Builder()
             .add("episode_id_list", episodeIds.joinToString(","))
             .build()
@@ -281,33 +240,37 @@ class KManga : HttpSource() {
         val hash = generateHash(params, birthday, expires)
 
         val postHeaders = headersBuilder()
-            .add("Accept", "application/json")
-            .add("Content-Type", "application/x-www-form-urlencoded")
-            .add("Origin", baseUrl)
-            .add("x-kmanga-is-crawler", "false")
             .add("x-kmanga-hash", hash)
             .build()
 
         val apiRequest = POST("$apiUrl/episode/list", postHeaders, formBody)
         val apiResponse = client.newCall(apiRequest).execute()
-
-        if (!apiResponse.isSuccessful) {
-            throw Exception("API request failed with code ${apiResponse.code}: ${apiResponse.body.string()}")
-        }
-
         val result = apiResponse.parseAs<EpisodeListResponse>()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
 
-        return result.episodeList.map { chapter ->
-            SChapter.create().apply {
-                url = "/title/${chapter.titleId}/episode/${chapter.episodeId}"
-                name = if (chapter.point > 0 && chapter.badge != 3 && chapter.rentalFinishTime == null) {
-                    "🔒 ${chapter.episodeName}"
-                } else {
-                    chapter.episodeName
-                }
-                date_upload = dateFormat.tryParse(chapter.startTime)
-            }
-        }.reversed()
+        return result.episodeList
+            .filter { !hideLocked || !it.isLocked }
+            .map { it.toSChapter(dateFormat) }
+            .reversed()
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+
+    // Pages
+    override fun pageListRequest(chapter: SChapter): Request {
+        val episodeId = (baseUrl + chapter.url).toHttpUrl().pathSegments.last()
+        val url = "$apiUrl/web/episode/viewer".toHttpUrl().newBuilder()
+            .addQueryParameter("episode_id", episodeId)
+            .build()
+        return hashedGet(url)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val results = response.parseAs<ViewerApiResponse>()
+        val seed = results.scrambleSeed
+        return results.pageList.mapIndexed { index, page ->
+            Page(index, imageUrl = "$page#scramble_seed=$seed")
+        }
     }
 
     private fun getBirthdayCookie(url: HttpUrl): Pair<String, String> {
@@ -319,12 +282,12 @@ class KManga : HttpSource() {
                 val decoded = URLDecoder.decode(birthdayCookie, "UTF-8")
                 val cookieData = decoded.parseAs<BirthdayCookie>()
                 cookieData.value to cookieData.expires.toString()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Fallback to default if cookie is malformed
                 "2000-01" to (System.currentTimeMillis() / 1000 + 315360000).toString()
             }
         } else {
-            // Default for logged out users or users without the cookie to bypass age restrictions
+            // Default for logged-out users or users without the cookie to bypass age restrictions
             "2000-01" to (System.currentTimeMillis() / 1000 + 315360000).toString()
         }
     }
@@ -337,9 +300,7 @@ class KManga : HttpSource() {
 
         val joinedParams = paramStrings.joinToString(",")
         val hash1 = joinedParams.encodeUtf8().sha256().hex()
-
         val cookieHash = getHashedParam(birthday, expires)
-
         val finalString = "$hash1$cookieHash"
         return finalString.encodeUtf8().sha512().hex()
     }
@@ -348,36 +309,6 @@ class KManga : HttpSource() {
         val keyHash = key.encodeUtf8().sha256().hex()
         val valueHash = value.encodeUtf8().sha512().hex()
         return "${keyHash}_$valueHash"
-    }
-
-    // Pages
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .map { response ->
-            if (!response.isSuccessful) {
-                if (response.code == 400) {
-                    throw Exception("This chapter is locked. Log in via WebView and rent or purchase the chapter to read.")
-                }
-                throw Exception("HTTP error ${response.code}")
-            }
-            pageListParse(response)
-        }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val apiResponse = response.parseAs<ViewerApiResponse>()
-        val seed = apiResponse.scrambleSeed
-        return apiResponse.pageList.mapIndexed { index, imageUrl ->
-            Page(index = index, imageUrl = "$imageUrl#scramble_seed=$seed")
-        }
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val episodeId = chapter.url.substringAfter("episode/")
-        val url = "$apiUrl/web/episode/viewer".toHttpUrl().newBuilder()
-            .addQueryParameter("episode_id", episodeId)
-            .build()
-
-        return hashedGet(url)
     }
 
     private fun hashedGet(url: HttpUrl): Request {
@@ -390,6 +321,14 @@ class KManga : HttpSource() {
         return GET(url, newHeaders)
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     // Filters
     override fun getFilterList() = FilterList(
         Filter.Header("NOTE: Search query will ignore genre filter"),
@@ -397,37 +336,40 @@ class KManga : HttpSource() {
     )
 
     private class GenreFilter :
-        UriPartFilter(
-            "Genre",
+        SelectFilter(
+            "Genres",
             arrayOf(
-                Pair("All", "/ranking"),
-                Pair("Romance･Romcom", "/search/genre/1"),
-                Pair("Horror･Mystery･Suspense", "/search/genre/2"),
-                Pair("Gag･Comedy･Slice-of-Life", "/search/genre/3"),
-                Pair("SF･Fantasy", "/search/genre/4"),
-                Pair("Sports", "/search/genre/5"),
-                Pair("Drama", "/search/genre/6"),
-                Pair("Outlaws･Underworld･Punks", "/search/genre/7"),
-                Pair("Action･Battle", "/search/genre/8"),
-                Pair("Isekai･Super Powers", "/search/genre/9"),
-                Pair("One-off Books", "/search/genre/10"),
-                Pair("Shojo/josei", "/search/genre/11"),
-                Pair("Yaoi/BL", "/search/genre/12"),
-                Pair("LGBTQ", "/search/genre/13"),
-                Pair("Yuri/GL", "/search/genre/14"),
-                Pair("Anime", "/search/genre/15"),
-                Pair("Award Winner", "/search/genre/16"),
+                Pair("Romance･Romcom", "1"),
+                Pair("Horror･Mystery･Suspense", "2"),
+                Pair("Gag･Comedy･Slice-of-Life", "3"),
+                Pair("SF･Fantasy", "4"),
+                Pair("Sports", "5"),
+                Pair("Drama", "6"),
+                Pair("Outlaws･Underworld･Punks", "7"),
+                Pair("Action･Battle", "8"),
+                Pair("Isekai･Super Powers", "9"),
+                Pair("One-off Books", "10"),
+                Pair("Shojo/josei", "11"),
+                Pair("Yaoi/BL", "12"),
+                Pair("LGBTQ", "13"),
+                Pair("Yuri/GL", "14"),
+                Pair("Anime", "15"),
+                Pair("Award Winner", "16"),
             ),
         )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
+    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+        val value: String
+            get() = vals[state].second
     }
 
     companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
         const val PREFIX_SEARCH = "id:"
     }
 
     // Unsupported
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
