@@ -36,6 +36,7 @@ class Softkomik : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
         .add("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
@@ -215,28 +216,36 @@ class Softkomik : HttpSource() {
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
+        val response = try {
+            chain.proceed(request)
+        } catch (_: Exception) {
+            null
+        }
 
-        if (response.isSuccessful) {
+        if (response != null && response.isSuccessful) {
             return response
         }
 
         val url = request.url.toString()
-        val currentCdn = cdnUrls.find { url.contains(it) } ?: return response
+        val currentCdn = cdnUrls.find { url.contains(it) } ?: return response ?: throw Exception("Initial image request failed and no fallback CDN found")
         val path = url.substringAfter(currentCdn)
 
         var latestResponse = response
         cdnUrls.filter { !url.contains(it) }.forEach { cdn ->
-            latestResponse.close()
+            latestResponse?.close()
             val newUrl = "$cdn$path".toHttpUrl()
-            latestResponse = chain.proceed(request.newBuilder().url(newUrl).build())
+            latestResponse = try {
+                chain.proceed(request.newBuilder().url(newUrl).build())
+            } catch (_: Exception) {
+                null
+            }
 
-            if (latestResponse.isSuccessful) {
-                return latestResponse
+            if (latestResponse?.isSuccessful == true) {
+                return latestResponse!!
             }
         }
 
-        return latestResponse
+        return latestResponse ?: throw Exception("All CDN attempts failed")
     }
 
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
@@ -288,8 +297,8 @@ class Softkomik : HttpSource() {
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
     private val cdnUrls = listOf(
-        "https://f1.softkomik.co/file/softkomik-image",
-        "https://img.softdevices.my.id/softkomik-image",
+        "https://f1.softkomik.com/file/softkomik-image",
+        "https://image.softdevices.my.id/softkomik-image",
         "https://image.softkomik.co/softkomik",
     )
 }
