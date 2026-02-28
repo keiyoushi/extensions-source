@@ -162,7 +162,7 @@ class LeituraManga : HttpSource() {
 
             document.select("script").mapNotNull(Element::data)
                 .firstOrNull { MANGA_ID_REGEX.containsMatchIn(it) }
-                ?.let { KEY_AES_PART_REGEX.find(it)?.groupValues?.last() }
+                ?.let { AES_KEY_PART_REGEX.find(it)?.groupValues?.last() }
                 ?.let(::append)
 
             document.selectFirst(".chapter-reading-container")
@@ -182,7 +182,7 @@ class LeituraManga : HttpSource() {
             ) as String
         }
 
-        val content = CONTENT_ENCRYPTED_REGEX.find(script)?.groupValues?.last()
+        val content = ENCRYPTED_CONTENT_REGEX.find(script)?.groupValues?.last()
             ?.let { CryptoAES.decrypt(it, password) }
             ?: return emptyList()
 
@@ -196,10 +196,10 @@ class LeituraManga : HttpSource() {
     companion object {
         private val MANGA_ID_REGEX = """mangaId[^:]+[^"]+"([^")]+)\\"""".toRegex()
         private val MANGA_SLUG_REGEX = """mangaSlug[^:]+[^"]+"([^"]+)\\""".toRegex()
-        private val KEY_AES_PART_REGEX = """"id[^:]+[^"]+"([^"]+)\\""".toRegex()
+        private val AES_KEY_PART_REGEX = """"id[^:]+[^"]+"([^"]+)\\""".toRegex()
 
         // 'U2FsdGVkX1' is the Base64 representation of the 'Salted__' prefix.
         // It indicates the data was encrypted using CryptoJS
-        private val CONTENT_ENCRYPTED_REGEX = """U2FsdGVkX1[^=]+=+""".toRegex()
+        private val ENCRYPTED_CONTENT_REGEX = """U2FsdGVkX1[^=]+=+""".toRegex()
     }
 }
