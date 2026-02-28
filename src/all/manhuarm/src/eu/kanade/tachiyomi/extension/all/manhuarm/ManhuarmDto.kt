@@ -15,6 +15,15 @@ import kotlinx.serialization.json.put
 import java.io.IOException
 
 @Serializable
+data class OcrDataDto(
+    val a: String,
+    val b: String,
+    val c: Long,
+    val d: String,
+    val e: String,
+)
+
+@Serializable
 class PageDto(
     @SerialName("image")
     val imageUrl: String,

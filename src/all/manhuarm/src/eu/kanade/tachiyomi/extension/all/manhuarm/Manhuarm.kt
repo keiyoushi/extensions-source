@@ -298,18 +298,25 @@ class Manhuarm(
         val jsonHeaders = Headers.Builder()
             .add("Referer", chapterUrl.toString())
             .add("Accept", "*/*")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .add("Cache-Control", "no-cache")
             .build()
 
-        val encoded = Regex("""_0xraw\s*=\s*"([^"]+)"""")
+        val ocrData = Regex("""_0xdata\s*=\s*(\{.*?\});""")
             .find(document.html())
             ?.groupValues
             ?.get(1)
+            ?.parseAs<OcrDataDto>()
             ?: return pages
 
-        val ocrUrl = try {
-            String(Base64.getDecoder().decode(encoded))
-        } catch (_: Exception) {
-            return pages
+        val ocrUrl = ocrData.let {
+            val ch = String(Base64.getDecoder().decode(it.a))
+            it.e.toHttpUrl().newBuilder()
+                .addQueryParameter("ch", ch)
+                .addQueryParameter("tk", it.b)
+                .addQueryParameter("ts", it.c.toString())
+                .addQueryParameter("nc", it.d)
+                .build().toString()
         }
 
         val dialog = try {
