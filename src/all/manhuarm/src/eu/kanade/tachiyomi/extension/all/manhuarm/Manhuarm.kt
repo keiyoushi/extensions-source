@@ -302,23 +302,21 @@ class Manhuarm(
             .add("Cache-Control", "no-cache")
             .build()
 
-        val encoded = Regex("""_0xdata\s*=\s*(\{.+\})""")
+        val ocrData = Regex("""_0xdata\s*=\s*(\{.*?\});""")
             .find(document.html())
             ?.groupValues
             ?.get(1)
+            ?.parseAs<OcrDataDto>()
             ?: return pages
 
-        val ocrUrl = try {
-            val data = encoded.parseAs<OcrDataDto>()
-            val ch = String(Base64.getDecoder().decode(data.a))
-            data.e.toHttpUrl().newBuilder()
+        val ocrUrl = ocrData.let {
+            val ch = String(Base64.getDecoder().decode(it.a))
+            it.e.toHttpUrl().newBuilder()
                 .addQueryParameter("ch", ch)
-                .addQueryParameter("tk", data.b)
-                .addQueryParameter("ts", data.c.toString())
-                .addQueryParameter("nc", data.d)
+                .addQueryParameter("tk", it.b)
+                .addQueryParameter("ts", it.c.toString())
+                .addQueryParameter("nc", it.d)
                 .build().toString()
-        } catch (_: Exception) {
-            return pages
         }
 
         val dialog = try {
