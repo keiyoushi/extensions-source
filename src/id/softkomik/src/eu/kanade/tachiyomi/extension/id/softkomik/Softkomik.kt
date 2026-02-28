@@ -20,7 +20,7 @@ import okhttp3.Response
 
 class Softkomik : HttpSource() {
     override val name = "Softkomik"
-    override val baseUrl = "https://softkomik.com"
+    override val baseUrl = "https://softkomik.co"
     override val lang = "id"
     override val supportsLatest = true
 
@@ -174,7 +174,7 @@ class Softkomik : HttpSource() {
         val data = response.extractNextJs<ChapterPageDataDto>()
             ?: throw Exception("Could not find chapter data")
 
-        val imageSrc = if (data.imageSrc.isEmpty()) {
+        val imageSrc = if (data.imageSrc!!.isEmpty()) {
             val slug = response.request.url.pathSegments[0]
             val chapter = response.request.url.pathSegments[2]
             val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id!!}"
@@ -190,10 +190,10 @@ class Softkomik : HttpSource() {
         }
 
         val imageBaseUrl = if (data.storageInter2 == true) cdnUrls[2] else cdnUrls[0]
-        val referer = response.request.url.newBuilder().query(null).build().toString()
+        val referer = response.request.url.toString()
 
         return imageSrc.mapIndexed { i, img ->
-            Page(i, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}#$referer")
+            Page(i, referer, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}")
         }
     }
 
@@ -201,14 +201,14 @@ class Softkomik : HttpSource() {
 
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
-        val referer = url.fragment ?: "$baseUrl/"
+        val referer = page.url!!
 
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .set("Referer", referer)
             .set("Origin", baseUrl)
             .build()
-        return GET(url.newBuilder().fragment(null).build(), newHeaders)
+        return GET(url, newHeaders)
     }
 
     // ============================= Utilities ==============================
@@ -288,8 +288,8 @@ class Softkomik : HttpSource() {
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
     private val cdnUrls = listOf(
-        "https://f1.softkomik.com/file/softkomik-image",
+        "https://f1.softkomik.co/file/softkomik-image",
         "https://img.softdevices.my.id/softkomik-image",
-        "https://image.softkomik.com/softkomik",
+        "https://image.softkomik.co/softkomik",
     )
 }
