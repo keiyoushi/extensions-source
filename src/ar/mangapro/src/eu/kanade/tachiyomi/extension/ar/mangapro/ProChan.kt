@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -43,6 +44,7 @@ import java.lang.UnsupportedOperationException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -93,8 +95,13 @@ class ProChan : HttpSource() {
         return fetchSearchManga(page, "", filters)
     }
 
-    @Volatile
-    private var internalPage = 1
+    private val pageNumber = ConcurrentHashMap<String, Int>()
+
+    private fun searchKey(query: String, filters: FilterList): String {
+        val filterPart = filters.filterIsInstance<Filter<*>>()
+            .joinToString("|") { it.state.toString() }
+        return "$query::$filterPart"
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
@@ -120,11 +127,12 @@ class ProChan : HttpSource() {
             }
         }
 
+        val key = searchKey(query, filters)
         if (page == 1) {
-            internalPage = 1
+            pageNumber[key] = 1
         }
 
-        return client.newCall(searchMangaRequest(internalPage++, query, filters))
+        return client.newCall(searchMangaRequest(pageNumber[key]!!, query, filters))
             .asObservableSuccess()
             .map { response ->
                 val statusFilter = filters.firstInstance<StatusFilter>().selected
@@ -174,8 +182,10 @@ class ProChan : HttpSource() {
             }
             .flatMap {
                 if (it.mangas.isEmpty() && it.hasNextPage) {
-                    fetchSearchManga(internalPage, query, filters)
+                    pageNumber[key] = pageNumber[key]!! + 1
+                    fetchSearchManga(pageNumber[key]!!, query, filters)
                 } else {
+                    if (!it.hasNextPage) pageNumber.remove(key)
                     Observable.just(it)
                 }
             }
@@ -557,7 +567,6 @@ class ProChan : HttpSource() {
         val decryptedBytes = cipher.doFinal(encryptedData + tag)
 
         return String(decryptedBytes, Charsets.UTF_8)
-            .also { Log.d(name, it) }
             .parseAs()
     }
 
