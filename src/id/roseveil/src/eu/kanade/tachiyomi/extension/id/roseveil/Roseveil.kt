@@ -21,6 +21,9 @@ import java.util.Locale
 
 class Roseveil : HttpSource() {
 
+    // URL path change (/manga/ -> /comic/)
+    override val versionId = 2
+
     override val name = "Roseveil"
 
     override val baseUrl = "https://roseveil.org"
