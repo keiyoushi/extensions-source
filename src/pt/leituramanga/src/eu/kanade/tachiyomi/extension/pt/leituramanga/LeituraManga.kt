@@ -11,13 +11,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
-import java.util.Objects
 
 class LeituraManga : HttpSource() {
 
@@ -48,6 +49,7 @@ class LeituraManga : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     // ================= Popular ==================
+
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/api/manga/get-tops?limit=200", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -66,6 +68,7 @@ class LeituraManga : HttpSource() {
         val hasNext = result.data.pagination.let { it.page < it.totalPage }
         return MangasPage(mangas, hasNext)
     }
+
     // ================= Search ==================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -109,6 +112,7 @@ class LeituraManga : HttpSource() {
         StatusFilter(),
         SortFilter(),
     )
+
     // ================= Details ==================
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
@@ -128,78 +132,73 @@ class LeituraManga : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+
     // ================= Chapters ==================
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val (mangaId, slug) = response.getMangaIdAndSlug()
-
-        if (setOf(mangaId, slug).any(Objects::isNull)) return emptyList()
-
-        val request = GET("$apiUrl/api/chapter/get-by-manga-id?mangaId=$mangaId&page=1&limit=9999", headers)
-
+        val dto = response.extractNextJs<MangaInfoDto>() ?: return emptyList()
+        val request = GET("$apiUrl/api/chapter/get-by-manga-id?mangaId=${dto.mangaId}&page=1&limit=9999", headers)
         val result = client.newCall(request).execute().parseAs<MangaResponseDto<ChapterListDto>>()
 
-        return result.data.data.map { it.toSChapter(slug!!) }
-    }
-
-    private fun Response.getMangaIdAndSlug(): Pair<String?, String?> {
-        val document = asJsoup()
-        val script = document.selectFirst("script:containsData(mangaId)")?.data() ?: return Pair(null, null)
-        return MANGA_ID_REGEX.find(script)?.groupValues?.last() to MANGA_SLUG_REGEX.find(script)?.groupValues?.last()
+        return result.data.data.map { it.toSChapter(dto.mangaSlug) }
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+
     // ================= Pages ==================
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val password = buildString {
-            document.selectFirst("[name=apple-mobile-web-app-id]")
-                ?.attr("content")
-                ?.let(::append)
-
-            document.select("script").mapNotNull(Element::data)
-                .firstOrNull { MANGA_ID_REGEX.containsMatchIn(it) }
-                ?.let { AES_KEY_PART_REGEX.find(it)?.groupValues?.last() }
-                ?.let(::append)
-
-            document.selectFirst(".chapter-reading-container")
-                ?.attr("style")
-                ?.substringAfter("'")
-                ?.substringBeforeLast("'")
-                ?.let(::append)
-        }
-
-        val script = QuickJs.create().use {
-            it.evaluate(
-                """
-                globalThis.self = globalThis;
-                ${document.select("script:containsData(self.__next_f)").joinToString("\n", transform = Element::data)}
-                self.__next_f.map(it => it[it.length - 1]).join('')
-                """.trimIndent(),
-            ) as String
-        }
-
-        val content = ENCRYPTED_CONTENT_REGEX.find(script)?.groupValues?.last()
-            ?.let { CryptoAES.decrypt(it, password) }
-            ?: return emptyList()
+        val password = document.getAESPassword()
+        val content = document.decryptPayload(password)
 
         return content.parseAs<List<ImageDto>>().mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl(cdnUrl))
         }
     }
 
+    private fun Document.getAESPassword(): String = buildString {
+        selectFirst("[name=apple-mobile-web-app-id]")
+            ?.attr("content")
+            ?.let(::append)
+
+        append(extractNextJs<PageInfoDto>()!!.id)
+
+        selectFirst(".chapter-reading-container")
+            ?.attr("style")
+            ?.substringAfter("'")
+            ?.substringBeforeLast("'")
+            ?.let(::append)
+    }
+
+    private fun Document.decryptPayload(password: String): String {
+        val script = QuickJs.create().use {
+            it.evaluate(
+                """
+                globalThis.self = globalThis;
+                ${select("script:containsData(self.__next_f)").joinToString("\n", transform = Element::data)}
+                self.__next_f.map(it => it[it.length - 1]).join('')
+                """.trimIndent(),
+            ) as String
+        }
+
+        val encryptedContent = extractNextJs<EncryptedContent>()
+
+        val payload = when {
+            encryptedContent != null && encryptedContent.payload.startsWith(PREFIX_SALT) -> encryptedContent.payload
+            else -> ENCRYPTED_CONTENT_REGEX.find(script)?.groupValues?.last()
+        }
+        return CryptoAES.decrypt(payload!!, password)
+    }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
-        private val MANGA_ID_REGEX = """mangaId[^:]+[^"]+"([^")]+)\\"""".toRegex()
-        private val MANGA_SLUG_REGEX = """mangaSlug[^:]+[^"]+"([^"]+)\\""".toRegex()
-        private val AES_KEY_PART_REGEX = """"id[^:]+[^"]+"([^"]+)\\""".toRegex()
-
         // 'U2FsdGVkX1' is the Base64 representation of the 'Salted__' prefix.
         // It indicates the data was encrypted using CryptoJS
-        private val ENCRYPTED_CONTENT_REGEX = """U2FsdGVkX1[^=]+=+""".toRegex()
+        private const val PREFIX_SALT = "U2FsdGVkX1"
+        private val ENCRYPTED_CONTENT_REGEX = """$PREFIX_SALT[^=]+=+|$PREFIX_SALT[^:]+""".toRegex()
     }
 }

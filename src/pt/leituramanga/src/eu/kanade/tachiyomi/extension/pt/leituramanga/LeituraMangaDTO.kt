@@ -95,3 +95,20 @@ class ImageDto(
 ) {
     fun absUrl(cdnUrl: String) = "$cdnUrl/$url"
 }
+
+@Serializable
+class MangaInfoDto(
+    val mangaSlug: String,
+    val mangaId: String,
+)
+
+@Serializable
+class PageInfoDto(
+    val id: String,
+    val mangaSlug: String,
+)
+
+@Serializable
+class EncryptedContent(
+    val payload: String,
+)
