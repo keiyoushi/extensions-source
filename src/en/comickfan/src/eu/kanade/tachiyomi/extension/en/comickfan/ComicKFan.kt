@@ -123,7 +123,7 @@ class ComicKFan : HttpSource() {
     }
 
     private fun Element.getValue(label: String): String? = select("div.flex-row.gap-4")
-        ?.firstOrNull { it.selectFirst("> div.text-sm")?.text()?.equals(label) == true }
+        .firstOrNull { it.selectFirst("> div.text-sm")?.text()?.equals(label) == true }
         ?.selectFirst("> div.text-sm:nth-child(2):last-child")
         ?.takeIf { it.text() !in listOf("", "-", "_") }
         ?.text()
