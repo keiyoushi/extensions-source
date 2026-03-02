@@ -160,7 +160,10 @@ class DetailsDto(
         artist = artists
         author = authors.joinToString()
         description = desc.toString().trim()
-        genre = genres.joinToString { it.genreName }
+        genre = buildList {
+            this@DetailsDto.format?.takeIf { it.isNotBlank() }?.let { add(it) }
+            addAll(genres.map { it.genreName })
+        }.joinToString()
         status = this@DetailsDto.publicationStatus.toStatus()
     }
 
