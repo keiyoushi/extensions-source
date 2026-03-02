@@ -74,16 +74,23 @@ class DreamTeamsScans : HttpSource() {
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
-        val realQuery = query.removePrefix(PREFIX_ID_SEARCH)
-        client.newCall(GET("$apiBaseUrl/series/comic/$realQuery", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val dto = response.parseAs<MangaDetailsDto>()
-                MangasPage(listOf(dto.toSManga()), false)
-            }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val slug = when {
+            query.startsWith(PREFIX_ID_SEARCH) -> query.removePrefix(PREFIX_ID_SEARCH)
+            query.startsWith("$baseUrl/comic/") -> query.substringAfter("/comic/").substringBefore("/")
+            else -> null
+        }
+
+        return if (slug != null) {
+            client.newCall(GET("$apiBaseUrl/series/comic/$slug", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val dto = response.parseAs<MangaDetailsDto>()
+                    MangasPage(listOf(dto.toSManga()), false)
+                }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
