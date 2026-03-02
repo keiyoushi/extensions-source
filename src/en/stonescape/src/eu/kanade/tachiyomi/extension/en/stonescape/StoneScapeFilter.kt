@@ -6,16 +6,6 @@ open class UriPartFilter(displayName: String, val vals: Array<Pair<String, Strin
     fun toUriPart() = vals[state].second
 }
 
-class ContentTypeFilter :
-    UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manhwa / Manga", "manhwa"),
-            Pair("Novel", "novel"),
-        ),
-    )
-
 class StatusFilter :
     UriPartFilter(
         "Status",
