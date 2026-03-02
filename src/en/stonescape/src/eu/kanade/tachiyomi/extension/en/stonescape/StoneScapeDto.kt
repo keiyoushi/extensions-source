@@ -96,13 +96,3 @@ private val dateFormat by lazy {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 }
-
-private fun parseDate(dateStr: String?): Long {
-    if (dateStr == null) return 0L
-    return try {
-        val cleanDate = dateStr.replace(" ", "T").substringBefore(".").substringBefore("+")
-        dateFormat.parse(cleanDate)?.time ?: 0L
-    } catch (_: Exception) {
-        0L
-    }
-}
