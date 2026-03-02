@@ -1,7 +1,7 @@
 ext {
-    extName = 'Azuki'
+    extName = 'Omoi'
     extClass = '.Azuki'
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = true
 }
 
