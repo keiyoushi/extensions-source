@@ -10,9 +10,26 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+
+@Serializable
+class MetaData<T>(
+    val data: List<T>,
+    val meta: Meta,
+) {
+    @Serializable
+    class Meta(
+        private val pages: Int,
+        private val page: Int,
+    ) {
+        fun hasNextPage() = pages > page
+    }
+}
 
 @Serializable
 class Data<T>(
@@ -93,6 +110,12 @@ object StringListSerializer : JsonTransformingSerializer<List<String>>(ListSeria
 }
 
 @Serializable
+class InitialChapters(
+    val initialChapters: List<Chapter>,
+    val totalChapters: Int,
+)
+
+@Serializable
 class Chapter(
     val id: Int,
     @SerialName("chapter_number")
@@ -105,24 +128,16 @@ class Chapter(
     val uploader: String? = null,
     @SerialName("created_at")
     val createdAt: String? = null,
-    val metadata: MetaData,
-) {
-    @Serializable
-    class MetaData(
-        val driveFileId: String? = null,
-    )
-}
+)
 
 @Serializable
 class ChapterUrl(
     val url: String,
-    val driveFileId: String? = null,
 )
 
 @Serializable
 class Images(
     val images: List<String>,
-    val maps: List<ScrambledImage>,
     @Serializable(DeferredMediaSerializer::class)
     val deferredMedia: DeferredMediaToken? = null,
 )
@@ -156,15 +171,59 @@ object DeferredMediaSerializer : KSerializer<DeferredMediaToken?> {
 @Serializable
 class DeferredImages(
     val images: List<String>,
-    val maps: List<ScrambledImage>,
+    @Serializable(ScrambledDataSerializer::class)
+    val maps: List<ScrambledData>,
 )
 
 @Serializable
+sealed class ScrambledData
+
+@Serializable
+@SerialName("direct")
 class ScrambledImage(
     val mode: String,
     val order: List<Int>,
     val pieces: List<String>,
     val dim: List<Int>,
+) : ScrambledData()
+
+@Serializable
+@SerialName("indirect")
+class ScrambledImageToken(
+    val token: String,
+    val method: String,
+) : ScrambledData()
+
+object ScrambledDataSerializer : JsonTransformingSerializer<List<ScrambledData>>(ListSerializer(ScrambledData.serializer())) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = JsonArray(
+        element.jsonArray.map { jsonElement ->
+            val jsonObject = jsonElement.jsonObject
+            when {
+                "method" in jsonObject -> JsonObject(
+                    jsonObject + ("type" to JsonPrimitive("indirect")),
+                )
+
+                else -> JsonObject(
+                    jsonObject + ("type" to JsonPrimitive("direct")),
+                )
+            }
+        },
+    )
+}
+
+@Serializable
+class ScrambledImageTokenValue(
+    val cid: Int,
+    val data: String,
+    val iv: String,
+    val m: String,
+    val tag: String,
+    val v: Int,
+)
+
+@Serializable
+class Key(
+    val key: String,
 )
 
 @Serializable
