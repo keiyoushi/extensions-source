@@ -2,8 +2,8 @@ ext {
     extName = 'Top Truyen'
     extClass = '.TopTruyen'
     themePkg = 'wpcomics'
-    baseUrl = 'https://www.toptruyenxz.com'
-    overrideVersionCode = 20
+    baseUrl = 'https://www.toptruyenss.com'
+    overrideVersionCode = 21
     isNsfw = true
 }
 
