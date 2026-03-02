@@ -59,6 +59,7 @@ class MangaDto(
     private val tags: List<TagDto>? = null,
     private val status: String? = null,
     private val type: String? = null,
+    val scanlators: List<ScanlatorDto>? = null,
 
     // Chapters
     val chapters: List<ChapterDto>? = null,
@@ -75,7 +76,14 @@ class MangaDto(
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = id
         title = this@MangaDto.title
-        thumbnail_url = getImagePath().let { it -> "$baseUrl/static/$it" }
+        thumbnail_url = getImagePath()?.let {
+            val url = when {
+                it.startsWith("http") -> it
+                it.startsWith("//") -> "https:$it"
+                else -> "$baseUrl/static/$it"
+            }
+            url.replaceFirst(Regex("^https?:?//"), "https://")
+        }
         description = synopsis
         genre = buildList {
             type?.let { add(it) }
@@ -104,28 +112,32 @@ class MangaDto(
     class AuthorDto(
         val name: String,
     )
+
+    @Serializable
+    class ScanlatorDto(
+        val id: String,
+        val name: String,
+    )
 }
 
 @Serializable
-class ChapterListDto(
+class AllChaptersDto(
     val chapters: List<ChapterDto>,
-    val pages: Int,
-    val page: Int,
-) {
-    fun hasNextPage(): Boolean = page + 1 < pages
-}
+)
 
 @Serializable
 class ChapterDto(
-    private val id: String,
+    val id: String,
     private val number: Float,
     private val title: String,
+    val scanlationMangaId: String? = null,
     @SerialName("createdAt") private val date: JsonElement? = null,
 ) {
-    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
+    fun toSChapter(slug: String, scanlatorName: String? = null): SChapter = SChapter.create().apply {
         url = "$slug/$id"
         chapter_number = number
         name = title
+        scanlator = scanlatorName
         date?.let {
             date_upload = parseDate(it)
         }

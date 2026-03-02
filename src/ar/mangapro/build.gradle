@@ -1,0 +1,13 @@
+ext {
+	extName = 'ProChan'
+	extClass = '.ProChan'
+	extVersionCode = 46
+	isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    compileOnly("com.github.tachiyomiorg:image-decoder:41c059e540")
+    implementation(project(":lib:cookieinterceptor"))
+}

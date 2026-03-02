@@ -11,9 +11,7 @@ import keiyoushi.utils.toJsonString
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 import java.util.TimeZone
 
 class ComicEarthStar :
@@ -21,20 +19,11 @@ class ComicEarthStar :
         "Comic Earth Star",
         "https://comic-earthstar.com",
         "ja",
-        "https://cdn-img.comic-earthstar.com",
-        true,
     ) {
     private val apiUrl = "$baseUrl/graphql"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
     override val supportsLatest = false
-
-    override val publisher: String = "アース・スター エンターテイメント"
-
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::imageIntercept)
-        .build()
 
     private inline fun <reified T> apiRequest(operationName: String, variables: T, query: String): Request {
         val payload = Payload(operationName, variables, query).toJsonString().toRequestBody()

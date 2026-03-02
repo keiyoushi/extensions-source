@@ -71,10 +71,8 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================ Search ======================================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return fetchPopularManga(page).map { mangasPage ->
-            MangasPage(mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }, hasNextPage = false)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(page).map { mangasPage ->
+        MangasPage(mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }, hasNextPage = false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
@@ -114,9 +112,7 @@ class ArgosScan : ParsedHttpSource() {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).sortedByDescending(SChapter::chapter_number)
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).sortedByDescending(SChapter::chapter_number)
 
     override fun chapterListSelector() = ".manga-chapter"
 
@@ -133,18 +129,15 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================ Pages =======================================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".manga-page img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".manga-page img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.absUrl("src"))
     }
 
     override fun imageUrlParse(document: Document) = ""
 
     // ============================== Utilities ==================================
 
-    private fun String.substringAfter(regex: Regex): String =
-        regex.find(this)?.value?.let(::substringAfter) ?: this
+    private fun String.substringAfter(regex: Regex): String = regex.find(this)?.value?.let(::substringAfter) ?: this
 
     companion object {
         private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)

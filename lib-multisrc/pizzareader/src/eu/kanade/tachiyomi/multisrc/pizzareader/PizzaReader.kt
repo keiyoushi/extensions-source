@@ -39,8 +39,7 @@ abstract class PizzaReader(
         add("Referer", baseUrl)
     }
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl/comics", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/comics", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PizzaResultsDto>(response.body.string())
@@ -82,9 +81,8 @@ abstract class PizzaReader(
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Workaround to allow "Open in browser" to use the real URL
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client.newCall(chapterListRequest(manga)).asObservableSuccess()
-            .map { mangaDetailsParse(it).apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
+        .map { mangaDetailsParse(it).apply { initialized = true } }
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val result = json.decodeFromString<PizzaResultDto>(response.body.string())
@@ -129,10 +127,8 @@ abstract class PizzaReader(
 
     override fun imageUrlParse(response: Response): String = ""
 
-    protected open fun String.toDate(): Long {
-        return runCatching { dateParser.parse(this)?.time }
-            .getOrNull() ?: 0L
-    }
+    protected open fun String.toDate(): Long = runCatching { dateParser.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     protected open fun String.toStatus(): Int = when (substring(0, 7)) {
         "In cors" -> SManga.ONGOING

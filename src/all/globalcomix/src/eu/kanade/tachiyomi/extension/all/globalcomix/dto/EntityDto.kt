@@ -8,4 +8,4 @@ sealed class EntityDto {
 }
 
 @Serializable
-class UnknownEntity() : EntityDto()
+class UnknownEntity : EntityDto()

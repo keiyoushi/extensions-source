@@ -9,13 +9,14 @@ import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhuascanUs : MangaThemesia(
-    "Manhuascan.us",
-    "https://manhuascan.us",
-    "en",
-    mangaUrlDirectory = "/manga-list",
-    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT),
-) {
+class ManhuascanUs :
+    MangaThemesia(
+        "Manhuascan.us",
+        "https://manhuascan.us",
+        "en",
+        mangaUrlDirectory = "/manga-list",
+        dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT),
+    ) {
     override val seriesAuthorSelector = ".tsinfo .imptdt:contains(Author) a"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -29,6 +30,7 @@ class ManhuascanUs : MangaThemesia(
                 is OrderByFilter -> {
                     url.addQueryParameter("order", filter.selectedValue())
                 }
+
                 else -> { /* Do Nothing */ }
             }
         }

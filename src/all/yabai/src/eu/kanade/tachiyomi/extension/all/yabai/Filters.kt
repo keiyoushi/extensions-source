@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.all.yabai
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList {
-    return FilterList(
-        SelectFilter("Category", categories.keys.toList()),
-        SelectFilter("Language", languages.keys.toList()),
-    )
-}
+fun getFilters(): FilterList = FilterList(
+    SelectFilter("Category", categories.keys.toList()),
+    SelectFilter("Language", languages.keys.toList()),
+)
 
-internal open class SelectFilter(name: String, val vals: List<String>, state: Int = 0) :
-    Filter.Select<String>(name, vals.map { it }.toTypedArray(), state)
+internal open class SelectFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.map { it }.toTypedArray(), state)
 
 val categories = mapOf(
     "All" to "",

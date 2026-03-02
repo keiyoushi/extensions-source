@@ -48,17 +48,14 @@ class Nikkangecchan : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return super.fetchSearchManga(page, query, filters)
-            .map {
-                val filtered = it.mangas.filter { e -> e.title.contains(query, true) }
-                MangasPage(filtered, false)
-            }
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = super.fetchSearchManga(page, query, filters)
+        .map {
+            val filtered = it.mangas.filter { e -> e.title.contains(query, true) }
+            MangasPage(filtered, false)
+        }
 
     // Does not have search, use complete list (in popular) instead.
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        popularMangaRequest(page)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(page)
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -80,8 +77,7 @@ class Nikkangecchan : ParsedHttpSource() {
 
     override fun chapterListSelector(): String = ".episodeBox"
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        super.chapterListParse(response).reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterFromElement(element: Element): SChapter {
         val episodePage = element.select(".episode-page").first()!!
@@ -96,9 +92,7 @@ class Nikkangecchan : ParsedHttpSource() {
         }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.just(listOf(Page(0, chapter.url, "$baseUrl${chapter.url}/image")))
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, chapter.url, "$baseUrl${chapter.url}/image")))
 
     override fun imageUrlParse(document: Document) = ""
 

@@ -7,24 +7,33 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 
 // https://greasyfork.org/en/scripts/467901-k-manga-ripper
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val response = chain.proceed(request)
         val fragment = request.url.fragment
-        if (fragment.isNullOrEmpty() || !fragment.startsWith("scramble_seed=")) {
-            return chain.proceed(request)
+
+        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.startsWith("scramble_seed=")) {
+            return response
         }
 
         val seed = fragment.substringAfter("scramble_seed=").toLong()
-        val response = chain.proceed(request)
-        val descrambledBody = descrambleImage(response.body, seed)
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+        val result = unscramble(bitmap, seed)
 
-        return response.newBuilder().body(descrambledBody).build()
+        bitmap.recycle()
+        val buffer = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        result.recycle()
+        val body = buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size)
+
+        return response.newBuilder()
+            .body(body)
+            .build()
     }
 
     private class Coord(val x: Int, val y: Int)
@@ -58,38 +67,30 @@ class ImageInterceptor : Interceptor {
         }
     }
 
-    private fun descrambleImage(responseBody: ResponseBody, seed: Long): ResponseBody {
+    private fun unscramble(image: Bitmap, seed: Long): Bitmap {
+        val width = image.width
+        val height = image.height
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+
+        val blockWidth = (width / 8 * 8) / 4
+        val blockHeight = (height / 8 * 8) / 4
+        val srcRect = Rect()
+        val dstRect = Rect()
+
         val unscrambledCoords = getUnscrambledCoords(seed)
-        val originalBitmap = BitmapFactory.decodeStream(responseBody.byteStream())
-            ?: throw Exception("Failed to decode image stream")
 
-        val originalWidth = originalBitmap.width
-        val originalHeight = originalBitmap.height
+        unscrambledCoords.forEach {
+            val srcX = it.source.x * blockWidth
+            val srcY = it.source.y * blockHeight
+            val dstX = it.dest.x * blockWidth
+            val dstY = it.dest.y * blockHeight
 
-        val descrambledBitmap = Bitmap.createBitmap(originalWidth, originalHeight, originalBitmap.config)
-        val canvas = Canvas(descrambledBitmap)
+            srcRect.set(srcX, srcY, srcX + blockWidth, srcY + blockHeight)
+            dstRect.set(dstX, dstY, dstX + blockWidth, dstY + blockHeight)
 
-        val getTileDimension = { size: Int -> (size / 8 * 8) / 4 }
-        val tileWidth = getTileDimension(originalWidth)
-        val tileHeight = getTileDimension(originalHeight)
-
-        unscrambledCoords.forEach { coord ->
-            val sx = coord.source.x * tileWidth
-            val sy = coord.source.y * tileHeight
-            val dx = coord.dest.x * tileWidth
-            val dy = coord.dest.y * tileHeight
-
-            val srcRect = Rect(sx, sy, sx + tileWidth, sy + tileHeight)
-            val destRect = Rect(dx, dy, dx + tileWidth, dy + tileHeight)
-
-            canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
+            canvas.drawBitmap(image, srcRect, dstRect, null)
         }
-        originalBitmap.recycle()
-
-        val outputStream = ByteArrayOutputStream()
-        descrambledBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
-        descrambledBitmap.recycle()
-
-        return outputStream.toByteArray().toResponseBody("image/jpeg".toMediaType())
+        return result
     }
 }

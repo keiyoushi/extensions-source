@@ -10,6 +10,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -102,7 +105,11 @@ class AkaiComic : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val root = response.parseAs<JsonElement>()
+        val mangaElement = root.extractMangaElement()
+        return mangaElement.parseAs<MangaDto>().toSManga()
+    }
 
     // ============================== Chapters ==============================
 
@@ -155,8 +162,8 @@ class AkaiComic : HttpSource() {
     // ============================== Helpers ================================
 
     private fun MangaDto.toSManga(): SManga = SManga.create().apply {
-        url = id
-        title = seriesName
+        url = id.ifBlank { slug.orEmpty() }
+        title = seriesName.ifBlank { alternativeName?.substringBefore(",")?.trim().orEmpty() }.ifBlank { "Unknown title" }
         thumbnail_url = coverUrl
         author = this@toSManga.author
         artist = this@toSManga.artist
@@ -179,6 +186,24 @@ class AkaiComic : HttpSource() {
             else -> SManga.UNKNOWN
         }
         initialized = true
+    }
+
+    private fun JsonElement.extractMangaElement(): JsonElement = when (this) {
+        is JsonObject -> {
+            val nested = this["manga"]
+                ?: this["series"]
+                ?: this["data"]
+                ?: this["result"]
+            when (nested) {
+                is JsonArray -> nested.firstOrNull() ?: this
+                null -> this
+                else -> nested
+            }
+        }
+
+        is JsonArray -> this.firstOrNull() ?: this
+
+        else -> this
     }
 
     companion object {

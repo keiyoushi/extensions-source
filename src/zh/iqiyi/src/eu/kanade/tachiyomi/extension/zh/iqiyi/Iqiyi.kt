@@ -49,9 +49,7 @@ class Iqiyi : ParsedHttpSource() {
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search-keyword=${query}_$page", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/search-keyword=${query}_$page", headers)
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
     override fun searchMangaSelector(): String = "ul.stacksList > li.stacksBook"
@@ -84,20 +82,18 @@ class Iqiyi : ParsedHttpSource() {
         return GET("$baseUrl/catalog/$id/", headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return json.parseToJsonElement(response.body.string())
-            .jsonObject["data"]!!.jsonObject["episodes"]!!.jsonArray.map {
-            SChapter.create().apply {
-                val comicId = it.jsonObject["comicId"]!!.jsonPrimitive.content
-                val episodeId = it.jsonObject["episodeId"]!!.jsonPrimitive.content
-                val episodeTitle = it.jsonObject["episodeTitle"]!!.jsonPrimitive.content
-                val episodeOrder = it.jsonObject["episodeOrder"]!!.jsonPrimitive.int
-                url = "/reader/${comicId}_$episodeId.html"
-                name = "$episodeOrder $episodeTitle"
-                date_upload = it.jsonObject["firstOnlineTime"]!!.jsonPrimitive.long
-            }
-        }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = json.parseToJsonElement(response.body.string())
+        .jsonObject["data"]!!.jsonObject["episodes"]!!.jsonArray.map {
+        SChapter.create().apply {
+            val comicId = it.jsonObject["comicId"]!!.jsonPrimitive.content
+            val episodeId = it.jsonObject["episodeId"]!!.jsonPrimitive.content
+            val episodeTitle = it.jsonObject["episodeTitle"]!!.jsonPrimitive.content
+            val episodeOrder = it.jsonObject["episodeOrder"]!!.jsonPrimitive.int
+            url = "/reader/${comicId}_$episodeId.html"
+            name = "$episodeOrder $episodeTitle"
+            date_upload = it.jsonObject["firstOnlineTime"]!!.jsonPrimitive.long
+        }
+    }.reversed()
 
     override fun chapterListSelector(): String = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()

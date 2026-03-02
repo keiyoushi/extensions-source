@@ -42,8 +42,10 @@ class HentaiFox(
         .split(' ').let {
             when {
                 it.contains(langCode) -> mangaLang
+
                 // search result doesn't have "data-languages" which will return a list with 1 blank element
                 it.size > 1 || (it.size == 1 && it.first().isNotBlank()) -> "other"
+
                 // if we don't know which language to filter then set to mangaLang to not filter at all
                 else -> mangaLang
             }
@@ -52,37 +54,36 @@ class HentaiFox(
     override val useShortTitlePreference = false
     override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector)
 
-    override fun Element.getInfo(tag: String): String {
-        return select("ul.${tag.lowercase()} a")
-            .joinToString {
-                val name = it.ownText()
-                if (tag.contains(regexTag)) {
-                    genres[name] = it.attr("href")
-                        .removeSuffix("/").substringAfterLast('/')
-                }
-                listOf(
-                    name,
-                    it.select(".split_tag").text()
-                        .removePrefix("| ")
-                        .trim(),
-                )
-                    .filter { s -> s.isNotBlank() }
-                    .joinToString()
+    override fun Element.getInfo(tag: String): String = select("ul.${tag.lowercase()} a")
+        .joinToString {
+            val name = it.ownText()
+            if (tag.contains(regexTag)) {
+                genres[name] = it.attr("href")
+                    .removeSuffix("/").substringAfterLast('/')
             }
-    }
+            listOf(
+                name,
+                it.select(".split_tag").text()
+                    .removePrefix("| ")
+                    .trim(),
+            )
+                .filter { s -> s.isNotBlank() }
+                .joinToString()
+        }
 
-    override fun Element.getTime(): Long =
-        selectFirst(".pages:contains(Posted:)")?.ownText()
-            ?.removePrefix("Posted: ")
-            .toDate(simpleDateFormat)
+    override fun Element.getTime(): Long = selectFirst(".pages:contains(Posted:)")?.ownText()
+        ?.removePrefix("Posted: ")
+        .toDate(simpleDateFormat)
 
     override fun HttpUrl.Builder.addPageUri(page: Int): HttpUrl.Builder {
         val url = toString()
         when {
             url == "$baseUrl/" && page == 2 ->
                 addPathSegments("page/$page")
+
             url.contains('?') ->
                 addQueryParameter("page", page.toString())
+
             else ->
                 addPathSegments("pag/$page")
         }
@@ -117,14 +118,11 @@ class HentaiFox(
 
     private fun sidebarMangaSelector() = "div.item"
 
-    private fun Element.sidebarMangaTitle() =
-        selectFirst("img")?.attr("alt")
+    private fun Element.sidebarMangaTitle() = selectFirst("img")?.attr("alt")
 
-    private fun Element.sidebarMangaUrl() =
-        selectFirst("a")?.attr("abs:href")
+    private fun Element.sidebarMangaUrl() = selectFirst("a")?.attr("abs:href")
 
-    private fun Element.sidebarMangaThumbnail() =
-        selectFirst("img")?.imgAttr()
+    private fun Element.sidebarMangaThumbnail() = selectFirst("img")?.imgAttr()
 
     private var csrfToken: String? = null
 
@@ -133,9 +131,7 @@ class HentaiFox(
         return super.tagsParser(document)
     }
 
-    private fun csrfParser(document: Document): String {
-        return document.select("[name=csrf-token]").attr("content")
-    }
+    private fun csrfParser(document: Document): String = document.select("[name=csrf-token]").attr("content")
 
     private fun setSidebarHeaders(csrfToken: String?): Headers {
         if (csrfToken == null) {
@@ -200,9 +196,7 @@ class HentaiFox(
         }
     }
 
-    override fun getSortOrderURIs(): List<Pair<String, String>> {
-        return super.getSortOrderURIs() + sidebarCategoriesFilterStateMap.toList()
-    }
+    override fun getSortOrderURIs(): List<Pair<String, String>> = super.getSortOrderURIs() + sidebarCategoriesFilterStateMap.toList()
 
     companion object {
         private val sidebarCategoriesFilterStateMap = mapOf(

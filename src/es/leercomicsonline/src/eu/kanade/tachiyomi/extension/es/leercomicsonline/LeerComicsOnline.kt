@@ -35,16 +35,15 @@ class LeerComicsOnline : HttpSource() {
         headers,
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET(
-            baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("api")
-                addPathSegments("series")
-                addQueryParameter("page", page.toString())
-                addQueryParameter("search", query)
-            }.build(),
-            headers,
-        )
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
+        baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegments("series")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("search", query)
+        }.build(),
+        headers,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")!!.toInt()
@@ -88,37 +87,34 @@ class LeerComicsOnline : HttpSource() {
         addPathSegment((baseUrl + manga.url).toHttpUrl().queryParameter("slug").toString())
     }.build().toString()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        json.decodeFromString<List<Comic>>(response.body.string()).reversed().map {
-            SChapter.create().apply {
-                name = it.title
-                setUrlWithoutDomain(
-                    baseUrl.toHttpUrl().newBuilder().apply {
-                        addPathSegment("api")
-                        addPathSegment("pages")
-                        addQueryParameter("id", it.id.toString())
-                        addQueryParameter(
-                            "letter",
-                            it.url.first().toString(),
-                        )
-                        addQueryParameter("slug", it.url)
-                    }.build().toString(),
-                )
-            }
+    override fun chapterListParse(response: Response): List<SChapter> = json.decodeFromString<List<Comic>>(response.body.string()).reversed().map {
+        SChapter.create().apply {
+            name = it.title
+            setUrlWithoutDomain(
+                baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("api")
+                    addPathSegment("pages")
+                    addQueryParameter("id", it.id.toString())
+                    addQueryParameter(
+                        "letter",
+                        it.url.first().toString(),
+                    )
+                    addQueryParameter("slug", it.url)
+                }.build().toString(),
+            )
         }
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment((baseUrl + chapter.url).toHttpUrl().queryParameter("slug").toString())
     }.build().toString()
 
-    override fun pageListParse(response: Response): List<Page> {
-        return try { // some chapters are just empty
-            json.decodeFromString<List<String>>(response.body.string()).mapIndexed { index, url ->
-                Page(index, imageUrl = url)
-            }
-        } catch (exception: Exception) {
-            emptyList()
+    override fun pageListParse(response: Response): List<Page> = try { // some chapters are just empty
+        json.decodeFromString<List<String>>(response.body.string()).mapIndexed { index, url ->
+            Page(index, imageUrl = url)
         }
+    } catch (exception: Exception) {
+        emptyList()
     }
 
     @Serializable
@@ -129,10 +125,8 @@ class LeerComicsOnline : HttpSource() {
     )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }

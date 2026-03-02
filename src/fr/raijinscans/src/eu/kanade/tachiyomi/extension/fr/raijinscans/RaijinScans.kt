@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.extension.fr.raijinscans
 
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,11 +23,15 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URI
 import java.util.Calendar
 import java.util.Locale
 import kotlin.collections.mapIndexed
+import kotlin.getValue
 
-class RaijinScans : HttpSource() {
+class RaijinScans :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Raijin Scans"
     override val baseUrl = "https://raijin-scans.fr"
@@ -33,6 +42,7 @@ class RaijinScans : HttpSource() {
 
     private var nonce: String? = null
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
     private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
@@ -147,25 +157,44 @@ class RaijinScans : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
-    private fun parseStatus(status: String?): Int {
-        return when {
-            status == null -> SManga.UNKNOWN
-            status.contains("En cours", ignoreCase = true) -> SManga.ONGOING
-            status.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("En cours", ignoreCase = true) -> SManga.ONGOING
+        status.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     // ========================= Chapter List ==========================
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select("ul.scroll-sm li.item").map(::chapterFromElement)
+        val showPremium = preferences.getBoolean(
+            SHOW_PREMIUM_KEY,
+            SHOW_PREMIUM_DEFAULT,
+        )
+        val elements = response
+            .asJsoup()
+            .select("ul.scroll-sm li.item")
+            .filterNot { !showPremium && it.selectFirst("a.cairo-premium") != null }
+        val chapters = elements.map { e ->
+            chapterFromElement(e, response.request.url.toString())
+        }
+        return chapters
     }
-
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+    private fun chapterFromElement(element: Element, mangaUrl: String): SChapter = SChapter.create().apply {
+        val premium = element.selectFirst("a.cairo-premium") != null
         val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("abs:href"))
-        name = link.attr("title").trim()
-
+        val title = link.attr("title")
+        var endUrl: String
+        if (!link.toString().contains("connexion")) {
+            endUrl = link.attr("abs:href")
+        } else {
+            val titleSplit = title.split(" ")
+            endUrl = URI(mangaUrl).resolve(titleSplit[1]).toString()
+        }
+        setUrlWithoutDomain(endUrl)
+        name = buildString {
+            if (premium) append("🔒 ")
+            append(title)
+        }
         date_upload = parseRelativeDateString(link.selectFirst("> span:nth-of-type(2)")?.text())
     }
 
@@ -178,7 +207,9 @@ class RaijinScans : HttpSource() {
 
         return when {
             "aujourd'hui" in lcDate -> cal.timeInMillis
+
             "hier" in lcDate -> cal.apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+
             number != null -> when {
                 ("h" in lcDate || "heure" in lcDate) && "chapitre" !in lcDate -> cal.apply { add(Calendar.HOUR_OF_DAY, -number) }.timeInMillis
                 "min" in lcDate -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
@@ -188,6 +219,7 @@ class RaijinScans : HttpSource() {
                 "an" in lcDate -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
                 else -> 0L
             }
+
             else -> 0L
         }
     }
@@ -195,7 +227,18 @@ class RaijinScans : HttpSource() {
     // ========================== Page List =============================
 
     override fun pageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
+        val document = response.asJsoup()
+
+        // left connexion check just in case cause url returned by the website is /connexion but then it wont show in chapters list
+        // so i made it so it goes to /{mangaurl}/{chapter number} which should show in almost all case the buy premium page and if it doesnt whatever it throw a 404
+        val isPremium = document.select(".subscription-required-message").isNotEmpty() || response.request.url.toString().contains("connexion")
+        if (isPremium) {
+            throw Exception("This chapter is premium. Please connect via the webview to view.")
+        }
+
+        val result = document.select("div.protected-image-data")
+
+        return result.mapIndexed { index, element ->
             val encodedUrl = element.attr("data-src")
             val imageUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT))
             Page(index, imageUrl = imageUrl)
@@ -203,4 +246,20 @@ class RaijinScans : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+
+    // ========================== Preference =============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = SHOW_PREMIUM_KEY
+            title = "Show premium chapters"
+            summary = "Show paid chapters (identified by 🔒) in the list."
+            setDefaultValue(SHOW_PREMIUM_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val SHOW_PREMIUM_KEY = "show_premium_chapters"
+        private const val SHOW_PREMIUM_DEFAULT = false
+    }
 }

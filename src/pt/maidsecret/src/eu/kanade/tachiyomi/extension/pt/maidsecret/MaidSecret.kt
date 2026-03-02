@@ -6,12 +6,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MaidSecret : Madara(
-    "Maid Secret",
-    "https://maidsecret.com",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class MaidSecret :
+    Madara(
+        "Maid Secret",
+        "https://maidsecret.com",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
     override val useNewChapterEndpoint = true
 
     override val client = super.client.newBuilder()

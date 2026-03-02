@@ -23,7 +23,7 @@ import java.util.TimeZone
 class TopTruyen :
     WPComics(
         "Top Truyen",
-        "https://www.toptruyenxi.com",
+        "https://www.toptruyenxz.com",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -32,12 +32,10 @@ class TopTruyen :
     ),
     ConfigurableSource {
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div[id^=page_].page-chapter img").mapIndexed { index, element ->
-            val img = element.attr("abs:src")
-            Page(index, imageUrl = img)
-        }.distinctBy { it.imageUrl }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("div[id^=page_].page-chapter img").mapIndexed { index, element ->
+        val img = element.attr("abs:src")
+        Page(index, imageUrl = img)
+    }.distinctBy { it.imageUrl }
 
     override fun popularMangaSelector() = "div.item-manga div.item"
 
@@ -82,10 +80,8 @@ class TopTruyen :
 
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading):not([style])"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            date_upload = element.select(".chapters + div").text().toDate()
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        date_upload = element.select(".chapters + div").text().toDate()
     }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"

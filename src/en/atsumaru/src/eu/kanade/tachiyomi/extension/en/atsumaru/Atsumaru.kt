@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
-import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -37,7 +36,7 @@ class Atsumaru : HttpSource() {
 
     private fun apiHeadersBuilder() = headersBuilder().apply {
         add("Accept", "*/*")
-        add("Host", "atsu.moe")
+        add("Referer", baseUrl)
         add("Content-Type", "application/json")
     }
 
@@ -173,23 +172,25 @@ class Atsumaru : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    private fun fetchChaptersRequest(mangaId: String, page: Int): Request = GET("$baseUrl/api/manga/chapters?id=$mangaId&filter=all&sort=desc&page=$page", apiHeaders)
-
-    override fun chapterListRequest(manga: SManga): Request = fetchChaptersRequest(manga.url, 0)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.queryParameter("id")!!
-        val chapterList = mutableListOf<ChapterDto>()
+        val mangaId = response.request.url.queryParameter("mangaId")!!
 
-        var result = response.parseAs<ChapterListDto>()
-        chapterList.addAll(result.chapters)
-
-        while (result.hasNextPage()) {
-            result = client.newCall(fetchChaptersRequest(mangaId, result.page + 1)).execute().parseAs()
-            chapterList.addAll(result.chapters)
+        val scanlatorMap = try {
+            val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
+            client.newCall(detailsRequest).execute().use {
+                it.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
+            }.orEmpty()
+        } catch (_: Exception) {
+            emptyMap()
         }
 
-        return chapterList.map { it.toSChapter(mangaId) }
+        val data = response.parseAs<AllChaptersDto>()
+
+        return data.chapters.map {
+            it.toSChapter(mangaId, it.scanlationMangaId?.let { id -> scanlatorMap[id] })
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -209,13 +210,18 @@ class Atsumaru : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
-        Page(index, imageUrl = baseUrl + page.image)
+        val imageUrl = when {
+            page.image.startsWith("http") -> page.image
+            page.image.startsWith("//") -> "https:${page.image}"
+            else -> "$baseUrl/static/${page.image.removePrefix("/").removePrefix("static/")}"
+        }
+        Page(index, imageUrl = imageUrl.replaceFirst(Regex("^https?:?//"), "https://"))
     }
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
             add("Accept", "image/avif,image/webp,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
+            add("Referer", baseUrl)
         }.build()
 
         return GET(page.imageUrl!!, imgHeaders)

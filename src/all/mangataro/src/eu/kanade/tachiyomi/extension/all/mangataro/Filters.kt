@@ -28,46 +28,51 @@ abstract class CheckBoxGroup<T>(
 
 class SearchWithFilters : Filter.CheckBox("Apply filters to Text Search", false)
 
-class TypeFilter : SelectFilter<String?>(
-    name = "Type",
-    options = listOf(
-        "All" to null,
-        "Manga" to "Manga",
-        "Manhwa" to "Manhwa",
-        "Manhua" to "Manhua",
-    ),
-)
+class TypeFilter :
+    SelectFilter<String?>(
+        name = "Type",
+        options = listOf(
+            "All" to null,
+            "Manga" to "Manga",
+            "Manhwa" to "Manhwa",
+            "Manhua" to "Manhua",
+        ),
+    )
 
-class StatusFilter : SelectFilter<String?>(
-    name = "Status",
-    options = listOf(
-        "All" to null,
-        "Completed" to "Completed",
-        "Ongoing" to "Ongoing",
-    ),
-)
+class StatusFilter :
+    SelectFilter<String?>(
+        name = "Status",
+        options = listOf(
+            "All" to null,
+            "Completed" to "Completed",
+            "Ongoing" to "Ongoing",
+        ),
+    )
 
-class YearFilter : SelectFilter<Int?>(
-    name = "Year",
-    options = buildList {
-        add("All" to null)
-        val current = Calendar.getInstance().get(Calendar.YEAR)
-        (current downTo 1949).mapTo(this) { it.toString() to it }
-    },
-)
+class YearFilter :
+    SelectFilter<Int?>(
+        name = "Year",
+        options = buildList {
+            add("All" to null)
+            val current = Calendar.getInstance().get(Calendar.YEAR)
+            (current downTo 1949).mapTo(this) { it.toString() to it }
+        },
+    )
 
-class TagFilter : CheckBoxGroup<Int>(
-    name = "Tags",
-    options = tags,
-)
+class TagFilter :
+    CheckBoxGroup<Int>(
+        name = "Tags",
+        options = tags,
+    )
 
-class TagFilterMatch : SelectFilter<String>(
-    name = "Tag Match",
-    options = listOf(
-        "Any" to "any",
-        "All" to "all",
-    ),
-)
+class TagFilterMatch :
+    SelectFilter<String>(
+        name = "Tag Match",
+        options = listOf(
+            "Any" to "any",
+            "All" to "all",
+        ),
+    )
 
 class SortFilter(
     state: Selection = Selection(0, false),

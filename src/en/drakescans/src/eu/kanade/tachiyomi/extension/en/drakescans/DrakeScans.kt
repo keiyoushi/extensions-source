@@ -45,10 +45,8 @@ class DrakeScans :
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        super.chapterListSelector(),
+        preferences,
+    )
 }

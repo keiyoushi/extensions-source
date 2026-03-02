@@ -15,6 +15,15 @@ import kotlinx.serialization.json.put
 import java.io.IOException
 
 @Serializable
+data class OcrDataDto(
+    val a: String,
+    val b: String,
+    val c: Long,
+    val d: String,
+    val e: String,
+)
+
+@Serializable
 class PageDto(
     @SerialName("image")
     val imageUrl: String,
@@ -80,23 +89,21 @@ private object DialogListSerializer :
         )
     }
 
-    private fun getCoordinates(element: JsonElement): JsonArray {
-        return when (element) {
-            is JsonArray -> element.jsonArray[0].jsonArray
-            else -> element.jsonObject["box"]?.jsonArray
-                ?: throw IOException("Dialog box position not found")
-        }
+    private fun getCoordinates(element: JsonElement): JsonArray = when (element) {
+        is JsonArray -> element.jsonArray[0].jsonArray
+
+        else -> element.jsonObject["box"]?.jsonArray
+            ?: throw IOException("Dialog box position not found")
     }
 
-    private fun getDialogs(element: JsonElement): JsonObject {
-        return buildJsonObject {
-            when (element) {
-                is JsonArray -> put("text", element.jsonArray[1])
-                else -> {
-                    element.jsonObject.entries
-                        .filter { it.value.isString }
-                        .forEach { put(it.key, it.value) }
-                }
+    private fun getDialogs(element: JsonElement): JsonObject = buildJsonObject {
+        when (element) {
+            is JsonArray -> put("text", element.jsonArray[1])
+
+            else -> {
+                element.jsonObject.entries
+                    .filter { it.value.isString }
+                    .forEach { put(it.key, it.value) }
             }
         }
     }

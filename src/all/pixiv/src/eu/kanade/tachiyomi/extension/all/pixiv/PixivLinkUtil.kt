@@ -1,15 +1,14 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
 
-import android.net.Uri
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 interface PixivTargetCompanion<out T : PixivTarget> {
-    val SEARCH_PREFIX: String
+    val searchPrefix: String
     fun fromSearchQuery(query: String): T? {
-        if (!query.startsWith(SEARCH_PREFIX)) return null
-        val id = query.removePrefix(SEARCH_PREFIX)
+        if (!query.startsWith(searchPrefix)) return null
+        val id = query.removePrefix(searchPrefix)
         if (!id.matches("\\d+".toRegex())) return null
         return fromSearchQueryId(id)
     }
@@ -21,18 +20,16 @@ sealed class PixivTarget {
     companion object {
         val BASE_URI = "https://www.pixiv.net".toHttpUrl()
 
-        fun fromSearchQuery(query: String) =
-            sequenceOf<PixivTargetCompanion<*>>(User, Series, Illustration)
-                .firstNotNullOfOrNull { it.fromSearchQuery(query) }
+        fun fromSearchQuery(query: String) = sequenceOf(User, Series, Illustration)
+            .firstNotNullOfOrNull { it.fromSearchQuery(query) }
 
         fun fromUri(uri: String) = uri.toHttpUrlOrNull()?.let { fromUri(it) }
-        fun fromUri(uri: Uri) = fromUri(uri.toString())
         fun fromUri(uri: HttpUrl): PixivTarget? {
             // if an absolute domain is specified, check if it matches. Tolerate relative urls as-is.
             if (!(
-                uri.scheme in listOf(null, "http", "https") &&
-                    uri.host.let { "pixiv.net" == it.removePrefix("www.") }
-                )
+                    uri.scheme in listOf(null, "http", "https") &&
+                        uri.host.let { "pixiv.net" == it.removePrefix("www.") }
+                    )
             ) {
                 return null
             }
@@ -47,9 +44,11 @@ sealed class PixivTarget {
             with(pathSegments[0]) {
                 return when {
                     equals("artworks") -> Illustration(pathSegments[1])
+
                     equals("users") -> User(pathSegments[1])
+
                     equals("user") &&
-                        (pathSegments.size >= 4 && pathSegments[2].equals("series")) ->
+                        (pathSegments.size >= 4 && pathSegments[2] == "series") ->
                         Series(pathSegments[3], pathSegments[1])
 
                     else -> null
@@ -59,54 +58,50 @@ sealed class PixivTarget {
     }
 
     abstract fun toHttpUrl(): HttpUrl
-    fun toUri() = Uri.parse(toHttpUrl().toString())
 
     abstract fun toSearchQuery(): String
 
     data class User(val userId: String) : PixivTarget() {
         companion object : PixivTargetCompanion<User> {
-            override val SEARCH_PREFIX = "user:"
+            override val searchPrefix = "user:"
             override fun fromSearchQueryId(id: String) = User(id)
         }
 
-        override fun toHttpUrl() =
-            BASE_URI.newBuilder()
-                .addPathSegment("users")
-                .addPathSegment(userId).build()
+        override fun toHttpUrl() = BASE_URI.newBuilder()
+            .addPathSegment("users")
+            .addPathSegment(userId).build()
 
-        override fun toSearchQuery(): String = SEARCH_PREFIX + userId
+        override fun toSearchQuery(): String = searchPrefix + userId
     }
 
     data class Illustration(val illustId: String) : PixivTarget() {
         companion object : PixivTargetCompanion<Illustration> {
-            override val SEARCH_PREFIX = "aid:"
+            override val searchPrefix = "aid:"
             override fun fromSearchQueryId(id: String) = Illustration(id)
         }
 
-        override fun toHttpUrl() =
-            BASE_URI.newBuilder()
-                .addPathSegment("artworks")
-                .addPathSegment(illustId).build()
+        override fun toHttpUrl() = BASE_URI.newBuilder()
+            .addPathSegment("artworks")
+            .addPathSegment(illustId).build()
 
-        override fun toSearchQuery(): String = SEARCH_PREFIX + illustId
+        override fun toSearchQuery(): String = searchPrefix + illustId
     }
 
     data class Series(val seriesId: String, val authorUserId: String? = null) : PixivTarget() {
         companion object : PixivTargetCompanion<Series> {
-            override val SEARCH_PREFIX = "sid:"
+            override val searchPrefix = "sid:"
             override fun fromSearchQueryId(id: String) = Series(id)
         }
 
-        override fun toHttpUrl() =
-            BASE_URI.newBuilder()
-                .addPathSegment("user")
-                .addPathSegment(
-                    authorUserId
-                        ?: throw UnsupportedOperationException("TBD what should be done in this case"),
-                )
-                .addPathSegment("series")
-                .addPathSegment(seriesId).build()
+        override fun toHttpUrl() = BASE_URI.newBuilder()
+            .addPathSegment("user")
+            .addPathSegment(
+                authorUserId
+                    ?: throw UnsupportedOperationException("TBD what should be done in this case"),
+            )
+            .addPathSegment("series")
+            .addPathSegment(seriesId).build()
 
-        override fun toSearchQuery(): String = SEARCH_PREFIX + seriesId
+        override fun toSearchQuery(): String = searchPrefix + seriesId
     }
 }

@@ -22,7 +22,9 @@ import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BiliManga : HttpSource(), ConfigurableSource {
+class BiliManga :
+    HttpSource(),
+    ConfigurableSource {
 
     override val baseUrl = "https://www.bilimanga.net"
 
@@ -34,24 +36,21 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
 
-    override val client = super.client.newBuilder()
-        .rateLimit(10, 10).addNetworkInterceptor(MangaInterceptor()).build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Accept-Language", "zh")
-        .add("Accept", "*/*")
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context).forEach(screen::addPreference)
+        preferencesInternal(screen.context, preferences).forEach(screen::addPreference)
     }
+
+    override val client = super.client.newBuilder().also {
+        val split = preferences.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+        it.rateLimit(split[0].toInt(), split[1].toLong())
+    }.addNetworkInterceptor(MangaInterceptor()).build()
+
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Accept-Language", "zh").add("Accept", "*/*")
 
     // Customize
 
     private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
-    private fun String.toHalfWidthDigits(): String {
-        return this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
-    }
+    private fun String.toHalfWidthDigits(): String = this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
 
     companion object {
         val META_REGEX = Regex("連載|完結|收藏|推薦|热度")
@@ -105,8 +104,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/top/lastupdate/$page.html", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/top/lastupdate/$page.html", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -139,8 +137,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val bkname =
-            doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
+        val bkname = doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
@@ -158,8 +155,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Catalog Page
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$baseUrl/read/${manga.id}/catalog", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
 
     override fun chapterListParse(response: Response) = response.asJsoup().let {
         val info = it.selectFirst(".chapter-sub-title")!!.text()

@@ -14,8 +14,6 @@ import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInte
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.google.GoogleTranslator
-import eu.kanade.tachiyomi.lib.i18n.Intl
-import eu.kanade.tachiyomi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
@@ -24,6 +22,8 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
@@ -298,18 +298,25 @@ class Manhuarm(
         val jsonHeaders = Headers.Builder()
             .add("Referer", chapterUrl.toString())
             .add("Accept", "*/*")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .add("Cache-Control", "no-cache")
             .build()
 
-        val encoded = Regex("""_0xraw\s*=\s*"([^"]+)"""")
+        val ocrData = Regex("""_0xdata\s*=\s*(\{.*?\});""")
             .find(document.html())
             ?.groupValues
             ?.get(1)
+            ?.parseAs<OcrDataDto>()
             ?: return pages
 
-        val ocrUrl = try {
-            String(Base64.getDecoder().decode(encoded))
-        } catch (_: Exception) {
-            return pages
+        val ocrUrl = ocrData.let {
+            val ch = String(Base64.getDecoder().decode(it.a))
+            it.e.toHttpUrl().newBuilder()
+                .addQueryParameter("ch", ch)
+                .addQueryParameter("tk", it.b)
+                .addQueryParameter("ts", it.c.toString())
+                .addQueryParameter("nc", it.d)
+                .build().toString()
         }
 
         val dialog = try {

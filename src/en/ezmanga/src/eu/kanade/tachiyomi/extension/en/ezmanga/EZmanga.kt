@@ -15,12 +15,13 @@ import okhttp3.Response
 import rx.Observable
 import rx.schedulers.Schedulers
 
-class EZmanga : Iken(
-    "EZmanga",
-    "en",
-    "https://ezmanga.org",
-    "https://vapi.ezmanga.org",
-) {
+class EZmanga :
+    Iken(
+        "EZmanga",
+        "en",
+        "https://ezmanga.org",
+        "https://vapi.ezmanga.org",
+    ) {
     // Migrated from HeanCms to Iken
     override val versionId = 4
 
@@ -37,9 +38,7 @@ class EZmanga : Iken(
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
@@ -84,26 +83,28 @@ class EZmanga : Iken(
         return FilterList(filters)
     }
 
-    private class SortFilter : SelectFilter(
-        "Sort",
-        "orderBy",
-        listOf(
-            Pair("Popularity", "totalViews"),
-            Pair("Latest", "updatedAt"),
-            Pair("Created at", "createdAt"),
-            Pair("Z-A", "postTitle"),
-        ),
-    )
+    private class SortFilter :
+        SelectFilter(
+            "Sort",
+            "orderBy",
+            listOf(
+                Pair("Popularity", "totalViews"),
+                Pair("Latest", "updatedAt"),
+                Pair("Created at", "createdAt"),
+                Pair("Z-A", "postTitle"),
+            ),
+        )
 
-    private class StatusFilter : SelectFilter(
-        "Status",
-        "seriesStatus",
-        listOf(
-            Pair("All", ""),
-            Pair("Ongoing", "ONGOING"),
-            Pair("Hiatus", "HIATUS"),
-            Pair("Completed", "COMPLETED"),
-            Pair("Dropped", "DROPPED"),
-        ),
-    )
+    private class StatusFilter :
+        SelectFilter(
+            "Status",
+            "seriesStatus",
+            listOf(
+                Pair("All", ""),
+                Pair("Ongoing", "ONGOING"),
+                Pair("Hiatus", "HIATUS"),
+                Pair("Completed", "COMPLETED"),
+                Pair("Dropped", "DROPPED"),
+            ),
+        )
 }

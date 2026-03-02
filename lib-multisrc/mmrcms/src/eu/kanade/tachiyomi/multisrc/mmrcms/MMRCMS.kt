@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.mmrcms
 
 import android.annotation.SuppressLint
 import android.util.Log
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.i18n.Intl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -132,18 +132,16 @@ constructor(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.isNotEmpty()) {
-            if (page == 1) {
-                client.newCall(searchMangaRequest(page, query, filters))
-                    .asObservableSuccess()
-                    .map { searchMangaParse(it) }
-            } else {
-                Observable.just(parseSearchDirectory(page))
-            }
+    ): Observable<MangasPage> = if (query.isNotEmpty()) {
+        if (page == 1) {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { searchMangaParse(it) }
         } else {
-            super.fetchSearchManga(page, query, filters)
+            Observable.just(parseSearchDirectory(page))
         }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -247,10 +245,13 @@ constructor(
         document.select(".row .dl-horizontal dt").forEach { element ->
             when (element.text().lowercase().removeSuffix(":")) {
                 in detailAuthor -> author = element.nextElementSibling()!!.text()
+
                 in detailArtist -> artist = element.nextElementSibling()!!.text()
+
                 in detailGenre -> genre = element.nextElementSibling()!!.select("a").joinToString {
                     it.text()
                 }
+
                 in detailStatus -> status = when (element.nextElementSibling()!!.text().lowercase()) {
                     in detailStatusComplete -> SManga.COMPLETED
                     in detailStatusOngoing -> SManga.ONGOING
@@ -305,10 +306,9 @@ constructor(
         }
     }
 
-    override fun pageListParse(document: Document) =
-        document.select("#all > img.img-responsive").mapIndexed { i, it ->
-            Page(i, imageUrl = it.imgAttr())
-        }
+    override fun pageListParse(document: Document) = document.select("#all > img.img-responsive").mapIndexed { i, it ->
+        Page(i, imageUrl = it.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -461,12 +461,10 @@ constructor(
         }
     }
 
-    protected fun guessCover(mangaUrl: String, url: String?): String {
-        return if (url == null || url.endsWith("no-image.png")) {
-            "$baseUrl/uploads/manga/${mangaUrl.substringAfterLast('/')}/cover/cover_250x350.jpg"
-        } else {
-            url
-        }
+    protected fun guessCover(mangaUrl: String, url: String?): String = if (url == null || url.endsWith("no-image.png")) {
+        "$baseUrl/uploads/manga/${mangaUrl.substringAfterLast('/')}/cover/cover_250x350.jpg"
+    } else {
+        url
     }
 
     protected fun Element.imgAttr(): String = when {

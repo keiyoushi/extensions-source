@@ -79,6 +79,7 @@ class ImageInterceptor : Interceptor {
                 val getTile = { size: Int -> (size / 32) * 8 }
                 Pair(getTile(originalWidth), getTile(originalHeight))
             }
+
             else -> {
                 val getTile = { size: Int -> (size / 8 * 8) / 4 }
                 Pair(getTile(originalWidth), getTile(originalHeight))

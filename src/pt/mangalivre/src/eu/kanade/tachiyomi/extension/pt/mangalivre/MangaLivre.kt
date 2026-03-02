@@ -3,10 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -14,6 +10,10 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
@@ -52,8 +52,7 @@ class MangaLivre :
 
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"
 
-    override fun xhrChaptersRequest(mangaUrl: String) =
-        POST("$mangaUrl/ajax/chapters/", xhrHeaders, FormBody.Builder().build())
+    override fun xhrChaptersRequest(mangaUrl: String) = POST("$mangaUrl/ajax/chapters/", xhrHeaders, FormBody.Builder().build())
 
     override fun pageListRequest(chapter: SChapter): Request {
         val fullUrl = if (chapter.url.startsWith("http")) {
@@ -64,12 +63,10 @@ class MangaLivre :
         return GET(fullUrl, headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".reading-content .page-break img.wp-manga-chapter-img[src]")
-            .mapIndexed { idx, img ->
-                Page(idx, document.location(), img.attr("abs:src").trim())
-            }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".reading-content .page-break img.wp-manga-chapter-img[src]")
+        .mapIndexed { idx, img ->
+            Page(idx, document.location(), img.attr("abs:src").trim())
+        }
 
     override fun imageRequest(page: Page): Request {
         val referer = if (page.url.isNotEmpty()) page.url else "$baseUrl/"

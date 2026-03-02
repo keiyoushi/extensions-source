@@ -1,0 +1,8 @@
+ext {
+    extName = 'Hentara'
+    extClass = '.Hentara'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

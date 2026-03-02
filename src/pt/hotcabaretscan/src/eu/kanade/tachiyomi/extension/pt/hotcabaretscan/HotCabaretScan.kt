@@ -10,12 +10,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class HotCabaretScan : Madara(
-    "Hot Cabaret Scan",
-    "https://hotcabaretscan.com",
-    "pt-BR",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
-) {
+class HotCabaretScan :
+    Madara(
+        "Hot Cabaret Scan",
+        "https://hotcabaretscan.com",
+        "pt-BR",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)

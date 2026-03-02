@@ -28,10 +28,8 @@ abstract class ThunderScansBase(
 
     open val searchMangaTitleSelector = ".bigor .tt, h3 a"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
-            title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf(String::isNotEmpty) ?: element.selectFirst("a")!!.attr("title")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        title = element.selectFirst(searchMangaTitleSelector)?.text()?.takeIf(String::isNotEmpty) ?: element.selectFirst("a")!!.attr("title")
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -39,27 +37,24 @@ abstract class ThunderScansBase(
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        super.chapterListSelector(),
+        preferences,
+    )
 }
 
-class LavaScans : ThunderScansBase(
-    "Lava Scans",
-    "https://lavascans.com",
-    "ar",
-    dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar")),
-) {
+class LavaScans :
+    ThunderScansBase(
+        "Lava Scans",
+        "https://lavascans.com",
+        "ar",
+        dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar")),
+    ) {
     override val id = 3209001028102012989
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            name = element.selectFirst(".ch-num")!!.text().ifEmpty { name }
-            date_upload = element.selectFirst(".ch-date")?.text()?.parseChapterDate() ?: date_upload
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        name = element.selectFirst(".ch-num")!!.text().ifEmpty { name }
+        date_upload = element.selectFirst(".ch-date")?.text()?.parseChapterDate() ?: date_upload
     }
     override fun searchMangaSelector() = ".listupd .manga-card-v"
 
@@ -85,9 +80,10 @@ class LavaScans : ThunderScansBase(
     }
 }
 
-class ThunderScans : ThunderScansBase(
-    "Thunder Scans",
-    "https://en-thunderscans.com",
-    "en",
-    mangaUrlDirectory = "/comics",
-)
+class ThunderScans :
+    ThunderScansBase(
+        "Thunder Scans",
+        "https://en-thunderscans.com",
+        "en",
+        mangaUrlDirectory = "/comics",
+    )

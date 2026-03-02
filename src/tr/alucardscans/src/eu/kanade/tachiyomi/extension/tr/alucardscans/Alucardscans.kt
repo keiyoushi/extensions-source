@@ -33,9 +33,7 @@ class Alucardscans : HttpSource() {
         timeZone = java.util.TimeZone.getTimeZone("UTC")
     }
 
-    private fun parseDate(dateStr: String?): Long {
-        return dateFormat.tryParse(dateStr?.replace("\$D", ""))
-    }
+    private fun parseDate(dateStr: String?): Long = dateFormat.tryParse(dateStr?.replace("\$D", ""))
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.body.string()
@@ -151,12 +149,10 @@ class Alucardscans : HttpSource() {
         return MangasPage(mangas!!, hasNextPage)
     }
 
-    private fun String.parseStatus(): Int {
-        return when (this.lowercase()) {
-            in statusOngoing -> SManga.ONGOING
-            in statusCompleted -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun String.parseStatus(): Int = when (this.lowercase()) {
+        in statusOngoing -> SManga.ONGOING
+        in statusCompleted -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     private val statusOngoing = listOf("ongoing", "devam ediyor")
@@ -166,7 +162,5 @@ class Alucardscans : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/api/series?search=$query&page=$page&limit=24", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/series?search=$query&page=$page&limit=24", headers)
 }

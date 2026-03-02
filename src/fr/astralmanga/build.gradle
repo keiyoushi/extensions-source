@@ -1,9 +1,8 @@
 ext {
     extName = 'Astral-Manga'
     extClass = '.AstralManga'
-    themePkg = 'madara'
     baseUrl = 'https://astral-manga.fr'
-    overrideVersionCode = 1
+    extVersionCode = 47
     isNsfw = false
 }
 

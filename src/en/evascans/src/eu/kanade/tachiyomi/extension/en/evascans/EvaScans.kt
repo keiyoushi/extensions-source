@@ -4,12 +4,13 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Element
 
-class EvaScans : MangaThemesia(
-    "Eva Scans",
-    "https://evascans.org",
-    "en",
-    "/series",
-) {
+class EvaScans :
+    MangaThemesia(
+        "Eva Scans",
+        "https://evascans.org",
+        "en",
+        "/series",
+    ) {
     // Fix search/listing - site uses custom card layout (div elements, not article)
     override fun searchMangaSelector() = "div.manga-card-v, .listupd .bs .bsx"
 

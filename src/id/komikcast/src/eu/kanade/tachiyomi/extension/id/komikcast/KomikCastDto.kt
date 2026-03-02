@@ -58,11 +58,12 @@ data class ChapterItem(
     val data: ChapterData,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+    val chapterIndex: Float? = null,
 )
 
 @Serializable
 data class ChapterData(
-    val index: Float,
+    val index: Float? = null,
     val title: String? = null,
     val images: List<String>? = null,
 )
@@ -95,7 +96,7 @@ fun SeriesItem.toSManga(): SManga = SManga.create().apply {
 }
 
 fun ChapterItem.toSChapter(seriesSlug: String?): SChapter = SChapter.create().apply {
-    val chapterIndex = data.index
+    val chapterIndex = (data.index ?: chapterIndex)!!
     val formattedIndex = formatChapterNumber(chapterIndex)
     url = "/series/$seriesSlug/chapters/$chapterIndex"
     name = if (data.title.isNullOrBlank()) {

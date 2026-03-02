@@ -42,34 +42,32 @@ class Toon11 : ParsedHttpSource() {
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank()) {
-            val url = "$baseUrl/bbs/search_stx.php".toHttpUrl().newBuilder().apply {
-                addQueryParameter("stx", query)
-            }.build()
-            GET(url, headers)
-        } else {
-            var urlString = ""
-            var isOver = ""
-            var genre = ""
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
+        val url = "$baseUrl/bbs/search_stx.php".toHttpUrl().newBuilder().apply {
+            addQueryParameter("stx", query)
+        }.build()
+        GET(url, headers)
+    } else {
+        var urlString = ""
+        var isOver = ""
+        var genre = ""
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> urlString = filter.selected
-                    is StatusFilter -> isOver = filter.selected
-                    is GenreFilter -> genre = filter.selected
-                    else -> {}
-                }
+        filters.forEach { filter ->
+            when (filter) {
+                is SortFilter -> urlString = filter.selected
+                is StatusFilter -> isOver = filter.selected
+                is GenreFilter -> genre = filter.selected
+                else -> {}
             }
-
-            val url = urlString.toHttpUrl().newBuilder().apply {
-                addQueryParameter("is_over", isOver)
-                if (page > 1) addQueryParameter("page", page.toString())
-                if (genre.isNotEmpty()) addQueryParameter("sca", genre)
-            }.build()
-
-            GET(url, headers)
         }
+
+        val url = urlString.toHttpUrl().newBuilder().apply {
+            addQueryParameter("is_over", isOver)
+            if (page > 1) addQueryParameter("page", page.toString())
+            if (genre.isNotEmpty()) addQueryParameter("sca", genre)
+        }.build()
+
+        GET(url, headers)
     }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
@@ -103,15 +101,13 @@ class Toon11 : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.selectFirst("h2.title")!!.text()
-            thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
-            document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
-            document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
-            document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
-            document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString() }
-        }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h2.title")!!.text()
+        thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
+        document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
+        document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
+        document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
+        document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString() }
     }
 
     private fun parseStatus(element: String): Int = when {
@@ -179,9 +175,7 @@ class Toon11 : ParsedHttpSource() {
         return date?.time ?: 0L
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + "/bbs" + chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "/bbs" + chapter.url, headers)
 
     override fun pageListParse(document: Document): List<Page> {
         val rawImageLinks = document.selectFirst("script + script[type^=text/javascript]:not([src])")!!.data()

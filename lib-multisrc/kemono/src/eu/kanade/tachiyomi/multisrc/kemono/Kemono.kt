@@ -35,7 +35,8 @@ open class Kemono(
     override val name: String,
     override val baseUrl: String,
     override val lang: String = "all",
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
@@ -85,16 +86,12 @@ open class Kemono(
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.fromCallable {
-            searchMangas(page, sortBy = "pop" to "desc")
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
+        searchMangas(page, sortBy = "pop" to "desc")
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return Observable.fromCallable {
-            searchMangas(page, sortBy = "lat" to "desc")
-        }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
+        searchMangas(page, sortBy = "lat" to "desc")
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
@@ -275,8 +272,7 @@ open class Kemono(
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET("$baseUrl/$apiPath${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/$apiPath${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val postData: KemonoPostDtoWrapped = response.parseAs()
@@ -319,16 +315,15 @@ open class Kemono(
 
     // Filters
 
-    override fun getFilterList(): FilterList =
-        FilterList(
-            SortFilter(
-                "Sort by",
-                Filter.Sort.Selection(0, false),
-                getSortsList,
-            ),
-            TypeFilter("Types", getTypes),
-            FavoritesFilter(),
-        )
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(
+            "Sort by",
+            Filter.Sort.Selection(0, false),
+            getSortsList,
+        ),
+        TypeFilter("Types", getTypes),
+        FavoritesFilter(),
+    )
 
     open val getTypes: List<String> = emptyList()
 
@@ -347,7 +342,7 @@ open class Kemono(
             vals.map { TriFilter(it, it.lowercase()) },
         )
 
-    internal class FavoritesFilter() :
+    internal class FavoritesFilter :
         Filter.Group<TriFilter>(
             "Favorites",
             listOf(TriFilter("Favorites Only", "fav")),
@@ -355,8 +350,7 @@ open class Kemono(
 
     internal open class TriFilter(name: String, val value: String) : Filter.TriState(name)
 
-    internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) :
-        Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
+    internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) : Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
         fun getValue() = vals[state!!.index].second
     }
 

@@ -235,6 +235,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             do {
                 val doc = when {
                     isEmpty() -> response
+
                     else -> {
                         val body = FormBody.Builder()
                             .add("page", nextPage.toString())
@@ -265,21 +266,22 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
     // Manga-TR: image URL resolution with Base64-decoded data-src
-    override fun getImgAttr(element: Element?): String? {
-        return when {
-            element == null -> null
-            element.hasAttr("data-src") -> {
-                try {
-                    val encodedUrl = element.attr("data-src")
-                    val decodedBytes = Base64.decode(encodedUrl, Base64.DEFAULT)
-                    String(decodedBytes, StandardCharsets.UTF_8)
-                } catch (e: Exception) {
-                    null
-                }
+    override fun getImgAttr(element: Element?): String? = when {
+        element == null -> null
+
+        element.hasAttr("data-src") -> {
+            try {
+                val encodedUrl = element.attr("data-src")
+                val decodedBytes = Base64.decode(encodedUrl, Base64.DEFAULT)
+                String(decodedBytes, StandardCharsets.UTF_8)
+            } catch (e: Exception) {
+                null
             }
-            element.hasAttr("data-original") -> element.absUrl("data-original")
-            else -> null
         }
+
+        element.hasAttr("data-original") -> element.absUrl("data-original")
+
+        else -> null
     }
 
     // Simple pageListParse - relies on the selector above
@@ -383,28 +385,33 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     // =========================== Filters (UI) ===========================
-    private class PublicationStatusFilter : Filter.Select<String>(
-        "Yayın Durumu",
-        arrayOf("Tümü", "Tamamlandı", "Devam Ediyor"),
-    )
+    private class PublicationStatusFilter :
+        Filter.Select<String>(
+            "Yayın Durumu",
+            arrayOf("Tümü", "Tamamlandı", "Devam Ediyor"),
+        )
 
-    private class TranslateStatusFilter : Filter.Select<String>(
-        "Çeviri Durumu",
-        arrayOf("Tümü", "Devam Ediyor", "Tamamlandı", "Bırakılmış", "Yok"),
-    )
+    private class TranslateStatusFilter :
+        Filter.Select<String>(
+            "Çeviri Durumu",
+            arrayOf("Tümü", "Devam Ediyor", "Tamamlandı", "Bırakılmış", "Yok"),
+        )
 
-    private class AgeRestrictionFilter : Filter.Select<String>(
-        "Yaş Sınırlaması",
-        arrayOf("Tümü", "16+", "18+"),
-    )
+    private class AgeRestrictionFilter :
+        Filter.Select<String>(
+            "Yaş Sınırlaması",
+            arrayOf("Tümü", "16+", "18+"),
+        )
 
-    private class ContentTypeFilter : Filter.Select<String>(
-        "İçerik Türü",
-        arrayOf("Tümü", "Manga", "Novel", "Webtoon", "Anime"),
-    )
+    private class ContentTypeFilter :
+        Filter.Select<String>(
+            "İçerik Türü",
+            arrayOf("Tümü", "Manga", "Novel", "Webtoon", "Anime"),
+        )
 
-    private class SpecialTypeFilter : Filter.Select<String>(
-        "Özel Tür",
-        arrayOf("Tümü", "Yetişkin"),
-    )
+    private class SpecialTypeFilter :
+        Filter.Select<String>(
+            "Özel Tür",
+            arrayOf("Tümü", "Yetişkin"),
+        )
 }

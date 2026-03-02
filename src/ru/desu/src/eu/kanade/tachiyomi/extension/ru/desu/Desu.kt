@@ -35,7 +35,9 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import kotlin.text.matches
 
-class Desu : ConfigurableSource, HttpSource() {
+class Desu :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Desu"
 
     override val id: Long = 6684416167758830305
@@ -131,10 +133,14 @@ class Desu : ConfigurableSource, HttpSource() {
             genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
             status = when (trans_status) {
                 "continued" -> SManga.ONGOING
+
                 "completed" -> SManga.COMPLETED
+
                 else -> when (this@toSManga.status) {
                     "ongoing" -> SManga.ONGOING
+
                     "released" -> SManga.COMPLETED
+
                     //  "copyright" -> SManga.LICENSED  Hides available chapters!
                     else -> SManga.UNKNOWN
                 }
@@ -143,13 +149,11 @@ class Desu : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -190,22 +194,16 @@ class Desu : ConfigurableSource, HttpSource() {
         return MangasPage(mangas, page.pageNavParams.count > page.pageNavParams.page * page.pageNavParams.limit)
     }
 
-    private fun titleDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + API_URL + manga.url + "/", headers)
-    }
+    private fun titleDetailsRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/", headers)
 
     // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(titleDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(titleDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + "/manga" + manga.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/manga" + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val responseString = response.body.string()
@@ -245,13 +243,9 @@ class Desu : ConfigurableSource, HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request = titleDetailsRequest(manga)
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + API_URL + chapter.url.substringAfterLast("#apiChapter"), headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + API_URL + chapter.url.substringAfterLast("#apiChapter"), headers)
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url.substringBeforeLast("#apiChapter")
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#apiChapter")
 
     override fun pageListParse(response: Response): List<Page> {
         val obj = json.parseToJsonElement(response.body.string())
@@ -264,36 +258,32 @@ class Desu : ConfigurableSource, HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun searchMangaByIdRequest(id: String): Request {
-        return GET("$baseUrl$API_URL/$id", headers)
+    private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl$API_URL/$id", headers)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+        client.newCall(searchMangaByIdRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$realQuery"
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client.newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
-    }
-
-    private class OrderBy : Filter.Select<String>(
-        "Сортировка",
-        arrayOf("Популярность", "Дата", "Имя"),
-    )
+    private class OrderBy :
+        Filter.Select<String>(
+            "Сортировка",
+            arrayOf("Популярность", "Дата", "Имя"),
+        )
 
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанр", genres)
 

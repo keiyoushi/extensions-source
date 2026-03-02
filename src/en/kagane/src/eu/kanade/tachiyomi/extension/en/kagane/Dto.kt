@@ -122,13 +122,19 @@ class DetailsDto(
         val label: String?,
     )
 
-    fun toSManga(sourceName: String? = null): SManga = SManga.create().apply {
+    fun toSManga(sourceName: String? = null, baseUrl: String = ""): SManga = SManga.create().apply {
         val desc = StringBuilder()
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
             desc.append(it.trim())
             desc.append("\n")
+        }
+
+        // Add source name
+        if (sourceName != null && this@DetailsDto.sourceId != null) {
+            if (desc.isNotEmpty()) desc.append("\n")
+            desc.append("Source: [$sourceName]($baseUrl/sources/${this@DetailsDto.sourceId})\n")
         }
 
         // Add alternate titles at the end

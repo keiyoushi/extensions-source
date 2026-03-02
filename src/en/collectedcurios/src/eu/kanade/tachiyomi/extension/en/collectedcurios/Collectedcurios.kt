@@ -23,29 +23,28 @@ class Collectedcurios : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(
-            MangasPage(
-                arrayListOf(
-                    SManga.create().apply {
-                        title = "Sequential Art"
-                        artist = "Jolly Jack aka Phillip M Jackson"
-                        author = "Jolly Jack aka Phillip M Jackson"
-                        status = SManga.ONGOING
-                        url = "/sequentialart.php"
-                        description = "Sequential Art webcomic."
-                        thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Sequential_Art_Button.jpg"
-                    },
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            arrayListOf(
+                SManga.create().apply {
+                    title = "Sequential Art"
+                    artist = "Jolly Jack aka Phillip M Jackson"
+                    author = "Jolly Jack aka Phillip M Jackson"
+                    status = SManga.ONGOING
+                    url = "/sequentialart.php"
+                    description = "Sequential Art webcomic."
+                    thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Sequential_Art_Button.jpg"
+                },
 
-                    SManga.create().apply {
-                        title = "Battle Bunnies"
-                        artist = "Jolly Jack aka Phillip M Jackson"
-                        author = "Jolly Jack aka Phillip M Jackson"
-                        status = SManga.ONGOING
-                        url = "/battlebunnies.php"
-                        description = "Battle Bunnies webcomic."
-                        thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Battle_Bunnies_Button.jpg"
-                    },
+                SManga.create().apply {
+                    title = "Battle Bunnies"
+                    artist = "Jolly Jack aka Phillip M Jackson"
+                    author = "Jolly Jack aka Phillip M Jackson"
+                    status = SManga.ONGOING
+                    url = "/battlebunnies.php"
+                    description = "Battle Bunnies webcomic."
+                    thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Battle_Bunnies_Button.jpg"
+                },
 
                     /*
                     SManga.create().apply {
@@ -58,19 +57,14 @@ class Collectedcurios : ParsedHttpSource() {
                         thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Spider_And_Scorpion_Button.jpg"
                     },
                      */
-                ),
-                false,
             ),
-        )
-    }
+            false,
+        ),
+    )
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return fetchPopularManga(1)
-    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseJs = response.asJsoup()
@@ -116,8 +110,10 @@ class Collectedcurios : ParsedHttpSource() {
         return when {
             url.contains("sequentialart") ->
                 document.selectFirst(".w3-image")!!.absUrl("src")
+
             url.contains("battlebunnies") || url.contains("spiderandscorpion") ->
                 document.selectFirst("#strip")!!.absUrl("src")
+
             else -> throw Exception("Could not find the image")
         }
     }

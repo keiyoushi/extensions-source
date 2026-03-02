@@ -9,19 +9,10 @@ class ComicGardo :
         "Comic Gardo",
         "https://comic-gardo.com",
         "ja",
-        "https://cdn-img.comic-gardo.com/public/page",
-        isPaginated = true,
     ) {
-
     override val supportsLatest: Boolean = false
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(::imageIntercept)
-        .build()
-
-    override val publisher: String = "オーバーラップ"
-
-    override fun popularMangaSelector(): String = "a[class^=SeriesListItem_link_]"
+    override val popularMangaSelector: String = "a[class^=SeriesListItem_link_]"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("[class^=SeriesListItem_series_title_]")!!.text()
@@ -29,7 +20,7 @@ class ComicGardo :
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun searchMangaSelector(): String = "ul[class^=SearchResult_search_result_list_] li"
+    override val searchMangaSelector: String = "ul[class^=SearchResult_search_result_list_] li"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("p[class^=SearchResultItem_series_title_]")!!.text()

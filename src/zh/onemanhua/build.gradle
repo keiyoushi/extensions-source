@@ -1,8 +1,0 @@
-ext {
-    extName = 'COLAMANGA'
-    extClass = '.Onemanhua'
-    extVersionCode = 26
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

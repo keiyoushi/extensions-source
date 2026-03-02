@@ -64,21 +64,19 @@ class Mangainua : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = "a:contains(Наступна)"
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.length > 2) {
-            POST(
-                "$baseUrl/index.php?do=search",
-                body = FormBody.Builder()
-                    .add("do", "search")
-                    .add("subaction", "search")
-                    .add("story", query)
-                    .add("search_start", page.toString())
-                    .build(),
-                headers = headers,
-            )
-        } else {
-            throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.length > 2) {
+        POST(
+            "$baseUrl/index.php?do=search",
+            body = FormBody.Builder()
+                .add("do", "search")
+                .add("subaction", "search")
+                .add("story", query)
+                .add("search_start", page.toString())
+                .build(),
+            headers = headers,
+        )
+    } else {
+        throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
@@ -115,15 +113,12 @@ class Mangainua : ParsedHttpSource() {
         }.joinToString()
     }
 
-    private fun Document.getInfoElement(text: String): Element? =
-        selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
+    private fun Document.getInfoElement(text: String): Element? = selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun parseChapterElements(elements: Elements): List<SChapter> {
         var previousChapterName: String? = null
@@ -196,10 +191,8 @@ class Mangainua : ParsedHttpSource() {
             SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH)
         }
 
-        private fun String.toDate(): Long {
-            return runCatching { DATE_FORMATTER.parse(trim())?.time }
-                .getOrNull() ?: 0L
-        }
+        private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(trim())?.time }
+            .getOrNull() ?: 0L
 
         private const val SITE_LOGIN_HASH = "site_login_hash"
 

@@ -8,12 +8,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class KnightNoScanlation : Madara(
-    "Knight No Scanlation",
-    "https://lectorknight.com",
-    "es",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class KnightNoScanlation :
+    Madara(
+        "Knight No Scanlation",
+        "https://lectorknight.com",
+        "es",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
         .build()

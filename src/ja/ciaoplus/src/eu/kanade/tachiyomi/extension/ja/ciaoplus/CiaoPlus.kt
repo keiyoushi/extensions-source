@@ -166,9 +166,7 @@ class CiaoPlus : HttpSource() {
     }
 
     // Details
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val titleId = manga.url.substringAfter("/title/")
@@ -206,9 +204,7 @@ class CiaoPlus : HttpSource() {
     }
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val details = response.parseAs<DetailResponse>()
@@ -309,8 +305,7 @@ class CiaoPlus : HttpSource() {
         GenreFilter(getGenreList()),
     )
 
-    private class GenreFilter(private val genres: Array<Pair<String, String>>) :
-        Filter.Select<String>("Filter by", genres.map { it.first }.toTypedArray()) {
+    private class GenreFilter(private val genres: Array<Pair<String, String>>) : Filter.Select<String>("Filter by", genres.map { it.first }.toTypedArray()) {
         fun toUriPart() = genres[state].second
     }
 

@@ -76,9 +76,13 @@ class SenManga : ParsedHttpSource() {
                         url.addQueryParameter("genre[]", genre.id)
                     }
                 }
+
                 is StatusFilter -> url.addQueryParameter("status", filter.toUriPart())
+
                 is TypeFilter -> url.addQueryParameter("type", filter.toUriPart())
+
                 is OrderFilter -> url.addQueryParameter("order", filter.toUriPart())
+
                 else -> {}
             }
         }
@@ -111,9 +115,7 @@ class SenManga : ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/directory/last_update?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/last_update?page=$page", headers)
 
     override fun chapterListSelector() = "ul.chapter-list li"
 
@@ -130,9 +132,7 @@ class SenManga : ParsedHttpSource() {
         date_upload = parseDate(element.select("time").attr("datetime"))
     }
 
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
-    }
+    private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0
 
     override fun pageListParse(document: Document): List<Page> {
         val pageCount = document
@@ -156,8 +156,7 @@ class SenManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         GenreFilter(getGenreList()),
@@ -169,41 +168,43 @@ class SenManga : ParsedHttpSource() {
     private class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
     private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
     }
 
-    private class StatusFilter : UriPartFilter(
-        "Status",
-        arrayOf(
-            Pair("", "All"),
-            Pair("Ongoing", "Ongoing"),
-            Pair("Completed", "Completed"),
-            Pair("Hiatus", "Hiatus"),
-        ),
-    )
-    private class TypeFilter : UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("", "All"),
-            Pair("Manga", "Manga"),
-            Pair("Manhua", "Manhua"),
-            Pair("Manhwa", "Manhwa"),
-        ),
-    )
-    private class OrderFilter : UriPartFilter(
-        "Order",
-        arrayOf(
-            Pair("", "Default"),
-            Pair("A-Z", "A-Z"),
-            Pair("Z-A", "Z-A"),
-            Pair("Update", "Update"),
-            Pair("Added", "Added"),
-            Pair("Popular", "Popular"),
-            Pair("Rating", "Rating"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "Status",
+            arrayOf(
+                Pair("", "All"),
+                Pair("Ongoing", "Ongoing"),
+                Pair("Completed", "Completed"),
+                Pair("Hiatus", "Hiatus"),
+            ),
+        )
+    private class TypeFilter :
+        UriPartFilter(
+            "Type",
+            arrayOf(
+                Pair("", "All"),
+                Pair("Manga", "Manga"),
+                Pair("Manhua", "Manhua"),
+                Pair("Manhwa", "Manhwa"),
+            ),
+        )
+    private class OrderFilter :
+        UriPartFilter(
+            "Order",
+            arrayOf(
+                Pair("", "Default"),
+                Pair("A-Z", "A-Z"),
+                Pair("Z-A", "Z-A"),
+                Pair("Update", "Update"),
+                Pair("Added", "Added"),
+                Pair("Popular", "Popular"),
+                Pair("Rating", "Rating"),
+            ),
+        )
 
     private fun getGenreList(): List<Genre> = listOf(
         Genre("Action"),

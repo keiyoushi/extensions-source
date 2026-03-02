@@ -42,28 +42,20 @@ class GunnerkriggCourt : ParsedHttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+
+    override fun chapterListSelector() = """div.chapters option[value~=\d*]"""
+
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
+
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        chapter_number = element.attr("value").toFloat()
+        setUrlWithoutDomain("/?p=" + element.attr("value"))
+        name = element.parent()!!.previousElementSibling()!!.text() + " (" + chapter_number.toInt() + ")"
+        // date_upload // Find by using hovertext above "Tom" on actual comic page
     }
 
-    override fun chapterListSelector() =
-        """div.chapters option[value~=\d*]"""
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
-
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            chapter_number = element.attr("value").toFloat()
-            setUrlWithoutDomain("/?p=" + element.attr("value"))
-            name = element.parent()!!.previousElementSibling()!!.text() + " (" + chapter_number.toInt() + ")"
-            // date_upload // Find by using hovertext above "Tom" on actual comic page
-        }
-    }
-
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".comic_image").mapIndexed { i, element -> Page(i, "", baseUrl + element.attr("src")) }
+    override fun pageListParse(document: Document): List<Page> = document.select(".comic_image").mapIndexed { i, element -> Page(i, "", baseUrl + element.attr("src")) }
 
     // <editor-fold desc="Not Used">
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

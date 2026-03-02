@@ -54,8 +54,7 @@ abstract class SpicyTheme(
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        response.parseAs<FilterResponseDto>().toMangasPage()
+    override fun popularMangaParse(response: Response): MangasPage = response.parseAs<FilterResponseDto>().toMangasPage()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -111,8 +110,7 @@ abstract class SpicyTheme(
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiBaseUrl/serie/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBaseUrl/serie/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<SeriesResponseDto>()
@@ -128,8 +126,7 @@ abstract class SpicyTheme(
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET("$apiBaseUrl/serie/${chapter.url}/")
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiBaseUrl/serie/${chapter.url}/")
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PagesResponseDto>()

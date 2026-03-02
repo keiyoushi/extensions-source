@@ -16,10 +16,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -288,7 +284,8 @@ class AsuraScans :
         val chNumber = element.selectFirst("h3")!!.ownText()
         val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
         val isPremiumChapter = element.selectFirst("svg") != null
-        this.name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        val baseName = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
+        name = if (isPremiumChapter) "🔒 $baseName" else baseName
 
         date_upload = try {
             val text = element.selectFirst("h3 + h3")!!.ownText()
