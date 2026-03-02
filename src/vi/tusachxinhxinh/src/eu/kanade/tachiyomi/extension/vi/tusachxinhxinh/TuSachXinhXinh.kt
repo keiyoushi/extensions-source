@@ -206,10 +206,6 @@ class TuSachXinhXinh : HttpSource() {
         val html = response.body.string()
         val imageUrls = ImageDecryptor.extractImageUrls(html)
 
-        if (imageUrls.isEmpty()) {
-            throw Exception("Không tìm thấy hình ảnh")
-        }
-
         return imageUrls.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
