@@ -280,6 +280,7 @@ class NewTruyenTranh :
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
         private const val BASE_URL_PREF_SUMMARY =
             "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
