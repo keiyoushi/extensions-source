@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.azuki
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,32 +13,46 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
-import rx.Observable
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
-class Azuki : HttpSource() {
-
-    override val name = "Azuki"
-    override val baseUrl = "https://www.azuki.co"
+class Azuki :
+    HttpSource(),
+    ConfigurableSource {
+    override val name = "Omoi"
+    override val baseUrl = "https://www.omoi.com"
     override val lang = "en"
     override val supportsLatest = true
+    override val versionId = 2
 
     private val apiUrl = "https://production.api.azuki.co"
     private val organizationKey = "199e5a19-a236-49f5-81f4-43d4a541748a"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
+        .addInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+            if ((response.code == 401 || response.code == 403) && request.url.pathSegments[2].contains("pages") && request.url.host == apiUrl.toHttpUrl().host) {
+                throw IOException("Log in via WebView and purchase this chapter to read.")
+            }
+            if (response.code == 404 && request.url.pathSegments[2].contains("pages") && request.url.host == apiUrl.toHttpUrl().host) {
+                throw IOException("This chapter is not available.")
+            }
+            response
+        }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -46,7 +63,16 @@ class Azuki : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("ol.o-series-card-list li").map(::mangaFromElement)
+        val mangas = document.select("ol.o-series-card-list li").map {
+            SManga.create().apply {
+                val link = it.selectFirst("a.a-card-link")!!
+                val uuid = link.attr("data-ga-item-id").substringAfter("series-")
+                val slug = (link.absUrl("href")).toHttpUrl().pathSegments.last()
+                setUrlWithoutDomain("$slug#$uuid")
+                title = link.text()
+                thumbnail_url = it.selectFirst("img")?.absUrl("src")
+            }
+        }
         val hasNextPage = document.selectFirst("a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -58,24 +84,25 @@ class Azuki : HttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/discover".toHttpUrl().newBuilder()
-        url.addQueryParameter("q", query)
-        url.addQueryParameter("page", page.toString())
+        val url = "$baseUrl/discover".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
+            }
+            filters.firstInstanceOrNull<SortFilter>()?.value?.let {
+                addQueryParameter("sort", it)
+            }
 
-        filters.forEach { filter ->
-            when (filter) {
-                is SortFilter -> url.addQueryParameter("sort", filter.toUriPart())
+            filters.firstInstanceOrNull<AccessTypeFilter>()?.value?.takeIf { it.isNotEmpty() }?.let {
+                addQueryParameter("access_type", it)
+            }
 
-                is AccessTypeFilter -> filter.toUriPart().takeIf { it.isNotEmpty() }?.let { url.addQueryParameter("access_type", it) }
+            filters.firstInstanceOrNull<PublisherFilter>()?.value?.takeIf { it.isNotEmpty() }?.let {
+                addQueryParameter("publisher_slug", it)
+            }
 
-                is GenreFilter ->
-                    filter.state
-                        .filter { it.state }
-                        .forEach { url.addQueryParameter("tags[]", it.value) }
-
-                is PublisherFilter -> filter.toUriPart().takeIf { it.isNotEmpty() }?.let { url.addQueryParameter("publisher_slug", it) }
-
-                else -> {}
+            filters.firstInstanceOrNull<GenreFilter>()?.state?.filter { it.state }?.forEach {
+                addQueryParameter("tags[]", it.value)
             }
         }
         return GET(url.build(), headers)
@@ -84,98 +111,79 @@ class Azuki : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            author = document.selectFirst(".o-series-summary__byline p")?.text()?.substringAfter("By ")?.substringBefore(" Published by")
-            artist = author
-            description = document.selectFirst(".o-series-summary__description")?.text()
-            genre = document.select(".o-series-summary__genres a").joinToString { it.text() }
-            thumbnail_url = document.selectFirst(".o-series-summary__cover img")?.absUrl("src")
-        }
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = "$baseUrl/${manga.url}".toHttpUrl().pathSegments.first()
+        return GET("$apiUrl/manga/slug/$slug/v0", apiHeaders())
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsDto>().toSManga()
+
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = "$baseUrl/${manga.url}".toHttpUrl().pathSegments.first()
+        return "$baseUrl/series/$slug"
     }
 
     // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val seriesSlug = response.request.url.pathSegments.lastOrNull() ?: return emptyList()
-        val mangaUuid = document.selectFirst("azuki-chapter-row-list[series-uuid]")?.attr("series-uuid")
+    override fun chapterListRequest(manga: SManga): Request {
+        val url = "$baseUrl/${manga.url}".toHttpUrl()
+        val slug = url.pathSegments.first()
+        val uuid = url.fragment
+        val chapterUrl = "$apiUrl/mangas/$uuid/chapters/v4".toHttpUrl().newBuilder()
+            .addQueryParameter("order", "ascending")
+            .addQueryParameter("count", "1000")
+            .fragment(slug)
+            .build()
+        return GET(chapterUrl, apiHeaders())
+    }
 
-        val unlockedChapterIds = if (mangaUuid != null) {
-            try {
-                val apiResponse = client.newCall(GET("$apiUrl/user/mangas/$mangaUuid/v0", apiHeaders())).execute()
-                if (apiResponse.isSuccessful) {
-                    val result = apiResponse.parseAs<UserMangaStatusDto>()
-                    (result.purchasedChapterUuids + result.unlockedChapterUuids).toSet()
-                } else {
-                    emptySet()
-                }
-            } catch (e: Exception) {
-                emptySet()
-            }
-        } else {
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val uuid = response.request.url.pathSegments[1]
+        val slug = response.request.url.fragment!!
+        val result = response.parseAs<ChapterDto>()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+
+        val unlockedChapterIds = try {
+            val request = GET("$apiUrl/user/mangas/$uuid/v0", apiHeaders())
+            val response = client.newCall(request).execute()
+            val result = response.parseAs<UserMangaStatusDto>()
+            (result.purchasedChapterUuids + result.unlockedChapterUuids).toSet()
+        } catch (_: Exception) {
             emptySet()
         }
 
-        return document.select(".m-chapter-row-list .m-chapter-row").mapNotNull { chapterRow ->
-            val link = chapterRow.selectFirst("a.a-card-link") ?: return@mapNotNull null
-            val href = link.absUrl("href").toHttpUrl()
+        return result.chapters.map {
+            val now = System.currentTimeMillis()
+            val isFree = it.freePublishedDate != null &&
+                dateFormat.tryParse(it.freePublishedDate) <= now &&
+                (it.freeUnpublishedDate == null || dateFormat.tryParse(it.freeUnpublishedDate) > now)
+            val isLocked = it.uuid !in unlockedChapterIds && !isFree
+            it to isLocked
+        }
+            .filter { (_, isLocked) -> !hideLocked || !isLocked }
+            .map { (chapter, isLocked) -> chapter.toSChapter(slug, isLocked, dateFormat) }
+            .reversed()
+    }
 
-            val chapterId = if ("/checkout/" in href.encodedPath) {
-                href.queryParameter("chapter_uuids[]")
-            } else {
-                href.pathSegments.lastOrNull()
-            }
-
-            if (chapterId.isNullOrEmpty()) return@mapNotNull null
-
-            SChapter.create().apply {
-                url = "/series/$seriesSlug/read/$chapterId"
-                name = link.selectFirst(".m-chapter-row__title-cluster span")?.text() ?: link.text()
-                date_upload = dateFormat.tryParse(chapterRow.selectFirst(".m-chapter-row__date time")?.attr("datetime"))
-
-                val isPremium = chapterRow.selectFirst(".m-chapter-row__premium-badge") != null ||
-                    chapterRow.parent()?.hasClass("m-chapter-card--secondary") == true
-
-                if (isPremium && chapterId !in unlockedChapterIds) {
-                    name = "🔒 $name"
-                }
-            }
-        }.reversed()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = "$baseUrl/${chapter.url}".toHttpUrl()
+        val slug = url.fragment
+        val chapterUuid = url.pathSegments.first()
+        return "$baseUrl/series/$slug/read/$chapterUuid"
     }
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfter("/read/")
-        val apiUrl = "$apiUrl/chapters/$chapterId/pages/v1"
-        return GET(apiUrl, apiHeaders())
+        val chapterUuid = "$baseUrl/${chapter.url}".toHttpUrl().pathSegments.first()
+        val url = "$apiUrl/chapters/$chapterUuid/pages/v1"
+        return GET(url, apiHeaders())
     }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .map { response ->
-            if (!response.isSuccessful) {
-                if (response.code == 401 || response.code == 403) {
-                    throw Exception("This chapter is locked. Log in via WebView and unlock the chapter to read.")
-                }
-                throw Exception("HTTP error ${response.code}")
-            }
-            pageListParse(response)
-        }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PageListDto>()
         return result.data.pages.mapIndexed { i, page ->
-            val imageList = page.image.webp ?: page.image.jpg
-                ?: throw Exception("No images found for page ${i + 1}")
-
-            val bestAvailableUrl = imageList.maxByOrNull { it.width }?.url
-                ?: throw Exception("No image URL found for page ${i + 1}")
-
-            val resolutionRegex = Regex("""/(\d+)\.(webp|jpg)$""")
-            val highResUrl = resolutionRegex.replace(bestAvailableUrl, "/2000.$2")
-
+            val highRes = page.image.webp.maxBy { it.width }
+            // This will give the highest possible resolution even if x2400 image doesn't exist.
+            val highResUrl = highRes.url.replace(Regex("""/\d+_"""), "/2400_")
             Page(i, imageUrl = "$highResUrl?drm=1")
         }
     }
@@ -194,21 +202,27 @@ class Azuki : HttpSource() {
             .build()
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     // Filters
     override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Search and active filters are applied together"),
         SortFilter(),
         AccessTypeFilter(),
         PublisherFilter(),
         GenreFilter(),
     )
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.a-card-link")!!
-        setUrlWithoutDomain(link.attr("href"))
-        title = link.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-    }
-
     // Unsupported
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+    }
 }
