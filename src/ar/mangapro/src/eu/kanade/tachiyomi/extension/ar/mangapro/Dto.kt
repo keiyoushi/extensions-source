@@ -138,8 +138,6 @@ class ChapterUrl(
 @Serializable
 class Images(
     val images: List<String>,
-    @Serializable(ScrambledDataSerializer::class)
-    val maps: List<ScrambledData>,
     @Serializable(DeferredMediaSerializer::class)
     val deferredMedia: DeferredMediaToken? = null,
 )
@@ -221,6 +219,11 @@ class ScrambledImageTokenValue(
     val m: String,
     val tag: String,
     val v: Int,
+)
+
+@Serializable
+class Key(
+    val key: String,
 )
 
 @Serializable

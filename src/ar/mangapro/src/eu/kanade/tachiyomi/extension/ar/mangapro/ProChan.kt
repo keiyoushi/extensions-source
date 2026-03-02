@@ -376,7 +376,7 @@ class ProChan : HttpSource() {
         val chapterId = response.request.url.pathSegments[4]
 
         val images = imageData.images.toMutableList()
-        val maps = imageData.maps.toMutableList()
+        val maps = mutableListOf<ScrambledData>()
 
         if (imageData.deferredMedia != null) {
             val deferredUrl = baseUrl.toHttpUrl().newBuilder()
@@ -533,30 +533,42 @@ class ProChan : HttpSource() {
         }
     }
 
+    private val sessionKey = ConcurrentHashMap<Int, Pair<String, Long>>()
+    private val sessionKeyLock = Any()
+
     private fun decodeScrambledImageToken(data: ScrambledImageToken): ScrambledImage {
         val value = String(urlSafeBase64(data.token), Charsets.UTF_8)
             .parseAs<ScrambledImageTokenValue>()
 
-        when (value.m) {
-            "browser" if value.v == 2 -> return decodeBrowseVersion(value)
-            // TODO: couldn't find a chapter which uses this, possibly for paid chapters?
-            "browser_session" if value.v == 3 -> throw Exception("Not yet implemented")
+        val iv = urlSafeBase64(value.iv)
+        val tag = urlSafeBase64(value.tag)
+        val encryptedData = urlSafeBase64(value.data)
+
+        val key = when (value.m) {
+            "browser" if value.v == 2 -> {
+                val hash = MessageDigest.getInstance("SHA-256")
+                    .digest(
+                        "prochan-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
+                            .toByteArray(Charsets.UTF_8),
+                    )
+                SecretKeySpec(hash, "AES")
+            }
+            // Untested, couldn't find a chapter which uses this, possibly for paid chapters?
+            "browser_session" if value.v == 3 -> synchronized(sessionKeyLock) {
+                val time = System.currentTimeMillis()
+                val key = sessionKey[value.cid]?.takeIf { it.second > time }?.first ?: run {
+                    val request = GET("$baseUrl/chapter-map-session-key/${value.cid}", headers)
+                    val response = client.newCall(request).execute().parseAs<Data<Key>>()
+
+                    sessionKey[value.cid] = response.data.key to (time + 120000)
+
+                    response.data.key
+                }
+
+                SecretKeySpec(urlSafeBase64(key), "AES")
+            }
             else -> throw Exception("Unknown method")
         }
-    }
-
-    private fun urlSafeBase64(data: String) = Base64.UrlSafe
-        .withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)
-        .decode(data)
-
-    private fun decodeBrowseVersion(data: ScrambledImageTokenValue): ScrambledImage {
-        val iv = urlSafeBase64(data.iv)
-        val tag = urlSafeBase64(data.tag)
-        val encryptedData = urlSafeBase64(data.data)
-
-        val hash = MessageDigest.getInstance("SHA-256")
-            .digest("prochan-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${data.cid}".toByteArray(Charsets.UTF_8))
-        val key = SecretKeySpec(hash, "AES")
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             val spec = GCMParameterSpec(128, iv)
@@ -565,10 +577,12 @@ class ProChan : HttpSource() {
         }
 
         val decryptedBytes = cipher.doFinal(encryptedData + tag)
-
-        return String(decryptedBytes, Charsets.UTF_8)
-            .parseAs()
+        return String(decryptedBytes, Charsets.UTF_8).parseAs()
     }
+
+    private fun urlSafeBase64(data: String) = Base64.UrlSafe
+        .withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)
+        .decode(data)
 
     private fun countViews(seriesId: String, chapterId: String? = null) {
         val userAgent = headers["User-Agent"]!!
