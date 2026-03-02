@@ -27,7 +27,7 @@ import java.util.Locale
 class HentaiCB :
     Madara(
         "CBHentai",
-        "https://2tencb.xyz",
+        "https://2tencb.lat",
         "vi",
         SimpleDateFormat("dd/MM/yyyy", Locale("vi")),
     ),
@@ -97,9 +97,8 @@ class HentaiCB :
     private val thumbnailOriginalUrlRegex = Regex("-\\d+x\\d+(\\.[a-zA-Z]+)$")
 
     override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
-        element.selectFirst("img")?.let { img ->
-            thumbnail_url = imageFromElement(img)?.replace(thumbnailOriginalUrlRegex, "$1")
-        }
+        val img = element.selectFirst("img")
+        thumbnail_url = imageFromElement(img!!)?.replace(thumbnailOriginalUrlRegex, "$1")
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
