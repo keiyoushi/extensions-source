@@ -179,8 +179,8 @@ class Azuki :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<PageListDto>().data ?: throw Exception()
-        return result.pages.mapIndexed { i, page ->
+        val result = response.parseAs<PageListDto>()
+        return result.data.pages.mapIndexed { i, page ->
             val highRes = page.image.webp.maxBy { it.width }
             // This will give the highest possible resolution even if x2400 image doesn't exist.
             val highResUrl = highRes.url.replace(Regex("""/\d+_"""), "/2400_")

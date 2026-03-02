@@ -103,7 +103,7 @@ class UserMangaStatusDto(
 
 @Serializable
 class PageListDto(
-    val data: PageDataDto?,
+    val data: PageDataDto,
 )
 
 @Serializable
