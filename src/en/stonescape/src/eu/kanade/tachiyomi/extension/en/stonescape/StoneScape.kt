@@ -62,6 +62,7 @@ class StoneScape : HttpSource() {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "24")
+            .addQueryParameter("contentType", "manhwa")
 
         if (query.isNotBlank()) {
             url.addQueryParameter("search", query)
@@ -69,11 +70,6 @@ class StoneScape : HttpSource() {
 
         filters.forEach { filter ->
             when (filter) {
-                is ContentTypeFilter -> {
-                    if (filter.state != 0) {
-                        url.addQueryParameter("contentType", filter.toUriPart())
-                    }
-                }
                 is StatusFilter -> {
                     if (filter.state != 0) {
                         url.addQueryParameter("status", filter.toUriPart())
@@ -138,7 +134,6 @@ class StoneScape : HttpSource() {
 
     // Filters
     override fun getFilterList() = FilterList(
-        ContentTypeFilter(),
         StatusFilter(),
         GenreFilter(getGenreList()),
     )
