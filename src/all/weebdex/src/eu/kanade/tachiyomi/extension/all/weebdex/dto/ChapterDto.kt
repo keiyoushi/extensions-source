@@ -70,7 +70,7 @@ class ChapterDto(
             name = Parser.unescapeEntities(chapterName.joinToString(" "), false)
             chapter_number = helper.parseChapterNumber(chapter)
             date_upload = helper.parseDate(publishedAt)
-            scanlator = relationships?.groups?.joinToString(", ") { it.name }
+            scanlator = relationships?.groups?.joinToString(", ") { it.name }?.takeIf { it.isNotBlank() } ?: "No Group"
         }
     }
     fun toPageList(dataSaver: Boolean): List<Page> {
