@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.stonescape
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
@@ -72,7 +73,7 @@ class ChapterDto(
         val formattedNumber = chapterNumber.removeSuffix(".00")
         url = "/series/$seriesSlug/ch-$formattedNumber#$chapterId"
         name = "Chapter $formattedNumber" + (if (!title.isNullOrBlank()) " - $title" else "")
-        date_upload = parseDate(createdAt)
+        date_upload = dateFormat.tryParse(createdAt)
         chapter_number = formattedNumber.toFloatOrNull() ?: -1f
     }
 }
@@ -90,8 +91,10 @@ class PageDto(
     val url: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 }
 
 private fun parseDate(dateStr: String?): Long {
