@@ -57,11 +57,10 @@ class GocTruyenTranh :
         val document = response.asJsoup()
         val manga = document.select("section.mt-12 > .grid > .flex").map { element ->
             SManga.create().apply {
-                element.selectFirst("a.line-clamp-2")!!.let {
-                    setUrlWithoutDomain(it.absUrl("href"))
-                    title = it.text()
-                }
-                thumbnail_url = element.selectFirst("img")
+                val sel = element.selectFirst("a.line-clamp-2")!!
+                setUrlWithoutDomain(sel.absUrl("href"))
+                title = sel.text()
+                thumbnail_url = sel.selectFirst("img")
                     ?.absUrl("src")
                     ?.let { url ->
                         url.toHttpUrlOrNull()
@@ -82,11 +81,10 @@ class GocTruyenTranh :
         val document = response.asJsoup()
         val chapter = document.select("section ul li a").map { element ->
             SChapter.create().apply {
-                element.selectFirst("a")!!.let {
-                    setUrlWithoutDomain(it.absUrl("href"))
-                    name = it.selectFirst(".items-center:contains(Chapter)")!!.text()
-                    date_upload = parseDate(it.select(".text-center").text())
-                }
+                val sel = element.selectFirst("a")!!
+                setUrlWithoutDomain(sel.absUrl("href"))
+                name = sel.selectFirst(".items-center:contains(Chapter)")!!.text()
+                date_upload = parseDate(sel.select(".text-center").text())
             }
         }
         return chapter
@@ -110,9 +108,9 @@ class GocTruyenTranh :
         val document = response.asJsoup()
         title = document.select("section aside:first-child h1").text()
         genre = document.select("span:contains(Thể loại:) ~ a").joinToString { it.text().trim(',', ' ') }
-        description = document.select("div.mt-3").joinToString {
-            it.select("a, strong").unwrap()
-            it.wholeText().trim()
+        description = document.select("div.mt-3").joinToString("\n\n") { container ->
+            val blocks = container.select("p")
+            if (blocks.isNotEmpty()) blocks.joinToString("\n\n") { it.wholeText().trim() } else container.wholeText().trim()
         }
         thumbnail_url = document.selectFirst("section aside:first-child img")
             ?.absUrl("src")
