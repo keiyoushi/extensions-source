@@ -96,8 +96,9 @@ class Readcomiconline :
         val activeFilters = if (filters.isEmpty()) getFilterList() else filters
         val genreList = activeFilters.filterIsInstance<GenreList>().first()
         val sortOption = activeFilters.filterIsInstance<SortFilter>().first().selected
+        val yearOption = activeFilters.filterIsInstance<YearFilter>().first().selected
 
-        return if (query.isEmpty() && genreList.included.size == 1 && genreList.excluded.isEmpty()) {
+        return if (query.isEmpty() && genreList.included.size == 1 && genreList.excluded.isEmpty() && yearOption == null) {
             // Single included genre — use /Genre/{name}/{sort} URL
             val genreName = genreList.state.first { it.isIncluded() }.name.replace(" ", "-")
             val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -105,9 +106,10 @@ class Readcomiconline :
                 addPathSegment(genreName)
                 if (sortOption != null) addPathSegment(sortOption)
                 addQueryParameter("page", page.toString())
+                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
             GET(url, headers)
-        } else if (query.isEmpty() && genreList.included.isEmpty() && genreList.excluded.isEmpty()) {
+        } else if (query.isEmpty() && genreList.included.isEmpty() && genreList.excluded.isEmpty() && yearOption == null) {
             // No query, no genres — publisher/writer/artist + sort
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
@@ -149,6 +151,7 @@ class Readcomiconline :
                     addPathSegment(sortOption)
                 }
                 addQueryParameter("page", page.toString())
+                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
             GET(url, headers)
         } else {
@@ -166,6 +169,10 @@ class Readcomiconline :
                         is GenreList -> {
                             addQueryParameter("ig", filter.included.joinToString(","))
                             addQueryParameter("eg", filter.excluded.joinToString(","))
+                        }
+
+                        is YearFilter -> {
+                            if (filter.selected != null) addQueryParameter("pubDate", filter.selected!!)
                         }
 
                         else -> {}
@@ -303,6 +310,12 @@ class Readcomiconline :
         open val selected get() = options[state].second.takeUnless { it.isEmpty() }
     }
 
+    private class YearFilter :
+        SelectFilter(
+            "Publish Year",
+            arrayOf(Pair("Any", "")) + (2026 downTo 1920).map { Pair(it.toString(), it.toString()) }.toTypedArray(),
+        )
+
     private class PublisherFilter : Filter.Text("Publisher")
     private class WriterFilter : Filter.Text("Writer")
     private class ArtistFilter : Filter.Text("Artist")
@@ -320,12 +333,14 @@ class Readcomiconline :
     override fun getFilterList() = FilterList(
         Status(),
         GenreList(getGenreList()),
+        YearFilter(),
         Filter.Separator(),
-        Filter.Header("Filters below is ignored when Status,Genre or the queue is not empty."),
+        Filter.Header("Filters below are ignored when any of the above filters or the search is filled. (Although you can sort for a single genre)"),
         SortFilter(),
         PublisherFilter(),
         WriterFilter(),
         ArtistFilter(),
+        Filter.Separator(),
     )
 
     // $("select[name=\"genres\"]").map((i,el) => `Genre("${$(el).next().text().trim()}", ${i})`).get().join(',\n')
