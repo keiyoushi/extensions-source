@@ -191,7 +191,13 @@ class Readcomiconline :
         manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
         manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().joinToString()
         manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
-        manga.description = infoElement.select("p:has(span:contains(Summary:)) ~ p").text()
+        manga.description = listOfNotNull(
+            infoElement.select("p:has(span:contains(Summary:)) ~ p").text().takeIf { it.isNotEmpty() },
+            infoElement.select("p:has(span:contains(Publisher:))").text().takeIf { it.isNotEmpty() }?.let { "\n$it" },
+            infoElement.select("p:has(span:contains(Publication date:))").text().takeIf { it.isNotEmpty() },
+            Regex("Views:\\s*([\\d,]+)").find(infoElement.select("p:has(span:contains(Views:))").text())
+                ?.let { "Views: ${it.groupValues[1]}" },
+        ).joinToString("\n")
         manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
             .let { parseStatus(it) }
         manga.thumbnail_url = document.select(".rightBox:eq(0) img").first()?.absUrl("src")
