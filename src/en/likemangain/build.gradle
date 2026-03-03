@@ -1,9 +1,9 @@
 ext {
-    extName = 'LikeManga.in'
-    extClass = '.LikeMangaIn'
+    extName = 'MangaYY'
+    extClass = '.MangaYY'
     themePkg = 'madara'
-    baseUrl = 'https://likemanga.in'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangayy.org'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

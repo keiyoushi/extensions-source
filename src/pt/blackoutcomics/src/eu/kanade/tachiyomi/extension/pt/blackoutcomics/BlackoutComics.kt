@@ -28,7 +28,9 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
+class BlackoutComics :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Blackout Comics"
 
@@ -98,12 +100,11 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()
 
-    override fun headersBuilder() =
-        super.headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-            .add("Accept-Language", "en-US,en;q=0.5")
-            .set("X-Requested-With", randomString((1..20).random()))
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        .add("Accept-Language", "en-US,en;q=0.5")
+        .set("X-Requested-With", randomString((1..20).random()))
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking")
@@ -128,15 +129,13 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesNextPageSelector() = null
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/comics/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client.newCall(GET("$baseUrl/comics/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
@@ -199,10 +198,9 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun Element.getInfo(text: String) =
-        selectFirst("p:contains($text)")?.run {
-            selectFirst("b")?.text() ?: ownText()
-        }
+    private fun Element.getInfo(text: String) = selectFirst("p:contains($text)")?.run {
+        selectFirst("b")?.text() ?: ownText()
+    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "section.relese > div.container > div.row h5:has(a)"
@@ -218,25 +216,19 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
-            val attr = item.attributes()
-                .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
-                ?.key ?: throw Exception("Capitulo não pode ser obtido")
+    override fun pageListParse(document: Document): List<Page> = document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
+        val attr = item.attributes()
+            .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
+            ?.key ?: throw Exception("Capitulo não pode ser obtido")
 
-            Page(index, "", item.absUrl(attr))
-        }
+        Page(index, "", item.absUrl(attr))
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(trim())?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(trim())?.time }
+        .getOrNull() ?: 0L
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')

@@ -120,11 +120,9 @@ class MangaDenizi : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.img-responsive").mapIndexed { i, element ->
-            val url = if (element.hasAttr("data-src")) element.attr("abs:data-src") else element.attr("abs:src")
-            Page(i, "", url)
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img.img-responsive").mapIndexed { i, element ->
+        val url = if (element.hasAttr("data-src")) element.attr("abs:data-src") else element.attr("abs:src")
+        Page(i, "", url)
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

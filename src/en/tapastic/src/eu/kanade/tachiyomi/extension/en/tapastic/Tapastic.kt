@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.en.tapastic
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.textinterceptor.TextInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -24,7 +24,9 @@ import okhttp3.Response
 import okio.IOException
 import rx.Observable
 
-class Tapastic : HttpSource(), ConfigurableSource {
+class Tapastic :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Tapas"
 
@@ -162,17 +164,13 @@ class Tapastic : HttpSource(), ConfigurableSource {
         return Observable.just(chapters)
     }
 
-    private fun ChapterDto.isPaywalledVisible() =
-        showLockedChapterPref || unlocked || free
+    private fun ChapterDto.isPaywalledVisible() = showLockedChapterPref || unlocked || free
 
-    private fun ChapterDto.isScheduledVisible() =
-        showScheduledChapterPrefer || !scheduled
+    private fun ChapterDto.isScheduledVisible() = showScheduledChapterPrefer || !scheduled
 
-    override fun chapterListRequest(manga: SManga): Request =
-        throw UnsupportedOperationException()
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // ============================== Pages =====================================
 

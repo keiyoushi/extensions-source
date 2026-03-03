@@ -39,7 +39,9 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-class Zaimanhua : HttpSource(), ConfigurableSource {
+class Zaimanhua :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
 
@@ -164,14 +166,11 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // Detail
-    override fun getMangaUrl(manga: SManga): String {
-        return "$mobileBaseUrl/pages/comic/detail?id=${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$mobileBaseUrl/pages/comic/detail?id=${manga.url}"
 
     // path: "/comic/detail/mangaId"
     private fun getMangaUrl(id: String): HttpUrl = "$apiUrl/comic/detail/$id?_v=2.2.5#$id".toHttpUrl()
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(getMangaUrl(manga.url), apiHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga.url), apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
@@ -185,8 +184,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     // Chapter
     override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga.url), apiHeaders.newBuilder().apply { set("Platform", "pc") }.build())
 
-    private fun pcChapterListRequest(mangaId: String): Request =
-        GET("$pcDetailUrl?id=$mangaId", apiHeaders.newBuilder().apply { set("Platform", "pc") }.build())
+    private fun pcChapterListRequest(mangaId: String): Request = GET("$pcDetailUrl?id=$mangaId", apiHeaders.newBuilder().apply { set("Platform", "pc") }.build())
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ResponseDto<DataWrapperDto<ChapterDataDto>>>()
@@ -213,8 +211,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // path: "/comic/chapter/mangaId/chapterId"
-    private fun pageListApiRequest(path: String): Request =
-        GET("$apiUrl/comic/chapter/$path?_v=2.2.5", apiHeaders.newBuilder().apply { set("Platform", "h5") }.build(), USE_CACHE)
+    private fun pageListApiRequest(path: String): Request = GET("$apiUrl/comic/chapter/$path?_v=2.2.5", apiHeaders.newBuilder().apply { set("Platform", "h5") }.build(), USE_CACHE)
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
@@ -271,9 +268,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Popular
-    private fun rankApiUrl(): HttpUrl.Builder =
-        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder()
-            .addQueryParameter("tag_id", "0")
+    private fun rankApiUrl(): HttpUrl.Builder = "$apiUrl/comic/rank/list".toHttpUrl().newBuilder()
+        .addQueryParameter("tag_id", "0")
 
     override fun popularMangaRequest(page: Int): Request = GET(
         rankApiUrl().apply {
@@ -282,16 +278,14 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         apiHeaders,
     )
 
-    private fun genreApiUrl(): HttpUrl.Builder =
-        "$apiUrl/comic/filter/list".toHttpUrl().newBuilder()
-            .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
+    private fun genreApiUrl(): HttpUrl.Builder = "$apiUrl/comic/filter/list".toHttpUrl().newBuilder()
+        .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
 
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     // Search
-    private fun searchApiUrl(): HttpUrl.Builder =
-        "$apiUrl/search/index".toHttpUrl().newBuilder().addQueryParameter("source", "0")
-            .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
+    private fun searchApiUrl(): HttpUrl.Builder = "$apiUrl/search/index".toHttpUrl().newBuilder().addQueryParameter("source", "0")
+        .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val ranking = filters.firstInstanceOrNull<RankingGroup>()
@@ -332,8 +326,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$apiUrl/comic/update/list/0/$page", apiHeaders)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/comic/update/list/0/$page", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangas = response.parseAs<ResponseDto<List<PageItemDto>?>>().data
@@ -401,7 +394,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 key = TOKEN_PREF
                 title = "令牌(Token)"
                 summary = "当前登录状态：${
-                if (preferences.getString(TOKEN_PREF, "").isNullOrEmpty()) "未登录" else "已登录"
+                    if (preferences.getString(TOKEN_PREF, "").isNullOrEmpty()) "未登录" else "已登录"
                 }\n填写用户名和密码后，不会立刻尝试登录，会在下次请求时自动尝试"
 
                 setEnabled(false)

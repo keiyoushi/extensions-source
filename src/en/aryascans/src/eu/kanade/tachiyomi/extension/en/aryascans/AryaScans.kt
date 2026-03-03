@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.en.aryascans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class AryaScans : Madara(
-    "Arya Scans",
-    "https://brainrotcomics.com",
-    "en",
-) {
+class AryaScans :
+    Madara(
+        "Arya Scans",
+        "https://brainrotcomics.com",
+        "en",
+    ) {
     override val useNewChapterEndpoint = true
 
     override val popularMangaUrlSelector = "${super.popularMangaUrlSelector}:not([href=New]):not([target=_self])"

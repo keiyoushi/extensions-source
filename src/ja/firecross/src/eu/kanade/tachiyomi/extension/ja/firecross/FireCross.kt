@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.firecross
 
-import eu.kanade.tachiyomi.lib.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -155,19 +155,17 @@ class FireCross : ClipStudioReader() {
     private class Label(name: String, value: String) : CheckBox(name, value)
     private class LabelFilter(labels: List<Label>) : Filter.Group<Label>("Labels", labels)
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("NOTE: Novels only show images, not text."),
-            LabelFilter(
-                listOf(
-                    Label("HJ文庫 (Novel)", "1"),
-                    Label("HJノベルス (Novel)", "2"),
-                    Label("コミックファイア (Manga)", "3"),
-                    Label("HJコミックス (Manga)", "4"),
-                ),
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("NOTE: Novels only show images, not text."),
+        LabelFilter(
+            listOf(
+                Label("HJ文庫 (Novel)", "1"),
+                Label("HJノベルス (Novel)", "2"),
+                Label("コミックファイア (Manga)", "3"),
+                Label("HJコミックス (Manga)", "4"),
             ),
-        )
-    }
+        ),
+    )
 
     // Unsupported
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()

@@ -6,12 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LaviniaFansub : Madara(
-    "Lavinia Fansub",
-    "https://laviniafansub.site",
-    "tr",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class LaviniaFansub :
+    Madara(
+        "Lavinia Fansub",
+        "https://laviniafansub.site",
+        "tr",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val useNewChapterEndpoint = true

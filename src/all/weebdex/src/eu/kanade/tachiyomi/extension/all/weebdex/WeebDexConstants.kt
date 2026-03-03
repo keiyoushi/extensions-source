@@ -8,6 +8,7 @@ object WeebDexConstants {
 
     // API Endpoints
     const val API_MANGA_URL = "$API_URL/manga"
+    const val API_CHAPTER_URL = "$API_URL/chapter"
 
     // CDN Endpoints
     const val CDN_COVER_URL = "$CDN_URL/covers"
@@ -96,6 +97,7 @@ object WeebDexConstants {
 
     // Sort Options
     val sortList = listOf(
+        "Relevance" to "relevance",
         "Views" to "views",
         "Updated At" to "updatedAt",
         "Created At" to "createdAt",

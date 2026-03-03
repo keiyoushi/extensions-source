@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.randomscan
 
-import eu.kanade.tachiyomi.lib.zipinterceptor.ZipInterceptor
+import keiyoushi.lib.zipinterceptor.ZipInterceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.BufferedSource
@@ -31,9 +31,7 @@ class LuraZipInterceptor : ZipInterceptor() {
         return decryptedData
     }
 
-    override fun requestIsZipImage(request: Request): Boolean {
-        return request.url.pathSegments.contains("cap-download")
-    }
+    override fun requestIsZipImage(request: Request): Boolean = request.url.pathSegments.contains("cap-download")
 
     override fun zipGetByteStream(request: Request, response: Response): InputStream {
         val keyData = listOf("obra_id", "slug", "cap_id", "cap_slug").joinToString("") {

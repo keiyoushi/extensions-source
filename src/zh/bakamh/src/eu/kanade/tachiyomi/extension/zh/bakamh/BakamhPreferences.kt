@@ -46,11 +46,9 @@ object BakamhPreferences {
             .removeSuffix("/")
     }
 
-    internal fun buildPreferences(context: Context): List<Preference> {
-        return listOf(
-            buildDomainPreference(context),
-        )
-    }
+    internal fun buildPreferences(context: Context): List<Preference> = listOf(
+        buildDomainPreference(context),
+    )
 
     internal fun buildDomainPreference(context: Context): Preference {
         return EditTextPreference(context).apply {

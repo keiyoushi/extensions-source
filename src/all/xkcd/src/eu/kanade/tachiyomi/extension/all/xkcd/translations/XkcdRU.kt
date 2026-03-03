@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.xkcd.translations
 
 import eu.kanade.tachiyomi.extension.all.xkcd.Xkcd
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import okhttp3.Response
 
 class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
@@ -40,21 +40,18 @@ class XkcdRU : Xkcd("https://xkcd.ru", "ru") {
         }
     }
 
-    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
-        return container.selectFirst("img[src*='/i/']")
+    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? = container.selectFirst("img[src*='/i/']")
+
+    override fun pageListParse(response: Response) = response.asJsoup().selectFirst(imageSelector)!!.let { container ->
+        // no interactive comics here
+        val img = container.selectFirst("img[src*='/i/']")!!
+
+        // create a text image for the alt text
+        val description = container.selectFirst(".comics_text")?.text() ?: img.attr("alt")
+        val text = TextInterceptorHelper.createUrl(img.attr("alt"), description)
+
+        listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
     }
-
-    override fun pageListParse(response: Response) =
-        response.asJsoup().selectFirst(imageSelector)!!.let { container ->
-            // no interactive comics here
-            val img = container.selectFirst("img[src*='/i/']")!!
-
-            // create a text image for the alt text
-            val description = container.selectFirst(".comics_text")?.text() ?: img.attr("alt")
-            val text = TextInterceptorHelper.createUrl(img.attr("alt"), description)
-
-            listOf(Page(0, "", img.attr("abs:src")), Page(1, "", text))
-        }
 
     override val interactiveText: String
         get() = throw UnsupportedOperationException()

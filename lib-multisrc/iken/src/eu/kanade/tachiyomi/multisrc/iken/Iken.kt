@@ -27,7 +27,8 @@ abstract class Iken(
     override val lang: String,
     override val baseUrl: String,
     val apiUrl: String = baseUrl,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -72,7 +73,7 @@ abstract class Iken(
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", perPage.toString())
+            addQueryParameter("perPage", PER_PAGE.toString())
             if (apiUrl.startsWith("https://api.", true)) {
                 addQueryParameter("tag", "latestUpdate")
                 addQueryParameter("isNovel", "false")
@@ -87,7 +88,7 @@ abstract class Iken(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", perPage.toString())
+            addQueryParameter("perPage", PER_PAGE.toString())
             addQueryParameter("searchTerm", query.trim())
             filters.filterIsInstance<UrlPartFilter>().forEach {
                 it.addUrlParameter(this)
@@ -105,7 +106,7 @@ abstract class Iken(
             .filterNot { it.isNovel }
             .map { it.toSManga() }
 
-        val hasNextPage = data.totalCount > (page * perPage)
+        val hasNextPage = data.totalCount > (page * PER_PAGE)
 
         return MangasPage(entries, hasNextPage)
     }
@@ -130,12 +131,9 @@ abstract class Iken(
         return Observable.just(update)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/series/${manga.url}", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val userId = userIdRegex.find(response.body.string())?.groupValues?.get(1) ?: ""
@@ -149,7 +147,7 @@ abstract class Iken(
         assert(!data.post.isNovel) { "Novels are unsupported" }
 
         return data.post.chapters
-            .filter { it.isPublic() && (it.isAccessible() || (preferences.getBoolean(showLockedChapterPrefKey, false) && it.isLocked())) }
+            .filter { it.isPublic() && (it.isAccessible() || (preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && it.isLocked())) }
             .map { it.toSChapter(data.post.slug) }
     }
 
@@ -189,14 +187,13 @@ abstract class Iken(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
-            key = showLockedChapterPrefKey
+            key = SHOW_LOCKED_CHAPTER_PREF_KEY
             title = "Show inaccessible chapters"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     protected fun Document.getNextJson(key: String): String {
         val data = selectFirst("script:containsData($key)")
@@ -221,6 +218,6 @@ abstract class Iken(
     }
 }
 
-private const val perPage = 18
-private const val showLockedChapterPrefKey = "pref_show_locked_chapters"
+private const val PER_PAGE = 18
+private const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
 private val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")

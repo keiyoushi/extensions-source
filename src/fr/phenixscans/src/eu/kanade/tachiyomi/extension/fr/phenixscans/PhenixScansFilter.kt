@@ -10,42 +10,46 @@ import kotlin.concurrent.thread
 
 // ========================= Sorting & Filtering ==========================
 
-class SortFilter : UriPartFilter(
-    "Sort by",
-    arrayOf(
-        Pair("Alphabetic", "title"),
-        Pair("Rating", "rating"),
-        Pair("Last updated", "updatedAt"),
-        Pair("Chapter number", "chapters"),
-    ),
-)
+class SortFilter :
+    UriPartFilter(
+        "Sort by",
+        arrayOf(
+            Pair("Alphabetic", "title"),
+            Pair("Rating", "rating"),
+            Pair("Last updated", "updatedAt"),
+            Pair("Chapter number", "chapters"),
+        ),
+    )
 
 class Tag(name: String, val id: String) : Filter.CheckBox(name)
 
-class GenreFilter(genres: List<Tag>) : Filter.Group<Tag>(
-    "Genres",
-    genres,
-)
+class GenreFilter(genres: List<Tag>) :
+    Filter.Group<Tag>(
+        "Genres",
+        genres,
+    )
 
-class StatusFilter : UriPartFilter(
-    "Status",
-    arrayOf(
-        Pair("All status", ""),
-        Pair("Ongoing", "Ongoing"),
-        Pair("On Hiatus", "Hiatus"),
-        Pair("Completed", "Completed"),
-    ),
-)
+class StatusFilter :
+    UriPartFilter(
+        "Status",
+        arrayOf(
+            Pair("All status", ""),
+            Pair("Ongoing", "Ongoing"),
+            Pair("On Hiatus", "Hiatus"),
+            Pair("Completed", "Completed"),
+        ),
+    )
 
-class TypeFilter : UriPartFilter(
-    "Type",
-    arrayOf(
-        Pair("Any type", ""),
-        Pair("Manga", "Manga"),
-        Pair("Manhwa", "Manhwa"),
-        Pair("Manhua", "Manhua"),
-    ),
-)
+class TypeFilter :
+    UriPartFilter(
+        "Type",
+        arrayOf(
+            Pair("Any type", ""),
+            Pair("Manga", "Manga"),
+            Pair("Manhwa", "Manhwa"),
+            Pair("Manhua", "Manhua"),
+        ),
+    )
 
 fun getGlobalFilterList(apiBaseUrl: String, client: OkHttpClient, headers: Headers): FilterList {
     fetchFilters(apiBaseUrl, client, headers)
@@ -104,8 +108,7 @@ private fun fetchFilters(apiBaseUrl: String, client: OkHttpClient, headers: Head
     }
 }
 
-open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-    Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart() = vals[state].second
 }
 

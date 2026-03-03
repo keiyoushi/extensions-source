@@ -78,9 +78,7 @@ class Hanime1 : ParsedHttpSource() {
         }
     }
 
-    private fun selectInfo(key: String, brief: Element?): String? {
-        return brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
-    }
+    private fun selectInfo(key: String, brief: Element?): String? = brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
 
     override fun pageListParse(document: Document): List<Page> {
         val currentImage = document.select("img#current-page-image")
@@ -123,13 +121,9 @@ class Hanime1 : ParsedHttpSource() {
         thumbnail_url = element.select("img").attr("data-srcset").extraSrc()
     }
 
-    private fun String.extraSrc(): String {
-        return split(",").first()
-    }
+    private fun String.extraSrc(): String = split(",").first()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+    )
 }

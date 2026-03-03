@@ -96,60 +96,57 @@ class Manhastro : HttpSource() {
 
     // ============================== Search ==============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        rx.Observable.fromCallable {
-            var mangas = fetchAllMangas()
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = rx.Observable.fromCallable {
+        var mangas = fetchAllMangas()
 
-            if (query.isNotBlank()) {
-                val q = query.lowercase().normalize()
-                mangas = mangas.filter { manga ->
-                    val titulo = manga.titulo.lowercase().normalize()
-                    val tituloBrasil = manga.tituloBrasil?.lowercase()?.normalize() ?: ""
-                    titulo.contains(q) || tituloBrasil.contains(q)
+        if (query.isNotBlank()) {
+            val q = query.lowercase().normalize()
+            mangas = mangas.filter { manga ->
+                val titulo = manga.titulo.lowercase().normalize()
+                val tituloBrasil = manga.tituloBrasil?.lowercase()?.normalize() ?: ""
+                titulo.contains(q) || tituloBrasil.contains(q)
+            }
+        }
+
+        val typeFilter = filters.filterIsInstance<TypeFilter>().firstOrNull()
+        val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
+        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+
+        val selectedTypes = typeFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
+        if (selectedTypes.isNotEmpty()) {
+            mangas = mangas.filter { manga ->
+                val mangaGenres = parseGenres(manga.generos)
+                selectedTypes.any { type ->
+                    mangaGenres.any { it.equals(type, ignoreCase = true) }
                 }
             }
+        }
 
-            val typeFilter = filters.filterIsInstance<TypeFilter>().firstOrNull()
-            val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
-            val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
-
-            val selectedTypes = typeFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
-            if (selectedTypes.isNotEmpty()) {
-                mangas = mangas.filter { manga ->
-                    val mangaGenres = parseGenres(manga.generos)
-                    selectedTypes.any { type ->
-                        mangaGenres.any { it.equals(type, ignoreCase = true) }
-                    }
+        val selectedGenres = genreFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
+        if (selectedGenres.isNotEmpty()) {
+            mangas = mangas.filter { manga ->
+                val mangaGenres = parseGenres(manga.generos)
+                selectedGenres.all { genre ->
+                    mangaGenres.any { it.equals(genre, ignoreCase = true) }
                 }
             }
+        }
 
-            val selectedGenres = genreFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
-            if (selectedGenres.isNotEmpty()) {
-                mangas = mangas.filter { manga ->
-                    val mangaGenres = parseGenres(manga.generos)
-                    selectedGenres.all { genre ->
-                        mangaGenres.any { it.equals(genre, ignoreCase = true) }
-                    }
-                }
-            }
+        val sortOption = sortFilter?.selected ?: "popular"
+        mangas = when (sortOption) {
+            "popular" -> mangas.sortedByDescending { it.popularity }
+            "recent" -> mangas.sortedByDescending { it.mangaId }
+            "alphabetical" -> mangas.sortedBy { it.displayTitle.lowercase() }
+            "chapters" -> mangas.sortedByDescending { it.qntCapitulo ?: 0 }
+            else -> mangas
+        }
 
-            val sortOption = sortFilter?.selected ?: "popular"
-            mangas = when (sortOption) {
-                "popular" -> mangas.sortedByDescending { it.popularity }
-                "recent" -> mangas.sortedByDescending { it.mangaId }
-                "alphabetical" -> mangas.sortedBy { it.displayTitle.lowercase() }
-                "chapters" -> mangas.sortedByDescending { it.qntCapitulo ?: 0 }
-                else -> mangas
-            }
-
-            MangasPage(mangas.map { it.toSManga() }, false)
-        }!!
+        MangasPage(mangas.map { it.toSManga() }, false)
+    }!!
 
     private fun parseGenres(generos: String?): List<String> {
         if (generos.isNullOrBlank()) return emptyList()
@@ -165,20 +162,16 @@ class Manhastro : HttpSource() {
         }
     }
 
-    private fun String.normalize(): String {
-        return java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
-            .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
-    }
+    private fun String.normalize(): String = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+        .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
 
     override fun getFilterList() = getFilters()
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga) = rx.Observable.fromCallable {
         val mangaId = manga.url.substringAfterLast("/").toInt()
@@ -189,8 +182,7 @@ class Manhastro : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$apiUrl/dados/${manga.url.substringAfterLast("/")}", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$apiUrl/dados/${manga.url.substringAfterLast("/")}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ApiResponse<List<ChapterDto>>>(transform = ::cleanJsonResponse)
@@ -213,8 +205,7 @@ class Manhastro : HttpSource() {
 
     // ============================== Pages ==============================
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$apiUrl/paginas/${chapter.url.substringAfterLast("/")}", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("$apiUrl/paginas/${chapter.url.substringAfterLast("/")}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PagesResponse>(transform = ::cleanJsonResponse)
@@ -241,12 +232,11 @@ class Manhastro : HttpSource() {
 
     // ============================== Helpers ==============================
 
-    private fun cleanJsonResponse(body: String): String =
-        body.removePrefix("\uFEFF")
-            .removePrefix(")]}'")
-            .removePrefix(",")
-            .removePrefix("_")
-            .trim()
+    private fun cleanJsonResponse(body: String): String = body.removePrefix("\uFEFF")
+        .removePrefix(")]}'")
+        .removePrefix(",")
+        .removePrefix("_")
+        .trim()
 
     private fun fetchAllMangas(): List<MangaDto> {
         val request = GET(

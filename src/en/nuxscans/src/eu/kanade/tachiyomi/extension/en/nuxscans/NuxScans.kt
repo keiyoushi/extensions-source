@@ -22,9 +22,7 @@ class NuxScans : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl2)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl2)
 
     override fun popularMangaSelector() = "#Blog1 .hfeed .hentry .post-content"
 
@@ -57,9 +55,7 @@ class NuxScans : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     // manga details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl2 + manga.url)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl2 + manga.url)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         thumbnail_url = document.select("a#unclick").attr("href")
@@ -68,15 +64,11 @@ class NuxScans : ParsedHttpSource() {
     }
 
     // chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl2 + manga.url)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl2 + manga.url)
 
     override fun chapterListSelector() = ".column1 .text-truncate a"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlElement = element.select("a").first()!!

@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.mangaplus
 
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -15,8 +15,7 @@ class MangaPlusResponse(
 @Serializable
 class ErrorResult(val popups: List<Popup> = emptyList()) {
 
-    fun langPopup(lang: Language): Popup? =
-        popups.firstOrNull { it.language == lang }
+    fun langPopup(lang: Language): Popup? = popups.firstOrNull { it.language == lang }
 }
 
 @Serializable

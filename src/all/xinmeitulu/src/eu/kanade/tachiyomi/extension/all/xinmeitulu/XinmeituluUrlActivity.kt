@@ -40,12 +40,10 @@ class XinmeituluUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun fromUrl(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 2) {
-            val slug = pathSegments[1]
-            "SLUG:$slug"
-        } else {
-            null
-        }
+    private fun fromUrl(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 2) {
+        val slug = pathSegments[1]
+        "SLUG:$slug"
+    } else {
+        null
     }
 }

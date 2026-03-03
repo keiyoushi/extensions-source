@@ -9,13 +9,14 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MadaraScans : MangaThemesia(
-    "Madara Scans",
-    "https://madarascans.com",
-    "en",
-    mangaUrlDirectory = "/series",
-    dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US),
-) {
+class MadaraScans :
+    MangaThemesia(
+        "Madara Scans",
+        "https://madarascans.com",
+        "en",
+        mangaUrlDirectory = "/series",
+        dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US),
+    ) {
     // support for both popular/latest tabs and search
     override fun searchMangaSelector() = "div.listupd>div, div.legend-inner"
 

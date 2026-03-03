@@ -32,7 +32,9 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
+class MangaUp(override val lang: String) :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Manga UP!"
     private val domain = "manga-up.com"
     override val baseUrl = "https://global.$domain"
@@ -287,13 +289,9 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         return result.toSManga(mangaId, imgUrl)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAsProto<MangaDetailResponse>()
@@ -304,9 +302,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
             .map { it.toSChapter(mangaId) }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
@@ -343,9 +339,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Helpers
-    private inline fun <reified T> Response.parseAsProto(): T {
-        return ProtoBuf.decodeFromByteArray(body.bytes())
-    }
+    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
     override fun getFilterList() = FilterList(
         SelectFilter(
@@ -369,8 +363,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         ),
     )
 
-    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         val selectedValue: String get() = vals[state].second
     }
 

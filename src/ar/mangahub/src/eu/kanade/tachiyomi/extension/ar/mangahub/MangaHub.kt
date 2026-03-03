@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Response
 import org.jsoup.Jsoup
 
-class MangaHub : ZeistManga(
-    "MangaHub",
-    "https://www.mangaxhentai.com",
-    "ar",
-) {
+class MangaHub :
+    ZeistManga(
+        "MangaHub",
+        "https://www.mangaxhentai.com",
+        "ar",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

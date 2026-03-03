@@ -2,15 +2,15 @@ package eu.kanade.tachiyomi.extension.es.mangacrab
 
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -54,12 +54,12 @@ class MangaCrab :
 
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
 
-    private val imageKeyRegex = """'Img-Key'\s*:\s*'(.*?)'""".toRegex()
+    private val imageKeyRegex = """'Img-X'\s*:\s*'(.*?)'""".toRegex()
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        val imageKey = document.selectFirst("script:containsData('Img-Key')")?.data()
+        val imageKey = document.selectFirst("script:containsData('Img-X')")?.data()
             ?.let { script ->
                 imageKeyRegex.find(script)?.groups?.get(1)?.value
             }
@@ -94,7 +94,7 @@ class MangaCrab :
         val imageKey = page.imageUrl!!.substringAfterLast("#")
         val headers = headers.newBuilder()
             .set("Referer", page.url)
-            .set("Img-Key", imageKey)
+            .set("Img-X", imageKey)
             .build()
 
         return GET(imageUrl, headers)

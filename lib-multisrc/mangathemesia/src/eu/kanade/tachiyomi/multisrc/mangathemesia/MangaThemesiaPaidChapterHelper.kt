@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.multisrc.mangathemesia
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl
 
 class MangaThemesiaPaidChapterHelper(
     private val hidePaidChaptersPrefKey: String = "pref_hide_paid_chapters",

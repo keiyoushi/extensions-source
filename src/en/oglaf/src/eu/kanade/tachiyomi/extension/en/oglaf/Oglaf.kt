@@ -44,8 +44,7 @@ class Oglaf : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = super.chapterListParse(response).distinct()
-        return chapterList.mapIndexed {
-                i, ch ->
+        return chapterList.mapIndexed { i, ch ->
             ch.apply { chapter_number = chapterList.size.toFloat() - i }
         }
     }

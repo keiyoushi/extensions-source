@@ -58,13 +58,14 @@ data class ChapterItem(
     val data: ChapterData,
     val createdAt: String? = null,
     val updatedAt: String? = null,
-    @SerialName("dataImages") val dataImages: Map<String, String>? = null,
+    val chapterIndex: Float? = null,
 )
 
 @Serializable
 data class ChapterData(
-    val index: Float,
+    val index: Float? = null,
     val title: String? = null,
+    val images: List<String>? = null,
 )
 
 @Serializable
@@ -95,7 +96,7 @@ fun SeriesItem.toSManga(): SManga = SManga.create().apply {
 }
 
 fun ChapterItem.toSChapter(seriesSlug: String?): SChapter = SChapter.create().apply {
-    val chapterIndex = data.index
+    val chapterIndex = (data.index ?: chapterIndex)!!
     val formattedIndex = formatChapterNumber(chapterIndex)
     url = "/series/$seriesSlug/chapters/$chapterIndex"
     name = if (data.title.isNullOrBlank()) {
@@ -109,9 +110,7 @@ fun ChapterItem.toSChapter(seriesSlug: String?): SChapter = SChapter.create().ap
 
 private val chapterNumberFormatter = DecimalFormat("#.##")
 
-private fun formatChapterNumber(number: Float): String {
-    return chapterNumberFormatter.format(number)
-}
+private fun formatChapterNumber(number: Float): String = chapterNumberFormatter.format(number)
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
 

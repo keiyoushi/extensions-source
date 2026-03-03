@@ -50,7 +50,9 @@ import javax.crypto.Cipher
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 
-class TheBlank : HttpSource(), ConfigurableSource {
+class TheBlank :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "The Blank"
     override val lang = "en"
     override val baseUrl = "https://theblank.net"
@@ -139,17 +141,13 @@ class TheBlank : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.popular)
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.popular)
 
-    override fun popularMangaParse(response: Response) =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", SortFilter.latest)
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
 
-    override fun latestUpdatesParse(response: Response) =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -158,7 +156,12 @@ class TheBlank : HttpSource(), ConfigurableSource {
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
+            return apiRequest(
+                url,
+                includeXSRFToken = true,
+                includeCSRFToken = false,
+                includeVersion = false,
+            )
         }
 
         val url = baseHttpUrl.newBuilder().apply {
@@ -203,7 +206,12 @@ class TheBlank : HttpSource(), ConfigurableSource {
             }
         }.build()
 
-        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
+        return apiRequest(
+            url,
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = false,
+        )
     }
 
     override fun getFilterList() = FilterList(
@@ -239,12 +247,15 @@ class TheBlank : HttpSource(), ConfigurableSource {
             .addPathSegment(manga.url)
             .build()
 
-        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true)
+        return apiRequest(
+            url,
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = true,
+        )
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/serie/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<MangaResponse>().props.serie
@@ -287,8 +298,7 @@ class TheBlank : HttpSource(), ConfigurableSource {
             .toString()
     }
 
-    override fun chapterListRequest(manga: SManga) =
-        mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<MangaResponse>().props.serie
@@ -328,7 +338,12 @@ class TheBlank : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
 
-        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true)
+        return apiRequest(
+            url,
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = true,
+        )
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -341,10 +356,16 @@ class TheBlank : HttpSource(), ConfigurableSource {
         val key = rsaDecrypt(keyPair.keyPair.private, sid)
 
         return signedUrls.mapIndexed { idx, img ->
+            val httpUrl = img.toHttpUrl()
+
+            val fileName = httpUrl.queryParameter("path")
+                ?.substringAfterLast('/')
+                ?: throw IllegalStateException("Image URL missing 'path' parameter: $img")
+
             Page(
                 index = idx,
-                imageUrl = img.toHttpUrl().newBuilder()
-                    .fragment(key)
+                imageUrl = httpUrl.newBuilder()
+                    .fragment(key + fileName)
                     .build()
                     .toString(),
             )
@@ -352,13 +373,19 @@ class TheBlank : HttpSource(), ConfigurableSource {
     }
 
     private fun fetchSessionId(publicKeyBase64: String): String {
-        val url = "$baseUrl/api/v1/session".toHttpUrl()
+        val url = "$baseUrl/checksum".toHttpUrl()
         val body = buildJsonObject {
-            put("clientPublicKey", publicKeyBase64)
-            put("nonce", generateNonce())
+            put("checksum", publicKeyBase64)
+            put("timestamp", generateNonce())
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
-        val request = apiRequest(url, body, includeXSRFToken = false, includeCSRFToken = true, includeVersion = false)
+        val request = apiRequest(
+            url,
+            body,
+            includeXSRFToken = false,
+            includeCSRFToken = true,
+            includeVersion = false,
+        )
 
         return client.newCall(request).execute()
             .parseAs<SessionResponse>().sid
@@ -422,14 +449,14 @@ class TheBlank : HttpSource(), ConfigurableSource {
         val fragment = request.url.fragment
             ?.takeIf { it != THUMBNAIL_FRAGMENT }
             ?: return response
-        val headerNonce = response.header("x-stream-header")
-            ?: return response
 
-        val nonce = decodeUrlSafeBase64(headerNonce)
+        val networkSource = response.body.source()
+        networkSource.skip(PREFIX_LENGTH.toLong())
+
+        val nonce = networkSource.readByteArray(IMAGE_HEADER_LENGTH.toLong())
         val key = MessageDigest.getInstance("SHA-256")
             .digest(fragment.toByteArray(Charsets.UTF_8))
 
-        val networkSource = response.body.source()
         val decryptedSource = object : okio.Source {
             private val secretStream = SecretStream()
             private val state = State().apply {
@@ -478,11 +505,11 @@ class TheBlank : HttpSource(), ConfigurableSource {
             .build()
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // Data size + ABYTES
+private const val PREFIX_LENGTH = 128
+private const val IMAGE_HEADER_LENGTH = 24

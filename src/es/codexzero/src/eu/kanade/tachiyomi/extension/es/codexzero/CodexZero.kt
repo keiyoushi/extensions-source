@@ -5,12 +5,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class CodexZero : Madara(
-    "Codex Zero",
-    "https://codex.readkisho.me",
-    "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class CodexZero :
+    Madara(
+        "Codex Zero",
+        "https://codex.readkisho.me",
+        "es",
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

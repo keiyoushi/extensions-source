@@ -12,12 +12,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DoujinHentai : Madara(
-    "DoujinHentai",
-    "https://doujinhentai.net",
-    "es",
-    SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH),
-) {
+class DoujinHentai :
+    Madara(
+        "DoujinHentai",
+        "https://doujinhentai.net",
+        "es",
+        SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH),
+    ) {
 
     override val fetchGenres = false
 
@@ -49,6 +50,7 @@ class DoujinHentai : Madara(
                             url.addQueryParameter("page", page.toString())
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -57,22 +59,18 @@ class DoujinHentai : Madara(
     }
 
     override fun searchMangaSelector() = "div.c-tabs-item__content > div.c-tabs-item__content, ${popularMangaSelector()}"
-    override fun searchMangaFromElement(element: Element): SManga {
-        return if (element.hasAttr("href")) {
-            popularMangaFromElement(element) // genre search results
-        } else {
-            super.searchMangaFromElement(element) // query search results
-        }
+    override fun searchMangaFromElement(element: Element): SManga = if (element.hasAttr("href")) {
+        popularMangaFromElement(element) // genre search results
+    } else {
+        super.searchMangaFromElement(element) // query search results
     }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun chapterListSelector() = "ul.main.version-chap > li.wp-manga-chapter:not(:last-child)" // removing empty li
     override val pageListParseSelector = "div#all > img.img-responsive"
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(document).apply {
-            title = title.removePrefix("Doujin Hentai:").trim()
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        title = title.removePrefix("Doujin Hentai:").trim()
     }
 
     override fun getFilterList() = FilterList(
@@ -80,42 +78,43 @@ class DoujinHentai : Madara(
         GenreSelectFilter(),
     )
 
-    class GenreSelectFilter : UriPartFilter(
-        "Búsqueda de género",
-        arrayOf(
-            Pair("<seleccionar>", ""),
-            Pair("Ecchi", "ecchi"),
-            Pair("Yaoi", "yaoi"),
-            Pair("Yuri", "yuri"),
-            Pair("Anal", "anal"),
-            Pair("Tetonas", "tetonas"),
-            Pair("Escolares", "escolares"),
-            Pair("Incesto", "incesto"),
-            Pair("Virgenes", "virgenes"),
-            Pair("Masturbacion", "masturbacion"),
-            Pair("Maduras", "maduras"),
-            Pair("Lolicon", "lolicon"),
-            Pair("Bikini", "bikini"),
-            Pair("Sirvientas", "sirvientas"),
-            Pair("Enfermera", "enfermera"),
-            Pair("Embarazada", "embarazada"),
-            Pair("Ahegao", "ahegao"),
-            Pair("Casadas", "casadas"),
-            Pair("Chica Con Pene", "chica-con-pene"),
-            Pair("Juguetes Sexuales", "juguetes-sexuales"),
-            Pair("Orgias", "orgias"),
-            Pair("Harem", "harem"),
-            Pair("Romance", "romance"),
-            Pair("Profesores", "profesores"),
-            Pair("Tentaculos", "tentaculos"),
-            Pair("Mamadas", "mamadas"),
-            Pair("Shota", "shota"),
-            Pair("Interracial", "interracial"),
-            Pair("Full Color", "full-colo"),
-            Pair("Sin Censura", "sin-censura"),
-            Pair("Futanari", "futanari"),
-            Pair("Doble Penetracion", "doble-penetracion"),
-            Pair("Cosplay", "cosplay"),
-        ),
-    )
+    class GenreSelectFilter :
+        UriPartFilter(
+            "Búsqueda de género",
+            arrayOf(
+                Pair("<seleccionar>", ""),
+                Pair("Ecchi", "ecchi"),
+                Pair("Yaoi", "yaoi"),
+                Pair("Yuri", "yuri"),
+                Pair("Anal", "anal"),
+                Pair("Tetonas", "tetonas"),
+                Pair("Escolares", "escolares"),
+                Pair("Incesto", "incesto"),
+                Pair("Virgenes", "virgenes"),
+                Pair("Masturbacion", "masturbacion"),
+                Pair("Maduras", "maduras"),
+                Pair("Lolicon", "lolicon"),
+                Pair("Bikini", "bikini"),
+                Pair("Sirvientas", "sirvientas"),
+                Pair("Enfermera", "enfermera"),
+                Pair("Embarazada", "embarazada"),
+                Pair("Ahegao", "ahegao"),
+                Pair("Casadas", "casadas"),
+                Pair("Chica Con Pene", "chica-con-pene"),
+                Pair("Juguetes Sexuales", "juguetes-sexuales"),
+                Pair("Orgias", "orgias"),
+                Pair("Harem", "harem"),
+                Pair("Romance", "romance"),
+                Pair("Profesores", "profesores"),
+                Pair("Tentaculos", "tentaculos"),
+                Pair("Mamadas", "mamadas"),
+                Pair("Shota", "shota"),
+                Pair("Interracial", "interracial"),
+                Pair("Full Color", "full-colo"),
+                Pair("Sin Censura", "sin-censura"),
+                Pair("Futanari", "futanari"),
+                Pair("Doble Penetracion", "doble-penetracion"),
+                Pair("Cosplay", "cosplay"),
+            ),
+        )
 }

@@ -3,11 +3,12 @@ package eu.kanade.tachiyomi.extension.en.heytoon
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-class SortFilter(state: Int = 0) : Filter.Select<String>(
-    name = "Sort",
-    values = sortBy.map { it.first }.toTypedArray(),
-    state = state,
-) {
+class SortFilter(state: Int = 0) :
+    Filter.Select<String>(
+        name = "Sort",
+        values = sortBy.map { it.first }.toTypedArray(),
+        state = state,
+    ) {
     val sort get() = sortBy[state].second
 
     companion object {

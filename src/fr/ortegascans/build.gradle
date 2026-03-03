@@ -1,0 +1,8 @@
+ext {
+	extName = 'Ortega Scans'
+	extClass = '.OrtegaScans'
+	extVersionCode = 1
+	isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -17,16 +17,11 @@ import okhttp3.Response
 
 class KomikCast : HttpSource() {
 
-    override val versionId = 2
-
+    override val id = 972717448578983812
     override val name = "Komik Cast"
-
     override val baseUrl = "https://v1.komikcast.fit"
-
     private val apiUrl = "https://be.komikcast.fit"
-
     override val lang = "id"
-
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -34,12 +29,15 @@ class KomikCast : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
         .add("Accept", "application/json")
         .add("Accept-language", "en-US,en;q=0.9,id;q=0.8")
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "popular")
+            .addQueryParameter("includeMeta", "true")
+            .addQueryParameter("sort", "popularity")
             .addQueryParameter("sortOrder", "desc")
             .addQueryParameter("take", "12")
             .addQueryParameter("page", page.toString())
@@ -51,6 +49,7 @@ class KomikCast : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("includeMeta", "true")
             .addQueryParameter("sort", "latest")
             .addQueryParameter("sortOrder", "desc")
             .addQueryParameter("take", "12")
@@ -63,6 +62,7 @@ class KomikCast : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("includeMeta", "true")
             .addQueryParameter("take", "12")
             .addQueryParameter("page", page.toString())
 
@@ -78,6 +78,12 @@ class KomikCast : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage = parseSeriesListResponse(response)
+
+    override fun getMangaUrl(manga: SManga): String {
+        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val slug = path[1]
+        return "$baseUrl/series/$slug"
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
@@ -103,6 +109,12 @@ class KomikCast : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.startsWith("/chapter/")) {
+            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
+            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
+            return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
+        }
+
         val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
         val slug = path[1]
         val chapterIndex = path[3]
@@ -111,8 +123,7 @@ class KomikCast : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterDetailResponse>()
-        val images = result.data.dataImages?.toSortedMap(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
-            ?.values?.toList() ?: emptyList()
+        val images = result.data.data.images ?: emptyList()
         return images.mapIndexed { index, imageUrl ->
             Page(index, "", imageUrl)
         }
@@ -125,16 +136,14 @@ class KomikCast : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-            SortOrderFilter(),
-            StatusFilter(),
-            FormatFilter(),
-            TypeFilter(),
-            GenreFilter(getGenres()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        SortOrderFilter(),
+        StatusFilter(),
+        FormatFilter(),
+        TypeFilter(),
+        GenreFilter(getGenres()),
+    )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

@@ -4,9 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.lib.unpacker.Unpacker
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -19,12 +19,13 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaBreakup : Madara(
-    "ManhwaBreakup",
-    "https://www.manhwabreakup.com",
-    "th",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("th")),
-) {
+class ManhwaBreakup :
+    Madara(
+        "ManhwaBreakup",
+        "https://www.manhwabreakup.com",
+        "th",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("th")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 

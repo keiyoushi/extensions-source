@@ -35,8 +35,6 @@ abstract class SimpleParsedHttpSource : ParsedHttpSource() {
     // endregion
 
     override fun chapterListSelector() = simpleMangaSelector()
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
     // endregion
 }

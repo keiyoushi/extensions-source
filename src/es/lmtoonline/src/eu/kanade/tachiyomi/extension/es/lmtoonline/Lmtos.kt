@@ -6,12 +6,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Lmtos : Madara(
-    "Lmtos",
-    "https://www.lmtos.com",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
-) {
+class Lmtos :
+    Madara(
+        "Lmtos",
+        "https://www.lmtos.com",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
+    ) {
 
     override val id = 3752522006902890093
 

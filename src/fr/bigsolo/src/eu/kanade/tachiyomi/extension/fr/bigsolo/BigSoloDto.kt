@@ -31,11 +31,11 @@ class Serie(
     val cover: Cover? = null,
     val chapters: Map<String, Chapter>,
     @SerialName("last_chapter")
-    val lastChapter: lastChapter? = null,
+    val lastChapter: LastChapter? = null,
 )
 
 @Serializable
-class lastChapter(
+class LastChapter(
     val timestamp: Int,
 )
 

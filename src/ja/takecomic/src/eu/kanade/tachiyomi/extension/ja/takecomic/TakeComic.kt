@@ -2,12 +2,13 @@ package eu.kanade.tachiyomi.extension.ja.takecomic
 
 import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
 
-class TakeComic : ComiciViewerAlt(
-    "TakeComic",
-    "https://takecomic.jp",
-    "ja",
-    "https://takecomic.jp/api",
-) {
+class TakeComic :
+    ComiciViewerAlt(
+        "TakeComic",
+        "https://takecomic.jp",
+        "ja",
+        "https://takecomic.jp/api",
+    ) {
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(
         Pair("ランキング", "/ranking/manga"),
         Pair("更新順", "/series/list/up"),

@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import java.util.concurrent.TimeUnit
 
-class GenzToons : Keyoapp(
-    "Genz Toons",
-    "https://genzupdates.com",
-    "en",
-) {
+class GenzToons :
+    Keyoapp(
+        "Genz Toons",
+        "https://genzupdates.com",
+        "en",
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(3)

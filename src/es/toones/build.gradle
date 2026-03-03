@@ -1,0 +1,10 @@
+ext {
+    extName = 'Toon-es'
+    extClass = '.Toones'
+    themePkg = 'madara'
+    baseUrl = 'https://toon-es.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

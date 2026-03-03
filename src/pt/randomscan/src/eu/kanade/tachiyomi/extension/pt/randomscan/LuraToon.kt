@@ -7,10 +7,6 @@ import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.MainPage
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -21,6 +17,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -33,7 +33,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon : HttpSource(), ConfigurableSource {
+class LuraToon :
+    HttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://luratoons.net"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
@@ -83,9 +85,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
         description = "Tipo: $category\n\n$synopsis"
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString<T>(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
@@ -101,13 +101,11 @@ class LuraToon : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                chapterListParse(manga, response)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservable()
+        .map { response ->
+            chapterListParse(manga, response)
+        }
 
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         if (response.code == 404) {

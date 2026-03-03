@@ -15,10 +15,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -27,12 +26,13 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Single
 import rx.schedulers.Schedulers
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
+class ManhuaRock :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     // Site changed from FMReader to some Madara copycat
     override val versionId = 2
@@ -52,8 +52,6 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val json: Json by injectLazy()
-
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -62,14 +60,12 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/tat-ca-truyen/$page/?sort=most-viewd")
 
-    override fun popularMangaSelector() = "div.listupd div.page-item"
+    override fun popularMangaSelector() = ".latest-manga-grid .latest-manga-card"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val a = element.selectFirst("a")!!
-
-        setUrlWithoutDomain(a.attr("abs:href"))
-        title = a.attr("title")
-        thumbnail_url = element.selectFirst("img")?.attr("abs:data-src")
+        setUrlWithoutDomain(element.selectFirst(".latest-manga-title a")!!.attr("abs:href"))
+        title = element.selectFirst(".latest-manga-title a")!!.text()
+        thumbnail_url = element.selectFirst(".latest-manga-thumb-wrapper img")?.attr("abs:src")
     }
 
     override fun popularMangaNextPageSelector() = "li.next:not(.disabled)"
@@ -113,13 +109,15 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         title = document.selectFirst("div.post-title h1")!!.text()
         author = document.selectFirst("div.author-content")?.text()
         artist = document.selectFirst("div.artist-content")?.text()
-        description = document.selectFirst("div.dsct")?.text()
+        description = document.selectFirst("div.dsct")?.joinToString("\n") { it.wholeText().trim() }
         genre = document.select("div.genres-content a[rel=tag]").joinToString { it.text() }
         status = when (document.selectFirst("div.summary-heading:contains(Tình Trạng) + div.summary-content")?.text()) {
             // I have zero idea what the strings for Ongoing and Completed are, these are educated guesses
             // All the metadata on this page is basically "Unknown".
             "Đang Tiến Hành" -> SManga.ONGOING
+
             "Hoàn Thành" -> SManga.COMPLETED
+
             else -> SManga.UNKNOWN
         }
         thumbnail_url = document.selectFirst("div.summary_image img")?.attr("abs:data-src")
@@ -146,7 +144,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
 
         countViews(chapterId)
 
-        val data = json.decodeFromString<AjaxImageListResponse>(response.body.string())
+        val data = response.parseAs<AjaxImageListResponse>()
 
         if (!data.status || data.html == null) {
             throw Exception(data.msg ?: "Lỗi không xác định khi lấy trang")
@@ -155,10 +153,8 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         return pageListParse(Jsoup.parse(data.html, baseUrl))
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -196,17 +192,18 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         override fun toString() = name
     }
 
-    private class OrderByFilter : Filter.Select<Slug>(
-        "Sắp xếp theo",
-        arrayOf(
-            Slug("Mới cập nhật", "latest-updated"),
-            Slug("Điểm", "score"),
-            Slug("Tên A-Z", "name-az"),
-            Slug("Ngày phát hành", "release-date"),
-            Slug("Xem nhiều", "most-viewd"),
-        ),
-        4,
-    )
+    private class OrderByFilter :
+        Filter.Select<Slug>(
+            "Sắp xếp theo",
+            arrayOf(
+                Slug("Mới cập nhật", "latest-updated"),
+                Slug("Điểm", "score"),
+                Slug("Tên A-Z", "name-az"),
+                Slug("Ngày phát hành", "release-date"),
+                Slug("Xem nhiều", "most-viewd"),
+            ),
+            4,
+        )
 
     private class GenreList(slugs: Array<Slug>) : Filter.Select<Slug>("Thể loại", slugs)
 

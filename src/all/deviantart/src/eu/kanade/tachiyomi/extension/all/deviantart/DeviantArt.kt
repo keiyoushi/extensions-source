@@ -24,7 +24,9 @@ import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DeviantArt : HttpSource(), ConfigurableSource {
+class DeviantArt :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "DeviantArt"
     override val baseUrl = "https://www.deviantart.com"
     override val lang = "all"
@@ -43,13 +45,9 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
-    }
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val matchGroups = requireNotNull(
@@ -65,13 +63,9 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         return MangasPage(listOf(manga), false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -80,8 +74,8 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         // If manga is sub-gallery then use sub-gallery name, else use gallery name
         val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
             ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
-        val artistInTitle = preferences.artistInTitle == ArtistInTitle.ALWAYS.name ||
-            preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name && galleryName == "All"
+        val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
+            ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && (galleryName == "All"))
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
@@ -129,14 +123,12 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         return chapterList.also(::orderChapterList).toList()
     }
 
-    private fun parseToChapterList(document: Document): List<SChapter> {
-        return document.select("item").map {
-            SChapter.create().apply {
-                setUrlWithoutDomain(it.selectFirst("link")!!.text())
-                name = it.selectFirst("title")!!.text()
-                date_upload = dateFormat.tryParse(it.selectFirst("pubDate")?.text())
-                scanlator = it.selectFirst("media|credit")?.text()
-            }
+    private fun parseToChapterList(document: Document): List<SChapter> = document.select("item").map {
+        SChapter.create().apply {
+            setUrlWithoutDomain(it.selectFirst("link")!!.text())
+            name = it.selectFirst("title")!!.text()
+            date_upload = dateFormat.tryParse(it.selectFirst("pubDate")?.text())
+            scanlator = it.selectFirst("media|credit")?.text()
         }
     }
 
@@ -169,13 +161,9 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun Response.asJsoupXml(): Document {
-        return Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
-    }
+    private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val artistInTitlePref = ListPreference(screen.context).apply {

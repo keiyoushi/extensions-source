@@ -11,11 +11,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class RokariComics : MangaThemesia(
-    "RokariComics",
-    "https://rokaricomics.com",
-    "en",
-) {
+class RokariComics :
+    MangaThemesia(
+        "RokariComics",
+        "https://rokaricomics.com",
+        "en",
+    ) {
     // Popular - Use homepage "Popular Today" section (first page only, no pagination)
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -41,12 +42,10 @@ class RokariComics : MangaThemesia(
     }
 
     // Latest - Use homepage pagination which shows latest updates
-    override fun latestUpdatesRequest(page: Int): Request {
-        return if (page == 1) {
-            GET(baseUrl, headers)
-        } else {
-            GET("$baseUrl/page/$page/", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (page == 1) {
+        GET(baseUrl, headers)
+    } else {
+        GET("$baseUrl/page/$page/", headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -82,12 +81,15 @@ class RokariComics : MangaThemesia(
                 is StatusFilter -> {
                     url.addQueryParameter("status", filter.selectedValue())
                 }
+
                 is TypeFilter -> {
                     url.addQueryParameter("type", filter.selectedValue())
                 }
+
                 is OrderByFilter -> {
                     url.addQueryParameter("order", filter.selectedValue())
                 }
+
                 is GenreListFilter -> {
                     filter.state
                         .filter { it.state != Filter.TriState.STATE_IGNORE }
@@ -96,6 +98,7 @@ class RokariComics : MangaThemesia(
                             url.addQueryParameter("genre[]", value)
                         }
                 }
+
                 else -> { /* Do Nothing */ }
             }
         }

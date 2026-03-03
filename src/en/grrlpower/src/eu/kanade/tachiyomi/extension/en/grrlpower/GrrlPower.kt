@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.en.grrlpower
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -15,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.textinterceptor.TextInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
@@ -30,7 +30,8 @@ class GrrlPower(
     override val lang: String = "en",
     override val name: String = "Grrl Power Comic",
     override val supportsLatest: Boolean = false,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     private val comicAuthor = "David Barrack"
     private val startingYear = 2010
     private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
@@ -142,20 +143,12 @@ class GrrlPower(
     // This can be called when the user refreshes the comic even if initialized is true
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }
