@@ -161,10 +161,7 @@ class Readcomiconline :
                 addQueryParameter("page", page.toString())
                 for (filter in activeFilters) {
                     when (filter) {
-                        is Status -> addQueryParameter(
-                            "status",
-                            arrayOf("", "Completed", "Ongoing")[filter.state],
-                        )
+                        is Status -> addQueryParameter("status", filter.selected.orEmpty())
 
                         is GenreList -> {
                             addQueryParameter("ig", filter.included.joinToString(","))
@@ -292,7 +289,15 @@ class Readcomiconline :
 
     override fun imageUrlParse(response: Response) = ""
 
-    private class Status : Filter.TriState("Completed")
+    private class Status :
+        SelectFilter(
+            "Status",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Completed", "Completed"),
+                Pair("Ongoing", "Ongoing"),
+            ),
+        )
     private class Genre(name: String, val gid: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>
@@ -331,8 +336,8 @@ class Readcomiconline :
         )
 
     override fun getFilterList() = FilterList(
-        Status(),
         GenreList(getGenreList()),
+        Status(),
         YearFilter(),
         Filter.Separator(),
         Filter.Header("Filters below are ignored when any of the above filters or the search is filled. (Although you can sort for a single genre)"),
@@ -340,7 +345,6 @@ class Readcomiconline :
         PublisherFilter(),
         WriterFilter(),
         ArtistFilter(),
-        Filter.Separator(),
     )
 
     // $("select[name=\"genres\"]").map((i,el) => `Genre("${$(el).next().text().trim()}", ${i})`).get().join(',\n')
