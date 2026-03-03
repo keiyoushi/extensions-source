@@ -92,14 +92,27 @@ class Readcomiconline :
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request { // publisher > writer > artist + sorting for both if else
-        if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>()
-                .all { it.included.isEmpty() && it.excluded.isEmpty() }
-        ) {
+    ): Request {
+        val activeFilters = if (filters.isEmpty()) getFilterList() else filters
+        val genreList = activeFilters.filterIsInstance<GenreList>().first()
+        val sortOption = activeFilters.filterIsInstance<SortFilter>().first().selected
+
+        return if (query.isEmpty() && genreList.included.size == 1 && genreList.excluded.isEmpty()) {
+            // Single included genre — use /Genre/{name}/{sort} URL
+            val genreName = genreList.state.first { it.isIncluded() }.name.replace(" ", "-")
+            val url = baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("Genre")
+                addPathSegment(genreName)
+                if (sortOption != null) addPathSegment(sortOption)
+                addQueryParameter("page", page.toString())
+            }.build()
+            GET(url, headers)
+        } else if (query.isEmpty() && genreList.included.isEmpty() && genreList.excluded.isEmpty()) {
+            // No query, no genres — publisher/writer/artist + sort
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
 
-                for (filter in if (filters.isEmpty()) getFilterList() else filters) {
+                for (filter in activeFilters) {
                     when (filter) {
                         is PublisherFilter -> {
                             if (filter.state.isNotEmpty()) {
@@ -129,18 +142,21 @@ class Readcomiconline :
                         break
                     }
                 }
-                addPathSegment(
-                    (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<SortFilter>()
-                        .first().selected.toString(),
-                )
+                if (!pathSegmentAdded) {
+                    addPathSegment("ComicList")
+                    if (sortOption != null) addPathSegment(sortOption)
+                } else if (sortOption != null) {
+                    addPathSegment(sortOption)
+                }
                 addQueryParameter("page", page.toString())
             }.build()
-            return GET(url, headers)
+            GET(url, headers)
         } else {
+            // Has query or multiple/excluded genres — AdvanceSearch
             val url = "$baseUrl/AdvanceSearch".toHttpUrl().newBuilder().apply {
                 addQueryParameter("comicName", query.trim())
                 addQueryParameter("page", page.toString())
-                for (filter in if (filters.isEmpty()) getFilterList() else filters) {
+                for (filter in activeFilters) {
                     when (filter) {
                         is Status -> addQueryParameter(
                             "status",
@@ -156,7 +172,7 @@ class Readcomiconline :
                     }
                 }
             }.build()
-            return GET(url, headers)
+            GET(url, headers)
         }
     }
 
