@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferencesLazy
@@ -24,7 +26,6 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
@@ -33,7 +34,7 @@ import java.util.Calendar
 import java.util.Locale
 
 class Readcomiconline :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
 
     override val name = "ReadComicOnline"
@@ -68,25 +69,24 @@ class Readcomiconline :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun popularMangaSelector() = ".list-comic > .item > a:first-child"
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ComicList/MostPopular?page=$page", headers)
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ComicList/LatestUpdate?page=$page", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         title = element.text()
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".list-comic > .item > a:first-child").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("ul.pager > li > a:contains(Next)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaNextPageSelector() = "ul.pager > li > a:contains(Next)"
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(
         page: Int,
@@ -160,13 +160,10 @@ class Readcomiconline :
         }
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val infoElement = document.select("div.barContent").first()!!
 
         val manga = SManga.create()
@@ -181,12 +178,10 @@ class Readcomiconline :
         return manga
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(realMangaDetailsRequest(manga)).asObservableSuccess()
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(super.mangaDetailsRequest(manga)).asObservableSuccess()
         .map { response ->
             mangaDetailsParse(response).apply { initialized = true }
         }
-
-    private fun realMangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga)
 
     override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
         ?: super.mangaDetailsRequest(manga)
@@ -197,16 +192,13 @@ class Readcomiconline :
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "table.listing tr:gt(1)"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()!!
-
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
-        chapter.name = urlElement.text()
-        chapter.date_upload = dateFormat.tryParse(element.selectFirst("td:eq(1)")?.text())
-        return chapter
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("table.listing tr:gt(1)").map { element ->
+        SChapter.create().apply {
+            val urlElement = element.selectFirst("a")!!
+            setUrlWithoutDomain(urlElement.attr("href"))
+            name = urlElement.text()
+            date_upload = dateFormat.tryParse(element.selectFirst("td:eq(1)")?.text())
+        }
     }
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
@@ -222,7 +214,8 @@ class Readcomiconline :
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         // Declare some important values first
         var encryptedLinks = mutableListOf<String>()
         val useSecondServer = serverPref() == "s2"
@@ -274,7 +267,7 @@ class Readcomiconline :
         }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response) = ""
 
     private class Status : Filter.TriState("Completed")
     private class Genre(name: String, val gid: String) : Filter.TriState(name)
