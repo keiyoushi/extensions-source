@@ -189,7 +189,7 @@ class Readcomiconline :
         val manga = SManga.create()
         manga.title = infoElement.selectFirst("a.bigChar")!!.text()
         manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
-        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").first()?.text()
+        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().joinToString()
         manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
         manga.description = infoElement.select("p:has(span:contains(Summary:)) ~ p").text()
         manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
