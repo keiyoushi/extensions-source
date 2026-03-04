@@ -34,9 +34,15 @@ class MyComic :
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        when (getString(PREF_LANGUAGE, "")) {
+            "zh-hant" -> edit().putString(PREF_LANGUAGE, "").apply()
+            "zh-hans" -> edit().putString(PREF_LANGUAGE, "cn").apply()
+        }
+    }
+
     private val requestUrl: String
-        get() = "$baseUrl/${preferences.getString(PREF_KEY_LANG, "")}"
+        get() = "$baseUrl/${preferences.getString(PREF_LANGUAGE, "")}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -176,7 +182,7 @@ class MyComic :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addPreference(
             ListPreference(screen.context).apply {
-                key = PREF_KEY_LANG
+                key = PREF_LANGUAGE
                 title = "設置首選語言"
                 summary = "當前：%s"
                 entries = arrayOf("繁體中文", "简体中文")
@@ -202,6 +208,6 @@ class MyComic :
         val CHAPTER_REGEX = Regex("(?<=chapters: )\\[\\{.*?\\}]")
         val popularFilter = SortFilter(2)
         val latestUpdateFilter = SortFilter(1)
-        const val PREF_KEY_LANG = "PREF_KEY_LANG"
+        const val PREF_LANGUAGE = "PREF_LANGUAGE"
     }
 }
