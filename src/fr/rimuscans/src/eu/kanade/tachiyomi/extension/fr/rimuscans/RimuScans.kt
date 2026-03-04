@@ -23,7 +23,7 @@ class RimuScans :
 
     override val name = "Rimu Scans"
 
-    override val baseUrl = "https://rimuscans.com"
+    override val baseUrl = "https://rimu-scans.fr"
 
     override val lang = "fr"
 
