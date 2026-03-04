@@ -14,12 +14,15 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MyComic :
     ParsedHttpSource(),
@@ -30,31 +33,28 @@ class MyComic :
     override val supportsLatest: Boolean = true
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+
     private val preferences by getPreferencesLazy()
     private val requestUrl: String
-        get() = if (preferences.getString(PREF_KEY_LANG, "") == "zh-hans") {
-            "$baseUrl/cn"
-        } else {
-            baseUrl
-        }
+        get() = "$baseUrl/${preferences.getString(PREF_KEY_LANG, "")}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div[data-flux-card] + div div[x-data]")
+        val data = document.select("div[data-flux-card] + div div[x-data]")
+        val notes = data.select("> div:first-child > div:first-child").map(Element::text)
+        return data
             .eachAttr("x-data")
-            .map {
-                it.substringAfter("chapters:").substringBefore("\n").trim().removeSuffix(",")
-            }
-            .map {
-                it.parseAs<List<Chapter>>()
-            }
-            .flatten()
-            .map {
-                SChapter.create().apply {
-                    name = it.title
-                    // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
-                    // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
-                    url = "/chapters/${it.id}"
+            .map { CHAPTER_REGEX.find(it)!!.value.parseAs<Array<Chapter>>() }
+            .flatMapIndexed { i, chapters ->
+                chapters.map {
+                    SChapter.create().apply {
+                        name = it.title
+                        // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
+                        // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
+                        url = "/chapters/${it.id}"
+                        date_upload = DATE_FORMAT.tryParse(document.selectFirst("time[datetime]")?.text())
+                        scanlator = notes[i]
+                    }
                 }
             }
     }
@@ -87,7 +87,7 @@ class MyComic :
             }
             detailElement.selectFirst("div[data-flux-badge] + div")?.let { element ->
                 author = element.selectFirst(":first-child a")?.text()
-                genre = element.select(":nth-child(3) a").joinToString { it.text() }
+                genre = element.select("> div:nth-child(2) ~ div a").joinToString { it.text() }
             }
             description =
                 detailElement.selectFirst("div[data-flux-badge] + div + div div[x-show=show]")
@@ -180,7 +180,7 @@ class MyComic :
                 title = "設置首選語言"
                 summary = "當前：%s"
                 entries = arrayOf("繁體中文", "简体中文")
-                entryValues = arrayOf("zh-hant", "zh-hans")
+                entryValues = arrayOf("", "cn")
                 setDefaultValue(entryValues[0])
             },
         )
@@ -198,9 +198,10 @@ class MyComic :
     }
 
     companion object {
+        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
+        val CHAPTER_REGEX = Regex("(?<=chapters: )\\[\\{.*?\\}]")
         val popularFilter = SortFilter(2)
         val latestUpdateFilter = SortFilter(1)
-
-        const val PREF_KEY_LANG = "pref_key_lang"
+        const val PREF_KEY_LANG = "PREF_KEY_LANG"
     }
 }
