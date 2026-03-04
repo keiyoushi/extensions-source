@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.yubikiri
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit
 class Kaguya :
     Madara(
         "Kaguya",
-        "https://kaguya.id",
+        "https://v1.kaguya.pro",
         "id",
         dateFormat = SimpleDateFormat("d MMMM", Locale("en")),
     ) {
@@ -34,6 +35,11 @@ class Kaguya :
     override val mangaDetailsSelectorThumbnail = "head meta[property='og:image']" // Same as browse
 
     override fun imageFromElement(element: Element): String? {
+        if (element.hasAttr("data-aesir")) {
+            val decoded = Base64.decode(element.attr("data-aesir"), Base64.DEFAULT).toString(Charsets.UTF_8).trim()
+            if (decoded.isNotEmpty()) return decoded
+        }
+        
         return super.imageFromElement(element)
             ?.takeIf { it.isNotEmpty() }
             ?: element.attr("content") // Thumbnail from <head>
