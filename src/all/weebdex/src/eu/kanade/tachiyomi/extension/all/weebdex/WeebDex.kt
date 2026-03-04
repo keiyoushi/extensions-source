@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.UpdatesListDto
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,6 +24,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 
 open class WeebDex(
     override val lang: String,
@@ -151,6 +153,30 @@ open class WeebDex(
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(WeebDexConstants.PREFIX_ID_SEARCH) -> {
+            val id = query.removePrefix(WeebDexConstants.PREFIX_ID_SEARCH)
+            client.newCall(GET("${WeebDexConstants.API_URL}/manga/$id", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val manga = response.parseAs<MangaDto>()
+                    MangasPage(listOf(manga.toSManga(coverQuality)), false)
+                }
+        }
+        query.startsWith(WeebDexConstants.PREFIX_CH_SEARCH) -> {
+            val id = query.removePrefix(WeebDexConstants.PREFIX_CH_SEARCH)
+            client.newCall(GET("${WeebDexConstants.API_URL}/chapter/$id", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val chapter = response.parseAs<ChapterDto>()
+                    val manga = chapter.relationships?.manga
+                        ?: throw Exception("Could not find manga for chapter $id")
+                    MangasPage(listOf(manga.toSManga(coverQuality)), false)
+                }
+        }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     // -------------------- Manga details --------------------
 

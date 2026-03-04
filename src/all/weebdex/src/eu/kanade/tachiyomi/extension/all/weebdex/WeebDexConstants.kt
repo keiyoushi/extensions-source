@@ -17,6 +17,10 @@ object WeebDexConstants {
     // Rate Limit (API is 5 req/s, using conservative value)
     const val RATE_LIMIT = 3
 
+    // Search Prefixes
+    const val PREFIX_ID_SEARCH = "id:"
+    const val PREFIX_CH_SEARCH = "ch:"
+
     // Tags Map
     val tags = mapOf(
         // Formats
