@@ -139,11 +139,16 @@ object Publus {
                 return response
             }
 
-            val fragmentJson = String(
-                Base64.decode(url.fragment, Base64.URL_SAFE),
-                StandardCharsets.UTF_8,
-            )
-            val params = fragmentJson.parseAs<PublusFragment>()
+            val params = try {
+                val fragmentJson = String(
+                    Base64.decode(url.fragment, Base64.URL_SAFE),
+                    StandardCharsets.UTF_8,
+                )
+                fragmentJson.parseAs<PublusFragment>()
+            } catch (_: Exception) {
+                return response
+            }
+
             if (!params.s) {
                 return response
             }
@@ -174,7 +179,7 @@ object Publus {
             unscrambled.recycle()
 
             return response.newBuilder()
-                .body(buffer.asResponseBody("image/jpeg".toMediaType()))
+                .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
                 .build()
         }
     }
