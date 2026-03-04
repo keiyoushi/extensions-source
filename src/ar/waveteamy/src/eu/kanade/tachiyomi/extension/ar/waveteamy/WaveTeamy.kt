@@ -38,13 +38,15 @@ class WaveTeamy : HttpSource() {
     override val client =
         network.cloudflareClient
             .newBuilder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
             .rateLimit(10, 1, TimeUnit.SECONDS)
             .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
 
     // Popular
     override fun popularMangaRequest(page: Int) = POST(
@@ -99,28 +101,29 @@ class WaveTeamy : HttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Manga Details
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val mangaData = response.extractNextJs<WMangaDetails>()!!
         title = mangaData.name
         thumbnail_url = mangaData.cover.toImage()
         description = mangaData.story?.replace("\\n", "\n")
-        genre = (mangaData.genre + (mangaData.type ?: "")).joinToString(", ")
+        genre = (mangaData.genre + mangaData.type)
+            .filterNot { it.isNullOrBlank() }
+            .joinToString(", ")
         status = mangaData.status.toStatus()
         artist = mangaData.artist.takeIf { it != "Updating" }
         author = mangaData.author.takeIf { it != "Updating" }
     }
 
     // Chapters
-    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url)
+    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = response.extractNextJs<List<WChapterList>>()
             ?.toMutableList()
-            ?: throw Exception(
-                "No chapters found. Please check this page in the WebView.",
-            )
+            ?: return emptyList()
+
         val workId = response.request.url.pathSegments[1]
         var page = 2
 
@@ -161,7 +164,7 @@ class WaveTeamy : HttpSource() {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val basePages = response.extractNextJs<WPage>()!!
