@@ -89,9 +89,9 @@ class Episode(
     val isLocked: Boolean
         get() = point > 0 && badge != 3 && rentalFinishTime == null
 
-    fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(dateFormat: SimpleDateFormat, showLockedPrefix: Boolean): SChapter = SChapter.create().apply {
         url = "/title/$titleId/episode/$episodeId"
-        val lock = if (isLocked) "🔒 " else ""
+        val lock = if (showLockedPrefix && isLocked) "🔒 " else ""
         name = lock + episodeName
         chapter_number = index.toFloat()
         date_upload = dateFormat.tryParse(startTime)

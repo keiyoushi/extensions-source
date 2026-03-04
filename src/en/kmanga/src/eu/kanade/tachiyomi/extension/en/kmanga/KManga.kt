@@ -247,10 +247,11 @@ class KManga :
         val apiResponse = client.newCall(apiRequest).execute()
         val result = apiResponse.parseAs<EpisodeListResponse>()
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val showLockedPrefix = preferences.getBoolean(LOCKED_PREFIX_PREF_KEY, true)
 
         return result.episodeList
             .filter { !hideLocked || !it.isLocked }
-            .map { it.toSChapter(dateFormat) }
+            .map { it.toSChapter(dateFormat, showLockedPrefix) }
             .reversed()
     }
 
@@ -327,6 +328,12 @@ class KManga :
             title = "Hide Locked Chapters"
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOCKED_PREFIX_PREF_KEY
+            title = "Prefix \"🔒\" to locked chapters"
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
 
     // Filters
@@ -365,6 +372,7 @@ class KManga :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val LOCKED_PREFIX_PREF_KEY = "locked_prefix"
         const val PREFIX_SEARCH = "id:"
     }
 
