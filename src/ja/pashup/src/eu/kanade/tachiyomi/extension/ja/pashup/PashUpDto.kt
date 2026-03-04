@@ -67,7 +67,7 @@ class MinMax(
 @Serializable
 class Product(
     @SerialName("ID") val id: String,
-    @SerialName("Name") val name: String,
+    @SerialName("Name") private val name: String,
     @SerialName("StartDate") val startDate: String?,
     @SerialName("DownloadURL") val downloadUrl: String,
     @SerialName("SalesUnit") val salesUnit: String?,

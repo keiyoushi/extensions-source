@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.pashup
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +15,7 @@ import keiyoushi.lib.publus.Publus.Decoder
 import keiyoushi.lib.publus.Publus.PublusInterceptor
 import keiyoushi.lib.publus.Publus.generatePages
 import keiyoushi.lib.publus.PublusPage
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -20,7 +25,9 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PashUp : HttpSource() {
+class PashUp :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Pash Up!"
     override val baseUrl = "https://pash-up.jp"
     override val lang = "ja"
@@ -29,6 +36,7 @@ class PashUp : HttpSource() {
     private val apiUrl = "$baseUrl/pageapi"
     private val pageLimit = 10
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(PublusInterceptor())
@@ -104,107 +112,73 @@ class PashUp : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/content/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$apiUrl/products.php".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "contents")
-            .addQueryParameter("id", manga.url)
-            .addQueryParameter("unit", "2")
-            .addQueryParameter("limit", "9999")
-            .addQueryParameter("order", "nodesc")
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .build()
-        return GET(url, headers)
-    }
+    private fun chapterListUrl(seriesId: String) = "$apiUrl/products.php".toHttpUrl().newBuilder()
+        .addQueryParameter("type", "contents")
+        .addQueryParameter("id", seriesId)
+        .addQueryParameter("unit", "2")
+        .addQueryParameter("limit", "9999")
+        .addQueryParameter("order", "nodesc")
+        .addQueryParameter("_", System.currentTimeMillis().toString())
+        .build()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ChapterResponse>()
-        val now = System.currentTimeMillis()
+    private fun ChapterResponse.collectProducts(): List<Product> = collectProductPairs().map { it.second }
+
+    private fun ChapterResponse.collectProductPairs(): List<Pair<String, Product>> {
         val allProducts = mutableListOf<Pair<String, Product>>()
-
-        result.contents.forEach { content ->
+        contents.forEach { content ->
             allProducts.add(content.seriesId to content.product)
             content.productMinMax?.values?.forEach { minMax ->
                 minMax.min?.let { allProducts.add(content.seriesId to it) }
                 minMax.max?.let { allProducts.add(content.seriesId to it) }
             }
         }
+        return allProducts.distinctBy { it.second.id }
+    }
 
-        val uniqueProducts = allProducts
-            .distinctBy { it.second.id }
+    override fun chapterListRequest(manga: SManga): Request = GET(chapterListUrl(manga.url), headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val now = System.currentTimeMillis()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val uniqueProducts = response.parseAs<ChapterResponse>()
+            .collectProductPairs()
             .filter { (_, product) ->
                 val endTime = dateFormat.tryParse(product.endDate)
                 endTime == 0L || endTime > now
+            }
+            .filter { (_, product) ->
+                !hideLocked || !product.downloadUrl.contains("/pageapi/download")
             }
 
         val grouped = uniqueProducts.groupBy { it.second.salesUnit }
         val chapters = (grouped["1"] ?: emptyList()).sortedByDescending { dateFormat.tryParse(it.second.startDate) }
         val volumes = (grouped["2"] ?: emptyList()).sortedByDescending { dateFormat.tryParse(it.second.startDate) }
-
         return (chapters + volumes).map { it.second.toSChapter(dateFormat, it.first) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val productId = chapterUrl.fragment
-        val seriesId = chapterUrl.pathSegments.first()
-
-        val url = "$apiUrl/products.php".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "contents")
-            .addQueryParameter("id", seriesId)
-            .addQueryParameter("unit", "2")
-            .addQueryParameter("limit", "9999")
-            .addQueryParameter("order", "nodesc")
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .build()
-
-        val response = client.newCall(GET(url, headers)).execute()
-        val result = response.parseAs<ChapterResponse> { it }
-
-        val allProducts = mutableListOf<Product>()
-        result.contents.forEach { content ->
-            allProducts.add(content.product)
-            content.productMinMax?.values?.forEach { minMax ->
-                minMax.min?.let { allProducts.add(it) }
-                minMax.max?.let { allProducts.add(it) }
-            }
-        }
-
-        return allProducts
-            .distinctBy { it.id }
-            .find { it.id == productId }!!
-            .downloadUrl
+        val result = client.newCall(GET(chapterListUrl(chapterUrl.pathSegments.first()), headers)).execute().parseAs<ChapterResponse>()
+        return result.collectProducts().find { it.id == chapterUrl.fragment }!!.downloadUrl
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val productId = chapterUrl.fragment
-        val seriesId = chapterUrl.pathSegments.first()
-        val url = "$apiUrl/products.php".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "contents")
-            .addQueryParameter("id", seriesId)
-            .addQueryParameter("unit", "2")
-            .addQueryParameter("limit", "9999")
-            .addQueryParameter("order", "nodesc")
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .fragment(productId)
+        val url = chapterListUrl(chapterUrl.pathSegments.first())
+            .newBuilder()
+            .fragment(chapterUrl.fragment)
             .build()
         return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val productId = response.request.url.fragment
-        val chapterResult = response.parseAs<ChapterResponse>()
-        val allProducts = mutableListOf<Product>()
-        chapterResult.contents.forEach { content ->
-            allProducts.add(content.product)
-            content.productMinMax?.values?.forEach { minMax ->
-                minMax.min?.let { allProducts.add(it) }
-                minMax.max?.let { allProducts.add(it) }
-            }
+        val product = response.parseAs<ChapterResponse>().collectProducts().find { it.id == productId }!!
+        if (product.downloadUrl.contains("/pageapi/download")) {
+            throw Exception("Log in via WebView and purchase this product to read.")
         }
 
-        val product = allProducts.distinctBy { it.id }.find { it.id == productId }
-        val cid = product!!.downloadUrl.toHttpUrl().queryParameter("cid")
+        val cid = product.downloadUrl.toHttpUrl().queryParameter("cid")
 
         val cUrl = "$baseUrl/pageapi/viewer/c.php".toHttpUrl().newBuilder()
             .addQueryParameter("cid", cid)
@@ -215,7 +189,7 @@ class PashUp : HttpSource() {
         val cPhp = try {
             cResponse.parseAs<CPhpResponse>().url
         } catch (_: Exception) {
-            throw Exception("Log in via WebView and purchase this chapter to read.")
+            throw Exception("Log in via WebView and purchase this product to read.")
         }
 
         val configRequest = GET(cPhp + "configuration_pack.json", headers)
@@ -250,5 +224,17 @@ class PashUp : HttpSource() {
         return generatePages(pageContent, result.keys, cPhp)
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Paid Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     override fun imageUrlParse(response: Response): String = response.request.url.toString()
+
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+    }
 }
