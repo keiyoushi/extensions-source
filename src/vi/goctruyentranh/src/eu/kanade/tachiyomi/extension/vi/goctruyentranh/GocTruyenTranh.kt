@@ -60,7 +60,7 @@ class GocTruyenTranh :
                 val sel = element.selectFirst("a.line-clamp-2")!!
                 setUrlWithoutDomain(sel.absUrl("href"))
                 title = sel.text()
-                thumbnail_url = sel.selectFirst("img")
+                thumbnail_url = element.selectFirst("img")
                     ?.absUrl("src")
                     ?.let { url ->
                         url.toHttpUrlOrNull()
