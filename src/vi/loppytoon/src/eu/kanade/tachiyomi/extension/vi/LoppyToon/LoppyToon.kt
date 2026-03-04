@@ -82,7 +82,10 @@ class LoppyToon : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            return GET("$baseUrl/api/search-story?keyword=$query", headers)
+            val url = "$baseUrl/api/search-story".toHttpUrl().newBuilder()
+                .addQueryParameter("keyword", query)
+                .build()
+            return GET(url, headers)
         }
 
         filters.forEach { filter ->
