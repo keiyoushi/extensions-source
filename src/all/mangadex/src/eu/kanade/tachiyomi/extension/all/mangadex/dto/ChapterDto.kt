@@ -24,8 +24,12 @@ data class ChapterAttributesDto(
 ) : AttributesDto() {
 
     /**
-     * Returns true if the chapter is from an external website and have no pages.
+     * Returns true if the chapter have no pages.
+     *
+     * Note (03/04/2026): the API sometimes falsely reports 'pages = 0' for chapters that actually
+     * have pages (e.g. 6ba0f2ef-02d7-4999-b347-c26c02ebea40). 'isInvalid' is used only as a first-pass signal.
+     * Verify via MD@HOME before discarding any chapter.
      */
     val isInvalid: Boolean
-        get() = externalUrl != null && pages == 0
+        get() = pages == 0
 }

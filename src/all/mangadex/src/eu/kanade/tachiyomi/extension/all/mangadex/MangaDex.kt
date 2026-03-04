@@ -550,7 +550,21 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         }
 
         return chapterListResults
-            .filterNot { it.attributes!!.isInvalid }
+            .filterNot { chapter ->
+                if (!chapter.attributes!!.isInvalid) return@filterNot false
+
+                val atHomeRequestUrl = if (preferences.forceStandardHttps) {
+                    "${MDConstants.API_URL}/at-home/server/${chapter.id}?forcePort443=true"
+                } else {
+                    "${MDConstants.API_URL}/at-home/server/${chapter.id}"
+                }
+                val request = helper.mdAtHomeRequest(atHomeRequestUrl, headers, CacheControl.FORCE_NETWORK)
+                val pages = runCatching {
+                    client.newCall(request).execute().use { it.parseAs<AtHomeDto>().chapter.data }
+                }.getOrNull()
+
+                pages.isNullOrEmpty()
+            }
             .map(helper::createChapter)
     }
 
