@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import kotlin.system.exitProcess
 
 class WeebDexUrlActivity : Activity() {
 
@@ -35,6 +34,5 @@ class WeebDexUrlActivity : Activity() {
         }
 
         finish()
-        exitProcess(0)
     }
 }
