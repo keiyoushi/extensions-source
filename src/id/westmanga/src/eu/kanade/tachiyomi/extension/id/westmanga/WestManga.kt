@@ -71,7 +71,7 @@ class WestManga : HttpSource() {
                 // old urls compatibility
                 setUrlWithoutDomain(
                     baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegment("comic")
+                        .addPathSegment("manga")
                         .addPathSegment(it.slug)
                         .addPathSegment("")
                         .toString(),
@@ -114,7 +114,7 @@ class WestManga : HttpSource() {
             // old urls compatibility
             setUrlWithoutDomain(
                 baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("comic")
+                    .addPathSegment("manga")
                     .addPathSegment(data.slug)
                     .addPathSegment("")
                     .toString(),
@@ -163,7 +163,6 @@ class WestManga : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(
                     baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegment("view")
                         .addPathSegment(it.slug)
                         .addPathSegment("")
                         .toString(),
