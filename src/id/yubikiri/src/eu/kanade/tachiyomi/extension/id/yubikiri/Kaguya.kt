@@ -39,7 +39,7 @@ class Kaguya :
             val decoded = Base64.decode(element.attr("data-aesir"), Base64.DEFAULT).toString(Charsets.UTF_8).trim()
             if (decoded.isNotEmpty()) return decoded
         }
-        
+
         return super.imageFromElement(element)
             ?.takeIf { it.isNotEmpty() }
             ?: element.attr("content") // Thumbnail from <head>
