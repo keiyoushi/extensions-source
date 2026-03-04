@@ -155,29 +155,49 @@ open class WeebDex(
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith(WeebDexConstants.PREFIX_ID_SEARCH) -> {
-            val id = query.removePrefix(WeebDexConstants.PREFIX_ID_SEARCH)
-            client.newCall(GET("${WeebDexConstants.API_URL}/manga/$id", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val manga = response.parseAs<MangaDto>()
-                    MangasPage(listOf(manga.toSManga(coverQuality)), false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        var newQuery = query
+        val url = query.trim().toHttpUrlOrNull()
+        if (url != null && (url.host == "weebdex.org" || url.host == "www.weebdex.org")) {
+            val pathSegments = url.pathSegments
+            if (pathSegments.size >= 2) {
+                val id = pathSegments[1]
+                newQuery = when (pathSegments[0]) {
+                    "title" -> WeebDexConstants.PREFIX_ID_SEARCH + id
+                    "chapter" -> WeebDexConstants.PREFIX_CH_SEARCH + id
+                    else -> query
                 }
+            }
         }
-        query.startsWith(WeebDexConstants.PREFIX_CH_SEARCH) -> {
-            val id = query.removePrefix(WeebDexConstants.PREFIX_CH_SEARCH)
-            client.newCall(GET("${WeebDexConstants.API_URL}/chapter/$id", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val chapter = response.parseAs<ChapterDto>()
-                    val manga = chapter.relationships?.manga
-                        ?: throw Exception("Could not find manga for chapter $id")
-                    MangasPage(listOf(manga.toSManga(coverQuality)), false)
-                }
+
+        return when {
+            newQuery.startsWith(WeebDexConstants.PREFIX_ID_SEARCH) -> {
+                val id = newQuery.removePrefix(WeebDexConstants.PREFIX_ID_SEARCH)
+                fetchMangaById(id)
+            }
+            newQuery.startsWith(WeebDexConstants.PREFIX_CH_SEARCH) -> {
+                val id = newQuery.removePrefix(WeebDexConstants.PREFIX_CH_SEARCH)
+                fetchMangaByChapterId(id)
+            }
+            else -> super.fetchSearchManga(page, newQuery, filters)
         }
-        else -> super.fetchSearchManga(page, query, filters)
     }
+
+    private fun fetchMangaById(id: String): Observable<MangasPage> = client.newCall(GET("${WeebDexConstants.API_URL}/manga/$id", headers))
+        .asObservableSuccess()
+        .map { response ->
+            val manga = response.parseAs<MangaDto>()
+            MangasPage(listOf(manga.toSManga(coverQuality)), false)
+        }
+
+    private fun fetchMangaByChapterId(id: String): Observable<MangasPage> = client.newCall(GET("${WeebDexConstants.API_URL}/chapter/$id", headers))
+        .asObservableSuccess()
+        .map { response ->
+            val chapter = response.parseAs<ChapterDto>()
+            val manga = chapter.relationships?.manga
+                ?: throw Exception("Could not find manga for chapter $id")
+            MangasPage(listOf(manga.toSManga(coverQuality)), false)
+        }
 
     // -------------------- Manga details --------------------
 

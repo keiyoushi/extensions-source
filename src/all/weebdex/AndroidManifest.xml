@@ -14,10 +14,11 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:host="weebdex.org" />
+                <data android:host="www.weebdex.org" />
                 <data android:scheme="https" />
 
-                <data android:pathPattern="/title/..*" />
-                <data android:pathPattern="/chapter/..*" />
+                <data android:pathPrefix="/title/" />
+                <data android:pathPrefix="/chapter/" />
             </intent-filter>
         </activity>
     </application>
