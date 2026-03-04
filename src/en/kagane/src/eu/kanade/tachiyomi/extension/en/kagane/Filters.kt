@@ -175,6 +175,15 @@ internal open class JsonMultiSelectTriFilter(
     }
 }
 
+internal class FormatFilter :
+    JsonMultiSelectFilter(
+        "Format",
+        "format",
+        FORMAT_OPTIONS.map { MultiSelectOption(it) },
+    )
+
+private val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
+
 internal class MatchAllGenresFilter : Filter.CheckBox("Match all selected genres", true)
 
 internal class MatchAllTagsFilter : Filter.CheckBox("Match all selected tags", true)

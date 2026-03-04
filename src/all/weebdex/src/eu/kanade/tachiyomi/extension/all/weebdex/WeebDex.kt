@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaListDto
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.UpdatesListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -65,21 +66,24 @@ open class WeebDex(
 
     // -------------------- Latest --------------------
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = WeebDexConstants.API_MANGA_URL.toHttpUrl().newBuilder()
+        val url = WeebDexConstants.API_CHAPTER_URL.toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("sort", "updatedAt")
+            .addQueryParameter("sort", "publishedAt")
             .addQueryParameter("order", "desc")
-            .addQueryParameter("hasChapters", "1")
             .apply {
                 if (weebdexLang != "all") {
-                    addQueryParameter("availableTranslatedLang", weebdexLang)
+                    addQueryParameter("tlang", weebdexLang)
                 }
             }
             .build()
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val updatesListDto = response.parseAs<UpdatesListDto>()
+        val mangas = updatesListDto.toSMangaList(coverQuality)
+        return MangasPage(mangas, updatesListDto.hasNextPage)
+    }
 
     // -------------------- Search --------------------
     override fun getFilterList(): FilterList = buildFilterList()

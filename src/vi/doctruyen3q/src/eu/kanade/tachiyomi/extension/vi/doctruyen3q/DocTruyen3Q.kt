@@ -23,7 +23,7 @@ import java.util.TimeZone
 class DocTruyen3Q :
     WPComics(
         "DocTruyen3Q",
-        "https://doctruyen3qhubx.com",
+        "https://doctruyen3qhubs.com",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -40,10 +40,9 @@ class DocTruyen3Q :
     override fun popularMangaSelector() = "div.item-manga div.item"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("h3 a")?.let {
-            title = it.text()
-            setUrlWithoutDomain(it.attr("abs:href"))
-        }
+        val sel = element.selectFirst("h3 a")!!
+        setUrlWithoutDomain(sel.absUrl("href"))
+        title = sel.text()
         thumbnail_url = imageOrNull(element.selectFirst("img")!!)
     }
 

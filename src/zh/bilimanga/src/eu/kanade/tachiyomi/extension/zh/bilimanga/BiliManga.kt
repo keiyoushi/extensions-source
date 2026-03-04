@@ -36,17 +36,16 @@ class BiliManga :
 
     private val preferences by getPreferencesLazy()
 
-    override val client = super.client.newBuilder()
-        .rateLimit(10, 10).addNetworkInterceptor(MangaInterceptor()).build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Accept-Language", "zh")
-        .add("Accept", "*/*")
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context).forEach(screen::addPreference)
+        preferencesInternal(screen.context, preferences).forEach(screen::addPreference)
     }
+
+    override val client = super.client.newBuilder().also {
+        val split = preferences.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+        it.rateLimit(split[0].toInt(), split[1].toLong())
+    }.addNetworkInterceptor(MangaInterceptor()).build()
+
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Accept-Language", "zh").add("Accept", "*/*")
 
     // Customize
 
@@ -138,8 +137,7 @@ class BiliManga :
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val bkname =
-            doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
+        val bkname = doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
