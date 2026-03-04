@@ -18,8 +18,8 @@ import javax.crypto.spec.SecretKeySpec
 
 class WestManga : HttpSource() {
     override val name = "West Manga"
-    override val baseUrl = "https://westmanga.me"
-    private val apiUrl = "https://data.westmanga.me"
+    override val baseUrl = "https://westmanga.tv"
+    private val apiUrl = "https://data.westmanga.tv"
     override val lang = "id"
     override val id = 8883916630998758688
     override val supportsLatest = true
@@ -71,7 +71,7 @@ class WestManga : HttpSource() {
                 // old urls compatibility
                 setUrlWithoutDomain(
                     baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegment("manga")
+                        .addPathSegment("comic")
                         .addPathSegment(it.slug)
                         .addPathSegment("")
                         .toString(),
@@ -86,8 +86,7 @@ class WestManga : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        assert(path.size == 3) { "Migrate from $name to $name" }
-        val slug = path[1]
+        val slug = path.filter { it.isNotBlank() }.last()
 
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
@@ -99,7 +98,7 @@ class WestManga : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
+        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments.filter { it.isNotBlank() }.last()
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("comic")
             .addPathSegment(slug)
@@ -115,7 +114,7 @@ class WestManga : HttpSource() {
             // old urls compatibility
             setUrlWithoutDomain(
                 baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("manga")
+                    .addPathSegment("comic")
                     .addPathSegment(data.slug)
                     .addPathSegment("")
                     .toString(),
@@ -164,6 +163,7 @@ class WestManga : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(
                     baseUrl.toHttpUrl().newBuilder()
+                        .addPathSegment("view")
                         .addPathSegment(it.slug)
                         .addPathSegment("")
                         .toString(),
@@ -176,8 +176,7 @@ class WestManga : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
-        assert(path.size == 2) { "Refresh Chapter List" }
-        val slug = path[0]
+        val slug = path.filter { it.isNotBlank() }.last()
 
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
@@ -189,7 +188,7 @@ class WestManga : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
+        val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.filter { it.isNotBlank() }.last()
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("view")
             .addPathSegment(slug)
