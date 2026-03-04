@@ -23,8 +23,8 @@ class QiScans :
     Iken(
         "Qi Scans",
         "en",
-        "https://qiscans.org",
-        "https://api.qiscans.org",
+        "https://qimanhwa.com",
+        "https://api.qimanhwa.com",
     ) {
 
     override val client = super.client.newBuilder()
