@@ -470,7 +470,7 @@ class Readcomiconline :
             val configLink = preferences.getString(
                 IMAGE_REMOTE_CONFIG_PREF,
                 IMAGE_REMOTE_CONFIG_DEFAULT,
-            )?.addBustQuery() ?: return null
+            )?.ifBlank { IMAGE_REMOTE_CONFIG_DEFAULT }?.addBustQuery() ?: return null
 
             try {
                 val configResponse = client.newCall(GET(configLink)).execute()
