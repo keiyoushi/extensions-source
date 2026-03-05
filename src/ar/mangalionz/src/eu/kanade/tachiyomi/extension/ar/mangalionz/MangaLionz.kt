@@ -10,7 +10,6 @@ import kotlinx.serialization.Serializable
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -45,10 +44,9 @@ class MangaLionz :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val body = response.body.string()
-
-        return try {
-            val dto = body.parseAs<SearchResponseDto>()
+        val contentType = response.header("Content-Type")
+        return contentType?.takeIf { it.startsWith("application/json") }?.let {
+            val dto = response.parseAs<SearchResponseDto>()
 
             if (!dto.success) {
                 MangasPage(emptyList(), false)
@@ -61,13 +59,7 @@ class MangaLionz :
                 }
                 MangasPage(manga, false)
             }
-        } catch (_: Exception) {
-            super.searchMangaParse(
-                response.newBuilder()
-                    .body(body.toResponseBody(response.body.contentType()))
-                    .build(),
-            )
-        }
+        } ?: super.searchMangaParse(response)
     }
 
     @Serializable
