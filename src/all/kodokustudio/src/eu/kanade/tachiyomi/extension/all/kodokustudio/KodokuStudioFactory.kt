@@ -15,6 +15,8 @@ class KodokuStudio(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val useNewChapterEndpoint = true
+
+    override val fetchGenres: Boolean = false
 }
 
 class KodokuStudioFactory : SourceFactory {
