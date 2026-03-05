@@ -1,7 +1,9 @@
 ext {
     extName = 'Kairos Toons'
     extClass = '.KairosToons'
-    extVersionCode = 1
+    themePkg = 'stalkercms'
+    baseUrl = 'https://kairostoons.net'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
