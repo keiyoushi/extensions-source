@@ -13,6 +13,8 @@ class KodokuStudio(
     override val mangaSubString: String = "manhua"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
+
+    override val useNewChapterEndpoint = true
 }
 
 class KodokuStudioFactory : SourceFactory {
