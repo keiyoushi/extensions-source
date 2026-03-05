@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -94,9 +95,9 @@ class Readcomiconline :
         filters: FilterList,
     ): Request {
         val activeFilters = if (filters.isEmpty()) getFilterList() else filters
-        val genreList = activeFilters.filterIsInstance<GenreList>().first()
-        val sortOption = activeFilters.filterIsInstance<SortFilter>().first().selected
-        val yearOption = activeFilters.filterIsInstance<YearFilter>().first().selected
+        val genreList = activeFilters.firstInstance<GenreList>()
+        val sortOption = activeFilters.firstInstance<SortFilter>().selected
+        val yearOption = activeFilters.firstInstance<YearFilter>().selected
 
         return if (query.isEmpty() && genreList.included.size == 1 && genreList.excluded.isEmpty() && yearOption == null) {
             // Single included genre — use /Genre/{name}/{sort} URL
