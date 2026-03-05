@@ -208,6 +208,6 @@ class MyComic :
         val CHAPTER_REGEX = Regex("(?<=chapters: )\\[\\{.*?\\}]")
         val popularFilter = SortFilter(2)
         val latestUpdateFilter = SortFilter(1)
-        const val PREF_LANGUAGE = "PREF_LANGUAGE"
+        const val PREF_LANGUAGE = "pref_key_lang"
     }
 }
