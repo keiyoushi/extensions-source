@@ -16,11 +16,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
+import java.util.concurrent.ConcurrentHashMap
 
 abstract class Iken(
     override val name: String,
@@ -98,15 +100,39 @@ abstract class Iken(
         return GET(url, headers)
     }
 
+    // Tracks the current page
+    private val pageNumber = ConcurrentHashMap<String, Int>()
+
+    private fun keyFromUrl(url: HttpUrl): String = url.queryParameterNames
+        .sorted()
+        .mapNotNull { paramName ->
+            val value = url.queryParameter(paramName)
+            if (value.isNullOrBlank()) null else "$paramName=$value"
+        }.joinToString("&")
+
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        val page = response.request.url.queryParameter("page")!!.toInt()
+        var page = response.request.url.queryParameter("page")!!.toInt()
 
         val entries = data.posts
             .filterNot { it.isNovel }
             .map { it.toSManga() }
 
         val hasNextPage = data.totalCount > (page * PER_PAGE)
+
+        val key = keyFromUrl(response.request.url)
+        if (page == 1) pageNumber[key] = 1
+
+        if (entries.isEmpty() && hasNextPage) {
+            pageNumber[key] = pageNumber[key]!! + 1
+            val newUrl = response.request.url.newBuilder()
+                .setQueryParameter("page", pageNumber[key]!!.toString())
+                .build()
+            val newResponse = client.newCall(GET(newUrl)).execute()
+            return searchMangaParse(newResponse)
+        }
+
+        if (!hasNextPage) pageNumber.remove(key)
 
         return MangasPage(entries, hasNextPage)
     }
@@ -216,8 +242,10 @@ abstract class Iken(
 
         return "\"${data.substring(start, i)}\"".parseAs<String>()
     }
-}
 
-private const val PER_PAGE = 18
-private const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
-private val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+    companion object {
+        const val PER_PAGE = 18
+        const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+    }
+}

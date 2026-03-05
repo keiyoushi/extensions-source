@@ -14,12 +14,13 @@ class Azora :
         "https://azoramoon.com",
         "https://api.azoramoon.com",
     ) {
+
     override val versionId = 2
-    val perPage = 18
+
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", perPage.toString())
+            addQueryParameter("perPage", Iken.PER_PAGE.toString())
             addQueryParameter("orderBy", "totalViews")
             addQueryParameter("orderDirection", "desc")
         }.build()
