@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.hijala
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.await
@@ -17,7 +18,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import org.jsoup.nodes.Document
-import tachiyomi.decoder.ImageDecoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -55,13 +55,8 @@ class Hijala :
                     val pieceRequest = request.newBuilder().url(pieceUrl).build()
                     client.newCall(pieceRequest).await().use { response ->
                         response.body.use { body ->
-                            val decoder = ImageDecoder.newInstance(body.byteStream())
-                                ?: throw Exception("Failed to create decoder for $pieceUrl")
-                            try {
-                                decoder.decode() ?: throw Exception("Failed to decode $pieceUrl")
-                            } finally {
-                                decoder.recycle()
-                            }
+                            BitmapFactory.decodeStream(body?.byteStream())
+                                ?: throw Exception("Failed to decode $pieceUrl")
                         }
                     }
                 }
