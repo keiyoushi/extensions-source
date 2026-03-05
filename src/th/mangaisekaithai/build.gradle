@@ -2,8 +2,8 @@ ext {
     extName = 'MangaIsekaiThai'
     extClass = '.MangaIsekaiThai'
     themePkg = 'madara'
-    baseUrl = 'https://www.mangaisekaithai.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.mangaisekaithai.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
