@@ -78,7 +78,7 @@ class KamiComic : HttpSource() {
                 .map { result ->
                     SManga.create().apply {
                         setUrlWithoutDomain(result.url!!.removePrefix(baseUrl))
-                         title = result.title!!.replace(MARK_REGEX, "$1")
+                        title = result.title!!.replace(MARK_REGEX, "$1")
                         thumbnail_url = result.thumb
                             ?.replace(THUMB_SIZE_REGEX, "")
                     }
