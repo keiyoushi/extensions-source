@@ -29,7 +29,7 @@ class Yupmanga : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimit(1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -145,20 +145,22 @@ class Yupmanga : HttpSource() {
     }
 
     private val totalPagesRegex = """totalPages: (\d*)""".toRegex()
-    private val imageTokenRegex = """readerImageToken\s*=\s*"(.*?)"""".toRegex()
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterId = response.request.url.queryParameter("chapter")!!
+        val chapterId = response.request.url.queryParameter("chapter")
+        val token = response.request.url.queryParameter("token")
+        if (token.isNullOrEmpty() || chapterId.isNullOrEmpty()) {
+            throw Exception("Información desactualizada. Refresque la lista de capítulos.")
+        }
         val document = response.asJsoup()
         val script = document.select("script:containsData(totalPages)").joinToString("\n")
         val totalPages = totalPagesRegex.find(script)?.groupValues?.get(1)?.toInt()!!
-        val imageToken = imageTokenRegex.find(script)?.groupValues?.get(1)!!
         return (1..totalPages).map { pageNumber ->
             val imageUrl = "$baseUrl/image-proxy-v2.php".toHttpUrl().newBuilder()
                 .addQueryParameter("chapter", chapterId)
                 .addQueryParameter("page", pageNumber.toString())
                 .addQueryParameter("context", "reader")
-                .addQueryParameter("token", imageToken)
+                .addQueryParameter("token", token)
                 .build()
 
             Page(pageNumber, imageUrl = imageUrl.toString())
