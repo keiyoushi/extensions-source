@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.readcomiconline
 import android.content.SharedPreferences
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -28,7 +27,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -205,13 +203,7 @@ class Readcomiconline :
         return manga
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(super.mangaDetailsRequest(manga)).asObservableSuccess()
-        .map { response ->
-            mangaDetailsParse(response).apply { initialized = true }
-        }
-
-    override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-        ?: super.mangaDetailsRequest(manga)
+    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
 
     private fun parseStatus(status: String) = when {
         status.contains("Ongoing") -> SManga.ONGOING
