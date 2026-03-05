@@ -8,3 +8,7 @@ ext {
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    compileOnly("com.github.tachiyomiorg:image-decoder:41c059e540")
+}
