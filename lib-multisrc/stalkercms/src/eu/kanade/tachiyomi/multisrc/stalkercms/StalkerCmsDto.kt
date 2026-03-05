@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.kairostoons
+package eu.kanade.tachiyomi.multisrc.stalkercms
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -22,3 +22,9 @@ class MangaDto(
         url = this@MangaDto.url
     }
 }
+
+@Serializable
+class LoadMoreReleasesDto(
+    val html: String,
+    @SerialName("has_next") val hasNext: Boolean,
+)
