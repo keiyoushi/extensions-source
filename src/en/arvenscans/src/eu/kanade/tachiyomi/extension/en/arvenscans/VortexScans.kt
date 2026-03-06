@@ -17,10 +17,11 @@ class VortexScans :
         "https://vortexscans.org",
         "https://api.vortexscans.org",
     ) {
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", perPage.toString())
+            addQueryParameter("perPage", Iken.PER_PAGE.toString())
             addQueryParameter("tag", "new")
             addQueryParameter("isNovel", "false")
         }.build()
@@ -28,18 +29,15 @@ class VortexScans :
         return GET(url, headers)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", perPage.toString())
-            addQueryParameter("tag", "hot")
-            addQueryParameter("isNovel", "false")
-        }.build()
+    override val popularSubString = "posts"
 
-        return GET(url, headers)
-    }
+    override val usePopularMangaApi = true
+
+    override fun popularMangaUrl(page: Int) = super.popularMangaUrl(page)
+        .addQueryParameter("tag", "hot")
+        .addQueryParameter("isNovel", "false")
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
-    val perPage = 18
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
         .asObservable()

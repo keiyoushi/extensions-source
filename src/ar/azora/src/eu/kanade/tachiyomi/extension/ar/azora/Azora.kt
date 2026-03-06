@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.azora
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 
 class Azora :
@@ -17,16 +14,10 @@ class Azora :
 
     override val versionId = 2
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", Iken.PER_PAGE.toString())
-            addQueryParameter("orderBy", "totalViews")
-            addQueryParameter("orderDirection", "desc")
-        }.build()
+    override val usePopularMangaApi = true
 
-        return GET(url, headers)
-    }
+    override fun popularMangaUrl(page: Int) = super.popularMangaUrl(page)
+        .addQueryParameter("orderDirection", "desc")
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 }
