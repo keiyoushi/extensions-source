@@ -9,7 +9,7 @@ import java.util.Locale
 class MangaLionz :
     Madara(
         "MangaLionz",
-        "https://manga-lionz.org",
+        "https://manga-lionz.com",
         "ar",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
     ) {
