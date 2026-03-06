@@ -99,8 +99,8 @@ class TitleDetailView(
         get() = chapterList.isNotEmpty() && chapterList.all(Chapter::isVerticalOnly)
 
     private val isOneShot: Boolean
-        get() = chapterList.size == 1 && chapterList.firstOrNull()
-            ?.name?.equals("one-shot", true) == true
+        get() = titleLabels.releaseSchedule == ReleaseSchedule.ONE_SHOT ||
+            (chapterList.size == 1 && chapterList.firstOrNull()?.name?.equals("one-shot", true) == true)
 
     private val isReEdition: Boolean
         get() = viewingPeriodDescription.contains(REEDITION_REGEX)
@@ -172,6 +172,7 @@ class TitleLabels(
     val isSimulpub: Boolean = false,
 )
 
+@Serializable
 enum class ReleaseSchedule {
     DISABLED,
     EVERYDAY,
@@ -182,6 +183,7 @@ enum class ReleaseSchedule {
     TRIMONTHLY,
     OTHER,
     COMPLETED,
+    ONE_SHOT,
 }
 
 @Serializable
