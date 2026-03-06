@@ -46,6 +46,7 @@ class MangaSwat :
             .add("Accept", "application/json, text/plain, */*")
             .add("Origin", baseUrl)
             .add("Referer", "$baseUrl/")
+            .set("User-Agent", "ktor-client")
             .build()
     }
 
