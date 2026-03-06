@@ -105,6 +105,8 @@ class MangaSwat :
         return storedToken!!
     }
 
+    private fun String.getMangaId(): String = this.removePrefix("/chapters/").substringBefore("/")
+
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
@@ -191,10 +193,11 @@ class MangaSwat :
 
     // Pages
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.getMangaId()}"
+
     override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.removePrefix("/chapters/").substringBefore("/")
         val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
-            .addPathSegment(id)
+            .addPathSegment(chapter.url.getMangaId())
             .build()
         return GET(url, apiHeaders)
     }
