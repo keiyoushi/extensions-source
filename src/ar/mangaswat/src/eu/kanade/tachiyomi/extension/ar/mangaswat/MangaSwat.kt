@@ -114,18 +114,13 @@ class MangaSwat :
         return GET(url, apiHeaders)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestUpdatesResponse>()
-        val mangas = data.results.map { it.toSManga() }
-        return MangasPage(mangas, data.hasNext())
-    }
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addQueryParameter("page_size", "12")
-            .addQueryParameter("order_by", "-created_at")
+        val url = "$apiBaseUrl/series/releases".toHttpUrl().newBuilder()
+            .addQueryParameter("page_size", "20")
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, apiHeaders)
@@ -151,11 +146,7 @@ class MangaSwat :
         return popularMangaRequest(page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestUpdatesResponse>()
-        val mangas = data.results.map { it.toSManga() }
-        return MangasPage(mangas, data.hasNext())
-    }
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     // Details
 
@@ -169,6 +160,8 @@ class MangaSwat :
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().toSManga()
 
     // Chapters
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
