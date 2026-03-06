@@ -224,7 +224,7 @@ class MangaSwat :
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val DEFAULT_BASE_URL = "https://meshmanga.com"
+        private const val DEFAULT_BASE_URL = "https://appswat.com"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
