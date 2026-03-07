@@ -11,12 +11,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -27,6 +28,10 @@ class RawUwU : HttpSource() {
     override val lang = "ja"
     override val supportsLatest = true
 
+    private val dateFormat by lazy {
+        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+    }
+
     override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
@@ -35,9 +40,10 @@ class RawUwU : HttpSource() {
     // --- BROWSE (POPULAR / LATEST / SEARCH) ---
 
     override fun getFilterList() = FilterList(
-        GenreFilter(),
+        Filter.Header("Filters are ignored when using text search."),
         StatusFilter(),
         SortFilter(),
+        GenreFilter(genres),
     )
 
     override fun popularMangaRequest(page: Int): Request {
@@ -55,30 +61,24 @@ class RawUwU : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotEmpty()) {
-        val url = "$baseUrl/spa/search".toHttpUrl().newBuilder()
-            .addQueryParameter("query", query)
-            .addQueryParameter("page", page.toString())
-            .build()
-        GET(url, headers)
-    } else {
-        val genreFilter = filters.firstInstance<GenreFilter>()
-        val statusFilter = filters.firstInstance<StatusFilter>()
-        val sortFilter = filters.firstInstance<SortFilter>()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/spa".toHttpUrl().newBuilder()
 
-        val genreCode = genreFilter.toCode()
-        val url = "$baseUrl/spa/genre/$genreCode".toHttpUrl().newBuilder()
-
-        statusFilter.toValue().takeIf { it.isNotEmpty() }?.let {
-            url.addQueryParameter("status", it)
+        if (query.isNotEmpty()) {
+            url.addPathSegment("search").addQueryParameter("query", query)
+        } else {
+            filters.forEach { filter ->
+                if (filter is UriFilter) {
+                    filter.addToUri(url)
+                } else if (filter is GenreFilter) {
+                    val genreId = genres[filter.state].path
+                    url.addPathSegment("genre")
+                    url.addPathSegment(genreId)
+                }
+            }
         }
-        sortFilter.toValue().takeIf { it.isNotEmpty() }?.let {
-            url.addQueryParameter("sort", it)
-        }
-
         url.addQueryParameter("page", page.toString())
-
-        GET(url.build(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaListResponse(response)
@@ -184,7 +184,7 @@ class RawUwU : HttpSource() {
         val serverUrl = chapterDetail?.server ?: ""
         val htmlContent = chapterDetail?.chapter_content ?: ""
 
-        val document = org.jsoup.Jsoup.parseBodyFragment(htmlContent)
+        val document = Jsoup.parseBodyFragment(htmlContent)
 
         return document.select("img").mapIndexed { i, img ->
             val rawPath = img.attr("data-src")
@@ -199,100 +199,6 @@ class RawUwU : HttpSource() {
 
     private fun parseDate(dateStr: String?): Long {
         if (dateStr == null) return 0
-        return try {
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
-                .parse(dateStr)?.time ?: 0
-        } catch (_: Exception) {
-            0
-        }
-    }
-}
-
-class GenreFilter :
-    Filter.Select<String>(
-        "Genre",
-        arrayOf(
-            "All", "Action", "Adaptions", "Adult", "Adventure", "Alternative World", "Animals", "Animated", "Comedy", "Cooking", "Crime", "Drama", "Ecchi", "Elves", "Fantasy", "Food", "Game", "Gender Bender", "Girls' Love", "Harem", "Hentai", "Historical", "Horror", "Isekai", "Josei", "Loli", "Lolicon", "Magic", "Manhua", "Manhwa", "Martial Arts", "Mature", "Mecha", "Medical", "Moe", "Mystery", "One shot", "Oneshot", "Philosophical", "Police", "Psychological", "Romance", "School Life", "Sci-fi", "Seinen", "Shotacon", "Shoujo", "Shoujo Ai", "Shounen", "Shounen Ai", "Slice of Life", "Smut", "Sports", "Supernatural", "Thriller", "Tragedy", "Trap (crossdressing)", "War", "Webtoons", "Yaoi", "Yuri",
-        ),
-    ) {
-    fun toCode() = when (state) {
-        0 -> "all"
-        1 -> "85" // Action
-        2 -> "163" // Adaptions
-        3 -> "139" // Adult
-        4 -> "86" // Adventure
-        5 -> "149" // Alternative World
-        6 -> "168" // Animals
-        7 -> "140" // Animated
-        8 -> "87" // Comedy
-        9 -> "134" // Cooking
-        10 -> "165" // Crime
-        11 -> "114" // Drama
-        12 -> "88" // Ecchi
-        13 -> "150" // Elves
-        14 -> "89" // Fantasy
-        15 -> "152" // Food
-        16 -> "155" // Game
-        17 -> "111" // Gender Bender
-        18 -> "167" // Girls' Love
-        19 -> "90" // Harem
-        20 -> "169" // Hentai
-        21 -> "115" // Historical
-        22 -> "127" // Horror
-        23 -> "144" // Isekai
-        24 -> "130" // Josei
-        25 -> "91" // Loli
-        26 -> "148" // Lolicon
-        27 -> "151" // Magic
-        28 -> "128" // Manhua
-        29 -> "125" // Manhwa
-        30 -> "126" // Martial Arts
-        31 -> "112" // Mature
-        32 -> "143" // Mecha
-        33 -> "132" // Medical
-        34 -> "141" // Moe
-        35 -> "121" // Mystery
-        36 -> "142" // One shot
-        37 -> "157" // Oneshot
-        38 -> "170" // Philosophical
-        39 -> "166" // Police
-        40 -> "119" // Psychological
-        41 -> "106" // Romance
-        42 -> "108" // School Life
-        43 -> "146" // Sci-fi
-        44 -> "107" // Seinen
-        45 -> "154" // Shotacon
-        46 -> "120" // Shoujo
-        47 -> "131" // Shoujo Ai
-        48 -> "118" // Shounen
-        49 -> "109" // Shounen Ai
-        50 -> "92" // Slice of Life
-        51 -> "123" // Smut
-        52 -> "124" // Sports
-        53 -> "93" // Supernatural
-        54 -> "164" // Thriller
-        55 -> "135" // Tragedy
-        56 -> "138" // Trap (crossdressing)
-        57 -> "153" // War
-        58 -> "116" // Webtoons
-        59 -> "161" // Yaoi
-        60 -> "110" // Yuri
-        else -> "all"
-    }
-}
-
-class StatusFilter : Filter.Select<String>("Status", arrayOf("All", "Ongoing", "Completed")) {
-    fun toValue() = when (state) {
-        1 -> "ongoing"
-        2 -> "completed"
-        else -> ""
-    }
-}
-
-class SortFilter : Filter.Select<String>("Sort", arrayOf("Update Date", "Popular", "Popular Today")) {
-    fun toValue() = when (state) {
-        1 -> "most_viewed"
-        2 -> "most_viewed_today"
-        else -> ""
+        return dateFormat.tryParse(dateStr)
     }
 }
