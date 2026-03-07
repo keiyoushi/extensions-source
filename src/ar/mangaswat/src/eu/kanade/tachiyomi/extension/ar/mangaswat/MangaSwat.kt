@@ -46,6 +46,7 @@ class MangaSwat :
             .add("Accept", "application/json, text/plain, */*")
             .add("Origin", baseUrl)
             .add("Referer", "$baseUrl/")
+            .set("User-Agent", "ktor-client")
             .build()
     }
 
@@ -104,10 +105,25 @@ class MangaSwat :
         return storedToken!!
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    private fun String.getMangaId(): String = this.removePrefix("/chapters/").substringBefore("/")
+
+    // Popular
+
+    override fun popularMangaRequest(page: Int): Request {
         val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addQueryParameter("page_size", "12")
-            .addQueryParameter("order_by", "-created_at")
+            .addQueryParameter("order_by", "-followers_count")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, apiHeaders)
+    }
+
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+
+    // Latest
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiBaseUrl/series/releases".toHttpUrl().newBuilder()
+            .addQueryParameter("page_size", "20")
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, apiHeaders)
@@ -119,19 +135,23 @@ class MangaSwat :
         return MangasPage(mangas, data.hasNext())
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addQueryParameter("is_hot", "true")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, apiHeaders)
+    // Search
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotBlank()) {
+            val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
+                .addQueryParameter("search", query)
+                .addQueryParameter("page", page.toString())
+                .build()
+            return GET(url, apiHeaders)
+        }
+
+        return popularMangaRequest(page)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestUpdatesResponse>()
-        val mangas = data.results.map { it.toSManga() }
-        return MangasPage(mangas, data.hasNext())
-    }
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+
+    // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
@@ -141,6 +161,10 @@ class MangaSwat :
     }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().toSManga()
+
+    // Chapters
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
@@ -167,10 +191,13 @@ class MangaSwat :
         return chapters
     }
 
+    // Pages
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.getMangaId()}"
+
     override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.removePrefix("/chapters/").substringBefore("/")
         val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
-            .addPathSegment(id)
+            .addPathSegment(chapter.url.getMangaId())
             .build()
         return GET(url, apiHeaders)
     }
@@ -182,25 +209,9 @@ class MangaSwat :
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-                .addQueryParameter("search", query)
-                .addQueryParameter("page", page.toString())
-                .build()
-            return GET(url, apiHeaders)
-        }
-
-        return popularMangaRequest(page)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestUpdatesResponse>()
-        val mangas = data.results.map { it.toSManga() }
-        return MangasPage(mangas, data.hasNext())
-    }
-
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+
+    // Preference
 
     companion object {
         internal val apiDateFormat by lazy {
