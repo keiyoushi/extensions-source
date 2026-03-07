@@ -58,7 +58,28 @@ abstract class Iken(
             .associateBy { it.slug }
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
+    /**
+     * Enables the API request for fetching popular manga.
+     */
+    protected open val usePopularMangaApi: Boolean = false
+
+    /**
+     * The path segment used in the API URL for the popular request.
+     * This can be changed if the site uses a different endpoint path
+     */
+    protected open val popularSubString: String = "query"
+
+    protected open fun popularMangaUrl(page: Int): HttpUrl.Builder = "$apiUrl/api/$popularSubString".toHttpUrl().newBuilder().apply {
+        addQueryParameter("page", page.toString())
+        addQueryParameter("perPage", PER_PAGE.toString())
+        addQueryParameter("orderBy", "totalViews")
+    }
+
+    override fun popularMangaRequest(page: Int): Request = if (usePopularMangaApi) {
+        GET(popularMangaUrl(page).build(), headers)
+    } else {
+        GET("$baseUrl/home", headers)
+    }
 
     protected open val popularMangaSelector = "aside a:has(img), .splide:has(.card) li a:has(img)"
 
