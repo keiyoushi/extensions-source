@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
 import keiyoushi.lib.randomua.getPrefCustomUA
 import keiyoushi.lib.randomua.getPrefUAType
@@ -28,11 +29,10 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URLEncoder
@@ -45,20 +45,6 @@ import javax.crypto.spec.SecretKeySpec
 class Mangago :
     ParsedHttpSource(),
     ConfigurableSource {
-
-    private data class ChapterJsDecryptCache(
-        val deobfChapterJs: String,
-        val key: ByteArray,
-        val iv: ByteArray,
-    )
-
-    private val chapterImagesCache = mutableMapOf<String, MutableList<String?>>()
-    private val chapterImagesCacheMutex = Any()
-    private val chapterImagesFetchLockMap = mutableMapOf<String, Any>()
-
-    private val chapterJsCache = mutableMapOf<String, ChapterJsDecryptCache>()
-    private val chapterJsFetchLockMap = mutableMapOf<String, Any>()
-    private val chapterJsCacheMutex = Any()
 
     override val name = "Mangago"
 
@@ -80,7 +66,9 @@ class Mangago :
             val request = chain.request()
             val response = chain.proceed(request)
 
-            val fragment = request.url.fragment ?: return@addInterceptor response
+            val fragment = request.url.fragment
+                ?.takeIf { it.contains("desckey=") }
+                ?: return@addInterceptor response
 
             // desckey=...&cols=...
             val key = fragment.substringAfter("desckey=").substringBefore("&")
@@ -238,140 +226,49 @@ class Mangago :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pageURLTemplate = document.selectFirst("input#curl")?.attr("value")?.trim().orEmpty()
-        val pageDataScript =
-            document.selectFirst("script:containsData(total_pages=), script:containsData(mid=), script:containsData(cid=)")
-                ?.data().orEmpty()
-        val totalPagesRegex = Regex("total_pages\\s*=\\s*(\\d+)")
-        val totalPages = totalPagesRegex.find(pageDataScript)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        val chapterKey = parseChapterKey(document)
+        val totalPages = document.selectFirst("script:containsData(total_pages)")
+            ?.data()
+            ?.let { Regex("""total_pages\s*=\s*(\d+)""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+            ?: throw Exception("Total page count not found")
 
-        synchronized(chapterJsCacheMutex) {
-            chapterJsCache.remove(chapterKey)
-        }
+        val nextPageUrl = document.selectFirst("a.next_page")!!
+            .absUrl("href")
+            .toHttpUrl()
 
-        if (pageURLTemplate.isBlank() || totalPages <= 0) {
-            throw Exception("Mangago: pageListParse failed - missing curl template or total_pages in ${document.location()}")
-        }
+        val urlTemplate = document.selectFirst("input#curl")!!
+            .attr("value").trim()
 
-        val baseUrl = document.location().toHttpUrl()
-        val sourcePath = baseUrl.encodedPath
+        val pages = getPageUrls(nextPageUrl, urlTemplate, totalPages)
+        val availableImages = getChapterImageUrls(document)
 
-        val cleanTemplate = pageURLTemplate.removePrefix("/")
-        val escapedTemplate = Regex.escape(cleanTemplate.replace("{page}", "__PAGE__"))
-            .replace("__PAGE__", "\\d+")
-
-        val curlPattern = runCatching { Regex(escapedTemplate) }.getOrNull()
-        val match = curlPattern?.find(sourcePath)
-
-        val prefix = if (match != null) {
-            sourcePath.substring(0, match.range.first).removeSuffix("/")
-        } else {
-            ""
-        }
-
-        val pageLinks = (1..totalPages).map { pageNumber ->
-            val relative = pageURLTemplate.replace("{page}", pageNumber.toString())
-
-            val normalizedPath = when {
-                prefix.isBlank() -> relative
-                else -> "$prefix/${relative.removePrefix("/")}"
-            }
-            val href = baseUrl.newBuilder().encodedPath(normalizedPath).build().toString()
-            (pageNumber - 1) to href
-        }
-
-        // Gets the first array of image URLs from the base chapter URL
-        val firstUrls = getChapterImageUrls(document)
-        if (firstUrls.isEmpty()) throw Exception("Mangago: pageListParse failed - decoded image url list is empty for ${document.location()}")
-        // Webcomics have the array of images partially filled with empty strings [eg: 1,2,3,,, or ,,,4,5,6]
-        val hasEmptyUrls = firstUrls.any { it.isBlank() }
-        if (!hasEmptyUrls) {
-            // Mangas have the full array of image URLs in the first request
-            return pageLinks.mapIndexed { idx, (pageIndex, href) ->
-                val resolved = firstUrls.getOrNull(pageIndex)
-                    ?: firstUrls.getOrNull(idx)
-                if (resolved.isNullOrBlank()) {
-                    throw Exception("Mangago: pageListParse failed - could not resolve image url for page ${pageIndex + 1}")
+        pages.onEachIndexed { index, page ->
+            availableImages[index].also {
+                if (it.isNotBlank()) {
+                    page.imageUrl = it
                 }
-                Page(idx, url = "", imageUrl = resolved)
-            }
-        }
-
-        synchronized(chapterImagesCacheMutex) {
-            chapterImagesCache[chapterKey] = MutableList(pageLinks.size) { null }
-        }
-
-        val pages = pageLinks.mapIndexed { idx, (pageIndex, href) ->
-            val resolved = firstUrls.getOrNull(pageIndex)
-            if (!resolved.isNullOrBlank()) {
-                // Seed cache with non-empty URLs from the first request.
-                synchronized(chapterImagesCacheMutex) {
-                    val cached = chapterImagesCache[chapterKey]
-                    if (cached != null && cached.size > pageIndex) {
-                        cached[pageIndex] = resolved
-                    }
-                }
-                Page(idx, url = "", imageUrl = resolved)
-            } else {
-                val encodedUrl = "$href#chapterKey=$chapterKey"
-                Page(idx, encodedUrl)
             }
         }
 
         return pages
     }
 
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.fromCallable {
-        val chapterKey = page.url.toHttpUrl().fragment
-            ?.substringAfter("chapterKey=")
-            ?.substringBefore("&")
-            ?.takeIf { it.isNotBlank() }
-            ?: throw Exception("Mangago: fetchImageUrl failed - missing chapter key for page ${page.index + 1}")
-        val resolvedFromCache = synchronized(chapterImagesCacheMutex) {
-            val cached = chapterImagesCache[chapterKey]
-            cached?.getOrNull(page.index)
-        }
-        if (!resolvedFromCache.isNullOrBlank()) {
-            return@fromCallable resolvedFromCache
-        }
-        val fetchLock = synchronized(chapterImagesCacheMutex) {
-            chapterImagesFetchLockMap.getOrPut(chapterKey) { Any() }
-        }
-        synchronized(fetchLock) {
-            // Double-check after acquiring fetch lock
-            synchronized(chapterImagesCacheMutex) {
-                val cached = chapterImagesCache[chapterKey]
-                cached?.getOrNull(page.index)
-            }?.takeIf { it.isNotBlank() }?.let {
-                return@fromCallable it
-            }
+    private fun getPageUrls(nextPageUrl: HttpUrl, urlTemplate: String, totalPages: Int): List<Page> {
+        val templateRegex = urlTemplate.replace("{page}", "\\d+").toRegex()
+        val fullPath = nextPageUrl.encodedPath
+        val matchStart = templateRegex.find(fullPath)?.range?.first
+            ?: throw Exception("Template not found in URL path")
 
-            val pageResponse = client.newCall(GET(page.url, headers)).execute()
-            val pageHtml = pageResponse.use { response -> response.body.string() }
-            val pageDocument = Jsoup.parse(pageHtml, page.url)
-            val urls = getChapterImageUrls(pageDocument)
+        val basePath = fullPath.substring(0, matchStart)
 
-            synchronized(chapterImagesCacheMutex) {
-                val cached = chapterImagesCache.getOrPut(chapterKey) { MutableList(urls.size) { null } }
-                urls.forEachIndexed { idx, item ->
-                    if (item.isNotBlank()) {
-                        if (idx < cached.size) {
-                            cached[idx] = item
-                        }
-                    }
-                }
-            }
-        }
+        return (1..totalPages).map { page ->
+            val resolvedPath = urlTemplate.replace("{page}", page.toString())
+            val url = nextPageUrl.newBuilder()
+                .encodedPath("$basePath$resolvedPath")
+                .fragment(page.toString())
+                .toString()
 
-        val resolved = synchronized(chapterImagesCacheMutex) {
-            chapterImagesCache[chapterKey]?.getOrNull(page.index)
+            Page(page, url)
         }
-
-        if (resolved.isNullOrBlank()) {
-            throw Exception("Mangago: fetchImageUrl failed - could not resolve image url for page ${page.index + 1}")
-        }
-        resolved
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -381,91 +278,56 @@ class Mangago :
         return super.pageListRequest(chapter)
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Unused")
+    override fun imageUrlParse(response: Response): String {
+        val index = response.request.url.fragment!!.toInt() - 1
+        val document = response.asJsoup()
+        val availableImages = getChapterImageUrls(document)
 
-    private fun parseChapterKey(document: Document): String {
-        val pageDataScript =
-            document.selectFirst("script:containsData(total_pages=), script:containsData(mid=), script:containsData(cid=)")
-                ?.data().orEmpty()
-        val midRegex = Regex("""mid\s*=\s*"([^"]+)"""")
-        val cidRegex = Regex("""cid\s*=\s*(\d+)""")
-        val mid = midRegex.find(pageDataScript)?.groupValues?.get(1).orEmpty()
-        val cid = cidRegex.find(pageDataScript)?.groupValues?.get(1).orEmpty()
-        if (mid.isBlank() || cid.isBlank()) {
-            throw Exception("Mangago: parseChapterKey failed - missing mid/cid in ${document.location()}")
-        }
-        return "$mid:$cid"
+        return availableImages.getOrNull(index)
+            ?.takeIf { it.isNotBlank() }
+            ?: throw Exception("Unable to find image for page ${index + 1}")
     }
 
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+
     private fun getChapterImageUrls(document: Document): List<String> {
-        val imgsrcsScript = document.selectFirst("script:containsData(imgsrcs)")?.html()
-            ?: throw Exception("Mangago: getChapterImageUrls failed - could not find 'imgsrcs' script in ${document.location()}")
-        val imgsrcRaw = imgSrcsRegex.find(imgsrcsScript)?.groupValues?.get(1)
-            ?: throw Exception("Mangago: getChapterImageUrls failed - could not extract base64 imgsrcs from script in ${document.location()}")
-        val imgsrcs = Base64.decode(imgsrcRaw, Base64.DEFAULT)
+        val images = document.selectFirst("script:containsData(imgsrcs)")
+            ?.data()
+            ?.let { imgSrcsRegex.find(it)?.groupValues?.get(1) }
+            ?.let { Base64.decode(it, Base64.DEFAULT) }
+            ?: throw Exception("could not find 'imgsrcs' script")
 
-        val decryptCache = getOrBuildChapterJsCache(document)
+        val chapterJsUrl = document.selectFirst("script[src*=chapter.js]")!!.absUrl("src")
+        val chapterJs = SoJsonV4Deobfuscator.decode(
+            client.newCall(
+                GET(chapterJsUrl, headers),
+            ).execute().body.string(),
+        )
+        val key = findHexEncodedVariable(chapterJs, "key").decodeHex()
+        val iv = findHexEncodedVariable(chapterJs, "iv").decodeHex()
 
-        val cipher = Cipher.getInstance(hashCipher)
-        val keyS = SecretKeySpec(decryptCache.key, aes)
-        cipher.init(Cipher.DECRYPT_MODE, keyS, IvParameterSpec(decryptCache.iv))
+        val cipher = Cipher.getInstance("AES/CBC/ZEROBYTEPADDING").apply {
+            val secretKeySpec = SecretKeySpec(key, "AES")
+            val ivParameterSpec = IvParameterSpec(iv)
 
-        var imageList = cipher.doFinal(imgsrcs).toString(Charsets.UTF_8)
+            init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
+        }
 
-        imageList = unescrambleImageList(imageList, decryptCache.deobfChapterJs)
+        var imageList = cipher.doFinal(images).toString(Charsets.UTF_8)
 
-        val cols = colsRegex.find(decryptCache.deobfChapterJs)?.groupValues?.get(1) ?: ""
+        imageList = unscrambleImageList(imageList, chapterJs)
+
+        val cols = colsRegex.find(chapterJs)?.groupValues?.get(1) ?: ""
 
         val resolvedUrls = imageList.split(",").map {
             if (it.contains("cspiclink")) {
-                "$it#desckey=${getDescramblingKey(decryptCache.deobfChapterJs, it)}&cols=$cols"
+                "$it#desckey=${getDescramblingKey(chapterJs, it)}&cols=$cols"
             } else {
                 it
             }
         }
 
         return resolvedUrls
-    }
-
-    private fun getOrBuildChapterJsCache(document: Document): ChapterJsDecryptCache {
-        val chapterKey = parseChapterKey(document)
-        val chapterJsUrl = document.getElementsByTag("script").first {
-            it.attr("src").contains("chapter.js", ignoreCase = true)
-        }.attr("abs:src")
-        synchronized(chapterJsCacheMutex) {
-            val cached = chapterJsCache[chapterKey]
-            if (cached != null) {
-                return cached
-            }
-        }
-
-        val lock = synchronized(chapterJsCacheMutex) {
-            chapterJsFetchLockMap.getOrPut(chapterKey) { Any() }
-        }
-
-        synchronized(lock) {
-            synchronized(chapterJsCacheMutex) {
-                val cached = chapterJsCache[chapterKey]
-                if (cached != null) {
-                    return cached
-                }
-            }
-
-            val obfuscatedChapterJs = client.newCall(GET(chapterJsUrl, headers)).execute().body.string()
-            val deobfChapterJs = SoJsonV4Deobfuscator.decode(obfuscatedChapterJs)
-            val key = findHexEncodedVariable(deobfChapterJs, "key").decodeHex()
-            val iv = findHexEncodedVariable(deobfChapterJs, "iv").decodeHex()
-            val entry = ChapterJsDecryptCache(
-                deobfChapterJs = deobfChapterJs,
-                key = key,
-                iv = iv,
-            )
-
-            synchronized(chapterJsCacheMutex) {
-                chapterJsCache[chapterKey] = entry
-            }
-            return entry
-        }
     }
 
     override fun getFilterList(): FilterList = FilterList(
@@ -597,7 +459,7 @@ class Mangago :
         return s
     }
 
-    private fun unescrambleImageList(imageList: String, js: String): String {
+    private fun unscrambleImageList(imageList: String, js: String): String {
         var imgList = imageList
         try {
             val keyLocations = keyLocationRegex.findAll(js).map {
@@ -613,7 +475,7 @@ class Mangago :
             }
 
             imgList = imgList.unscramble(unscrambleKey)
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             // Only call where it should throw is imageList[it].toString().toInt().
             // This usually means that the list is already unscrambled.
         }
@@ -666,8 +528,8 @@ class Mangago :
             .toByteArray()
     }
 
-    private fun getDescramblingKey(deobfChapterJs: String, imageUrl: String): String {
-        val imgkeys = deobfChapterJs
+    private fun getDescramblingKey(chapterJs: String, imageUrl: String): String {
+        val imgKeys = chapterJs
             .substringAfter("var renImg = function(img,width,height,id){")
             .substringBefore("key = key.split(")
             .split("\n")
@@ -676,7 +538,7 @@ class Mangago :
             .replace("img.src", "url")
 
         val js = """
-            function getDescramblingKey(url) { $imgkeys; return key; }
+            function getDescramblingKey(url) { $imgKeys; return key; }
             getDescramblingKey("$imageUrl");
         """.trimIndent()
 
@@ -689,10 +551,6 @@ class Mangago :
 
     private val jsFilters =
         listOf("jQuery", "document", "getContext", "toDataURL", "getImageData", "width", "height")
-
-    private val hashCipher = "AES/CBC/ZEROBYTEPADDING"
-
-    private val aes = "AES"
 
     private val keyLocationRegex by lazy {
         Regex("""str\.charAt\(\s*(\d+)\s*\)""")
