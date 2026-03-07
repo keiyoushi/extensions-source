@@ -145,7 +145,8 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
 
             info.selectFirst("div.post-content_item.wleft:contains(Alternative) div.summary-content")
                 ?.text()
-                ?.takeIf { it != "Updating" && it.isNotEmpty() }
+                ?.takeIf { it != "Updating" }
+                ?.takeIf { it.isNotEmpty() }
                 ?.let {
                     append("Alternative Names:\n")
                     it.split("/", ";").forEach { alt ->
