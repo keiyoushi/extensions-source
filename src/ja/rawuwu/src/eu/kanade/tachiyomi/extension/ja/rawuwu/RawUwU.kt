@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.rawuwu
 
+import eu.kanade.tachiyomi.extension.ja.rawuwu.dto.ChapterPageResponseDto
+import eu.kanade.tachiyomi.extension.ja.rawuwu.dto.MangaDetailResponseDto
+import eu.kanade.tachiyomi.extension.ja.rawuwu.dto.RawUwUResponseDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,14 +11,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class RawUwU : HttpSource() {
 
@@ -24,21 +27,10 @@ class RawUwU : HttpSource() {
     override val lang = "ja"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val originalRequest = chain.request()
-            val requestBuilder = originalRequest.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient
 
-            if (originalRequest.header("User-Agent").isNullOrEmpty()) {
-                val defaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                requestBuilder.header("User-Agent", defaultUA)
-            }
-
-            requestBuilder.header("Referer", baseUrl)
-
-            chain.proceed(requestBuilder.build())
-        }
-        .build()
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     // --- BROWSE (POPULAR / LATEST / SEARCH) ---
 
@@ -48,23 +40,39 @@ class RawUwU : HttpSource() {
         SortFilter(),
     )
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/spa/genre/all?sort=most_viewed&page=$page", headers)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/spa/latest-manga?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/spa/genre/all".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "most_viewed")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl/spa/latest-manga".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, headers)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotEmpty()) {
-        GET("$baseUrl/spa/search?query=$query&page=$page", headers)
+        val url = "$baseUrl/spa/search".toHttpUrl().newBuilder()
+            .addQueryParameter("query", query)
+            .addQueryParameter("page", page.toString())
+            .build()
+        GET(url, headers)
     } else {
-        val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
-        val statusFilter = filters.filterIsInstance<StatusFilter>().firstOrNull()
-        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+        val genreFilter = filters.firstInstance<GenreFilter>()
+        val statusFilter = filters.firstInstance<StatusFilter>()
+        val sortFilter = filters.firstInstance<SortFilter>()
 
-        val genreCode = genreFilter?.toCode() ?: "all"
+        val genreCode = genreFilter.toCode()
         val url = "$baseUrl/spa/genre/$genreCode".toHttpUrl().newBuilder()
 
-        statusFilter?.toValue()?.takeIf { it.isNotEmpty() }?.let {
+        statusFilter.toValue().takeIf { it.isNotEmpty() }?.let {
             url.addQueryParameter("status", it)
         }
-        sortFilter?.toValue()?.takeIf { it.isNotEmpty() }?.let {
+        sortFilter.toValue().takeIf { it.isNotEmpty() }?.let {
             url.addQueryParameter("sort", it)
         }
 
@@ -78,23 +86,17 @@ class RawUwU : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = parseMangaListResponse(response)
 
     private fun parseMangaListResponse(response: Response): MangasPage {
-        val jsonElement = Json.parseToJsonElement(response.body.string()).jsonObject
+        val result = response.parseAs<RawUwUResponseDto>()
 
-        val mangaArray = jsonElement["manga_list"]?.jsonArray
-            ?: return MangasPage(emptyList(), false)
-
-        val mangas = mangaArray.map { item ->
-            val obj = item.jsonObject
+        val mangas = result.manga_list?.map { manga ->
             SManga.create().apply {
-                val id = obj["manga_id"]?.jsonPrimitive?.content ?: ""
-                url = "/raw/$id"
-                title = obj["manga_name"]?.jsonPrimitive?.content ?: ""
-                thumbnail_url = obj["manga_cover_img"]?.jsonPrimitive?.content
+                url = "/raw/${manga.manga_id}"
+                title = manga.manga_name
+                thumbnail_url = manga.manga_cover_img
             }
-        }
+        } ?: emptyList()
 
-        val pagi = jsonElement["pagi"]?.jsonObject
-        val hasNextPage = pagi?.get("button")?.jsonObject?.get("next")?.jsonPrimitive?.content?.toIntOrNull()?.let { it > 0 } ?: false
+        val hasNextPage = result.pagi?.button?.next?.let { it > 0 } ?: false
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -108,16 +110,17 @@ class RawUwU : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val responseBody = response.body.string()
-        val json = Json.parseToJsonElement(responseBody).jsonObject
-        val detail = json["detail"]?.jsonObject ?: throw Exception("Manga detail not found")
+        val result = response.parseAs<MangaDetailResponseDto>()
 
         return SManga.create().apply {
-            title = detail["manga_name"]?.jsonPrimitive?.content ?: ""
-            thumbnail_url = detail["manga_cover_img_full"]?.jsonPrimitive?.content
-                ?: detail["manga_cover_img"]?.jsonPrimitive?.content
-            val descriptionText = detail["manga_description"]?.jsonPrimitive?.content ?: ""
-            val altName = detail["manga_others_name"]?.jsonPrimitive?.content ?: ""
+            val detail = result.detail ?: throw Exception("Could not find manga details")
+            title = detail.manga_name
+            thumbnail_url = detail.manga_cover_img_full
+                ?: detail.manga_cover_img ?: ""
+
+            val descriptionText = detail.manga_description ?: ""
+            val altName = detail.manga_others_name ?: ""
+
             description = buildString {
                 append(descriptionText)
                 append("\n\n")
@@ -129,14 +132,15 @@ class RawUwU : HttpSource() {
                 }
             }
 
-            author = json["authors"]?.jsonArray?.joinToString {
-                it.jsonObject["author_name"]?.jsonPrimitive?.content ?: ""
+            author = result.authors?.joinToString { it.author_name }
+            genre = result.tags?.joinToString { it.tag_name }
+
+            val isActive = detail.manga_status
+            status = when (isActive) {
+                true -> SManga.COMPLETED
+                false -> SManga.ONGOING
+                else -> SManga.UNKNOWN
             }
-            genre = json["tags"]?.jsonArray?.joinToString {
-                it.jsonObject["tag_name"]?.jsonPrimitive?.content ?: ""
-            }
-            val isActive = detail["manga_status"]?.jsonPrimitive?.content?.toBoolean() ?: false
-            status = if (isActive) SManga.COMPLETED else SManga.ONGOING
         }
     }
 
@@ -148,18 +152,17 @@ class RawUwU : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = Json.parseToJsonElement(response.body.string()).jsonObject
-        val mangaId = json["detail"]?.jsonObject?.get("manga_id")?.jsonPrimitive?.content ?: ""
-        val chaptersArray = json["chapters"]?.jsonArray ?: return emptyList()
+        val json = response.parseAs<MangaDetailResponseDto>()
+        val mangaId = json.detail?.manga_id ?: ""
+        val chaptersArray = json.chapters ?: return emptyList()
 
-        return chaptersArray.map { element ->
-            val obj = element.jsonObject
+        return chaptersArray.map { chapter ->
             SChapter.create().apply {
-                val num = obj["chapter_number"]?.jsonPrimitive?.content ?: ""
+                val num = chapter.chapter_number ?: ""
                 url = "/read/$mangaId/chapter-$num"
-                val title = obj["chapter_title"]?.jsonPrimitive?.content ?: ""
+                val title = chapter.chapter_title ?: ""
                 name = if (title.isNotEmpty()) "Ch. $num - $title" else "Chapter $num"
-                date_upload = parseDate(obj["chapter_date_published"]?.jsonPrimitive?.content)
+                date_upload = parseDate(chapter.chapter_date_published ?: "")
             }
         }
     }
@@ -175,12 +178,11 @@ class RawUwU : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val json = Json.parseToJsonElement(response.body.string()).jsonObject
+        val result = response.parseAs<ChapterPageResponseDto>()
 
-        val chapterDetail = json["chapter_detail"]?.jsonObject
-        val serverUrl = chapterDetail?.get("server")?.jsonPrimitive?.content
-        val htmlContent = chapterDetail?.get("chapter_content")?.jsonPrimitive?.content
-            ?: return emptyList()
+        val chapterDetail = result.chapter_detail
+        val serverUrl = chapterDetail?.server ?: ""
+        val htmlContent = chapterDetail?.chapter_content ?: ""
 
         val document = org.jsoup.Jsoup.parseBodyFragment(htmlContent)
 
