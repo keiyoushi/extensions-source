@@ -65,7 +65,7 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.selectFirst("div.item-thumb.wleft a")!!.attr("title")
+        title = element.selectFirst("div.item-thumb.wleft img")!!.attr("alt")
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -134,21 +134,29 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
 
         title = document.select("div.post-title.wleft > h1").text()
         description = buildString {
-            document.select("div.ss-manga > p")
-                .eachText().onEach {
+            document.selectFirst("div.ss-manga")
+                ?.wholeText()?.trim()
+                ?.takeIf { it != "N/A" }
+                ?.takeIf { it.isNotEmpty() }
+                ?.also {
                     append(it.trim())
                     append("\n\n")
                 }
 
             info.selectFirst("div.post-content_item.wleft:contains(Alternative) div.summary-content")
                 ?.text()
-                ?.takeIf { it != "Updating" && it.isNotEmpty() }
+                ?.takeIf { it != "Updating" }
+                ?.takeIf { it.isNotEmpty() }
                 ?.let {
                     append("Alternative Names:\n")
-                    append(it.trim())
+                    it.split("/", ";").forEach { alt ->
+                        append("- ", alt.trim())
+                        append("\n")
+                    }
                 }
         }
-        status = when (info.select("div.post-content_item.wleft:contains(Status) div.summary-content").text()) {
+        val statusElement = document.selectFirst("div.post-content_item.wleft:contains(Status) div.summary-content")
+        status = when (statusElement?.text()) {
             "Ongoing" -> SManga.ONGOING
             "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
