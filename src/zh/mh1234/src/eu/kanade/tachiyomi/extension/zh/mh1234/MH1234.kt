@@ -41,7 +41,7 @@ class MH1234 : ParsedHttpSource() {
         element.selectFirst("a.comic-card__link")!!.let {
             this.setUrlWithoutDomain(it.absUrl("href"))
             title = it.selectFirst(".comic-card__title")!!.text()
-            thumbnail_url = it.selectFirst("img.comic-card__image")?.attr("data-src")
+            thumbnail_url = it.selectFirst("img.comic-card__image")?.absUrl("data-src")
         }
     }
 
@@ -81,9 +81,9 @@ class MH1234 : ParsedHttpSource() {
         }.build()
         GET(url, headers)
     } else {
-        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selected?.value ?: "0"
-        val status = filters.filterIsInstance<StatusFilter>().firstOrNull()?.selected?.value ?: "0"
-        val sort = filters.filterIsInstance<SortFilter>().firstOrNull()?.selected?.value ?: "id"
+        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selected?.second ?: "0"
+        val status = filters.filterIsInstance<StatusFilter>().firstOrNull()?.selected?.second ?: "0"
+        val sort = filters.filterIsInstance<SortFilter>().firstOrNull()?.selected?.second ?: "id"
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("category")
@@ -123,8 +123,6 @@ class MH1234 : ParsedHttpSource() {
 
     // Manga Detail Page / Chapters Page (Separate)
 
-    // override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url)
-
     override fun chapterListSelector() = ".chapter-list a.chapter-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
@@ -137,7 +135,7 @@ class MH1234 : ParsedHttpSource() {
     // Manga View Page
 
     override fun pageListParse(document: Document): List<Page> = document.select("img.reader-image").mapIndexed { i, img ->
-        Page(i, "", img.attr("data-src"))
+        Page(i, "", img.absUrl("data-src"))
     }
 
     // Image
