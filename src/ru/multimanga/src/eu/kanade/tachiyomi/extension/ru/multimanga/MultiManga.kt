@@ -20,7 +20,7 @@ import java.util.Locale
 
 class MultiManga : ParsedHttpSource() {
     override val name = "MultiManga"
-    override val baseUrl = "https://multi-manga.com"
+    override val baseUrl = "https://multi-manga.today"
     override val lang = "ru"
     override val supportsLatest = true
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)

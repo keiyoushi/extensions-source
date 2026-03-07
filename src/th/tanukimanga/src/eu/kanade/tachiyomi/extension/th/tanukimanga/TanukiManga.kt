@@ -7,7 +7,7 @@ import java.util.Locale
 class TanukiManga :
     MangaThemesia(
         "Tanuki-Manga",
-        "https://www.tanuki-manga.com",
+        "https://www.tanuki-manga.net",
         "th",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
     )

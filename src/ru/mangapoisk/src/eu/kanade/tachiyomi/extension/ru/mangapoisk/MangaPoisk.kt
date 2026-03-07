@@ -23,7 +23,7 @@ import java.util.Locale
 class MangaPoisk : ParsedHttpSource() {
     override val name = "MangaPoisk"
 
-    override val baseUrl = "https://mangapoisk.live"
+    override val baseUrl = "https://mangap.ru"
 
     override val lang = "ru"
 

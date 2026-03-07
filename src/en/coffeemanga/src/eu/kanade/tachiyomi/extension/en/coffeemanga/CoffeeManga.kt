@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.coffeemanga
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import org.jsoup.nodes.Element
 
-class CoffeeManga : Madara("Coffee Manga", "https://coffeemanga.io", "en") {
+class CoffeeManga : Madara("Coffee Manga", "https://coffeemanga.ink", "en") {
     override val useNewChapterEndpoint = false
 
     override fun imageFromElement(element: Element): String? = when {

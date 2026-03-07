@@ -12,7 +12,7 @@ import java.util.Locale
 class MangaGezgini :
     Madara(
         "MangaGezgini",
-        "https://mangagezgini.love",
+        "https://mangagezgini.online",
         "tr",
         SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     ) {

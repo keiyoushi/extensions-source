@@ -2,8 +2,8 @@ ext {
     extName = 'Coffee Manga'
     extClass = '.CoffeeManga'
     themePkg = 'madara'
-    baseUrl = 'https://coffeemanga.io'
-    overrideVersionCode = 4
+    baseUrl = 'https://coffeemanga.ink'
+    overrideVersionCode = 5
     isNsfw = true
 }
 
