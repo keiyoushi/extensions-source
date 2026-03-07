@@ -7,7 +7,7 @@ import java.util.Locale
 class PopsManga :
     MangaThemesia(
         "PopsManga",
-        "https://popsmanga.com",
+        "https://popsmanga.net",
         "th",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
     )

@@ -5,6 +5,6 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 class SpeedManga :
     MangaThemesia(
         "Speed Manga",
-        "https://speed-manga.com",
+        "https://speed-manga.net",
         "th",
     )

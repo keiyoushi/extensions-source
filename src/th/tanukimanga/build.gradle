@@ -2,8 +2,8 @@ ext {
     extName = 'Tanuki-Manga'
     extClass = '.TanukiManga'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.tanuki-manga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.tanuki-manga.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

@@ -56,7 +56,7 @@ class DuaLeoTruyen :
         }
     }
 
-    private val defaultBaseUrl: String = "https://dualeotruyenvh.com"
+    private val defaultBaseUrl: String = "https://dualeotruyenky.com"
 
     override val lang = "vi"
 

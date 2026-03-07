@@ -22,7 +22,7 @@ import java.util.Locale
 class MangaIsekaiThai :
     Madara(
         "MangaIsekaiThai",
-        "https://www.mangaisekaithai.com",
+        "https://www.mangaisekaithai.net",
         "th",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
     ) {
