@@ -286,9 +286,20 @@ abstract class Luscious(
                     nextPage = data["info"]!!.jsonObject["has_next_page"]!!.jsonPrimitive.boolean
                     data["items"]!!.jsonArray.map {
                         val chapter = SChapter.create()
-                        val url = when (getResolutionPref()) {
-                            "-1" -> it.jsonObject["url_to_original"]!!.jsonPrimitive.content
-                            else -> it.jsonObject["thumbnails"]!!.jsonArray[getResolutionPref()?.toInt()!!].jsonObject["url"]!!.jsonPrimitive.content
+                        val url = when {
+                            getResolutionPref() != "-1" -> {
+                                it.jsonObject["thumbnails"]!!.jsonArray[getResolutionPref()?.toInt()!!].jsonObject["url"]!!.jsonPrimitive.content
+                            }
+                            it.jsonObject["url_to_original"]!!.jsonPrimitive.contentOrNull != null -> {
+                                it.jsonObject["url_to_original"]!!.jsonPrimitive.content
+                            }
+                            else -> {
+                                it.jsonObject["thumbnails"]!!.jsonArray.maxByOrNull {
+                                    val height = it.jsonObject["height"]!!.jsonPrimitive.int
+                                    val width = it.jsonObject["width"]!!.jsonPrimitive.int
+                                    height * width
+                                }?.jsonObject?.get("url")!!.jsonPrimitive.content ?: ""
+                            }
                         }
                         when {
                             url.startsWith("//") -> chapter.url = "https:$url"
@@ -659,7 +670,7 @@ abstract class Luscious(
 
     private fun getContentTypeFilters() = listOf(
         SelectFilterOption("All", FILTER_VALUE_IGNORE),
-        SelectFilterOption("Hentai", "0"),
+        SelectFilterOption("Hentai", "2"),
         SelectFilterOption("Non-Erotic", "5"),
         SelectFilterOption("Real People", "6"),
     )
@@ -857,8 +868,8 @@ abstract class Luscious(
 
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
-        private val MIRROR_PREF_ENTRIES = arrayOf("Guest", "API", "Members")
-        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://apicdn.luscious.net", "https://members.luscious.net")
+        private val MIRROR_PREF_ENTRIES = arrayOf("Guest", "Members")
+        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://members.luscious.net")
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 
