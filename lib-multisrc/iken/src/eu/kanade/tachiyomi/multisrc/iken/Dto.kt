@@ -124,4 +124,9 @@ class ChapterPostDetails(
     val slug: String,
 )
 
+@Serializable
+class PageParseDto(
+    val url: String,
+)
+
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
