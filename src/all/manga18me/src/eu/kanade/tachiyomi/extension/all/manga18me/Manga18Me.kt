@@ -65,7 +65,7 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.selectFirst("div.item-thumb.wleft a")!!.attr("title")
+        title = element.selectFirst("div.item-thumb.wleft img")!!.attr("alt")
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -145,10 +145,11 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
                 ?.takeIf { it != "Updating" && it.isNotEmpty() }
                 ?.let {
                     append("Alternative Names:\n")
-                    append(it.trim())
+                    append("- ", it.trim())
                 }
         }
-        status = when (info.select("div.post-content_item.wleft:contains(Status) div.summary-content").text()) {
+        val statusElement = document.selectFirst("div.post-content_item.wleft:contains(Status) div.summary-content")
+        status = when (statusElement?.text()) {
             "Ongoing" -> SManga.ONGOING
             "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
