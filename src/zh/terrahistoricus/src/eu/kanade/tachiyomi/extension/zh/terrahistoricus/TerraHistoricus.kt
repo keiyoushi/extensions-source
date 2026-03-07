@@ -17,16 +17,42 @@ import uy.kohesive.injekt.injectLazy
 class TerraHistoricus : HttpSource() {
     override val name = "泰拉记事社"
     override val lang = "zh"
-    override val baseUrl = "https://terra-historicus.hypergryph.com"
+    override val baseUrl = "https://comic.hypergryph.com"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/comic", headers)
-    override fun popularMangaParse(response: Response) = MangasPage(response.parseAs<List<THComic>>().map { it.toSManga() }, false)
+    private val topicKeys = listOf("terra-historicus", "talos-ii-historicus")
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/recentUpdate", headers)
-    override fun latestUpdatesParse(response: Response) = MangasPage(response.parseAs<List<THRecentUpdate>>().map { it.toSManga() }, false)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/comic?topicKey=${topicKeys[0]}", headers)
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        val requests = topicKeys.map { client.newCall(GET("$baseUrl/api/comic?topicKey=$it", headers)) }
+        return Observable.from(requests)
+            .flatMap { it.asObservableSuccess() }
+            .toList()
+            .map { responses ->
+                val mangas = responses.flatMap { it.parseAs<List<THComic>>().map { comic -> comic.toSManga() } }
+                MangasPage(mangas, false)
+            }
+    }
+
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/recentUpdate?topicKey=${topicKeys[0]}", headers)
+
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        val requests = topicKeys.map { client.newCall(GET("$baseUrl/api/recentUpdate?topicKey=$it", headers)) }
+        return Observable.from(requests)
+            .flatMap { it.asObservableSuccess() }
+            .toList()
+            .map { responses ->
+                val mangas = responses.flatMap { it.parseAs<List<THRecentUpdate>>().map { update -> update.toSManga() } }
+                MangasPage(mangas, false)
+            }
+    }
+
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(page).map { mangasPage ->
         val mangas = mangasPage.mangas.filter { it.title.contains(query) }
@@ -37,7 +63,7 @@ class TerraHistoricus : HttpSource() {
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
     // navigate webview to webpage
-    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.removePrefix("/api"), headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.replace("/api/comic/", "/terra-historicus/"), headers)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
         .map { response -> mangaDetailsParse(response).apply { initialized = true } }
