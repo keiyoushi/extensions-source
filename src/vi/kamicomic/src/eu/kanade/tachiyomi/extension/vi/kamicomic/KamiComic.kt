@@ -129,10 +129,10 @@ class KamiComic : HttpSource() {
         val wpManga = mangaList.first()
 
         return SManga.create().apply {
-            title = Jsoup.parse(wpManga.title!!.rendered!!).text()
+            title = Jsoup.parseBodyFragment(wpManga.title!!.rendered!!).text()
 
             description = wpManga.content?.rendered?.let { html ->
-                Jsoup.parse(html).text().trim()
+                Jsoup.parseBodyFragment(html).text().trim()
             }
 
             val terms = wpManga.embedded?.terms
