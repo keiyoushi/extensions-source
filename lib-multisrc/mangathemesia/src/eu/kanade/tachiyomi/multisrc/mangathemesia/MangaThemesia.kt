@@ -274,7 +274,7 @@ abstract class MangaThemesia(
         }
     }
 
-    protected fun String?.removeEmptyPlaceholder(): String? = if (this.isNullOrBlank() || (this == "-") || (this == "N/A") || (this == "n/a")) null else this
+    protected fun String?.removeEmptyPlaceholder(): String? = if (this.isNullOrBlank() || (this == "-") || (this == "N/A") || (this == "n/a") || (this == "Unknown")) null else this
 
     open fun String?.parseStatus(): Int = when {
         this == null -> SManga.UNKNOWN

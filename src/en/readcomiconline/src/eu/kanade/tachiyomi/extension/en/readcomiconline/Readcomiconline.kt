@@ -3,16 +3,18 @@ package eu.kanade.tachiyomi.extension.en.readcomiconline
 import android.content.SharedPreferences
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -24,16 +26,14 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
 class Readcomiconline :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
 
     override val name = "ReadComicOnline"
@@ -68,38 +68,52 @@ class Readcomiconline :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun popularMangaSelector() = ".list-comic > .item > a:first-child"
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ComicList/MostPopular?page=$page", headers)
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ComicList/LatestUpdate?page=$page", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         title = element.text()
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".list-comic > .item > a:first-child").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("ul.pager > li > a:contains(Next)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaNextPageSelector() = "ul.pager > li > a:contains(Next)"
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request { // publisher > writer > artist + sorting for both if else
-        if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>()
-                .all { it.included.isEmpty() && it.excluded.isEmpty() }
-        ) {
+    ): Request {
+        val activeFilters = if (filters.isEmpty()) getFilterList() else filters
+        val genreList = activeFilters.firstInstance<GenreList>()
+        val sortOption = activeFilters.firstInstance<SortFilter>().selected
+        val yearOption = activeFilters.firstInstance<YearFilter>().selected
+
+        return if (query.isEmpty() && genreList.included.size == 1 && genreList.excluded.isEmpty() && yearOption == null) {
+            // Single included genre — use /Genre/{name}/{sort} URL
+            val genreName = genreList.state.first { it.isIncluded() }.name.replace(" ", "-")
+            val url = baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("Genre")
+                addPathSegment(genreName)
+                if (sortOption != null) addPathSegment(sortOption)
+                addQueryParameter("page", page.toString())
+                if (yearOption != null) addQueryParameter("pubDate", yearOption)
+            }.build()
+            GET(url, headers)
+        } else if (query.isEmpty() && genreList.included.isEmpty() && genreList.excluded.isEmpty() && yearOption == null) {
+            // No query, no genres — publisher/writer/artist + sort
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
 
-                for (filter in if (filters.isEmpty()) getFilterList() else filters) {
+                for (filter in activeFilters) {
                     when (filter) {
                         is PublisherFilter -> {
                             if (filter.state.isNotEmpty()) {
@@ -129,67 +143,67 @@ class Readcomiconline :
                         break
                     }
                 }
-                addPathSegment(
-                    (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<SortFilter>()
-                        .first().selected.toString(),
-                )
+                if (!pathSegmentAdded) {
+                    addPathSegment("ComicList")
+                    if (sortOption != null) addPathSegment(sortOption)
+                } else if (sortOption != null) {
+                    addPathSegment(sortOption)
+                }
                 addQueryParameter("page", page.toString())
+                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
-            return GET(url, headers)
+            GET(url, headers)
         } else {
+            // Has query or multiple/excluded genres — AdvanceSearch
             val url = "$baseUrl/AdvanceSearch".toHttpUrl().newBuilder().apply {
                 addQueryParameter("comicName", query.trim())
                 addQueryParameter("page", page.toString())
-                for (filter in if (filters.isEmpty()) getFilterList() else filters) {
+                for (filter in activeFilters) {
                     when (filter) {
-                        is Status -> addQueryParameter(
-                            "status",
-                            arrayOf("", "Completed", "Ongoing")[filter.state],
-                        )
+                        is Status -> addQueryParameter("status", filter.selected.orEmpty())
 
                         is GenreList -> {
                             addQueryParameter("ig", filter.included.joinToString(","))
                             addQueryParameter("eg", filter.excluded.joinToString(","))
                         }
 
+                        is YearFilter -> {
+                            if (filter.selected != null) addQueryParameter("pubDate", filter.selected!!)
+                        }
+
                         else -> {}
                     }
                 }
             }.build()
-            return GET(url, headers)
+            GET(url, headers)
         }
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val infoElement = document.select("div.barContent").first()!!
 
         val manga = SManga.create()
         manga.title = infoElement.selectFirst("a.bigChar")!!.text()
         manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
-        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").first()?.text()
+        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().joinToString()
         manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
-        manga.description = infoElement.select("p:has(span:contains(Summary:)) ~ p").text()
+        manga.description = listOfNotNull(
+            infoElement.select("p:has(span:contains(Summary:)) ~ p").text().takeIf { it.isNotEmpty() },
+            infoElement.select("p:has(span:contains(Publisher:))").text().takeIf { it.isNotEmpty() }?.let { "\n$it" },
+            infoElement.select("p:has(span:contains(Publication date:))").text().takeIf { it.isNotEmpty() },
+            Regex("Views:\\s*([\\d,]+)").find(infoElement.select("p:has(span:contains(Views:))").text())
+                ?.let { "Views: ${it.groupValues[1]}" },
+        ).joinToString("\n")
         manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
             .let { parseStatus(it) }
         manga.thumbnail_url = document.select(".rightBox:eq(0) img").first()?.absUrl("src")
         return manga
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(realMangaDetailsRequest(manga)).asObservableSuccess()
-        .map { response ->
-            mangaDetailsParse(response).apply { initialized = true }
-        }
-
-    private fun realMangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga)
-
-    override fun mangaDetailsRequest(manga: SManga): Request = captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
-        ?: super.mangaDetailsRequest(manga)
+    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
 
     private fun parseStatus(status: String) = when {
         status.contains("Ongoing") -> SManga.ONGOING
@@ -197,16 +211,13 @@ class Readcomiconline :
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "table.listing tr:gt(1)"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()!!
-
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
-        chapter.name = urlElement.text()
-        chapter.date_upload = dateFormat.tryParse(element.selectFirst("td:eq(1)")?.text())
-        return chapter
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("table.listing tr:gt(1)").map { element ->
+        SChapter.create().apply {
+            val urlElement = element.selectFirst("a")!!
+            setUrlWithoutDomain(urlElement.attr("href"))
+            name = urlElement.text()
+            date_upload = dateFormat.tryParse(element.selectFirst("td:eq(1)")?.text())
+        }
     }
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
@@ -222,28 +233,26 @@ class Readcomiconline :
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         // Declare some important values first
         var encryptedLinks = mutableListOf<String>()
         val useSecondServer = serverPref() == "s2"
 
-        // Get script elements
-        val scripts = document.select("script")
-
-        // We'll evaluate every script that exists in the HTML
         if (remoteConfigItem == null) {
             throw IOException("Failed to retrieve configuration")
         }
 
-        for (script in scripts) {
-            QuickJs.create().use {
-                val eval =
-                    "let _encryptedString = ${Json.encodeToString(script.data().trimIndent())};let _useServer2 = $useSecondServer;${remoteConfigItem!!.imageDecryptEval}"
-                val evalResult = (it.evaluate(eval) as String).parseAs<List<String>>()
+        // Combine all js scripts (so baeu() URL detection and link extraction see the same content)
+        // baeu() is function call in the source code that sometimes contain a custom URL for the base URL for images
+        // in that case we bypass choosing server1 or server2 base URLs and use the custom URL instead
+        val combinedScripts = document.select("script").joinToString("\n") { it.data().trimIndent() }
 
-                // Add results to 'encryptedLinks'
-                encryptedLinks.addAll(evalResult)
-            }
+        QuickJs.create().use {
+            val eval =
+                "let _encryptedString = ${Json.encodeToString(combinedScripts)};let _useServer2 = $useSecondServer;${remoteConfigItem!!.imageDecryptEval}"
+            val evalResult = (it.evaluate(eval) as String).parseAs<List<String>>()
+            encryptedLinks.addAll(evalResult)
         }
 
         encryptedLinks = encryptedLinks.let { links ->
@@ -274,9 +283,17 @@ class Readcomiconline :
         }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response) = ""
 
-    private class Status : Filter.TriState("Completed")
+    private class Status :
+        SelectFilter(
+            "Status",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Completed", "Completed"),
+                Pair("Ongoing", "Ongoing"),
+            ),
+        )
     private class Genre(name: String, val gid: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
         val included: List<String>
@@ -294,6 +311,12 @@ class Readcomiconline :
         open val selected get() = options[state].second.takeUnless { it.isEmpty() }
     }
 
+    private class YearFilter :
+        SelectFilter(
+            "Publish Year",
+            arrayOf(Pair("Any", "")) + (2026 downTo 1920).map { Pair(it.toString(), it.toString()) }.toTypedArray(),
+        )
+
     private class PublisherFilter : Filter.Text("Publisher")
     private class WriterFilter : Filter.Text("Writer")
     private class ArtistFilter : Filter.Text("Artist")
@@ -309,10 +332,11 @@ class Readcomiconline :
         )
 
     override fun getFilterList() = FilterList(
-        Status(),
         GenreList(getGenreList()),
+        Status(),
+        YearFilter(),
         Filter.Separator(),
-        Filter.Header("Filters below is ignored when Status,Genre or the queue is not empty."),
+        Filter.Header("Filters below are ignored when any of the above filters or the search is filled. (Although you can sort for a single genre)"),
         SortFilter(),
         PublisherFilter(),
         WriterFilter(),
@@ -443,7 +467,7 @@ class Readcomiconline :
             val configLink = preferences.getString(
                 IMAGE_REMOTE_CONFIG_PREF,
                 IMAGE_REMOTE_CONFIG_DEFAULT,
-            )?.addBustQuery() ?: return null
+            )?.ifBlank { IMAGE_REMOTE_CONFIG_DEFAULT }?.addBustQuery() ?: return null
 
             try {
                 val configResponse = client.newCall(GET(configLink)).execute()

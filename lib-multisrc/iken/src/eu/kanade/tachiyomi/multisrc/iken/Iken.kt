@@ -16,11 +16,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
+import java.util.concurrent.ConcurrentHashMap
 
 abstract class Iken(
     override val name: String,
@@ -56,7 +58,28 @@ abstract class Iken(
             .associateBy { it.slug }
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
+    /**
+     * Enables the API request for fetching popular manga.
+     */
+    protected open val usePopularMangaApi: Boolean = false
+
+    /**
+     * The path segment used in the API URL for the popular request.
+     * This can be changed if the site uses a different endpoint path
+     */
+    protected open val popularSubString: String = "query"
+
+    protected open fun popularMangaUrl(page: Int): HttpUrl.Builder = "$apiUrl/api/$popularSubString".toHttpUrl().newBuilder().apply {
+        addQueryParameter("page", page.toString())
+        addQueryParameter("perPage", PER_PAGE.toString())
+        addQueryParameter("orderBy", "totalViews")
+    }
+
+    override fun popularMangaRequest(page: Int): Request = if (usePopularMangaApi) {
+        GET(popularMangaUrl(page).build(), headers)
+    } else {
+        GET("$baseUrl/home", headers)
+    }
 
     protected open val popularMangaSelector = "aside a:has(img), .splide:has(.card) li a:has(img)"
 
@@ -98,15 +121,39 @@ abstract class Iken(
         return GET(url, headers)
     }
 
+    // Tracks the current page
+    private val pageNumber = ConcurrentHashMap<String, Int>()
+
+    private fun keyFromUrl(url: HttpUrl): String = url.queryParameterNames
+        .sorted()
+        .mapNotNull { paramName ->
+            val value = url.queryParameter(paramName)
+            if (value.isNullOrBlank()) null else "$paramName=$value"
+        }.joinToString("&")
+
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        val page = response.request.url.queryParameter("page")!!.toInt()
+        var page = response.request.url.queryParameter("page")!!.toInt()
 
         val entries = data.posts
             .filterNot { it.isNovel }
             .map { it.toSManga() }
 
         val hasNextPage = data.totalCount > (page * PER_PAGE)
+
+        val key = keyFromUrl(response.request.url)
+        if (page == 1) pageNumber[key] = 1
+
+        if (entries.isEmpty() && hasNextPage) {
+            pageNumber[key] = pageNumber[key]!! + 1
+            val newUrl = response.request.url.newBuilder()
+                .setQueryParameter("page", pageNumber[key]!!.toString())
+                .build()
+            val newResponse = client.newCall(GET(newUrl)).execute()
+            return searchMangaParse(newResponse)
+        }
+
+        if (!hasNextPage) pageNumber.remove(key)
 
         return MangasPage(entries, hasNextPage)
     }
@@ -216,8 +263,10 @@ abstract class Iken(
 
         return "\"${data.substring(start, i)}\"".parseAs<String>()
     }
-}
 
-private const val PER_PAGE = 18
-private const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
-private val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+    companion object {
+        const val PER_PAGE = 18
+        const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+    }
+}

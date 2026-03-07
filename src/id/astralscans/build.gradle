@@ -1,0 +1,10 @@
+ext {
+    extName = 'Astral Scans'
+    extClass = '.AstralScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://astralscans.top'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

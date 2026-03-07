@@ -1,9 +1,8 @@
 ext {
     extName = 'TheManga'
     extClass = '.TheManga'
-    themePkg = 'madara'
     baseUrl = 'https://themanga.my.id'
-    overrideVersionCode = 0
+    extVersionCode = 46
     isNsfw = false
 }
 

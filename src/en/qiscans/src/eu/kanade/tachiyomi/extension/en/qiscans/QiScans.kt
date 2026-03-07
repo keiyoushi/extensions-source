@@ -23,22 +23,15 @@ class QiScans :
     Iken(
         "Qi Scans",
         "en",
-        "https://qiscans.org",
-        "https://api.qiscans.org",
+        "https://qimanhwa.com",
+        "https://api.qimanhwa.com",
     ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", "18")
-            addQueryParameter("orderBy", "totalViews")
-        }.build()
-        return GET(url, headers)
-    }
+    override val usePopularMangaApi = true
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 

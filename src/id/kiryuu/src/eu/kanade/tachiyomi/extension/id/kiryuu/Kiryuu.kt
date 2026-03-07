@@ -11,7 +11,7 @@ class Kiryuu :
     NatsuId(
         "Kiryuu",
         "id",
-        "https://kiryuu03.com",
+        "https://v1.kiryuu.to",
     ) {
     // Formerly "Kiryuu (WP Manga Stream)"
     override val id = 3639673976007021338

@@ -8,6 +8,7 @@ object WeebDexConstants {
 
     // API Endpoints
     const val API_MANGA_URL = "$API_URL/manga"
+    const val API_CHAPTER_URL = "$API_URL/chapter"
 
     // CDN Endpoints
     const val CDN_COVER_URL = "$CDN_URL/covers"
@@ -15,6 +16,10 @@ object WeebDexConstants {
 
     // Rate Limit (API is 5 req/s, using conservative value)
     const val RATE_LIMIT = 3
+
+    // Search Prefixes
+    const val PREFIX_ID_SEARCH = "id:"
+    const val PREFIX_CH_SEARCH = "ch:"
 
     // Tags Map
     val tags = mapOf(
