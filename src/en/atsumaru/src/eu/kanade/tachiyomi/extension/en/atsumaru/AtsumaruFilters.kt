@@ -47,6 +47,10 @@ internal class SortFilter :
     }
 }
 
+internal class AdultFilter : Filter.CheckBox("Show Adult Content", false)
+
+internal class OfficialFilter : Filter.CheckBox("Only Official Translations", false)
+
 internal data class Genre(val name: String, val id: String)
 
 internal data class Type(val name: String, val id: String)

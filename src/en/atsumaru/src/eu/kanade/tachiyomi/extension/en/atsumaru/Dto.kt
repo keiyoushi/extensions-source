@@ -190,4 +190,6 @@ internal class SearchFilter(
     val includedTags: List<String>? = null,
     val year: Int? = null,
     val minChapters: Int? = null,
+    val showAdult: Boolean = false,
+    val officialTranslation: Boolean = false,
 )

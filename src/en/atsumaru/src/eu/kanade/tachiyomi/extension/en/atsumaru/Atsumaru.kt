@@ -67,8 +67,9 @@ class Atsumaru : HttpSource() {
         StatusFilter(getStatusList()),
         YearFilter(),
         MinChaptersFilter(),
-        Filter.Separator(),
         SortFilter(),
+        AdultFilter(),
+        OfficialFilter(),
     )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -89,6 +90,8 @@ class Atsumaru : HttpSource() {
         var year: Int? = null
         var minChapters: Int? = null
         var sort = "popularity"
+        var showAdult = false
+        var officialTranslation = false
 
         filters.forEach { filter ->
             when (filter) {
@@ -128,6 +131,14 @@ class Atsumaru : HttpSource() {
                     sort = SortFilter.VALUES[filter.state!!.index]
                 }
 
+                is AdultFilter -> {
+                    showAdult = filter.state
+                }
+
+                is OfficialFilter -> {
+                    officialTranslation = filter.state
+                }
+
                 else -> {}
             }
         }
@@ -146,6 +157,8 @@ class Atsumaru : HttpSource() {
                 includedTags = selectedGenres.ifEmpty { null },
                 year = year,
                 minChapters = minChapters,
+                showAdult = showAdult,
+                officialTranslation = officialTranslation,
             ),
         )
     }
