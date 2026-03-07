@@ -302,7 +302,7 @@ class Manhuarm(
             .add("Cache-Control", "no-cache")
             .build()
 
-        val ocrData = Regex("""_0xdata\s*=\s*(\{.*?\});""")
+        val ocrData = Regex("""_0x\w+\s*=\s*(\{.*?\});""")
             .find(document.html())
             ?.groupValues
             ?.get(1)
