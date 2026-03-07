@@ -21,7 +21,6 @@ class Result(
     val pager: Pager?,
 )
 
-// TODO: filter novels?
 @Serializable
 class Item(
     val thumbnail: String?,
@@ -32,8 +31,7 @@ class Item(
     fun toSManga(): SManga = SManga.create().apply {
         url = id
         title = name
-        val url = thumbnail?.toHttpUrl()
-        thumbnail_url = url?.newBuilder()?.removePathSegment(url.pathSegments.lastIndex)?.build().toString() // high-res cover
+        thumbnail_url = thumbnail?.toHttpUrl()?.newBuilder()?.removePathSegment(1)?.build().toString()
     }
 }
 
@@ -68,8 +66,7 @@ class Product(
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = seriesName ?: name
-        val url = thumbnail?.toHttpUrl()
-        thumbnail_url = url?.newBuilder()?.removePathSegment(url.pathSegments.lastIndex)?.build().toString()
+        thumbnail_url = thumbnail?.toHttpUrl()?.newBuilder()?.removePathSegment(1)?.build().toString()
         author = this@Product.authors?.joinToString { it.name }
         description = buildString {
             if (!caption.isNullOrBlank()) {
@@ -89,7 +86,6 @@ class Product(
             }
         }
         genre = genreName
-        // TODO status
     }
 }
 
