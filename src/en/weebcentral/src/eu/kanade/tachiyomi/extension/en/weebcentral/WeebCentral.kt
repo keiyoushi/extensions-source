@@ -38,7 +38,7 @@ class WeebCentral : ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
-    private val excludedSearchCharacters = "[!#:()]".toRegex()
+    private val excludedSearchCharacters = "[!#:(),-]".toRegex()
 
     // ============================== Popular ===============================
 
