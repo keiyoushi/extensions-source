@@ -82,7 +82,7 @@ class Product(
                 append("\n\nPublisher: $publisherName")
             }
             if (isRestricted18 == true) {
-                append("\n\n+18")
+                append("\n\n18+")
             }
         }
         genre = genreName
