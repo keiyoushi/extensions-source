@@ -134,8 +134,11 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
 
         title = document.select("div.post-title.wleft > h1").text()
         description = buildString {
-            document.select("div.ss-manga > p")
-                .eachText().onEach {
+            document.selectFirst("div.ss-manga")
+                ?.wholeText()?.trim()
+                ?.takeIf { it != "N/A" }
+                ?.takeIf { it.isNotEmpty() }
+                ?.also {
                     append(it.trim())
                     append("\n\n")
                 }
@@ -145,7 +148,10 @@ open class Manga18Me(override val lang: String) : ParsedHttpSource() {
                 ?.takeIf { it != "Updating" && it.isNotEmpty() }
                 ?.let {
                     append("Alternative Names:\n")
-                    append("- ", it.trim())
+                    it.split("/", ";").forEach { alt ->
+                        append("- ", alt.trim())
+                        append("\n")
+                    }
                 }
         }
         val statusElement = document.selectFirst("div.post-content_item.wleft:contains(Status) div.summary-content")
