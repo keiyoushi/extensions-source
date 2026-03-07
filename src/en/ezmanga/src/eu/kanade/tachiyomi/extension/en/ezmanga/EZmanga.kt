@@ -29,14 +29,7 @@ class EZmanga :
         .rateLimit(3)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", "18")
-            addQueryParameter("orderBy", "totalViews")
-        }.build()
-        return GET(url, headers)
-    }
+    override val usePopularMangaApi = true
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
