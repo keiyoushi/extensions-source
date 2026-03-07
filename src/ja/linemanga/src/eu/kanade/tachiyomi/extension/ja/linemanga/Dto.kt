@@ -23,10 +23,10 @@ class Result(
 
 @Serializable
 class Item(
-    val thumbnail: String?,
+    private val thumbnail: String?,
     @SerialName("is_light_novel") val isLightNovel: Boolean?,
-    val id: String,
-    val name: String,
+    private val id: String,
+    private val name: String,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = id
