@@ -27,18 +27,16 @@ class TerraHistoricus : HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/comic?topicKey=${topicKeys[page - 1]}", headers)
     override fun popularMangaParse(response: Response) = MangasPage(response.parseAs<List<THComic>>().map { it.toSManga() }, false)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        client.newCall(popularMangaRequest(page)).asObservableSuccess().map { response ->
-            MangasPage(response.parseAs<List<THComic>>().map { it.toSManga() }, page < topicKeys.size)
-        }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client.newCall(popularMangaRequest(page)).asObservableSuccess().map { response ->
+        MangasPage(response.parseAs<List<THComic>>().map { it.toSManga() }, page < topicKeys.size)
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/recentUpdate?topicKey=${topicKeys[page - 1]}", headers)
     override fun latestUpdatesParse(response: Response) = MangasPage(response.parseAs<List<THRecentUpdate>>().map { it.toSManga() }, false)
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        client.newCall(latestUpdatesRequest(page)).asObservableSuccess().map { response ->
-            MangasPage(response.parseAs<List<THRecentUpdate>>().map { it.toSManga() }, page < topicKeys.size)
-        }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = client.newCall(latestUpdatesRequest(page)).asObservableSuccess().map { response ->
+        MangasPage(response.parseAs<List<THRecentUpdate>>().map { it.toSManga() }, page < topicKeys.size)
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(page).map { mangasPage ->
         val mangas = mangasPage.mangas.filter { it.title.contains(query) }
@@ -48,8 +46,9 @@ class TerraHistoricus : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    // navigate webview to webpage
-    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.removePrefix("/api"), headers)
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.removePrefix("/api")
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.removePrefix("/api")
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
         .map { response -> mangaDetailsParse(response).apply { initialized = true } }
