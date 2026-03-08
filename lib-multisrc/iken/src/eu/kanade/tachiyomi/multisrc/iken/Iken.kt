@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +26,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import rx.Observable
 import java.util.concurrent.ConcurrentHashMap
 
 abstract class Iken(
@@ -57,17 +56,6 @@ abstract class Iken(
         classLoader = this::class.java.classLoader!!,
     )
 
-    protected val titleCache by lazy {
-        val response = client.newCall(GET("$apiUrl/api/query?perPage=9999", headers)).execute()
-        val data = response.parseAs<SearchResponse>()
-        data.posts.filterNot { it.isNovel }.associateBy { it.slug }
-    }
-
-    /**
-     * Enables the API request for fetching popular manga.
-     */
-    protected open val usePopularMangaApi: Boolean = false
-
     /**
      * Automatically fetched genres from the source to be used in the filters.
      */
@@ -96,25 +84,11 @@ abstract class Iken(
         addQueryParameter("orderBy", "totalViews")
     }
 
-    override fun popularMangaRequest(page: Int): Request = if (usePopularMangaApi) {
-        GET(popularMangaUrl(page).build(), headers)
-    } else {
-        GET("$baseUrl/home", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(popularMangaUrl(page).build(), headers)
 
     protected open val popularMangaSelector = "aside a:has(img), .splide:has(.card) li a:has(img)"
 
-    override fun popularMangaParse(response: Response): MangasPage = if (usePopularMangaApi) {
-        searchMangaParse(response)
-    } else {
-        val document = response.asJsoup()
-
-        val entries = document.select(popularMangaSelector).mapNotNull {
-            titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
-        }
-
-        MangasPage(entries, false)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // latest
 
@@ -306,37 +280,35 @@ abstract class Iken(
         return "$baseUrl/series/$slug"
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        if (usePopularMangaApi) return super.fetchMangaDetails(manga)
-
-        val slug = manga.url.substringBeforeLast("#")
-        val update = titleCache[slug]?.toSManga() ?: manga
-
-        return Observable.just(update)
-    }
-
     override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<Manga>()!!.toSManga()
 
     // chapters
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val userId = userIdRegex.find(response.body.string())?.groupValues?.get(1) ?: ""
-
         val id = response.request.url.fragment!!
-        val chapterUrl = "$apiUrl/api/chapters?postId=$id&skip=0&take=900&order=desc&userid=$userId"
-        val chapterResponse = client.newCall(GET(chapterUrl, headers)).execute()
+        val slug = response.request.url.pathSegments.last()
+        val body = response.body.string()
 
-        val data = chapterResponse.parseAs<Post<ChapterListResponse>>()
+        // Detect vShield / BalooPow challenge pagege
+        if (vShieldRegex.containsMatchIn(body)) throw Exception("vShield challenge detected. Open in WebView to solve it.")
+
+        val data = body.extractNextJsRsc<Post<ChapterListResponse>>() ?: run {
+            val userId = userIdRegex.find(body)?.groupValues?.get(1) ?: ""
+            val chapterUrl = "$apiUrl/api/chapters?postId=$id&skip=0&take=900&order=desc&userid=$userId"
+            val chapterResponse = client.newCall(GET(chapterUrl, headers)).execute()
+
+            chapterResponse.parseAs<Post<ChapterListResponse>>()
+        }
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
 
         return data.post.chapters
             .filter { it.isPublic() && (it.isAccessible() || (preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && it.isLocked())) }
-            .map { it.toSChapter(data.post.slug) }
+            .map { it.toSChapter(data.post.slug ?: slug) }
     }
 
     // pages
@@ -351,10 +323,10 @@ abstract class Iken(
             throw Exception("Unlock chapter in webview")
         }
 
-        val pages = document.getNextJson("images").parseAs<List<PageParseDto>>()
+        val pages = document.extractNextJs<Images>()!!
 
         val sortedPages = if (sortPagesByFilename) {
-            pages.sortedWith(
+            pages.images.sortedWith(
                 compareBy { page ->
                     val filename = page.url.substringAfterLast('/')
                     val number = Regex("\\d+").find(filename)?.value?.toIntOrNull() ?: Int.MAX_VALUE
@@ -362,7 +334,7 @@ abstract class Iken(
                 },
             )
         } else {
-            pages
+            pages.images
         }
 
         return sortedPages.mapIndexed { idx, p ->
@@ -382,31 +354,10 @@ abstract class Iken(
         }.also(screen::addPreference)
     }
 
-    protected fun Document.getNextJson(key: String): String {
-        val data = selectFirst("script:containsData($key)")
-            ?.data()
-            ?: throw Exception("Unable to retrieve NEXT data")
-
-        val keyIndex = data.indexOf(key)
-        val start = data.indexOf('[', keyIndex)
-
-        var depth = 1
-        var i = start + 1
-
-        while (i < data.length && depth > 0) {
-            when (data[i]) {
-                '[' -> depth++
-                ']' -> depth--
-            }
-            i++
-        }
-
-        return "\"${data.substring(start, i)}\"".parseAs<String>()
-    }
-
     companion object {
         const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        val vShieldRegex = Regex("""balooPow\.min\.js|Completing challenge|publicSalt|_2__vShield_v""")
         val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
     }
 }

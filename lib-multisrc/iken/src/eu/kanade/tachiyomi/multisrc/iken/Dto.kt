@@ -98,7 +98,7 @@ class Chapter(
     private val isAccessible: Boolean,
     private val isLocked: Boolean? = false,
     private val isTimeLocked: Boolean? = false,
-    private val mangaPost: ChapterPostDetails,
+    private val mangaPost: ChapterPostDetails? = null,
 ) {
     fun isPublic() = chapterStatus == "PUBLIC"
 
@@ -108,7 +108,7 @@ class Chapter(
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
         val prefix = if (!isAccessible()) "🔒 " else ""
-        val seriesSlug = mangaSlug ?: mangaPost.slug
+        val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number"
         date_upload = try {
@@ -121,12 +121,18 @@ class Chapter(
 
 @Serializable
 class ChapterPostDetails(
-    val slug: String,
+    val slug: String?,
 )
 
 @Serializable
 class PageParseDto(
     val url: String,
+    val order: Int? = null,
+)
+
+@Serializable
+class Images(
+    val images: List<PageParseDto>,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
