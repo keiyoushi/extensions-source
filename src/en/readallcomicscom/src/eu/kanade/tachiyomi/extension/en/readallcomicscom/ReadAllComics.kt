@@ -7,13 +7,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
@@ -21,7 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ReadAllComics : ParsedHttpSource() {
+class ReadAllComics : HttpSource() {
 
     override val name = "ReadAllComics"
 
@@ -31,16 +30,18 @@ class ReadAllComics : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    private lateinit var searchPageElements: Elements
-
     override val client = network.cloudflareClient
+
+    // Popular
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = throw Exception("Use search to find comics.")
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun popularMangaSelector() = ""
-    override fun popularMangaNextPageSelector() = null
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    // Search
+
+    private lateinit var searchPageElements: Elements
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (page == 1) {
         client.newCall(searchMangaRequest(page, query, filters))
@@ -61,36 +62,32 @@ class ReadAllComics : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        searchPageElements = response.asJsoup().select(searchMangaSelector())
-
+        searchPageElements = response.asJsoup().select("ul.list-story.categories li")
         return searchPageParse(1)
     }
 
     private fun searchPageParse(page: Int): MangasPage {
         val mangas = mutableListOf<SManga>()
-        val endRange = ((page * 24) - 1).let { if (it <= searchPageElements.lastIndex) it else searchPageElements.lastIndex }
+        val endRange = ((page * 24) - 1).coerceAtMost(searchPageElements.lastIndex)
 
-        for (i in (((page - 1) * 24)..endRange)) {
-            mangas.add(
-                searchMangaFromElement(searchPageElements[i]),
-            )
+        for (i in ((page - 1) * 24)..endRange) {
+            mangas.add(mangaFromElement(searchPageElements[i]))
         }
 
         return MangasPage(mangas, endRange < searchPageElements.lastIndex)
     }
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
         val titleAnchor = element.selectFirst("a.cat-title")!!
         setUrlWithoutDomain(titleAnchor.attr("href"))
         title = titleAnchor.text()
         thumbnail_url = element.selectFirst("img.book-cover")?.attr("src")
     }
 
-    override fun searchMangaSelector() = "ul.list-story.categories li"
-    override fun searchMangaNextPageSelector() = null
+    // Manga details
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val archive = document.selectFirst(".description-archive")!!
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val archive = response.asJsoup().selectFirst(".description-archive")!!
         title = archive.selectFirst("h1")!!.text()
         thumbnail_url = archive.selectFirst("p img")?.attr("abs:src")
         val infoStrongs = archive.select(".b > p strong")
@@ -101,27 +98,34 @@ class ReadAllComics : ParsedHttpSource() {
         }?.text()?.replace("\\n", "\n\n")
     }
 
-    override fun chapterListSelector() = ".list-story a"
+    // Chapters
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.text()
-        // can only get the year from chapter title
-        val year = name.substringAfterLast('(').substringBefore(')')
-        date_upload = dateFormat.tryParse("$year-1-1")
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".list-story a").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.text()
+            val year = name.substringAfterLast('(').substringBefore(')')
+            date_upload = dateFormat.tryParse("$year-1-1")
+        }
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
-        Page(idx, "", element.attr("abs:src"))
+    // Pages
+
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("body img:not(div[id=logo] img)").mapIndexed { idx, element ->
+        Page(idx, imageUrl = element.attr("abs:src"))
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = ""
+
+
+    // Latest (unsupported)
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 }
