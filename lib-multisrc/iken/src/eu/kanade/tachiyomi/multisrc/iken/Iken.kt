@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,10 @@ abstract class Iken(
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
 
     protected val intl = Intl(
         language = lang,
@@ -218,6 +223,8 @@ abstract class Iken(
 
     protected open val sortFilterKey: String = "sortBy"
 
+    protected open val genreFilterKey: String = "genreIds"
+
     override fun getFilterList(): FilterList {
         CoroutineScope(Dispatchers.IO).launch {
             fetchGenres()
@@ -236,7 +243,7 @@ abstract class Iken(
                     Filter.Header(intl["genre_filter_header"]),
                     GenreFilter(
                         title = intl["genre_filter_title"],
-                        "genreIds",
+                        genreFilterKey,
                         genres = genresList,
                     ),
                 )
@@ -300,13 +307,17 @@ abstract class Iken(
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        if (usePopularMangaApi) return super.fetchMangaDetails(manga)
+
         val slug = manga.url.substringBeforeLast("#")
         val update = titleCache[slug]?.toSManga() ?: manga
 
         return Observable.just(update)
     }
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
+
+    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<Manga>()!!.toSManga()
 
     // chapters
 
