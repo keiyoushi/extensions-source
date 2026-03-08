@@ -15,12 +15,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -286,9 +286,20 @@ abstract class Luscious(
                     nextPage = data["info"]!!.jsonObject["has_next_page"]!!.jsonPrimitive.boolean
                     data["items"]!!.jsonArray.map {
                         val chapter = SChapter.create()
-                        val url = when (getResolutionPref()) {
-                            "-1" -> it.jsonObject["url_to_original"]!!.jsonPrimitive.content
-                            else -> it.jsonObject["thumbnails"]!!.jsonArray[getResolutionPref()?.toInt()!!].jsonObject["url"]!!.jsonPrimitive.content
+                        val url = when {
+                            getResolutionPref() != "-1" -> {
+                                it.jsonObject["thumbnails"]!!.jsonArray[getResolutionPref()?.toInt()!!].jsonObject["url"]!!.jsonPrimitive.content
+                            }
+                            it.jsonObject["url_to_original"]!!.jsonPrimitive.contentOrNull != null -> {
+                                it.jsonObject["url_to_original"]!!.jsonPrimitive.content
+                            }
+                            else -> {
+                                it.jsonObject["thumbnails"]!!.jsonArray.maxByOrNull {
+                                    val height = it.jsonObject["height"]!!.jsonPrimitive.int
+                                    val width = it.jsonObject["width"]!!.jsonPrimitive.int
+                                    height * width
+                                }?.jsonObject?.get("url")!!.jsonPrimitive.content ?: ""
+                            }
                         }
                         when {
                             url.startsWith("//") -> chapter.url = "https:$url"
@@ -356,10 +367,22 @@ abstract class Luscious(
             nextPage = data["info"]!!.jsonObject["has_next_page"]!!.jsonPrimitive.boolean
             data["items"]!!.jsonArray.map {
                 val index = it.jsonObject["position"]!!.jsonPrimitive.int
-                val url = when (getResolutionPref()) {
-                    "-1" -> it.jsonObject["url_to_original"]!!.jsonPrimitive.content
-                    else -> it.jsonObject["thumbnails"]!!.jsonArray[getResolutionPref()?.toInt()!!].jsonObject["url"]!!.jsonPrimitive.content
+                val url = when {
+                    getResolutionPref() != "-1" -> {
+                        it.jsonObject["thumbnails"]!!.jsonArray[getResolutionPref()?.toInt()!!].jsonObject["url"]!!.jsonPrimitive.content
+                    }
+                    it.jsonObject["url_to_original"]!!.jsonPrimitive.contentOrNull != null -> {
+                        it.jsonObject["url_to_original"]!!.jsonPrimitive.content
+                    }
+                    else -> {
+                        it.jsonObject["thumbnails"]!!.jsonArray.maxByOrNull {
+                            val height = it.jsonObject["height"]!!.jsonPrimitive.int
+                            val width = it.jsonObject["width"]!!.jsonPrimitive.int
+                            height * width
+                        }?.jsonObject?.get("url")!!.jsonPrimitive.content ?: ""
+                    }
                 }
+
                 when {
                     url.startsWith("//") -> pages.add(Page(index, "https:$url", "https:$url"))
                     else -> pages.add(Page(index, url, url))
@@ -647,7 +670,7 @@ abstract class Luscious(
 
     private fun getContentTypeFilters() = listOf(
         SelectFilterOption("All", FILTER_VALUE_IGNORE),
-        SelectFilterOption("Hentai", "0"),
+        SelectFilterOption("Hentai", "2"),
         SelectFilterOption("Non-Erotic", "5"),
         SelectFilterOption("Real People", "6"),
     )
@@ -845,8 +868,8 @@ abstract class Luscious(
 
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
-        private val MIRROR_PREF_ENTRIES = arrayOf("Guest", "API", "Members")
-        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://apicdn.luscious.net", "https://members.luscious.net")
+        private val MIRROR_PREF_ENTRIES = arrayOf("Guest", "Members")
+        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://members.luscious.net")
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 

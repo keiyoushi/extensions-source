@@ -12,7 +12,7 @@ import java.util.Locale
 class EmpireWebtoon :
     Madara(
         "Empire Webtoon",
-        "https://webtoonempire-ron.com",
+        "https://webtoonempire-bl.com",
         "ar",
         SimpleDateFormat("d MMMM، yyyy", Locale("ar")),
     ),

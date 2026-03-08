@@ -7,7 +7,7 @@ import java.util.Locale
 class Catzaa :
     Madara(
         "Catzaa",
-        "https://catzaa.com",
+        "https://catzaa.net",
         "th",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
     ) {

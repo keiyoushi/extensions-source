@@ -1,0 +1,10 @@
+ext {
+    extName = 'Comic Verse'
+    extClass = '.ComicVerse'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://arcomixverse.blogspot.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

@@ -2,8 +2,8 @@ ext {
     extName = 'Emperor Scan'
     extClass = '.EmperorScan'
     themePkg = 'madara'
-    baseUrl = 'https://emperorscan.mundoalterno.org'
-    overrideVersionCode = 8
+    baseUrl = 'https://imperiomanhua.com'
+    overrideVersionCode = 9
     isNsfw = false
 }
 
