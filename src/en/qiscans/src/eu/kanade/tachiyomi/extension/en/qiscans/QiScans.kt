@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.qiscans
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
@@ -26,8 +25,6 @@ class QiScans :
         .build()
 
     override val usePopularMangaApi = true
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {

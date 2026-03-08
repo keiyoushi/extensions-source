@@ -3,10 +3,8 @@ package eu.kanade.tachiyomi.extension.en.ezmanga
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
 
 class EZmanga :
     Iken(
@@ -23,8 +21,6 @@ class EZmanga :
         .build()
 
     override val usePopularMangaApi = true
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
