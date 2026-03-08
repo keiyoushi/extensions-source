@@ -36,7 +36,6 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Base64
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -302,22 +301,9 @@ class Manhuarm(
             .add("Cache-Control", "no-cache")
             .build()
 
-        val ocrData = Regex("""_0x\w+\s*=\s*(\{.*?\});""")
-            .find(document.html())
-            ?.groupValues
-            ?.get(1)
-            ?.parseAs<OcrDataDto>()
-            ?: return pages
+        val script = document.select("script").find { it.data().contains("fetch-ocr.php") }?.data() ?: return pages
 
-        val ocrUrl = ocrData.let {
-            val ch = String(Base64.getDecoder().decode(it.a))
-            it.e.toHttpUrl().newBuilder()
-                .addQueryParameter("ch", ch)
-                .addQueryParameter("tk", it.b)
-                .addQueryParameter("ts", it.c.toString())
-                .addQueryParameter("nc", it.d)
-                .build().toString()
-        }
+        val ocrUrl = extractOcrUrl(script) ?: return pages
 
         val dialog = try {
             val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()
