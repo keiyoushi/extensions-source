@@ -28,8 +28,6 @@ class VortexScans :
         return GET(url, headers)
     }
 
-    override val usePopularMangaApi = true
-
     override fun popularMangaUrl(page: Int) = super.popularMangaUrl(page)
         .addQueryParameter("tag", "hot")
         .addQueryParameter("isNovel", "false")

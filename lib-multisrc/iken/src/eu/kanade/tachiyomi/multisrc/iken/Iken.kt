@@ -296,12 +296,15 @@ abstract class Iken(
         // Detect vShield / BalooPow challenge pagege
         if (vShieldRegex.containsMatchIn(body)) throw Exception("vShield challenge detected. Open in WebView to solve it.")
 
-        val data = body.extractNextJsRsc<Post<ChapterListResponse>>() ?: run {
-            val userId = userIdRegex.find(body)?.groupValues?.get(1) ?: ""
+        val data = runCatching {
+            body.extractNextJsRsc<Post<ChapterListResponse>>()
+        }.getOrNull() ?: run {
+            val userId = userIdRegex.find(body)?.groupValues?.get(1).orEmpty()
             val chapterUrl = "$apiUrl/api/chapters?postId=$id&skip=0&take=900&order=desc&userid=$userId"
-            val chapterResponse = client.newCall(GET(chapterUrl, headers)).execute()
 
-            chapterResponse.parseAs<Post<ChapterListResponse>>()
+            client.newCall(GET(chapterUrl, headers))
+                .execute()
+                .parseAs<Post<ChapterListResponse>>()
         }
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
