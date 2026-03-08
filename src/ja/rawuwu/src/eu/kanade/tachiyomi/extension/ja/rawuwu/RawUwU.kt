@@ -90,7 +90,7 @@ class RawUwU : HttpSource() {
 
         val mangas = result.manga_list?.map { manga ->
             SManga.create().apply {
-                url = "/raw/${manga.manga_id}"
+                url = manga.manga_id
                 title = manga.manga_name
                 thumbnail_url = manga.manga_cover_img
             }
@@ -102,11 +102,10 @@ class RawUwU : HttpSource() {
 
     // --- DETAILS ---
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/raw/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.split("/").last().filter { it.isDigit() }
-        return GET("$baseUrl/spa/manga/$id")
+        return GET("$baseUrl/spa/manga/${manga.url}")
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -120,15 +119,16 @@ class RawUwU : HttpSource() {
 
             val descriptionText = detail.manga_description
             val altName = detail.manga_others_name
-
             description = buildString {
-                append(descriptionText)
-                append("\n\n")
+                if (!descriptionText.isNullOrBlank()) append(descriptionText)
 
-                if (altName.isNotEmpty()) {
+                if (!altName.isNullOrBlank()) {
+                    if (isNotEmpty()) append("\n\n")
+
                     append("Alternative Names: ")
-                    append("\n• ")
-                    append(altName.replace(",", "\n• "))
+                    altName.split(",").forEach{name ->
+                        append("\n• ${name.trim()}")
+                    }
                 }
             }
 
@@ -147,8 +147,7 @@ class RawUwU : HttpSource() {
     // --- CHAPTERS ---
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.split("/").last().filter { it.isDigit() }
-        return GET("$baseUrl/spa/manga/$id", headers)
+        return GET("$baseUrl/spa/manga/${manga.url}", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
