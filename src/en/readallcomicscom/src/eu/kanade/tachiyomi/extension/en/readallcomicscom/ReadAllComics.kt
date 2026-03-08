@@ -80,12 +80,13 @@ class ReadAllComics : ParsedHttpSource() {
     }
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.text()
-        thumbnail_url = ""
+        val titleAnchor = element.selectFirst("a.cat-title")!!
+        setUrlWithoutDomain(titleAnchor.attr("href"))
+        title = titleAnchor.text()
+        thumbnail_url = element.selectFirst("img.book-cover")?.attr("src")
     }
 
-    override fun searchMangaSelector() = ".categories a"
+    override fun searchMangaSelector() = "ul.list-story.categories li"
     override fun searchMangaNextPageSelector() = null
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
