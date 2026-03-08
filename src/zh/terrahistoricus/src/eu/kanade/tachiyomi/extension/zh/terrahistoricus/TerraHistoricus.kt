@@ -25,22 +25,20 @@ class TerraHistoricus : HttpSource() {
     private val topicKeys = listOf("terra-historicus", "talos-ii-historicus")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/comic?topicKey=${topicKeys[page - 1]}", headers)
-    override fun popularMangaParse(response: Response) = MangasPage(response.parseAs<List<THComic>>().map { it.toSManga() }, false)
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client.newCall(popularMangaRequest(page)).asObservableSuccess().map { response ->
-        MangasPage(response.parseAs<List<THComic>>().map { it.toSManga() }, page < topicKeys.size)
-    }
+    override fun popularMangaParse(response: Response) = MangasPage(
+        response.parseAs<List<THComic>>().map { it.toSManga() },
+        response.request.url.queryParameter("topicKey") != topicKeys.last(),
+    )
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/recentUpdate?topicKey=${topicKeys[page - 1]}", headers)
-    override fun latestUpdatesParse(response: Response) = MangasPage(response.parseAs<List<THRecentUpdate>>().map { it.toSManga() }, false)
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = client.newCall(latestUpdatesRequest(page)).asObservableSuccess().map { response ->
-        MangasPage(response.parseAs<List<THRecentUpdate>>().map { it.toSManga() }, page < topicKeys.size)
-    }
+    override fun latestUpdatesParse(response: Response) = MangasPage(
+        response.parseAs<List<THRecentUpdate>>().map { it.toSManga() },
+        response.request.url.queryParameter("topicKey") != topicKeys.last(),
+    )
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(page).map { mangasPage ->
         val mangas = mangasPage.mangas.filter { it.title.contains(query) }
-        MangasPage(mangas, page < topicKeys.size)
+        MangasPage(mangas, mangasPage.hasNextPage)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
