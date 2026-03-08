@@ -82,8 +82,7 @@ class RokuHentai : HttpSource() {
         Filter.Header("• Negate a filter with \"-\": -language:foo."),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        if (page == 1) GET("$baseUrl?q=$query") else GET("$baseUrl/_search?p=$offset&q=$query")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (page == 1) GET("$baseUrl?q=$query") else GET("$baseUrl/_search?p=$offset&q=$query")
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
