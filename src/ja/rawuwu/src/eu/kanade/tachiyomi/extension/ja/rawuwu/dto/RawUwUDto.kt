@@ -10,9 +10,9 @@ data class RawUwUResponseDto(
 
 @Serializable
 data class MangaListDto(
-    val manga_id: Int,
-    val manga_name: String,
-    val manga_cover_img: String,
+    @SerialName("manga_id") val mangaId: Int,
+    @SerialName("manga_name") val mangaName: String,
+    @SerialName("manga_cover_img") val mangaCoverImg: String,
 )
 
 @Serializable
