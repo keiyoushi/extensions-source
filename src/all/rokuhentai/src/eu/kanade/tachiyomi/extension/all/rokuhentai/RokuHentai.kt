@@ -82,7 +82,8 @@ class RokuHentai : HttpSource() {
         Filter.Header("• Negate a filter with \"-\": -language:foo."),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (page == 1) GET("$baseUrl?q=$query") else GET("$baseUrl/_search?p=$offset&q=$query")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        if (page == 1) GET("$baseUrl?q=$query") else GET("$baseUrl/_search?p=$offset&q=$query")
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
@@ -122,12 +123,9 @@ class RokuHentai : HttpSource() {
 
     // Manga View Page
 
-    // override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-    //     val s = chapter.url.split('#')
-    //     return Observable.just(List(s[1].toInt()) { Page(it, "${s[0]}/$it") })
-    // }
-
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select(".site-reader > img").mapIndexed { i, e -> Page(i, imageUrl = e.attr("data-src")) }
+    override fun pageListParse(response: Response) = response.asJsoup().select(".site-reader > img").mapIndexed { i, e ->
+        Page(i, imageUrl = e.attr("data-src"))
+    }
 
     // Image
 
