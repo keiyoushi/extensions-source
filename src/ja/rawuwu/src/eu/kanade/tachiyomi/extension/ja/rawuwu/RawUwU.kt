@@ -90,7 +90,7 @@ class RawUwU : HttpSource() {
 
         val mangas = result.manga_list?.map { manga ->
             SManga.create().apply {
-                url = manga.manga_id
+                url = manga.manga_id.toString()
                 title = manga.manga_name
                 thumbnail_url = manga.manga_cover_img
             }
@@ -104,9 +104,7 @@ class RawUwU : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/raw/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/spa/manga/${manga.url}")
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/spa/manga/${manga.url}")
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<MangaDetailResponseDto>()
@@ -126,7 +124,7 @@ class RawUwU : HttpSource() {
                     if (isNotEmpty()) append("\n\n")
 
                     append("Alternative Names: ")
-                    altName.split(",").forEach{name ->
+                    altName.split(",").forEach { name ->
                         append("\n• ${name.trim()}")
                     }
                 }
@@ -146,14 +144,12 @@ class RawUwU : HttpSource() {
 
     // --- CHAPTERS ---
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/spa/manga/${manga.url}", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/spa/manga/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = response.parseAs<MangaDetailResponseDto>()
-        val mangaId = json.detail?.manga_id ?: ""
-        val chaptersArray = json.chapters ?: return emptyList()
+        val result = response.parseAs<MangaDetailResponseDto>()
+        val mangaId = result.detail?.manga_id ?: throw Exception("Could not find chapters")
+        val chaptersArray = result.chapters ?: return emptyList()
 
         return chaptersArray.map { chapter ->
             SChapter.create().apply {
@@ -180,7 +176,7 @@ class RawUwU : HttpSource() {
         val result = response.parseAs<ChapterPageResponseDto>()
 
         val chapterDetail = result.chapter_detail
-        val serverUrl = chapterDetail?.server ?: ""
+        val serverUrl = chapterDetail?.server ?: throw Exception("Could not find server url")
         val htmlContent = chapterDetail?.chapter_content ?: ""
 
         val document = Jsoup.parseBodyFragment(htmlContent)
@@ -195,9 +191,5 @@ class RawUwU : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
-
-    private fun parseDate(dateStr: String?): Long {
-        if (dateStr == null) return 0
-        return dateFormat.tryParse(dateStr)
-    }
+    private fun parseDate(dateStr: String?): Long = dateFormat.tryParse(dateStr)
 }
