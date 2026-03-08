@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.multisrc.iken
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -111,11 +111,7 @@ class Chapter(
         val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number"
-        date_upload = try {
-            dateFormat.parse(createdAt)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+        date_upload = dateFormat.tryParse(createdAt)
     }
 }
 
