@@ -59,9 +59,9 @@ class ReadAllComics : HttpSource() {
 
     private fun mangaFromElement(element: Element) = SManga.create().apply {
         val titleAnchor = element.selectFirst("a.cat-title")!!
-        setUrlWithoutDomain(titleAnchor.attr("href"))
+        setUrlWithoutDomain(titleAnchor.attr("abs:href"))
         title = titleAnchor.text()
-        thumbnail_url = element.selectFirst("img.book-cover")?.attr("src")
+        thumbnail_url = element.selectFirst("img.book-cover")?.attr("abs:src")
     }
 
     // Manga details
@@ -73,16 +73,14 @@ class ReadAllComics : HttpSource() {
         val infoStrongs = archive.select(".b > p strong")
         genre = infoStrongs.firstOrNull()?.text()
         author = infoStrongs.lastOrNull()?.text()
-        description = archive.selectFirst("#hidden-description")?.also { el ->
-            el.select("hr").prepend("\\n")
-        }?.text()?.replace("\\n", "\n\n")
+        description = archive.selectFirst("#hidden-description")?.wholeText()?.trim()
     }
 
     // Chapters
 
     override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".list-story a").map { element ->
         SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
+            setUrlWithoutDomain(element.attr("abs:href"))
             name = element.text()
             val year = name.substringAfterLast('(').substringBefore(')')
             date_upload = dateFormat.tryParse("$year-1-1")
@@ -95,7 +93,7 @@ class ReadAllComics : HttpSource() {
         Page(idx, imageUrl = element.attr("abs:src"))
     }
 
-    override fun imageUrlParse(response: Response) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Latest (unsupported)
 
