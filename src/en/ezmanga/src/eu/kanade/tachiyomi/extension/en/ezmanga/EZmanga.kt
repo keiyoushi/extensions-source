@@ -20,8 +20,6 @@ class EZmanga :
         .rateLimit(3)
         .build()
 
-    override val usePopularMangaApi = true
-
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())

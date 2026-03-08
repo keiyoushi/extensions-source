@@ -8,6 +8,4 @@ class HijalaScans :
         "en",
         "https://en-hijala.com",
         "https://api.en-hijala.com",
-    ) {
-    override val usePopularMangaApi = true
-}
+    )

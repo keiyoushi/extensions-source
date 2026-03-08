@@ -8,6 +8,4 @@ class NyxScans :
         "en",
         "https://nyxscans.com",
         "https://api.nyxscans.com",
-    ) {
-    override val usePopularMangaApi = true
-}
+    )
