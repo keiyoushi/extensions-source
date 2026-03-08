@@ -116,10 +116,10 @@ class RawUwU : HttpSource() {
             val detail = result.detail ?: throw Exception("Could not find manga details")
             title = detail.manga_name
             thumbnail_url = detail.manga_cover_img_full
-                ?: detail.manga_cover_img ?: ""
+                ?: detail.manga_cover_img
 
-            val descriptionText = detail.manga_description ?: ""
-            val altName = detail.manga_others_name ?: ""
+            val descriptionText = detail.manga_description
+            val altName = detail.manga_others_name
 
             description = buildString {
                 append(descriptionText)
