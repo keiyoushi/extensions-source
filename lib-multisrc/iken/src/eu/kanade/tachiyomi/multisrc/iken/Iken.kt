@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -260,7 +261,7 @@ abstract class Iken(
     protected suspend fun fetchGenres() {
         if (fetchGenres && fetchGenresAttempts < 3 && !genresFetched) {
             try {
-                client.newCall(genresRequest()).execute()
+                client.newCall(genresRequest()).await()
                     .use { parseGenres(it) }
                     .also {
                         genresFetched = true
