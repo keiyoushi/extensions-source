@@ -28,13 +28,12 @@ class VortexScans :
         return GET(url, headers)
     }
 
-    override val popularSubString = "posts"
-
     override val usePopularMangaApi = true
 
     override fun popularMangaUrl(page: Int) = super.popularMangaUrl(page)
         .addQueryParameter("tag", "hot")
         .addQueryParameter("isNovel", "false")
+        .setPathSegment(1, "posts")
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
         .asObservable()
