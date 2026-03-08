@@ -330,6 +330,21 @@ class Mangago :
         return resolvedUrls
     }
 
+    override fun imageRequest(page: Page): Request {
+        val url = page.imageUrl!!.toHttpUrl()
+
+        return if (url.host.contains("_")) {
+            // workaround for "android internal error" caused by _ in domain
+            val imageUrl = url.newBuilder()
+                .scheme("http")
+                .build()
+
+            GET(imageUrl, headers)
+        } else {
+            GET(url, headers)
+        }
+    }
+
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Ignored if using text search"),
         SortFilter(),
