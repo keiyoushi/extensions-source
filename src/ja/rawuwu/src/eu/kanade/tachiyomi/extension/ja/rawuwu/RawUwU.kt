@@ -20,6 +20,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class RawUwU : HttpSource() {
 
@@ -29,7 +30,9 @@ class RawUwU : HttpSource() {
     override val supportsLatest = true
 
     private val dateFormat by lazy {
-        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 
     override val client: OkHttpClient = network.cloudflareClient
@@ -88,11 +91,11 @@ class RawUwU : HttpSource() {
     private fun parseMangaListResponse(response: Response): MangasPage {
         val result = response.parseAs<RawUwUResponseDto>()
 
-        val mangas = result.manga_list?.map { manga ->
+        val mangas = result.mangaList?.map { manga ->
             SManga.create().apply {
-                url = manga.manga_id.toString()
-                title = manga.manga_name
-                thumbnail_url = manga.manga_cover_img
+                url = manga.mangaId.toString()
+                title = manga.mangaName
+                thumbnail_url = manga.mangaCoverImg
             }
         } ?: emptyList()
 
@@ -111,12 +114,12 @@ class RawUwU : HttpSource() {
 
         return SManga.create().apply {
             val detail = result.detail ?: throw Exception("Could not find manga details")
-            title = detail.manga_name
-            thumbnail_url = detail.manga_cover_img_full
-                ?: detail.manga_cover_img
+            title = detail.mangaName
+            thumbnail_url = detail.mangaCoverImgFull
+                ?: detail.mangaCoverImg
 
-            val descriptionText = detail.manga_description
-            val altName = detail.manga_others_name
+            val descriptionText = detail.mangaDescription
+            val altName = detail.mangaOthersName
             description = buildString {
                 if (!descriptionText.isNullOrBlank()) append(descriptionText)
 
@@ -130,10 +133,10 @@ class RawUwU : HttpSource() {
                 }
             }
 
-            author = result.authors?.joinToString { it.author_name }
-            genre = result.tags?.joinToString { it.tag_name }
+            author = result.authors?.joinToString { it.authorName }
+            genre = result.tags?.joinToString { it.tagName }
 
-            val isActive = detail.manga_status
+            val isActive = detail.mangaStatus
             status = when (isActive) {
                 true -> SManga.COMPLETED
                 false -> SManga.ONGOING
@@ -148,16 +151,16 @@ class RawUwU : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<MangaDetailResponseDto>()
-        val mangaId = result.detail?.manga_id ?: throw Exception("Could not find chapters")
+        val mangaId = result.detail?.mangaId ?: throw Exception("Could not find chapters")
         val chaptersArray = result.chapters ?: return emptyList()
 
         return chaptersArray.map { chapter ->
             SChapter.create().apply {
-                val num = chapter.chapter_number ?: ""
+                val num = chapter.chapterNumber ?: ""
                 url = "/read/$mangaId/chapter-$num"
-                val title = chapter.chapter_title ?: ""
+                val title = chapter.chapterTitle ?: ""
                 name = if (title.isNotEmpty()) "Ch. $num - $title" else "Chapter $num"
-                date_upload = parseDate(chapter.chapter_date_published ?: "")
+                date_upload = parseDate(chapter.chapterDatePublished ?: "")
             }
         }
     }
@@ -175,9 +178,9 @@ class RawUwU : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterPageResponseDto>()
 
-        val chapterDetail = result.chapter_detail
+        val chapterDetail = result.chapterDetail
         val serverUrl = chapterDetail?.server ?: throw Exception("Could not find server url")
-        val htmlContent = chapterDetail?.chapter_content ?: ""
+        val htmlContent = chapterDetail?.chapterContent ?: ""
 
         val document = Jsoup.parseBodyFragment(htmlContent)
 

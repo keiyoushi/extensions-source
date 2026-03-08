@@ -1,28 +1,29 @@
 package eu.kanade.tachiyomi.extension.ja.rawuwu.dto
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RawUwUResponseDto(
-    val manga_list: List<MangaListDto>? = null,
+class RawUwUResponseDto(
+    @SerialName("manga_list") val mangaList: List<MangaListDto>? = null,
     val pagi: PagiDto? = null,
 )
 
 @Serializable
-data class MangaListDto(
+class MangaListDto(
     @SerialName("manga_id") val mangaId: Int,
     @SerialName("manga_name") val mangaName: String,
     @SerialName("manga_cover_img") val mangaCoverImg: String,
 )
 
 @Serializable
-data class PagiDto(val button: ButtonDto? = null)
+class PagiDto(val button: ButtonDto? = null)
 
 @Serializable
-data class ButtonDto(val next: Int? = null)
+class ButtonDto(val next: Int? = null)
 
 @Serializable
-data class MangaDetailResponseDto(
+class MangaDetailResponseDto(
     val authors: List<AuthorDto>? = null,
     val chapters: List<ChapterDto>? = null,
     val detail: MangaDetailDto? = null,
@@ -30,30 +31,30 @@ data class MangaDetailResponseDto(
 )
 
 @Serializable
-data class MangaDetailDto(
-    val manga_id: Int,
-    val manga_name: String,
-    val manga_description: String? = null,
-    val manga_status: Boolean? = null,
-    val manga_cover_img: String? = null,
-    val manga_cover_img_full: String? = null,
-    val manga_others_name: String? = null,
+class MangaDetailDto(
+    @SerialName("manga_id") val mangaId: Int,
+    @SerialName("manga_name") val mangaName: String,
+    @SerialName("manga_description") val mangaDescription: String? = null,
+    @SerialName("manga_status") val mangaStatus: Boolean? = null,
+    @SerialName("manga_cover_img") val mangaCoverImg: String? = null,
+    @SerialName("manga_cover_img_full") val mangaCoverImgFull: String? = null,
+    @SerialName("manga_others_name") val mangaOthersName: String? = null,
 )
 
 @Serializable
-data class ChapterDto(
-    val chapter_title: String? = null,
-    val chapter_number: Float? = null,
-    val chapter_date_published: String? = null,
+class ChapterDto(
+    @SerialName("chapter_title") val chapterTitle: String? = null,
+    @SerialName("chapter_number") val chapterNumber: Float? = null,
+    @SerialName("chapter_date_published") val chapterDatePublished: String? = null,
     val server: String? = null,
-    val chapter_content: String? = null,
+    @SerialName("chapter_content") val chapterContent: String? = null,
 )
 
 @Serializable
-data class AuthorDto(val author_name: String)
+class AuthorDto(@SerialName("author_name") val authorName: String)
 
 @Serializable
-data class TagDto(val tag_name: String)
+class TagDto(@SerialName("tag_name") val tagName: String)
 
 @Serializable
-data class ChapterPageResponseDto(val chapter_detail: ChapterDto? = null)
+class ChapterPageResponseDto(@SerialName("chapter_detail") val chapterDetail: ChapterDto? = null)
