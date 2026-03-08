@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.readallcomicscom
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,7 +13,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -41,40 +39,22 @@ class ReadAllComics : HttpSource() {
 
     // Search
 
-    private lateinit var searchPageElements: Elements
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (page == 1) {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { searchMangaParse(it) }
-    } else {
-        Observable.just(searchPageParse(page))
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("story", query)
             addQueryParameter("s", "")
             addQueryParameter("type", "comic")
+            if (page > 1) addQueryParameter("paged", page.toString())
         }.build()
 
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        searchPageElements = response.asJsoup().select("ul.list-story.categories li")
-        return searchPageParse(1)
-    }
-
-    private fun searchPageParse(page: Int): MangasPage {
-        val mangas = mutableListOf<SManga>()
-        val endRange = ((page * 24) - 1).coerceAtMost(searchPageElements.lastIndex)
-
-        for (i in ((page - 1) * 24)..endRange) {
-            mangas.add(mangaFromElement(searchPageElements[i]))
-        }
-
-        return MangasPage(mangas, endRange < searchPageElements.lastIndex)
+        val document = response.asJsoup()
+        val mangas = document.select("ul.list-story.categories li").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("a.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     private fun mangaFromElement(element: Element) = SManga.create().apply {
@@ -116,7 +96,6 @@ class ReadAllComics : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = ""
-
 
     // Latest (unsupported)
 
