@@ -51,33 +51,18 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
 
 class ProChan : HttpSource() {
-class ProChan : HttpSource(), ConfigurableSource {
     override val name = "ProChan"
     override val lang = "ar"
-    
-    // إعداد التفضيلات لقراءة الرابط المخصص
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", Context.MODE_PRIVATE)
-    }
-
-    // الرابط الأساسي يقرأ من الإعدادات أو يستخدم الافتراضي إذا لم يتم تغييره
-    override val baseUrl: String by lazy {
-        preferences.getString(BASE_URL_PREF, "https://prochan.net")!!.removeSuffix("/")
-    }
-
-    // استخراج الدومين تلقائياً من الرابط المدخل لاستخدامه في الكوكيز
-    private val domain: String by lazy {
-        baseUrl.replace("https://", "").replace("http://", "").split("/")[0]
-    }
-
+    private val domain = "prochan.net"
+    override val baseUrl = "https://$domain"
     override val supportsLatest = true
-    override val versionId = 6
+    override val versionId = 5
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .addNetworkInterceptor(
             CookieInterceptor(
-                domain, // يستخدم الدومين المستخرج ديناميكياً
+                domain,
                 listOf(
                     "safe_browsing" to "off",
                     "language" to "ar",
@@ -85,24 +70,6 @@ class ProChan : HttpSource(), ConfigurableSource {
             ),
         )
         .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
-
-    private val rscHeaders = headersBuilder()
-        .set("rsc", "1")
-        .build()
-
-    // إضافة خانات الإعدادات في واجهة التطبيق
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "تغيير رابط الموقع"
-            summary = "الرابط الحالي: $baseUrl"
-            defaultValue = "https://prochan.net"
-            dialogTitle = "أدخل الرابط الجديد"
-        }.let(screen::addPreference)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
