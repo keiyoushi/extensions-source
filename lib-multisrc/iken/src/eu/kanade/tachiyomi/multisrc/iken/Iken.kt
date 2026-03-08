@@ -322,6 +322,10 @@ abstract class Iken(
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
+        if (document.select("#publicSalt, #challenge").isNotEmpty()) {
+            throw Exception("vShield challenge detected. Open in WebView to solve it.")
+        }
+
         if (document.selectFirst("svg.lucide-lock") != null) {
             throw Exception("Unlock chapter in webview")
         }
