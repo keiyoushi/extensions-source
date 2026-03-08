@@ -231,14 +231,36 @@ class Mangago :
             ?.let { Regex("""total_pages\s*=\s*(\d+)""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
             ?: throw Exception("Total page count not found")
 
-        val nextPageUrl = document.selectFirst("a.next_page")!!
-            .absUrl("href")
-            .toHttpUrl()
+        val slug = document.location().toHttpUrl().let {
+            val path = it.pathSegments
+
+            if (path.size > 2 && path[0] == "read-manga") {
+                path[1]
+            } else {
+                throw Exception("slug not found")
+            }
+        }
 
         val urlTemplate = document.selectFirst("input#curl")!!
             .attr("value").trim()
+            .removePrefix("/")
 
-        val pages = getPageUrls(nextPageUrl, urlTemplate, totalPages)
+        if (!urlTemplate.contains("{page}")) {
+            throw Exception("No replaceable string in url template")
+        }
+
+        val pages = (1..totalPages).map { page ->
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("read-manga")
+                .addPathSegment(slug)
+                .addEncodedPathSegments(urlTemplate.replace("{page}", page.toString()))
+                .fragment(page.toString())
+                .build()
+                .toString()
+
+            Page(page, url)
+        }
+
         val availableImages = getChapterImageUrls(document)
 
         pages.onEachIndexed { index, page ->
@@ -250,25 +272,6 @@ class Mangago :
         }
 
         return pages
-    }
-
-    private fun getPageUrls(nextPageUrl: HttpUrl, urlTemplate: String, totalPages: Int): List<Page> {
-        val templateRegex = urlTemplate.replace("{page}", "\\d+").toRegex()
-        val fullPath = nextPageUrl.encodedPath
-        val matchStart = templateRegex.find(fullPath)?.range?.first
-            ?: throw Exception("Template not found in URL path")
-
-        val basePath = fullPath.substring(0, matchStart)
-
-        return (1..totalPages).map { page ->
-            val resolvedPath = urlTemplate.replace("{page}", page.toString())
-            val url = nextPageUrl.newBuilder()
-                .encodedPath("$basePath$resolvedPath")
-                .fragment(page.toString())
-                .toString()
-
-            Page(page, url)
-        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
