@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
 import rx.Observable
 
 class VortexScans :
@@ -29,15 +28,12 @@ class VortexScans :
         return GET(url, headers)
     }
 
-    override val popularSubString = "posts"
-
     override val usePopularMangaApi = true
 
     override fun popularMangaUrl(page: Int) = super.popularMangaUrl(page)
         .addQueryParameter("tag", "hot")
         .addQueryParameter("isNovel", "false")
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+        .setPathSegment(1, "posts")
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
         .asObservable()
