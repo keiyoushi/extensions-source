@@ -90,22 +90,15 @@ class ReadAllComics : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = null
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        genre = document.select("p strong").joinToString { it.text() }
-        author = document.select("p > strong").last()?.text()
-        description = buildString {
-            document.select(".b > strong").forEach { element ->
-                val vol = element.previousElementSibling()
-                if (isNotBlank()) {
-                    append("\n\n")
-                }
-                if (vol?.tagName() == "span") {
-                    append(vol.text(), "\n")
-                }
-                append(element.text())
-            }
-        }
-        thumbnail_url = document.select("p img").attr("abs:src")
+        val archive = document.selectFirst(".description-archive")!!
+        title = archive.selectFirst("h1")!!.text()
+        thumbnail_url = archive.selectFirst("p img")?.attr("abs:src")
+        val infoStrongs = archive.select(".b > p strong")
+        genre = infoStrongs.firstOrNull()?.text()
+        author = infoStrongs.lastOrNull()?.text()
+        description = archive.selectFirst("#hidden-description")?.also { el ->
+            el.select("hr").prepend("\\n")
+        }?.text()?.replace("\\n", "\n\n")
     }
 
     override fun chapterListSelector() = ".list-story a"
