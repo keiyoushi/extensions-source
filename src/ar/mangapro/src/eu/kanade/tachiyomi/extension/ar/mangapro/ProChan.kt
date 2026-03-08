@@ -53,7 +53,7 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
+    private val domain = "https://prochan.net/"
     override val baseUrl = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
@@ -116,7 +116,7 @@ class ProChan : HttpSource() {
                 val slug = path[3]
 
                 val manga = SManga.create().apply {
-                    this@apply.url = "/series/$type/$mangaId/$slug"
+                    this@apply.url = "https://prochan.net/series/$type/$mangaId/$slug"
                 }
 
                 return fetchMangaDetails(manga).map {
