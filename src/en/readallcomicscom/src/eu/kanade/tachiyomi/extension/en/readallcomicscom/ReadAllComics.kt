@@ -35,29 +35,12 @@ class ReadAllComics : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("page/$page")
-        }.build()
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = throw Exception("Use search to find comics.")
 
-        return GET(url, headers)
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create().apply {
-            val category = element.classNames()
-                .firstOrNull { it.startsWith("category-") }!!
-                .substringAfter("category-")
-            setUrlWithoutDomain("/category/$category")
-            title = category.replace("-", " ").titleCaseWords()
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
-
-        return manga
-    }
-
-    override fun popularMangaSelector() = "#post-area > div"
-    override fun popularMangaNextPageSelector() = "a.page-numbers.next"
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun popularMangaSelector() = ""
+    override fun popularMangaNextPageSelector() = null
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (page == 1) {
         client.newCall(searchMangaRequest(page, query, filters))
@@ -136,11 +119,6 @@ class ReadAllComics : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> = document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
         Page(idx, "", element.attr("abs:src"))
-    }
-
-    private fun String.titleCaseWords(): String {
-        val words = this.split(" ")
-        return words.joinToString(" ") { word -> word.replaceFirstChar { it.titlecase() } }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
