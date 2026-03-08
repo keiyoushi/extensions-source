@@ -257,7 +257,7 @@ abstract class Iken(
     /**
      * Fetch the genres from the source to be used in the filters.
      */
-    protected fun fetchGenres() {
+    protected suspend fun fetchGenres() {
         if (fetchGenres && fetchGenresAttempts < 3 && !genresFetched) {
             try {
                 client.newCall(genresRequest()).execute()
