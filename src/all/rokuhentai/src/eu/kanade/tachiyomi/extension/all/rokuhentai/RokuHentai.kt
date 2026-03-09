@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -19,6 +20,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class RokuHentai : HttpSource() {
 
@@ -27,16 +29,18 @@ class RokuHentai : HttpSource() {
     override val name = "Roku Hentai"
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Customize
 
     private var offset: String? = null
-    private val SManga.id get() = url.substringAfterLast('/')
+    private val SManga.id get() = url.substringAfterLast('/').substringBefore('#')
 
     companion object {
-        val DATE_FORMAT = SimpleDateFormat("MMM d, yyyy, h:mm a", Locale.US)
-        val IMG_REGEX = Regex("background-image: url\\(\"(.+?)\"\\);")
+        val DATE_FORMAT = SimpleDateFormat("MMM d, yyyy, h:mm a", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val IMG_REGEX = Regex("""background-image: url\("(.+?)"\);""")
     }
 
     private fun parseManga(e: Element) = SManga.create().apply {
@@ -48,9 +52,10 @@ class RokuHentai : HttpSource() {
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int): Request = if (page == 1) GET(baseUrl) else GET("$baseUrl/_search?p=$offset")
+    override fun popularMangaRequest(page: Int) = if (page == 1) GET(baseUrl, headers) else GET("$baseUrl/_search?p=$offset", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
+        // test?.let { throw Exception(it) }
         val type = response.header("Content-Type")!!
         val mangas = if (type.contains("text/html")) {
             response.asJsoup().select(".mdc-card > .site-popunder-ad-slot").map(::parseManga)
@@ -60,7 +65,7 @@ class RokuHentai : HttpSource() {
             }
         }
         offset = mangas.last().id
-        return MangasPage(mangas, mangas.size == 24)
+        return MangasPage(mangas, mangas.isNotEmpty())
     }
 
     // Latest Page
@@ -82,11 +87,22 @@ class RokuHentai : HttpSource() {
         Filter.Header("• Negate a filter with \"-\": -language:foo."),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (page == 1) GET("$baseUrl?q=$query") else GET("$baseUrl/_search?p=$offset&q=$query")
+    // private var test: String? = null
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+        if (page == 1) {
+            url.addQueryParameter("q", query)
+        } else {
+            url.addPathSegment("_search").addQueryParameter("q", query).addQueryParameter("p", offset)
+            // test = url.build().toString()
+        }
+        return GET(url.build(), headers)
+    }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    // Manga Detail Page
+    // Manga Detail
 
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
@@ -104,7 +120,7 @@ class RokuHentai : HttpSource() {
         }
     }
 
-    // Catalog Page
+    // Chapter
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
         listOf(
@@ -120,10 +136,10 @@ class RokuHentai : HttpSource() {
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    // Manga View Page
+    // Page
 
     override fun pageListParse(response: Response) = response.asJsoup().select(".site-reader > img").mapIndexed { i, e ->
-        Page(i, imageUrl = e.attr("data-src"))
+        Page(i, imageUrl = e.absUrl("data-src"))
     }
 
     // Image
