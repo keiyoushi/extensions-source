@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.ezmanga
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 
 class EZmanga :
     Iken(
@@ -20,12 +17,11 @@ class EZmanga :
         .rateLimit(3)
         .build()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", Iken.PER_PAGE.toString())
-            addQueryParameter("orderBy", "updatedAt")
-        }.build()
-        return GET(url, headers)
-    }
+    override val sortOptions =
+        listOf(
+            Pair("Latest", "updatedAt"),
+            Pair("Popularity", "totalViews"),
+            Pair("Created at", "createdAt"),
+            Pair("Z-A", "postTitle"),
+        )
 }

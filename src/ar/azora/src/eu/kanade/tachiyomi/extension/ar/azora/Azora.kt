@@ -11,7 +11,4 @@ class Azora :
     ) {
 
     override val versionId = 2
-
-    override fun popularMangaUrl(page: Int) = super.popularMangaUrl(page)
-        .addQueryParameter("orderDirection", "desc")
 }
