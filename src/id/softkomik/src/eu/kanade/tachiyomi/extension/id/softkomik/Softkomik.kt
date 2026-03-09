@@ -20,7 +20,7 @@ import okhttp3.Response
 
 class Softkomik : HttpSource() {
     override val name = "Softkomik"
-    override val baseUrl = "https://softkomik.com"
+    override val baseUrl = "https://softkomik.co/"
     override val lang = "id"
     override val supportsLatest = true
 
@@ -103,9 +103,9 @@ class Softkomik : HttpSource() {
 
         val mangas = libData.data.map { manga ->
             SManga.create().apply {
-                setUrlWithoutDomain(manga.title_slug!!)
-                title = manga.title!!
-                thumbnail_url = "$coverUrl/${manga.gambar!!.removePrefix("/")}"
+                setUrlWithoutDomain(manga.title_slug)
+                title = manga.title
+                thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
             }
         }
         return MangasPage(mangas, libData.page < libData.maxPage)
@@ -121,7 +121,7 @@ class Softkomik : HttpSource() {
         val slug = response.request.url.pathSegments.lastOrNull()!!
         return SManga.create().apply {
             setUrlWithoutDomain(slug)
-            title = manga.title!!
+            title = manga.title
             author = manga.author
             description = manga.sinopsis
             genre = manga.Genre?.joinToString()
@@ -130,7 +130,7 @@ class Softkomik : HttpSource() {
                 "tamat" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = "$coverUrl/${manga.gambar!!.removePrefix("/")}"
+            thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
         }
     }
 
@@ -146,7 +146,7 @@ class Softkomik : HttpSource() {
         val dto = response.parseAs<ChapterListDto>()
         val slug = response.request.url.pathSegments[1]
         return dto.chapter.map { chapter ->
-            val chapterNumStr = chapter.chapter!!
+            val chapterNumStr = chapter.chapter
             val chapterNum = chapterNumStr.toFloatOrNull() ?: -1f
             val displayNum = formatChapterDisplay(chapterNumStr)
             SChapter.create().apply {
@@ -176,12 +176,12 @@ class Softkomik : HttpSource() {
         val imageSrc = if (data.imageSrc.isEmpty()) {
             val slug = response.request.url.pathSegments[0]
             val chapter = response.request.url.pathSegments[2]
-            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id!!}"
+            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id}"
             client.newCall(GET(url, headers)).execute().use {
-                it.parseAs<ChapterPageImagesDto>().imageSrc!!
+                it.parseAs<ChapterPageImagesDto>().imageSrc
             }
         } else {
-            data.imageSrc!!
+            data.imageSrc
         }
 
         if (imageSrc.isEmpty()) {
@@ -238,21 +238,21 @@ class Softkomik : HttpSource() {
 
         val session = getSession()
         val newRequest = request.newBuilder()
-            .addHeader("X-Token", session.token!!)
-            .addHeader("X-Sign", session.sign!!)
+            .addHeader("X-Token", session.token)
+            .addHeader("X-Sign", session.sign)
             .build()
         return chain.proceed(newRequest)
     }
 
     private fun getSession(): SessionDto {
         val currentSession = session
-        if (currentSession != null && currentSession.ex!! > System.currentTimeMillis()) {
+        if (currentSession != null && currentSession.ex > System.currentTimeMillis()) {
             return currentSession
         }
 
         synchronized(this) {
             val currentSessionSync = session
-            if (currentSessionSync != null && currentSessionSync.ex!! > System.currentTimeMillis()) {
+            if (currentSessionSync != null && currentSessionSync.ex > System.currentTimeMillis()) {
                 return currentSessionSync
             }
 
