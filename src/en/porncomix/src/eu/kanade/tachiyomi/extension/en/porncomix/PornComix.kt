@@ -49,9 +49,9 @@ class PornComix : ParsedHttpSource() {
         manga.title = anchor.text().trim()
 
         manga.thumbnail_url = element.selectFirst("img")?.let { img ->
-            img.attr("data-pagespeed-lazy-src")
-                .ifBlank { img.attr("data-src") }
-                .ifBlank { img.attr("src") }
+            img.absUrl("data-pagespeed-lazy-src")
+                .ifBlank { img.absUrl("data-src") }
+                .ifBlank { img.absUrl("src") }
         }
 
         return manga
