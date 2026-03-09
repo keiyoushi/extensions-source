@@ -157,9 +157,10 @@ class RawUwU : HttpSource() {
         return chaptersArray.map { chapter ->
             SChapter.create().apply {
                 val num = chapter.chapterNumber!!
-                url = "/read/$mangaId/chapter-$num"
+                val formattedNum = if (num % 1.0 == 0.0) num.toInt().toString() else num.toString()
+                url = "/read/$mangaId/chapter-$formattedNum"
                 val title = chapter.chapterTitle?.trim()
-                name = if (!title.isNullOrBlank()) "Ch. $num - $title" else "Chapter $num"
+                name = if (!title.isNullOrBlank()) "Ch. $formattedNum - $title" else "Chapter $formattedNum"
                 date_upload = parseDate(chapter.chapterDatePublished ?: "")
             }
         }
