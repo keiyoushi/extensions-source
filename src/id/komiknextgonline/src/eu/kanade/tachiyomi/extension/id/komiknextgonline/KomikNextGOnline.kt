@@ -94,9 +94,9 @@ class KomikNextGOnline : ParsedHttpSource() {
 
     // ======================== Details ========================
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1.entry-title")!!.text().trim()
+        title = document.selectFirst("h1.entry-title")!!.text()
         author = document.selectFirst("span.byline")?.text()?.replace("by ", "")?.trim()
-        description = document.selectFirst("article.post")?.text()?.trim()
+        description = document.selectFirst("article.post")?.text()
         status = SManga.COMPLETED
         thumbnail_url = document.selectFirst("meta[property=\"og:image\"]")?.attr("abs:content")
     }
