@@ -25,12 +25,16 @@ class HentaiManga :
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun popularMangaNextPageSelector() = "a.next"
-    override fun searchMangaSelector() = "li.movie-item > a"
+    override fun searchMangaSelector() = "div.page-item-detail"
+    override val searchMangaUrlSelector = "div.post-title a"
     override fun searchMangaNextPageSelector() = "a.next"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        title = element.attr("title")
+        element.selectFirst(searchMangaUrlSelector)!!.let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.text()
+        }
+        element.selectFirst("img")?.let { thumbnail_url = processThumbnail(imageFromElement(it), true) }
     }
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
@@ -42,3 +46,4 @@ class HentaiManga :
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 }
+
