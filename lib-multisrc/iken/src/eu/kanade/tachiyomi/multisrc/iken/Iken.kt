@@ -45,7 +45,7 @@ abstract class Iken(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    private val rscHeaders = headersBuilder()
+    protected val rscHeaders = headersBuilder()
         .set("rsc", "1")
         .build()
 
@@ -187,15 +187,22 @@ abstract class Iken(
 
     protected open val sortOptions: Options =
         listOf(
-            intl["sort_by_latest_chapters"] to "latest_chapters",
-            intl["sort_by_popular"] to "popular",
-            intl["sort_by_newest"] to "newest",
-            intl["sort_by_oldest"] to "oldest",
-            intl["sort_by_most_chapters"] to "most_chapters",
-            intl["sort_by_alphabetical"] to "alphabetical",
+            intl["sort_by_last_chapter"] to "lastChapterAddedAt",
+            intl["sort_by_views"] to "totalViews",
+            intl["sort_by_added_date"] to "createdAt",
+            intl["sort_by_chapters_count"] to "chaptersCount",
+            intl["sort_by_alphabetical"] to "postTitle",
         )
 
-    protected open val sortFilterKey: String = "sortBy"
+    protected open val sortFilterKey: String = "orderBy"
+
+    protected open val sortDirectionOptions: Options =
+        listOf(
+            intl["sort_direction_descending"] to "desc",
+            intl["sort_direction_ascending"] to "asc",
+        )
+
+    protected open val sortDirectionFilterKey: String = "orderDirection"
 
     protected open val genreFilterKey: String = "genreIds"
 
@@ -205,9 +212,18 @@ abstract class Iken(
         }
 
         val filters = mutableListOf<Filter<*>>().apply {
-            addIfNotEmpty(statusFilterOptions) { StatusFilter(intl["status_filter_title"], statusFilterKey, statusFilterOptions) }
-            addIfNotEmpty(typeFilterOptions) { TypeFilter(intl["type_filter_title"], typeFilterKey, typeFilterOptions) }
-            addIfNotEmpty(sortOptions) { SortFilter(intl["sort_by_title"], sortFilterKey, sortOptions) }
+            addIfNotEmpty(statusFilterOptions) {
+                StatusFilter(intl["status_filter_title"], statusFilterKey, statusFilterOptions)
+            }
+            addIfNotEmpty(typeFilterOptions) {
+                TypeFilter(intl["type_filter_title"], typeFilterKey, typeFilterOptions)
+            }
+            addIfNotEmpty(sortOptions) {
+                SortFilter(intl["sort_by_title"], sortFilterKey, sortOptions)
+            }
+            addIfNotEmpty(sortDirectionOptions) {
+                SortFilter(intl["sort_direction_title"], sortDirectionFilterKey, sortDirectionOptions)
+            }
         }
 
         if (genresList.isNotEmpty()) {
