@@ -41,7 +41,7 @@ class KomikNextGOnline : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun popularMangaSelector() = "ul#comic-list li.comic"
+    override fun popularMangaSelector() = "#left-content ul#comic-list li.comic"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val titleElement = element.selectFirst(".comic-title, .entry-title")!!
@@ -86,7 +86,7 @@ class KomikNextGOnline : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "${popularMangaSelector()}, article.comic"
+    override fun searchMangaSelector() = "${popularMangaSelector()}, #left-content article.comic"
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
