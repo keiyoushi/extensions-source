@@ -6,6 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.extension.th.reborntrans.model.AjaxResponse
@@ -21,10 +23,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -33,6 +31,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /*
 Author: github.com/keegang6705, Claude Sonnet 4.6, GPT-5.2
@@ -51,26 +53,52 @@ class RebornTrans : HttpSource() {
     private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.US)
     private val ajaxUrl = "$baseUrl/wp-admin/admin-ajax.php"
     private val jsonMediaType = "application/json".toMediaType()
-    private val handler = Handler(Looper.getMainLooper())
+
+    // Lazy so it's only created when first used, by which point the main looper exists
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val context
         get() = Injekt.get<Application>()
 
     companion object {
         private const val TAG = "RebornTrans"
-        private const val WEBVIEW_TIMEOUT = 30L
+        private const val WEBVIEW_TIMEOUT = 45L
+
+        private val FETCH_INTERCEPT_JS =
+            """
+            (function() {
+                if (window.__rtIntercepted) return;
+                window.__rtIntercepted = true;
+                var _origFetch = window.fetch;
+                window.fetch = function(input, init) {
+                    var url = (typeof input === 'string') ? input : (input && input.url) || '';
+                    if (url.indexOf('/images') !== -1 && init && init.body) {
+                        try {
+                            var body = JSON.parse(init.body);
+                            if (body.turnstile_token) {
+                                window.TachiyomiRT.onToken(body.turnstile_token);
+                            } else {
+                                window.TachiyomiRT.onLog('fetch /images — no token in body: ' + init.body);
+                            }
+                        } catch(e) {
+                            window.TachiyomiRT.onLog('parse error: ' + e);
+                        }
+                    }
+                    return _origFetch.apply(this, arguments);
+                };
+                window.TachiyomiRT.onLog('fetch interceptor installed');
+            })();
+            """.trimIndent()
     }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-            GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaAjax(response)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-            GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaAjax(response)
 
@@ -78,14 +106,14 @@ class RebornTrans : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url =
-                "$baseUrl/wp-json/wp/v2/posts"
-                        .toHttpUrl()
-                        .newBuilder()
-                        .addQueryParameter("search", query)
-                        .addQueryParameter("_embed", "wp:featuredmedia")
-                        .addQueryParameter("per_page", "20")
-                        .addQueryParameter("page", page.toString())
-                        .build()
+            "$baseUrl/wp-json/wp/v2/posts"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("search", query)
+                .addQueryParameter("_embed", "wp:featuredmedia")
+                .addQueryParameter("per_page", "20")
+                .addQueryParameter("page", page.toString())
+                .build()
         return GET(url, headers)
     }
 
@@ -94,19 +122,19 @@ class RebornTrans : HttpSource() {
         val totalPages = response.headers["X-WP-TotalPages"]?.toIntOrNull() ?: 1
         val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
         val mangas =
-                posts.map { post ->
-                    SManga.create().apply {
-                        title =
-                                android.text.Html.fromHtml(
-                                                post.title.rendered,
-                                                android.text.Html.FROM_HTML_MODE_LEGACY
-                                        )
-                                        .toString()
-                                        .trim()
-                        setUrlWithoutDomain(post.link.removePrefix(baseUrl))
-                        thumbnail_url = post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
-                    }
+            posts.map { post ->
+                SManga.create().apply {
+                    title =
+                        android.text.Html.fromHtml(
+                            post.title.rendered,
+                            android.text.Html.FROM_HTML_MODE_LEGACY,
+                        )
+                            .toString()
+                            .trim()
+                    setUrlWithoutDomain(post.link.removePrefix(baseUrl))
+                    thumbnail_url = post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
                 }
+            }
         return MangasPage(mangas, currentPage < totalPages)
     }
 
@@ -117,13 +145,13 @@ class RebornTrans : HttpSource() {
         val html = ajax.data?.html.orEmpty()
         val doc = org.jsoup.Jsoup.parseBodyFragment(html, baseUrl)
         val mangas =
-                doc.select("a.manga-card").map { el ->
-                    SManga.create().apply {
-                        title = el.selectFirst("h3")!!.text().trim()
-                        setUrlWithoutDomain(el.attr("abs:href"))
-                        thumbnail_url = el.selectFirst("img")?.absUrl("src")
-                    }
+            doc.select("a.manga-card").map { el ->
+                SManga.create().apply {
+                    title = el.selectFirst("h3")!!.text().trim()
+                    setUrlWithoutDomain(el.attr("abs:href"))
+                    thumbnail_url = el.selectFirst("img")?.absUrl("src")
                 }
+            }
         return MangasPage(mangas, mangas.size == 15)
     }
 
@@ -132,12 +160,12 @@ class RebornTrans : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.removeSuffix("/").substringAfterLast("/")
         val url =
-                "$baseUrl/wp-json/wp/v2/posts"
-                        .toHttpUrl()
-                        .newBuilder()
-                        .addQueryParameter("slug", slug)
-                        .addQueryParameter("_embed", "wp:featuredmedia,wp:term")
-                        .build()
+            "$baseUrl/wp-json/wp/v2/posts"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("slug", slug)
+                .addQueryParameter("_embed", "wp:featuredmedia,wp:term")
+                .build()
         return GET(url, headers)
     }
 
@@ -147,39 +175,37 @@ class RebornTrans : HttpSource() {
         val post = response.parseAs<List<WpPost>>().first()
         return SManga.create().apply {
             title =
-                    android.text.Html.fromHtml(
-                                    post.title.rendered,
-                                    android.text.Html.FROM_HTML_MODE_LEGACY
-                            )
-                            .toString()
-                            .trim()
+                android.text.Html.fromHtml(
+                    post.title.rendered,
+                    android.text.Html.FROM_HTML_MODE_LEGACY,
+                )
+                    .toString()
+                    .trim()
             description = org.jsoup.Jsoup.parseBodyFragment(post.content.rendered).text().trim()
             thumbnail_url =
-                    post.meta?.coverUrl ?: post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
+                post.meta?.coverUrl ?: post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
             genre =
-                    post.classList
-                            .filter { it.startsWith("category-") && it != "category-uncategorized" }
-                            .map {
-                                it.removePrefix("category-").replace("-", " ").replaceFirstChar { c
-                                    ->
-                                    c.uppercase()
-                                }
-                            }
-                            .joinToString()
-                            .ifEmpty { null }
-            status =
-                    when (post.meta?.workStatus) {
-                        "completed" -> SManga.COMPLETED
-                        "processing", "ongoing" -> SManga.ONGOING
-                        else -> SManga.UNKNOWN
+                post.classList
+                    .filter { it.startsWith("category-") && it != "category-uncategorized" }
+                    .map {
+                        it.removePrefix("category-").replace("-", " ").replaceFirstChar { c ->
+                            c.uppercase()
+                        }
                     }
+                    .joinToString()
+                    .ifEmpty { null }
+            status =
+                when (post.meta?.workStatus) {
+                    "completed" -> SManga.COMPLETED
+                    "processing", "ongoing" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
         }
     }
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request =
-            GET("$baseUrl${manga.url}?tab=episodes", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}?tab=episodes", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -187,100 +213,82 @@ class RebornTrans : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(el.attr("href"))
                 name =
-                        el.selectFirst("h3.manga-single-episode-item__title")?.text()?.trim()
-                                ?: "ตอนที่ ${el.attr("data-episode-number")}"
+                    el.selectFirst("h3.manga-single-episode-item__title")?.text()?.trim()
+                        ?: "ตอนที่ ${el.attr("data-episode-number")}"
                 chapter_number = el.attr("data-episode-number").toFloatOrNull() ?: -1f
                 date_upload =
-                        el.selectFirst(".manga-single-episode-item__date")?.text()?.let {
-                            parseDate(it)
-                        }
-                                ?: 0L
+                    el.selectFirst(".manga-single-episode-item__date")?.text()?.let {
+                        parseDate(it)
+                    }
+                        ?: 0L
             }
         }
     }
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request =
-            GET("$baseUrl${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterUrl = response.request.url.toString()
-        Log.d(TAG, "pageListParse: loading $chapterUrl")
+        Log.d(TAG, "pageListParse: $chapterUrl")
 
         val document = response.asJsoup()
 
         val scriptText =
-                document.select("script").map { it.data() }.firstOrNull {
-                    it.contains("episodeId=")
-                }
-                        ?: throw Exception(
-                                "[$TAG] Could not find episode script block in page HTML"
-                        )
+            document.select("script").map { it.data() }.firstOrNull {
+                it.contains("episodeId=")
+            }
+                ?: throw Exception("[$TAG] No episode script block found in HTML")
 
         val episodeId =
-                Regex("""episodeId=(\d+)""").find(scriptText)?.groupValues?.get(1)
-                        ?: throw Exception("[$TAG] Regex failed to extract episodeId from script")
+            Regex("""episodeId=(\d+)""").find(scriptText)?.groupValues?.get(1)
+                ?: throw Exception("[$TAG] episodeId not found in script")
 
-        Log.d(TAG, "episodeId=$episodeId — launching WebView for Turnstile")
+        Log.d(TAG, "episodeId=$episodeId — starting WebView")
 
-        val token = fetchTurnstileToken(chapterUrl, episodeId)
+        val token =
+            fetchTurnstileToken(chapterUrl, episodeId)
+                ?: throw Exception(
+                    "[$TAG] Turnstile token not received within ${WEBVIEW_TIMEOUT}s\n" +
+                        "episodeId=$episodeId — check logcat tag=$TAG",
+                )
 
-        if (token == null) {
-            Log.w(
-                    TAG,
-                    "episodeId=$episodeId — WebView timed out or returned no token after ${WEBVIEW_TIMEOUT}s"
-            )
-            throw Exception(
-                    "[$TAG] Turnstile token not received within ${WEBVIEW_TIMEOUT}s (episodeId=$episodeId)\nTry opening the chapter again."
-            )
-        }
-
-        Log.d(TAG, "episodeId=$episodeId — token received (len=${token.length}), calling API")
+        Log.d(TAG, "episodeId=$episodeId — token len=${token.length}, calling API")
 
         val ts = System.currentTimeMillis()
         val apiUrl = "$baseUrl/wp-json/manga-eagle/v1/episodes/$episodeId/images?_t=$ts"
         val bodyJson = """{"_t":$ts,"turnstile_token":"$token"}"""
-        Log.d(TAG, "POST $apiUrl  body=$bodyJson")
 
         val apiHeaders =
-                headers.newBuilder()
-                        .set("Content-Type", "application/json")
-                        .set("X-Requested-With", "XMLHttpRequest")
-                        .set("Cache-Control", "no-cache")
-                        .build()
+            headers.newBuilder()
+                .set("Content-Type", "application/json")
+                .set("X-Requested-With", "XMLHttpRequest")
+                .set("Cache-Control", "no-cache")
+                .build()
 
         val apiResponse =
-                client.newCall(POST(apiUrl, apiHeaders, bodyJson.toRequestBody(jsonMediaType)))
-                        .execute()
+            client.newCall(
+                POST(apiUrl, apiHeaders, bodyJson.toRequestBody(jsonMediaType)),
+            )
+                .execute()
+
         val rawBody = apiResponse.peekBody(Long.MAX_VALUE).string()
-        Log.d(TAG, "API response ${apiResponse.code}: $rawBody")
+        Log.d(TAG, "API ${apiResponse.code}: $rawBody")
 
         val result =
-                try {
-                    kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                            .decodeFromString<ImageApiResponse>(rawBody)
-                } catch (e: Exception) {
-                    throw Exception(
-                            "[$TAG] Failed to parse image API response: ${e.message}\nRaw: $rawBody"
-                    )
-                }
+            try {
+                kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                    .decodeFromString<ImageApiResponse>(rawBody)
+            } catch (e: Exception) {
+                throw Exception("[$TAG] JSON parse failed: ${e.message} — raw: $rawBody")
+            }
 
-        if (!result.success) {
-            throw Exception(
-                    "[$TAG] API returned success=false (episodeId=$episodeId)\nRaw: $rawBody"
-            )
-        }
+        if (!result.success) throw Exception("[$TAG] API success=false — raw: $rawBody")
+        if (result.assets.isEmpty()) throw Exception("[$TAG] API returned 0 assets — raw: $rawBody")
 
-        if (result.assets.isEmpty()) {
-            throw Exception("[$TAG] API returned 0 assets (episodeId=$episodeId)\nRaw: $rawBody")
-        }
-
-        Log.d(TAG, "episodeId=$episodeId — got ${result.assets.size} images")
-        return result.assets.mapIndexed { i, asset ->
-            Log.d(TAG, "  page $i → ${asset.url}")
-            Page(i, imageUrl = asset.url)
-        }
+        Log.d(TAG, "episodeId=$episodeId — ${result.assets.size} pages")
+        return result.assets.mapIndexed { i, asset -> Page(i, imageUrl = asset.url) }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -289,115 +297,82 @@ class RebornTrans : HttpSource() {
         var token: String? = null
         var webView: WebView? = null
 
-        // This JS is injected at document-start via onPageStarted to avoid the race
-        // where turnstile.render() fires before onPageFinished
-        val patchJs =
-                """
-            (function() {
-                if (window.__tachiyomiPatched) return;
-                window.__tachiyomiPatched = true;
-                console.log('[RebornTrans] JS bridge installed');
+        // WebView must be created on the main thread
+        mainHandler.post {
+            val wv = WebView(context)
+            webView = wv
 
-                function tryPatchTurnstile() {
-                    if (typeof turnstile !== 'undefined' && typeof turnstile.render === 'function') {
-                        var origRender = turnstile.render;
-                        turnstile.render = function(el, params) {
-                            console.log('[RebornTrans] turnstile.render intercepted');
-                            var origCallback = params.callback;
-                            params.callback = function(t) {
-                                console.log('[RebornTrans] Turnstile token received, len=' + t.length);
-                                window.TachiyomiTurnstile.onToken(t);
-                                if (origCallback) origCallback(t);
-                            };
-                            return origRender.call(this, el, params);
-                        };
-                        console.log('[RebornTrans] turnstile.render patched successfully');
-                    } else {
-                        setTimeout(tryPatchTurnstile, 50);
+            wv.settings.javaScriptEnabled = true
+            wv.settings.domStorageEnabled = true
+            wv.settings.userAgentString = headers["User-Agent"]
+
+            wv.addJavascriptInterface(
+                object : Any() {
+                    @JavascriptInterface
+                    fun onToken(t: String) {
+                        Log.d(TAG, "episodeId=$episodeId bridge.onToken len=${t.length}")
+                        if (token == null) {
+                            token = t
+                            latch.countDown()
+                        }
+                    }
+
+                    @JavascriptInterface
+                    fun onLog(msg: String) {
+                        Log.d(TAG, "episodeId=$episodeId JS: $msg")
+                    }
+                },
+                "TachiyomiRT",
+            )
+
+            wv.webViewClient =
+                object : WebViewClient() {
+                    // shouldInterceptRequest runs on a background thread — no handler.post
+                    // needed,
+                    // but we cannot call evaluateJavascript here (requires main thread).
+                    // Instead we use onPageFinished which is always on main thread.
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): WebResourceResponse? {
+                        Log.d(TAG, "episodeId=$episodeId intercept: ${request.url}")
+                        return null
+                    }
+
+                    override fun onPageFinished(view: WebView, pageUrl: String) {
+                        // onPageFinished is called on the main thread — safe to
+                        // evaluateJavascript
+                        Log.d(TAG, "episodeId=$episodeId onPageFinished: $pageUrl")
+                        view.evaluateJavascript(FETCH_INTERCEPT_JS, null)
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView,
+                        errorCode: Int,
+                        description: String,
+                        failingUrl: String,
+                    ) {
+                        Log.e(
+                            TAG,
+                            "episodeId=$episodeId WebView error $errorCode '$description' @ $failingUrl",
+                        )
                     }
                 }
-                tryPatchTurnstile();
-            })();
-        """.trimIndent()
 
-        handler.post {
-            webView =
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.userAgentString = headers["User-Agent"]
-
-                        addJavascriptInterface(
-                                object : Any() {
-                                    @JavascriptInterface
-                                    fun onToken(t: String) {
-                                        Log.d(
-                                                TAG,
-                                                "episodeId=$episodeId WebView bridge: token len=${t.length}"
-                                        )
-                                        token = t
-                                        latch.countDown()
-                                    }
-
-                                    @JavascriptInterface
-                                    fun onLog(msg: String) {
-                                        Log.d(TAG, "episodeId=$episodeId WebView JS: $msg")
-                                    }
-                                },
-                                "TachiyomiTurnstile"
-                        )
-
-                        webViewClient =
-                                object : WebViewClient() {
-                                    override fun onPageStarted(
-                                            view: WebView,
-                                            pageUrl: String,
-                                            favicon: android.graphics.Bitmap?
-                                    ) {
-                                        Log.d(
-                                                TAG,
-                                                "episodeId=$episodeId WebView onPageStarted: $pageUrl"
-                                        )
-                                        // Inject early — before any site JS runs
-                                        view.evaluateJavascript(patchJs, null)
-                                    }
-
-                                    override fun onPageFinished(view: WebView, pageUrl: String) {
-                                        Log.d(
-                                                TAG,
-                                                "episodeId=$episodeId WebView onPageFinished: $pageUrl"
-                                        )
-                                        // Re-inject in case the page did a soft navigation
-                                        view.evaluateJavascript(patchJs, null)
-                                    }
-
-                                    override fun onReceivedError(
-                                            view: WebView,
-                                            errorCode: Int,
-                                            description: String,
-                                            failingUrl: String,
-                                    ) {
-                                        Log.e(
-                                                TAG,
-                                                "episodeId=$episodeId WebView error $errorCode: $description @ $failingUrl"
-                                        )
-                                    }
-                                }
-
-                        Log.d(TAG, "episodeId=$episodeId WebView loading $url")
-                        loadUrl(url)
-                    }
+            Log.d(TAG, "episodeId=$episodeId WebView.loadUrl($url)")
+            wv.loadUrl(url)
         }
 
         val completed = latch.await(WEBVIEW_TIMEOUT, TimeUnit.SECONDS)
         Log.d(
-                TAG,
-                "episodeId=$episodeId latch completed=$completed token=${if (token != null) "present" else "null"}"
+            TAG,
+            "episodeId=$episodeId latch completed=$completed token=${if (token != null) "ok(${token!!.length})" else "null"}",
         )
 
-        handler.post {
+        mainHandler.post {
             webView?.stopLoading()
             webView?.destroy()
+            webView = null
             Log.d(TAG, "episodeId=$episodeId WebView destroyed")
         }
 
@@ -408,8 +383,5 @@ class RebornTrans : HttpSource() {
 
     override fun getFilterList() = FilterList()
 
-    // ============================== Helpers ===============================
-
-    private fun parseDate(text: String): Long =
-            runCatching { dateFormat.parse(text)?.time }.getOrNull() ?: 0L
+    private fun parseDate(text: String): Long = runCatching { dateFormat.parse(text)?.time }.getOrNull() ?: 0L
 }
