@@ -76,37 +76,23 @@ abstract class Iken(
      */
     protected open val fetchGenres: Boolean = true
 
-    // popular
-
-    protected open fun popularMangaUrl(page: Int): HttpUrl.Builder = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-        addQueryParameter("page", page.toString())
-        addQueryParameter("perPage", PER_PAGE.toString())
-        addQueryParameter("orderBy", "totalViews")
+    // Popular (Search with popular order and nothing else)
+    protected open val popularFilter by lazy {
+        FilterList(SortFilter("", sortFilterKey, sortOptions, sortOptions[1].second))
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET(popularMangaUrl(page).build(), headers)
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilter)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    protected open val popularMangaSelector = "aside a:has(img), .splide:has(.card) li a:has(img)"
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    // latest
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", PER_PAGE.toString())
-            if (apiUrl.startsWith("https://api.", true)) {
-                addQueryParameter("tag", "latestUpdate")
-                addQueryParameter("isNovel", "false")
-            }
-        }.build()
-
-        return GET(url, headers)
+    // Latest (Search with update order and nothing else)
+    protected open val latestFilter by lazy {
+        FilterList(SortFilter("", sortFilterKey, sortOptions))
     }
 
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilter)
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
+    // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
@@ -119,8 +105,6 @@ abstract class Iken(
 
         return GET(url, headers)
     }
-
-    // search
 
     // Tracks the current page
     private val pageNumber = ConcurrentHashMap<String, Int>()

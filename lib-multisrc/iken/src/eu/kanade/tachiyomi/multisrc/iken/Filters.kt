@@ -13,9 +13,11 @@ abstract class SelectFilter(
     name: String,
     private val urlParameter: String,
     private val options: Options,
+    defaultValue: String? = null,
 ) : Filter.Select<String>(
     name,
     options.map { it.first }.toTypedArray(),
+    options.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
 ),
     UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
@@ -62,7 +64,8 @@ class SortFilter(
     title: String,
     key: String,
     options: Options,
-) : SelectFilter(title, key, options)
+    defaultValue: String? = null,
+) : SelectFilter(title, key, options, defaultValue)
 
 class GenreFilter(
     title: String,
