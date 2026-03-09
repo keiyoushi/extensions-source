@@ -114,7 +114,7 @@ class TitleDetailView(
         get() = isSimulReleased || titleLabels.isSimulpub
 
     private val isOnHiatus: Boolean
-        get() = nonAppearanceInfo.contains(HIATUS_REGEX)
+        get() = nonAppearanceInfo.contains(HIATUS_REGEX) || titleLabels.releaseSchedule == ReleaseSchedule.HIATUS
 
     private fun createGenres(intl: Intl): List<String> = buildList {
         if (isSimulpub && !isReEdition && !isOneShot && !isCompleted) {
@@ -184,6 +184,7 @@ enum class ReleaseSchedule {
     OTHER,
     COMPLETED,
     ONE_SHOT,
+    HIATUS,
 }
 
 @Serializable
