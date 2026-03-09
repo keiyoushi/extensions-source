@@ -128,7 +128,7 @@ class RawUwU : HttpSource() {
 
                     append("Alternative Names: ")
                     altName.split(",").forEach { name ->
-                        append("\n• ${name.trim()}")
+                        append("\n - ${name.trim()}")
                     }
                 }
             }
@@ -156,10 +156,10 @@ class RawUwU : HttpSource() {
 
         return chaptersArray.map { chapter ->
             SChapter.create().apply {
-                val num = chapter.chapterNumber ?: ""
+                val num = chapter.chapterNumber!!
                 url = "/read/$mangaId/chapter-$num"
-                val title = chapter.chapterTitle ?: ""
-                name = if (title.isNotEmpty()) "Ch. $num - $title" else "Chapter $num"
+                val title = chapter.chapterTitle?.trim()
+                name = if (!title.isNullOrBlank()) "Ch. $num - $title" else "Chapter $num"
                 date_upload = parseDate(chapter.chapterDatePublished ?: "")
             }
         }
@@ -168,7 +168,7 @@ class RawUwU : HttpSource() {
     // --- PAGES ---
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val segments = chapter.url.trim('/').split("/")
+        val segments = baseUrl.toHttpUrl().resolve(chapter.url)!!.pathSegments
         val mangaId = segments[1]
         val chapterNum = segments[2].removePrefix("chapter-")
 
@@ -178,18 +178,16 @@ class RawUwU : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterPageResponseDto>()
 
-        val chapterDetail = result.chapterDetail
-        val serverUrl = chapterDetail?.server ?: throw Exception("Could not find server url")
-        val htmlContent = chapterDetail?.chapterContent ?: ""
+        val chapterDetail = result.chapterDetail ?: throw Exception("Could not find chapter detail")
+        val serverUrl = chapterDetail.server ?: throw Exception("Could not server url")
+        val htmlContent = chapterDetail.chapterContent ?: throw Exception("Could not find chapter pages")
 
         val document = Jsoup.parseBodyFragment(htmlContent)
 
         return document.select("img").mapIndexed { i, img ->
-            val rawPath = img.attr("data-src")
-                .ifEmpty { img.attr("src") }
-                .removePrefix("/")
+            val rawPath = img.attr("data-src").removePrefix("/")
 
-            Page(i, "", "$serverUrl/$rawPath")
+            Page(i, imageUrl = "$serverUrl/$rawPath")
         }
     }
 
