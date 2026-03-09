@@ -23,10 +23,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -35,6 +31,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class RebornTrans : HttpSource() {
     override val name = "Reborn Trans"
@@ -49,6 +49,7 @@ class RebornTrans : HttpSource() {
     private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.US)
     private val ajaxUrl = "$baseUrl/wp-admin/admin-ajax.php"
     private val jsonMediaType = "application/json".toMediaType()
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     // Lazy so it's only created when first used, by which point the main looper exists
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -60,7 +61,7 @@ class RebornTrans : HttpSource() {
         private const val WEBVIEW_TIMEOUT = 45L
 
         private val FETCH_INTERCEPT_JS =
-                """
+            """
             (function() {
                 if (window.__rtIntercepted) return;
                 window.__rtIntercepted = true;
@@ -88,15 +89,13 @@ class RebornTrans : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-            GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaAjax(response)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-            GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$ajaxUrl?action=manga_eagle_load_paginated_posts&page=$page&limit=15", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaAjax(response)
 
@@ -104,14 +103,14 @@ class RebornTrans : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url =
-                "$baseUrl/wp-json/wp/v2/posts"
-                        .toHttpUrl()
-                        .newBuilder()
-                        .addQueryParameter("search", query)
-                        .addQueryParameter("_embed", "wp:featuredmedia")
-                        .addQueryParameter("per_page", "20")
-                        .addQueryParameter("page", page.toString())
-                        .build()
+            "$baseUrl/wp-json/wp/v2/posts"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("search", query)
+                .addQueryParameter("_embed", "wp:featuredmedia")
+                .addQueryParameter("per_page", "20")
+                .addQueryParameter("page", page.toString())
+                .build()
         return GET(url, headers)
     }
 
@@ -120,19 +119,19 @@ class RebornTrans : HttpSource() {
         val totalPages = response.headers["X-WP-TotalPages"]?.toIntOrNull() ?: 1
         val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
         val mangas =
-                posts.map { post ->
-                    SManga.create().apply {
-                        title =
-                                android.text.Html.fromHtml(
-                                                post.title.rendered,
-                                                android.text.Html.FROM_HTML_MODE_LEGACY,
-                                        )
-                                        .toString()
-                                        .trim()
-                        setUrlWithoutDomain(post.link.removePrefix(baseUrl))
-                        thumbnail_url = post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
-                    }
+            posts.map { post ->
+                SManga.create().apply {
+                    title =
+                        android.text.Html.fromHtml(
+                            post.title.rendered,
+                            android.text.Html.FROM_HTML_MODE_LEGACY,
+                        )
+                            .toString()
+                            .trim()
+                    setUrlWithoutDomain(post.link.removePrefix(baseUrl))
+                    thumbnail_url = post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
                 }
+            }
         return MangasPage(mangas, currentPage < totalPages)
     }
 
@@ -143,13 +142,13 @@ class RebornTrans : HttpSource() {
         val html = ajax.data?.html.orEmpty()
         val doc = org.jsoup.Jsoup.parseBodyFragment(html, baseUrl)
         val mangas =
-                doc.select("a.manga-card").map { el ->
-                    SManga.create().apply {
-                        title = el.selectFirst("h3")!!.text().trim()
-                        setUrlWithoutDomain(el.attr("abs:href"))
-                        thumbnail_url = el.selectFirst("img")?.absUrl("src")
-                    }
+            doc.select("a.manga-card").map { el ->
+                SManga.create().apply {
+                    title = el.selectFirst("h3")!!.text().trim()
+                    setUrlWithoutDomain(el.attr("abs:href"))
+                    thumbnail_url = el.selectFirst("img")?.absUrl("src")
                 }
+            }
         return MangasPage(mangas, mangas.size == 15)
     }
 
@@ -158,12 +157,12 @@ class RebornTrans : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.removeSuffix("/").substringAfterLast("/")
         val url =
-                "$baseUrl/wp-json/wp/v2/posts"
-                        .toHttpUrl()
-                        .newBuilder()
-                        .addQueryParameter("slug", slug)
-                        .addQueryParameter("_embed", "wp:featuredmedia,wp:term")
-                        .build()
+            "$baseUrl/wp-json/wp/v2/posts"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("slug", slug)
+                .addQueryParameter("_embed", "wp:featuredmedia,wp:term")
+                .build()
         return GET(url, headers)
     }
 
@@ -173,39 +172,37 @@ class RebornTrans : HttpSource() {
         val post = response.parseAs<List<WpPost>>().first()
         return SManga.create().apply {
             title =
-                    android.text.Html.fromHtml(
-                                    post.title.rendered,
-                                    android.text.Html.FROM_HTML_MODE_LEGACY,
-                            )
-                            .toString()
-                            .trim()
+                android.text.Html.fromHtml(
+                    post.title.rendered,
+                    android.text.Html.FROM_HTML_MODE_LEGACY,
+                )
+                    .toString()
+                    .trim()
             description = org.jsoup.Jsoup.parseBodyFragment(post.content.rendered).text().trim()
             thumbnail_url =
-                    post.meta?.coverUrl ?: post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
+                post.meta?.coverUrl ?: post.embedded?.featuredMedia?.firstOrNull()?.sourceUrl
             genre =
-                    post.classList
-                            .filter { it.startsWith("category-") && it != "category-uncategorized" }
-                            .map {
-                                it.removePrefix("category-").replace("-", " ").replaceFirstChar { c
-                                    ->
-                                    c.uppercase()
-                                }
-                            }
-                            .joinToString()
-                            .ifEmpty { null }
-            status =
-                    when (post.meta?.workStatus) {
-                        "completed" -> SManga.COMPLETED
-                        "processing", "ongoing" -> SManga.ONGOING
-                        else -> SManga.UNKNOWN
+                post.classList
+                    .filter { it.startsWith("category-") && it != "category-uncategorized" }
+                    .map {
+                        it.removePrefix("category-").replace("-", " ").replaceFirstChar { c ->
+                            c.uppercase()
+                        }
                     }
+                    .joinToString()
+                    .ifEmpty { null }
+            status =
+                when (post.meta?.workStatus) {
+                    "completed" -> SManga.COMPLETED
+                    "processing", "ongoing" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
         }
     }
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request =
-            GET("$baseUrl${manga.url}?tab=episodes", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}?tab=episodes", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -213,22 +210,21 @@ class RebornTrans : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(el.attr("href"))
                 name =
-                        el.selectFirst("h3.manga-single-episode-item__title")?.text()?.trim()
-                                ?: "ตอนที่ ${el.attr("data-episode-number")}"
+                    el.selectFirst("h3.manga-single-episode-item__title")?.text()?.trim()
+                        ?: "ตอนที่ ${el.attr("data-episode-number")}"
                 chapter_number = el.attr("data-episode-number").toFloatOrNull() ?: -1f
                 date_upload =
-                        el.selectFirst(".manga-single-episode-item__date")?.text()?.let {
-                            parseDate(it)
-                        }
-                                ?: 0L
+                    el.selectFirst(".manga-single-episode-item__date")?.text()?.let {
+                        parseDate(it)
+                    }
+                        ?: 0L
             }
         }
     }
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request =
-            GET("$baseUrl${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterUrl = response.request.url.toString()
@@ -237,23 +233,23 @@ class RebornTrans : HttpSource() {
         val document = response.asJsoup()
 
         val scriptText =
-                document.select("script").map { it.data() }.firstOrNull {
-                    it.contains("episodeId=")
-                }
-                        ?: throw Exception("[$TAG] No episode script block found in HTML")
+            document.select("script").map { it.data() }.firstOrNull {
+                it.contains("episodeId=")
+            }
+                ?: throw Exception("[$TAG] No episode script block found in HTML")
 
         val episodeId =
-                Regex("""episodeId=(\d+)""").find(scriptText)?.groupValues?.get(1)
-                        ?: throw Exception("[$TAG] episodeId not found in script")
+            Regex("""episodeId=(\d+)""").find(scriptText)?.groupValues?.get(1)
+                ?: throw Exception("[$TAG] episodeId not found in script")
 
         Log.d(TAG, "episodeId=$episodeId — starting WebView")
 
         val token =
-                fetchTurnstileToken(chapterUrl, episodeId)
-                        ?: throw Exception(
-                                "[$TAG] Turnstile token not received within ${WEBVIEW_TIMEOUT}s\n" +
-                                        "episodeId=$episodeId — check logcat tag=$TAG",
-                        )
+            fetchTurnstileToken(chapterUrl, episodeId)
+                ?: throw Exception(
+                    "[$TAG] Turnstile token not received within ${WEBVIEW_TIMEOUT}s\n" +
+                        "episodeId=$episodeId — check logcat tag=$TAG",
+                )
 
         Log.d(TAG, "episodeId=$episodeId — token len=${token.length}, calling API")
 
@@ -262,28 +258,27 @@ class RebornTrans : HttpSource() {
         val bodyJson = """{"_t":$ts,"turnstile_token":"$token"}"""
 
         val apiHeaders =
-                headers.newBuilder()
-                        .set("Content-Type", "application/json")
-                        .set("X-Requested-With", "XMLHttpRequest")
-                        .set("Cache-Control", "no-cache")
-                        .build()
+            headers.newBuilder()
+                .set("Content-Type", "application/json")
+                .set("X-Requested-With", "XMLHttpRequest")
+                .set("Cache-Control", "no-cache")
+                .build()
 
         val apiResponse =
-                client.newCall(
-                                POST(apiUrl, apiHeaders, bodyJson.toRequestBody(jsonMediaType)),
-                        )
-                        .execute()
+            client.newCall(
+                POST(apiUrl, apiHeaders, bodyJson.toRequestBody(jsonMediaType)),
+            )
+                .execute()
 
         val rawBody = apiResponse.peekBody(Long.MAX_VALUE).string()
         Log.d(TAG, "API ${apiResponse.code}: $rawBody")
 
         val result =
-                try {
-                    kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                            .decodeFromString<ImageApiResponse>(rawBody)
-                } catch (e: Exception) {
-                    throw Exception("[$TAG] JSON parse failed: ${e.message} — raw: $rawBody")
-                }
+            try {
+                json.decodeFromString<ImageApiResponse>(rawBody)
+            } catch (e: Exception) {
+                throw Exception("[$TAG] JSON parse failed: ${e.message} — raw: $rawBody")
+            }
 
         if (!result.success) throw Exception("[$TAG] API success=false — raw: $rawBody")
         if (result.assets.isEmpty()) throw Exception("[$TAG] API returned 0 assets — raw: $rawBody")
@@ -308,57 +303,58 @@ class RebornTrans : HttpSource() {
             wv.settings.userAgentString = headers["User-Agent"]
 
             wv.addJavascriptInterface(
-                    object : Any() {
-                        @JavascriptInterface
-                        fun onToken(t: String) {
-                            Log.d(TAG, "episodeId=$episodeId bridge.onToken len=${t.length}")
-                            if (token == null) {
-                                token = t
-                                latch.countDown()
-                            }
+                object : Any() {
+                    @JavascriptInterface
+                    fun onToken(t: String) {
+                        Log.d(TAG, "episodeId=$episodeId bridge.onToken len=${t.length}")
+                        if (token == null) {
+                            token = t
+                            latch.countDown()
                         }
+                    }
 
-                        @JavascriptInterface
-                        fun onLog(msg: String) {
-                            Log.d(TAG, "episodeId=$episodeId JS: $msg")
-                        }
-                    },
-                    "TachiyomiRT",
+                    @JavascriptInterface
+                    fun onLog(msg: String) {
+                        Log.d(TAG, "episodeId=$episodeId JS: $msg")
+                    }
+                },
+                "TachiyomiRT",
             )
 
             wv.webViewClient =
-                    object : WebViewClient() {
-                        // shouldInterceptRequest runs on a background thread — no handler.post
-                        // needed,
-                        // but we cannot call evaluateJavascript here (requires main thread).
-                        // Instead use onPageFinished which is always on main thread.
-                        override fun shouldInterceptRequest(
-                                view: WebView,
-                                request: WebResourceRequest,
-                        ): WebResourceResponse? {
-                            Log.d(TAG, "episodeId=$episodeId intercept: ${request.url}")
-                            return null
-                        }
-
-                        override fun onPageFinished(view: WebView, pageUrl: String) {
-                            // onPageFinished is called on the main thread — safe to
-                            // evaluateJavascript
-                            Log.d(TAG, "episodeId=$episodeId onPageFinished: $pageUrl")
-                            view.evaluateJavascript(FETCH_INTERCEPT_JS, null)
-                        }
-
-                        override fun onReceivedError(
-                                view: WebView,
-                                errorCode: Int,
-                                description: String,
-                                failingUrl: String,
-                        ) {
-                            Log.e(
-                                    TAG,
-                                    "episodeId=$episodeId WebView error $errorCode '$description' @ $failingUrl",
-                            )
-                        }
+                object : WebViewClient() {
+                    // shouldInterceptRequest runs on a background thread — no handler.post
+                    // needed,
+                    // but we cannot call evaluateJavascript here (requires main thread).
+                    // Instead use onPageFinished which is always on main thread.
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): WebResourceResponse? {
+                        Log.d(TAG, "episodeId=$episodeId intercept: ${request.url}")
+                        return null
                     }
+
+                    override fun onPageFinished(view: WebView, pageUrl: String) {
+                        // onPageFinished is called on the main thread — safe to
+                        // evaluateJavascript
+                        Log.d(TAG, "episodeId=$episodeId onPageFinished: $pageUrl")
+                        view.evaluateJavascript(FETCH_INTERCEPT_JS, null)
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onReceivedError(
+                        view: WebView,
+                        errorCode: Int,
+                        description: String,
+                        failingUrl: String,
+                    ) {
+                        Log.e(
+                            TAG,
+                            "episodeId=$episodeId WebView error $errorCode '$description' @ $failingUrl",
+                        )
+                    }
+                }
 
             Log.d(TAG, "episodeId=$episodeId WebView.loadUrl($url)")
             wv.loadUrl(url)
@@ -366,8 +362,8 @@ class RebornTrans : HttpSource() {
 
         val completed = latch.await(WEBVIEW_TIMEOUT, TimeUnit.SECONDS)
         Log.d(
-                TAG,
-                "episodeId=$episodeId latch completed=$completed token=${if (token != null) "ok(${token!!.length})" else "null"}",
+            TAG,
+            "episodeId=$episodeId latch completed=$completed token=${if (token != null) "ok(${token?.length})" else "null"}",
         )
 
         mainHandler.post {
@@ -384,6 +380,5 @@ class RebornTrans : HttpSource() {
 
     override fun getFilterList() = FilterList()
 
-    private fun parseDate(text: String): Long =
-            runCatching { dateFormat.parse(text)?.time }.getOrNull() ?: 0L
+    private fun parseDate(text: String): Long = runCatching { dateFormat.parse(text)?.time }.getOrNull() ?: 0L
 }
