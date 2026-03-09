@@ -145,7 +145,7 @@ class PornComix : ParsedHttpSource() {
 
         if (pswp.isNotEmpty()) {
             return pswp.mapIndexed { index, element ->
-                val url = element.attr("data-pswp-src")
+                val url = element.absUrl("data-pswp-src")
                 Page(index, "", url)
             }
         }
