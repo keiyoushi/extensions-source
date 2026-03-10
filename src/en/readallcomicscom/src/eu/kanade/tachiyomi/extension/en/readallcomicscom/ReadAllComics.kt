@@ -77,8 +77,8 @@ class ReadAllComics : HttpSource() {
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val archive = response.asJsoup().selectFirst(".description-archive")!!
-        title = archive.selectFirst("h1")!!.text()
-        thumbnail_url = archive.selectFirst("p img")?.attr("abs:src")
+        title = archive.selectFirst("h1")?.text() ?: ""
+        thumbnail_url = archive.selectFirst("p img")?.attr("abs:src") ?: throw Exception("No cover available")
         val infoStrongs = archive.select(".b > p strong")
         genre = infoStrongs.firstOrNull()?.text()
         author = infoStrongs.lastOrNull()?.text()
