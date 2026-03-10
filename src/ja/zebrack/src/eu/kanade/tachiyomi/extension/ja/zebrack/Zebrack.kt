@@ -48,6 +48,7 @@ class Zebrack :
     private val magazineApiUrl = "https://api.$subdomain.com/api"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
     private val preferences: SharedPreferences by getPreferencesLazy()
+    private val hideLocked get() = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
 
     private var secret: String? = null
 
@@ -57,45 +58,31 @@ class Zebrack :
             val request = chain.request()
             val response = chain.proceed(request)
 
-            if (response.isSessionExpired()) {
-                response.close()
+            if (!response.isSessionExpired()) return@addInterceptor response
 
-                val failedSecret = request.url.queryParameter("secret")
+            response.close()
 
-                if (failedSecret != null) {
-                    flushSecret(failedSecret)
+            val failedSecret = request.url.queryParameter("secret")
 
-                    synchronized(this) {
-                        if (secret == failedSecret) {
-                            secret = null
-                        }
-                    }
-                }
+            clearSecretIfCurrent(failedSecret)
+            flushSecret(failedSecret)
 
-                val newSecret = fetchSecret()
-                val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
-                val newUrl = request.url.newBuilder()
-
+            val newSecret = fetchSecret()
+            val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
+            val newUrl = request.url.newBuilder().apply {
                 if (isSecretValid) {
-                    newUrl.setQueryParameter("secret", newSecret)
+                    setQueryParameter("secret", newSecret)
                 } else {
-                    newUrl.removeAllQueryParameters("secret")
-
-                    synchronized(this) {
-                        if (secret == newSecret) {
-                            secret = null
-                        }
-                    }
+                    removeAllQueryParameters("secret")
+                    clearSecretIfCurrent(newSecret)
                 }
+            }.build()
 
-                val newRequest = request.newBuilder()
-                    .url(newUrl.build())
-                    .build()
+            val newRequest = request.newBuilder()
+                .url(newUrl)
+                .build()
 
-                return@addInterceptor chain.proceed(newRequest)
-            }
-
-            response
+            chain.proceed(newRequest)
         }
         .build()
 
@@ -123,8 +110,7 @@ class Zebrack :
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAsProto<LatestResponse>()
-        val mangas = result.list.map { it.toSManga() }
+        val mangas = response.parseAsProto<LatestResponse>().list.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -161,34 +147,27 @@ class Zebrack :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val segment = response.request.url.pathSegments.last()
-        when (segment) {
-            "rensai" -> {
-                return latestUpdatesParse(response)
-            }
+        return when (segment) {
+            "rensai" -> latestUpdatesParse(response)
             "magazine_list" -> {
                 val result = response.parseAsProto<MagazineFilterResponse>()
-                val mangas = (
-                    result.magazines.magazinesListAll +
-                        result.magazines.magazinesListMen +
-                        result.magazines.magazinesListWoman
-                    ).map { it.toSManga() }
-
-                return MangasPage(mangas, false)
+                val mangas = with(result.magazines) {
+                    (magazinesListAll + magazinesListMen + magazinesListWoman).map { it.toSManga() }
+                }
+                MangasPage(mangas, false)
             }
             else -> {
-                val result = response.parseAsProto<SearchResponse>()
-                val mangas = result.list.map { it.toSManga() }
-
-                return MangasPage(mangas, false)
+                val mangas = response.parseAsProto<SearchResponse>().list.map { it.toSManga() }
+                MangasPage(mangas, false)
             }
         }
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val mangaUrl = "$baseUrl/${manga.url}".toHttpUrl()
-        val magazine = mangaUrl.fragment?.toInt()
+        val isMagazine = mangaUrl.fragment?.toInt()
         val magazineId = mangaUrl.pathSegments.first()
-        if (magazine == 1) {
+        if (isMagazine == 1) {
             val url = "$apiUrl/v3/magazine_detail".toHttpUrl().newBuilder()
                 .addQueryParameter("os", "browser")
                 .addQueryParameter("magazine_id", magazineId)
@@ -205,8 +184,8 @@ class Zebrack :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.request.url.pathSegments.last().contains("title_detail")
-        return if (manga) {
+        val isTitleDetail = response.request.url.pathSegments.last().contains("title_detail")
+        return if (isTitleDetail) {
             response.parseAsProto<MangaDetailsResponse>().details.toSManga()
         } else {
             response.parseAsProto<MagazineDetailsResponse>().details.toSManga()
@@ -217,20 +196,12 @@ class Zebrack :
         val mangaUrl = "$baseUrl/${manga.url}".toHttpUrl()
         val magazine = mangaUrl.fragment?.toInt()
         val magazineId = mangaUrl.pathSegments.first()
-        return if (magazine == 1) {
-            "$baseUrl/magazine/$magazineId/detail"
-        } else {
-            "$baseUrl/title/${manga.url}"
-        }
+        return if (magazine == 1) "$baseUrl/magazine/$magazineId/detail" else "$baseUrl/title/${manga.url}"
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val mangaUrl = "$baseUrl/${manga.url}".toHttpUrl()
-        if (mangaUrl.fragment?.toInt() == 1) {
-            return fetchMagazineChapters(mangaUrl.pathSegments.first())
-        }
-
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        if (mangaUrl.fragment?.toInt() == 1) return fetchMagazineChapters(mangaUrl.pathSegments.first())
         val secretKey = fetchSecret()
         val chapterUrl = "$apiUrl/v3/title_chapter_list".toHttpUrl().newBuilder()
             .addQueryParameter("os", "browser")
@@ -244,46 +215,36 @@ class Zebrack :
             .apply { secretKey?.let { addQueryParameter("secret", it) } }
             .build()
 
-        val chapterRequest = GET(chapterUrl, headers)
-        val volumeRequest = GET(volumeUrl, headers)
-
-        fun Response.parseChapters(): List<SChapter> {
-            val result = parseAsProto<ChapterResponse>()
-            val sessionMsg = result.chapterList
-                ?.flatMap { it.chapters.orEmpty() }
-                ?.firstNotNullOfOrNull { it.session?.message }
-            if (sessionMsg == SESSION_EXPIRED) {
-                flushSecret(request.url.queryParameter("secret"))
-                throw Exception(LOCKED)
-            }
-            return result.chapterList.orEmpty()
-                .flatMap { it.chapters.orEmpty() }
-                .filter { !hideLocked || !it.isLocked }
-                .map { it.toSChapter() }
-        }
-
-        fun Response.parseVolumes(): List<SChapter> {
-            val result = parseAsProto<VolumeResponse>()
-            val sessionMsg = result.volumeData?.volumeList
-                ?.firstNotNullOfOrNull { it.session?.message }
-            if (sessionMsg == SESSION_EXPIRED) {
-                flushSecret(request.url.queryParameter("secret"))
-                throw Exception(LOCKED)
-            }
-            return result.volumeData?.volumeList.orEmpty()
-                .filter { !hideLocked || !it.isLockedVolume }
-                .map { it.toSChapter() }
-        }
-
-        val chapters = client.newCall(chapterRequest)
+        val chapters = client.newCall(GET(chapterUrl, headers))
             .asObservableSuccess()
-            .map { it.parseChapters() }
+            .map { it.parseChapterResponse() }
 
-        val volumes = client.newCall(volumeRequest)
+        val volumes = client.newCall(GET(volumeUrl, headers))
             .asObservableSuccess()
-            .map { it.parseVolumes() }
+            .map { it.parseVolumeResponse() }
 
-        return Observable.zip(volumes, chapters) { chapter, volume -> (chapter + volume).reversed() }
+        return Observable.zip(volumes, chapters) { vols, chaps -> (vols + chaps).reversed() }
+    }
+
+    private fun Response.parseChapterResponse(): List<SChapter> {
+        val result = parseAsProto<ChapterResponse>()
+        val sessionMsg = result.chapterList
+            ?.flatMap { it.chapters.orEmpty() }
+            ?.firstNotNullOfOrNull { it.session?.message }
+        checkSessionExpired(sessionMsg, request.url.queryParameter("secret"))
+        return result.chapterList.orEmpty()
+            .flatMap { it.chapters.orEmpty() }
+            .filter { !hideLocked || !it.isLocked }
+            .map { it.toSChapter() }
+    }
+
+    private fun Response.parseVolumeResponse(): List<SChapter> {
+        val result = parseAsProto<VolumeResponse>()
+        val sessionMsg = result.volumeData?.volumeList?.firstNotNullOfOrNull { it.session?.message }
+        checkSessionExpired(sessionMsg, request.url.queryParameter("secret"))
+        return result.volumeData?.volumeList.orEmpty()
+            .filter { !hideLocked || !it.isLockedVolume }
+            .map { it.toSChapter() }
     }
 
     private fun fetchMagazineChapters(magazineId: String, year: Int = Calendar.getInstance(jst).get(Calendar.YEAR)): Observable<List<SChapter>> {
@@ -297,20 +258,16 @@ class Zebrack :
             .build()
         val response = client.newCall(GET(url, headers)).asObservableSuccess()
         return response.flatMap { response ->
-            val data = response.parseAsProto<MagazineResponse>().magazineData
-            val issues = data?.magazineList
+            val data = response.parseAsProto<MagazineResponse>().magazineData?.magazineList
+            val sessionMsg = data?.firstNotNullOfOrNull { it.session?.message }
+            checkSessionExpired(sessionMsg, response.request.url.queryParameter("secret"))
 
-            val sessionMsg = issues?.firstNotNullOfOrNull { it.session?.message }
-            if (sessionMsg == SESSION_EXPIRED) {
-                flushSecret(response.request.url.queryParameter("secret"))
-                throw Exception(LOCKED)
-            }
-
-            if (issues.isNullOrEmpty()) {
+            if (data.isNullOrEmpty()) {
                 Observable.just(emptyList())
             } else {
-                fetchMagazineChapters(magazineId, year - 1)
-                    .map { prev -> issues.filter { !hideLocked || !it.isLockedMagazine }.map { it.toSChapter() } + prev }
+                fetchMagazineChapters(magazineId, year - 1).map { prev ->
+                    data.filter { !hideLocked || !it.isLockedMagazine }.map { it.toSChapter() } + prev
+                }
             }
         }
     }
@@ -347,9 +304,7 @@ class Zebrack :
             }
 
             1 -> {
-                val parts = fragment!!.split(":")
-                val titleId = parts[0]
-                val isTrial = parts[1]
+                val (titleId, isTrial) = fragment!!.split(":")
                 val requestUrl = "$apiUrl/v3/manga_volume_viewer".toHttpUrl().newBuilder()
                     .addQueryParameter("os", "browser")
                     .addQueryParameter("title_id", titleId)
@@ -361,9 +316,7 @@ class Zebrack :
             }
 
             else -> {
-                val parts = fragment!!.split(":")
-                val magazineIssueId = parts[0]
-                val isTrial = parts[1]
+                val (magazineIssueId, isTrial) = fragment!!.split(":")
                 val requestUrl = "$magazineApiUrl/browser/magazine_viewer".toHttpUrl().newBuilder()
                     .addQueryParameter("os", "browser")
                     .addQueryParameter("magazine_id", id)
@@ -377,26 +330,21 @@ class Zebrack :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val type = response.request.url.pathSegments.last()
-        if (type == "magazine_viewer") {
+        val isMagazineViewer = response.request.url.pathSegments.last() == "magazine_viewer"
+
+        return if (isMagazineViewer) {
             val result = response.parseAsProto<MagazineViewerImages>()
-            if (result.session?.message == SESSION_EXPIRED) {
-                flushSecret(response.request.url.queryParameter("secret"))
-                throw Exception(LOCKED)
-            }
-            return result.pages?.pagesList.orEmpty().mapIndexedNotNull { i, image ->
-                image.page?.let { Page(i, imageUrl = "${image.page}#key=${image.key}") }
+            checkSessionExpired(result.session?.message, response.request.url.queryParameter("secret"))
+            result.pages?.pagesList.orEmpty().mapIndexedNotNull { i, image ->
+                image.page?.let { Page(i, imageUrl = "$it#key=${image.key}") }
+            }.ifEmpty { throw Exception(LOCKED) }
+        } else {
+            val result = response.parseAsProto<ViewerResponse>()
+            checkSessionExpired(result.session?.message, response.request.url.queryParameter("secret"))
+            result.images.mapIndexedNotNull { i, image ->
+                image.pages?.let { Page(i, imageUrl = "${it.page}#key=${it.key}") }
             }.ifEmpty { throw Exception(LOCKED) }
         }
-
-        val result = response.parseAsProto<ViewerResponse>()
-        if (result.session?.message == SESSION_EXPIRED) {
-            flushSecret(response.request.url.queryParameter("secret"))
-            throw Exception(LOCKED)
-        }
-        return result.images.mapIndexedNotNull { i, image ->
-            image.pages?.let { Page(i, imageUrl = "${it.page}#key=${it.key}") }
-        }.ifEmpty { throw Exception(LOCKED) }
     }
 
     private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
@@ -472,6 +420,18 @@ class Zebrack :
         peekBody(Long.MAX_VALUE).string().contains(SESSION_EXPIRED)
     } catch (_: Exception) {
         false
+    }
+
+    private fun checkSessionExpired(sessionMsg: String?, failedSecret: String?) {
+        if (sessionMsg == SESSION_EXPIRED) {
+            flushSecret(failedSecret)
+            throw Exception(LOCKED)
+        }
+    }
+
+    @Synchronized
+    private fun clearSecretIfCurrent(value: String?) {
+        if (secret == value) secret = null
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
