@@ -125,7 +125,7 @@ class MagazinePocket :
 
                 if (result.isEmpty()) break
 
-                mangas.addAll(result.map { it.toSManga() }.reversed())
+                mangas.addAll(result.map { it.toSManga() })
             }
 
             MangasPage(mangas, false)
