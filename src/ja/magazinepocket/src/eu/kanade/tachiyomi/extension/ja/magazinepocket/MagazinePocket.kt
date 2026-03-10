@@ -35,12 +35,13 @@ class MagazinePocket :
     HttpSource(),
     ConfigurableSource {
     override val name = "Magazine Pocket"
-    override val baseUrl = "https://pocket.shonenmagazine.com"
+    private val domain = "pocket.shonenmagazine.com"
+    override val baseUrl = "https://$domain"
     override val lang = "ja"
     override val supportsLatest = true
     override val versionId = 2
 
-    private val apiUrl = "https://api.pocket.shonenmagazine.com"
+    private val apiUrl = "https://api.$domain"
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     private val pageLimit = 25
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
