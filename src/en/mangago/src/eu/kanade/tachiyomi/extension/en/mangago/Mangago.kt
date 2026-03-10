@@ -80,7 +80,7 @@ class Mangago :
         ).build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
-        preferences.getString(PREF_KEY_CUSTOM_UA, null)?.also {
+        preferences.getString(PREF_KEY_CUSTOM_UA, null)?.takeIf { it.isNotBlank() }?.also {
             set("User-Agent", it)
         }
         add("Referer", "$baseUrl/")
