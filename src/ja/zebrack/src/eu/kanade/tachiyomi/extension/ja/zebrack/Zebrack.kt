@@ -35,7 +35,6 @@ import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-// TODO: Gravures, test everything again
 class Zebrack :
     HttpSource(),
     ConfigurableSource {
@@ -170,8 +169,8 @@ class Zebrack :
                 val result = response.parseAsProto<MagazineFilterResponse>()
                 val mangas = (
                     result.magazines.magazinesListAll +
-                        result.magazines.magazinesListWoman +
-                        result.magazines.magazinesListMen
+                        result.magazines.magazinesListMen +
+                        result.magazines.magazinesListWoman
                     ).map { it.toSManga() }
 
                 return MangasPage(mangas, false)
@@ -254,7 +253,7 @@ class Zebrack :
                 ?.flatMap { it.chapters.orEmpty() }
                 ?.firstNotNullOfOrNull { it.session?.message }
             if (sessionMsg == SESSION_EXPIRED) {
-                flushSecret(request.url.queryParameter("secret")!!)
+                flushSecret(request.url.queryParameter("secret"))
                 throw Exception(LOCKED)
             }
             return result.chapterList.orEmpty()
@@ -268,11 +267,11 @@ class Zebrack :
             val sessionMsg = result.volumeData?.volumeList
                 ?.firstNotNullOfOrNull { it.session?.message }
             if (sessionMsg == SESSION_EXPIRED) {
-                flushSecret(request.url.queryParameter("secret")!!)
+                flushSecret(request.url.queryParameter("secret"))
                 throw Exception(LOCKED)
             }
             return result.volumeData?.volumeList.orEmpty()
-                .filter { !hideLocked || it.isFree != null }
+                .filter { !hideLocked || !it.isLockedVolume }
                 .map { it.toSChapter() }
         }
 
@@ -288,20 +287,32 @@ class Zebrack :
     }
 
     private fun fetchMagazineChapters(magazineId: String, year: Int = Calendar.getInstance(jst).get(Calendar.YEAR)): Observable<List<SChapter>> {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val secretKey = fetchSecret()
         val url = "$apiUrl/browser/magazine_backnumbers".toHttpUrl().newBuilder()
             .addQueryParameter("os", "browser")
             .addQueryParameter("magazine_id", magazineId)
             .addQueryParameter("year", year.toString())
+            .apply { secretKey?.let { addQueryParameter("secret", it) } }
             .build()
-        return client.newCall(GET(url, headers)).asObservableSuccess()
-            .flatMap { response ->
-                val issues = response.parseAsProto<MagazineResponse>().magazineData?.magazineList
-                if (issues.isNullOrEmpty()) {
-                    Observable.just(emptyList())
-                } else {
-                    fetchMagazineChapters(magazineId, year - 1).map { prev -> issues.map { it.toSChapter() } + prev }
-                }
+        val response = client.newCall(GET(url, headers)).asObservableSuccess()
+        return response.flatMap { response ->
+            val data = response.parseAsProto<MagazineResponse>().magazineData
+            val issues = data?.magazineList
+
+            val sessionMsg = issues?.firstNotNullOfOrNull { it.session?.message }
+            if (sessionMsg == SESSION_EXPIRED) {
+                flushSecret(response.request.url.queryParameter("secret"))
+                throw Exception(LOCKED)
             }
+
+            if (issues.isNullOrEmpty()) {
+                Observable.just(emptyList())
+            } else {
+                fetchMagazineChapters(magazineId, year - 1)
+                    .map { prev -> issues.filter { !hideLocked || !it.isLockedMagazine }.map { it.toSChapter() } + prev }
+            }
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -312,7 +323,7 @@ class Zebrack :
         return when (type) {
             0 -> "$baseUrl/title/$fragment/chapter/$id/viewer"
             1 -> "$baseUrl/title/${fragment?.substringBefore(":")}/volume/$id/viewer"
-            else -> "$baseUrl/magazine/$id/issue/$fragment/viewer"
+            else -> "$baseUrl/magazine/$id/issue/${fragment?.substringBefore(":")}/viewer"
         }
     }
 
@@ -350,12 +361,15 @@ class Zebrack :
             }
 
             else -> {
+                val parts = fragment!!.split(":")
+                val magazineIssueId = parts[0]
+                val isTrial = parts[1]
                 val requestUrl = "$magazineApiUrl/browser/magazine_viewer".toHttpUrl().newBuilder()
                     .addQueryParameter("os", "browser")
                     .addQueryParameter("magazine_id", id)
-                    .addQueryParameter("magazine_issue_id", fragment)
+                    .addQueryParameter("magazine_issue_id", magazineIssueId)
                     .apply { secretKey?.let { addQueryParameter("secret", it) } }
-                    .addQueryParameter("is_trial", "1")
+                    .addQueryParameter("is_trial", isTrial)
                     .build()
                 GET(requestUrl, headers)
             }
@@ -367,7 +381,7 @@ class Zebrack :
         if (type == "magazine_viewer") {
             val result = response.parseAsProto<MagazineViewerImages>()
             if (result.session?.message == SESSION_EXPIRED) {
-                flushSecret(response.request.url.queryParameter("secret")!!)
+                flushSecret(response.request.url.queryParameter("secret"))
                 throw Exception(LOCKED)
             }
             return result.pages?.pagesList.orEmpty().mapIndexedNotNull { i, image ->
@@ -377,7 +391,7 @@ class Zebrack :
 
         val result = response.parseAsProto<ViewerResponse>()
         if (result.session?.message == SESSION_EXPIRED) {
-            flushSecret(response.request.url.queryParameter("secret")!!)
+            flushSecret(response.request.url.queryParameter("secret"))
             throw Exception(LOCKED)
         }
         return result.images.mapIndexedNotNull { i, image ->
@@ -432,7 +446,7 @@ class Zebrack :
 
     @SuppressLint("SetJavaScriptEnabled")
     @Synchronized
-    private fun flushSecret(target: String) {
+    private fun flushSecret(target: String?) {
         Handler(Looper.getMainLooper()).post {
             val webView = WebView(Injekt.get<Application>())
             with(webView.settings) {

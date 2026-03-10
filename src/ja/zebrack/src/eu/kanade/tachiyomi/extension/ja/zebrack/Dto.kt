@@ -20,7 +20,7 @@ class TitleRanking(
 class RankingEntries(
     @ProtoNumber(1) private val thumbnail: String?,
     @ProtoNumber(3) private val name: String,
-    @ProtoNumber(11) val info: RankingInfo,
+    @ProtoNumber(11) private val info: RankingInfo,
 ) {
     fun toSManga() = SManga.create().apply {
         url = if (info.magazineId != null) "${info.magazineId}#1" else info.id.toString()
@@ -32,7 +32,7 @@ class RankingEntries(
 @Serializable
 class RankingInfo(
     @ProtoNumber(5) val id: Int?,
-    @ProtoNumber(7) val magazineId: Int?, // "7": Magazine -> "5" is missing
+    @ProtoNumber(7) val magazineId: Int?, // if "7": Magazine -> "5" is missing
 )
 
 @Serializable
@@ -61,7 +61,7 @@ class SearchResponse(
 @Serializable
 class SearchEntries(
     @ProtoNumber(1) private val thumbnail: String?,
-    @ProtoNumber(2) val id: String,
+    @ProtoNumber(2) private val id: String,
     @ProtoNumber(3) private val name: String,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -214,23 +214,23 @@ class VolumeData(
 
 @Serializable
 class Volume(
-    @ProtoNumber(2) val titleId: Int,
-    @ProtoNumber(3) val chapterId: Int,
-    @ProtoNumber(4) val title: String?,
-    @ProtoNumber(5) val volumeName: String,
-    @ProtoNumber(7) val uploadDate: Long?,
-    @ProtoNumber(17) val purchased: Int?,
-    @ProtoNumber(23) val isFree: Int?,
+    @ProtoNumber(2) private val titleId: Int,
+    @ProtoNumber(3) private val chapterId: Int,
+    @ProtoNumber(4) private val title: String?,
+    @ProtoNumber(5) private val volumeName: String,
+    @ProtoNumber(7) private val uploadDate: Long?,
+    @ProtoNumber(17) private val purchased: Int?,
+    @ProtoNumber(23) private val isFree: Int?,
     @ProtoNumber(101) val session: SessionError?,
 ) {
-    private val isLocked: Boolean
+    val isLockedVolume: Boolean
         get() = isFree != 1 && purchased != 1
 
     private val isTrial: Boolean
         get() = purchased != 1
 
     fun toSChapter() = SChapter.create().apply {
-        val lock = if (isLocked) "🔒 (Preview) " else ""
+        val lock = if (isLockedVolume) "🔒 (Preview) " else ""
         val isTrial = if (isTrial) "1" else "0"
         val trimName = if (title != null) volumeName.replace(title, "").trim() else volumeName
         url = "$chapterId/1#$titleId:$isTrial"
@@ -249,18 +249,24 @@ class MagazineData(
     @ProtoNumber(3) val magazineList: List<Magazine>?,
 )
 
-// TODO: buy mag
 @Serializable
 class Magazine(
-    @ProtoNumber(1) val issueId: Int,
-    @ProtoNumber(4) val title: String,
-    @ProtoNumber(6) val uploadDate: Long?,
-    @ProtoNumber(10) val magazineId: Int,
+    @ProtoNumber(1) private val issueId: Int,
+    @ProtoNumber(4) private val title: String,
+    @ProtoNumber(6) private val uploadDate: Long?,
+    @ProtoNumber(8) private val purchased: Int?,
+    @ProtoNumber(10) private val magazineId: Int,
+    @ProtoNumber(1000) val session: SessionError?,
 ) {
+    val isLockedMagazine: Boolean
+        get() = purchased != 1
+
     fun toSChapter() = SChapter.create().apply {
-        url = "$magazineId/2#$issueId"
+        val lock = if (isLockedMagazine) "🔒 (Preview) " else ""
+        val isTrial = if (isLockedMagazine) "1" else "0"
+        url = "$magazineId/2#$issueId:$isTrial"
         uploadDate?.let { date_upload = it * 1000L }
-        name = title
+        name = lock + title
     }
 }
 
