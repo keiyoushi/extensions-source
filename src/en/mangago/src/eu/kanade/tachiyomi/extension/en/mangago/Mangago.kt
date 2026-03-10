@@ -338,11 +338,25 @@ class Mangago :
 
         val cols = colsRegex.find(chapterJs)?.groupValues?.get(1) ?: ""
 
-        val resolvedUrls = imageList.split(",").map {
-            if (it.contains("cspiclink")) {
-                "$it#desckey=${getDescramblingKey(chapterJs, it)}&cols=$cols"
-            } else {
-                it
+        val imgKeys = chapterJs
+            .substringAfter("var renImg = function(img,width,height,id){")
+            .substringBefore("key = key.split(")
+            .split("\n")
+            .filter { jsFilters.all { filter -> !it.contains(filter) } }
+            .joinToString("\n")
+            .replace("img.src", "url")
+
+        val resolvedUrls = QuickJs.create().use { qjs ->
+            qjs.execute(replacePosBytecode)
+            qjs.evaluate("function getDescramblingKey(url) { $imgKeys; return key; }")
+
+            imageList.split(",").map {
+                if (it.contains("cspiclink")) {
+                    val descKey = qjs.evaluate("""getDescramblingKey("$it");""") as String
+                    "$it#desckey=$descKey&cols=$cols"
+                } else {
+                    it
+                }
             }
         }
 
@@ -560,27 +574,6 @@ class Mangago :
         return chunked(2)
             .map { it.toInt(16).toByte() }
             .toByteArray()
-    }
-
-    private fun getDescramblingKey(chapterJs: String, imageUrl: String): String {
-        val imgKeys = chapterJs
-            .substringAfter("var renImg = function(img,width,height,id){")
-            .substringBefore("key = key.split(")
-            .split("\n")
-            .filter { jsFilters.all { filter -> !it.contains(filter) } }
-            .joinToString("\n")
-            .replace("img.src", "url")
-
-        val js = """
-            function getDescramblingKey(url) { $imgKeys; return key; }
-            getDescramblingKey("$imageUrl");
-        """.trimIndent()
-
-        return QuickJs.create().use {
-            it.execute(replacePosBytecode)
-
-            it.evaluate(js).toString()
-        }
     }
 
     private val jsFilters =
