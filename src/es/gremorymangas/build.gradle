@@ -1,9 +1,9 @@
 ext {
     extName = 'Gremory Mangas'
     extClass = '.GremoryMangas'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://gremorymangas.com'
-    overrideVersionCode = 0
+    themePkg = 'madara'
+    baseUrl = 'https://gremoryhistorias.org'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
