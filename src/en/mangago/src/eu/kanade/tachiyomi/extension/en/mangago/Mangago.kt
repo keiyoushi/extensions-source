@@ -48,7 +48,8 @@ class Mangago :
 
     override val name = "Mangago"
 
-    override val baseUrl = "https://www.mangago.me"
+    private val domain = "mangago.me"
+    override val baseUrl = "https://www.$domain"
 
     override val lang = "en"
 
@@ -226,33 +227,50 @@ class Mangago :
     }
 
     override fun pageListParse(document: Document): List<Page> {
+        val availableImages = getChapterImageUrls(document)
+
+        if (availableImages.none { it.isBlank() }) {
+            return availableImages.mapIndexed { idx, img ->
+                Page(idx, imageUrl = img)
+            }
+        }
+
         val totalPages = document.selectFirst("script:containsData(total_pages)")
             ?.data()
             ?.let { Regex("""total_pages\s*=\s*(\d+)""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
             ?: throw Exception("Total page count not found")
 
-        val slug = document.location().toHttpUrl().let {
-            val path = it.pathSegments
-
-            if (path.size > 2 && path[0] == "read-manga") {
-                path[1]
-            } else {
-                throw Exception("slug not found")
-            }
-        }
-
         val urlTemplate = document.selectFirst("input#curl")!!
             .attr("value").trim()
             .removePrefix("/")
+            .also {
+                if (!it.contains("{page}")) {
+                    throw Exception("No replaceable string in url template")
+                }
+            }
 
-        if (!urlTemplate.contains("{page}")) {
-            throw Exception("No replaceable string in url template")
+        val prefix = with(document.location().toHttpUrl()) {
+            val urlTemplateSegment = urlTemplate.split("/")[0]
+            if (
+                host.endsWith(domain) &&
+                pathSegments.size > 3 &&
+                pathSegments[0] == "read-manga" &&
+                pathSegments[2] == urlTemplateSegment
+            ) {
+                val slug = pathSegments[1]
+                "$baseUrl/read-manga/$slug"
+            } else if (
+                !host.endsWith(domain) &&
+                pathSegments[0] == urlTemplateSegment
+            ) {
+                "https://$host"
+            } else {
+                throw Exception("Unexpected Url structure")
+            }
         }
 
         val pages = (1..totalPages).map { page ->
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("read-manga")
-                .addPathSegment(slug)
+            val url = prefix.toHttpUrl().newBuilder()
                 .addEncodedPathSegments(urlTemplate.replace("{page}", page.toString()))
                 .fragment(page.toString())
                 .build()
@@ -260,8 +278,6 @@ class Mangago :
 
             Page(page, url)
         }
-
-        val availableImages = getChapterImageUrls(document)
 
         pages.onEachIndexed { index, page ->
             availableImages[index].also {
