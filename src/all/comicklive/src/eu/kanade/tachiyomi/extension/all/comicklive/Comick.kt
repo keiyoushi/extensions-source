@@ -340,7 +340,7 @@ class Comick(
                 val des = Jsoup.parseBodyFragment(data.desc).wholeText()
                     .replace(Regex("\\s+"), " ") // collapse multiple whitespaces into a single space
                     .replace(Regex("(?<=[^.]{12})(?<!\\bMr|\\bMs|\\bMrs|\\bDr|\\bProf|\\bSr|\\bJr|\\bVol|\\bCh)\\.\\s+"), ".\n\n") // insert line breaks after periods
-                    .replace(Regex(":\\s+"), ":\n\n") // insert line breaks after colons
+                    .replace(Regex("(?<=[^:]{12})(?<!\\b[a-zA-Z]{1,10}):\\s+"), ":\n\n") // insert line breaks after colons
                     .trim()
                 append(des)
 
