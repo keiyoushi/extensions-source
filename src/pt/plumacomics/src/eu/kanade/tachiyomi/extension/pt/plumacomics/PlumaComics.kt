@@ -48,7 +48,7 @@ class PlumaComics : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/series?sort=popular", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/series", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
