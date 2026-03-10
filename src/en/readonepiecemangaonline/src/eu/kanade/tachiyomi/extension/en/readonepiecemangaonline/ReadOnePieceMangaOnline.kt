@@ -1,8 +1,30 @@
 package eu.kanade.tachiyomi.extension.en.readonepiecemangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.lib.randomua.UserAgentType
+import keiyoushi.lib.randomua.setRandomUserAgent
+import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 
 class ReadOnePieceMangaOnline : MangaCatalog("Read One Piece Manga Online", "https://ww12.readonepiece.com", "en") {
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            userAgentType = UserAgentType.DESKTOP,
+            filterInclude = listOf("chrome"),
+        )
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
+    override fun pageListParse(document: Document): List<Page> = document.select(".js-pages-container img.js-page,.img_container img")
+        .filterNot { it.parent()?.tagName() == "noscript" }
+        .map { img -> img.attr("abs:data-src").ifEmpty { img.attr("abs:src") } }
+        .filter { it.startsWith("http") }
+        .mapIndexed { index, url -> Page(index, "", url) }
+
     override val sourceList = listOf(
         Pair("One Piece", "$baseUrl/manga/one-piece/"),
         Pair("Colored", "$baseUrl/manga/one-piece-digital-colored-comics/"),

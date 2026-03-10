@@ -3,8 +3,12 @@ ext {
     extClass = '.ReadOnePieceMangaOnline'
     themePkg = 'mangacatalog'
     baseUrl = 'https://ww12.readonepiece.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
