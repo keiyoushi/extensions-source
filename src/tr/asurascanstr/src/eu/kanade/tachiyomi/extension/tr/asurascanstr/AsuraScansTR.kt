@@ -7,7 +7,7 @@ import java.util.Locale
 class AsuraScansTR :
     Madara(
         "Asura Scans TR",
-        "https://asurascans.com.tr",
+        "https://asurascans.com.tr/",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     ) {
