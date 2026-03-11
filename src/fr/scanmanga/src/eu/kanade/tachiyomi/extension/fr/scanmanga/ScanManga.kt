@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
 import android.util.Base64
-import android.util.Log
-import eu.kanade.tachiyomi.lib.betterhttplogging.getChunkedHttpLogger
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,7 +15,6 @@ import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -32,15 +29,6 @@ class ScanManga : HttpSource() {
     override val lang = "fr"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addNetworkInterceptor {
-            val request = it.request()
-            Log.d("ScanManga", "Requesting URL: ${request.url}")
-            it.proceed(request)
-        }
-        .addNetworkInterceptor(getChunkedHttpLogger("ScanManga"))
-        .build()
 
     override fun headersBuilder(): Headers.Builder {
         val currentChromeVersion = super.headersBuilder().build().get("User-Agent")?.let {
