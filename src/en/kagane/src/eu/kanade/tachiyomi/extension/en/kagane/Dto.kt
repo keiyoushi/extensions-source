@@ -97,6 +97,8 @@ class DetailsDto(
     val seriesAlternateTitles: List<AlternateTitle> = emptyList(),
     @SerialName("series_books")
     val seriesBooks: List<ChapterDto.Book> = emptyList(),
+    @SerialName("edition_info")
+    val editionInfo: String? = null,
 ) {
     @Serializable
     class SeriesStaff(
@@ -122,7 +124,10 @@ class DetailsDto(
         val label: String?,
     )
 
-    fun toSManga(sourceName: String? = null, baseUrl: String = ""): SManga = SManga.create().apply {
+    fun toSManga(sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
+        val base = this@DetailsDto.title.trim()
+        val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
+        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition
         val desc = StringBuilder()
 
         // Add main description
