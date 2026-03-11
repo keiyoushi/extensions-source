@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
@@ -98,6 +99,7 @@ class KomikNextGOnline : ParsedHttpSource() {
         author = document.selectFirst("span.byline")?.text()?.replace("by ", "")?.trim()
         description = document.selectFirst("article.post")?.text()
         status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         thumbnail_url = document.selectFirst("meta[property=\"og:image\"]")?.attr("abs:content")
     }
 
