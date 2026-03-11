@@ -66,14 +66,26 @@ class Titles(
 class Entry(
     @ProtoNumber(1) private val id: Int,
     @ProtoNumber(2) private val name: String,
+    @ProtoNumber(6) private val banner: String?,
     @ProtoNumber(16) private val cover: String?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
         title = name
-        thumbnail_url = cover
+        thumbnail_url = cover ?: banner
     }
 }
+
+@Serializable
+class TagResponse(
+    @ProtoNumber(2) val tags: List<Tags>?,
+)
+
+@Serializable
+class Tags(
+    @ProtoNumber(1) val tagId: Int,
+    @ProtoNumber(2) val name: String,
+)
 
 @Serializable
 class DetailResponse(

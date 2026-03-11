@@ -6,13 +6,18 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -32,6 +37,8 @@ class MangaOne :
     private val apiUrl = "$baseUrl/api/client"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private var tagList: List<Tags> = emptyList()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -66,9 +73,19 @@ class MangaOne :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotBlank()) {
+            val url = apiUrl.toHttpUrl().newBuilder()
+                .addQueryParameter("rq", "title/search")
+                .addQueryParameter("query", query)
+                .build()
+                .toString()
+            return POST(url, headers)
+        }
+
+        val tagId = filters.firstInstanceOrNull<TagFilter>()?.valueId
         val url = apiUrl.toHttpUrl().newBuilder()
             .addQueryParameter("rq", "title/search")
-            .addQueryParameter("query", query)
+            .addQueryParameter("tag_id", tagId.toString())
             .build()
             .toString()
         return POST(url, headers)
@@ -142,6 +159,34 @@ class MangaOne :
         }
         return result.pages.mapIndexed { i, pages ->
             Page(i, imageUrl = "${pages.page.url}#$key:$iv")
+        }
+    }
+
+    override fun getFilterList(): FilterList {
+        fetchTags()
+        return if (tagList.isEmpty()) {
+            FilterList(Filter.Header("Press 'Reset' to load genres"))
+        } else {
+            FilterList(TagFilter(tagList))
+        }
+    }
+
+    private class TagFilter(private val tags: List<Tags>) : Filter.Select<String>("ジャンル", tags.map { it.name }.toTypedArray()) {
+        val valueId: Int
+            get() = tags[state].tagId
+    }
+
+    private fun fetchTags() {
+        if (tagList.isNotEmpty()) return
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val url = apiUrl.toHttpUrl().newBuilder()
+                    .addQueryParameter("rq", "title/search")
+                    .build()
+                val request = GET(url, headers)
+                val response = client.newCall(request).execute()
+                tagList = response.parseAsProto<TagResponse>().tags.orEmpty()
+            }
         }
     }
 
