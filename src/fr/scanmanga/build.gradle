@@ -1,8 +1,12 @@
 ext {
     extName = 'Scan-Manga'
     extClass = '.ScanManga'
-    extVersionCode = 13
+    extVersionCode = 14
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:betterhttplogging"))
+}

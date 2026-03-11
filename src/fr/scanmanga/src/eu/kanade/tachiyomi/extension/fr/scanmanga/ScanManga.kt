@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
 import android.util.Base64
+import android.util.Log
+import eu.kanade.tachiyomi.lib.betterhttplogging.getChunkedHttpLogger
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +17,7 @@ import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -30,13 +33,47 @@ class ScanManga : HttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
-        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36")
-        .set("X-Requested-With", "XMLHttpRequest")
+    override val client: OkHttpClient = super.client.newBuilder()
+        .addNetworkInterceptor {
+            val request = it.request()
+            Log.d("ScanManga", "Requesting URL: ${request.url}")
+            it.proceed(request)
+        }
+        .addNetworkInterceptor(getChunkedHttpLogger("ScanManga"))
+        .build()
+
+    override fun headersBuilder(): Headers.Builder {
+        val currentChromeVersion = super.headersBuilder().build().get("User-Agent")?.let {
+            Regex("Chrome/(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull()
+        } ?: 145
+
+        return Headers.Builder()
+//            .add(
+//                "sec-ch-ua",
+//                "\"Not:A-Brand\";v=\"99\", \"Google Chrome\";v=\"$currentChromeVersion\", \"Chromium\";v=\"$currentChromeVersion\"",
+//            )
+//            .add("sec-ch-ua-mobile", "?1")
+//            .add("sec-ch-ua-platform", "\"Android\"")
+            .add("upgrade-insecure-requests", "1")
+            .add(
+                "user-agent",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$currentChromeVersion.0.0.0 Mobile Safari/537.36",
+            )
+            .add(
+                "accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            )
+            .add("sec-fetch-site", "none")
+//            .add("sec-fetch-mode", "navigate")
+//            .add("sec-fetch-user", "?1")
+//            .add("sec-fetch-dest", "document")
+            .add("accept-language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+//            .add("priority", "u=0, i")
+            .add("X-Requested-With", "")
+    }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
@@ -175,6 +212,10 @@ class ScanManga : HttpSource() {
     }
 
     private fun dataAPI(data: String, idc: Int): UrlPayload {
+        if (data.contains("error")) {
+            error("Received error response from data API: ${Regex("\\s+").replace(data, " ").trim()}")
+        }
+
         // Step 1: Base64 decode the input
         val compressedBytes = Base64.decode(data, Base64.NO_WRAP or Base64.NO_PADDING)
 
@@ -218,7 +259,7 @@ class ScanManga : HttpSource() {
         val documentUrl = document.baseUri().toHttpUrl()
 
         val pageListRequest = POST(
-            "$baseUrl/api/lel/$chapterId.json",
+            "https://bqj.${baseUrl.toHttpUrl().topPrivateDomain()}/lel/$chapterId.json",
             headers.newBuilder()
                 .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
                 .add("Referer", documentUrl.toString())
