@@ -171,7 +171,7 @@ class DetailsDto(
         "ONGOING" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
         "HIATUS" -> SManga.ON_HIATUS
-        "CANCELLED" -> SManga.CANCELLED
+        "ABANDONED" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 }

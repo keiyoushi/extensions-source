@@ -768,6 +768,7 @@ class Kagane :
                 preferences.contentRating.toSet(),
             ),
             FormatFilter(),
+            PublicationStatusFilter(),
             Filter.Separator(),
         )
 

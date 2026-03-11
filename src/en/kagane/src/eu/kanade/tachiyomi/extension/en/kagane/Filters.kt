@@ -184,6 +184,20 @@ internal class FormatFilter :
 
 private val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
 
+internal class PublicationStatusFilter :
+    JsonMultiSelectFilter(
+        "Status",
+        "publication_status",
+        PUBLICATION_STATUS_OPTIONS.map { (name, value) -> MultiSelectOption(name, value) },
+    )
+
+private val PUBLICATION_STATUS_OPTIONS = listOf(
+    Pair("Ongoing", "Ongoing"),
+    Pair("Completed", "Completed"),
+    Pair("Hiatus", "Hiatus"),
+    Pair("Cancelled", "Abandoned"),
+)
+
 internal class MatchAllGenresFilter : Filter.CheckBox("Match all selected genres", true)
 
 internal class MatchAllTagsFilter : Filter.CheckBox("Match all selected tags", true)
