@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.rokuhentai
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,8 +25,11 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
-class RokuHentai : HttpSource() {
+class RokuHentai :
+    HttpSource(),
+    ConfigurableSource {
 
     override val baseUrl = "https://rokuhentai.com"
     override val lang = "all"
@@ -33,7 +40,8 @@ class RokuHentai : HttpSource() {
 
     // Customize
 
-    private var offset: String? = null
+    private val pref by getPreferencesLazy()
+    private val offset = ConcurrentHashMap<String, String>()
     private val SManga.id get() = url.substringAfterLast('/').substringBefore('#')
 
     companion object {
@@ -41,6 +49,18 @@ class RokuHentai : HttpSource() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
         val IMG_REGEX = Regex("""background-image: url\("(.+?)"\);""")
+        const val THUMBNAIL_PREF = "THUMBNAIL"
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        screen.addPreference(
+            SwitchPreferenceCompat(screen.context).apply {
+                key = THUMBNAIL_PREF
+                title = "Use thumbnails instead of the original images"
+                summary = "After enabling, each page of the manga will display smaller and blurrier thumbnail."
+                setDefaultValue(false)
+            },
+        )
     }
 
     private fun parseManga(e: Element) = SManga.create().apply {
@@ -52,10 +72,9 @@ class RokuHentai : HttpSource() {
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int) = if (page == 1) GET(baseUrl, headers) else GET("$baseUrl/_search?p=$offset", headers)
+    override fun popularMangaRequest(page: Int) = if (page == 1) GET(baseUrl, headers) else GET("$baseUrl/_search?p=${offset["popular"]}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        // test?.let { throw Exception(it) }
         val type = response.header("Content-Type")!!
         val mangas = if (type.contains("text/html")) {
             response.asJsoup().select(".mdc-card > .site-popunder-ad-slot").map(::parseManga)
@@ -64,7 +83,8 @@ class RokuHentai : HttpSource() {
                 parseManga(Jsoup.parse(it, baseUrl).selectFirst(".site-popunder-ad-slot")!!)
             }
         }
-        offset = mangas.last().id
+        response.request.url.queryParameter("q")?.let { offset["search:$it"] = mangas.last().id }
+            ?: run { offset["popular"] = mangas.last().id }
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
@@ -87,15 +107,10 @@ class RokuHentai : HttpSource() {
         Filter.Header("• Negate a filter with \"-\": -language:foo."),
     )
 
-    // private var test: String? = null
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-        if (page == 1) {
-            url.addQueryParameter("q", query)
-        } else {
-            url.addPathSegment("_search").addQueryParameter("q", query).addQueryParameter("p", offset)
-            // test = url.build().toString()
+        val url = baseUrl.toHttpUrl().newBuilder().addQueryParameter("q", query)
+        if (page > 1) {
+            url.addPathSegment("_search").addQueryParameter("p", offset["search:$query"])
         }
         return GET(url.build(), headers)
     }
@@ -113,6 +128,7 @@ class RokuHentai : HttpSource() {
             description = titles.getOrNull(1)?.text()
             genre = doc.select(".mdc-chip").joinToString {
                 val text = it.text().split(": ")
+                if (text[0] == "artist") author = text[1]
                 if (text[1].contains(' ')) "${text[0]}: \"${text[1]}\"" else it.text()
             }
             status = SManga.COMPLETED
@@ -122,10 +138,12 @@ class RokuHentai : HttpSource() {
 
     // Chapter
 
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}/0#top-to-bottom"
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
         listOf(
             SChapter.create().apply {
-                setUrlWithoutDomain("${manga.url.substringBefore('#')}/0")
+                url = manga.id
                 name = manga.title
                 date_upload = manga.url.substringAfter(',').toLong()
                 chapter_number = 0F
@@ -138,9 +156,16 @@ class RokuHentai : HttpSource() {
 
     // Page
 
-    override fun pageListParse(response: Response) = response.asJsoup().select(".site-reader > img").mapIndexed { i, e ->
-        Page(i, imageUrl = e.absUrl("data-src"))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val size = chapter.scanlator!!.substringBefore('P').toInt()
+        val path = if (pref.getBoolean(THUMBNAIL_PREF, false)) "page-thumbnails" else "pages"
+        return Observable.just(List(size) { i -> Page(i, imageUrl = "$baseUrl/_images/$path/${chapter.url}/$i.jpg") })
     }
+
+    // override fun pageListParse(response: Response) = response.asJsoup().select(".site-reader > img").mapIndexed { i, e ->
+    //     Page(i, imageUrl = e.absUrl("data-src"))
+    // }
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     // Image
 
