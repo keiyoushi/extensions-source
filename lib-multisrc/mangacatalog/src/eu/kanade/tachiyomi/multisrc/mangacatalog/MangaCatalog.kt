@@ -7,8 +7,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import keiyoushi.lib.randomua.UserAgentType
-import keiyoushi.lib.randomua.setRandomUserAgent
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -23,12 +21,7 @@ abstract class MangaCatalog(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            userAgentType = UserAgentType.DESKTOP,
-            filterInclude = listOf("chrome"),
-        )
-        .build()
+    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
