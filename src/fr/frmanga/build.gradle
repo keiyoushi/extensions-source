@@ -1,9 +1,0 @@
-ext {
-    extName = 'FR Manga'
-    extClass = '.FRManga'
-    themePkg = 'mccms'
-    baseUrl = 'https://www.frmanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
