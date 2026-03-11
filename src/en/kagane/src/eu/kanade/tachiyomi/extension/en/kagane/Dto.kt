@@ -220,7 +220,7 @@ class ChapterDto(
             return when (mode) {
                 "optional" -> {
                     when {
-                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Chapter $chapterNo"
+                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Ch.$chapterNo"
                         else -> trimmedTitle
                     }
                 }
@@ -228,8 +228,8 @@ class ChapterDto(
                 "always" -> {
                     when {
                         chapterNo.isNullOrBlank() -> trimmedTitle
-                        trimmedTitle.isEmpty() -> "Chapter $chapterNo"
-                        else -> "($chapterNo) $trimmedTitle"
+                        trimmedTitle.isEmpty() -> "Ch.$chapterNo"
+                        else -> "Ch.$chapterNo $trimmedTitle"
                     }
                 }
 

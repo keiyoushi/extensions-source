@@ -757,9 +757,9 @@ class Kagane :
             "vol_chapter",
         )
         internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
-            "Default (Hide numbers)",
-            "Include chapter numbers",
-            "Vol. + chapter number + title",
+            "Title only (e.g. 'Manga Title' / 'Ch.5')",
+            "Ch.X + title (e.g. 'Ch.5 Manga Title')",
+            "Vol.X Ch.Y + title (e.g. 'Vol.1 Ch.5 Manga Title')",
         )
     }
 
