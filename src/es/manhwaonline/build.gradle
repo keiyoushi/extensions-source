@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhwaOnline'
+    extClass = '.ManhwaOnline'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwa-online.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
