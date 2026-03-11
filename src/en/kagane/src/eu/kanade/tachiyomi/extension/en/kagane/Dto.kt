@@ -228,8 +228,19 @@ class ChapterDto(
                     }
                 }
 
-                else -> {}
-            } as String
+                "vol_chapter" -> {
+                    val volPart = if (!volumeNo.isNullOrBlank()) "Vol.$volumeNo " else ""
+                    val chPart = if (!chapterNo.isNullOrBlank()) "Ch.$chapterNo" else ""
+                    val numPart = "$volPart$chPart".trim()
+                    when {
+                        numPart.isEmpty() -> trimmedTitle
+                        trimmedTitle.isEmpty() -> numPart
+                        else -> "$numPart $trimmedTitle"
+                    }
+                }
+
+                else -> trimmedTitle
+            }
         }
     }
 

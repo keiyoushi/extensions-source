@@ -742,10 +742,12 @@ class Kagane :
         internal val CHAPTER_TITLE_MODES = arrayOf(
             "optional",
             "always",
+            "vol_chapter",
         )
         internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
             "Default (Hide numbers)",
             "Include chapter numbers",
+            "Vol. + chapter number + title",
         )
     }
 
