@@ -7,6 +7,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.lib.randomua.UserAgentType
+import keiyoushi.lib.randomua.setRandomUserAgent
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -20,6 +23,16 @@ abstract class MangaCatalog(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            userAgentType = UserAgentType.DESKTOP,
+            filterInclude = listOf("chrome"),
+        )
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
     open val sourceList = listOf(
         Pair("$name", "$baseUrl"),
     ).sortedBy { it.first }.distinctBy { it.second }
@@ -92,9 +105,12 @@ abstract class MangaCatalog(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".js-pages-container img.js-page,.img_container img").mapIndexed { index, img ->
-        Page(index, "", img.attr("src"))
-    }
+    override fun pageListParse(document: Document): List<Page> =
+        document.select(".js-pages-container img.js-page,.img_container img")
+            .filterNot { it.parent()?.tagName() == "noscript" }
+            .map { img -> img.attr("abs:data-src").ifEmpty { img.attr("abs:src") } }
+            .filter { it.startsWith("http") }
+            .mapIndexed { index, url -> Page(index, "", url) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }
