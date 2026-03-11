@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.multisrc.iken
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
+typealias Options = List<Pair<String, String>>
+
 interface UrlPartFilter {
     fun addUrlParameter(url: HttpUrl.Builder)
 }
@@ -10,10 +12,12 @@ interface UrlPartFilter {
 abstract class SelectFilter(
     name: String,
     private val urlParameter: String,
-    private val options: List<Pair<String, String>>,
+    private val options: Options,
+    defaultValue: String? = null,
 ) : Filter.Select<String>(
     name,
     options.map { it.first }.toTypedArray(),
+    options.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
 ),
     UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
@@ -21,12 +25,15 @@ abstract class SelectFilter(
     }
 }
 
-class CheckBoxFilter(name: String, val value: String) : Filter.CheckBox(name)
+class CheckBoxFilter(
+    name: String,
+    val value: String,
+) : Filter.CheckBox(name)
 
 abstract class CheckBoxGroup(
     name: String,
     private val urlParameter: String,
-    options: List<Pair<String, String>>,
+    options: Options,
 ) : Filter.Group<CheckBoxFilter>(
     name,
     options.map { CheckBoxFilter(it.first, it.second) },
@@ -41,37 +48,27 @@ abstract class CheckBoxGroup(
     }
 }
 
-class StatusFilter :
-    SelectFilter(
-        "Status",
-        "seriesStatus",
-        listOf(
-            Pair("", ""),
-            Pair("Ongoing", "ONGOING"),
-            Pair("Completed", "COMPLETED"),
-            Pair("Cancelled", "CANCELLED"),
-            Pair("Dropped", "DROPPED"),
-            Pair("Mass Released", "MASS_RELEASED"),
-            Pair("Coming Soon", "COMING_SOON"),
-        ),
-    )
+class StatusFilter(
+    title: String,
+    key: String,
+    options: Options,
+) : SelectFilter(title, key, options)
 
-class TypeFilter :
-    SelectFilter(
-        "Type",
-        "seriesType",
-        listOf(
-            Pair("", ""),
-            Pair("Manga", "MANGA"),
-            Pair("Manhua", "MANHUA"),
-            Pair("Manhwa", "MANHWA"),
-            Pair("Russian", "RUSSIAN"),
-        ),
-    )
+class TypeFilter(
+    title: String,
+    key: String,
+    options: Options,
+) : SelectFilter(title, key, options)
 
-class GenreFilter(genres: List<Pair<String, String>>) :
-    CheckBoxGroup(
-        "Genres",
-        "genreIds",
-        genres,
-    )
+class SortFilter(
+    title: String,
+    key: String,
+    options: Options,
+    defaultValue: String? = null,
+) : SelectFilter(title, key, options, defaultValue)
+
+class GenreFilter(
+    title: String,
+    key: String,
+    genres: Options,
+) : CheckBoxGroup(title, key, genres)
