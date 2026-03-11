@@ -22,6 +22,8 @@ class PornComix : ParsedHttpSource() {
 
     override val lang = "en"
 
+    override val versionId = 2
+
     override val supportsLatest = false
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
