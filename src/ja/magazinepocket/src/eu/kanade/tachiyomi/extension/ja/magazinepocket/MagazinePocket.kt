@@ -98,38 +98,33 @@ class MagazinePocket :
 
     // Latest
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        if (page > 1) return Observable.just(MangasPage(emptyList(), false))
+        val dayOffset = page - 1
+        if (dayOffset >= 14) return Observable.just(MangasPage(emptyList(), false))
         return Observable.fromCallable {
-            val mangas = ArrayList<SManga>()
-
-            for (dayOffset in 0..13) {
-                val calendar = GregorianCalendar(jst).apply {
-                    time = Date()
-                    add(Calendar.DAY_OF_MONTH, -dayOffset)
-                }
-
-                val dateString = buildString {
-                    append(calendar.get(Calendar.YEAR))
-                    append('-')
-                    append((calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
-                    append('-')
-                    append(calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0'))
-                }
-
-                val url = "$apiUrl/web/top/updated/title".toHttpUrl().newBuilder()
-                    .addQueryParameter("base_date", dateString)
-                    .build()
-
-                val request = hashedGet(url)
-                val response = client.newCall(request).execute()
-                val result = response.parseAs<TitleListResponse>().titleList
-
-                if (result.isEmpty()) break
-
-                mangas.addAll(result.map { it.toSManga() })
+            val calendar = GregorianCalendar(jst).apply {
+                time = Date()
+                add(Calendar.DAY_OF_MONTH, -dayOffset)
             }
 
-            MangasPage(mangas, false)
+            val dateString = buildString {
+                append(calendar.get(Calendar.YEAR))
+                append('-')
+                append((calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
+                append('-')
+                append(calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0'))
+            }
+
+            val url = "$apiUrl/web/top/updated/title".toHttpUrl().newBuilder()
+                .addQueryParameter("base_date", dateString)
+                .build()
+
+            val request = hashedGet(url)
+            val response = client.newCall(request).execute()
+            val result = response.parseAs<TitleListResponse>().titleList
+            val mangas = result.map { it.toSManga() }
+            val hasNextPage = dayOffset < 13 && result.isNotEmpty()
+
+            MangasPage(mangas, hasNextPage)
         }
     }
 
