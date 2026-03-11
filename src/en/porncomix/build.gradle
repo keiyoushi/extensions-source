@@ -3,7 +3,6 @@ ext {
     extClass = '.PornComix'
     baseUrl = 'https://bestporncomix.com'
     extVersionCode = 48
-    versionId = 2
     isNsfw = true
 }
 
