@@ -20,18 +20,17 @@ class FrierenOnline :
     override fun getFilterList() = FilterList()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".about h1")!!.text().trim()
+        title = document.selectFirst(".about h1")!!.text()
         thumbnail_url = document.selectFirst(".cover_managa img")?.attr("abs:src")
         description = document.selectFirst(".synopsis p")?.text()
         author = document.selectFirst("h5:contains(Author) + h4")?.text()
         artist = document.selectFirst("h5:contains(Artist) + h4")?.text()
         genre = document.select(".tags a[rel=tag]").joinToString { it.text() }
-        status = when (document.selectFirst("h5:contains(Status) + h4")?.text()?.trim()) {
+        status = when (document.selectFirst("h5:contains(Status) + h4")?.text()) {
             "OnGoing" -> SManga.ONGOING
             "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        initialized = true
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
