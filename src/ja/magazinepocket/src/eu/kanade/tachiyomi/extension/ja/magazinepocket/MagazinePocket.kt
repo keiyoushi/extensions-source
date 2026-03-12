@@ -42,9 +42,10 @@ class MagazinePocket :
     override val versionId = 2
 
     private val apiUrl = "https://api.$domain"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
-    private val pageLimit = 25
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply { timeZone = jst }
+    private val dateFormatLatest = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { timeZone = jst }
+    private val pageLimit = 25
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -106,14 +107,7 @@ class MagazinePocket :
                 add(Calendar.DAY_OF_MONTH, -dayOffset)
             }
 
-            val dateString = buildString {
-                append(calendar.get(Calendar.YEAR))
-                append('-')
-                append((calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
-                append('-')
-                append(calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0'))
-            }
-
+            val dateString = dateFormatLatest.format(calendar.time)
             val url = "$apiUrl/web/top/updated/title".toHttpUrl().newBuilder()
                 .addQueryParameter("base_date", dateString)
                 .build()
