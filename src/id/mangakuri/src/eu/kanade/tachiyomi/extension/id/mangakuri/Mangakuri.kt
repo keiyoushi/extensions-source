@@ -12,6 +12,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -134,7 +135,7 @@ class Mangakuri : HttpSource() {
             thumbnail_url = dto.poster_image_url
             author = dto.author_name
             artist = dto.artist_name
-            description = dto.synopsis?.replace(Regex("<[^>]*>"), "")
+            description = dto.synopsis?.let { Jsoup.parse(it).text() }
             genre = dto.genres.joinToString { it.name }
             status = when (dto.comic_status?.uppercase()) {
                 "ONGOING" -> SManga.ONGOING
