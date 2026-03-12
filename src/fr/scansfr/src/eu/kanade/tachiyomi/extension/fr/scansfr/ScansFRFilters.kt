@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 internal fun getFilters() = FilterList(
-    ContentFilter(),
     HasChaptersFilter(),
     SortFilter(),
     TypeFilter(),
@@ -13,15 +12,6 @@ internal fun getFilters() = FilterList(
 )
 
 internal class HasChaptersFilter : Filter.CheckBox("Avec chapitres uniquement")
-
-internal class ContentFilter :
-    SelectFilter(
-        "Contenu",
-        listOf(
-            Pair("Tous", "all"),
-            Pair("SFW uniquement", "sfw"),
-        ),
-    )
 
 internal class SortFilter :
     SelectFilter(

@@ -1,14 +1,19 @@
 package eu.kanade.tachiyomi.extension.fr.scansfr
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -24,7 +29,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ScansFR : HttpSource() {
+class ScansFR :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "ScansFR"
     override val baseUrl = "https://scansfr.com"
@@ -45,9 +52,23 @@ class ScansFR : HttpSource() {
 
     private val sessionId = java.util.UUID.randomUUID().toString()
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private val showNsfw get() = preferences.getBoolean(PREF_SHOW_NSFW, false)
+
+    private fun nsfwQueryParam() = if (showNsfw) "&nsfw=true" else "&isNsfw=false"
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_NSFW
+            title = "Afficher le contenu NSFW"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&sort=popular&nsfw=true", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&sort=popular${nsfwQueryParam()}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<MangaListDto>()
@@ -59,7 +80,7 @@ class ScansFR : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&sort=updated&nsfw=true", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&sort=updated${nsfwQueryParam()}", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -70,7 +91,6 @@ class ScansFR : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         lastQuery = query
-        var sfwOnly = false
         hasChaptersOnly = false
         val url = "$apiUrl/api/v1/mangas".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
@@ -81,12 +101,11 @@ class ScansFR : HttpSource() {
                     is TypeFilter -> if (filter.selected.isNotEmpty()) addQueryParameter("type", filter.selected)
                     is StatusFilter -> if (filter.selected.isNotEmpty()) addQueryParameter("status", filter.selected)
                     is GenreFilter -> if (filter.selected.isNotEmpty()) addQueryParameter("genre", filter.selected)
-                    is ContentFilter -> sfwOnly = filter.selected == "sfw"
                     is HasChaptersFilter -> hasChaptersOnly = filter.state
                     else -> {}
                 }
             }
-            if (sfwOnly) addQueryParameter("isNsfw", "false") else addQueryParameter("nsfw", "true")
+            if (showNsfw) addQueryParameter("nsfw", "true") else addQueryParameter("isNsfw", "false")
         }.build()
         return GET(url, headers)
     }
@@ -216,6 +235,8 @@ class ScansFR : HttpSource() {
     }
 
     companion object {
+        private const val PREF_SHOW_NSFW = "pref_show_nsfw"
+
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private val DATE_FORMATTER = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
