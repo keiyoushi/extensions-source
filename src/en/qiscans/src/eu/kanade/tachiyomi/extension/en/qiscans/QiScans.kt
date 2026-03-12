@@ -4,7 +4,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.multisrc.iken.Images
-import eu.kanade.tachiyomi.multisrc.iken.Options
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 import rx.Observable
 import java.util.concurrent.TimeUnit
@@ -29,31 +27,6 @@ class QiScans :
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
 
-    override val statusFilterOptions: Options =
-        listOf(
-            "All" to "",
-            "Ongoing" to "ONGOING",
-            "Hiatus" to "HIATUS",
-            "Dropped" to "DROPPED",
-            "Completed" to "COMPLETED",
-        )
-
-    override val typeFilterOptions: Options = emptyList()
-
-    override val sortOptions: Options =
-        listOf(
-            "Latest" to "lastChapterAddedAt",
-            "Most Views" to "totalViews",
-            "Newly Added" to "createdAt",
-            "Title" to "postTitle",
-        )
-
-    override val sortDirectionOptions: Options =
-        listOf(
-            "Descending" to "desc",
-            "Ascending" to "asc",
-        )
-
     override fun searchMangaParse(response: Response): MangasPage = super.searchMangaParse(response).apply {
         mangas.forEach(::normalizeMangaTextFields)
     }
@@ -69,28 +42,18 @@ class QiScans :
             throw Exception("vShield challenge detected. Open in WebView to solve it.")
         }
 
-        if (document.isLockedChapterPage()) {
-            throw Exception("Paid chapter unavailable.")
-        }
-
-        val images = document.extractNextJs<Images>() ?: throw Exception("Unable to retrieve NEXT data")
+        val images = document.extractNextJs<Images>()
+            ?: if (document.selectFirst("svg.lucide-lock") != null) {
+                throw Exception("Paid chapter unavailable.")
+            } else {
+                throw Exception("Unable to retrieve NEXT data")
+            }
 
         return images.images
             .sortedBy { it.order ?: Int.MAX_VALUE }
             .mapIndexed { idx, p ->
                 Page(idx, imageUrl = p.url.replace(" ", "%20"))
             }
-    }
-
-    private fun Document.isLockedChapterPage(): Boolean {
-        if (selectFirst("svg.lucide-lock") != null) return true
-
-        val text = body().text()
-        return text.contains("unlock chapter", ignoreCase = true) ||
-            text.contains("chapter locked", ignoreCase = true) ||
-            text.contains("paid chapter", ignoreCase = true) ||
-            text.contains("purchase", ignoreCase = true) ||
-            text.contains("coins", ignoreCase = true)
     }
 
     private fun normalizeMangaTextFields(manga: SManga) {
