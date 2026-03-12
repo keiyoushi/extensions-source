@@ -322,7 +322,7 @@ class Kagane :
                     null
                 }
         }
-        return dto.toSManga(sourceName, baseUrl)
+        return dto.toSManga(sourceName, baseUrl, preferences.showEdition, preferences.showSource)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
@@ -635,6 +635,9 @@ class Kagane :
     private val SharedPreferences.sourceDisplayMode: String
         get() = this.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
 
+    private val SharedPreferences.showEdition: Boolean
+        get() = this.getBoolean(SHOW_EDITION, SHOW_EDITION_DEFAULT)
+
     private val SharedPreferences.showSource: Boolean
         get() = this.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
@@ -681,6 +684,12 @@ class Kagane :
             entries = arrayOf("Official Sources Only", "Show All (Official + Scanlations)")
             entryValues = arrayOf("official", "all")
             setDefaultValue(SOURCE_DISPLAY_MODE_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_EDITION
+            title = "Show edition name in title"
+            setDefaultValue(SHOW_EDITION_DEFAULT)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -732,6 +741,9 @@ class Kagane :
         private const val SHOW_SOURCE = "pref_show_source"
         private const val SHOW_SOURCE_DEFAULT = false
 
+        private const val SHOW_EDITION = "pref_show_edition"
+        private const val SHOW_EDITION_DEFAULT = false
+
         private const val DATA_SAVER = "data_saver_default"
 
         private const val WVD_KEY = "wvd_key"
@@ -742,10 +754,12 @@ class Kagane :
         internal val CHAPTER_TITLE_MODES = arrayOf(
             "optional",
             "always",
+            "vol_chapter",
         )
         internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
-            "Default (Hide numbers)",
-            "Include chapter numbers",
+            "Title only (e.g. 'Manga Title' / 'Ch.5')",
+            "Ch.X + title (e.g. 'Ch.5 Manga Title')",
+            "Vol.X Ch.Y + title (e.g. 'Vol.1 Ch.5 Manga Title')",
         )
     }
 
@@ -768,6 +782,7 @@ class Kagane :
                 preferences.contentRating.toSet(),
             ),
             FormatFilter(),
+            PublicationStatusFilter(),
             Filter.Separator(),
         )
 
