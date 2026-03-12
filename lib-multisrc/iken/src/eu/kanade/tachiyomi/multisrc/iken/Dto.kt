@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.multisrc.iken
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -98,7 +98,7 @@ class Chapter(
     private val isAccessible: Boolean,
     private val isLocked: Boolean? = false,
     private val isTimeLocked: Boolean? = false,
-    private val mangaPost: ChapterPostDetails,
+    private val mangaPost: ChapterPostDetails? = null,
 ) {
     fun isPublic() = chapterStatus == "PUBLIC"
 
@@ -108,20 +108,27 @@ class Chapter(
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
         val prefix = if (!isAccessible()) "🔒 " else ""
-        val seriesSlug = mangaSlug ?: mangaPost.slug
+        val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number"
-        date_upload = try {
-            dateFormat.parse(createdAt)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+        date_upload = dateFormat.tryParse(createdAt)
     }
 }
 
 @Serializable
 class ChapterPostDetails(
-    val slug: String,
+    val slug: String?,
+)
+
+@Serializable
+class PageParseDto(
+    val url: String,
+    val order: Int? = null,
+)
+
+@Serializable
+class Images(
+    val images: List<PageParseDto>,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
