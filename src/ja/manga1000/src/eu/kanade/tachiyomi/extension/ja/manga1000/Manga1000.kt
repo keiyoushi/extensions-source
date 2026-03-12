@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
@@ -18,6 +19,8 @@ class Manga1000 : HttpSource() {
     override val name = "Manga1000"
     override val baseUrl = "https://hachiraw.win"
     override val lang = "ja"
+
+    override val versionId = 2
 
     override val supportsLatest = false
 
@@ -29,25 +32,24 @@ class Manga1000 : HttpSource() {
 
     // ============================== Popular / Homepage ===============================
     override fun popularMangaRequest(page: Int): Request {
-        val url = if (page == 1) {
-            "$baseUrl/"
-        } else {
-            "$baseUrl/page/$page/"
+        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+        if (page > 1) {
+            urlBuilder.addPathSegment("page")
+            urlBuilder.addPathSegment(page.toString())
         }
-        return GET(url, headers)
+        return GET(urlBuilder.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select("article.post.manga").map { element ->
+        val mangas = document.select("article.post.manga").mapNotNull { element ->
+            val a = element.selectFirst(".entry-title a") ?: return@mapNotNull null
             SManga.create().apply {
-                element.selectFirst(".entry-title a")?.let {
-                    title = it.text()
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                }
-                thumbnail_url = element.selectFirst(".featured-thumb img")?.let {
-                    it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
+                title = a.text()
+                setUrlWithoutDomain(a.attr("abs:href"))
+                thumbnail_url = element.selectFirst(".featured-thumb img")?.run {
+                    attr("abs:data-src").ifEmpty { attr("abs:src") }
                 }
             }
         }
@@ -62,33 +64,31 @@ class Manga1000 : HttpSource() {
 
     // =============================== Search & Filters =====================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            val url = if (page == 1) {
-                "$baseUrl/search?query=$query"
-            } else {
-                "$baseUrl/search/page/$page/?query=$query"
+        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+
+        if (query.isNotBlank()) {
+            urlBuilder.addPathSegment("search")
+            if (page > 1) {
+                urlBuilder.addPathSegment("page")
+                urlBuilder.addPathSegment(page.toString())
             }
-            return GET(url, headers)
+            urlBuilder.addQueryParameter("query", query)
+            return GET(urlBuilder.build(), headers)
         }
 
-        var categoryId = ""
-        filters.forEach { filter ->
-            if (filter is CategoryFilter) {
-                categoryId = filter.toUriPart()
-            }
+        val categoryId = filters.filterIsInstance<CategoryFilter>()
+            .firstOrNull()?.toUriPart().orEmpty()
+
+        if (categoryId.isNotEmpty()) {
+            urlBuilder.addPathSegment("category")
+            urlBuilder.addPathSegment(categoryId)
+        }
+        if (page > 1) {
+            urlBuilder.addPathSegment("page")
+            urlBuilder.addPathSegment(page.toString())
         }
 
-        val url = if (categoryId.isNotEmpty()) {
-            if (page == 1) {
-                "$baseUrl/category/$categoryId/"
-            } else {
-                "$baseUrl/category/$categoryId/page/$page/"
-            }
-        } else {
-            if (page == 1) "$baseUrl/" else "$baseUrl/page/$page/"
-        }
-
-        return GET(url, headers)
+        return GET(urlBuilder.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -104,10 +104,10 @@ class Manga1000 : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h1.entry-title")?.text()?.substringBefore(" - ") ?: ""
+            title = document.selectFirst("h1.entry-title")?.text()?.substringBefore(" - ")!!
 
-            thumbnail_url = document.selectFirst(".entry-content img")?.let {
-                it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
+            thumbnail_url = document.selectFirst(".entry-content img")?.run {
+                attr("abs:data-src").ifEmpty { attr("abs:src") }
             }
 
             author = document.selectFirst(".entry-content > p:contains(Author:)")?.text()?.replace("Author:", "")?.trim()
