@@ -39,10 +39,7 @@ class ReadAllComics : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("ul.list-story.categories li").map { mangaFromElement(it) }
-        val currentPage = document.selectFirst("span.page-numbers.current")?.text()?.trim()?.toIntOrNull() ?: 1
-        val hasNextPage = document.select("div.pagination a.page-numbers").any {
-            it.attr("abs:href").substringAfter("paged=").substringBefore("#").toIntOrNull()?.let { n -> n > currentPage } == true
-        }
+        val hasNextPage = document.selectFirst(".pagination .page-numbers.current + .page-numbers") != null
         return MangasPage(mangas, hasNextPage)
     }
 
