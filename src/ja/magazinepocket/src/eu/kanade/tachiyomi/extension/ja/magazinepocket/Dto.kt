@@ -58,14 +58,14 @@ class Episode(
     private val badge: Int,
     @SerialName("rental_finish_time") private val rentalFinishTime: String? = null,
 ) {
+    val isLocked: Boolean
+        get() = point > 0 && badge != 3 && rentalFinishTime == null
+
     fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
         val paddedId = titleId.toString().padStart(5, '0')
+        val lock = if (isLocked) "🔒 " else ""
         url = "/title/$paddedId/episode/$episodeId"
-        name = if (point > 0 && badge != 3 && rentalFinishTime == null) {
-            "🔒 $episodeName"
-        } else {
-            episodeName
-        }
+        name = lock + episodeName
         chapter_number = index.toFloat()
         date_upload = dateFormat.tryParse(startTime)
     }
@@ -91,7 +91,9 @@ class WebTitle(
 @Serializable
 class ViewerApiResponse(
     @SerialName("page_list") val pageList: List<String>,
-    @SerialName("scramble_seed") val scrambleSeed: Long,
+    @SerialName("scramble_seed") val scrambleSeed: String,
+    @SerialName("title_id") val titleId: Int,
+    @SerialName("episode_id") val episodeId: Int,
 )
 
 @Serializable
