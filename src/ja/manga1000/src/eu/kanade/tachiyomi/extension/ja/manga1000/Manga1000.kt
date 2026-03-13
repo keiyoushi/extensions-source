@@ -36,6 +36,7 @@ class Manga1000 : HttpSource() {
         if (page > 1) {
             urlBuilder.addPathSegment("page")
             urlBuilder.addPathSegment(page.toString())
+            urlBuilder.addPathSegment("")
         }
         return GET(urlBuilder.build(), headers)
     }
@@ -82,10 +83,12 @@ class Manga1000 : HttpSource() {
         if (categoryId.isNotEmpty()) {
             urlBuilder.addPathSegment("category")
             urlBuilder.addPathSegment(categoryId)
+            urlBuilder.addPathSegment("")
         }
         if (page > 1) {
             urlBuilder.addPathSegment("page")
             urlBuilder.addPathSegment(page.toString())
+            urlBuilder.addPathSegment("")
         }
 
         return GET(urlBuilder.build(), headers)
@@ -117,7 +120,7 @@ class Manga1000 : HttpSource() {
                 val text = it.text()
                 !text.contains("Author:") && !text.contains("Category:")
             }
-            description = descriptionElements.joinToString("\n") { it.text() }.trim()
+            description = descriptionElements.joinToString("\n") { it.text() }
         }
     }
 
@@ -128,7 +131,7 @@ class Manga1000 : HttpSource() {
         return document.select(".chaplist table tbody tr td a").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
-                name = element.text().trim().ifEmpty { "Chapter" }
+                name = element.text().ifEmpty { "Chapter" }
             }
         }
     }
@@ -141,7 +144,7 @@ class Manga1000 : HttpSource() {
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
 
             if (url.isNotEmpty() && !url.contains("lazy.png")) {
-                Page(i, "", url)
+                Page(i, imageUrl = url)
             } else {
                 null
             }
