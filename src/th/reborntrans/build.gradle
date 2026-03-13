@@ -1,0 +1,8 @@
+ext {
+    extName = 'Reborn Trans'
+    extClass = '.RebornTrans'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
