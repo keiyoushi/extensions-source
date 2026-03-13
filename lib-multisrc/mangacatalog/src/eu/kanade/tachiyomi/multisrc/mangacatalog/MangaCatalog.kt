@@ -98,11 +98,8 @@ abstract class MangaCatalog(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".js-pages-container img.js-page,.img_container img")
-        .filterNot { it.parent()?.tagName() == "noscript" }
-        .map { img -> img.attr("abs:data-src").ifEmpty { img.attr("abs:src") } }
-        .filter { it.startsWith("http") }
-        .mapIndexed { index, url -> Page(index, "", url) }
+    override fun pageListParse(document: Document): List<Page> = document.select("img[data-src]")
+        .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }
