@@ -24,6 +24,8 @@ abstract class Comicaso(
     private val excludedGenres: Set<String> = emptySet(),
 ) : HttpSource() {
 
+    override val versionId = 2
+
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
@@ -32,28 +34,31 @@ abstract class Comicaso(
         .set("Referer", "$baseUrl/")
 
     private fun indexRequest(page: Int, query: String = "", filters: FilterList? = null): Request {
-        val url = "$baseUrl/wp-content/static/manga/index.json".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
+        var genre = ""
+        var completedOnly = false
 
         filters?.forEach { filter ->
             when (filter) {
-                is GenreFilter -> {
-                    if (filter.state > 0) {
-                        url.addQueryParameter("genre", filter.values[filter.state])
-                    }
-                }
-                is StatusFilter -> {
-                    if (filter.state == 1) {
-                        url.addQueryParameter("completed", "1")
-                    }
-                }
+                is GenreFilter -> if (filter.state > 0) genre = filter.values[filter.state]
+                is StatusFilter -> completedOnly = filter.state == 1
                 else -> Unit
             }
         }
 
+        val url = "$baseUrl/wp-content/static/manga/index.json".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .fragment(searchStateFragment(query, genre, completedOnly))
+
         return GET(url.build(), headers)
     }
+
+    private fun searchStateFragment(query: String, genre: String, completedOnly: Boolean): String = "https://state/".toHttpUrl().newBuilder()
+        .addQueryParameter("q", query)
+        .addQueryParameter("genre", genre)
+        .addQueryParameter("completed", if (completedOnly) "1" else "0")
+        .build()
+        .query
+        .orEmpty()
 
     private fun parseIndex(response: Response): List<MangaDto> = response.parseAs()
 
@@ -101,7 +106,7 @@ abstract class Comicaso(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val sorted = parseIndex(response).sortedByDescending { it.updated_at ?: 0L }
+        val sorted = parseIndex(response).sortedByDescending { it.updatedAt ?: 0L }
         return paged(sorted, page)
     }
 
@@ -110,7 +115,7 @@ abstract class Comicaso(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val sorted = parseIndex(response).sortedByDescending { it.updated_at ?: 0L }
+        val sorted = parseIndex(response).sortedByDescending { it.updatedAt ?: 0L }
         return paged(sorted, page)
     }
 
@@ -119,11 +124,13 @@ abstract class Comicaso(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val query = response.request.url.queryParameter("q").orEmpty()
-        val genre = response.request.url.queryParameter("genre").orEmpty()
-        val completedOnly = response.request.url.queryParameter("completed") == "1"
+        val state = "https://state/?${response.request.url.fragment.orEmpty()}".toHttpUrl()
+
+        val query = state.queryParameter("q").orEmpty()
+        val genre = state.queryParameter("genre").orEmpty()
+        val completedOnly = state.queryParameter("completed") == "1"
         val filtered = applyIndexFilters(parseIndex(response), query, genre, completedOnly)
-            .sortedByDescending { it.updated_at ?: 0L }
+            .sortedByDescending { it.updatedAt ?: 0L }
         return paged(filtered, page)
     }
 
@@ -154,10 +161,10 @@ abstract class Comicaso(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val title = document.selectFirst("h1")?.text().orEmpty()
+        val title = document.selectFirst("h1")!!.text()
 
         fun infoValue(label: String): String? {
-            val row = document.select("*:matchesOwn(^\\s*$label\\s*$)").firstOrNull() ?: return null
+            val row = document.selectFirst("*:matchesOwn(^\\s*$label\\s*$)") ?: return null
             val parentText = row.parent()?.text().orEmpty()
             return parentText.substringAfter(label, "").trim().takeIf { it.isNotBlank() }
         }
@@ -187,7 +194,6 @@ abstract class Comicaso(
             }
 
             genre = document.select(".mjv2-tags .mjv2-tag").joinToString { it.text() }
-                .ifBlank { null }
 
             thumbnail_url = document.selectFirst(".mjv2-detail-cover img")
                 ?.let { it.attr("abs:src").ifEmpty { it.attr("abs:data-src") } }
@@ -200,51 +206,28 @@ abstract class Comicaso(
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.trim('/').substringAfterLast('/')
+        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments.lastOrNull().orEmpty()
         return GET("$baseUrl/wp-content/static/manga/$slug.json", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val manga = response.parseAs<MangaDetailsDto>()
-        return manga.chapters.map { chapter ->
+        return manga.chapters.asReversed().map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain("/komik/${manga.slug}/${chapter.slug}/")
                 name = chapter.title
-                chapter_number = chapterNumberFrom(chapter.slug)
                 date_upload = chapter.date * 1000L
             }
         }
-            .distinctBy { it.url }
-            .sortedByDescending { it.chapter_number }
-    }
-
-    private fun chapterNumberFrom(slug: String): Float {
-        val decimal = Regex("(\\d+)\\s*[._-]\\s*(\\d+)")
-            .find(slug)
-            ?.groupValues
-            ?.let { groups ->
-                val main = groups.getOrNull(1).orEmpty()
-                val sub = groups.getOrNull(2).orEmpty()
-                if (main.isNotEmpty() && sub.isNotEmpty()) "$main.$sub" else null
-            }
-            ?.toFloatOrNull()
-
-        val integer = Regex("(\\d+)")
-            .find(slug)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toFloatOrNull()
-
-        return decimal ?: integer ?: -1f
     }
 
     // Pages
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("figure img, .mjv2-reader img").mapIndexed { index, img ->
+        return document.select("figure img, .mjv2-reader img").mapIndexedNotNull { index, img ->
             val imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-            Page(index, document.location(), imageUrl)
-        }.filter { it.imageUrl?.isNotBlank() == true }
+            imageUrl.takeIf { it.isNotBlank() }?.let { Page(index, document.location(), it) }
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -253,8 +236,6 @@ abstract class Comicaso(
     override fun getFilterList(): FilterList {
         val genres = ALL_GENRES.filterNot { it in excludedGenres }.toTypedArray()
         return FilterList(
-            Filter.Header("NOTE: Filters are applied locally from index.json"),
-            Filter.Separator(),
             GenreFilter(genres),
             StatusFilter(),
         )

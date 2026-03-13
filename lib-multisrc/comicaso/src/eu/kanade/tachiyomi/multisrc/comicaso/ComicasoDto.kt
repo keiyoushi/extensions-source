@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.comicaso
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -58,7 +59,8 @@ class MangaDto(
     val author: String,
     val genres: List<String> = emptyList(),
     val type: String,
-    val updated_at: Long? = null,
+    @SerialName("updated_at")
+    val updatedAt: Long? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/komik/$slug/"
