@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
+import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -107,7 +108,7 @@ class Details(
     fun toSManga() = SManga.create().apply {
         title = name
         author = authors
-        description = infoText
+        description = infoText?.let { Jsoup.parse(it).text() }
         thumbnail_url = latestThumbnail?.thumbnail
     }
 }
