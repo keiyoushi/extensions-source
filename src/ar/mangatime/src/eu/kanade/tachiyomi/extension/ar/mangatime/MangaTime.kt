@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangatime
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,8 +14,6 @@ import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -24,10 +21,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.io.IOException
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+private val WHITESPACE_REGEX = "\\s+".toRegex()
+private val INVALID_CHARS_REGEX = "[^a-zA-Z0-9-]".toRegex()
 
 class MangaTime : HttpSource() {
     override val baseUrl = "https://mangatime.org"
@@ -57,8 +56,8 @@ class MangaTime : HttpSource() {
     }
 
     private fun replaceNameWithDash(inputString: String): String {
-        var replacedString = inputString.replace("\\s+".toRegex(), "-")
-        return replacedString.replace("[^a-zA-Z0-9-]".toRegex(), "")
+        var replacedString = inputString.replace(WHITESPACE_REGEX, "-")
+        return replacedString.replace(INVALID_CHARS_REGEX, "")
     }
 
     private fun String?.toStatus() = when (this) {
@@ -71,19 +70,7 @@ class MangaTime : HttpSource() {
 
     private fun addView(seriesId: String) {
         val body = """{"id":"$seriesId"}""".toRequestBody("application/json".toMediaType())
-        val request = POST("$baseUrl/add_view", headers, body)
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: okio.IOException) {
-                Log.e(name, "Failed to count views", e)
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    if (!it.isSuccessful) Log.e(name, "Error: ${it.code}")
-                }
-            }
-        })
+        client.newCall(POST("$baseUrl/add_view", headers, body))
     }
 
     // Popular
@@ -119,7 +106,7 @@ class MangaTime : HttpSource() {
             .addQueryParameter("q", query)
             .build()
 
-        return GET(url)
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response) = MangasPage(popularMangaParse(response).mangas, false)
@@ -127,12 +114,12 @@ class MangaTime : HttpSource() {
     // Details
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup().select("div.anime__details__text")
-        title = document.select("h3").text()
-        description = document.select("p").text()
-        thumbnail_url = document.selectFirst("div.set-bg")?.imgAttr()
-        status = document.selectFirst("li:contains(الحالة)")?.ownText().toStatus()
-        genre = document.selectFirst("li:contains(التصنيفات)")?.ownText()?.replace("\u060c", ",") // Arabic Comma
+        val detailsElement = response.asJsoup().selectFirst("div.anime__details__text")!!
+        title = detailsElement.selectFirst("h3")!!.text()
+        description = detailsElement.select("p").text()
+        thumbnail_url = detailsElement.selectFirst("div.set-bg")?.imgAttr()
+        status = detailsElement.selectFirst("li:contains(الحالة)")?.ownText().toStatus()
+        genre = detailsElement.selectFirst("li:contains(التصنيفات)")?.ownText()?.replace("\u060c", ",") // Arabic comma
     }
 
     // Chapters
@@ -160,11 +147,10 @@ class MangaTime : HttpSource() {
     // Pages
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val seriesId = chapter.url.substringAfter("#").substringBefore("#")
+        val (seriesId, pagesId) = chapter.url.toHttpUrl().fragment!!.split("#", limit = 2)
 
         addView(seriesId)
 
-        val pagesId = chapter.url.substringAfterLast("#").parseAs<List<String>>()
         return Observable.just(
             pagesId.mapIndexed { index, id ->
                 Page(index, imageUrl = "$baseUrl/get_image/$id")
