@@ -1,0 +1,13 @@
+ext {
+    extName = 'Manga Raw Page'
+    extClass = '.MangaRaw'
+    baseUrl = 'https://mangaraw.page'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:seedrandom"))
+}
