@@ -206,12 +206,13 @@ abstract class Comicaso(
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments.lastOrNull().orEmpty()
+        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments.lastOrNull { it.isNotBlank() }.orEmpty()
         return GET("$baseUrl/wp-content/static/manga/$slug.json", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = response.parseAs<MangaDetailsDto>()
+        val manga = runCatching { response.parseAs<MangaDetailsDto>() }.getOrNull() ?: return emptyList()
+
         return manga.chapters.asReversed().map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain("/komik/${manga.slug}/${chapter.slug}/")
