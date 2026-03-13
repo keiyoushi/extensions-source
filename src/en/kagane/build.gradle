@@ -1,7 +1,7 @@
 ext {
     extName = 'Kagane'
     extClass = '.Kagane'
-    extVersionCode = 21
+    extVersionCode = 22
     isNsfw = true
 }
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Frieren Online'
+    extClass = '.FrierenOnline'
+    themePkg = 'madara'
+    baseUrl = 'https://www.frieren.online'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
