@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiSco'
+    extClass = '.HentaiSco'
+    themePkg = 'madara'
+    baseUrl = 'https://hentaisco.cc'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
