@@ -104,20 +104,22 @@ class KomikNextGOnline : ParsedHttpSource() {
     }
 
     // ======================== Chapters ========================
-    override fun chapterListSelector() = "head"
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val document = element.ownerDocument()!!
-        setUrlWithoutDomain(document.selectFirst("meta[property=\"og:url\"]")!!.attr("content"))
-        name = "Chapter 1"
-        date_upload = document.selectFirst("span.posted-on a")?.text()?.let {
-            dateFormat.tryParse(it.replace("Posted on ", "").trim())
-        } ?: 0L
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return listOf(chapterFromElement(document.selectFirst(chapterListSelector())!!))
+
+        val chapter = SChapter.create().apply {
+            setUrlWithoutDomain(document.selectFirst("meta[property=\"og:url\"]")!!.attr("abs:content"))
+            name = "Chapter 1"
+            date_upload = document.selectFirst("span.posted-on a")?.text()?.let {
+                dateFormat.tryParse(it.replace("Posted on ", "").trim())
+            } ?: 0L
+        }
+
+        return listOf(chapter)
     }
 
     // ======================== Pages ========================
