@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mangafree'
+    extClass = '.Mangafree'
+    themePkg = 'madara'
+    baseUrl = 'https://mangafree.info'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
