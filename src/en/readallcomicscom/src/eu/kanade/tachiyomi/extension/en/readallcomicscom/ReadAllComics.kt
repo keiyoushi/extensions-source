@@ -13,7 +13,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -32,10 +31,17 @@ class ReadAllComics : HttpSource() {
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = throw Exception("Use search to find comics.")
+    override fun popularMangaRequest(page: Int): Request {
+        val url = if (page == 1) baseUrl else "$baseUrl/?paged=$page"
+        return GET(url, headers)
+    }
 
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("ul.list-story.categories li").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst(".pagination .page-numbers.current + .page-numbers") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
     // Search
 
