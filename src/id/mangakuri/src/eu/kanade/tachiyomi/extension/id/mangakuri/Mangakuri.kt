@@ -15,6 +15,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class Mangakuri : HttpSource() {
 
@@ -54,10 +55,10 @@ class Mangakuri : HttpSource() {
             SManga.create().apply {
                 url = "/comic/${manga.slug}"
                 title = manga.title
-                thumbnail_url = manga.poster_image_url
+                thumbnail_url = manga.posterImageUrl
             }
         }
-        return MangasPage(mangas, response.request.url.queryParameter("page")!!.toInt() < dto.total_pages)
+        return MangasPage(mangas, response.request.url.queryParameter("page")!!.toInt() < dto.totalPages)
     }
 
     // ================= Latest =================
@@ -122,22 +123,19 @@ class Mangakuri : HttpSource() {
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ================= Details =================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/comic/")
-        return GET("$apiUrl/series/comic/$slug", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<SeriesDetailDto>()
         return SManga.create().apply {
             url = "/comic/${dto.slug}"
             title = dto.title
-            thumbnail_url = dto.poster_image_url
-            author = dto.author_name
-            artist = dto.artist_name
+            thumbnail_url = dto.posterImageUrl
+            author = dto.authorName
+            artist = dto.artistName
             description = dto.synopsis?.let { Jsoup.parse(it).text() }
             genre = dto.genres.joinToString { it.name }
-            status = when (dto.comic_status?.uppercase()) {
+            status = when (dto.comicStatus?.uppercase()) {
                 "ONGOING" -> SManga.ONGOING
                 "COMPLETED" -> SManga.COMPLETED
                 "HIATUS" -> SManga.ON_HIATUS
@@ -160,29 +158,22 @@ class Mangakuri : HttpSource() {
                 url = "/comic/$comicSlug/chapter/${chapter.slug}"
                 name = "Chapter ${formatChapterNumber(chapter.number)}"
                 chapter_number = chapter.number.toFloatOrNull() ?: -1f
-                date_upload = dateFormat.tryParse(chapter.created_at)
+                date_upload = dateFormat.tryParse(chapter.createdAt)
             }
         }
     }
 
-    private fun formatChapterNumber(number: String): String = if (number.endsWith(".00")) {
-        number.substringBefore(".00")
-    } else {
-        number
-    }
+    private fun formatChapterNumber(number: String): String = number.removeSuffix(".00")
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // ================= Pages =================
-    override fun pageListRequest(chapter: SChapter): Request {
-        val path = chapter.url.removePrefix("/")
-        return GET("$apiUrl/series/$path", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/series${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterDetailDto>()
         return dto.chapter.pages.mapIndexed { i, page ->
-            Page(i, imageUrl = page.image_url)
+            Page(i, imageUrl = page.imageUrl)
         }
     }
 
@@ -203,6 +194,8 @@ class Mangakuri : HttpSource() {
     )
 
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 }
