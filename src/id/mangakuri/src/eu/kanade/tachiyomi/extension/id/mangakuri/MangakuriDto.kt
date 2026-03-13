@@ -1,56 +1,57 @@
 package eu.kanade.tachiyomi.extension.id.mangakuri
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SearchResponseDto(
+class SearchResponseDto(
     val data: List<MangaDto>,
-    val total_pages: Int,
+    @SerialName("total_pages") val totalPages: Int,
 )
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val title: String,
     val slug: String,
-    val poster_image_url: String? = null,
+    @SerialName("poster_image_url") val posterImageUrl: String? = null,
 )
 
 @Serializable
-data class SeriesDetailDto(
+class SeriesDetailDto(
     val title: String,
     val slug: String,
     val synopsis: String? = null,
-    val poster_image_url: String? = null,
-    val comic_status: String? = null,
-    val author_name: String? = null,
-    val artist_name: String? = null,
+    @SerialName("poster_image_url") val posterImageUrl: String? = null,
+    @SerialName("comic_status") val comicStatus: String? = null,
+    @SerialName("author_name") val authorName: String? = null,
+    @SerialName("artist_name") val artistName: String? = null,
     val genres: List<GenreDto> = emptyList(),
     val units: List<ChapterDto> = emptyList(),
 )
 
 @Serializable
-data class GenreDto(
+class GenreDto(
     val name: String,
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val slug: String,
     val number: String,
-    val created_at: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable
-data class ChapterDetailDto(
+class ChapterDetailDto(
     val chapter: ChapterPagesDto,
 )
 
 @Serializable
-data class ChapterPagesDto(
+class ChapterPagesDto(
     val pages: List<PageDto>,
 )
 
 @Serializable
-data class PageDto(
-    val image_url: String,
+class PageDto(
+    @SerialName("image_url") val imageUrl: String,
 )
