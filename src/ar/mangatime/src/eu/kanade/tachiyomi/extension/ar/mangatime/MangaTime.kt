@@ -132,7 +132,7 @@ class MangaTime : HttpSource() {
         description = document.select("p").text()
         thumbnail_url = document.selectFirst("div.set-bg")?.imgAttr()
         status = document.selectFirst("li:contains(الحالة)")?.ownText().toStatus()
-        genre = document.selectFirst("li:contains(التصنيفات)")?.ownText()?.replace("،", ",")
+        genre = document.selectFirst("li:contains(التصنيفات)")?.ownText()?.replace("\u060c", ",") // Arabic Comma
     }
 
     // Chapters
