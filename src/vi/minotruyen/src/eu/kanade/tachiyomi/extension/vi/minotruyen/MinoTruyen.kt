@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -33,8 +33,6 @@ class MinoTruyen(
     override val lang = "vi"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -67,8 +65,6 @@ class MinoTruyen(
         }
         return MangasPage(mangaList, false)
     }
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
     // =============================== Latest ===============================
 
@@ -169,14 +165,7 @@ class MinoTruyen(
         }
     }
 
-    private fun parseDate(dateStr: String?): Long {
-        if (dateStr.isNullOrBlank()) return 0L
-        return try {
-            dateFormat.parse(dateStr)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
-    }
+    private fun parseDate(dateStr: String?): Long = dateStr?.takeIf { it.isNotBlank() }?.let(dateFormat::tryParse) ?: 0L
 
     // =============================== Pages ================================
 
@@ -195,7 +184,7 @@ class MinoTruyen(
             throw Exception("Failed to decrypt chapter data")
         }
 
-        val servers = json.decodeFromString<List<ChapterServer>>(decrypted)
+        val servers = decrypted.parseAs<List<ChapterServer>>()
 
         val selectedServer = selectImageServer(servers)
             ?: throw Exception("No image server found")
@@ -254,11 +243,7 @@ class MinoTruyen(
     }
 
     private fun decodeDrmMap(drmData: String): List<StripInfo> {
-        val encrypted = runCatching {
-            Base64.decode(drmData, Base64.DEFAULT)
-        }.getOrElse {
-            return emptyList()
-        }
+        val encrypted = Base64.decode(drmData, Base64.DEFAULT)
 
         val key = DRM_XOR_KEY.toByteArray(StandardCharsets.US_ASCII)
         val plainBytes = ByteArray(encrypted.size)

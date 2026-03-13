@@ -8,7 +8,7 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okio.Buffer
 
 class MinoImageInterceptor : Interceptor {
 
@@ -18,18 +18,15 @@ class MinoImageInterceptor : Interceptor {
         if (!fragment.startsWith(FRAGMENT_PREFIX)) return chain.proceed(request)
 
         val strips = parseStripMap(fragment.removePrefix(FRAGMENT_PREFIX))
-        val cleanRequest = request.newBuilder()
-            .url(request.url.newBuilder().fragment(null).build())
-            .build()
-
-        val response = chain.proceed(cleanRequest)
+        val response = chain.proceed(request)
         if (!response.isSuccessful || strips.isEmpty()) return response
 
-        val mediaType = response.body.contentType() ?: "image/jpeg".toMediaType()
-        val sourceBytes = response.body.bytes()
+        val body = response.body
+        val mediaType = body.contentType() ?: "image/jpeg".toMediaType()
 
-        val scrambled = BitmapFactory.decodeByteArray(sourceBytes, 0, sourceBytes.size)
-            ?: return response.newBuilder().body(sourceBytes.toResponseBody(mediaType)).build()
+        val scrambled = body.byteStream().use { stream ->
+            BitmapFactory.decodeStream(stream)
+        } ?: return chain.proceed(request)
 
         val unscrambled = Bitmap.createBitmap(scrambled.width, scrambled.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(unscrambled)
@@ -50,14 +47,14 @@ class MinoImageInterceptor : Interceptor {
             srcY += height
         }
 
-        val output = ByteArrayOutputStream()
-        unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val output = Buffer()
+        unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
 
         scrambled.recycle()
         unscrambled.recycle()
 
         return response.newBuilder()
-            .body(output.toByteArray().toResponseBody(mediaType))
+            .body(output.readByteArray().toResponseBody(mediaType))
             .build()
     }
 
