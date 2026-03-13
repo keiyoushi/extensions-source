@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.comicaso.Comicaso
 class Comicazen :
     Comicaso(
         "Comicazen",
-        "https://comicazen.com",
+        "https://comicazen.id",
         "id",
         pageSize = 16,
         excludedGenres = setOf(

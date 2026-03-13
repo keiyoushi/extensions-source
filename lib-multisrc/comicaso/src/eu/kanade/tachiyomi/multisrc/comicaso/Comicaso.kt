@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.comicaso
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,14 +11,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 
 abstract class Comicaso(
     override val name: String,
@@ -27,225 +24,136 @@ abstract class Comicaso(
     private val excludedGenres: Set<String> = emptySet(),
 ) : HttpSource() {
 
+    override val versionId = 2
+
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
 
-    private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
-
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/wp-json/neoglass/v1/mangas".toHttpUrl().newBuilder()
-            .addQueryParameter("paged", page.toString())
-            .addQueryParameter("per_page", pageSize.toString())
-            .build()
+    private fun indexRequest(page: Int, query: String = "", filters: FilterList? = null): Request {
+        var genre = ""
+        var completedOnly = false
 
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaListResponse>()
-        val mangas = result.items.map { it.toSManga() }
-        return MangasPage(mangas, result.items.size == pageSize)
-    }
-
-    // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/v2/?page=$page"
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.ng-list div.ng-list-item").map { element ->
-            SManga.create().apply {
-                val thumb = element.selectFirst("div.ng-list-thumb")!!
-                val link = thumb.selectFirst("a")!!.absUrl("href")
-                title = element.selectFirst("div.ng-list-info a h3")!!.text()
-                thumbnail_url = thumb.selectFirst("img")?.let { img ->
-                    img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-                } ?: ""
-                setUrlWithoutDomain(link)
-            }
-        }
-        val hasNextPage = document.selectFirst("div.ng-pagination a.ng-page-btn.next") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/wp-json/neoglass/v1/mangas".toHttpUrl().newBuilder()
-            .addQueryParameter("paged", page.toString())
-            .addQueryParameter("per_page", pageSize.toString())
-
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("s", query)
-        }
-
-        filters.forEach { filter ->
+        filters?.forEach { filter ->
             when (filter) {
-                is GenreFilter -> {
-                    if (filter.state > 0) {
-                        val genre = filter.values[filter.state]
-                        val genreSlug = genreToSlug(genre)
-                        url.addQueryParameter("genre", genreSlug)
-                    }
-                }
-
-                is StatusFilter -> {
-                    if (filter.state == 1) {
-                        url.addQueryParameter("completed", "1")
-                    }
-                }
-
-                else -> {}
+                is GenreFilter -> if (filter.state > 0) genre = filter.values[filter.state]
+                is StatusFilter -> completedOnly = filter.state == 1
+                else -> Unit
             }
         }
+
+        val url = "$baseUrl/wp-content/static/manga/index.json".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .fragment(searchStateFragment(query, genre, completedOnly))
 
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun searchStateFragment(query: String, genre: String, completedOnly: Boolean): String = "https://state/".toHttpUrl().newBuilder()
+        .addQueryParameter("q", query)
+        .addQueryParameter("genre", genre)
+        .addQueryParameter("completed", if (completedOnly) "1" else "0")
+        .build()
+        .query
+        .orEmpty()
+
+    private fun parseIndex(response: Response): List<MangaDto> = response.parseAs()
+
+    private fun applyIndexFilters(
+        all: List<MangaDto>,
+        query: String,
+        genre: String,
+        completedOnly: Boolean,
+    ): List<MangaDto> {
+        var result = all
+
+        if (query.isNotBlank()) {
+            result = result.filter {
+                it.title.contains(query, ignoreCase = true) ||
+                    it.alternative.contains(query, ignoreCase = true)
+            }
+        }
+
+        if (genre.isNotBlank() && genre != "All") {
+            result = result.filter { manga ->
+                manga.genres.any { it.equals(genre, ignoreCase = true) }
+            }
+        }
+
+        if (completedOnly) {
+            result = result.filter {
+                it.status.equals("completed", ignoreCase = true) ||
+                    it.status.equals("end", ignoreCase = true)
+            }
+        }
+
+        return result
+    }
+
+    private fun paged(list: List<MangaDto>, page: Int): MangasPage {
+        val from = (page - 1) * pageSize
+        if (from >= list.size) return MangasPage(emptyList(), false)
+        val to = minOf(from + pageSize, list.size)
+        val pageItems = list.subList(from, to).map { it.toSManga() }
+        return MangasPage(pageItems, to < list.size)
+    }
+
+    // Popular
+    override fun popularMangaRequest(page: Int): Request = indexRequest(page)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val sorted = parseIndex(response).sortedByDescending { it.updatedAt ?: 0L }
+        return paged(sorted, page)
+    }
+
+    // Latest
+    override fun latestUpdatesRequest(page: Int): Request = indexRequest(page)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val sorted = parseIndex(response).sortedByDescending { it.updatedAt ?: 0L }
+        return paged(sorted, page)
+    }
+
+    // Search
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = indexRequest(page, query, filters)
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val state = "https://state/?${response.request.url.fragment.orEmpty()}".toHttpUrl()
+
+        val query = state.queryParameter("q").orEmpty()
+        val genre = state.queryParameter("genre").orEmpty()
+        val completedOnly = state.queryParameter("completed") == "1"
+        val filtered = applyIndexFilters(parseIndex(response), query, genre, completedOnly)
+            .sortedByDescending { it.updatedAt ?: 0L }
+        return paged(filtered, page)
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
         query.startsWith(URL_SEARCH_PREFIX) -> {
             val url = query.removePrefix(URL_SEARCH_PREFIX).trim().replace(baseUrl, "")
             val mangaUrl = if (url.startsWith("/")) url else "/$url"
-            fetchMangaDetails(
-                SManga.create().apply {
-                    this.url = mangaUrl
-                },
-            )
+            fetchMangaDetails(SManga.create().apply { this.url = mangaUrl })
                 .map { MangasPage(listOf(it), false) }
         }
 
         query.startsWith("http://") || query.startsWith("https://") -> {
             val url = query.trim().replace(baseUrl, "")
             val mangaUrl = if (url.startsWith("/")) url else "/$url"
-            fetchMangaDetails(
-                SManga.create().apply {
-                    this.url = mangaUrl
-                },
-            )
+            fetchMangaDetails(SManga.create().apply { this.url = mangaUrl })
                 .map { MangasPage(listOf(it), false) }
         }
 
-        else -> super.fetchSearchManga(page, query, filters)
-    }
-
-    protected open fun genreToSlug(genre: String): String = when (genre) {
-        "Action" -> "action"
-        "Adaptation" -> "adaptation"
-        "Adult" -> "adult"
-        "Adventure" -> "adventure"
-        "Age Gap" -> "age-gap"
-        "Aliens" -> "aliens"
-        "Animals" -> "animals"
-        "Anthology" -> "anthology"
-        "BDSM" -> "bdsm"
-        "Beasts" -> "beasts"
-        "Bloody" -> "bloody"
-        "Bodyswap" -> "bodyswap"
-        "Boys" -> "boys"
-        "Cheating/Infidelity", "Cheating Infidelity" -> "cheating-infidelity"
-        "Childhood Friends" -> "childhood-friends"
-        "College life", "College Life" -> "college-life"
-        "Comedy" -> "comedy"
-        "Contest winning", "Contest Winning" -> "contest-winning"
-        "Cooking" -> "cooking"
-        "Crime" -> "crime"
-        "Crossdressing" -> "crossdressing"
-        "Delinquents" -> "delinquents"
-        "Demons" -> "demons"
-        "Drama" -> "drama"
-        "Dungeons" -> "dungeons"
-        "Ecchi" -> "ecchi"
-        "Emperor's daughte", "Emperors Daughte" -> "emperors-daughte"
-        "Fantasy" -> "fantasy"
-        "Fetish" -> "fetish"
-        "Fighting" -> "fighting"
-        "Full Color" -> "full-color"
-        "Game" -> "game"
-        "Gender Bender" -> "gender-bender"
-        "Genderswap" -> "genderswap"
-        "Ghosts" -> "ghosts"
-        "Girl" -> "girl"
-        "Girls" -> "girls"
-        "Gore" -> "gore"
-        "Harem" -> "harem"
-        "Hentai" -> "hentai"
-        "Historical" -> "historical"
-        "Horror", "Horrow" -> "horrow"
-        "Incest" -> "incest"
-        "Isekai" -> "isekai"
-        "Josei(W)", "Joseiw" -> "joseiw"
-        "Kids" -> "kids"
-        "Magic" -> "magic"
-        "Magical Girls" -> "magical-girls"
-        "Manga" -> "manga"
-        "Manhua" -> "manhua"
-        "Manhwa" -> "manhwa"
-        "Martial Arts" -> "martial-arts"
-        "Mature" -> "mature"
-        "Medical" -> "medical"
-        "Military" -> "military"
-        "Monster Girls" -> "monster-girls"
-        "Monsters" -> "monsters"
-        "Music" -> "music"
-        "Mystery" -> "mystery"
-        "NTR", "Ntr" -> "ntr"
-        "Non-human", "Non Human" -> "non-human"
-        "Office Workers" -> "office-workers"
-        "Omegaverse" -> "omegaverse"
-        "Oneshot" -> "oneshot"
-        "Philosophical" -> "philosophical"
-        "Police" -> "police"
-        "Psychological" -> "psychological"
-        "Regression" -> "regression"
-        "Reincarnation" -> "reincarnation"
-        "Revenge" -> "revenge"
-        "Reverse Harem" -> "reverse-harem"
-        "Reverse Isekai" -> "reverse-isekai"
-        "Romance" -> "romance"
-        "Royal family", "Royal Family" -> "royal-family"
-        "Royalty" -> "royalty"
-        "School Life" -> "school-life"
-        "Sci-Fi", "Sci Fi" -> "sci-fi"
-        "Seinen(M)", "Seinenm" -> "seinenm"
-        "Sejarah" -> "sejarah"
-        "Shoujo(G)", "Shoujog" -> "shoujog"
-        "Shoujo ai", "Shoujo Ai" -> "shoujo-ai"
-        "Shounen ai", "Shounen Ai" -> "shounen-ai"
-        "Shounen(B)", "Shounenb" -> "shounenb"
-        "Showbiz" -> "showbiz"
-        "Slice of Life", "Slice Of Life" -> "slice-of-life"
-        "SM/BDSM/SUB-DOM", "SM Bdsm Sub Dom" -> "sm-bdsm-sub-dom"
-        "Smut" -> "smut"
-        "Space" -> "space"
-        "Sports" -> "sports"
-        "Super Power" -> "super-power"
-        "Superhero" -> "superhero"
-        "Supernatural" -> "supernatural"
-        "Survival" -> "survival"
-        "Thriller" -> "thriller"
-        "Time Travel" -> "time-travel"
-        "Tower Climbing" -> "tower-climbing"
-        "Tragedy" -> "tragedy"
-        "Transmigration" -> "transmigration"
-        "Vampires" -> "vampires"
-        "Video Games" -> "video-games"
-        "Villainess" -> "villainess"
-        "Violence" -> "violence"
-        "Western" -> "western"
-        "Wuxia" -> "wuxia"
-        "Yakuzas" -> "yakuzas"
-        "Yaoi(BL)", "Yaoibl" -> "yaoibl"
-        "Yuri(GL)", "Yurigl" -> "yurigl"
-        "Zombies" -> "zombies"
-        else -> genre.lowercase()
+        else -> client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
     }
 
     // Details
@@ -253,96 +161,73 @@ abstract class Comicaso(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val requestUrl = response.request.url.toString()
-        val mangaUrl = requestUrl.replace(baseUrl, "").let { if (it.startsWith("/")) it else "/$it" }
+        val title = document.selectFirst("h1")!!.text()
+
+        fun infoValue(label: String): String? {
+            val row = document.selectFirst("*:matchesOwn(^\\s*$label\\s*$)") ?: return null
+            val parentText = row.parent()?.text().orEmpty()
+            return parentText.substringAfter(label, "").trim().takeIf { it.isNotBlank() }
+        }
+
         return SManga.create().apply {
-            url = mangaUrl
-            title = document.selectFirst("h1.ng-detail-title")!!.text()
+            url = response.request.url.toString().replace(baseUrl, "")
+            this.title = title
+
+            val altTitle = document.selectFirst(".mjv2-manga-alt, .mjv2-manga-subtitle")?.text()
 
             description = buildString {
-                document.selectFirst("p.ng-desc")?.text()?.let { append(it) }
+                document.selectFirst(".mjv2-synopsis p, .mjv2-synopsis-content p")?.text()?.let {
+                    if (it.isNotBlank()) append(it)
+                }
 
-                document.selectFirst(".ng-meta-info p:contains(Alternative:)")
-                    ?.ownText()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let {
-                        if (isNotEmpty()) append("\n\n")
-                        append("Alternative: ")
-                        append(it)
-                    }
+                altTitle?.takeIf { it.isNotBlank() && it != this@apply.title }?.let {
+                    if (isNotEmpty()) append("\n\n")
+                    append("Alternative: ")
+                    append(it)
+                }
             }
 
-            status = document.selectFirst(".ng-meta-info p:contains(Status:)")
-                ?.ownText()
-                ?.let { statusText ->
-                    when {
-                        statusText.contains("On-going", ignoreCase = true) -> SManga.ONGOING
-                        statusText.contains("End", ignoreCase = true) -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-                } ?: SManga.UNKNOWN
+            status = when {
+                infoValue("Status")?.contains("On Going", ignoreCase = true) == true -> SManga.ONGOING
+                infoValue("Status")?.contains("Completed", ignoreCase = true) == true -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
-            genre = document.select(".ng-meta-row:contains(Genres:)")
-                .text()
-                .substringAfter("Genres:")
-                .split(",")
-                .mapNotNull { it.trim().takeIf { s -> s.isNotEmpty() } }
-                .joinToString()
+            genre = document.select(".mjv2-tags .mjv2-tag").joinToString { it.text() }
 
-            thumbnail_url = document.selectFirst(".ng-detail-cover")
-                ?.attr("style")
-                ?.substringAfter("url('")
-                ?.substringBefore("')") ?: ""
+            thumbnail_url = document.selectFirst(".mjv2-detail-cover img")
+                ?.let { it.attr("abs:src").ifEmpty { it.attr("abs:data-src") } }
+                .orEmpty()
+
+            author = infoValue("Author")
+            artist = infoValue("Artist")
         }
     }
 
     // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("ul.ng-chapter-list li.ng-chapter-item").map { element ->
-            SChapter.create().apply {
-                val link = element.selectFirst("a.ng-btn.ng-read-small")!!
-                setUrlWithoutDomain(link.attr("href"))
-                name = element.selectFirst(".ng-chapter-title")!!.text()
-                date_upload = element.selectFirst(".ng-chapter-date")?.text()?.let { parseChapterDate(it) } ?: 0L
-            }
-        }.reversed()
+    override fun chapterListRequest(manga: SManga): Request {
+        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments.lastOrNull { it.isNotBlank() }.orEmpty()
+        return GET("$baseUrl/wp-content/static/manga/$slug.json", headers)
     }
 
-    private fun parseChapterDate(dateStr: String): Long {
-        if (dateStr.isEmpty()) return 0L
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val manga = runCatching { response.parseAs<MangaDetailsDto>() }.getOrNull() ?: return emptyList()
 
-        val calendar = Calendar.getInstance()
-
-        return when {
-            dateStr.contains("hari", ignoreCase = true) -> {
-                val days = dateStr.replace(Regex("\\D"), "").toIntOrNull() ?: 1
-                calendar.add(Calendar.DAY_OF_MONTH, -days)
-                calendar.timeInMillis
+        return manga.chapters.asReversed().map { chapter ->
+            SChapter.create().apply {
+                setUrlWithoutDomain("/komik/${manga.slug}/${chapter.slug}/")
+                name = chapter.title
+                date_upload = chapter.date * 1000L
             }
-
-            dateStr.contains("minggu", ignoreCase = true) -> {
-                val weeks = dateStr.replace(Regex("\\D"), "").toIntOrNull() ?: 1
-                calendar.add(Calendar.WEEK_OF_YEAR, -weeks)
-                calendar.timeInMillis
-            }
-
-            dateStr.contains("bulan", ignoreCase = true) -> {
-                val months = dateStr.replace(Regex("\\D"), "").toIntOrNull() ?: 1
-                calendar.add(Calendar.MONTH, -months)
-                calendar.timeInMillis
-            }
-
-            else -> dateFormat.tryParse(dateStr)
         }
     }
 
     // Pages
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div.ng-chapter-images div.ng-chapter-image img").mapIndexed { index, img ->
+        return document.select("figure img, .mjv2-reader img").mapIndexedNotNull { index, img ->
             val imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-            Page(index, document.location(), imageUrl)
+            imageUrl.takeIf { it.isNotBlank() }?.let { Page(index, document.location(), it) }
         }
     }
 
@@ -352,18 +237,12 @@ abstract class Comicaso(
     override fun getFilterList(): FilterList {
         val genres = ALL_GENRES.filterNot { it in excludedGenres }.toTypedArray()
         return FilterList(
-            Filter.Header("NOTE: Filters are ignored when using text search!"),
-            Filter.Separator(),
             GenreFilter(genres),
             StatusFilter(),
         )
     }
 
-    protected class GenreFilter(genres: Array<String>) :
-        Filter.Select<String>(
-            "Genre",
-            genres,
-        )
+    protected class GenreFilter(genres: Array<String>) : Filter.Select<String>("Genre", genres)
 
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
