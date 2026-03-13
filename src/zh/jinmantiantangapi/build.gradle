@@ -1,0 +1,8 @@
+ext {
+    extName = 'Jinman Tiantang (API)'
+    extClass = '.JinmantiantangApi'
+    extVersionCode = 17
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
