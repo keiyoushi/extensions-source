@@ -5,45 +5,35 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.FormBody
 
 fun getFilterListInternal() = FilterList(
-    Filter.Header("搜索选项"),
     SearchTypeFilter(),
     SortFilter(),
-    Filter.Separator(),
-    Filter.Header("排行榜（搜索文本时无效）"),
-    RankingFilter(),
-    RankingRangeFilter(),
+    StatusFilter(),
 )
 
-interface ListingFilter {
+interface SearchFilter {
     fun addTo(builder: FormBody.Builder)
 }
 
-interface SearchFilter : ListingFilter
-
 class SearchTypeFilter :
-    Filter.Select<String>("搜索范围", arrayOf("综合", "标签", "作者")),
+    Filter.Select<String>("搜索类型", arrayOf("预设", "标签", "作者")),
     SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
-        builder.addEncoded("type", arrayOf("de", "tag", "author")[state])
+        builder.addEncoded("mode", arrayOf("default", "tag", "author")[state])
     }
 }
 
 class SortFilter :
-    Filter.Select<String>("排序", arrayOf("时间", "阅读量", "收藏")),
+    Filter.Select<String>("排序方式", arrayOf("预设", "观看次数", "收藏", "评分")),
     SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
-        builder.addEncoded("sort", arrayOf("bid", "views", "favorites")[state])
+        builder.addEncoded("sort", arrayOf("", "views", "favorites", "rating")[state])
     }
 }
 
-class RankingFilter : Filter.Select<String>("排行榜", arrayOf("阅读榜", "收藏榜", "高质量榜")) {
-    val path get() = arrayOf("readLeaderboard", "favLeaderboard", "proportion")[state]
-}
-
-class RankingRangeFilter :
-    Filter.Select<String>("阅读/收藏榜范围", arrayOf("日榜", "周榜", "月榜")),
-    ListingFilter {
+class StatusFilter :
+    Filter.Select<String>("完结状态", arrayOf("全部", "连载中", "已完结")),
+    SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
-        builder.addEncoded("type", arrayOf("day", "week", "moon")[state])
+        builder.addEncoded("finished", arrayOf("", "false", "true")[state])
     }
 }
