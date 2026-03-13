@@ -17,49 +17,32 @@ import java.net.URLDecoder
 class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = super.popularMangaParse(response).mangas
-            .distinctBy { it.url }
-
+        val mangas = super.popularMangaParse(response).mangas.distinctBy { it.url }
         return MangasPage(mangas, false)
     }
 
     override fun genresRequest() = GET("$baseUrl/search/", headers)
 
-    override fun parseGenres(document: Document): List<Genre> = document.select("[x-data*=genre] button").map {
-        val name = it.text()
-        val id = it.attr("wire:key")
-
-        Genre(name, id)
-    }
+    override fun parseGenres(document: Document): List<Genre> = document.select("[x-data*=genre] button").map { Genre(it.text(), it.attr("wire:key")) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
-            if (query.isNotBlank()) {
-                addQueryParameter("title", query)
-            }
-            filters.firstOrNull { it is GenreList }?.also {
-                val filter = it as GenreList
-                filter.state
-                    .filter { it.state }
-                    .forEach { genre ->
-                        addQueryParameter("genre", genre.id)
-                    }
-            }
+            if (page > 1) addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) addQueryParameter("title", query)
+            (filters.firstOrNull { it is GenreList } as? GenreList)?.state
+                ?.filter { it.state }
+                ?.forEach { addQueryParameter("genre", it.id) }
         }.build()
-
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "[wire:snapshot*=pages.search] button[tags]"
+    override fun searchMangaSelector() = "main#main-content [wire:key*='serie']"
 
     override fun searchMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
-
-        val mangas = response.asJsoup()
-            .select(searchMangaSelector())
-            .map(::searchMangaFromElement)
-
-        return MangasPage(mangas, false)
+        val document = response.asJsoup()
+        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
+        return MangasPage(mangas, hasNextPage = mangas.size >= 20)
     }
 
     override val descriptionSelector = "#expand_content"
@@ -97,6 +80,4 @@ private val pagesRegex = Regex("pages:(\\[[^]]+])")
 private val linkRegex = """baseLink:(["'])(.+?)\1""".toRegex()
 
 @Serializable
-class Path(
-    val path: String,
-)
+class Path(val path: String)
