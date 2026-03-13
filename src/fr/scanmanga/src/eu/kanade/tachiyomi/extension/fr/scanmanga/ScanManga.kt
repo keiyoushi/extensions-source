@@ -199,9 +199,11 @@ class ScanManga : HttpSource() {
         }
     }
 
+    private val multipleSpaces = Regex("""\s+""")
+
     private fun dataAPI(data: String, idc: Int): UrlPayload {
         if (data.contains("error")) {
-            error("Received error response from data API: ${Regex("\\s+").replace(data, " ").trim()}")
+            error("Received error response from data API: ${multipleSpaces.replace(data, " ").trim()}")
         }
 
         // Step 1: Base64 decode the input
