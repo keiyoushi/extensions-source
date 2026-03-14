@@ -1,0 +1,7 @@
+ext {
+    extName = 'LanorTrad'
+    extClass = '.LanorTrad'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
