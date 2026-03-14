@@ -24,7 +24,7 @@ fun getPreferencesInternal(context: Context) = arrayOf(
         entries = arrayOf("僅顯示全年齡內容", "僅顯示成人内容", "顯示所有内容")
         entryValues = arrayOf("false", "true", "both")
         setOnPreferenceChangeListener { _, _ ->
-            Toast.makeText(context, "重啟應用後生效", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "重啟應用後生效", Toast.LENGTH_SHORT).show()
             true
         }
     },

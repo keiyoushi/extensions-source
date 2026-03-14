@@ -15,7 +15,7 @@ interface SearchFilter {
 }
 
 class SearchTypeFilter :
-    Filter.Select<String>("搜索类型", arrayOf("预设", "标签", "作者")),
+    Filter.Select<String>("類型", arrayOf("預設", "標籤", "作者")),
     SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("mode", arrayOf("default", "tag", "author")[state])
@@ -23,7 +23,7 @@ class SearchTypeFilter :
 }
 
 class SortFilter :
-    Filter.Select<String>("排序方式", arrayOf("预设", "观看次数", "收藏", "评分")),
+    Filter.Select<String>("排序方式", arrayOf("預設", "觀看次數", "收藏", "評分")),
     SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("sort", arrayOf("", "views", "favorites", "rating")[state])
@@ -31,7 +31,7 @@ class SortFilter :
 }
 
 class StatusFilter :
-    Filter.Select<String>("完结状态", arrayOf("全部", "连载中", "已完结")),
+    Filter.Select<String>("完結狀態", arrayOf("全部", "連載中", "已完結")),
     SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("finished", arrayOf("", "false", "true")[state])
