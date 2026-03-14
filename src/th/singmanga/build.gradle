@@ -3,7 +3,7 @@ ext {
     extClass = ".Singmanga"
     baseUrl = "https://www.sing-manga.com"
     overrideVersionCode = 0
-    isNsfw = "false"
+    isNsfw = false
     themePkg = "mangathemesia"
 }
 
