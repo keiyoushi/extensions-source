@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 private const val STATIC_URL = "https://api.scansfr.com"
 
 @Serializable
-internal data class MangaListDto(
+internal class MangaListDto(
     val mangas: List<MangaBriefDto>,
     val page: Int,
     val totalPages: Int,
