@@ -13,45 +13,39 @@ fun String.formatNames() = split(" ").joinToString { name ->
     name.split("-").joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
 }
 
-fun MangaDto.formatDescription() = "時間：${DATE_FORMAT.format(time * 1000)}\n" +
-    "评分：$rating\n" +
-    "原作：${otag.formatNames()}\n" +
-    "角色：${pname.formatNames()}" + (description.takeIf(CharSequence::isNotEmpty)?.let { "\n---\n$it" } ?: "")
-
 @Serializable
-data class ListingPageDto(
+class ListingPageDto(
     val info: List<MangaDto>?,
     val len: Int?,
     val status: String,
 )
 
 @Serializable
-data class SearchPageDto(
+class SearchPageDto(
     val count: Int?,
     val data: List<SearchMangaDto>?,
     val status: String,
 )
 
-data class MangaDetailDto(
+class MangaDetailDto(
     val status: String,
     val book: MangaDto?,
     val chapters: List<Pair<String, List<ChapterDto>>>?,
 )
 
 @Serializable
-data class CategoryDto(val id: Int, val name: String)
+class CategoryDto(val id: Int, val name: String)
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: Int,
     val name: String,
     val count: Int,
-    val sort: Int,
     @SerialName("created_at") val createdAt: Long,
 )
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     @SerialName("Bid") val id: Int,
     @SerialName("Mode") val mode: Int,
     @SerialName("Bookname") val name: String,
@@ -75,21 +69,26 @@ data class MangaDto(
         m.thumbnail_url = "https://img.noymanga.com/$id/m1.webp"
         m.initialized = mode == 0 || description.isNotEmpty()
     }
+
+    fun formatDescription() = "時間：${DATE_FORMAT.format(time * 1000)}\n" +
+        "评分：$rating\n" +
+        "原作：${otag.formatNames()}\n" +
+        "角色：${pname.formatNames()}" + (description.takeIf(CharSequence::isNotEmpty)?.let { "\n---\n$it" } ?: "")
 }
 
 @Serializable
-data class SearchMangaDto(
-    val id: Int,
-    val name: String,
-    val description: String,
-    val author: String,
-    val tags: List<String>,
-    val pname: List<String>,
-    val otag: List<String>,
-    val time: Long,
-    val mode: Int,
-    val status: Int,
-    @SerialName("rating_sum") val rating: Float,
+class SearchMangaDto(
+    private val id: Int,
+    private val name: String,
+    private val description: String,
+    private val author: String,
+    private val tags: List<String>,
+    private val pname: List<String>,
+    private val otag: List<String>,
+    private val time: Long,
+    private val mode: Int,
+    private val status: Int,
+    @SerialName("rating_sum") private val rating: Float,
 ) {
     fun toSManga() = SManga.create().also { m ->
         m.url = id.toString()
