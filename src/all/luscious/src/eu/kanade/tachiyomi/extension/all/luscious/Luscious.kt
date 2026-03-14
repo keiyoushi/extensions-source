@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -170,7 +171,7 @@ abstract class Luscious(
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumList")
             .addQueryParameter("query", ALBUM_LIST_REQUEST_GQL)
-            .addQueryParameter("variables", Json.encodeToString(input))
+            .addQueryParameter("variables", input.toJsonString())
             .build()
         return GET(url, headers)
     }
@@ -200,7 +201,7 @@ abstract class Luscious(
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumGet")
             .addQueryParameter("query", albumInfoQuery)
-            .addQueryParameter("variables", Json.encodeToString(input))
+            .addQueryParameter("variables", input.toJsonString())
             .build()
         return GET(url, headers)
     }
@@ -319,7 +320,7 @@ abstract class Luscious(
         return apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumListOwnPictures")
             .addQueryParameter("query", ALBUM_PICTURES_REQUEST_GQL)
-            .addQueryParameter("variables", Json.encodeToString(input))
+            .addQueryParameter("variables", input.toJsonString())
             .build()
     }
 
