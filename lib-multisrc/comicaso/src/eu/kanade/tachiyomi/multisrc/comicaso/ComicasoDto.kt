@@ -17,7 +17,7 @@ class MangaDto(
     @SerialName("updated_at") val updatedAt: Long? = null,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/komik/$slug/"
+        url = slug
         title = this@MangaDto.title
         thumbnail_url = thumbnail
         genre = genres?.joinToString()
@@ -49,8 +49,8 @@ class ChapterDto(
     val title: String,
     val date: Long? = null,
 ) {
-    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
-        url = "$mangaUrl$slug/"
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        url = "/komik/$mangaSlug/$slug/"
         name = title
         date_upload = date?.let { it * 1000L } ?: 0L
     }
