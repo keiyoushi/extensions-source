@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sunset Manga'
+    extClass = '.SunsetManga'
+    themePkg = 'madara'
+    baseUrl = 'https://sunsetmanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

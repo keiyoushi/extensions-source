@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.softkomik
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,12 +14,11 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 class Softkomik : HttpSource() {
     override val name = "Softkomik"
-    override val baseUrl = "https://softkomik.com"
+    override val baseUrl = "https://softkomik.co"
     override val lang = "id"
     override val supportsLatest = true
 
@@ -103,9 +101,9 @@ class Softkomik : HttpSource() {
 
         val mangas = libData.data.map { manga ->
             SManga.create().apply {
-                setUrlWithoutDomain(manga.title_slug!!)
-                title = manga.title!!
-                thumbnail_url = "$coverUrl/${manga.gambar!!.removePrefix("/")}"
+                setUrlWithoutDomain(manga.title_slug)
+                title = manga.title
+                thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
             }
         }
         return MangasPage(mangas, libData.page < libData.maxPage)
@@ -121,7 +119,7 @@ class Softkomik : HttpSource() {
         val slug = response.request.url.pathSegments.lastOrNull()!!
         return SManga.create().apply {
             setUrlWithoutDomain(slug)
-            title = manga.title!!
+            title = manga.title
             author = manga.author
             description = manga.sinopsis
             genre = manga.Genre?.joinToString()
@@ -130,7 +128,7 @@ class Softkomik : HttpSource() {
                 "tamat" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = "$coverUrl/${manga.gambar!!.removePrefix("/")}"
+            thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
         }
     }
 
@@ -146,8 +144,8 @@ class Softkomik : HttpSource() {
         val dto = response.parseAs<ChapterListDto>()
         val slug = response.request.url.pathSegments[1]
         return dto.chapter.map { chapter ->
-            val chapterNumStr = chapter.chapter!!
-            val chapterNum = chapterNumStr.toFloatOrNull() ?: -1f
+            val chapterNumStr = chapter.chapter
+            val chapterNum = chapterNumStr.substringBefore(".").toFloatOrNull() ?: -1f
             val displayNum = formatChapterDisplay(chapterNumStr)
             SChapter.create().apply {
                 url = "/$slug/chapter/$chapterNumStr"
@@ -158,12 +156,18 @@ class Softkomik : HttpSource() {
     }
 
     private fun formatChapterDisplay(chapterStr: String): String {
-        val floatVal = chapterStr.toFloatOrNull() ?: return chapterStr
-        return if (floatVal == floatVal.toLong().toFloat()) {
+        val parts = chapterStr.split(".")
+        val numPart = parts[0]
+        val suffix = parts.drop(1).joinToString(".")
+
+        val floatVal = numPart.toFloatOrNull() ?: return chapterStr
+        val formatted = if (floatVal == floatVal.toLong().toFloat()) {
             floatVal.toLong().toString()
         } else {
             floatVal.toString().trimEnd('0').trimEnd('.')
         }
+
+        return if (suffix.isNotEmpty()) "$formatted.$suffix" else formatted
     }
 
     // ======================== Pages ========================
@@ -176,12 +180,12 @@ class Softkomik : HttpSource() {
         val imageSrc = if (data.imageSrc.isEmpty()) {
             val slug = response.request.url.pathSegments[0]
             val chapter = response.request.url.pathSegments[2]
-            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id!!}"
+            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id}"
             client.newCall(GET(url, headers)).execute().use {
-                it.parseAs<ChapterPageImagesDto>().imageSrc!!
+                it.parseAs<ChapterPageImagesDto>().imageSrc
             }
         } else {
-            data.imageSrc!!
+            data.imageSrc
         }
 
         if (imageSrc.isEmpty()) {
@@ -210,57 +214,90 @@ class Softkomik : HttpSource() {
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
 
-        if (response.isSuccessful || !request.url.encodedPath.contains("img-file")) {
-            return response
+        val response = try {
+            chain.proceed(request)
+        } catch (e: java.net.UnknownHostException) {
+            null
         }
 
-        val imgPath = request.url.toString().substringAfter("img-file/")
-        val otherHosts = cdnUrls.filter { !request.url.toString().contains(it) }
+        if (response?.isSuccessful == true) return response
+        response?.close()
 
-        var latestResponse = response
+        val currentHost = cdnUrls.firstOrNull { request.url.toString().startsWith(it) }
+            ?: return throw java.net.UnknownHostException("Unknown CDN host: ${request.url.host}")
+
+        val imagePath = request.url.toString().removePrefix(currentHost).removePrefix("/")
+        val otherHosts = cdnUrls.filter { it != currentHost }
+
+        var latestResponse: Response? = null
         for (newHost in otherHosts) {
-            latestResponse.close()
-            val newUrl = "$newHost/img-file/$imgPath".toHttpUrl()
-            latestResponse = chain.proceed(request.newBuilder().url(newUrl).build())
-            if (latestResponse.isSuccessful) return latestResponse
+            latestResponse?.close()
+            val newUrl = "$newHost/$imagePath".toHttpUrl()
+            latestResponse = try {
+                chain.proceed(request.newBuilder().url(newUrl).build())
+            } catch (e: java.net.UnknownHostException) {
+                null
+            }
+            if (latestResponse?.isSuccessful == true) return latestResponse
         }
 
-        return latestResponse
+        return latestResponse ?: throw java.net.UnknownHostException("All CDN hosts failed for: $imagePath")
     }
 
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (!request.url.host.contains("softdevices.my.id")) {
+
+        if (!request.url.host.endsWith("softdevices.my.id")) {
             return chain.proceed(request)
         }
 
         val session = getSession()
+
         val newRequest = request.newBuilder()
-            .addHeader("X-Token", session.token!!)
-            .addHeader("X-Sign", session.sign!!)
+            .addHeader("X-Token", session.token)
+            .addHeader("X-Sign", session.sign)
             .build()
+
         return chain.proceed(newRequest)
     }
 
     private fun getSession(): SessionDto {
         val currentSession = session
-        if (currentSession != null && currentSession.ex!! > System.currentTimeMillis()) {
+        if (currentSession != null && currentSession.ex > System.currentTimeMillis()) {
             return currentSession
         }
 
         synchronized(this) {
             val currentSessionSync = session
-            if (currentSessionSync != null && currentSessionSync.ex!! > System.currentTimeMillis()) {
+            if (currentSessionSync != null && currentSessionSync.ex > System.currentTimeMillis()) {
                 return currentSessionSync
             }
 
-            client.newCall(POST("$baseUrl/api/me", headers, "".toRequestBody())).execute().close()
+            val apiHeaders = headersBuilder()
+                .set("Accept", "application/json")
+                .set("Content-Type", "application/json")
+                .set("X-Requested-With", "XMLHttpRequest")
+                .build()
 
-            val newSession = client.newCall(GET("$baseUrl/api/sessions", headers)).execute().use {
-                it.parseAs<SessionDto>()
+            val hasCookies = client.cookieJar
+                .loadForRequest(baseUrl.toHttpUrl())
+                .any { it.name == "zEm9be" || it.name == "AhyyL" }
+
+            if (!hasCookies) {
+                client.newCall(GET(baseUrl, headers)).execute().close()
+                client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
             }
+
+            val response = client.newCall(GET("$baseUrl/api/sessions", apiHeaders)).execute()
+
+            if (!response.isSuccessful) {
+                val code = response.code
+                response.close()
+                throw Exception("Gagal mendapatkan akses token dari Softkomik (HTTP $code).")
+            }
+
+            val newSession = response.use { it.parseAs<SessionDto>() }
             session = newSession
             return newSession
         }
@@ -279,6 +316,7 @@ class Softkomik : HttpSource() {
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
     private val cdnUrls = listOf(
+        "https://cd1.softkomik.online/softkomik",
         "https://f1.softkomik.com/file/softkomik-image",
         "https://img.softdevices.my.id/softkomik-image",
         "https://image.softkomik.com/softkomik",

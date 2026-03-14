@@ -1,9 +1,0 @@
-ext {
-    extName = 'Neumanga'
-    extClass = '.Neumanga'
-    themePkg = 'colorlibanime'
-    baseUrl = 'https://neumanga.xyz'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

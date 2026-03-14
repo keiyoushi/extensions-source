@@ -6,11 +6,13 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,10 +21,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
-import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -35,7 +34,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.crypto.Cipher
@@ -48,7 +46,8 @@ class Mangago :
 
     override val name = "Mangago"
 
-    override val baseUrl = "https://www.mangago.me"
+    private val domain = "mangago.me"
+    override val baseUrl = "https://www.$domain"
 
     override val lang = "en"
 
@@ -57,11 +56,7 @@ class Mangago :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
+        .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -79,19 +74,16 @@ class Mangago :
             return@addInterceptor response.newBuilder()
                 .body(body)
                 .build()
-        }.build()
+        }
+        .addNetworkInterceptor(
+            CookieInterceptor(domain, "_m_superu" to "1"),
+        ).build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Cookie", cookiesHeader)
-
-    private val cookiesHeader by lazy {
-        val cookies = mutableMapOf<String, String>()
-
-        // Needed for correct page ordering
-        cookies["_m_superu"] = "1"
-
-        buildCookies(cookies)
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
+        preferences.getString(PREF_KEY_CUSTOM_UA, null)?.takeIf { it.isNotBlank() }?.also {
+            set("User-Agent", it)
+        }
+        add("Referer", "$baseUrl/")
     }
 
     private val genreListingSelector = ".updatesli"
@@ -226,33 +218,50 @@ class Mangago :
     }
 
     override fun pageListParse(document: Document): List<Page> {
+        val availableImages = getChapterImageUrls(document)
+
+        if (availableImages.none { it.isBlank() }) {
+            return availableImages.mapIndexed { idx, img ->
+                Page(idx, imageUrl = img)
+            }
+        }
+
         val totalPages = document.selectFirst("script:containsData(total_pages)")
             ?.data()
             ?.let { Regex("""total_pages\s*=\s*(\d+)""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
             ?: throw Exception("Total page count not found")
 
-        val slug = document.location().toHttpUrl().let {
-            val path = it.pathSegments
-
-            if (path.size > 2 && path[0] == "read-manga") {
-                path[1]
-            } else {
-                throw Exception("slug not found")
-            }
-        }
-
         val urlTemplate = document.selectFirst("input#curl")!!
             .attr("value").trim()
             .removePrefix("/")
+            .also {
+                if (!it.contains("{page}")) {
+                    throw Exception("No replaceable string in url template")
+                }
+            }
 
-        if (!urlTemplate.contains("{page}")) {
-            throw Exception("No replaceable string in url template")
+        val prefix = with(document.location().toHttpUrl()) {
+            val urlTemplateSegment = urlTemplate.split("/")[0]
+            if (
+                host.endsWith(domain) &&
+                pathSegments.size > 3 &&
+                pathSegments[0] == "read-manga" &&
+                pathSegments[2] == urlTemplateSegment
+            ) {
+                val slug = pathSegments[1]
+                "$baseUrl/read-manga/$slug"
+            } else if (
+                !host.endsWith(domain) &&
+                pathSegments[0] == urlTemplateSegment
+            ) {
+                "https://$host"
+            } else {
+                throw Exception("Unexpected Url structure")
+            }
         }
 
         val pages = (1..totalPages).map { page ->
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("read-manga")
-                .addPathSegment(slug)
+            val url = prefix.toHttpUrl().newBuilder()
                 .addEncodedPathSegments(urlTemplate.replace("{page}", page.toString()))
                 .fragment(page.toString())
                 .build()
@@ -260,8 +269,6 @@ class Mangago :
 
             Page(page, url)
         }
-
-        val availableImages = getChapterImageUrls(document)
 
         pages.onEachIndexed { index, page ->
             availableImages[index].also {
@@ -322,11 +329,25 @@ class Mangago :
 
         val cols = colsRegex.find(chapterJs)?.groupValues?.get(1) ?: ""
 
-        val resolvedUrls = imageList.split(",").map {
-            if (it.contains("cspiclink")) {
-                "$it#desckey=${getDescramblingKey(chapterJs, it)}&cols=$cols"
-            } else {
-                it
+        val imgKeys = chapterJs
+            .substringAfter("var renImg = function(img,width,height,id){")
+            .substringBefore("key = key.split(")
+            .split("\n")
+            .filter { jsFilters.all { filter -> !it.contains(filter) } }
+            .joinToString("\n")
+            .replace("img.src", "url")
+
+        val resolvedUrls = QuickJs.create().use { qjs ->
+            qjs.execute(replacePosBytecode)
+            qjs.evaluate("function getDescramblingKey(url) { $imgKeys; return key; }")
+
+            imageList.split(",").map {
+                if (it.contains("cspiclink")) {
+                    val descKey = qjs.evaluate("""getDescramblingKey("$it");""") as String
+                    "$it#desckey=$descKey&cols=$cols"
+                } else {
+                    it
+                }
             }
         }
 
@@ -534,37 +555,12 @@ class Mangago :
         return output.toByteArray()
     }
 
-    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
-        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
-    }
-
     private fun String.decodeHex(): ByteArray {
         check(length % 2 == 0) { "Must have an even length" }
 
         return chunked(2)
             .map { it.toInt(16).toByte() }
             .toByteArray()
-    }
-
-    private fun getDescramblingKey(chapterJs: String, imageUrl: String): String {
-        val imgKeys = chapterJs
-            .substringAfter("var renImg = function(img,width,height,id){")
-            .substringBefore("key = key.split(")
-            .split("\n")
-            .filter { jsFilters.all { filter -> !it.contains(filter) } }
-            .joinToString("\n")
-            .replace("img.src", "url")
-
-        val js = """
-            function getDescramblingKey(url) { $imgKeys; return key; }
-            getDescramblingKey("$imageUrl");
-        """.trimIndent()
-
-        return QuickJs.create().use {
-            it.execute(replacePosBytecode)
-
-            it.evaluate(js).toString()
-        }
     }
 
     private val jsFilters =
@@ -607,10 +603,26 @@ class Mangago :
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
         }.let(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_KEY_CUSTOM_UA
+            title = "Custom user agent string"
+            summary = "Leave blank to use the default user agent string"
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    Headers.headersOf("User-Agent", newValue as String)
+                    Toast.makeText(screen.context, "Restart app to apply changes", Toast.LENGTH_SHORT).show()
+                    true
+                } catch (e: IllegalArgumentException) {
+                    Toast.makeText(screen.context, "Invalid user agent string: ${e.message}", Toast.LENGTH_LONG).show()
+                    false
+                }
+            }
+        }.also(screen::addPreference)
     }
 
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
     }
 }
