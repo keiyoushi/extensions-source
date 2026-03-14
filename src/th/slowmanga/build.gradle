@@ -1,0 +1,10 @@
+ext {
+    extName = "Slow Manga"
+    extClass = ".SlowManga"
+    baseUrl = "https://www.slow-manga.com"
+    themePkg = "mangathemesia"
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
