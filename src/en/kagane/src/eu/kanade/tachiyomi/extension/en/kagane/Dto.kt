@@ -82,10 +82,8 @@ class AlternateSeries(
 class DetailsDto(
     val title: String,
     val description: String?,
-    @SerialName("publication_status")
-    val publicationStatus: String,
     @SerialName("upload_status")
-    val uploadStatus: String,
+    val publicationStatus: String,
     val format: String?,
     @SerialName("source_id")
     val sourceId: String?,
