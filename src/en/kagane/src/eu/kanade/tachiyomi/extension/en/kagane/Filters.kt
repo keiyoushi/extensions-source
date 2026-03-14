@@ -187,7 +187,7 @@ private val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other
 internal class PublicationStatusFilter :
     JsonMultiSelectFilter(
         "Status",
-        "publication_status",
+        "upload_status",
         PUBLICATION_STATUS_OPTIONS.map { (name, value) -> MultiSelectOption(name, value) },
     )
 
