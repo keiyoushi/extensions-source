@@ -248,7 +248,7 @@ class Softkomik : HttpSource() {
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        if (request.url.host != "softdevices.my.id") {
+        if (!request.url.host.endsWith("softdevices.my.id")) {
             return chain.proceed(request)
         }
 

@@ -341,7 +341,7 @@ abstract class Iken(
                 },
             )
         } else {
-            pages.images
+            pages.images.sortedBy { it.order ?: Int.MAX_VALUE }
         }
 
         return sortedPages.mapIndexed { idx, p ->
