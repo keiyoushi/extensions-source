@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.noyacg
 
 import android.content.Context
+import android.widget.Toast
 import androidx.preference.ListPreference
 
 const val POPULAR_MANGAS_PREF = "POPULAR_MANGAS"
@@ -22,5 +23,9 @@ fun getPreferencesInternal(context: Context) = arrayOf(
         setDefaultValue("both")
         entries = arrayOf("僅顯示全年齡內容", "僅顯示成人内容", "顯示所有内容")
         entryValues = arrayOf("false", "true", "both")
+        setOnPreferenceChangeListener { _, _ ->
+            Toast.makeText(context, "重啟應用後生效", Toast.LENGTH_LONG).show()
+            true
+        }
     },
 )
