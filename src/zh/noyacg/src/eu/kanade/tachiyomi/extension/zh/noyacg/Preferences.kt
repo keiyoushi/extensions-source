@@ -1,31 +1,31 @@
 package eu.kanade.tachiyomi.extension.zh.noyacg
 
 import android.content.Context
-import android.content.SharedPreferences
+import android.widget.Toast
 import androidx.preference.ListPreference
-import kotlin.random.Random
+
+const val POPULAR_MANGAS_PREF = "POPULAR_MANGAS"
+const val ADULT_PREF = "ADULT"
 
 fun getPreferencesInternal(context: Context) = arrayOf(
     ListPreference(context).apply {
-        val count = IMAGE_CDN.size
-        key = IMAGE_CDN_PREF
-        title = "图片分流（重启生效）"
+        key = POPULAR_MANGAS_PREF
+        title = "熱門漫畫顯示內容"
         summary = "%s"
-        entries = Array(count) { "分流 ${it + 1}" }
-        entryValues = Array(count) { "$it" }
+        setDefaultValue("day")
+        entries = arrayOf("日閱讀榜", "周閱讀榜", "月閱讀榜")
+        entryValues = arrayOf("day", "week", "month")
+    },
+    ListPreference(context).apply {
+        key = ADULT_PREF
+        title = "漫畫內容類型"
+        summary = "%s"
+        setDefaultValue("both")
+        entries = arrayOf("僅顯示全年齡內容", "僅顯示成人内容", "顯示所有内容")
+        entryValues = arrayOf("false", "true", "both")
+        setOnPreferenceChangeListener { _, _ ->
+            Toast.makeText(context, "重啟應用後生效", Toast.LENGTH_SHORT).show()
+            true
+        }
     },
 )
-
-val SharedPreferences.imageCdn: String
-    get() {
-        val imageCdn = IMAGE_CDN
-        var index = getString(IMAGE_CDN_PREF, "-1")!!.toInt()
-        if (index !in imageCdn.indices) {
-            index = Random.nextInt(0, imageCdn.size)
-            edit().putString(IMAGE_CDN_PREF, index.toString()).apply()
-        }
-        return "https://" + imageCdn[index]
-    }
-
-const val IMAGE_CDN_PREF = "IMAGE_CDN"
-val IMAGE_CDN get() = arrayOf("img.noy.asia", "img.noyteam.online", "img.457475.xyz")
