@@ -53,7 +53,7 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
+    override val domain = "procomic.net"
     override val baseUrl = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
@@ -73,7 +73,7 @@ class ProChan : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
+        .set("Origin", "baseUrl")
 
     private val rscHeaders = headersBuilder()
         .set("rsc", "1")
