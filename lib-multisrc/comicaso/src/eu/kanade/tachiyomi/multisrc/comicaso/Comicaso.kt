@@ -34,17 +34,14 @@ abstract class Comicaso(
 
     private var cachedMangaList: List<MangaDto>? = null
 
-    private fun getMangaList(): Observable<List<MangaDto>> = if (cachedMangaList != null) {
-        Observable.just(cachedMangaList!!)
-    } else {
-        client.newCall(GET("$baseUrl/wp-content/static/manga/index.json", headers))
+    private fun getMangaList(): Observable<List<MangaDto>> = cachedMangaList?.let { Observable.just(it) }
+        ?: client.newCall(GET("$baseUrl/wp-content/static/manga/index.json", headers))
             .asObservableSuccess()
             .map { response ->
                 response.parseAs<List<MangaDto>>().also {
                     cachedMangaList = it
                 }
             }
-    }
 
     // ============================== Popular ===============================
 
@@ -88,8 +85,8 @@ abstract class Comicaso(
             }
 
             if (url != null) {
-                val mangaUrl = "/" + url.substringAfter(baseUrl).removePrefix("/")
-                return fetchMangaDetails(SManga.create().apply { this.url = mangaUrl })
+                val mangaSlug = url.substringAfter("/komik/").substringBefore("/")
+                return fetchMangaDetails(SManga.create().apply { this.url = mangaSlug })
                     .map { MangasPage(listOf(it), false) }
             }
         }
@@ -137,17 +134,14 @@ abstract class Comicaso(
 
     // =========================== Manga Details ============================
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/komik/${manga.url}/"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removeSuffix("/").substringAfterLast("/")
-        return GET("$baseUrl/wp-content/static/manga/$slug.json", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/wp-content/static/manga/${manga.url}.json", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<MangaDetailDto>()
         return SManga.create().apply {
-            url = "/komik/${result.slug}/"
+            url = result.slug
             title = result.title
             thumbnail_url = result.thumbnail
             description = buildString {
@@ -174,8 +168,7 @@ abstract class Comicaso(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<MangaDetailDto>()
-        val mangaUrl = "/komik/${result.slug}/"
-        return result.chapters?.map { it.toSChapter(mangaUrl) }?.reversed() ?: emptyList()
+        return result.chapters?.map { it.toSChapter(result.slug) }?.reversed() ?: emptyList()
     }
 
     // =============================== Pages ================================
