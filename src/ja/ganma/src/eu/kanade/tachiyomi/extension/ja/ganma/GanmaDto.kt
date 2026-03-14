@@ -155,13 +155,13 @@ class SearchEdge(
 class MangaItemDto(
     private val alias: String,
     private val title: String,
-    private val todaysJacketImageURL: String?,
-    private val rectangleWithLogoImageURL: String?,
+    @SerialName("todaysJacketImageURL") private val todaysJacketImageUrl: String?,
+    @SerialName("rectangleWithLogoImageURL") private val rectangleWithLogoImageUrl: String?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = alias
         title = this@MangaItemDto.title
-        thumbnail_url = todaysJacketImageURL ?: rectangleWithLogoImageURL
+        thumbnail_url = todaysJacketImageUrl ?: rectangleWithLogoImageUrl
     }
 }
 
@@ -178,7 +178,7 @@ class Details(
     private val authorName: String?,
     private val description: String?,
     private val isFinished: Boolean?,
-    private val squareWithLogoImageURL: String?,
+    @SerialName("squareWithLogoImageURL") private val squareWithLogoImageUrl: String?,
     private val rectangleWithLogoImageURL: String?,
     private val magazineTags: List<Tags>?,
     val isWebOnlySensitive: Boolean?,
@@ -189,7 +189,7 @@ class Details(
         description = this@Details.description
         genre = magazineTags?.joinToString { it.name }
         status = if (isFinished == true) SManga.COMPLETED else SManga.ONGOING
-        thumbnail_url = squareWithLogoImageURL ?: rectangleWithLogoImageURL
+        thumbnail_url = squareWithLogoImageUrl ?: rectangleWithLogoImageURL
     }
 }
 
@@ -275,11 +275,11 @@ class ViewerInfo(
 @Serializable
 class ViewerImages(
     val pageCount: Int,
-    val pageImageBaseURL: String,
+    @SerialName("pageImageBaseURL") val pageImageBaseUrl: String,
     val pageImageSign: String,
 )
 
 @Serializable
 class Afterword(
-    val imageUrl: String?,
+    @SerialName("imageURL") val imageUrl: String?,
 )

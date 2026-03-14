@@ -151,7 +151,7 @@ class Ganma :
         val sign = pageImages.pageImageSign
         return buildList {
             (1..pageImages.pageCount).mapTo(this) { i ->
-                val url = "${pageImages.pageImageBaseURL}$i.jpg".toHttpUrl().newBuilder()
+                val url = "${pageImages.pageImageBaseUrl}$i.jpg".toHttpUrl().newBuilder()
                     .encodedQuery(sign)
                     .setQueryParameter("w", "4999")
                     .build()
