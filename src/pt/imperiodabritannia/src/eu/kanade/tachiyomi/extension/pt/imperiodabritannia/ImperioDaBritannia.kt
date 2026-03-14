@@ -33,7 +33,7 @@ class ImperioDaBritannia : HttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/obras?pagina=$page&limite=24", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl?pagina=$page&limite=24", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<Pageable>()
@@ -43,7 +43,7 @@ class ImperioDaBritannia : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/obras/recentes?pagina=$page&limite=20", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/recentes?pagina=$page&limite=20", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
