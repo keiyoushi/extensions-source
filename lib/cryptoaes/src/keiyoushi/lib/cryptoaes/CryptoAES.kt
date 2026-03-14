@@ -63,7 +63,7 @@ object CryptoAES {
      * @param keyBytes key as a bytearray
      * @param ivBytes iv as a bytearray
      */
-    private fun decryptAES(cipherTextBytes: ByteArray, keyBytes: ByteArray, ivBytes: ByteArray): String = try {
+    fun decryptAES(cipherTextBytes: ByteArray, keyBytes: ByteArray, ivBytes: ByteArray): String = try {
         val cipher = Cipher.getInstance(HASH_CIPHER)
         val keyS = SecretKeySpec(keyBytes, AES)
         cipher.init(Cipher.DECRYPT_MODE, keyS, IvParameterSpec(ivBytes))
