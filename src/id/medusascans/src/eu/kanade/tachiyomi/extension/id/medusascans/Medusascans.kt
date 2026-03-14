@@ -7,18 +7,4 @@ class Medusascans :
         "Medusascans",
         "https://medusascans.com",
         "id",
-        pageSize = 16,
-        excludedGenres = setOf(
-            "Crossdressing",
-            "Emperors Daughte",
-            "Fighting",
-            "Genderswap",
-            "Girls",
-            "Incest",
-            "Kids",
-            "Philosophical",
-            "Reverse Isekai",
-            "Sejarah",
-            "Superhero",
-        ),
     )

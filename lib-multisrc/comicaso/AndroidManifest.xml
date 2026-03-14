@@ -14,7 +14,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="${SOURCEHOST}"
-                    android:pathPattern="/v2/manga/..*"
+                    android:pathPattern="/komik/..*"
                     android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
