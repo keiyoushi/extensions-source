@@ -53,8 +53,7 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
-    override val baseUrl = "https://$domain"
+    override val baseUrl = "https://procomic.net"
     override val supportsLatest = true
     override val versionId = 5
 
