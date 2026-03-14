@@ -301,9 +301,10 @@ class Manhuarm(
             .add("Cache-Control", "no-cache")
             .build()
 
-        val script = document.select("script").find { it.data().contains("fetch-ocr.php") }?.data() ?: return pages
+        val scripts = document.select("script").joinToString("\n") { it.data() }
+        if (!scripts.contains("fetch-ocr.php")) return pages
 
-        val ocrUrl = extractOcrUrl(script) ?: return pages
+        val ocrUrl = extractOcrUrl(scripts) ?: return pages
 
         val dialog = try {
             val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()

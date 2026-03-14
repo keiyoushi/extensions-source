@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm
 
+import android.util.Base64
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.util.Base64
 
 class MachineTranslationsFactoryUtils
 
@@ -23,31 +23,41 @@ data class Language(
 )
 
 fun extractOcrUrl(script: String): String? {
-    val ocrData = OCR_DATA_REGEX.find(script)?.groupValues?.get(1)?.parseAs<JsonObject>() ?: return null
-    val baseUrl = ocrData.values.firstOrNull { it.jsonPrimitive.contentOrNull?.contains("fetch-ocr.php", ignoreCase = true) == true }?.jsonPrimitive?.content ?: return null
+    val cleanScript = script.replace("\\/", "/")
 
-    return try {
+    val ocrData = OCR_DATA_REGEX.find(cleanScript)?.groupValues?.get(1)?.let {
+        runCatching { it.parseAs<JsonObject>() }.getOrNull()
+    }
+
+    val vault = VAULT_REGEX.find(cleanScript)?.groupValues?.get(1)?.let { content ->
+        VAULT_ITEM_REGEX.findAll(content).map { it.groupValues[1].ifEmpty { it.groupValues[2] } }.toList()
+    } ?: emptyList()
+
+    val baseUrl = vault.find { it.contains("fetch-ocr.php", true) }
+        ?: ocrData?.values?.firstOrNull { it.jsonPrimitive.contentOrNull?.contains("fetch-ocr.php", true) == true }?.jsonPrimitive?.content
+        ?: return null
+
+    return runCatching {
         baseUrl.toHttpUrl().newBuilder().apply {
-            PARAM_REGEX.findAll(script).forEach { match ->
-                val paramName = match.groupValues[1]
-                val decode = match.groupValues[2].isNotBlank()
-                val dataKey = match.groupValues[3]
+            PARAM_REGEX.findAll(cleanScript).forEach { match ->
+                val (paramName, decodeMarker, dataKey) = match.destructured
+                val value = ocrData?.get(dataKey)?.jsonPrimitive?.contentOrNull
+                    ?: dataKey.toIntOrNull()?.let { vault.getOrNull(it) }
 
-                ocrData[dataKey]?.jsonPrimitive?.contentOrNull?.let { value ->
-                    addQueryParameter(paramName, if (decode) value.decodeBase64() else value)
+                value?.let {
+                    val decodedValue = if (decodeMarker.isNotBlank()) it.decodeBase64() else it
+                    addQueryParameter(paramName, decodedValue)
                 }
             }
         }.build().toString()
-    } catch (_: Exception) {
-        null
-    }
+    }.getOrNull()
 }
 
-private fun String.decodeBase64(): String = try {
-    String(Base64.getDecoder().decode(this))
-} catch (_: Exception) {
-    this
-}
+private fun String.decodeBase64(): String = runCatching {
+    String(Base64.decode(this, Base64.DEFAULT))
+}.getOrDefault(this)
 
 private val OCR_DATA_REGEX = Regex("""\w+\s*=\s*(\{[^{}]*fetch-ocr\.php[^{}]*\})""")
-private val PARAM_REGEX = Regex("""['"]?(\w+)['"]?\s*:\s*(atob\s*\(\s*)?\w+(?:\.|\[['"])(\w+)""")
+private val VAULT_REGEX = Regex("""\w+\s*=\s*(\[[^]]*fetch-ocr\.php[^]]*])""")
+private val VAULT_ITEM_REGEX = Regex("""['"](.*?)['"]|(\d+)""")
+private val PARAM_REGEX = Regex("""(?:append\(|['"]?)(\w{2,})['"]?\s*[:=,]\s*(atob\s*\()?\s*\w+(?:\.|\[['"]?)(\w+)""")
