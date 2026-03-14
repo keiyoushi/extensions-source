@@ -73,7 +73,7 @@ class NoyAcg :
             MangaDetailDto(status, book, chapters)
         }
     } catch (_: Exception) {
-        throw Exception("请在 WebView 中登录")
+        throw Exception("請在 WebView 中登入")
     } finally {
         close()
     }
@@ -81,13 +81,14 @@ class NoyAcg :
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        val body = FormBody.Builder().addEncoded("type", "day").addEncoded("page", page.toString())
+        val type = pref.getString(POPULAR_MANGAS_PREF, "day")!!
+        val body = FormBody.Builder().addEncoded("type", type).addEncoded("page", page.toString())
         return POST("$baseUrl/api/readLeaderboard#$page", headers, body.build())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<ListingPageDto>()
-        check(result.status == "ok") { throw Exception("请在 WebView 中登录") }
+        check(result.status == "ok") { throw Exception("請在 WebView 中登入") }
         val page = response.request.url.fragment!!.toInt()
         val mangas = result.info!!.map(MangaDto::toSManga)
         return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.len!!)
@@ -116,7 +117,7 @@ class NoyAcg :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchPageDto>()
-        check(result.status == "ok") { throw Exception("请在 WebView 中登录") }
+        check(result.status == "ok") { throw Exception("請在 WebView 中登入") }
         val page = response.request.url.fragment!!.toInt()
         val mangas = result.data!!.map(SearchMangaDto::toSManga)
         return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count!!)
@@ -130,7 +131,7 @@ class NoyAcg :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseMangaDetail()
-        check(manga.status == "ok") { throw Exception("请在 WebView 中登录") }
+        check(manga.status == "ok") { throw Exception("請在 WebView 中登入") }
         return SManga.create().apply {
             url = manga.book!!.id.toString()
             title = manga.book.name
@@ -149,30 +150,29 @@ class NoyAcg :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val manga = response.parseMangaDetail()
-        check(manga.status == "ok") { throw Exception("请在 WebView 中登录") }
+        check(manga.status == "ok") { throw Exception("請在 WebView 中登入") }
         val mangaId = response.request.url.pathSegments.last()
         return if (manga.chapters!!.isEmpty()) {
             listOf(
                 SChapter.create().apply {
-                    url = "$mangaId/0"
-                    name = "单章节"
-                    date_upload = manga.book!!.time * 1000
+                    url = mangaId
+                    name = "單章節（${manga.book!!.len}P）"
+                    date_upload = manga.book.time * 1000
                     chapter_number = 0F
-                    scanlator = "${manga.book.len}P"
                 },
             )
         } else {
-            manga.chapters.flatMap { category ->
+            manga.chapters.reversed().flatMap { category ->
                 category.second.map {
                     SChapter.create().apply {
                         url = "$mangaId/${it.id}"
-                        name = it.name
+                        name = "${it.name}（${it.count}P）"
                         date_upload = it.createdAt * 1000
                         // chapter_number = it.sort.toFloat()
-                        scanlator = "${category.first} • ${it.count}P"
+                        scanlator = category.first
                     }
                 }.reversed()
-            }.reversed()
+            }
         }
     }
 
@@ -181,7 +181,7 @@ class NoyAcg :
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val size = chapter.scanlator!!.substringAfter(" • ").substringBefore('P').toInt()
+        val size = chapter.name.substringAfterLast('（').substringBefore('P').toInt()
         return Observable.just(
             List(size) { Page(it, imageUrl = "https://img.noymanga.com/${chapter.url}/${it + 1}.webp") },
         )

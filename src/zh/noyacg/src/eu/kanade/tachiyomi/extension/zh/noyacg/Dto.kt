@@ -13,7 +13,7 @@ fun String.formatNames() = split(" ").joinToString { name ->
     name.split("-").joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
 }
 
-fun MangaDto.formatDescription() = "时间：${DATE_FORMAT.format(time * 1000)}\n" +
+fun MangaDto.formatDescription() = "時間：${DATE_FORMAT.format(time * 1000)}\n" +
     "评分：$rating\n" +
     "原作：${otag.formatNames()}\n" +
     "角色：${pname.formatNames()}" + (description.takeIf(CharSequence::isNotEmpty)?.let { "\n---\n$it" } ?: "")
@@ -95,7 +95,7 @@ data class SearchMangaDto(
         m.url = id.toString()
         m.title = name
         m.author = author.formatNames()
-        m.description = "时间：${DATE_FORMAT.format(time * 1000)}\n" +
+        m.description = "時間：${DATE_FORMAT.format(time * 1000)}\n" +
             "评分：$rating\n" +
             "原作：${otag.joinToString()}\n" +
             "角色：${pname.joinToString()}" + (description.takeIf(CharSequence::isNotEmpty)?.let { "\n---\n$it" } ?: "")
