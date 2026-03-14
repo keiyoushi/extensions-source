@@ -1,0 +1,10 @@
+ext {
+    extName = "Singmanga"
+    extClass = ".Singmanga"
+    baseUrl = "https://www.sing-manga.com"
+    overrideVersionCode = 0
+    isNsfw = false
+    themePkg = "mangathemesia"
+}
+
+apply from: "$rootDir/common.gradle"
