@@ -101,9 +101,8 @@ class ScansFR :
                     else -> {}
                 }
             }
-            if (showNsfw) addQueryParameter("nsfw", "true") else addQueryParameter("isNsfw", "false")
         }.build()
-        return GET(url, headers)
+        return GET("$url${nsfwQueryParam()}", headers)
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
