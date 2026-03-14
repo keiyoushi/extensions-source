@@ -53,7 +53,7 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
+    override val domain = "procomic.net"
     override val baseUrl = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
@@ -585,7 +585,7 @@ class ProChan : HttpSource() {
         .decode(data)
 
     private fun countViews(seriesId: String, chapterId: String? = null) {
-        val userAgent = headers["User-Agent"]!!
+        val userAgent = headers["Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"]!!
         val payload = ViewsDto(
             chapterId = chapterId?.toInt(),
             contentId = seriesId.toInt(),
