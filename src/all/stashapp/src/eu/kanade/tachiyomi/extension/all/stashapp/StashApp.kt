@@ -4,7 +4,9 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,18 +15,20 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.collections.mapNotNull
+import kotlin.collections.orEmpty
+import kotlin.time.Instant
 
 class StashApp :
     HttpSource(),
-    ConfigurableSource {
+    ConfigurableSource,
+    UnmeteredSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -35,224 +39,153 @@ class StashApp :
     override val supportsLatest = true
 
     override val baseUrl: String
-        get() = preferences.getString(BASE_URL_KEY, BASE_URL)!!.trim()
+        get() = preferences.getString(BASE_URL_KEY, BASE_URL_DEFAULT)!!.trim()
 
-    // https://github.com/stashapp/stash/blob/v0.30.1/pkg/sqlite/gallery.go#L773
-    private fun getBriefMangaRequest(page: Int, q: String, sort: String, direction: String): Request {
-        val variables = JSONObject()
-            .put(
-                "filter",
-                JSONObject()
-                    .put("q", q)
-                    .put("page", page)
-                    .put("per_page", BRIEF_MANGA_PER_PAGE)
-                    .put("sort", sort)
-                    .put("direction", direction),
-            )
-
-        val query = FIND_GALLERIES_QUERY.trimIndent()
-
-        val body = JSONObject()
-            .put("query", query)
-            .put("operationName", "FindGalleries")
-            .put("variables", variables)
-            .toString()
-            .toRequestBody("application/json; charset=utf-8".toMediaType())
-
-        return Request.Builder()
-            .url("$baseUrl/graphql")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Accept", "application/graphql-response+json, application/json")
-            .post(body)
+    private inline fun <reified T> graphQLRequest(query: String, operationName: String, variables: T): Request {
+        val headers = headersBuilder()
+            .add("Content-Type", "application/json")
+            .add("Accept", "application/graphql-response+json, application/json")
             .build()
+
+        val body = GraphQLRequest(
+            query = query.trimIndent(),
+            operationName = operationName,
+            variables = variables,
+        ).toJsonString().toRequestBody("application/json".toMediaType())
+
+        return POST("$baseUrl/graphql", headers, body)
     }
 
-    private fun parseBriefManga(response: Response): MangasPage {
-        val galleries = response.body.string()
-            .let(::JSONObject)
-            .optJSONObject("data")
-            ?.optJSONObject("findGalleries")
-            ?.optJSONArray("galleries")
+    /**
+     * @param sort https://github.com/stashapp/stash/blob/v0.30.1/pkg/sqlite/gallery.go#L773
+     */
+    private fun mangaBriefRequest(page: Int, q: String?, sort: String?, direction: SortDirectionEnum?): Request = graphQLRequest(
+        query = MANGA_BRIEF_QUERY,
+        operationName = "MangaBrief",
+        variables = MangaBriefVariables(
+            filter = FindFilterType(
+                q = q,
+                page = page,
+                perPage = MANGA_BRIEF_PER_PAGE,
+                sort = sort,
+                direction = direction,
+            ),
+        ),
+    )
+
+    private fun parseMangaBrief(response: Response): MangasPage {
+        val galleries = response.parseAs<GraphQLResponse<MangaBriefData>>()
+            .data
+            ?.findGalleries
+            ?.galleries
             ?: return MangasPage(emptyList(), false)
 
-        val mangas = buildList {
-            for (index in 0 until galleries.length()) {
-                val gallery = galleries.optJSONObject(index) ?: continue
-                val id = gallery.optString("id")
-                val title = gallery.optString("title").takeIf { it.isNotBlank() }
-                    ?: gallery.optJSONObject("folder")
-                        ?.optString("path")
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let(::pathLast)
-
-                if (id.isBlank() || title.isNullOrBlank()) continue
-
-                add(
-                    SManga.create().apply {
-                        url = toAbsoluteUrl("/galleries/$id")
-                        this.title = title
-                        thumbnail_url = gallery
-                            .optJSONObject("cover")
-                            ?.toThumbnailUrl()
-                    },
-                )
-            }
-        }
+        val mangas = galleries.mapNotNull { gallery -> gallery.toMangaBrief() }
 
         return MangasPage(
             mangas = mangas,
-            hasNextPage = galleries.length() >= BRIEF_MANGA_PER_PAGE && mangas.isNotEmpty(),
+            hasNextPage = mangas.size >= MANGA_BRIEF_PER_PAGE,
         )
     }
 
-    override fun popularMangaRequest(page: Int) = getBriefMangaRequest(page, "", "rating", "DESC")
-
-    override fun popularMangaParse(response: Response): MangasPage = parseBriefManga(response)
-
-    // TODO support getFilterList
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = getBriefMangaRequest(page, query, "path", "ASC")
-
-    override fun searchMangaParse(response: Response): MangasPage = parseBriefManga(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = getBriefMangaRequest(page, "", "updated_at", "DESC")
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseBriefManga(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val variables = JSONObject().put("id", urlLast(manga.url))
-
-        val body = JSONObject()
-            .put("query", FIND_GALLERY_QUERY1.trimIndent())
-            .put("operationName", "FindGallery")
-            .put("variables", variables)
-            .toString()
-            .toRequestBody("application/json; charset=utf-8".toMediaType())
-
-        return Request.Builder()
-            .url("$baseUrl/graphql")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Accept", "application/graphql-response+json, application/json")
-            .post(body)
-            .build()
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val gallery = response.body.string()
-            .let(::JSONObject)
-            .optJSONObject("data")
-            ?.optJSONObject("findGallery")
-            ?: return SManga.create()
-
-        val id = gallery.optString("id")
-        val title = gallery.optString("title").takeIf { it.isNotBlank() }
-            ?: gallery.optJSONObject("folder")
-                ?.optString("path")
-                ?.takeIf { it.isNotBlank() }
-                ?.let(::pathLast)
-            ?: id
-
-        val tags = gallery.optJSONArray("tags")
-            ?.let { array ->
-                buildList {
-                    for (index in 0 until array.length()) {
-                        val name = array.optJSONObject(index)?.optString("name").orEmpty()
-                        if (name.isNotBlank()) add(name)
-                    }
-                }
-            }
-            .orEmpty()
-            .joinToString(", ")
+    private fun Gallery.toMangaBrief(): SManga? {
+        val id = id?.takeIf(String::isNotBlank) ?: return null
 
         return SManga.create().apply {
             url = toAbsoluteUrl("/galleries/$id")
-            this.title = title
-            artist = gallery.optString("photographer").takeIf { it.isNotBlank() }
+            this.title = toTitle()
+            thumbnail_url = cover?.toThumbnailUrl()
+        }
+    }
+
+    override fun popularMangaRequest(page: Int) = mangaBriefRequest(page, null, "rating", SortDirectionEnum.DESC)
+
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaBrief(response)
+
+    // TODO support getFilterList
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = mangaBriefRequest(page, query, "path", SortDirectionEnum.ASC)
+
+    override fun searchMangaParse(response: Response): MangasPage = parseMangaBrief(response)
+
+    override fun latestUpdatesRequest(page: Int): Request = mangaBriefRequest(page, null, "updated_at", SortDirectionEnum.DESC)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaBrief(response)
+
+    override fun mangaDetailsRequest(manga: SManga): Request = graphQLRequest(
+        query = MANGA_DETAILS_QUERY,
+        operationName = "MangaDetails",
+        variables = MangaDetailsVariables(id = urlLast(manga.url)),
+    )
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val gallery = response.parseAs<GraphQLResponse<MangaDetailsData>>()
+            .data!!
+            .findGallery
+
+        return gallery.toMangaDetails()!!
+    }
+
+    private fun Gallery.toMangaDetails(): SManga? {
+        val id = id?.takeIf(String::isNotBlank) ?: return null
+
+        return SManga.create().apply {
+            url = toAbsoluteUrl("/galleries/$id")
+            title = toTitle()
+            artist = photographer?.takeIf(String::isNotBlank)
             author = artist
-            description = gallery.optString("details").takeIf { it.isNotBlank() }
-            genre = tags.takeIf { it.isNotBlank() }
+            description = details?.takeIf(String::isNotBlank)
+            genre = tags
+                .orEmpty()
+                .mapNotNull(Tag::name)
+                .filter(String::isNotBlank)
+                .joinToString(", ")
+                .takeIf(String::isNotBlank)
             status = SManga.UNKNOWN
-            thumbnail_url = gallery
-                .optJSONObject("cover")
-                ?.toThumbnailUrl()
+            thumbnail_url = cover?.toThumbnailUrl()
             update_strategy = UpdateStrategy.ALWAYS_UPDATE
             initialized = true
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val variables = JSONObject().put("id", urlLast(manga.url))
-
-        val body = JSONObject()
-            .put("query", FIND_GALLERY_QUERY2.trimIndent())
-            .put("operationName", "FindGallery")
-            .put("variables", variables)
-            .toString()
-            .toRequestBody("application/json; charset=utf-8".toMediaType())
-
-        return Request.Builder()
-            .url("$baseUrl/graphql")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Accept", "application/graphql-response+json, application/json")
-            .post(body)
-            .build()
-    }
+    override fun chapterListRequest(manga: SManga): Request = graphQLRequest(
+        query = CHAPTER_LIST_QUERY,
+        operationName = "ChapterList",
+        variables = ChapterListVariables(id = urlLast(manga.url)),
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val gallery = response.body.string()
-            .let(::JSONObject)
-            .optJSONObject("data")
-            ?.optJSONObject("findGallery")
+        val gallery = response.parseAs<GraphQLResponse<ChapterListData>>()
+            .data
+            ?.findGallery
             ?: return emptyList()
 
-        val id = gallery.optString("id")
-        val createdAt = gallery.optString("created_at").takeIf { it.isNotBlank() }
+        val id = gallery.id!!
 
         return listOf(
             SChapter.create().apply {
                 url = toAbsoluteUrl("/galleries/$id")
                 name = "Chapter"
-                date_upload = createdAt?.let(::parseIsoDatetimeMillis) ?: 0L
+                date_upload = gallery.createdAt?.takeIf(String::isNotBlank)?.let(::parseRFC3339Millis) ?: 0L
                 chapter_number = 1f
-                scanlator = gallery.optString("photographer").takeIf { it.isNotBlank() }
+                scanlator = gallery.photographer?.takeIf(String::isNotBlank)
             },
         )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val variables = JSONObject().put("id", urlLast(chapter.url).toInt())
-
-        val body = JSONObject()
-            .put("query", FIND_GALLERY_IMAGES_QUERY.trimIndent())
-            .put("operationName", "FindGallery")
-            .put("variables", variables)
-            .toString()
-            .toRequestBody("application/json; charset=utf-8".toMediaType())
-
-        return Request.Builder()
-            .url("$baseUrl/graphql")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Accept", "application/graphql-response+json, application/json")
-            .post(body)
-            .build()
-    }
+    override fun pageListRequest(chapter: SChapter): Request = graphQLRequest(
+        query = PAGE_LIST_QUERY,
+        operationName = "PageList",
+        variables = PageListVariables(id = urlLast(chapter.url).toInt()),
+    )
 
     override fun pageListParse(response: Response): List<Page> {
-        val images = response.body.string()
-            .let(::JSONObject)
-            .optJSONObject("data")
-            ?.optJSONObject("findImages")
-            ?.optJSONArray("images")
+        val images = response.parseAs<GraphQLResponse<PageListData>>()
+            .data
+            ?.findImages
+            ?.images
             ?: return emptyList()
 
-        return buildList {
-            for (index in 0 until images.length()) {
-                val imageId = images.optJSONObject(index)?.optString("id").orEmpty()
-                if (imageId.isBlank()) continue
-                val url = toAbsoluteUrl("/image/$imageId/image")
-
-                add(Page(index = size, url = url, imageUrl = url))
-            }
-        }
+        return images.mapIndexedNotNull { index, image -> image.toPage(index) }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -276,88 +209,12 @@ class StashApp :
             key = BASE_URL_KEY
             title = "Server URL"
             summary = "Example: http://localhost:9999"
-            setDefaultValue(BASE_URL)
+            setDefaultValue(BASE_URL_DEFAULT)
 
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putString("baseUrl", newValue as String).commit()
             }
         }.let(screen::addPreference)
-    }
-
-    companion object {
-        private const val BASE_URL_KEY = "base_url"
-        private const val BASE_URL = "http://localhost:9999"
-        private const val BRIEF_MANGA_PER_PAGE = 25
-        private const val FIND_GALLERIES_QUERY = """
-            query FindGalleries(${"$"}filter: FindFilterType) {
-                findGalleries(filter: ${"$"}filter) {
-                    galleries {
-                        id
-                        title
-                        folder {
-                            path
-                        }
-                        cover {
-                            paths {
-                                thumbnail
-                            }
-                            visual_files {
-                                __typename
-                            }
-                        }
-                    }
-                }
-            }
-        """
-        private const val FIND_GALLERY_QUERY1 = """
-            query FindGallery(${'$'}id: ID!) {
-                findGallery(id: ${'$'}id) {
-                      id
-                      title
-                      folder {
-                          path
-                      }
-                      photographer
-                      details
-                      tags {
-                          name
-                      }
-                      cover {
-                          paths {
-                              thumbnail
-                          }
-                          visual_files {
-                              __typename
-                          }
-                      }
-                }
-            }
-        """
-        private const val FIND_GALLERY_QUERY2 = """
-            query FindGallery(${'$'}id: ID!) {
-                findGallery(id: ${'$'}id) {
-                    id
-                    created_at
-                    photographer
-                }
-            }
-        """
-
-        private const val FIND_GALLERY_IMAGES_QUERY = """
-            query FindGallery(${'$'}id: Int!) {
-                findImages(
-                    filter: { per_page: -1, sort: "path" }
-                    image_filter: {
-                        galleries_filter: { id: { value: ${'$'}id, modifier: EQUALS } }
-                        files_filter: { image_file_filter: { format: { value: "", modifier: NOT_EQUALS } } }
-                    }
-                ) {
-                    images {
-                        id
-                    }
-                }
-            }
-        """
     }
 
     private fun toAbsoluteUrl(path: String): String = when {
@@ -374,39 +231,27 @@ class StashApp :
         .substringAfterLast('/')
         .substringAfterLast('\\')
 
-    // paths {
-    //     thumbnail
-    // }
-    // visual_files {
-    //     __typename
-    // }
-    private fun JSONObject.toThumbnailUrl(): String? {
-        val firstVisualFileType = optJSONArray("visual_files")
-            ?.optJSONObject(0)
-            ?.optString("__typename")
+    private fun parseRFC3339Millis(value: String): Long {
+        // ISO 8601 covers RFC3339
+        return Instant.parseOrNull(value)?.toEpochMilliseconds() ?: 0L
+    }
 
-        if (firstVisualFileType != "ImageFile") return null
+    private fun Gallery.toTitle(): String = title?.takeIf(String::isNotBlank)
+        ?: folder?.path?.takeIf(String::isNotBlank)?.let(::pathLast)
+        ?: "Untitled"
 
-        return optJSONObject("paths")
-            ?.optString("thumbnail")
+    private fun Image.toThumbnailUrl(): String? {
+        if (visualFiles.firstOrNull()?.isImage() != true) return null
+
+        return paths
+            ?.thumbnail
             ?.takeIf { it.isNotBlank() }
-            ?.let(::toAbsoluteUrl)
     }
 
-    private fun parseIsoDatetimeMillis(value: String): Long {
-        val formats = listOf(
-            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
-            "yyyy-MM-dd'T'HH:mm:ssXXX",
-            "yyyy-MM-dd'T'HH:mm:ss'Z'",
-        )
-        for (pattern in formats) {
-            val parsed = runCatching {
-                SimpleDateFormat(pattern, Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }.parse(value)?.time
-            }.getOrNull()
-            if (parsed != null) return parsed
-        }
-        return 0L
+    private fun Image.toPage(index: Int): Page? {
+        val id = id?.takeIf(String::isNotBlank) ?: return null
+        return Page(index = index, url = toAbsoluteUrl("/images/$id"), imageUrl = toAbsoluteUrl("/image/$id/image"))
     }
+
+    private fun VisualFile.isImage(): Boolean = __typename == "ImageFile"
 }
