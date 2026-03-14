@@ -6,3 +6,5 @@ ext {
     isNsfw = "false"
     themePkg = "mangathemesia"
 }
+
+apply from: "$rootDir/common.gradle"
