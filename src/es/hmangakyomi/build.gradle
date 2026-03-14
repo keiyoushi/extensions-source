@@ -1,0 +1,10 @@
+ext {
+    extName = "Hmangakyomi"
+    extClass = ".Hmangakyomi"
+    themePkg = "mangathemesia"
+    baseUrl = "https://hmangakyomi.online"
+    overrideVersionCode = 0
+    isNsfw = "true"
+}
+
+apply from: "$rootDir/common.gradle"
