@@ -62,7 +62,7 @@ class ImperioDaBritannia : HttpSource() {
 
     // Details
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/")
@@ -82,7 +82,7 @@ class ImperioDaBritannia : HttpSource() {
 
     // Chapters
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
