@@ -15,12 +15,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.lib.synchrony.Deobfuscator
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -44,13 +41,7 @@ class SakuraMangas :
 
     override val baseUrl = "https://sakuramangas.org"
 
-    private val preferences = getPreferences()
-
     override val client = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(3, 2)
         .build()
 
@@ -70,11 +61,7 @@ class SakuraMangas :
         .set("X-Requested-With", "XMLHttpRequest")
         .set("Connection", "keep-alive")
         .set("Cache-Control", "no-cache")
-        .apply {
-            if (!preferences.getPrefCustomUA().isNullOrEmpty()) {
-                set("User-Agent", preferences.getPrefCustomUA()!!)
-            }
-        }
+        .setRandomUserAgent()
 
     // ================================ Popular =======================================
 
@@ -453,6 +440,6 @@ class SakuraMangas :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 }

@@ -29,10 +29,11 @@ class BuonDua : ParsedHttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
-        .setRandomUserAgent(UserAgentType.MOBILE)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .setRandomUserAgent(UserAgentType.MOBILE)
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -69,6 +70,8 @@ class BuonDua : ParsedHttpSource() {
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga {

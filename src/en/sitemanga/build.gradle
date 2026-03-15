@@ -3,7 +3,7 @@ ext {
     extClass = '.SiteManga'
     themePkg = 'madara'
     baseUrl = 'https://sitemanga.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

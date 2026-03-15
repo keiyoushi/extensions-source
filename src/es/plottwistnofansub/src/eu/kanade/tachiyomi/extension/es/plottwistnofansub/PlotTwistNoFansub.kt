@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.plottwistnofansub
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -14,15 +13,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -48,22 +42,17 @@ class PlotTwistNoFansub :
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences = getPreferences()
-
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .setRandomUserAgent()
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -134,6 +123,8 @@ class PlotTwistNoFansub :
             }
         }
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()

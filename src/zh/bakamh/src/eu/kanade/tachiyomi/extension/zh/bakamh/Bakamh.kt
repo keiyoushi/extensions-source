@@ -29,13 +29,13 @@ class Bakamh :
     override val baseUrl by lazy { preferences.baseUrl() }
 
     override val client = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(UserAgentType.MOBILE)
         .addInterceptor(UserAgentClientHintsInterceptor())
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
         .add("Referer", "$baseUrl/")
+        .setRandomUserAgent(UserAgentType.MOBILE)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         BakamhPreferences.buildPreferences(screen.context)
