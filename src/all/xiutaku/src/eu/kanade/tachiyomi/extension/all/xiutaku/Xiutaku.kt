@@ -76,6 +76,8 @@ class Xiutaku : ParsedHttpSource() {
             ?.select(".tags > .tag")?.joinToString { it.text().removePrefix("#") }
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> {

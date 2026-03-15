@@ -59,7 +59,7 @@ open class NHentai(
 
     override fun headersBuilder() = super.headersBuilder()
         .setRandomUserAgent(
-            filterInclude = listOf("chrome")
+            filterInclude = listOf("chrome"),
         )
 
     private var displayFullTitle: Boolean = when (preferences.getString(TITLE_PREF, "full")) {

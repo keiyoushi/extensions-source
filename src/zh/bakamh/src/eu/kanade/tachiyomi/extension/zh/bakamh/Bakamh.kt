@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.extension.zh.bakamh.BakamhPreferences.preferenceMigra
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
@@ -36,6 +37,8 @@ class Bakamh :
         .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
         .add("Referer", "$baseUrl/")
         .setRandomUserAgent(UserAgentType.MOBILE)
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         BakamhPreferences.buildPreferences(screen.context)

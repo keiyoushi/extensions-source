@@ -7,11 +7,10 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
-import keiyoushi.lib.randomua.PREF_KEY_RANDOM_UA
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
@@ -60,6 +59,8 @@ class MangaStop :
         .set("Sec-Fetch-User", "?1")
         .set("Upgrade-Insecure-Requests", "1")
         .setRandomUserAgent()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)

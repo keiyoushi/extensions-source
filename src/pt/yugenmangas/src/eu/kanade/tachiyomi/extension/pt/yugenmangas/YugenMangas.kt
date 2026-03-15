@@ -48,7 +48,7 @@ class YugenMangas :
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy ()
+    private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)

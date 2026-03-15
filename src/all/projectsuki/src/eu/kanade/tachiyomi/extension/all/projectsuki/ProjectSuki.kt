@@ -579,6 +579,8 @@ class ProjectSuki :
         }
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     /**
      * Handles the [Response] given by [chapterListRequest]'s [Request].
      * [HttpSource]'s inheritors will have a default [chapterListRequest] that asks for:
