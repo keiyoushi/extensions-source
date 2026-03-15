@@ -1,0 +1,10 @@
+ext {
+    extName = 'Orca Manga'
+    extClass = '.Orcamanga'
+    overrideVersionCode = 0
+    isNsfw = false
+    themePkg = "zeistmanga"
+    baseUrl = "https://www.orcamanga.site"
+}
+
+apply from: "$rootDir/common.gradle"
