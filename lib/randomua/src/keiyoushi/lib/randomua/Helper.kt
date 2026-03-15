@@ -1,14 +1,32 @@
 package keiyoushi.lib.randomua
 
+import android.os.Looper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.await
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
+import okhttp3.CacheControl
+import okhttp3.brotli.BrotliInterceptor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 private var userAgent: String? = null
-private val client = Injekt.get<NetworkHelper>().client
+private val client = Injekt.get<NetworkHelper>().client.newBuilder()
+    .addNetworkInterceptor { chain ->
+        chain.proceed(chain.request()).newBuilder()
+            .header("Cache-Control", "max-age=${24 * 60 * 60}")
+            .removeHeader("Pragma")
+            .removeHeader("Expires")
+            .build()
+    }
+    .apply {
+        val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
+        if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
+    }
+    .build()
 
 internal fun getRandomUserAgent(
     userAgentType: UserAgentType,
@@ -17,7 +35,14 @@ internal fun getRandomUserAgent(
 ): String? {
     if (!userAgent.isNullOrEmpty()) return userAgent
 
-    val uaResponse = client.newCall(GET("https://keiyoushi.github.io/user-agents/user-agents.json")).execute()
+    // avoid network on main thread when webview screen accesses headers
+    val uaRequest = if (Looper.myLooper() == Looper.getMainLooper()) {
+        GET(UA_DB_URL, cache = CacheControl.FORCE_CACHE)
+    } else {
+        GET(UA_DB_URL)
+    }
+
+    val uaResponse = runBlocking(Dispatchers.IO) { client.newCall(uaRequest).await() }
 
     if (!uaResponse.isSuccessful) {
         uaResponse.close()
@@ -44,6 +69,8 @@ internal fun getRandomUserAgent(
         .randomOrNull()
         .also { userAgent = it }
 }
+
+private const val UA_DB_URL = "https://keiyoushi.github.io/user-agents/user-agents.json"
 
 enum class UserAgentType {
     MOBILE,
