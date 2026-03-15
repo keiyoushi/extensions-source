@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.mangatime
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,10 +9,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.tryParse
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.internal.closeQuietly
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -50,6 +57,18 @@ class MangaTime : HttpSource() {
         .addQueryParameter("input", input)
         .build()
 
+    private fun trackView(seriesId: String, chapterId: String) {
+        client.newCall(
+            POST(
+                trpcUrl("content.trackView", "").toString(),
+                headers,
+                ViewQuery(seriesId, chapterId).trpcJson().toRequestBody("application/json".toMediaType()),
+            ),
+        ).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) = response.closeQuietly()
+            override fun onFailure(call: Call, e: IOException) {}
+        })
+    }
     // Popular
 
     override fun popularMangaRequest(page: Int): Request = GET(trpcUrl("search.searchSeries", SearchDto(page, limit, "popularity", "desc").trpcJson()), headers)
@@ -136,6 +155,8 @@ class MangaTime : HttpSource() {
         val result = response.parseTrpcList<PagesDto>()
 
         if (!result.isUnlocked) throw Exception("Chapter is locked")
+
+        trackView(result.seriesId, result.id)
 
         return result.pages.mapIndexed { i, image ->
             Page(i, imageUrl = image.toImage())

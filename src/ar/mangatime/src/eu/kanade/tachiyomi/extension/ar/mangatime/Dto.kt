@@ -92,6 +92,8 @@ class TrpcDataPages(
 class PagesDto(
     val pages: List<String>,
     val isUnlocked: Boolean,
+    val id: String,
+    val seriesId: String,
 )
 
 // Trpc Request
@@ -125,13 +127,13 @@ class ChaptersQuery(
 )
 
 @Serializable
-class PagesTarget(
-    val targetType: String,
-    val targetId: String,
-)
-
-@Serializable
 class PagesQuery(
     val seriesSlug: String,
     val chapterNumber: Int,
+)
+
+@Serializable
+class ViewQuery(
+    val seriesId: String,
+    val chapterId: String,
 )
