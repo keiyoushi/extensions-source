@@ -1,0 +1,10 @@
+ext {
+    extName = "Amanga Planet"
+    extClass = ".AmangaPlanet"
+    baseUrl = "https://www.amangaplanet.com.tr"
+    themePkg = "mangathemesia"
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
