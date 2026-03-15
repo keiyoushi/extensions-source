@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bloom Scans'
+    extClass = '.Bloomscans'
+    themePkg = "mangathemesia"
+    overrideVersionCode = 0
+    baseUrl = "https://bloomscans.com"
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
