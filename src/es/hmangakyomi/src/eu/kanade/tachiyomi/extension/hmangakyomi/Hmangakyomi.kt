@@ -14,7 +14,6 @@ class Hmangakyomi :
         "Hmangakyomi",
         "https://hmangakyomi.online",
         "es",
-        mangaUrlDirectory = "/manga",
     ) {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::thumbnailInterceptor)

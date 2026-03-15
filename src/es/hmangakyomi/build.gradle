@@ -4,7 +4,7 @@ ext {
     themePkg = "mangathemesia"
     baseUrl = "https://hmangakyomi.online"
     overrideVersionCode = 0
-    isNsfw = "true"
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
