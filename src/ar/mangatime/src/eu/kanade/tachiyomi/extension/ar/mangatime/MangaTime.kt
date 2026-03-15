@@ -21,6 +21,7 @@ import okhttp3.internal.closeQuietly
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class MangaTime : HttpSource() {
     override val baseUrl = "https://mangatime.org"
@@ -32,6 +33,7 @@ class MangaTime : HttpSource() {
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
+        .apply { timeZone = TimeZone.getTimeZone("UTC") }
 
     private val limit: Int = 24
 
