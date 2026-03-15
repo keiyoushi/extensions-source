@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.manhwaxxl
 
+import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,8 +13,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,7 +24,9 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class ManhwaXXL : ParsedHttpSource() {
+class ManhwaXXL :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Manhwa XXL"
 
@@ -34,6 +40,8 @@ class ManhwaXXL : ParsedHttpSource() {
     override val versionId = 2
 
     private val json: Json by injectLazy()
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
@@ -115,10 +123,17 @@ class ManhwaXXL : ParsedHttpSource() {
         val jsonObject = json.decodeFromString<ChaptersHtmlDTO>(ajaxResponse.body.string())
         val chapterDoc = Jsoup.parse(jsonObject.data.html)
 
-        return chapterDoc.select(".comic-card a").map { elements ->
+        return chapterDoc.select(".comic-card").mapNotNull { element ->
+            val link = element.selectFirst("a") ?: return@mapNotNull null
+            val isVip = element.selectFirst(".fa-crown") != null
+
+            if (isVip && preferences.getBoolean(HIDE_VIP_PREF, false)) {
+                return@mapNotNull null
+            }
+
             SChapter.create().apply {
-                setUrlWithoutDomain(elements.absUrl("href"))
-                name = elements.attr("title")
+                setUrlWithoutDomain(link.absUrl("href"))
+                name = (if (isVip) "🔒 " else "") + link.attr("title")
             }
         }
     }
@@ -137,6 +152,14 @@ class ManhwaXXL : ParsedHttpSource() {
         Filter.Header("Ignored if using text search"),
         GenreFilter(getGenreList()),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = HIDE_VIP_PREF
+            title = "Hide VIP chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
     private data class Genre(val name: String, val id: String) {
         override fun toString() = name
@@ -163,4 +186,8 @@ class ManhwaXXL : ParsedHttpSource() {
         Genre("Uncensore", "uncensore"),
         Genre("Webtoon", "webtoon"),
     )
+
+    companion object {
+        private const val HIDE_VIP_PREF = "hide_vip_chapters"
+    }
 }
