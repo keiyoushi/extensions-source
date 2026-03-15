@@ -54,15 +54,14 @@ class DFlowScans : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val info = document.selectFirst("div[style*=flex-wrap: wrap]")
         return SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
             thumbnail_url = document.selectFirst(".col-md-4.col-lg-3 img")?.absUrl("src")
             description = document.selectFirst(".col-md-8.col-lg-9 > p")?.text()
-            genre = document.select("span[style*=border-radius: 20px]")?.joinToString { it.text() }
-            author = info?.selectFirst("div:has(span:containsOwn(Author)) span + span")?.text()
-            artist = info?.selectFirst("div:has(span:containsOwn(Artist)) span + span")?.text()
-            status = when (info?.selectFirst("span[style*=primary-light]")?.text()) {
+            genre = document.select("div:has(> strong:containsOwn(Genres)) span")?.joinToString { it.text() }
+            author = document.selectFirst("div:has(> span:containsOwn(Author)) span + span")?.text()
+            artist = document.selectFirst("div:has(> span:containsOwn(Artist)) span + span")?.text()
+            status = when (document.selectFirst("div:has(> span:containsOwn(Status)) span + span")?.text()) {
                 "Ongoing" -> SManga.ONGOING
                 "Completed" -> SManga.COMPLETED
                 "Hiatus" -> SManga.ON_HIATUS
