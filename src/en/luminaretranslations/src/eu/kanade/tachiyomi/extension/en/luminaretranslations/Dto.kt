@@ -88,7 +88,7 @@ class ChapterResponse(
 
 @Serializable
 class ChapterData(
-    @SerialName("title") private val title: String?,
+    private val title: String?,
     @SerialName("chapter_number") private val chapterNumber: Float,
     private val slug: String,
 ) {

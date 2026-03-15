@@ -136,7 +136,7 @@ class LuminareTranslations : HttpSource() {
         } else {
             FilterList(
                 Filter.Header("Note: Search and active filters are applied together"),
-                SortFilter(data.sorts),
+                SortFilter(data.sorts.map { if (it.slug == "Terbaru") Filters(it.name, "Latest") else it }),
                 TypeFilter(data.types.filter { it.name !in EXCLUDED_TYPES }),
                 StatusFilter(data.statuses),
                 Filter.Separator(),
