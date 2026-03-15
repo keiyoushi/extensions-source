@@ -1,0 +1,10 @@
+ext {
+    extName = '9hentai MTL'
+    extClass = '.Ninehentaimtl'
+    overrideVersionCode = 0
+    themePkg = 'madara'
+    baseUrl ="https://9hentai.lol"
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
