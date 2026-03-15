@@ -43,7 +43,7 @@ class Ganma :
         .add("X-From", "$baseUrl/web")
 
     // Popular
-    override fun popularMangaRequest(page: Int) = graphQlRequest("home", HASH_HOME, EmptyVariables)
+    override fun popularMangaRequest(page: Int) = graphQLRequest("home", HASH_HOME, EmptyVariables)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<GraphQLResponse<HomeDto>>()
@@ -55,7 +55,7 @@ class Ganma :
     override fun latestUpdatesRequest(page: Int): Request {
         if (page == 1) lastCursor = null
         val today = getLatestDay()
-        return graphQlRequest("serialMagazinesByDayOfWeek", HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK, DayOfWeekVariables(today, lastCursor))
+        return graphQLRequest("serialMagazinesByDayOfWeek", HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK, DayOfWeekVariables(today, lastCursor))
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -70,7 +70,7 @@ class Ganma :
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (page == 1) lastCursor = null
         if (query.isNotBlank()) {
-            return graphQlRequest(
+            return graphQLRequest(
                 "magazinesByKeywordSearch",
                 HASH_MAGAZINES_BY_KEYWORD_SEARCH,
                 SearchVariables(query, lastCursor),
@@ -80,9 +80,9 @@ class Ganma :
 
         val categoryFilter = filters.firstInstance<CategoryFilter>()
         return if (categoryFilter.value == "finished") {
-            graphQlRequest("finishedMagazines", HASH_FINISHED_MAGAZINES, FinishedVariables(lastCursor)).newBuilder().tag("finished").build()
+            graphQLRequest("finishedMagazines", HASH_FINISHED_MAGAZINES, FinishedVariables(lastCursor)).newBuilder().tag("finished").build()
         } else {
-            graphQlRequest("serialMagazinesByDayOfWeek", HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK, DayOfWeekVariables(categoryFilter.value, lastCursor))
+            graphQLRequest("serialMagazinesByDayOfWeek", HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK, DayOfWeekVariables(categoryFilter.value, lastCursor))
         }
     }
 
@@ -109,7 +109,7 @@ class Ganma :
     // Details
     override fun getMangaUrl(manga: SManga) = "$baseUrl/web/magazine/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga) = graphQlRequest("magazineDetail", HASH_MAGAZINE_DETAIL, MagazineDetailVariables(manga.url))
+    override fun mangaDetailsRequest(manga: SManga) = graphQLRequest("magazineDetail", HASH_MAGAZINE_DETAIL, MagazineDetailVariables(manga.url))
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<GraphQLResponse<DetailsResponse>>().data.magazine
@@ -118,11 +118,7 @@ class Ganma :
     }
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request = graphQlRequest(
-        "storyInfoList",
-        HASH_STORY_INFO_LIST,
-        ChapterListVariables(manga.url, 9999, null),
-    ).newBuilder().tag(manga.url).build()
+    override fun chapterListRequest(manga: SManga): Request = graphQLRequest("storyInfoList", HASH_STORY_INFO_LIST, ChapterListVariables(manga.url, 9999, null)).newBuilder().tag(manga.url).build()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slug = response.request.tag().toString()
@@ -138,7 +134,7 @@ class Ganma :
     // Viewer
     override fun pageListRequest(chapter: SChapter): Request {
         val (alias, storyId) = "$baseUrl#${chapter.url}".toHttpUrl().fragment!!.split("/")
-        return graphQlRequest("magazineStoryForReader", HASH_MAGAZINE_STORY_FOR_READER, ViewerVariables(alias, storyId), alias !in webOnlyAliases)
+        return graphQLRequest("magazineStoryForReader", HASH_MAGAZINE_STORY_FOR_READER, ViewerVariables(alias, storyId), alias !in webOnlyAliases)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -170,7 +166,7 @@ class Ganma :
 
     override fun getFilterList() = FilterList(CategoryFilter())
 
-    private inline fun <reified T> graphQlRequest(operationName: String, hash: String, variables: T, useAppHeaders: Boolean = false): Request {
+    private inline fun <reified T> graphQLRequest(operationName: String, hash: String, variables: T, useAppHeaders: Boolean = false): Request {
         val headers = headersBuilder()
             .set(
                 "User-Agent",
