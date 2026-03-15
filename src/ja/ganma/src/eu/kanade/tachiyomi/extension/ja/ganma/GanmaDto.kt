@@ -1,11 +1,16 @@
 package eu.kanade.tachiyomi.extension.ja.ganma
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class GraphQLResponse<T>(val data: T)
+class GraphQLResponse<T>(
+    val data: T,
+)
 
+@Suppress("unused")
 @Serializable
 class Payload<T>(
     val operationName: String,
@@ -24,94 +29,72 @@ class Payload<T>(
     }
 }
 
+// Variables
 @Serializable
 object EmptyVariables
 
+@Suppress("unused")
 @Serializable
 class SearchVariables(
     val keyword: String,
-    val first: Int,
-    val after: String? = null,
+    val after: String?,
 )
 
+@Suppress("unused")
 @Serializable
 class DayOfWeekVariables(
     val dayOfWeek: String,
-    val first: Int,
-    val after: String? = null,
+    val after: String?,
 )
 
+@Suppress("unused")
 @Serializable
 class FinishedVariables(
-    val first: Int,
-    val after: String? = null,
+    val after: String?,
 )
 
+@Suppress("unused")
 @Serializable
 class MagazineDetailVariables(
     val magazineIdOrAlias: String,
 )
 
+@Suppress("unused")
 @Serializable
-class StoryInfoListVariables(
+class ChapterListVariables(
     val magazineIdOrAlias: String,
     val first: Int,
-    val after: String? = null,
+    val after: String?,
 )
 
+@Suppress("unused")
 @Serializable
-class StoryReaderVariables(
+class ViewerVariables(
     val magazineIdOrAlias: String,
     val storyId: String,
 )
 
+// Cursor
 @Serializable
-class MangaItemDto(
-    val alias: String,
-    val title: String,
-    val todaysJacketImageURL: String? = null,
-    val rectangleWithLogoImageURL: String? = null,
+class PageInfo(
+    val hasNextPage: Boolean,
+    val endCursor: String?,
 )
 
+// Popular
 @Serializable
 class HomeDto(
-    val ranking: Ranking,
-    val latestTotalRanking10: List<MangaItemDto>,
+    val ranking: RankingDto,
 )
 
 @Serializable
-class Ranking(
+class RankingDto(
     val totalRanking: List<MangaItemDto>,
 )
 
+// Latest
 @Serializable
-class SearchEdge(
-    val node: MangaItemDto?,
-)
-
-@Serializable
-class StoryInfoMagazine(
-    val magazine: MangaItemDto,
-)
-
-@Serializable
-class FinishedEdge(
-    val node: MangaItemDto,
-)
-
-@Serializable
-class SearchDto(
-    val searchComic: SearchResult,
-)
-
-@Serializable
-class SearchResult(
-    val edges: List<SearchEdge>,
-    val pageInfo: PageInfo,
-)
-
-@Serializable
-class SerialResponseDto(
+class LatestResponse(
     val serialPerDayOfWeek: SerialPanel,
 )
 
@@ -133,115 +116,170 @@ class SerialEdge(
 
 @Serializable
 class SerialNode(
-    val storyInfo: StoryInfoMagazine,
+    val storyInfo: StoryInfoRef,
+)
+
+@Serializable
+class StoryInfoRef(
+    val magazine: MangaItemDto,
 )
 
 @Serializable
 class FinishedResponseDto(
-    val magazinesByCategory: FinishedCategory,
+    val magazinesByCategory: FinishedCategoryDto,
 )
 
 @Serializable
-class FinishedCategory(
-    val magazines: FinishedConnection,
+class FinishedCategoryDto(
+    val magazines: SearchConnection,
+)
+
+// Search
+@Serializable
+class SearchResponse(
+    val searchComic: SearchConnection,
 )
 
 @Serializable
-class FinishedConnection(
-    val edges: List<FinishedEdge>,
+class SearchConnection(
+    val edges: List<SearchEdge>,
     val pageInfo: PageInfo,
 )
 
 @Serializable
-class MagazineDetailDto(
-    val magazine: MagazineDetail,
+class SearchEdge(
+    val node: MangaItemDto,
 )
 
 @Serializable
-class MagazineDetail(
-    val title: String,
+class MangaItemDto(
+    private val alias: String,
+    private val title: String,
+    @SerialName("todaysJacketImageURL") private val todaysJacketImageUrl: String?,
+    @SerialName("rectangleWithLogoImageURL") private val rectangleWithLogoImageUrl: String?,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = alias
+        title = this@MangaItemDto.title
+        thumbnail_url = todaysJacketImageUrl ?: rectangleWithLogoImageUrl
+    }
+}
+
+// Details
+@Serializable
+class DetailsResponse(
+    val magazine: Details,
+)
+
+@Serializable
+class Details(
     val alias: String,
-    val authorName: String? = null,
-    val description: String,
-    val isFinished: Boolean,
-    val todaysJacketImageURL: String? = null,
+    private val title: String,
+    private val authorName: String?,
+    private val description: String?,
+    private val isFinished: Boolean?,
+    @SerialName("squareWithLogoImageURL") private val squareWithLogoImageUrl: String?,
+    private val rectangleWithLogoImageURL: String?,
+    private val magazineTags: List<Tags>?,
+    val isWebOnlySensitive: Boolean?,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = this@Details.title
+        author = authorName
+        description = this@Details.description
+        genre = magazineTags?.joinToString { it.name }
+        status = if (isFinished == true) SManga.COMPLETED else SManga.ONGOING
+        thumbnail_url = squareWithLogoImageUrl ?: rectangleWithLogoImageURL
+    }
+}
+
+@Serializable
+class Tags(
+    val name: String,
+)
+
+// Chapters
+@Serializable
+class ChapterResponse(
+    val magazine: ChapterInfos,
 )
 
 @Serializable
-class ChapterListDto(
-    val magazine: MagazineWithChapters,
+class ChapterInfos(
+    val storyInfos: ChapterEdge,
 )
 
 @Serializable
-class MagazineWithChapters(
-    val storyInfos: StoryInfoConnection,
-)
-
-@Serializable
-class StoryInfoConnection(
+class ChapterEdge(
     val edges: List<StoryInfoEdge>,
-    val pageInfo: PageInfo,
 )
 
 @Serializable
 class StoryInfoEdge(
-    val node: StoryInfoNode,
+    val node: Chapters,
 )
 
 @Serializable
-class StoryInfoNode(
-    val storyId: String,
-    val title: String,
-    val subtitle: String? = null,
-    val contentsRelease: Long,
-    val isPurchased: Boolean,
-    val contentsAccessCondition: ContentsAccessCondition,
-    val isSellByStory: Boolean,
-)
+class Chapters(
+    private val storyId: String,
+    private val title: String,
+    private val subtitle: String?,
+    private val contentsRelease: Long,
+    private val isPurchased: Boolean?,
+    private val contentsAccessCondition: ContentsAccessCondition?,
+) {
+    val isLocked: Boolean
+        get() = isPurchased == false && (
+            (contentsAccessCondition?.typename != "FreeStoryContentsAccessCondition") ||
+                (contentsAccessCondition.info?.coins != null && contentsAccessCondition.info.coins != 0)
+            )
+
+    fun toSChapter(slug: String) = SChapter.create().apply {
+        val lock = if (isLocked) "\uD83E\uDE99 " else ""
+        val chapterName = if (!subtitle.isNullOrEmpty()) "$title $subtitle" else title
+        url = "$slug/$storyId"
+        name = lock + chapterName
+        date_upload = contentsRelease
+    }
+}
 
 @Serializable
 class ContentsAccessCondition(
-    @SerialName("__typename")
-    val typename: String,
-    val info: PurchaseInfo? = null,
+    @SerialName("__typename") val typename: String,
+    val info: PurchaseInfo?,
 )
 
 @Serializable
 class PurchaseInfo(
-    val coins: Int,
+    val coins: Int?,
+)
+
+// Viewer
+@Serializable
+class ViewerResponse(
+    val magazine: ViewerContent,
 )
 
 @Serializable
-class PageInfo(
-    val hasNextPage: Boolean,
-    val endCursor: String? = null,
+class ViewerContent(
+    val storyContents: ViewerInfo,
 )
 
 @Serializable
-class PageListDto(
-    val magazine: MagazinePages,
+class ViewerInfo(
+    val pageImages: ViewerImages?,
+    val error: String?,
+    val afterword: Afterword?,
 )
 
 @Serializable
-class MagazinePages(
-    val storyContents: StoryContents,
-)
-
-@Serializable
-class StoryContents(
-    val pageImages: PageImages? = null,
-    val error: String? = null,
-    val afterword: Afterword? = null,
-)
-
-@Serializable
-class PageImages(
+class ViewerImages(
     val pageCount: Int,
-    val pageImageBaseURL: String,
+    @SerialName("pageImageBaseURL") val pageImageBaseUrl: String,
     val pageImageSign: String,
 )
 
 @Serializable
 class Afterword(
-    val imageURL: String? = null,
+    @SerialName("imageURL") val imageUrl: String?,
 )
