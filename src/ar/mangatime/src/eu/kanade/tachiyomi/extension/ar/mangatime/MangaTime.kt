@@ -1,32 +1,19 @@
 package eu.kanade.tachiyomi.extension.ar.mangatime
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.nodes.Element
-import rx.Observable
-import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
-
-private val WHITESPACE_REGEX = "\\s+".toRegex()
-private val INVALID_CHARS_REGEX = "[^a-zA-Z0-9-]".toRegex()
 
 class MangaTime : HttpSource() {
     override val baseUrl = "https://mangatime.org"
@@ -35,138 +22,129 @@ class MangaTime : HttpSource() {
 
     override val lang = "ar"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
-    private val perPage: Int = 24
+    private val limit: Int = 24
 
-    private fun getPageRange(page: Int): String {
-        val start = (page - 1) * perPage
-        val end = page * perPage
-        return "$start/$end"
-    }
-
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-setbg-high") -> attr("abs:data-setbg-high")
-        hasAttr("data-setbg-low") -> attr("abs:data-setbg-low")
-        hasAttr("data-setbg") -> attr("abs:data-setbg-low")
-        hasAttr("data-src") -> attr("abs:data-src")
-        else -> attr("abs:src")
-    }
-
-    private fun replaceNameWithDash(inputString: String): String {
-        var replacedString = inputString.replace(WHITESPACE_REGEX, "-")
-        return replacedString.replace(INVALID_CHARS_REGEX, "")
-    }
-
-    private fun String?.toStatus() = when (this) {
-        "مستمرة" -> SManga.ONGOING
-        "قادم قريبًا" -> SManga.ONGOING
-        "مكتمل" -> SManga.COMPLETED
-        "متوقف" -> SManga.ON_HIATUS
+    private fun String?.toStatus() = when (this?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
-    private fun addView(seriesId: String) {
-        val body = """{"id":"$seriesId"}""".toRequestBody("application/json".toMediaType())
-        client.newCall(POST("$baseUrl/add_view", headers, body))
+    private fun String.toImage(): String {
+        val t = this.replace(" ", "%20")
+        return when {
+            this.startsWith("http") -> t
+            else -> "$baseUrl$t"
+        }
     }
+
+    private fun trpcUrl(endpoint: String, input: String): HttpUrl = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegments("api/trpc/$endpoint")
+        .addQueryParameter("batch", "1")
+        .addQueryParameter("input", input)
+        .build()
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/releases/${getPageRange(page)}/Newest/")
+    override fun popularMangaRequest(page: Int): Request = GET(trpcUrl("search.searchSeries", SearchDto(page, limit, "popularity", "desc").trpcJson()), headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val result = response.parseTrpcList<MangaListData>()
 
-        val entries = document.select("a.manga-link").map { el ->
+        val entries = result.results.map {
             SManga.create().apply {
-                title = el.attr("manganame")
-                url = "/manga/${replaceNameWithDash(title)}/"
-                thumbnail_url = el.selectFirst("div[itemprop]")?.imgAttr()
+                title = it.title
+                thumbnail_url = it.coverUrl.toImage()
+                url = "/${it.type}/${it.slug}#${it.id}"
             }
         }
 
-        val hasNextPage = document.selectFirst(".current-page + #next-page") == null
-
-        return MangasPage(entries, hasNextPage)
+        return MangasPage(entries, result.hasMore)
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = GET(trpcUrl("search.searchSeries", SearchDto(page, limit, "recent", "desc").trpcJson()), headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .build()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(trpcUrl("search.searchSeries", SearchDto(page, limit, "popularity", "desc", query).trpcJson()), headers)
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response) = MangasPage(popularMangaParse(response).mangas, false)
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Details
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val seriesSlug = getMangaUrl(manga).toHttpUrl().pathSegments[1]
+        return GET(trpcUrl("content.getSeriesBySlug", SeriesSlug(seriesSlug).trpcJson()), headers)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val detailsElement = response.asJsoup().selectFirst("div.anime__details__text")!!
-        title = detailsElement.selectFirst("h3")!!.text()
-        description = detailsElement.select("p").text()
-        thumbnail_url = detailsElement.selectFirst("div.set-bg")?.imgAttr()
-        status = detailsElement.selectFirst("li:contains(الحالة)")?.ownText().toStatus()
-        genre = detailsElement.selectFirst("li:contains(التصنيفات)")?.ownText()?.replace("\u060c", ",") // Arabic comma
+        val manga = response.parseTrpcList<SeriesDto>()
+
+        title = manga.title
+        thumbnail_url = manga.coverUrl.toImage()
+        description = manga.description
+        status = manga.status.toStatus()
+        genre = ((manga.genres ?: emptyList()).map { it.name } + manga.type)
+            .filter { it.isNotBlank() }.joinToString().replace("\u060c", ",") // Arabic comma
     }
 
     // Chapters
 
+    override fun chapterListRequest(manga: SManga): Request {
+        val seriesId = manga.url.substringAfterLast("#")
+        return GET(trpcUrl("content.getChapters", ChaptersQuery(seriesId, -1).trpcJson()), headers)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val src = response.asJsoup().selectFirst("script:containsData(chapters = [)")!!.data()
-        val chapters = src.substringAfter("chapters = ")
-            .substringBefore(";")
-            .parseAs<List<ChapterDto>>()
+        val result = response.parseTrpcList<ChaptersDto>()
 
-        val seriesId = src.substringAfter("id: \"").substringBefore("\"")
-
-        addView(seriesId)
-
-        return chapters.map { chapter ->
+        return result.chapters.map {
             SChapter.create().apply {
-                chapter_number = chapter.order.toFloat()
-                name = chapter.name
-                setUrlWithoutDomain("${response.request.url}chapter-${chapter.order}/#$seriesId#${chapter.pages.toJsonString()}")
-                date_upload = dateFormat.tryParse(chapter.uploadTime)
+                chapter_number = it.number.toFloat()
+                name = it.title
+                setUrlWithoutDomain("/chapter/${it.number}")
+                date_upload = dateFormat.tryParse(it.publishedAt)
             }
         }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
     // Pages
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val (seriesId, pagesId) = chapter.url.toHttpUrl().fragment!!.split("#", limit = 2)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = getChapterUrl(chapter).toHttpUrl()
+        val seriesSlug = chapterUrl.pathSegments[1]
+        val chapterNumber = chapterUrl.pathSegments[3].toInt()
 
-        addView(seriesId)
-
-        return Observable.just(
-            pagesId.mapIndexed { index, id ->
-                Page(index, imageUrl = "$baseUrl/get_image/$id")
-            },
-        )
+        return GET(trpcUrl("content.getChapterPages", PagesQuery(seriesSlug, chapterNumber).trpcJson()), headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseTrpcList<PagesDto>()
+
+        if (!result.isUnlocked) throw Exception("Chapter is locked")
+
+        return result.pages.mapIndexed { i, image ->
+            Page(i, imageUrl = image.toImage())
+        }
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    @Serializable
-    class ChapterDto(
-        val name: String,
-        val order: Int,
-        @SerialName("upload_time") val uploadTime: String,
-        val pages: List<String>,
-    )
+    override fun prepareNewChapter(chapter: SChapter, manga: SManga) {
+        chapter.url = manga.url.substringBefore("#") + chapter.url
+    }
 }
