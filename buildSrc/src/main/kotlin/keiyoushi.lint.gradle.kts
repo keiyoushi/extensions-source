@@ -12,17 +12,7 @@ spotless {
             ))
         trimTrailingWhitespace()
         endWithNewline()
-
-        custom("randomua-requires-getMangaUrl-override") { fileContent ->
-            if ("keiyoushi.lib.randomua" in fileContent &&
-                "override fun getMangaUrl(" !in fileContent
-            ) {
-                throw AssertionError(
-                    "usage of :lib:randomua requires override of getMangaUrl()",
-                )
-            }
-            fileContent
-        }
+        addStep(RandomUaCheck.create())
     }
 
     java {

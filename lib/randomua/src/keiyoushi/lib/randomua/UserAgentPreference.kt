@@ -33,7 +33,7 @@ private fun SharedPreferences.getPrefCustomUA(): String? = getString(PREF_KEY_CU
  */
 context(source: HttpSource)
 fun Headers.Builder.setRandomUserAgent(
-    userAgentType: UserAgentType? =  null,
+    userAgentType: UserAgentType? = null,
     filterInclude: List<String> = emptyList(),
     filterExclude: List<String> = emptyList(),
 ) = apply {
