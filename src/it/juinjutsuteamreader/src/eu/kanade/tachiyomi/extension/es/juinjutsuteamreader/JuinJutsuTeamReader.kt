@@ -14,6 +14,8 @@ class JuinJutsuTeamReader : FoolSlide("Juin Jutsu Team Reader", "https://www.jui
 
     private val seenMangaUrls = mutableSetOf<String>()
 
+    private val numberOnlyRegex = Regex("""\d+""")
+
     private val chapterNumberRegex = Regex("""/(\d+(?:\.\d+)?)/(?:\d+/)?$""")
 
     override fun popularMangaRequest(page: Int): Request {
@@ -39,7 +41,7 @@ class JuinJutsuTeamReader : FoolSlide("Juin Jutsu Team Reader", "https://www.jui
     }
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).filter { chapter ->
-        !chapter.name.trim().matches(Regex("""\d+"""))
+        !chapter.name.trim().matches(numberOnlyRegex)
     }
 
     override fun chapterListRequest(manga: SManga): Request = super.chapterListRequest(manga).newBuilder()
