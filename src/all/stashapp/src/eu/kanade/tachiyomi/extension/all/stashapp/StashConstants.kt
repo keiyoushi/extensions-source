@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.stashapp
 
-const val BASE_URL_KEY = "base_url"
-const val BASE_URL_DEFAULT = "http://localhost:9999"
+const val PREF_BASE_URL = "base_url"
+
+const val DEFAULT_BASE_URL = "http://localhost:9999"
+
+const val PREF_API_KEY = "api_key"
+
 const val MANGA_BRIEF_PER_PAGE = 25
 
 const val MANGA_BRIEF_QUERY = $$"""
