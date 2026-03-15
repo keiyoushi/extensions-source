@@ -1,0 +1,10 @@
+ext {
+    extName = 'Turkmangaoku'
+    extClass = '.Turkmangaoku'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://turkmangaoku.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
