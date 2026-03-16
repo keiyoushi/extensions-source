@@ -267,11 +267,11 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             val content = script.html()
 
             // window.imageQueueData = { queue: [...], logo: "...", k2: "..." }
-            val k2Match = Regex(""""k2"\s*:\s*"([a-f0-9]+)"""").find(content) ?: continue
+            val k2Match = Regex("""\bk2\b\s*:\s*"([a-f0-9]+)"""").find(content) ?: continue
             val k2 = k2Match.groupValues[1]
 
             val queueMatch = Regex(
-                """"queue"\s*:\s*(\[[\s\S]*?\])\s*,\s*"logo"""",
+                """\bqueue\b\s*:\s*(\[[\s\S]*?\])\s*,\s*\blog\b""",
             ).find(content) ?: continue
             val queueStr = queueMatch.groupValues[1]
 
