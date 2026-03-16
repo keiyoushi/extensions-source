@@ -159,9 +159,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     // =========================== Manga Details ============================
-    // YAMA: Orijinal selector'lar (div.manga-meta-card, div.info-body h1 vb.)
-    // sitenin güncel HTML yapısıyla uyuşmuyordu.
-    // manga-berserk.html'den doğrulanan selector'larla güncellendi.
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
@@ -249,45 +246,88 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
-    override fun getImgAttr(element: Element?): String? = when {
-        element == null -> null
-        element.hasAttr("data-src") -> {
-            try {
-                val encodedUrl = element.attr("data-src")
-                val decodedBytes = Base64.decode(encodedUrl, Base64.DEFAULT)
-                String(decodedBytes, StandardCharsets.UTF_8)
-            } catch (e: Exception) {
-                null
-            }
-        }
-        element.hasAttr("data-original") -> element.absUrl("data-original")
-        else -> null
-    }
+    // getImgAttr artık kullanılmıyor, FMReader override zorunluluğu için null döndür
+    override fun getImgAttr(element: Element?): String? = null
 
+    // ============================== Pages ================================
+    // Site resim URL'lerini şifreli olarak saklıyor:
+    //   - HTML'deki <div id="chapter-images" data-k1="..."> → k1 anahtarı
+    //   - JS'deki window.imageQueueData.k2 → k2 anahtarı
+    //   - İki anahtar XOR'lanarak şifre çözme anahtarı elde ediliyor
+    //   - Her resim, birden fazla Base64 chunk'a bölünmüş hâlde queue'da duruyor
+    //   - Chunk'lar birleştirilip XOR anahtarıyla decode ediliyor → gerçek URL
+    //   - "FAKE_..." ile başlayan entry'ler sahte, atlanıyor
     override fun pageListParse(document: Document): List<Page> {
+        // k1: HTML div attribute'u
+        val k1 = document.selectFirst("div#chapter-images")
+            ?.attr("data-k1") ?: return emptyList()
+
         val scripts = document.select("script:not([src])")
         for (script in scripts) {
             val content = script.html()
+
+            // window.imageQueueData = { queue: [...], logo: "...", k2: "..." }
+            val k2Match = Regex(""""k2"\s*:\s*"([a-f0-9]+)"""").find(content) ?: continue
+            val k2 = k2Match.groupValues[1]
+
             val queueMatch = Regex(
-                """var\s+imageQueue\s*=\s*\[(.*?)\]""",
-                RegexOption.DOT_MATCHES_ALL,
+                """"queue"\s*:\s*(\[[\s\S]*?\])\s*,\s*"logo"""",
             ).find(content) ?: continue
+            val queueStr = queueMatch.groupValues[1]
 
-            val encodedUrls = queueMatch.groupValues[1]
-                .split(",")
-                .map { it.trim().removeSurrounding("\"") }
-                .filter { it.isNotEmpty() && it != "LOGO" }
+            // XOR anahtarını oluştur
+            val key = buildXorKey(k1, k2)
 
-            return encodedUrls.mapIndexedNotNull { index, encoded ->
-                try {
-                    val decoded = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
-                    Page(index, imageUrl = decoded)
-                } catch (e: Exception) {
-                    null
-                }
+            val pages = mutableListOf<Page>()
+            var idx = 0
+
+            // Her item: ["chunk1","chunk2",...] veya "FAKE_..." string'i
+            // Önce FAKE_ string'leri atla, array'leri işle
+            val itemRegex = Regex("""\[([^\[\]]+)\]""")
+            for (item in itemRegex.findAll(queueStr)) {
+                // Chunk'ları birleştir
+                val combined = Regex(""""([^"]+)"""")
+                    .findAll(item.groupValues[1])
+                    .joinToString("") { it.groupValues[1] }
+
+                // FAKE içeriyorsa atla
+                if (combined.contains("FAKE")) continue
+
+                val url = xorDecodeUrl(combined, key) ?: continue
+                pages.add(Page(idx++, imageUrl = url))
             }
+
+            if (pages.isNotEmpty()) return pages
         }
+
         return emptyList()
+    }
+
+    // k1 ve k2 hex string'lerini byte dizisine çevir, XOR'la
+    private fun buildXorKey(k1: String, k2: String): ByteArray {
+        val b1 = k1.chunked(2).mapNotNull { it.toIntOrNull(16)?.toByte() }
+        val b2 = k2.chunked(2).mapNotNull { it.toIntOrNull(16)?.toByte() }
+        if (b1.isEmpty() || b2.isEmpty()) return ByteArray(0)
+        val len = maxOf(b1.size, b2.size)
+        return ByteArray(len) { i ->
+            (b1[i % b1.size].toInt() xor b2[i % b2.size].toInt()).toByte()
+        }
+    }
+
+    // Base64 string'i decode et, XOR anahtarıyla şifresini çöz, URL'yi döndür
+    @Suppress("SwallowedException")
+    private fun xorDecodeUrl(base64: String, key: ByteArray): String? {
+        if (key.isEmpty()) return null
+        return try {
+            val bytes = Base64.decode(base64, Base64.DEFAULT)
+            val xored = ByteArray(bytes.size) { i ->
+                (bytes[i].toInt() xor key[i % key.size].toInt()).toByte()
+            }
+            val url = String(xored, StandardCharsets.UTF_8)
+            if (url.startsWith("http")) url else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     // =========================== List Parse ===========================
