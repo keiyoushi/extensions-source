@@ -1,0 +1,10 @@
+ext {
+    extName = "Fin Manga"
+    extClass = ".FinManga"
+    baseUrl = "https://www.fin-manga.com"
+    themePkg = "mangathemesia"
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
