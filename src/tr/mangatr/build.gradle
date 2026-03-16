@@ -1,10 +1,13 @@
 ext {
     extName = 'Manga-TR'
     extClass = '.MangaTR'
-    themePkg = 'fmreader'
-    baseUrl = 'https://manga-tr.com'
-    overrideVersionCode = 6
-    isNsfw = true
+    extVersionCode = 2      // 1'den 2'ye: domain + CF bypass güncellemesi
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    // Cloudflare bypass için zorunlu
+    implementation(project(':lib:cloudflare-interceptor'))
+}
