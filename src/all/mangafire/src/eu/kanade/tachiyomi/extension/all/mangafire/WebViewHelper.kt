@@ -85,7 +85,7 @@ class WebViewHelper(
 
                                 // allow script from their cdn
                                 if (
-                                    request.url.host.orEmpty().contains("mfcdn.cc") &&
+                                    request.url.host.orEmpty().contains("mfcdn.nl") &&
                                     request.url.pathSegments.lastOrNull().orEmpty().contains("js")
                                 ) {
                                     Log.d(name, "allowed: ${request.url}")
