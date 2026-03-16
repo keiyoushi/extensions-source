@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build MangaTR
-        run: ./gradlew :extensions:tr:mangaTR:assembleRelease
+        run: ./gradlew :src:tr:mangaTR:assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
