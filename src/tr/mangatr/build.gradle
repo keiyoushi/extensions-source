@@ -1,7 +1,7 @@
 ext {
     extName = 'Manga-TR'
     extClass = '.MangaTR'
-    extVersionCode = 2      // 1'den 2'ye: domain + CF bypass güncellemesi
+    extVersionCode = 3
     isNsfw = false
 }
 
