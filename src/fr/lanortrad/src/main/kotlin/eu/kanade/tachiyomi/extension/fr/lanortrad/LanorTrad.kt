@@ -9,13 +9,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
 class LanorTrad : HttpSource() {
 
@@ -23,8 +22,6 @@ class LanorTrad : HttpSource() {
     override val baseUrl = "https://lanortrad.netlify.app"
     override val lang = "fr"
     override val supportsLatest = false
-
-    private val json: Json by injectLazy()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/js/utile/mangaData.js", headers)
 
@@ -53,11 +50,21 @@ class LanorTrad : HttpSource() {
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(GET("$baseUrl/js/utile/mangaData.js", headers)).asObservableSuccess()
         .map { response ->
             val mangaList = parseMangaData(response.body.string())
-            val mangaData = mangaList.find { "/Manga/${it.id}.html".replace(" ", "%20") == manga.url } ?: throw Exception("Manga not found")
+            val mangaData = mangaList.find { it.id == manga.url } ?: throw Exception("Manga not found")
             mangaData.toSManga().apply {
                 url = manga.url
             }
         }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("Manga")
+            .addPathSegment("${manga.url}.html")
+            .build()
+            .toString()
+
+        return GET(url, headers)
+    }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
@@ -66,11 +73,13 @@ class LanorTrad : HttpSource() {
             val document = response.asJsoup()
 
             // Oneshots links directly to a dedicated HTML reader page
-            document.selectFirst("a[href*=neshot]")?.let { oneshotElement ->
+            val oneshotElement = document.selectFirst("a[href*=neshot]")
+            if (oneshotElement != null) {
                 return@flatMap Observable.just(
                     listOf(
                         SChapter.create().apply {
-                            setUrlWithoutDomain(oneshotElement.absUrl("href").replace(" ", "%20"))
+                            val absUrl = oneshotElement.absUrl("href").replace(" ", "%20")
+                            setUrlWithoutDomain(absUrl.toHttpUrl().encodedPath)
                             name = "Oneshot"
                             chapter_number = 1f
                         },
@@ -78,13 +87,16 @@ class LanorTrad : HttpSource() {
                 )
             }
 
-            document.selectFirst("script[src*=/js/manga/]")?.let { scriptElem ->
+            val scriptElem = document.selectFirst("script[src*=/js/manga/]")
+            if (scriptElem != null) {
                 val scriptUrl = scriptElem.absUrl("src")
                 client.newCall(GET(scriptUrl, headers)).asObservableSuccess()
                     .map { response ->
                         parseChaptersJs(response.body.string())
                     }
-            } ?: Observable.just(emptyList())
+            } else {
+                Observable.just(emptyList())
+            }
         }
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
@@ -102,7 +114,12 @@ class LanorTrad : HttpSource() {
             chapters.add(
                 SChapter.create().apply {
                     name = "$chapterPrefix $i"
-                    url = "/Manga/$currentManga/$chapterPrefix%20$i.html"
+                    url = baseUrl.toHttpUrl().newBuilder()
+                        .addPathSegment("Manga")
+                        .addPathSegment(currentManga)
+                        .addPathSegment("$chapterPrefix $i.html")
+                        .build()
+                        .encodedPath
                     chapter_number = i.toFloat()
                 },
             )
@@ -115,7 +132,12 @@ class LanorTrad : HttpSource() {
                 chapters.add(
                     SChapter.create().apply {
                         name = "$chapterPrefix $numStr"
-                        url = "/Manga/$currentManga/$chapterPrefix%20$numStr.html"
+                        url = baseUrl.toHttpUrl().newBuilder()
+                            .addPathSegment("Manga")
+                            .addPathSegment(currentManga)
+                            .addPathSegment("$chapterPrefix $numStr.html")
+                            .build()
+                            .encodedPath
                         chapter_number = numStr.toFloatOrNull() ?: -1f
                     },
                 )
@@ -184,15 +206,22 @@ class LanorTrad : HttpSource() {
             }
 
         return runCatching {
-            json.decodeFromString<List<LanorMangaDto>>(fixedJson)
+            fixedJson.parseAs<List<LanorMangaDto>>()
         }.getOrElse { emptyList() }
     }
 
     private fun LanorMangaDto.toSManga() = SManga.create().also { manga ->
         manga.title = title
         val imgToUse = if (type.equals("oneshot", true)) image else coverImage
-        manga.thumbnail_url = if (imgToUse.startsWith("http")) imgToUse else "$baseUrl/${imgToUse.removePrefix("/").replace(" ", "%20")}"
-        manga.url = "/Manga/$id.html".replace(" ", "%20")
+        manga.thumbnail_url = if (imgToUse.startsWith("http")) {
+            imgToUse
+        } else {
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments(imgToUse.removePrefix("/"))
+                .build()
+                .toString()
+        }
+        manga.url = id
         manga.description = description
         manga.status = when (status.lowercase()) {
             "en cours" -> SManga.ONGOING
