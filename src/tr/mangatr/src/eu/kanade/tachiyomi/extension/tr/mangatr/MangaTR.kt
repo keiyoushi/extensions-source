@@ -295,14 +295,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     // finalXorKey = hex(int(k1, 16) XOR 0x4eac8c90).padStart(8,'0') + k2
-    private fun buildFinalXorKey(k1: String, k2: String): String {
-        val k1Long = k1.toLongOrNull(16) ?: return k2
-        val firstHalf = (k1Long xor 0x4eac8c90L)
-            .and(0xFFFFFFFFL)
-            .toString(16)
-            .padStart(8, '0')
-        return firstHalf + k2
-    }
+    private fun buildFinalXorKey(k1: String, k2: String): String = k1 + k2
 
     // xorDecrypt: base64 decode → her byte'ı key char kodu ile XOR → URL string
     @Suppress("SwallowedException")
