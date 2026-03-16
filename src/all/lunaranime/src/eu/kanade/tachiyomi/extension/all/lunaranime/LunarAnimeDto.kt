@@ -68,6 +68,7 @@ class LunarChapterListResponse(
 class LunarChapterDto(
     val chapter: String,
     @SerialName("chapter_number") val chapterNumber: Float,
+    @SerialName("chapter_subnumber") val chapterSubnumber: Float? = null,
     @SerialName("chapter_title") val chapterTitle: String? = null,
     val language: String,
     @SerialName("uploaded_at") val uploadedAt: String? = null,
@@ -75,8 +76,15 @@ class LunarChapterDto(
     fun toSChapter(mangaSlug: String, isLocked: Boolean): SChapter = SChapter.create().apply {
         url = "/manga/$mangaSlug/$chapter?lang=$language"
         val prefix = if (isLocked) "🔒 " else ""
-        name = prefix + (chapterTitle?.takeIf { it.isNotBlank() } ?: "Chapter $chapter")
-        chapter_number = this@LunarChapterDto.chapterNumber
+        val chapterNum = "Chapter $chapter"
+        name = prefix + if (chapterTitle.isNullOrBlank()) {
+            chapterNum
+        } else if (chapterTitle.contains(chapterNum, ignoreCase = true) || chapterTitle.contains("Ch.$chapter", ignoreCase = true)) {
+            chapterTitle
+        } else {
+            "$chapterNum : $chapterTitle"
+        }
+        chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber
         date_upload = uploadedAt?.let { parseChapterDate(it) } ?: 0L
         scanlator = language.uppercase(Locale.ROOT)
     }
