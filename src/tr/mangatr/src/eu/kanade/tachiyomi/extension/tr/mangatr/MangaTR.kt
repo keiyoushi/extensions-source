@@ -34,7 +34,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override val requestPath = "manga-list-sayfala.html"
 
-    // ============================== Popular ===============================
+    // Popular
+
     override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) button.btn-info"
 
     override fun popularMangaSelector() = "div.col-md-12 > span.thumbnail"
@@ -57,7 +58,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return GET(url, headers)
     }
 
-    // =============================== Latest ===============================
+    // Latest
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/$requestPath".toHttpUrl().newBuilder()
             .addQueryParameter("sort", "last_update")
@@ -69,7 +71,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return GET(url, headers)
     }
 
-    // =============================== Search ===============================
+    // Search
+
     private var cachedGenres: List<FMReader.Genre> = emptyList()
 
     @Volatile private var isLoadingGenres: Boolean = false
@@ -157,7 +160,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         title = element.text()
     }
 
-    // =========================== Manga Details ============================
+    // Details
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
@@ -187,7 +191,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         }
     }
 
-    // ============================== Chapters ==============================
+    // Chapters
+
     override fun chapterListSelector() = "div.chapter-item"
 
     override val chapterUrlSelector = "div.chapter-title a"
@@ -235,11 +240,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.startsWith("/")) {
-            baseUrl + chapter.url
-        } else {
-            "$baseUrl/${chapter.url}"
-        }
+        val url = if (chapter.url.startsWith("/")) baseUrl + chapter.url else "$baseUrl/${chapter.url}"
         return GET(url, headers)
     }
 
@@ -247,44 +248,49 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override fun getImgAttr(element: Element?): String? = null
 
-    // ============================== Pages =================================
-    //
-    // Site resim URL'lerini şifreleyerek saklıyor (sc.js ile):
-    //   1. HTML'deki <div id="chapter-images" data-k1="...">  → k1
-    //   2. JS'deki window.imageQueueData.k2                   → k2
-    //   3. finalXorKey = hex(int(k1,16) XOR 0x4eac8c90) + k2  (16 char)
-    //   4. Her resim birden fazla Base64 chunk'a bölünmüş
-    //   5. Chunk'lar birleştirilip xorDecrypt'e gönderiliyor
-    //   6. xorDecrypt: base64 decode → her byte'ı key char'ıyla XOR → URL
-    //
+    // Pages
+    // Şifreleme: key = k1 + k2, xorDecrypt = atob(chunks.join('')) XOR key
+
     override fun pageListParse(document: Document): List<Page> {
-        val k1 = document.selectFirst("div#chapter-images")
-            ?.attr("data-k1") ?: return emptyList()
+        val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1") ?: return emptyList()
 
         for (script in document.select("script:not([src])")) {
-            val content = script.html()
-            if (!content.contains("imageQueueData")) continue
+            val js = script.html()
+            if (!js.contains("imageQueueData")) continue
 
-            val k2Match = Regex("""\bk2\b\s*:\s*"([a-f0-9]+)"""").find(content) ?: continue
-            val k2 = k2Match.groupValues[1]
+            // k2 değerini al
+            val k2 = Regex("""\bk2\b\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: continue
 
-            val queueMatch = Regex(
-                """\bqueue\b\s*:\s*(\[[\s\S]*\])\s*,\s*\blogo\b""",
-            ).find(content) ?: continue
-            val queueStr = queueMatch.groupValues[1]
+            // queue array'ini al — "queue" ile "logo" arasındaki her şey
+            val queueStart = js.indexOf("queue")
+            val logoIndex = js.indexOf("logo", queueStart)
+            if (queueStart < 0 || logoIndex < 0) continue
+            val queueSection = js.substring(queueStart, logoIndex)
 
-            val keyStr = buildFinalXorKey(k1, k2)
+            val key = k1 + k2
             val pages = mutableListOf<Page>()
             var idx = 0
 
-            for (item in Regex("""\[([^\[\]]+)\]""").findAll(queueStr)) {
-                val combined = Regex(""""([^"]+)"""")
-                    .findAll(item.groupValues[1])
-                    .joinToString("") { it.groupValues[1] }
+            // Her [ ... ] bloğunu bul
+            var pos = 0
+            while (pos < queueSection.length) {
+                val open = queueSection.indexOf('[', pos)
+                if (open < 0) break
+                val close = queueSection.indexOf(']', open)
+                if (close < 0) break
+                pos = close + 1
 
+                val block = queueSection.substring(open + 1, close)
+                // Chunk string'lerini topla
+                val chunks = Regex(""""([^"]+)"""").findAll(block)
+                    .map { it.groupValues[1] }
+                    .toList()
+                if (chunks.isEmpty()) continue
+
+                val combined = chunks.joinToString("")
                 if (combined.contains("FAKE")) continue
 
-                val url = xorDecodeUrl(combined, keyStr) ?: continue
+                val url = xorDecrypt(combined, key) ?: continue
                 pages.add(Page(idx++, imageUrl = url))
             }
 
@@ -294,19 +300,15 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return emptyList()
     }
 
-    // finalXorKey = hex(int(k1, 16) XOR 0x4eac8c90).padStart(8,'0') + k2
-    private fun buildFinalXorKey(k1: String, k2: String): String = k1 + k2
-
-    // xorDecrypt: base64 decode → her byte'ı key char kodu ile XOR → URL string
     @Suppress("SwallowedException")
-    private fun xorDecodeUrl(base64Str: String, keyStr: String): String? {
-        if (keyStr.isEmpty()) return null
+    private fun xorDecrypt(base64Str: String, key: String): String? {
+        if (key.isEmpty()) return null
         return try {
-            val padded = base64Str + "=".repeat((4 - base64Str.length % 4) % 4)
-            val bytes = Base64.decode(padded, Base64.DEFAULT)
+            val pad = (4 - base64Str.length % 4) % 4
+            val bytes = Base64.decode(base64Str + "=".repeat(pad), Base64.DEFAULT)
             val result = buildString {
                 bytes.forEachIndexed { i, b ->
-                    append(((b.toInt() and 0xFF) xor keyStr[i % keyStr.length].code).toChar())
+                    append(((b.toInt() and 0xFF) xor key[i % key.length].code).toChar())
                 }
             }
             if (result.startsWith("http")) result else null
@@ -315,7 +317,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         }
     }
 
-    // =========================== List Parse ===========================
+    // List Parse
+
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
@@ -342,7 +345,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = (document.select(popularMangaNextPageSelector()).first()?.text() ?: "").let {
             if (it.contains(Regex("""\w*\s\d*\s\w*\s\d*"""))) {
-                it.split(" ").let { pageOf -> pageOf[1] != pageOf[3] }
+                it.split(" ").let { p -> p[1] != p[3] }
             } else {
                 it.isNotEmpty()
             }
@@ -383,7 +386,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         }
     }
 
-    // =========================== Filters (UI) ===========================
+    // Filters
+
     private class PublicationStatusFilter :
         Filter.Select<String>(
             "Yayın Durumu",
