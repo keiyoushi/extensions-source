@@ -19,7 +19,7 @@ class MayoTune(
     private val chapterEndpoint: String,
 ) : HttpSource() {
     override val name: String = "MayoTune"
-    override val baseUrl: String = "https://mayotune.xyz"
+    override val baseUrl: String = "https://mayochuu.xyz"
     override val versionId: Int = 1
 
     private val names = mapOf(
@@ -36,23 +36,17 @@ class MayoTune(
     }
 
     // Popular
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(source), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(source), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Latest
     override val supportsLatest: Boolean = true
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(source), false))
-    }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(source), false))
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
     override fun fetchSearchManga(
@@ -71,16 +65,12 @@ class MayoTune(
         return Observable.just(MangasPage(mangas, false))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Get Override
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/$chapterEndpoint/chapters", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/$chapterEndpoint/chapters", headers)
 
     override fun getChapterUrl(chapter: SChapter): String {
         val id = (baseUrl + chapter.url).toHttpUrl().queryParameter("id")

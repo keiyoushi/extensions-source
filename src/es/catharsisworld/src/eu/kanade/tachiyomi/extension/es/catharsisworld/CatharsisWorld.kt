@@ -78,9 +78,7 @@ class CatharsisWorld :
     override val chapterProtectorPasswordPrefix = "protectornonce='"
     override val chapterProtectorDataPrefix = "_data='"
 
-    private fun Element.imageFromStyle(): String {
-        return this.attr("style").substringAfter("url(").substringBefore(")")
-    }
+    private fun Element.imageFromStyle(): String = this.attr("style").substringAfter("url(").substringBefore(")")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -103,16 +101,16 @@ class CatharsisWorld :
         }.also { screen.addPreference(it) }
     }
 
-    private var _cachedBaseUrl: String? = null
+    private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, super.baseUrl)!!
+            if (cachedBaseUrl == null) {
+                cachedBaseUrl = getString(BASE_URL_PREF, super.baseUrl)!!
             }
-            return _cachedBaseUrl!!
+            return cachedBaseUrl!!
         }
         set(value) {
-            _cachedBaseUrl = value
+            cachedBaseUrl = value
             edit().putString(BASE_URL_PREF, value).apply()
         }
 

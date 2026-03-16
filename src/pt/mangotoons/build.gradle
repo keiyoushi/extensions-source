@@ -2,8 +2,12 @@ ext {
     extName = 'Mango Toons'
     extClass = '.MangoToons'
     baseUrl = 'https://mangotoons.com'
-    extVersionCode = 2
+    extVersionCode = 5
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:cookieinterceptor'))
+}

@@ -21,20 +21,16 @@ class ManhwaBuddy : ParsedHttpSource() {
     override val name = "ManhwaBuddy"
     override val supportsLatest = true
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.selectFirst(".chapter-name")!!.text()
-            date_upload = element.selectFirst(".ct-update")?.text().orEmpty().let { parseDate(it) }
-        }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.selectFirst(".chapter-name")!!.text()
+        date_upload = element.selectFirst(".ct-update")?.text().orEmpty().let { parseDate(it) }
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+    private fun parseDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)!!.time
+    } catch (_: ParseException) {
+        0L
     }
 
     private val dateFormat by lazy {
@@ -45,66 +41,52 @@ class ManhwaBuddy : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("h4")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
+    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("h4")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("src")
     }
 
     override fun latestUpdatesNextPageSelector(): String = ".next"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page", headers)
 
     override fun latestUpdatesSelector(): String = ".latest-list .latest-item"
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            val info = document.selectFirst(".main-info-right")!!
-            author = info.selectFirst("li:contains(Author) a")?.text()
-            status = when (info.selectFirst("li:contains(Status) span")?.text()) {
-                "Ongoing" -> SManga.ONGOING
-                "Complete" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            artist = info.selectFirst("li:contains(Artist) a")?.text()
-            genre = info.select("li:contains(Genres) a").joinToString { it.text() }
-
-            description = document.select(".short-desc-content p").joinToString("\n") { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val info = document.selectFirst(".main-info-right")!!
+        author = info.selectFirst("li:contains(Author) a")?.text()
+        status = when (info.selectFirst("li:contains(Status) span")?.text()) {
+            "Ongoing" -> SManga.ONGOING
+            "Complete" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
+        artist = info.selectFirst("li:contains(Artist) a")?.text()
+        genre = info.select("li:contains(Genres) a").joinToString { it.text() }
+
+        description = document.select(".short-desc-content p").joinToString("\n") { it.text() }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".loading").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".loading").mapIndexed { i, element ->
+        Page(i, imageUrl = element.attr("abs:src"))
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("h3")!!.text()
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("img")?.attr("src")
     }
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaSelector(): String = ".item-move"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("a")!!.attr("title")
-            thumbnail_url = element.selectFirst("img")?.attr("src")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("a")!!.attr("title")
+        thumbnail_url = element.selectFirst("img")?.attr("src")
     }
 
     override fun searchMangaNextPageSelector(): String = ".next"
@@ -145,35 +127,35 @@ class ManhwaBuddy : ParsedHttpSource() {
     )
 
     // copy([...document.querySelectorAll(".nav-pc-list li a")].map((e) => `Pair("${e.textContent.trim()}", "${e.href.split("/").filter(Boolean).pop()}"),`).join("\n"))
-    private class GenreFilter : UriPartFilter(
-        "Genres",
-        arrayOf(
-            Pair("Action", "action"),
-            Pair("Romance", "romance"),
-            Pair("Drama", "drama"),
-            Pair("Martial Arts", "martial-arts"),
-            Pair("Ecchi", "ecchi"),
-            Pair("Fantasy", "fantasy"),
-            Pair("Harem", "harem"),
-            Pair("Historical", "historical"),
-            Pair("Mature", "mature"),
-            Pair("Mystery", "mystery"),
-            Pair("Psychological", "psychological"),
-            Pair("School Life", "school-life"),
-            Pair("Smut", "smut"),
-            Pair("Isekai", "isekai"),
-            Pair("Thriller", "thriller"),
-            Pair("Crime", "crime"),
-            Pair("Sci-Fi", "sci-fi"),
-            Pair("Horror", "horror"),
-            Pair("Mecha", "mecha"),
-            Pair("Medical", "medical"),
-            Pair("Sports", "sports"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Genres",
+            arrayOf(
+                Pair("Action", "action"),
+                Pair("Romance", "romance"),
+                Pair("Drama", "drama"),
+                Pair("Martial Arts", "martial-arts"),
+                Pair("Ecchi", "ecchi"),
+                Pair("Fantasy", "fantasy"),
+                Pair("Harem", "harem"),
+                Pair("Historical", "historical"),
+                Pair("Mature", "mature"),
+                Pair("Mystery", "mystery"),
+                Pair("Psychological", "psychological"),
+                Pair("School Life", "school-life"),
+                Pair("Smut", "smut"),
+                Pair("Isekai", "isekai"),
+                Pair("Thriller", "thriller"),
+                Pair("Crime", "crime"),
+                Pair("Sci-Fi", "sci-fi"),
+                Pair("Horror", "horror"),
+                Pair("Mecha", "mecha"),
+                Pair("Medical", "medical"),
+                Pair("Sports", "sports"),
+            ),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

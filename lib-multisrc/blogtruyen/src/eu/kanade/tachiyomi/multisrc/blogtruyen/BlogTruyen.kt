@@ -48,8 +48,7 @@ abstract class BlogTruyen(
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
     }
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/ajax/Search/AjaxLoadListManga?key=tatca&orderBy=3&p=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/ajax/Search/AjaxLoadListManga?key=tatca&orderBy=3&p=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -80,8 +79,7 @@ abstract class BlogTruyen(
 
     override fun popularMangaNextPageSelector() = ".paging:last-child:not(.current_page)"
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET(baseUrl + if (page > 1) "/page-$page" else "", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl + if (page > 1) "/page-$page" else "", headers)
 
     override fun latestUpdatesSelector() = ".storyitem .fl-l"
 
@@ -117,6 +115,7 @@ abstract class BlogTruyen(
             )
                 .map { MangasPage(listOf(it), false) }
         }
+
         else -> super.fetchSearchManga(page, query, filters)
     }
 
@@ -155,15 +154,19 @@ abstract class BlogTruyen(
                             else -> {}
                         }
                     }
+
                     is Author -> {
                         addQueryParameter("aut", filter.state)
                     }
+
                     is Scanlator -> {
                         addQueryParameter("gr", filter.state)
                     }
+
                     is Status -> {
                         status = filter.state
                     }
+
                     else -> {}
                 }
             }
@@ -192,11 +195,9 @@ abstract class BlogTruyen(
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    private fun searchMangaFromElement(element: Element, tiptip: Element) =
-        popularMangaFromElement(element, tiptip)
+    private fun searchMangaFromElement(element: Element, tiptip: Element) = popularMangaFromElement(element, tiptip)
 
     override fun searchMangaNextPageSelector() = ".pagination .glyphicon-step-forward"
 
@@ -333,28 +334,27 @@ abstract class BlogTruyen(
     // copy([...document.querySelectorAll(".CategoryFilter li")].map((e) => `Genre("${e.textContent.trim()}", "${e.dataset.id}"),`).join("\n"))
     open fun getGenreList(): List<Genre> = emptyList()
 
-    private class Status : Filter.Select<String>(
-        "Status",
-        arrayOf("Sao cũng được", "Đang tiến hành", "Đã hoàn thành", "Tạm ngưng"),
-    )
+    private class Status :
+        Filter.Select<String>(
+            "Status",
+            arrayOf("Sao cũng được", "Đang tiến hành", "Đã hoàn thành", "Tạm ngưng"),
+        )
     private class Author : Filter.Text("Tác giả")
     private class Scanlator : Filter.Text("Nhóm dịch")
     class Genre(name: String, val id: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
 
-    private fun getMangaTitle(document: Document) =
-        document
-            .selectFirst(".entry-title a")!!
-            .attr("title")
-            .removePrefix("truyện tranh ")
+    private fun getMangaTitle(document: Document) = document
+        .selectFirst(".entry-title a")!!
+        .attr("title")
+        .removePrefix("truyện tranh ")
 
     private fun Element.textWithNewlines() = run {
         select("p, br").prepend("\\n")
         text().replace("\\n", "\n").replace("\n ", "\n")
     }
 
-    private fun extractIdFromQuery(prefix: String, query: String): String =
-        query.substringAfter(prefix).trimStart().substringAfterLast("-")
+    private fun extractIdFromQuery(prefix: String, query: String): String = query.substringAfter(prefix).trimStart().substringAfterLast("-")
 
     private fun countView(document: Document) {
         val mangaId = document.getElementById("MangaId")!!.attr("value")

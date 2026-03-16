@@ -18,12 +18,13 @@ class MiauScanFactory : SourceFactory {
     )
 }
 
-open class MiauScan(lang: String) : MangaThemesia(
-    name = "Miau Scan",
-    baseUrl = "https://leemiau.com",
-    lang = lang,
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+open class MiauScan(lang: String) :
+    MangaThemesia(
+        name = "Miau Scan",
+        baseUrl = "https://leemiau.com",
+        lang = lang,
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
 
     private val portugueseMode =
         if (lang == "pt-BR") Filter.TriState.STATE_INCLUDE else Filter.TriState.STATE_EXCLUDE
@@ -53,24 +54,18 @@ open class MiauScan(lang: String) : MangaThemesia(
         return super.searchMangaRequest(page, query, FilterList(overloadedFilters))
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
-            title = title.replace(PORTUGUESE_SUFFIX, "")
-        }
+    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
+        title = title.replace(PORTUGUESE_SUFFIX, "")
     }
 
     override val seriesAuthorSelector = ".tsinfo .imptdt:contains(autor) i"
     override val seriesStatusSelector = ".tsinfo .imptdt:contains(estado) i"
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(document).apply {
-            title = title.replace(PORTUGUESE_SUFFIX, "")
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        title = title.replace(PORTUGUESE_SUFFIX, "")
     }
 
-    override fun getGenreList(): List<Genre> {
-        return super.getGenreList().filter { it.value != PORTUGUESE_GENRE_ID }
-    }
+    override fun getGenreList(): List<Genre> = super.getGenreList().filter { it.value != PORTUGUESE_GENRE_ID }
 
     companion object {
         const val PORTUGUESE_GENRE_ID = "307"

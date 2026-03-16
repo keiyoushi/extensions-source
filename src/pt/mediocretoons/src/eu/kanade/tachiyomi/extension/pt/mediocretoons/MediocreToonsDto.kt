@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -13,13 +14,14 @@ import java.util.TimeZone
 
 @Serializable
 data class MediocrePaginationDto(
-    val currentPage: Int? = null,
-    val totalPages: Int = 0,
-    val totalItems: Int = 0,
-    val itemsPerPage: Int = 0,
-    val hasNextPage: Boolean = false,
-    val hasPreviousPage: Boolean = false,
-)
+    @JsonNames("currentPage", "pagina_atual") val currentPage: Int? = null,
+    @JsonNames("totalPages", "paginas") val totalPages: Int = 0,
+    @JsonNames("totalItems", "total") val totalItems: Int = 0,
+    @JsonNames("itemsPerPage", "itens_por_pagina") val itemsPerPage: Int = 0,
+) {
+    val hasNextPage: Boolean get() = totalPages > (currentPage ?: 0)
+    val hasPreviousPage: Boolean get() = 1 < (currentPage ?: 0)
+}
 
 @Serializable
 data class MediocreListDto<T>(
@@ -129,20 +131,18 @@ fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
     return sManga
 }
 
-fun MediocreChapterSimpleDto.toSChapter(): SChapter {
-    return SChapter.create().apply {
-        name = this@toSChapter.name
-        chapter_number = number ?: 0f
-        url = "/capitulo/$id"
-        date_upload = dateFormat.tryParse(createdAt)
-    }
+fun MediocreChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
+    name = this@toSChapter.name
+    chapter_number = number ?: 0f
+    url = "/capitulo/$id"
+    date_upload = dateFormat.tryParse(createdAt)
 }
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
     val obraId = manga?.id ?: 0
-    val capituloNome = name
+    val chapterNumber = number?.toString()?.removeSuffix(".0") ?: name
     return pages.mapIndexed { idx, p ->
-        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$capituloNome/${p.src}"
+        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/${p.src}"
         Page(idx, imageUrl = imageUrl)
     }
 }

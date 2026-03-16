@@ -11,11 +11,12 @@ import okhttp3.Response
 import java.io.IOException
 import java.security.MessageDigest
 
-class YakshaComics : Madara(
-    "YakshaComics",
-    "https://yakshacomics.com",
-    "en",
-) {
+class YakshaComics :
+    Madara(
+        "YakshaComics",
+        "https://yakshacomics.com",
+        "en",
+    ) {
     override val useNewChapterEndpoint = true
 
     // Adapted from src/en/yakshascans
@@ -61,12 +62,10 @@ class YakshaComics : Madara(
         }
     }
 
-    private fun String.sha256(): String {
-        return MessageDigest
-            .getInstance("SHA-256")
-            .digest(toByteArray())
-            .fold("", { str, it -> str + "%02x".format(it) })
-    }
+    private fun String.sha256(): String = MessageDigest
+        .getInstance("SHA-256")
+        .digest(toByteArray())
+        .fold("", { str, it -> str + "%02x".format(it) })
 
     override val mangaDetailsSelectorDescription: String =
         "div.description-summary div.summary__content h3 + p, div.description-summary div.summary__content:not(:has(h3)), div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"

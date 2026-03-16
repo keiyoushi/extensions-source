@@ -69,6 +69,7 @@ abstract class VerComics(
                         url.addPathSegments(page.toString())
                     }
                 }
+
                 else -> {}
             }
         }
@@ -101,16 +102,14 @@ abstract class VerComics(
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = manga.title
-                    url = manga.url
-                },
-            ),
-        )
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = manga.title
+                url = manga.url
+            },
+        ),
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
@@ -137,28 +136,25 @@ abstract class VerComics(
         return FilterList(filters)
     }
 
-    protected open fun Element.imgAttr(): String? {
-        return when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").getSrcSetImage()
-            this.hasAttr("data-cfsrc") -> this.attr("abs:data-cfsrc")
-            else -> this.attr("abs:src")
-        }
+    protected open fun Element.imgAttr(): String? = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+        this.hasAttr("srcset") -> this.attr("abs:srcset").getSrcSetImage()
+        this.hasAttr("data-cfsrc") -> this.attr("abs:data-cfsrc")
+        else -> this.attr("abs:src")
     }
 
-    private fun String.getSrcSetImage(): String? {
-        return this.split(" ")
-            .filter(URL_REGEX::matches)
-            .maxOfOrNull(String::toString)
-    }
+    private fun String.getSrcSetImage(): String? = this.split(" ")
+        .filter(URL_REGEX::matches)
+        .maxOfOrNull(String::toString)
 
     // Replace the baseUrl and genreSuffix in the following string
     // Array.from(document.querySelectorAll('div.tagcloud a.tag-cloud-link')).map(a => `Pair("${a.innerText}", "${a.href.replace('$baseUrl/genreSuffix/', '')}")`).join(',\n')
-    class Genre(genres: Array<Pair<String, String>>) : UriPartFilter(
-        "Filtrar por género",
-        genres,
-    )
+    class Genre(genres: Array<Pair<String, String>>) :
+        UriPartFilter(
+            "Filtrar por género",
+            genres,
+        )
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
@@ -174,8 +170,7 @@ abstract class VerComics(
         val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)${'$'}""".toRegex()
     }
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

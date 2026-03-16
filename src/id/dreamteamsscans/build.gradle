@@ -1,0 +1,9 @@
+ext {
+    extName = 'DreamTeams Scans'
+    extClass = '.DreamTeamsScans'
+    extVersionCode = 31
+    baseUrl = 'https://dreamteams.space'
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

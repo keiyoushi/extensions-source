@@ -8,23 +8,19 @@ import java.util.Date
 import java.util.Locale
 
 val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
-fun filterTags(include: String = "", exclude: List<String> = emptyList(), tags: List<String>): String? {
-    return tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
-        .joinToString {
-            it.substringAfter(":").replace("_", " ").split(" ").joinToString(" ") { s ->
-                s.replaceFirstChar { sr ->
-                    if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
-                }
+fun filterTags(include: String = "", exclude: List<String> = emptyList(), tags: List<String>): String? = tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
+    .joinToString {
+        it.substringAfter(":").replace("_", " ").split(" ").joinToString(" ") { s ->
+            s.replaceFirstChar { sr ->
+                if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
             }
-        }.takeIf { it.isNotBlank() }
-}
-fun getReadableSize(bytes: Double): String {
-    return when {
-        bytes >= 300 * 1000 * 1000 -> "${"%.2f".format(bytes / (1000.0 * 1000.0 * 1000.0))} GB"
-        bytes >= 100 * 1000 -> "${"%.2f".format(bytes / (1000.0 * 1000.0))} MB"
-        bytes >= 1000 -> "${"%.2f".format(bytes / (1000.0))} kB"
-        else -> "$bytes B"
-    }
+        }
+    }.takeIf { it.isNotBlank() }
+fun getReadableSize(bytes: Double): String = when {
+    bytes >= 300 * 1000 * 1000 -> "${"%.2f".format(bytes / (1000.0 * 1000.0 * 1000.0))} GB"
+    bytes >= 100 * 1000 -> "${"%.2f".format(bytes / (1000.0 * 1000.0))} MB"
+    bytes >= 1000 -> "${"%.2f".format(bytes / (1000.0))} kB"
+    else -> "$bytes B"
 }
 
 @Serializable

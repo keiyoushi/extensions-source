@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.mangatoshokanz
 
 import android.util.Base64
-import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
+import keiyoushi.lib.cryptoaes.CryptoAES
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -17,11 +17,9 @@ import javax.crypto.Cipher
 
 private val json: Json by injectLazy()
 
-internal fun getKeys(): KeyPair {
-    return KeyPairGenerator.getInstance("RSA").run {
-        initialize(RSAKeyGenParameterSpec(512, RSAKeyGenParameterSpec.F4))
-        generateKeyPair()
-    }
+internal fun getKeys(): KeyPair = KeyPairGenerator.getInstance("RSA").run {
+    initialize(RSAKeyGenParameterSpec(512, RSAKeyGenParameterSpec.F4))
+    generateKeyPair()
 }
 
 internal fun PublicKey.toPem(): String {

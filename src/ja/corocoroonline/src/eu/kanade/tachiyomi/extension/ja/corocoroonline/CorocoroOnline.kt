@@ -37,9 +37,7 @@ class CorocoroOnline : HttpSource() {
         .addInterceptor(ImageInterceptor())
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/ranking", super.headersBuilder().add("rsc", "1").build())
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking", super.headersBuilder().add("rsc", "1").build())
 
     override fun popularMangaParse(response: Response): MangasPage {
         val category = response.request.url.fragment ?: "総合"
@@ -89,8 +87,11 @@ class CorocoroOnline : HttpSource() {
                     .build()
                 GET(url, headers)
             }
+
             "completed" -> GET("$baseUrl/rensai/completed", headers)
+
             "one-shot" -> GET("$baseUrl/rensai/one-shot", headers)
+
             else -> {
                 GET("$baseUrl/ranking#$selection", super.headersBuilder().add("rsc", "1").build())
             }
@@ -137,13 +138,9 @@ class CorocoroOnline : HttpSource() {
         return detailView.toSManga()
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val detailView = response.parseAsProto<TitleDetailView>()
@@ -153,8 +150,11 @@ class CorocoroOnline : HttpSource() {
 
         val isAscending = when {
             first.date_upload < last.date_upload -> true
+
             first.date_upload > last.date_upload -> false
+
             first.chapter_number > -1 && last.chapter_number > -1 -> first.chapter_number < last.chapter_number
+
             else -> {
                 val firstId = first.url.substringAfterLast("/").toLong()
                 val lastId = last.url.substringAfterLast("/").toLong()
@@ -164,9 +164,7 @@ class CorocoroOnline : HttpSource() {
         return if (isAscending) chapters.reversed() else chapters
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfterLast("/")
@@ -203,14 +201,10 @@ class CorocoroOnline : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Helpers
-    private inline fun <reified T> Response.parseAsProto(): T {
-        return ProtoBuf.decodeFromByteArray(body.bytes())
-    }
+    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
-    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody {
-        return ProtoBuf.encodeToByteArray(this)
-            .toRequestBody("application/protobuf".toMediaType())
-    }
+    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody = ProtoBuf.encodeToByteArray(this)
+        .toRequestBody("application/protobuf".toMediaType())
 
     private fun getLatestDay(): String {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Tokyo"))
@@ -250,8 +244,7 @@ class CorocoroOnline : HttpSource() {
         ),
     )
 
-    private open class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, options.map { it.first }.toTypedArray()) {
+    private open class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) : Filter.Select<String>(displayName, options.map { it.first }.toTypedArray()) {
         fun toUriPart() = options[state].second
     }
 }

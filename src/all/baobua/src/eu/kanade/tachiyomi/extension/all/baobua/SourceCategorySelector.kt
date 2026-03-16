@@ -6,14 +6,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 data class SourceCategory(private val name: String, var cat: String) {
     override fun toString() = this.name
 
-    fun buildUrl(baseUrl: String, page: Int): String {
-        return baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("category")
-            .addPathSegment(this.cat)
-            .addQueryParameter("page", page.toString())
-            .build()
-            .toString()
-    }
+    fun buildUrl(baseUrl: String, page: Int): String = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegment("category")
+        .addPathSegment(this.cat)
+        .addQueryParameter("page", page.toString())
+        .build()
+        .toString()
 }
 
 class SourceCategorySelector(

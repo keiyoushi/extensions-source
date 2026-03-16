@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.tr.ragnarscans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 
-class RagnarScans : Madara(
-    "Ragnar Scans",
-    "https://ragnarscans.com",
-    "tr",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override val useNewChapterEndpoint = true
-}
+class RagnarScans :
+    InitManga(
+        "Ragnar Scans",
+        "https://ragnarscans.com",
+        "tr",
+        mangaUrlDirectory = "manga",
+        popularUrlSlug = "en-cok-takip-edilenler",
+        versionId = 2,
+    )

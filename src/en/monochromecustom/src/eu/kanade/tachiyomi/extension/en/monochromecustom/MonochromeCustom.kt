@@ -6,8 +6,9 @@ import eu.kanade.tachiyomi.multisrc.monochrome.MonochromeCMS
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferencesLazy
 
-class MonochromeCustom : ConfigurableSource,
-    MonochromeCMS("Monochrome Custom", "", "en") {
+class MonochromeCustom :
+    MonochromeCMS("Monochrome Custom", "", "en"),
+    ConfigurableSource {
     override val baseUrl by lazy {
         preferences.getString("baseUrl", DEMO_BASE_URL)!!
     }

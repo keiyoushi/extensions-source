@@ -19,8 +19,7 @@ data class Series(
     val cover: String
         get() = "/images/serie/$id.jpg?v=$version"
 
-    override fun toString() =
-        synopsis.replace("\n          ", " ").replace("<br />", "")
+    override fun toString() = synopsis.replace("\n          ", " ").replace("<br />", "")
 }
 
 @Serializable
@@ -52,8 +51,7 @@ data class Album(
     private inline val isLocked: Boolean
         get() = !fullAvailable && !(inUserLibrary || inUserSubscription)
 
-    override fun toString() =
-        title + if (isLocked) " \uD83D\uDD12" else ""
+    override fun toString() = title + if (isLocked) " \uD83D\uDD12" else ""
 }
 
 @Serializable
@@ -62,8 +60,7 @@ data class AlbumPage(
     private val key: String,
     private val iv: String,
 ) {
-    override fun toString() =
-        "/$albumPageNumber?type=full&key=${key.urlSafe}&iv=${iv.urlSafe}"
+    override fun toString() = "/$albumPageNumber?type=full&key=${key.urlSafe}&iv=${iv.urlSafe}"
 
     private inline val String.urlSafe: String
         get() = replace('+', '-').replace('/', '_')

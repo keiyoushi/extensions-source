@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
 
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -18,15 +22,18 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-class Pixiv(override val lang: String) : HttpSource() {
+class Pixiv(override val lang: String) :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Pixiv"
     override val baseUrl = "https://www.pixiv.net"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder().add("Referer", "$baseUrl/")
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
     private open inner class HttpCall(href: String?) {
         val url: HttpUrl.Builder = baseUrl.toHttpUrl()
@@ -35,8 +42,7 @@ class Pixiv(override val lang: String) : HttpSource() {
         val request: Request.Builder = Request.Builder()
             .headers(headersBuilder().build())
 
-        fun execute(): Response =
-            client.newCall(request.url(url.build()).build()).execute()
+        fun execute(): Response = client.newCall(request.url(url.build()).build()).execute()
     }
 
     class PixivApiException(message: String? = null) : Exception(message, null)
@@ -67,18 +73,18 @@ class Pixiv(override val lang: String) : HttpSource() {
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         if (page == 1) {
             popularMangaIterator = sequence {
-                val call = ApiCall("/touch/ajax/ranking/illust?mode=daily&type=manga")
+                val rankingCall = ApiCall("/touch/ajax/ranking/illust?mode=daily&type=manga")
 
                 for (p in countUp(start = 1)) {
-                    call.url.setEncodedQueryParameter("page", p.toString())
+                    rankingCall.url.setEncodedQueryParameter("page", p.toString())
 
-                    val entries = call.executeApi<PixivRankings>().getOrThrow().ranking!!
+                    val entries = rankingCall.executeApi<PixivRankings>().getOrThrow().ranking!!
                     if (entries.isEmpty()) break
 
-                    val call = ApiCall("/touch/ajax/illust/details/many")
-                    entries.forEach { call.url.addEncodedQueryParameter("illust_ids[]", it.illustId!!) }
+                    val detailsCall = ApiCall("/touch/ajax/illust/details/many")
+                    entries.forEach { detailsCall.url.addEncodedQueryParameter("illust_ids[]", it.illustId!!) }
 
-                    call.executeApi<PixivIllustsDetails>().getOrThrow().illust_details!!.forEach { yield(it) }
+                    detailsCall.executeApi<PixivIllustsDetails>().getOrThrow().illust_details!!.forEach { yield(it) }
                 }
             }
                 .toSManga()
@@ -95,14 +101,19 @@ class Pixiv(override val lang: String) : HttpSource() {
 
     private var searchNextPage = 1
     private var searchHash: Int? = null
-    private lateinit var searchIterator: Iterator<SManga>
+    private lateinit var searchIterator: Iterator<PixivIllust>
+    private lateinit var searchPredicates: List<(PixivIllust) -> Boolean>
+
+    private var userSearchNextPage = 1
+    private var userSearchHash: Int? = null
+    private lateinit var userSearchIterator: Iterator<SManga>
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
-        val target = PixivTarget.fromUri(query) /*?: PixivTarget.fromSearchQuery(query)*/
+        val target = PixivTarget.fromUri(query) ?: PixivTarget.fromSearchQuery(query)
 
         val singleResult = { manga: SManga? ->
             Observable.just(
@@ -119,38 +130,56 @@ class Pixiv(override val lang: String) : HttpSource() {
 
         // Deeplink selection of specific IDs: simply fetch the single object and return
         when (target) {
-            is PixivTarget.Illustration ->
-                singleResult(getIllustCached(target.illustId)?.toSManga())
+            is PixivTarget.Illustration -> {
+                return singleResult(getIllustCached(target.illustId)?.toSManga())
+            }
+
             is PixivTarget.Series -> {
                 // TODO: caching!
                 val series = ApiCall("/touch/ajax/illust/series/${target.seriesId}")
                     .executeApi<PixivSeriesDetails>().getOrNull()?.series
-                singleResult(series?.toSManga())
+                return singleResult(series?.toSManga())
             }
-            else -> null
-        }?.let { return it }
+
+            is PixivTarget.User -> {
+                val user = getUserCached(target.userId)
+                val manga = SManga.create().apply {
+                    url = "/users/${target.userId}"
+                    title = user?.name ?: "User ${target.userId}"
+                    thumbnail_url = user?.imageBig
+                }
+                return singleResult(manga)
+            }
+
+            else -> {}
+        }
 
         val filters = filters.list as PixivFilters
+
+        if (filters.users.isNotBlank()) {
+            val hash = filters.users.hashCode()
+            if (hash != userSearchHash || page == 1) {
+                userSearchHash = hash
+                userSearchIterator = makeUserSearchSequence(nick = filters.users).iterator()
+                userSearchNextPage = 2
+            } else {
+                require(page == userSearchNextPage++)
+            }
+
+            val mangas = userSearchIterator.truncateToList(TARGET_RESULTS)
+            return Observable.just(MangasPage(mangas, hasNextPage = mangas.isNotEmpty()))
+        }
+
         val hash = Pair(query, filters.toList()).hashCode()
 
         if (hash != searchHash || page == 1) {
             searchHash = hash
 
             lateinit var searchSequence: Sequence<PixivIllust>
-            lateinit var predicates: List<(PixivIllust) -> Boolean>
+            // clear predicates
+            searchPredicates = emptyList()
 
-            // TODO: it would be useful to allow multiple user: tags in the query
-            if (target is PixivTarget.User) {
-                searchSequence = makeUserIdIllustSearchSequence(
-                    id = target.userId,
-                    type = filters.type,
-                )
-
-                predicates = buildList {
-                    filters.makeTagsPredicate()?.let(::add)
-                    filters.makeRatingPredicate()?.let(::add)
-                }
-            } else if (query.isNotBlank()) {
+            if (query.isNotBlank()) {
                 searchSequence = makeIllustSearchSequence(
                     word = query,
                     order = filters.order,
@@ -161,19 +190,9 @@ class Pixiv(override val lang: String) : HttpSource() {
                     dateAfter = filters.dateAfter.ifBlank { null },
                 )
 
-                predicates = buildList {
+                searchPredicates = buildList {
                     filters.makeTagsPredicate()?.let(::add)
                     filters.makeUsersPredicate()?.let(::add)
-                }
-            } else if (filters.users.isNotBlank()) {
-                searchSequence = makeUserIllustSearchSequence(
-                    nick = filters.users,
-                    type = filters.type,
-                )
-
-                predicates = buildList {
-                    filters.makeTagsPredicate()?.let(::add)
-                    filters.makeRatingPredicate()?.let(::add)
                 }
             } else {
                 searchSequence = makeIllustSearchSequence(
@@ -185,22 +204,58 @@ class Pixiv(override val lang: String) : HttpSource() {
                     dateBefore = filters.dateBefore.ifBlank { null },
                     dateAfter = filters.dateAfter.ifBlank { null },
                 )
-
-                predicates = emptyList()
             }
 
-            if (predicates.isNotEmpty()) {
-                searchSequence = searchSequence.filter { predicates.all { p -> p(it) } }
-            }
-
-            searchIterator = searchSequence.toSManga().iterator()
+            searchIterator = searchSequence.iterator()
             searchNextPage = 2
         } else {
             require(page == searchNextPage++)
         }
 
-        val mangas = searchIterator.truncateToList(50).toList()
+        val filteredIllusts = if (searchPredicates.isEmpty()) {
+            searchIterator.truncateToList(TARGET_RESULTS)
+        } else {
+            // if we have a filter let's be a little smarter about how to get enough results
+            fetchWithAdaptiveWindow(searchIterator, searchPredicates)
+        }
+
+        val mangas = filteredIllusts.toSManga()
         return Observable.just(MangasPage(mangas, hasNextPage = mangas.isNotEmpty()))
+    }
+
+    // fetch with variable window size - if filter is strong and we're not getting a lot of
+    // results, cast a bigger net.
+    //
+    // this filters post-truncate to avoid the case where a strong filter will cause the search
+    // to spin forever and futilely fetch page after page trying to get enough results to return
+    private fun fetchWithAdaptiveWindow(
+        iterator: Iterator<PixivIllust>,
+        predicates: List<(PixivIllust) -> Boolean>,
+    ): List<PixivIllust> {
+        val sampleIllusts = iterator.truncateToList(RESULTS_PER_PAGE)
+        val sampleFiltered = sampleIllusts.filter { illust -> predicates.all { p -> p(illust) } }
+
+        val hitRate = if (sampleIllusts.isNotEmpty()) {
+            sampleFiltered.size.toDouble() / sampleIllusts.size
+        } else {
+            0.0
+        }
+        val estimatedWindow = if (hitRate > 0) {
+            (TARGET_RESULTS / hitRate).toInt().coerceIn(RESULTS_PER_PAGE, MAX_WINDOW_SIZE)
+        } else {
+            MAX_WINDOW_SIZE
+        }
+
+        // get estimated rest of unfiltered items needed to hit target results
+        val remainingNeeded = (estimatedWindow - RESULTS_PER_PAGE).coerceAtLeast(0)
+        val additionalIllusts = if (remainingNeeded > 0) {
+            iterator.truncateToList(remainingNeeded)
+        } else {
+            emptyList()
+        }
+
+        val allIllusts = sampleIllusts + additionalIllusts
+        return allIllusts.filter { illust -> predicates.all { p -> p(illust) } }
     }
 
     private fun makeIllustSearchSequence(
@@ -237,24 +292,48 @@ class Pixiv(override val lang: String) : HttpSource() {
         }
     }
 
-    private fun makeUserIllustSearchSequence(nick: String, type: String?) = sequence<PixivIllust> {
-        val searchUsers = HttpCall("/search_user.php?s_mode=s_usr")
-            .apply { url.addQueryParameter("nick", nick) }
+    // search by username
+    private fun makeUserSearchSequence(nick: String) = sequence<SManga> {
+        val searchUsers = HttpCall("/search/users")
+            .apply {
+                url.addQueryParameter("s_mode", "s_usr")
+                url.addQueryParameter("nick", nick)
+                url.addQueryParameter("i", "1")
+                url.addQueryParameter("comment", "")
+                // have to use desktop User-Agent to get __NEXT_DATA__ (mobile version is SPA without embedded data)
+                request.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            }
 
         for (p in countUp(start = 1)) {
             searchUsers.url.setEncodedQueryParameter("p", p.toString())
 
-            val userIds = searchUsers.execute().asJsoup()
-                .select(".user-recommendation-item > a").eachAttr("href")
-                .map { it.substringAfterLast('/') }
+            val response = searchUsers.execute()
+            val htmlBody = response.body.string()
+
+            val doc = org.jsoup.Jsoup.parse(htmlBody)
+            val nextDataScript = doc.select("script#__NEXT_DATA__").first()?.data() ?: break
+
+            val nextData = json.decodeFromString<PixivNextData>(nextDataScript)
+            val pageProps = nextData.props.pageProps
+            val userIds = pageProps.userIds
 
             if (userIds.isEmpty()) break
 
+            val users = pageProps.userData?.users
             for (userId in userIds) {
-                yieldAll(makeUserIdIllustSearchSequence(userId, type))
+                val user = users?.get(userId.toString())
+                yield(
+                    SManga.create().apply {
+                        url = "/users/$userId"
+                        title = user?.name ?: "User $userId"
+                        thumbnail_url = user?.imageBig
+                    },
+                )
             }
         }
     }
+
+    // lookup directly by user id
     private fun makeUserIdIllustSearchSequence(id: String, type: String?) = sequence<PixivIllust> {
         val fetchUserIllusts = ApiCall("/touch/ajax/user/illusts")
             .apply {
@@ -355,6 +434,13 @@ class Pixiv(override val lang: String) : HttpSource() {
         }
     }
 
+    private val getUserCached by lazy {
+        lruCached<String, PixivUserInfo?>(25) { userId ->
+            val call = ApiCall("/ajax/user/$userId?full=1")
+            return@lruCached call.executeApi<PixivUserInfo>().getOrNull()
+        }
+    }
+
     private val getSeriesIllustsCached by lazy {
         lruCached<String, List<PixivIllust>?>(25) { seriesId ->
             val call = ApiCall("/touch/ajax/illust/series_content/$seriesId")
@@ -376,56 +462,66 @@ class Pixiv(override val lang: String) : HttpSource() {
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val (id, isSeries) = parseSMangaUrl(manga.url)
+        val target = PixivTarget.fromUri(baseUrl + manga.url) ?: return Observable.just(manga)
 
-        if (isSeries) {
-            val series = ApiCall("/touch/ajax/illust/series/$id")
-                .executeApi<PixivSeriesDetails>().getOrThrow().series!!
+        when (target) {
+            is PixivTarget.User -> {
+                val response = getUserCached(target.userId)
 
-            val illusts = getSeriesIllustsCached(id)!!
-
-            if (series.id != null && series.userId != null) {
-                manga.setUrlWithoutDomain("/user/${series.userId}/series/${series.id}")
+                response?.name?.let {
+                    manga.title = it
+                    manga.author = it
+                    manga.artist = it
+                }
+                response?.comment?.let { manga.description = it }
+                response?.imageBig?.let { manga.thumbnail_url = it }
             }
+            is PixivTarget.Series -> {
+                val series = ApiCall("/touch/ajax/illust/series/${target.seriesId}")
+                    .executeApi<PixivSeriesDetails>().getOrThrow().series!!
 
-            series.title?.let { manga.title = it }
-            series.caption?.let { manga.description = it }
+                val illusts = getSeriesIllustsCached(target.seriesId)!!
 
-            illusts.firstOrNull()?.author_details?.user_name?.let {
-                manga.artist = it
-                manga.author = it
+                series.title?.let { manga.title = it }
+                series.caption?.let { manga.description = it }
+
+                illusts.firstOrNull()?.author_details?.user_name?.let {
+                    manga.artist = it
+                    manga.author = it
+                }
+
+                val tags = illusts.flatMap { it.tags ?: emptyList() }.toSet()
+                if (tags.isNotEmpty()) manga.genre = tags.joinToString()
+
+                val coverImage = series.coverImage?.let { if (it.isString) it.content else null }
+                (coverImage ?: illusts.firstOrNull()?.url)?.let { manga.thumbnail_url = it }
             }
+            is PixivTarget.Illustration -> {
+                val illust = getIllustCached(target.illustId)!!
 
-            val tags = illusts.flatMap { it.tags ?: emptyList() }.toSet()
-            if (tags.isNotEmpty()) manga.genre = tags.joinToString()
+                illust.title?.let { manga.title = it }
 
-            val coverImage = series.coverImage?.let { if (it.isString) it.content else null }
-            (coverImage ?: illusts.firstOrNull()?.url)?.let { manga.thumbnail_url = it }
-        } else {
-            val illust = getIllustCached(id)!!
+                illust.author_details?.user_name?.let {
+                    manga.artist = it
+                    manga.author = it
+                }
 
-            illust.id?.let { manga.setUrlWithoutDomain("/artworks/$it") }
-            illust.title?.let { manga.title = it }
-
-            illust.author_details?.user_name?.let {
-                manga.artist = it
-                manga.author = it
+                illust.comment?.let { manga.description = it }
+                illust.tags?.let { manga.genre = it.joinToString() }
+                illust.url?.let { manga.thumbnail_url = it }
             }
-
-            illust.comment?.let { manga.description = it }
-            illust.tags?.let { manga.genre = it.joinToString() }
-            illust.url?.let { manga.thumbnail_url = it }
         }
 
         return Observable.just(manga)
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val (id, isSeries) = parseSMangaUrl(manga.url)
+        val target = PixivTarget.fromUri(baseUrl + manga.url) ?: return Observable.just(emptyList())
 
-        val illusts = when (isSeries) {
-            true -> getSeriesIllustsCached(id)!!
-            false -> listOf(getIllustCached(id)!!)
+        val illusts = when (target) {
+            is PixivTarget.User -> makeUserIdIllustSearchSequence(target.userId, type = null).toList()
+            is PixivTarget.Series -> getSeriesIllustsCached(target.seriesId)!!
+            is PixivTarget.Illustration -> listOf(getIllustCached(target.illustId)!!)
         }
 
         val chapters = illusts.mapIndexed { i, illust ->
@@ -445,38 +541,68 @@ class Pixiv(override val lang: String) : HttpSource() {
 
         val pages = ApiCall("/ajax/illust/$illustId/pages")
             .executeApi<List<PixivIllustPage>>().getOrThrow()
-            .mapIndexed { i, it -> Page(i, chapter.url, it.urls!!.original!!) }
+            .mapIndexed { i, page ->
+                val imageUrl = getImageUrl(page.urls!!)
+                Page(i, chapter.url, imageUrl)
+            }
 
         return Observable.just(pages)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        throw UnsupportedOperationException()
+    private fun getImageUrl(urls: PixivIllustPageUrls): String {
+        val quality = preferences.getString(PREF_IMAGE_QUALITY, "original")!!
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+        val sizeOrder = listOf("thumb_mini", "small", "regular", "original")
+        val startIndex = sizeOrder.indexOf(quality).takeIf { it >= 0 } ?: sizeOrder.lastIndex
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+        return sizeOrder.drop(startIndex).firstNotNullOf { size ->
+            when (size) {
+                "thumb_mini" -> urls.thumb_mini
+                "small" -> urls.small
+                "regular" -> urls.regular
+                "original" -> urls.original
+                else -> null
+            }
+        }
+    }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_IMAGE_QUALITY
+            title = "Image quality"
+            entries = arrayOf("Thumb Mini", "Small", "Regular", "Original")
+            entryValues = arrayOf("thumb_mini", "small", "regular", "original")
+            setDefaultValue("original")
+            summary = "%s"
+        }.also(screen::addPreference)
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
+    companion object {
+        private const val PREF_IMAGE_QUALITY = "pref_image_quality"
 
-    override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException()
+        // constants for fetchWithAdaptiveWindow
+        private const val TARGET_RESULTS = 50
+        private const val RESULTS_PER_PAGE = 36
+        private const val MAX_WINDOW_SIZE = 1000 // roughly 25 pages
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

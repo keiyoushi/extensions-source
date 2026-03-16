@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaEsp : MangaThemesia(
-    "MangaEsp",
-    "https://mangaesp.topmanhuas.org",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("en")),
-) {
+class MangaEsp :
+    MangaThemesia(
+        "MangaEsp",
+        "https://mangaesp.topmanhuas.org",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("en")),
+    ) {
     override val versionId = 2
 
     override val client = super.client.newBuilder()

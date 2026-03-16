@@ -80,7 +80,8 @@ internal class LatestUpdatesResponse(
 
 @Serializable
 internal class LatestMangaDto(
-    private val id: Int,
+    private val id: Int? = null,
+    private val serie_id: Int? = null,
     private val slug: String,
     private val title: String,
     private val poster: PosterDto,
@@ -88,7 +89,7 @@ internal class LatestMangaDto(
     fun toSManga(): SManga = SManga.create().apply {
         this.title = this@LatestMangaDto.title
         this.thumbnail_url = poster.mediumUrl
-        this.url = id.toString()
+        this.url = (id ?: serie_id)!!.toString()
     }
 }
 
@@ -113,7 +114,9 @@ internal class ChapterDto(
 ) {
     fun toSChapter(): SChapter = SChapter.create().apply {
         name = chapter
-        date_upload = MangaSwat.apiDateFormat.tryParse(createdAt)
+        date_upload = MangaSwat.apiDateFormat.tryParse(
+            createdAt.substringBefore('.').let { it + if (it.endsWith("Z")) "" else "Z" },
+        )
         url = "/chapters/$id/$slug/"
     }
 }

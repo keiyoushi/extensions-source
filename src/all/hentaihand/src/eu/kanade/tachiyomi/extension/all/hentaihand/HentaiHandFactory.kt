@@ -57,9 +57,9 @@ abstract class HentaiHandCommon(
 class HentaiHandOther : HentaiHandCommon("all") {
     override val id: Long = 1235047015955289468
 }
-class HentaiHandJa : HentaiHandCommon("ja", listOf(1, 29))
+class HentaiHandJa : HentaiHandCommon("ja", listOf(3, 29))
 class HentaiHandEn : HentaiHandCommon("en", listOf(2, 27))
-class HentaiHandZh : HentaiHandCommon("zh", listOf(3, 50))
+class HentaiHandZh : HentaiHandCommon("zh", listOf(1, 50))
 class HentaiHandBg : HentaiHandCommon("bg", listOf(4))
 class HentaiHandCeb : HentaiHandCommon("ceb", listOf(5, 44))
 class HentaiHandNoText : HentaiHandCommon("other", listOf(6)) {

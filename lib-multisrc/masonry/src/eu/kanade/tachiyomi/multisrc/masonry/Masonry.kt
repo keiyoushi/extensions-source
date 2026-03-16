@@ -57,54 +57,50 @@ abstract class Masonry(
         thumbnail_url = element.selectFirst("img")?.imgAttr()
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/updates/sort/newest/mpage/$page/", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/updates/sort/newest/mpage/$page/", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotEmpty()) {
-            val url = "$baseUrl/search/post/".toHttpUrl().newBuilder()
-                .addPathSegment(query.trim())
-                .addEncodedPathSegments("mpage/$page/")
-                .build()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotEmpty()) {
+        val url = "$baseUrl/search/post/".toHttpUrl().newBuilder()
+            .addPathSegment(query.trim())
+            .addEncodedPathSegments("mpage/$page/")
+            .build()
 
-            GET(url, headers)
-        } else {
-            val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
-            val sortFilter = filters.filterIsInstance<SortFilter>().first()
+        GET(url, headers)
+    } else {
+        val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
+        val sortFilter = filters.filterIsInstance<SortFilter>().first()
 
-            val url = baseUrl.toHttpUrl().newBuilder().apply {
-                if (tagFilter == null || tagFilter.selected == "") {
-                    addPathSegment("updates")
-                    sortFilter.getUriPartIfNeeded("search").also {
-                        if (it.isBlank()) {
-                            addEncodedPathSegments("page/$page/")
-                        } else {
-                            addEncodedPathSegments(it)
-                            addEncodedPathSegments("mpage/$page/")
-                        }
-                    }
-                } else {
-                    addPathSegment("tag")
-                    addPathSegment(tagFilter.selected)
-                    sortFilter.getUriPartIfNeeded("tag").also {
-                        if (it.isBlank()) {
-                            addEncodedPathSegments("page/$page/")
-                        } else {
-                            addEncodedPathSegments(it)
-                            addEncodedPathSegments("mpage/$page/")
-                        }
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (tagFilter == null || tagFilter.selected == "") {
+                addPathSegment("updates")
+                sortFilter.getUriPartIfNeeded("search").also {
+                    if (it.isBlank()) {
+                        addEncodedPathSegments("page/$page/")
+                    } else {
+                        addEncodedPathSegments(it)
+                        addEncodedPathSegments("mpage/$page/")
                     }
                 }
-            }.build()
+            } else {
+                addPathSegment("tag")
+                addPathSegment(tagFilter.selected)
+                sortFilter.getUriPartIfNeeded("tag").also {
+                    if (it.isBlank()) {
+                        addEncodedPathSegments("page/$page/")
+                    } else {
+                        addEncodedPathSegments(it)
+                        addEncodedPathSegments("mpage/$page/")
+                    }
+                }
+            }
+        }.build()
 
-            GET(url, headers)
-        }
+        GET(url, headers)
     }
 
     private var tags = emptyList<Pair<String, String>>()
@@ -165,35 +161,29 @@ abstract class Masonry(
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Gallery"
-                    url = manga.url
-                },
-            ),
-        )
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
+        listOf(
+            SChapter.create().apply {
+                name = "Gallery"
+                url = manga.url
+            },
+        ),
+    )
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("href"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("href"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    protected fun Element.imgAttr(): String? {
-        return when {
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            else -> attr("abs:src")
-        }
+    protected fun Element.imgAttr(): String? = when {
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        else -> attr("abs:src")
     }
 }

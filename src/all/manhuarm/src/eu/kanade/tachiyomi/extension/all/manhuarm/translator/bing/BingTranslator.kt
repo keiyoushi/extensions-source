@@ -44,10 +44,8 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         return text
     }
 
-    private fun fetchTranslatedText(request: Request): String {
-        return client.newCall(request).execute().parseAs<List<TranslateDto>>()
-            .firstOrNull()!!.text
-    }
+    private fun fetchTranslatedText(request: Request): String = client.newCall(request).execute().parseAs<List<TranslateDto>>()
+        .firstOrNull()!!.text
 
     private fun refreshTokens(): Boolean {
         tokens = loadTokens()
@@ -104,9 +102,7 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         )
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromStream(body.byteStream())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromStream(body.byteStream())
 
     companion object {
         val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(\d+),"([^"]+)""".toRegex()

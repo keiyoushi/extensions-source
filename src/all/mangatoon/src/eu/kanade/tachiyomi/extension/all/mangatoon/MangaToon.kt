@@ -44,6 +44,7 @@ open class MangaToon(
         "pt-BR" ->
             "Este capítulo é pago e não pode ser lido. " +
                 "Use o app oficial do MangaToon para comprar e ler."
+
         else ->
             "This chapter is paid and can't be read. " +
                 "Use the MangaToon official app to purchase and read it."
@@ -66,9 +67,7 @@ open class MangaToon(
 
     override fun popularMangaNextPageSelector() = "span.next"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -111,9 +110,7 @@ open class MangaToon(
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url + "/episodes", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "/episodes", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = super.chapterListParse(response)
@@ -148,18 +145,14 @@ open class MangaToon(
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.pictures div img:first-child")
-            .mapIndexed { i, element -> Page(i, "", element.imgAttr()) }
-            .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.pictures div img:first-child")
+        .mapIndexed { i, element -> Page(i, "", element.imgAttr()) }
+        .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
 
     override fun imageUrlParse(document: Document) = ""
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMAT.parse(this)?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun String.toDate(): Long = runCatching { DATE_FORMAT.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     protected open fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")

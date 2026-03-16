@@ -1,0 +1,10 @@
+ext {
+    extName = 'Doujinclub'
+    extClass = '.Doujinclub'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/doujinclub'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -30,7 +30,8 @@ open class UriMultiSelectFilter(
     name: String,
     private val param: String,
     private val vals: Array<Pair<String, String>>,
-) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }), UriFilter {
+) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val checked = state.filter { it.state }
 
@@ -46,7 +47,8 @@ open class UriTriSelectFilter(
     name: String,
     private val param: String,
     private val vals: Array<Pair<String, String>>,
-) : Filter.Group<UriTriSelectOption>(name, vals.map { UriTriSelectOption(it.first, it.second) }), UriFilter {
+) : Filter.Group<UriTriSelectOption>(name, vals.map { UriTriSelectOption(it.first, it.second) }),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         state.forEach { s ->
             when (s.state) {
@@ -57,68 +59,72 @@ open class UriTriSelectFilter(
     }
 }
 
-class TypeFilter : UriMultiSelectFilter(
-    "Type",
-    "type",
-    arrayOf(
-        Pair("Manga", "manga"),
-        Pair("One-Shot", "one_shot"),
-        Pair("Doujinshi", "doujinshi"),
-        Pair("Novel", "novel"),
-        Pair("Manhwa", "manhwa"),
-        Pair("Manhua", "manhua"),
-    ),
-)
+class TypeFilter :
+    UriMultiSelectFilter(
+        "Type",
+        "type",
+        arrayOf(
+            Pair("Manga", "manga"),
+            Pair("One-Shot", "one_shot"),
+            Pair("Doujinshi", "doujinshi"),
+            Pair("Novel", "novel"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Manhua", "manhua"),
+        ),
+    )
 
-class GenreFilter : UriTriSelectFilter(
-    "Genres",
-    "genre[]",
-    arrayOf(
-        Pair("Action", "1"),
-        Pair("Adventure", "78"),
-        Pair("Avant Garde", "3"),
-        Pair("Boys Love", "4"),
-        Pair("Comedy", "5"),
-        Pair("Demons", "77"),
-        Pair("Drama", "6"),
-        Pair("Ecchi", "7"),
-        Pair("Fantasy", "79"),
-        Pair("Girls Love", "9"),
-        Pair("Gourmet", "10"),
-        Pair("Harem", "11"),
-        Pair("Horror", "530"),
-        Pair("Isekai", "13"),
-        Pair("Iyashikei", "531"),
-        Pair("Josei", "15"),
-        Pair("Kids", "532"),
-        Pair("Magic", "539"),
-        Pair("Mahou Shoujo", "533"),
-        Pair("Martial Arts", "534"),
-        Pair("Mecha", "19"),
-        Pair("Military", "535"),
-        Pair("Music", "21"),
-        Pair("Mystery", "22"),
-        Pair("Parody", "23"),
-        Pair("Psychological", "536"),
-        Pair("Reverse Harem", "25"),
-        Pair("Romance", "26"),
-        Pair("School", "73"),
-        Pair("Sci-Fi", "28"),
-        Pair("Seinen", "537"),
-        Pair("Shoujo", "30"),
-        Pair("Shounen", "31"),
-        Pair("Slice of Life", "538"),
-        Pair("Space", "33"),
-        Pair("Sports", "34"),
-        Pair("Super Power", "75"),
-        Pair("Supernatural", "76"),
-        Pair("Suspense", "37"),
-        Pair("Thriller", "38"),
-        Pair("Vampire", "39"),
-    ),
-)
+class GenreFilter :
+    UriTriSelectFilter(
+        "Genres",
+        "genre[]",
+        arrayOf(
+            Pair("Action", "1"),
+            Pair("Adventure", "78"),
+            Pair("Avant Garde", "3"),
+            Pair("Boys Love", "4"),
+            Pair("Comedy", "5"),
+            Pair("Demons", "77"),
+            Pair("Drama", "6"),
+            Pair("Ecchi", "7"),
+            Pair("Fantasy", "79"),
+            Pair("Girls Love", "9"),
+            Pair("Gourmet", "10"),
+            Pair("Harem", "11"),
+            Pair("Horror", "530"),
+            Pair("Isekai", "13"),
+            Pair("Iyashikei", "531"),
+            Pair("Josei", "15"),
+            Pair("Kids", "532"),
+            Pair("Magic", "539"),
+            Pair("Mahou Shoujo", "533"),
+            Pair("Martial Arts", "534"),
+            Pair("Mecha", "19"),
+            Pair("Military", "535"),
+            Pair("Music", "21"),
+            Pair("Mystery", "22"),
+            Pair("Parody", "23"),
+            Pair("Psychological", "536"),
+            Pair("Reverse Harem", "25"),
+            Pair("Romance", "26"),
+            Pair("School", "73"),
+            Pair("Sci-Fi", "28"),
+            Pair("Seinen", "537"),
+            Pair("Shoujo", "30"),
+            Pair("Shounen", "31"),
+            Pair("Slice of Life", "538"),
+            Pair("Space", "33"),
+            Pair("Sports", "34"),
+            Pair("Super Power", "75"),
+            Pair("Supernatural", "76"),
+            Pair("Suspense", "37"),
+            Pair("Thriller", "38"),
+            Pair("Vampire", "39"),
+        ),
+    )
 
-class GenreModeFilter : Filter.CheckBox("Must have all the selected genres"), UriFilter {
+class GenreModeFilter :
+    Filter.CheckBox("Must have all the selected genres"),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (state) {
             builder.addQueryParameter("genre_mode", "and")
@@ -126,23 +132,25 @@ class GenreModeFilter : Filter.CheckBox("Must have all the selected genres"), Ur
     }
 }
 
-class StatusFilter : UriMultiSelectFilter(
-    "Status",
-    "status[]",
-    arrayOf(
-        Pair("Completed", "completed"),
-        Pair("Releasing", "releasing"),
-        Pair("On Hiatus", "on_hiatus"),
-        Pair("Discontinued", "discontinued"),
-        Pair("Not Yet Published", "info"),
-    ),
-)
+class StatusFilter :
+    UriMultiSelectFilter(
+        "Status",
+        "status[]",
+        arrayOf(
+            Pair("Completed", "completed"),
+            Pair("Releasing", "releasing"),
+            Pair("On Hiatus", "on_hiatus"),
+            Pair("Discontinued", "discontinued"),
+            Pair("Not Yet Published", "info"),
+        ),
+    )
 
-class YearFilter : UriMultiSelectFilter(
-    "Year",
-    "year[]",
-    years,
-) {
+class YearFilter :
+    UriMultiSelectFilter(
+        "Year",
+        "year[]",
+        years,
+    ) {
     companion object {
         private val currentYear by lazy {
             Calendar.getInstance()[Calendar.YEAR]
@@ -160,7 +168,9 @@ class YearFilter : UriMultiSelectFilter(
     }
 }
 
-class MinChapterFilter : Filter.Text("Minimum chapter length"), UriFilter {
+class MinChapterFilter :
+    Filter.Text("Minimum chapter length"),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (state.isNotEmpty()) {
             val value = state.toIntOrNull()?.takeIf { it > 0 }
@@ -171,20 +181,21 @@ class MinChapterFilter : Filter.Text("Minimum chapter length"), UriFilter {
     }
 }
 
-class SortFilter(defaultValue: String? = null) : UriPartFilter(
-    "Sort",
-    "sort",
-    arrayOf(
-        Pair("Most relevance", "most_relevance"),
-        Pair("Recently updated", "recently_updated"),
-        Pair("Recently added", "recently_added"),
-        Pair("Release date", "release_date"),
-        Pair("Trending", "trending"),
-        Pair("Name A-Z", "title_az"),
-        Pair("Scores", "scores"),
-        Pair("MAL scores", "mal_scores"),
-        Pair("Most viewed", "most_viewed"),
-        Pair("Most favourited", "most_favourited"),
-    ),
-    defaultValue,
-)
+class SortFilter(defaultValue: String? = null) :
+    UriPartFilter(
+        "Sort",
+        "sort",
+        arrayOf(
+            Pair("Most relevance", "most_relevance"),
+            Pair("Recently updated", "recently_updated"),
+            Pair("Recently added", "recently_added"),
+            Pair("Release date", "release_date"),
+            Pair("Trending", "trending"),
+            Pair("Name A-Z", "title_az"),
+            Pair("Scores", "scores"),
+            Pair("MAL scores", "mal_scores"),
+            Pair("Most viewed", "most_viewed"),
+            Pair("Most favourited", "most_favourited"),
+        ),
+        defaultValue,
+    )

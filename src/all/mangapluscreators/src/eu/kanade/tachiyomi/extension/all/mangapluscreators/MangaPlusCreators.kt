@@ -164,7 +164,9 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                                 addQueryParameter("s", filter.selected)
                             }
                         }
+
                         is GenreFilter -> addPathSegment(filter.selected)
+
                         else -> { /* Nothing else is supported for now */ }
                     }
                 }
@@ -229,9 +231,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return chapterListPageRequest(1, titleContentId)
     }
 
-    private fun chapterListPageRequest(page: Int, titleContentId: String): Request {
-        return GET("$baseUrl/titles/$titleContentId/?page=$page", headers)
-    }
+    private fun chapterListPageRequest(page: Int, titleContentId: String): Request = GET("$baseUrl/titles/$titleContentId/?page=$page", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterListResponse = chapterListPageParse(response)
@@ -257,8 +257,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     private fun chapterListPageParse(response: Response): ChaptersPage {
         val result = response.asJsoup()
-        val chapters = result.select(".mod-item-series").map {
-                element ->
+        val chapters = result.select(".mod-item-series").map { element ->
             chapterElementToSChapter(element)
         }
         val hasResult = result.select(".mod-pagination .next").isNotEmpty()
@@ -291,8 +290,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         val readerElement = result.selectFirst("div[react=viewer]")!!
         val dataPages = readerElement.attr("data-pages")
         val refererUrl = response.request.url.toString()
-        return dataPages.parseAs<MpcReaderDataPages>().pc.map {
-                page ->
+        return dataPages.parseAs<MpcReaderDataPages>().pc.map { page ->
             Page(page.pageNo, refererUrl, page.imageUrl)
         }
     }
@@ -331,32 +329,34 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         Filter.Separator(),
     )
 
-    private class SortFilter() : SelectFilter(
-        "Sort",
-        listOf(
-            SelectFilterOption("Popularity", ""),
-            SelectFilterOption("Date", "latest_desc"),
-            SelectFilterOption("Likes", "like_desc"),
-        ),
-        0,
-    )
+    private class SortFilter :
+        SelectFilter(
+            "Sort",
+            listOf(
+                SelectFilterOption("Popularity", ""),
+                SelectFilterOption("Date", "latest_desc"),
+                SelectFilterOption("Likes", "like_desc"),
+            ),
+            0,
+        )
 
-    private class GenreFilter() : SelectFilter(
-        "Genres",
-        listOf(
-            SelectFilterOption("Fantasy", "fantasy"),
-            SelectFilterOption("Action", "action"),
-            SelectFilterOption("Romance", "romance"),
-            SelectFilterOption("Horror", "horror"),
-            SelectFilterOption("Slice of Life", "slice_of_life"),
-            SelectFilterOption("Comedy", "comedy"),
-            SelectFilterOption("Sports", "sports"),
-            SelectFilterOption("Sci-Fi", "sf"),
-            SelectFilterOption("Mystery", "mystery"),
-            SelectFilterOption("Others", "others"),
-        ),
-        0,
-    )
+    private class GenreFilter :
+        SelectFilter(
+            "Genres",
+            listOf(
+                SelectFilterOption("Fantasy", "fantasy"),
+                SelectFilterOption("Action", "action"),
+                SelectFilterOption("Romance", "romance"),
+                SelectFilterOption("Horror", "horror"),
+                SelectFilterOption("Slice of Life", "slice_of_life"),
+                SelectFilterOption("Comedy", "comedy"),
+                SelectFilterOption("Sports", "sports"),
+                SelectFilterOption("Sci-Fi", "sf"),
+                SelectFilterOption("Mystery", "mystery"),
+                SelectFilterOption("Others", "others"),
+            ),
+            0,
+        )
 
     private abstract class SelectFilter(
         name: String,

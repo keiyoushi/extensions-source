@@ -39,12 +39,15 @@ class MangaChan : MultiChan("MangaChan", "https://im.manga-chan.me", "ru") {
                             }
                         }
                     }
+
                     is OrderBy -> {
                         if (filter.state!!.ascending && filter.state!!.index == 0) {
                             statusParam = false
                         }
                     }
+
                     is Status -> status = arrayOf("", "all_done", "end", "ongoing", "new_ch")[filter.state]
+
                     else -> continue
                 }
             }
@@ -59,6 +62,7 @@ class MangaChan : MultiChan("MangaChan", "https://im.manga-chan.me", "ru") {
                                 arrayOf("&n=dateasc", "&n=favdesc", "&n=abcasc", "&n=chdesc")[filter.state!!.index]
                             }
                         }
+
                         else -> continue
                     }
                 }
@@ -77,6 +81,7 @@ class MangaChan : MultiChan("MangaChan", "https://im.manga-chan.me", "ru") {
                                 arrayOf("manga/new&n=dateasc", "mostfavorites", "catalog", "sortch")[filter.state!!.index]
                             }
                         }
+
                         else -> continue
                     }
                 }
@@ -93,11 +98,12 @@ class MangaChan : MultiChan("MangaChan", "https://im.manga-chan.me", "ru") {
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)
     private class Genre(name: String, val id: String = name.replace(' ', '_')) : Filter.TriState(name)
     private class Status : Filter.Select<String>("Статус", arrayOf("Все", "Перевод завершен", "Выпуск завершен", "Онгоинг", "Новые главы"))
-    private class OrderBy : Filter.Sort(
-        "Сортировка",
-        arrayOf("Дата", "Популярность", "Имя", "Главы"),
-        Selection(1, false),
-    )
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("Дата", "Популярность", "Имя", "Главы"),
+            Selection(1, false),
+        )
 
     override fun getFilterList() = FilterList(
         Status(),

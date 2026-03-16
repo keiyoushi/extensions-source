@@ -39,9 +39,7 @@ class Comicabc : ParsedHttpSource() {
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/member/search.aspx?key=$query&page=$page", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/member/search.aspx?key=$query&page=$page", headers)
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
     override fun searchMangaSelector(): String = popularMangaSelector()
@@ -72,9 +70,7 @@ class Comicabc : ParsedHttpSource() {
         url = "/online/new-$comicId.html?ch=$chapterId"
         name = element.text()
     }
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     // Pages
 
@@ -87,7 +83,7 @@ class Comicabc : ParsedHttpSource() {
             .substringBefore("\$(\"#pt,#ptb\")")
         val quickJs = QuickJs.create()
         val variableName = script.substringAfter("img  s=\"").substringBefore("'")
-        val images = quickJs.evaluate(nview + script + lazyloadx.format(variableName)) as Array<*>
+        val images = quickJs.evaluate(N_VIEW + script + LAZY_LOAD_X.format(variableName)) as Array<*>
         quickJs.close()
         return images.mapIndexed { index, it ->
             Page(index, "", it.toString())
@@ -100,12 +96,12 @@ class Comicabc : ParsedHttpSource() {
     companion object {
         // Functions required by script in pageListParse()
         // Taken from https://www.8comic.com/js/j.js?9989588541
-        const val nview = """function lc(l){if(l.length!=2 ) return l;var az="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";var a=l.substring(0,1);var b=l.substring(1,2);if(a=="Z") return 8000+az.indexOf(b);else return az.indexOf(a)*52+az.indexOf(b);}
+        const val N_VIEW = """function lc(l){if(l.length!=2 ) return l;var az="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";var a=l.substring(0,1);var b=l.substring(1,2);if(a=="Z") return 8000+az.indexOf(b);else return az.indexOf(a)*52+az.indexOf(b);}
 function nn(n){return n<10?'00'+n:n<100?'0'+n:n;}function mm(p){return (parseInt((p-1)/10)%10)+(((p-1)%10)*3)};
 function su(a,b,c){var e=(a+'').substring(b,b+c);return (e);}var y=46;"""
 
         // Modified from https://www.8comic.com/js/lazyloadx.js?9989588541
-        const val lazyloadx = """src="%s"
+        const val LAZY_LOAD_X = """src="%s"
 var b=eval(src.substring(0,5));
 var c=eval(src.substring(5,10));
 var d=eval(src.substring(10,15));

@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.globalcomix.dto
 
 import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComix.Companion.dateFormatter
-import eu.kanade.tachiyomi.extension.all.globalcomix.lockSymbol
-import eu.kanade.tachiyomi.extension.all.globalcomix.release
+import eu.kanade.tachiyomi.extension.all.globalcomix.LOCK_SYMBOL
+import eu.kanade.tachiyomi.extension.all.globalcomix.RELEASE
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
@@ -13,7 +13,7 @@ typealias ChaptersDto = PaginatedResponseDto<ChapterDataDto>
 
 @Suppress("PropertyName")
 @Serializable
-@SerialName(release)
+@SerialName(RELEASE)
 class ChapterDataDto(
     val title: String,
     val chapter: String, // Stringified number
@@ -34,7 +34,7 @@ class ChapterDataDto(
         fun ChapterDataDto.createChapter(): SChapter {
             val chapterName = mutableListOf<String>()
             if (isPremium) {
-                chapterName.add(lockSymbol)
+                chapterName.add(LOCK_SYMBOL)
             }
 
             chapter.let {

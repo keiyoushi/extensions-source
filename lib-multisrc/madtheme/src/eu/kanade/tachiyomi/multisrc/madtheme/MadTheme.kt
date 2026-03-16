@@ -73,36 +73,26 @@ abstract class MadTheme(
     private var genreKey = "genre[]"
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(OrderFilter(0)))
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(0)))
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun popularMangaSelector(): String =
-        searchMangaSelector()
+    override fun popularMangaSelector(): String = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector(): String? =
-        searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector(): String? = searchMangaNextPageSelector()
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList(OrderFilter(1)))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(1)))
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesSelector(): String =
-        searchMangaSelector()
+    override fun latestUpdatesSelector(): String = searchMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector(): String? =
-        searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector(): String? = searchMangaNextPageSelector()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -121,12 +111,15 @@ abstract class MadTheme(
                             }
                         }
                 }
+
                 is StatusFilter -> {
                     url.addQueryParameter("status", filter.toUriPart())
                 }
+
                 is OrderFilter -> {
                     url.addQueryParameter("sort", filter.toUriPart())
                 }
+
                 else -> {}
             }
         }
@@ -221,15 +214,13 @@ abstract class MadTheme(
         return chaptersList
     }
 
-    private fun buildChapterUrl(mangaId: String, mangaSlug: String): HttpUrl {
-        return baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("manga")
-            addPathSegment(if (useSlugSearch) mangaSlug else mangaId)
-            addPathSegment("chapters")
-            addQueryParameter("source", "detail")
-        }.build()
-    }
+    private fun buildChapterUrl(mangaId: String, mangaSlug: String): HttpUrl = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("api")
+        addPathSegment("manga")
+        addPathSegment(if (useSlugSearch) mangaSlug else mangaId)
+        addPathSegment("chapters")
+        addQueryParameter("source", "detail")
+    }.build()
 
     override fun chapterListRequest(manga: SManga): Request {
         if (useLegacyApi) {
@@ -298,8 +289,8 @@ abstract class MadTheme(
                 // we've got no choice but to fallback to chapter images from HTML.
                 // TODO: This might need to be solved one day ^
                 if (chapterImagesFromJs.all { e ->
-                    e.startsWith("http://") || e.startsWith("https://")
-                }
+                        e.startsWith("http://") || e.startsWith("https://")
+                    }
                 ) {
                     // Great, we can use these.
                     if (chapterImagesFromHtml.count() < chapterImagesFromJs.count()) {
@@ -335,38 +326,32 @@ abstract class MadTheme(
     }
 
     // Image
-    override fun pageListRequest(chapter: SChapter): Request {
-        return if (chapter.url.toHttpUrlOrNull() != null) {
-            // External chapter
-            GET(chapter.url, headers)
-        } else {
-            super.pageListRequest(chapter)
-        }
+    override fun pageListRequest(chapter: SChapter): Request = if (chapter.url.toHttpUrlOrNull() != null) {
+        // External chapter
+        GET(chapter.url, headers)
+    } else {
+        super.pageListRequest(chapter)
     }
 
-    override fun imageRequest(page: Page): Request {
-        return GET("${page.imageUrl}#image-request", headers)
-    }
+    override fun imageRequest(page: Page): Request = GET("${page.imageUrl}#image-request", headers)
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Date logic lifted from Madara
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long {
-            return try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
+        fun SimpleDateFormat.tryParse(string: String): Long = try {
+            parse(string)?.time ?: 0
+        } catch (_: ParseException) {
+            0
         }
 
         return when {
             " ago" in date -> {
                 parseRelativeDate(date)
             }
+
             else -> dateFormat.tryParse(date)
         }
     }
@@ -387,12 +372,10 @@ abstract class MadTheme(
     }
 
     // Dynamic genres
-    private fun parseGenres(document: Document): List<Genre>? {
-        return document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.run {
-            firstOrNull()?.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
-            map {
-                Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
-            }
+    private fun parseGenres(document: Document): List<Genre>? = document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.run {
+        firstOrNull()?.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
+        map {
+            Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
         }
     }
 
@@ -418,34 +401,35 @@ abstract class MadTheme(
         return genresList ?: listOf(Genre("Press reset to attempt to fetch genres", ""))
     }
 
-    class StatusFilter : UriPartFilter(
-        "Status",
-        arrayOf(
-            Pair("All", "all"),
-            Pair("Ongoing", "ongoing"),
-            Pair("Completed", "completed"),
-        ),
-    )
+    class StatusFilter :
+        UriPartFilter(
+            "Status",
+            arrayOf(
+                Pair("All", "all"),
+                Pair("Ongoing", "ongoing"),
+                Pair("Completed", "completed"),
+            ),
+        )
 
-    class OrderFilter(state: Int = 0) : UriPartFilter(
-        "Order By",
-        arrayOf(
-            Pair("Views", "views"),
-            Pair("Updated", "updated_at"),
-            Pair("Created", "created_at"),
-            Pair("Name A-Z", "name"),
-            // Pair("Number of Chapters", "total_chapters"),
-            Pair("Rating", "rating"),
-        ),
-        state,
-    )
+    class OrderFilter(state: Int = 0) :
+        UriPartFilter(
+            "Order By",
+            arrayOf(
+                Pair("Views", "views"),
+                Pair("Updated", "updated_at"),
+                Pair("Created", "created_at"),
+                Pair("Name A-Z", "name"),
+                // Pair("Number of Chapters", "total_chapters"),
+                Pair("Rating", "rating"),
+            ),
+            state,
+        )
 
     open class UriPartFilter(
         displayName: String,
         private val vals: Array<Pair<String, String>>,
         state: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
 

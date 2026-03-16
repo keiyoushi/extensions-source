@@ -34,14 +34,15 @@ import uy.kohesive.injekt.injectLazy
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
-class Happymh : HttpSource(), ConfigurableSource {
+class Happymh :
+    HttpSource(),
+    ConfigurableSource {
     override val name: String = "嗨皮漫画"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
 
     override val baseUrl: String = "https://m.happymh.com"
     private val json: Json by injectLazy()
-    private val chapterUrlToCode = hashMapOf<String, String>()
 
     private val preferences = getPreferences()
 
@@ -57,7 +58,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
         if (originalResponse.headers("Content-Type")
-            .contains("application/octet-stream") && originalResponse.request.url.toString()
+                .contains("application/octet-stream") && originalResponse.request.url.toString()
                 .contains(".jpg")
         ) {
             val orgBody = originalResponse.body.source()
@@ -150,14 +151,12 @@ class Happymh : HttpSource(), ConfigurableSource {
         return MangasPage(popularMangaParse(response).mangas, false)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            GenreFilter(),
-            AreaFilter(),
-            AudienceFilter(),
-            StatusFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        GenreFilter(),
+        AreaFilter(),
+        AudienceFilter(),
+        StatusFilter(),
+    )
 
     // Details
 
@@ -192,14 +191,12 @@ class Happymh : HttpSource(), ConfigurableSource {
     private fun fetchChapterByPageAsObservable(
         manga: SManga,
         page: Int,
-    ): Observable<Pair<Int, ChapterByPageResponseData>> {
-        return Observable.just(fetchChapterByPage(manga, page)).concatMap {
-            if (it.isPageEnd()) {
-                Observable.just(page to it)
-            } else {
-                Observable.just(page to it)
-                    .concatWith(fetchChapterByPageAsObservable(manga, page + 1))
-            }
+    ): Observable<Pair<Int, ChapterByPageResponseData>> = Observable.just(fetchChapterByPage(manga, page)).concatMap {
+        if (it.isPageEnd()) {
+            Observable.just(page to it)
+        } else {
+            Observable.just(page to it)
+                .concatWith(fetchChapterByPageAsObservable(manga, page + 1))
         }
     }
 
@@ -225,54 +222,44 @@ class Happymh : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + (chapterUrlToCode[chapter.url]?.let { "/mangaread/$it" } ?: chapter.url)
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val comicId = url.pathSegments[0]
+        val chapterId = url.pathSegments[2]
+        return "$baseUrl/mangaread/$comicId/$chapterId"
     }
 
     // Pages
-
-    private fun fetchChapterCode(chapter: SChapter): String? {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
-        val expectPage = url.fragment?.toIntOrNull() ?: 1
-        val comicId = url.pathSegments[0]
-        val chapterId = url.pathSegments[2].toLong()
-        var code = fetchChapterByPage(comicId, expectPage).items.find { it.id == chapterId }?.codes
-        if (code == null) {
-            // Do full search for find target code
-            var page = 1
-            var end = false
-            while (!end && code == null) {
-                val resp = fetchChapterByPage(comicId, page)
-                code = resp.items.find { it.id == chapterId }?.codes
-                end = resp.isPageEnd()
-                page += 1
-            }
-        }
-        return code?.also { chapterUrlToCode[chapter.url] = it }
-    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (!chapter.url.contains(DUMMY_CHAPTER_MARK)) {
             // Old format is detected
             throw Exception("请刷新章节列表")
         }
-        val code = fetchChapterCode(chapter) ?: throw Exception("找不到章节地址，请尝试刷新章节列表")
-        val url = "$baseUrl/v2.0/apis/manga/reading?code=$code&v=v3.1818134"
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val comicId = chapterUrl.pathSegments[0]
+        val chapterId = chapterUrl.pathSegments[2]
+
+        val url = "$baseUrl/v2.0/apis/manga/reading?code=$comicId&cid=$chapterId&v=v3.1919111"
         // Some chapters return 403 without this header
         val headers = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", baseUrl + chapter.url)
+            .set("Referer", "$baseUrl/mangaread/$comicId/$chapterId")
             .build()
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListResponseDto>().data.scans
-            // If n == 1, the image is from next chapter
-            .filter { it.n == 0 }
-            .mapIndexed { index, it ->
-                Page(index, "", it.url)
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().data.scans
+        // If n == 1, the image is from next chapter
+        .filter { it.n == 0 }
+        .mapIndexed { index, it ->
+            // Strip q=... for large images (> 16383px) to avoid WebpExceedRange error
+            val url = if (it.width > 16383 || it.height > 16383) {
+                it.url.substringBefore("?q=")
+            } else {
+                it.url
             }
-    }
+            Page(index, "", url)
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -308,9 +295,7 @@ class Happymh : HttpSource(), ConfigurableSource {
         json.decodeFromStream(it.body.byteStream())
     }
 
-    private fun ChapterByPageResponseData.isPageEnd(): Boolean {
-        return isEnd == 1 || items.isEmpty()
-    }
+    private fun ChapterByPageResponseData.isPageEnd(): Boolean = isEnd == 1 || items.isEmpty()
 
     companion object {
         private const val DUMMY_CHAPTER_MARK = "dummy-mark"

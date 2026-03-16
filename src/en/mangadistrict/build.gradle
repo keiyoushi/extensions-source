@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaDistrict'
     themePkg = 'madara'
     baseUrl = 'https://mangadistrict.com'
-    overrideVersionCode = 13
+    overrideVersionCode = 14
     isNsfw = true
 }
 

@@ -37,10 +37,10 @@ data class Manga(
     val showads: Int?,
     val slug: String,
     val submitter: Long?,
-    val total: Long,
+    val total: Long?,
     @SerialName("trans_group") val transGroup: String,
     val views: Long,
-    @SerialName("vote_count") val voteCount: Long,
+    @SerialName("vote_count") val voteCount: Long?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = this@Manga.slug
@@ -50,6 +50,41 @@ data class Manga(
         description = "${Jsoup.parse(this@Manga.description).text()}\n\n$otherName"
         thumbnail_url = this@Manga.cover
         genre = this@Manga.genres?.split(",")?.joinToString { it.trim() }
+        status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
+    }
+}
+
+@Serializable
+data class ListPagedManga(
+    val currentPage: Long,
+    val items: List<MangaEntry>,
+    val totalItems: Long,
+    val totalPages: Long,
+)
+
+@Serializable
+data class MangaEntry(
+    val artists: String?,
+    val authors: String,
+    val cover: String,
+    val description: String = "",
+    val genres: List<String>?,
+    val hidden: Int?,
+    val id: Long,
+    @SerialName("m_status") val mStatus: Int,
+    val name: String,
+    @SerialName("other_name") val otherName: String,
+    val slug: String,
+    @SerialName("trans_group") val transGroup: String,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = this@MangaEntry.slug
+        title = this@MangaEntry.name
+        artist = this@MangaEntry.artists
+        author = this@MangaEntry.authors
+        description = "${Jsoup.parse(this@MangaEntry.description).text()}\n\n$otherName"
+        thumbnail_url = this@MangaEntry.cover
+        genre = this@MangaEntry.genres?.joinToString { it.trim() }
         status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
     }
 }
@@ -76,3 +111,8 @@ data class Chapter(
         }.getOrDefault(0L)
     }
 }
+
+@Serializable
+data class Genre(
+    val name: String,
+)

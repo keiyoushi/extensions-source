@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -38,7 +39,8 @@ import javax.net.ssl.X509TrustManager
 class MangaFire(
     override val lang: String,
     private val langCode: String = lang,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "MangaFire"
 
     override val baseUrl = "https://mangafire.to"
@@ -48,13 +50,15 @@ class MangaFire(
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor)
+        .rateLimit(2)
         .apply {
-            val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-            object : X509TrustManager {
-                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            }
+            val naiveTrustManager =
+                @SuppressLint("CustomX509TrustManager")
+                object : X509TrustManager {
+                    override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+                    override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                    override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                }
 
             val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
                 val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
@@ -80,25 +84,21 @@ class MangaFire(
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(
-            page,
-            "",
-            FilterList(SortFilter(defaultValue = "most_viewed")),
-        )
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(SortFilter(defaultValue = "most_viewed")),
+    )
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return searchMangaRequest(
-            page,
-            "",
-            FilterList(SortFilter(defaultValue = "recently_updated")),
-        )
-    }
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(SortFilter(defaultValue = "recently_updated")),
+    )
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
@@ -211,11 +211,9 @@ class MangaFire(
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(VOLUME_URL_SUFFIX)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return mangaDetailsParse(response.asJsoup()).apply {
-            if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
-                title = VOLUME_TITLE_PREFIX + title
-            }
+    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup()).apply {
+        if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
+            title = VOLUME_TITLE_PREFIX + title
         }
     }
 
@@ -243,9 +241,11 @@ class MangaFire(
         }
     }
 
+    // MangaFire marks manga as "completed" when their original publication is completed,
+    // even if their translation is not complete, so we use the "PUBLISHING_FINISHED" status.
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "releasing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
+        "completed" -> SManga.PUBLISHING_FINISHED
         "on_hiatus" -> SManga.ON_HIATUS
         "discontinued" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
@@ -253,9 +253,7 @@ class MangaFire(
 
     // ============================== Chapters ==============================
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url.substringBeforeLast("#")
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#")
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.removeSuffix(VOLUME_URL_SUFFIX).substringAfterLast(".")
@@ -338,9 +336,7 @@ class MangaFire(
             }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException()
-    }
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @Serializable
     class PageListDto(private val images: List<List<JsonPrimitive>>) {
@@ -352,9 +348,7 @@ class MangaFire(
 
     class Image(val url: String, val offset: Int)
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================ Preferences =============================
 
@@ -373,9 +367,7 @@ class MangaFire(
         val result: T,
     )
 
-    private fun String.toBodyFragment(): Document {
-        return Jsoup.parseBodyFragment(this, baseUrl)
-    }
+    private fun String.toBodyFragment(): Document = Jsoup.parseBodyFragment(this, baseUrl)
 
     companion object {
         private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)

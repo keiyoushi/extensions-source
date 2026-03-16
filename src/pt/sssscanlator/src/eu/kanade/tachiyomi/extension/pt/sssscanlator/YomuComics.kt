@@ -25,7 +25,9 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
-class YomuComics : HttpSource(), ConfigurableSource {
+class YomuComics :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Yomu Comics"
 
@@ -114,9 +116,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/home", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/home", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val homeDto = response.parseAs<HomeDto>()
@@ -125,9 +125,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/updates?page=$page&limit=50", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/updates?page=$page&limit=50", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesDto = response.parseAs<UpdatesDto>()
@@ -169,6 +167,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
                         url.addQueryParameter("genre", filter.toUriPart())
                     }
                 }
+
                 is TypeFilter -> {
                     if (filter.state != 0) {
                         val part = filter.toUriPart()
@@ -178,16 +177,19 @@ class YomuComics : HttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 is StatusFilter -> {
                     if (filter.state != 0) {
                         url.addQueryParameter("status", filter.toUriPart())
                     }
                 }
+
                 is AdultFilter -> {
                     if (filter.state) {
                         url.addQueryParameter("showAdult", "true")
                     }
                 }
+
                 else -> {}
             }
         }
@@ -208,7 +210,16 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     // =============================== Details ==============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/obra/")
+        val path = manga.url
+            .removePrefix(baseUrl)
+            .removePrefix("/")
+
+        val slug = if (path.startsWith("obra/")) {
+            path.removePrefix("obra/")
+        } else {
+            path
+        }
+
         return GET("$baseUrl/api/public/series/$slug", headers)
     }
 
@@ -218,10 +229,12 @@ class YomuComics : HttpSource(), ConfigurableSource {
         return seriesDto.toSManga(slug)
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     // =============================== Chapters =============================
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val seriesDto = response.parseAs<SeriesDto>()
@@ -231,7 +244,12 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     // ================================ Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val url = if (chapter.url.startsWith("http")) {
+            chapter.url.toHttpUrl()
+        } else {
+            "$baseUrl${chapter.url}".toHttpUrl()
+        }
+
         val mangaId = url.queryParameter("id")
             ?: throw IOException("ID da obra não encontrado na URL do capítulo")
         val chapterNumber = url.pathSegments.last().removePrefix("capitulo-").replace("-", ".")
@@ -247,9 +265,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

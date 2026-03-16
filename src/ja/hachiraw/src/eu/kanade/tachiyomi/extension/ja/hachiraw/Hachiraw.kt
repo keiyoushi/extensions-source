@@ -35,12 +35,11 @@ class Hachiraw : ParsedHttpSource() {
         SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
     }
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(SortFilter(2)),
-        )
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(
+        page,
+        "",
+        FilterList(SortFilter(2)),
+    )
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -48,12 +47,11 @@ class Hachiraw : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(SortFilter(0)),
-        )
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
+        page,
+        "",
+        FilterList(SortFilter(0)),
+    )
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
@@ -65,19 +63,17 @@ class Hachiraw : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val manga = SManga.create().apply { url = "/manga/$slug" }
+    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
+        val manga = SManga.create().apply { url = "/manga/$slug" }
 
-            fetchMangaDetails(manga)
-                .map {
-                    it.url = "/manga/$slug"
-                    MangasPage(listOf(it), false)
-                }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        fetchMangaDetails(manga)
+            .map {
+                it.url = "/manga/$slug"
+                MangasPage(listOf(it), false)
+            }
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -164,10 +160,9 @@ class Hachiraw : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document) =
-        document.select("#TopPage img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("src"))
-        }
+    override fun pageListParse(document: Document) = document.select("#TopPage img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.absUrl("src"))
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 

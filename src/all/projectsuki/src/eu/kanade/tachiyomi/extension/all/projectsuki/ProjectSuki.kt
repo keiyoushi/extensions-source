@@ -6,9 +6,6 @@ import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_BOOK_QUER
 import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_READ_QUERY_PREFIX
 import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_SEARCH_QUERY_PREFIX
 import eu.kanade.tachiyomi.extension.all.projectsuki.activities.ProjectSukiSearchUrlActivity
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -22,6 +19,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
@@ -156,19 +156,17 @@ internal val reportPrefix: String
 internal class ProjectSukiException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** Throws a [ProjectSukiException], which will get caught by Tachiyomi: the message will be exposed as a [toast][android.widget.Toast]. */
-internal inline fun reportErrorToUser(locationHint: String? = null, message: () -> String): Nothing {
-    throw ProjectSukiException(
-        buildString {
-            append("[")
-            append(reportPrefix)
-            append("""]: """)
-            append(message())
-            if (!locationHint.isNullOrBlank()) {
-                append(" @$locationHint")
-            }
-        },
-    )
-}
+internal inline fun reportErrorToUser(locationHint: String? = null, message: () -> String): Nothing = throw ProjectSukiException(
+    buildString {
+        append("[")
+        append(reportPrefix)
+        append("""]: """)
+        append(message())
+        if (!locationHint.isNullOrBlank()) {
+            append(" @$locationHint")
+        }
+    },
+)
 
 /** Used when chapters don't have a [Language][DataExtractor.ChaptersTableColumnDataType.Language] column (if that ever happens). */
 internal const val UNKNOWN_LANGUAGE: String = "unknown"
@@ -181,7 +179,9 @@ internal const val UNKNOWN_LANGUAGE: String = "unknown"
  * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
  */
 @Suppress("unused")
-class ProjectSuki : HttpSource(), ConfigurableSource {
+class ProjectSuki :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name: String = "Project Suki"
     override val baseUrl: String = homepageUri.toASCIIString()
@@ -254,20 +254,18 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
      * Same concept as [popularMangaRequest], but is sent to [https://projectsuki.com/search](https://projectsuki.com/search).
      * This is the [Full-Site][ProjectSukiFilters.SearchMode.FULL_SITE] variant of search, it *will* return results that have no chapters.
      */
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET(
-            homepageUrl.newBuilder()
-                .addPathSegment("search")
-                .addQueryParameter("page", (page - 1).toString())
-                .addQueryParameter("q", query)
-                .applyPSFilter<ProjectSukiFilters.Origin>(from = filters)
-                .applyPSFilter<ProjectSukiFilters.Status>(from = filters)
-                .applyPSFilter<ProjectSukiFilters.Author>(from = filters)
-                .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
-                .build(),
-            headers,
-        )
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
+        homepageUrl.newBuilder()
+            .addPathSegment("search")
+            .addQueryParameter("page", (page - 1).toString())
+            .addQueryParameter("q", query)
+            .applyPSFilter<ProjectSukiFilters.Origin>(from = filters)
+            .applyPSFilter<ProjectSukiFilters.Status>(from = filters)
+            .applyPSFilter<ProjectSukiFilters.Author>(from = filters)
+            .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
+            .build(),
+        headers,
+    )
 
     /**
      * Handles the server's [Response] that was returned from [popularMangaRequest]'s [Request].
@@ -455,9 +453,7 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
         }
     }
 
-    private fun filterList(vararg sequences: Sequence<Filter<*>>): FilterList {
-        return FilterList(sequences.asSequence().flatten().toList())
-    }
+    private fun filterList(vararg sequences: Sequence<Filter<*>>): FilterList = FilterList(sequences.asSequence().flatten().toList())
 
     /**
      * Should return a fresh [FilterList] containing fresh (new) instances

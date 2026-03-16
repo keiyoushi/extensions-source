@@ -49,7 +49,10 @@ class GlobalComixFactory : SourceFactory {
     )
 }
 
-class GlobalComixAlbanian : GlobalComix("al")
+class GlobalComixAlbanian : GlobalComix("sq", "al") {
+    // lang changed from al to sq
+    override val id = 3356591153022230079
+}
 class GlobalComixArabic : GlobalComix("ar")
 class GlobalComixBulgarian : GlobalComix("bg")
 class GlobalComixBengali : GlobalComix("bn")
@@ -57,7 +60,10 @@ class GlobalComixBrazilianPortuguese : GlobalComix("pt-BR", "br")
 class GlobalComixChineseMandarin : GlobalComix("zh-Hans", "cn")
 class GlobalComixCzech : GlobalComix("cs", "cz")
 class GlobalComixGerman : GlobalComix("de")
-class GlobalComixDanish : GlobalComix("dk")
+class GlobalComixDanish : GlobalComix("da", "dk") {
+    // lang changed from dk to da
+    override val id = 5048347663546425663
+}
 class GlobalComixGreek : GlobalComix("el")
 class GlobalComixEnglish : GlobalComix("en")
 class GlobalComixSpanish : GlobalComix("es")

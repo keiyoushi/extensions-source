@@ -14,8 +14,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.en.mehgazone.interceptors.BasicAuthInterceptor
 import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.ChapterListDto
 import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.PageListDto
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -25,6 +23,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.textinterceptor.TextInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -44,7 +44,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mehgazone : ConfigurableSource, HttpSource() {
+class Mehgazone :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Mehgazone"
 
@@ -105,8 +107,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         false,
     )
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET(manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val html = response.asJsoup()
@@ -125,11 +126,10 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url, 1)
 
-    private fun chapterListRequest(url: String, page: Int): Request =
-        GET(
-            "$url/wp-json/wp/v2/posts?per_page=100&page=$page&_fields=id,title,date_gmt,excerpt",
-            headers,
-        )
+    private fun chapterListRequest(url: String, page: Int): Request = GET(
+        "$url/wp-json/wp/v2/posts?per_page=100&page=$page&_fields=id,title,date_gmt,excerpt",
+        headers,
+    )
 
     private fun hasNextPage(headers: Headers, responseSize: Int, page: Int): Boolean {
         val pages = headers["X-Wp-Totalpages"]?.toInt()
@@ -296,13 +296,12 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         return null
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        fetchPopularManga(0).map {
-            MangasPage(
-                it.mangas.filter { m -> m.title.contains(query) },
-                false,
-            )
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(0).map {
+        MangasPage(
+            it.mangas.filter { m -> m.title.contains(query) },
+            false,
+        )
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

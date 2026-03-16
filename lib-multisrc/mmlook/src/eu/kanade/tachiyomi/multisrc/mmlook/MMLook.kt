@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mmlook
 
-import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.unpacker.Unpacker
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Request
@@ -130,8 +130,11 @@ open class MMLook(
             val value = text.substring(4).trimStart()
             when (val key = text.substring(0, 4)) {
                 "作 者：" -> author = value
+
                 "更新时间" -> updated = "$text\n\n"
+
                 "标 签：" -> genre = value.replace(" ", ", ")
+
                 "状 态：" -> status = when (value) {
                     "连载中" -> SManga.ONGOING
                     "已完结" -> SManga.COMPLETED

@@ -48,11 +48,9 @@ class Bakai : ParsedHttpSource() {
 
                     private val cookieJar = network.cloudflareClient.cookieJar
 
-                    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) =
-                        cookieJar.saveFromResponse(url, cookies.removeLimit())
+                    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = cookieJar.saveFromResponse(url, cookies.removeLimit())
 
-                    override fun loadForRequest(url: HttpUrl) =
-                        cookieJar.loadForRequest(url).removeLimit()
+                    override fun loadForRequest(url: HttpUrl) = cookieJar.loadForRequest(url).removeLimit()
                 },
             )
             .build()
@@ -88,32 +86,22 @@ class Bakai : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = "li.ipsPagination_next:not(.ipsPagination_inactive) > a[rel=next]"
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException("Not used.")
-    }
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException("Not used.")
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException("Not used.")
-    }
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException("Not used.")
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/hentai/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client.newCall(GET("$baseUrl/hentai/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
@@ -175,33 +163,23 @@ class Bakai : ParsedHttpSource() {
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException("Not used.")
-    }
+    override fun chapterListSelector(): String = throw UnsupportedOperationException("Not used.")
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.ipsGrid div.ipsType_center > img")
-            .mapIndexed { index, item ->
-                Page(index, "", item.imgAttr())
-            }
-    }
-
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
-
-    private fun Element.imgAttr(): String {
-        return when {
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
-            else -> attr("abs:src")
+    override fun pageListParse(document: Document): List<Page> = document.select("div.ipsGrid div.ipsType_center > img")
+        .mapIndexed { index, item ->
+            Page(index, "", item.imgAttr())
         }
+
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
+        else -> attr("abs:src")
     }
 
     // =============================== Interceptors =========================
@@ -256,9 +234,7 @@ class Bakai : ParsedHttpSource() {
 
     // =============================== Utililies ======================================
 
-    private fun String.contains(vararg values: String): Boolean {
-        return values.any { it.contains(this, ignoreCase = true) }
-    }
+    private fun String.contains(vararg values: String): Boolean = values.any { it.contains(this, ignoreCase = true) }
 
     companion object {
         const val PREFIX_SEARCH = "id:"

@@ -2,8 +2,8 @@ ext {
     extName = 'Eros Scans'
     extClass = '.ErosScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://erosvoid.xyz'
-    overrideVersionCode = 4
+    baseUrl = 'https://erosxsun.xyz'
+    overrideVersionCode = 5
     isNsfw = false
 }
 

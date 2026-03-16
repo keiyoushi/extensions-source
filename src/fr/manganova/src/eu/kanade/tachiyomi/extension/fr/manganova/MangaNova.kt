@@ -44,9 +44,7 @@ class MangaNova : HttpSource() {
     }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$api/catalogue/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$api/catalogue/", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -166,11 +164,7 @@ class MangaNova : HttpSource() {
     }
 
     // Unsupported stuff
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }

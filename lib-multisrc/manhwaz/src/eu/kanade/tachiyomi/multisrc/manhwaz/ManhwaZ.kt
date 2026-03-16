@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.manhwaz
 
 import android.util.Log
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.i18n.Intl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -146,10 +146,9 @@ abstract class ManhwaZ(
         }
     }
 
-    override fun pageListParse(document: Document) =
-        document.select("div.page-break img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.imgAttr())
-        }
+    override fun pageListParse(document: Document) = document.select("div.page-break img").mapIndexed { i, it ->
+        Page(i, imageUrl = it.imgAttr())
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -181,15 +180,16 @@ abstract class ManhwaZ(
         genres: List<SelectOption>,
     ) : SelectFilter(intl["genre_filter_title"], genres)
 
-    private class OrderByFilter(intl: Intl) : SelectFilter(
-        intl["order_by_filter_title"],
-        listOf(
-            SelectOption(intl["order_by_latest"], "latest"),
-            SelectOption(intl["order_by_rating"], "rating"),
-            SelectOption(intl["order_by_most_views"], "views"),
-            SelectOption(intl["order_by_new"], "new"),
-        ),
-    )
+    private class OrderByFilter(intl: Intl) :
+        SelectFilter(
+            intl["order_by_filter_title"],
+            listOf(
+                SelectOption(intl["order_by_latest"], "latest"),
+                SelectOption(intl["order_by_rating"], "rating"),
+                SelectOption(intl["order_by_most_views"], "views"),
+                SelectOption(intl["order_by_new"], "new"),
+            ),
+        )
 
     private var genres = emptyList<SelectOption>()
     private var fetchGenreStatus = FetchGenreStatus.NOT_FETCHED

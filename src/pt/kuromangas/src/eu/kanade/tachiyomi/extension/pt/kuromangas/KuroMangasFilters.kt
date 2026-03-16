@@ -7,8 +7,7 @@ fun getFilters() = FilterList(
     SortFilter("Ordenar por", getSortOptions()),
 )
 
-class SortFilter(displayName: String, private val sortOptions: List<Pair<String, String>>) :
-    Filter.Select<String>(displayName, sortOptions.map { it.first }.toTypedArray()) {
+class SortFilter(displayName: String, private val sortOptions: List<Pair<String, String>>) : Filter.Select<String>(displayName, sortOptions.map { it.first }.toTypedArray()) {
     val selectedSort: String
         get() = sortOptions.getOrNull(state)?.second ?: "average_rating"
     val selectedOrder: String

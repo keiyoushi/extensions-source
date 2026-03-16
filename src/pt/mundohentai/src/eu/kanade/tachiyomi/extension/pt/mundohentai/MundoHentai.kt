@@ -39,12 +39,11 @@ class MundoHentai : ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", baseUrl)
 
-    private fun genericMangaFromElement(element: Element): SManga =
-        SManga.create().apply {
-            title = element.select("span.thumb-titulo").text()
-            thumbnail_url = element.select("img.attachment-post-thumbnail").attr("src")
-            setUrlWithoutDomain(element.select("a:has(span.thumb-imagem)").attr("href"))
-        }
+    private fun genericMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("span.thumb-titulo").text()
+        thumbnail_url = element.select("img.attachment-post-thumbnail").attr("src")
+        setUrlWithoutDomain(element.select("a:has(span.thumb-imagem)").attr("href"))
+    }
 
     // The source does not have a popular list page, so we use the Doujin list instead.
     override fun popularMangaRequest(page: Int): Request {

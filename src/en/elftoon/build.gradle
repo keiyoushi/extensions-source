@@ -3,7 +3,7 @@ ext {
     extClass = '.ElfToon'
     themePkg = 'mangathemesia'
     baseUrl = 'https://elftoon.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 2
     isNsfw = false
 }
 

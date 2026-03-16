@@ -43,13 +43,11 @@ abstract class MangaReader(
 
     protected open val sortPopularValue = "most-viewed"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(
-            page,
-            "",
-            FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues(), sortPopularValue)),
-        )
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues(), sortPopularValue)),
+    )
 
     final override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
@@ -57,13 +55,11 @@ abstract class MangaReader(
 
     protected open val sortLatestValue = "latest-updated"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return searchMangaRequest(
-            page,
-            "",
-            FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues(), sortLatestValue)),
-        )
-    }
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(SortFilter(sortFilterName, sortFilterParam, sortFilterValues(), sortLatestValue)),
+    )
 
     final override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
@@ -163,6 +159,7 @@ abstract class MangaReader(
         val count = authors.size
         when (count) {
             0 -> return manga
+
             1 -> {
                 manga.author = text.first()
                 return manga
@@ -197,9 +194,7 @@ abstract class MangaReader(
 
     // ============================== Chapters ==============================
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return baseUrl + chapter.url.substringBeforeLast('#')
-    }
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast('#')
 
     open val chapterIdSelect = "en-chapters"
 
@@ -227,9 +222,7 @@ abstract class MangaReader(
             }
     }
 
-    open fun getAjaxUrl(id: String): String {
-        return "$baseUrl//ajax/image/list/$id?mode=vertical"
-    }
+    open fun getAjaxUrl(id: String): String = "$baseUrl//ajax/image/list/$id?mode=vertical"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast('#').ifEmpty {
@@ -261,9 +254,7 @@ abstract class MangaReader(
         return pageList
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -310,7 +301,8 @@ abstract class MangaReader(
         private val param: String,
         private val vals: Array<Pair<String, String>>,
         private val join: String? = null,
-    ) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }), UriFilter {
+    ) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }),
+        UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val checked = state.filter { it.state }
             if (join == null) {
@@ -337,16 +329,14 @@ abstract class MangaReader(
 
     protected open val sortFilterParam: String = "sort"
 
-    protected open fun sortFilterValues(): Array<Pair<String, String>> {
-        return arrayOf(
-            Pair("Default", "default"),
-            Pair("Latest Updated", sortLatestValue),
-            Pair("Score", "score"),
-            Pair("Name A-Z", "name-az"),
-            Pair("Release Date", "release-date"),
-            Pair("Most Viewed", sortPopularValue),
-        )
-    }
+    protected open fun sortFilterValues(): Array<Pair<String, String>> = arrayOf(
+        Pair("Default", "default"),
+        Pair("Latest Updated", sortLatestValue),
+        Pair("Score", "score"),
+        Pair("Name A-Z", "name-az"),
+        Pair("Release Date", "release-date"),
+        Pair("Most Viewed", sortPopularValue),
+    )
 
     open fun getSortFilter() = SortFilter(sortFilterName, sortFilterParam, sortFilterValues())
 

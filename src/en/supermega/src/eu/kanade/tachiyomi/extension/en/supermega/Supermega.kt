@@ -59,11 +59,10 @@ class Supermega : ParsedHttpSource() {
         )
     }
 
-    override fun pageListParse(document: Document) =
-        document.select("img[border='4']")
-            .mapIndexed { i, element ->
-                Page(i, "", element.attr("src"))
-            }
+    override fun pageListParse(document: Document) = document.select("img[border='4']")
+        .mapIndexed { i, element ->
+            Page(i, "", element.attr("src"))
+        }
 
     // idk if this is needed i just copied the megatokyo extension lul
     // certificate wasn't trusted for some reason so trusted all certificates
@@ -110,8 +109,7 @@ class Supermega : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mihentai'
+    extClass = '.Mihentai'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mihentai.net'
+    overrideVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

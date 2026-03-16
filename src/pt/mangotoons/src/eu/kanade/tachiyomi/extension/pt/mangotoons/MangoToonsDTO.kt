@@ -81,9 +81,7 @@ class MangoChapterDto(
         date_upload = dateFormat.tryParse(data)
     }
 
-    private fun formatChapterNumber(numero: Float): String {
-        return numero.toString().removeSuffix(".0")
-    }
+    private fun formatChapterNumber(numero: Float): String = numero.toString().removeSuffix(".0")
 
     companion object {
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
@@ -100,15 +98,30 @@ class MangoPageResponse(
 
 @Serializable
 class MangoPageChapterDto(
+    @SerialName("obra_id") val obraId: Int,
+    val numero: Int,
     val paginas: List<MangoPageDto> = emptyList(),
 )
 
 @Serializable
 class MangoPageDto(
-    @SerialName("cdn_id") val url: String,
+    val numero: Int,
+    val url: String,
 )
 
 @Serializable
 class MangoLatestChapterDto(
     val obra: MangoMangaDto? = null,
+)
+
+@Serializable
+class LoginResponseDto(
+    val sucesso: Boolean = false,
+    val token: String? = null,
+)
+
+@Serializable
+class AuthRequestDto(
+    val email: String,
+    val senha: String,
 )

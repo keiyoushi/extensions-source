@@ -1,9 +1,0 @@
-ext {
-    extName = 'PoManga'
-    extClass = '.PoManga'
-    themePkg = 'madara'
-    baseUrl = 'https://pomanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

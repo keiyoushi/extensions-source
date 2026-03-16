@@ -55,19 +55,20 @@ class ImageDecryptor : Interceptor {
         return factory.generateSecret(spec).encoded
     }
 
-    private fun detectMediaType(data: ByteArray): String {
-        return when {
-            data.startsWith(PNG_HEADER) -> "image/png"
-            data.startsWith(JPEG_HEADER) -> "image/jpeg"
-            data.startsWith(GIF_HEADER) -> "image/gif"
-            data.size >= 12 && data.startsWith(RIFF_HEADER) &&
-                data.slice(8..11) == WEBP_MARKER -> "image/webp"
-            else -> "image/jpeg"
-        }
+    private fun detectMediaType(data: ByteArray): String = when {
+        data.startsWith(PNG_HEADER) -> "image/png"
+
+        data.startsWith(JPEG_HEADER) -> "image/jpeg"
+
+        data.startsWith(GIF_HEADER) -> "image/gif"
+
+        data.size >= 12 && data.startsWith(RIFF_HEADER) &&
+            data.slice(8..11) == WEBP_MARKER -> "image/webp"
+
+        else -> "image/jpeg"
     }
 
-    private fun ByteArray.startsWith(prefix: List<Byte>) =
-        size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
+    private fun ByteArray.startsWith(prefix: List<Byte>) = size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
 
     companion object {
         private const val ENCRYPTION_KEY = "4f8d2a7b9c6e1f3a5b0c9e2d7a6b1c3f8e4d2a9b7c6f1e3a5b0c9d2e7f6a1b39"

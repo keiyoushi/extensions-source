@@ -62,12 +62,10 @@ class SixMH : MCCMSWeb("六漫画", "https://www.liumanhua.com") {
     @Serializable
     private class Data(val images: List<String>)
 
-    private fun parseStatus(status: String?): Int {
-        return when {
-            status == null -> SManga.UNKNOWN
-            status.contains("连载") -> SManga.ONGOING
-            status.contains("完结") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("连载") -> SManga.ONGOING
+        status.contains("完结") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 }

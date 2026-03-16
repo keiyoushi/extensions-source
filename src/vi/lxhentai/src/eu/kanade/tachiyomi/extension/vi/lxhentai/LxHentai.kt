@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.lxhentai
 
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -24,14 +25,17 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.collections.map
 
-class LxHentai : ParsedHttpSource(), ConfigurableSource {
+class LxHentai :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "LXManga"
 
     override val id = 6495630445796108150
 
-    private val defaultBaseUrl = "https://lxmanga.my"
+    private val defaultBaseUrl = "https://lxmanga.space"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -45,40 +49,32 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(SortBy(3)))
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortBy(3)))
 
     override fun popularMangaSelector() = searchMangaSelector()
 
-    override fun popularMangaFromElement(element: Element) =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(SortBy(0)))
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortBy(0)))
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element) =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
 
-    override fun latestUpdatesNextPageSelector() =
-        searchMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val slug = query.substringAfter(PREFIX_ID_SEARCH)
-                val mangaUrl = "/truyen/$slug"
-                fetchMangaDetails(SManga.create().apply { url = mangaUrl })
-                    .map { MangasPage(listOf(it), false) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val slug = query.substringAfter(PREFIX_ID_SEARCH)
+            val mangaUrl = "/truyen/$slug"
+            fetchMangaDetails(SManga.create().apply { url = mangaUrl })
+                .map { MangasPage(listOf(it), false) }
         }
+
+        else -> super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -101,16 +97,21 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
                             Filter.TriState.STATE_EXCLUDE -> addQueryParameter("filter[reject_genres]", genre.id)
                         }
                     }
+
                     is Author -> if (canAddTextFilter && it.state.isNotEmpty()) {
                         addQueryParameter("filter[artist]", it.state)
                         canAddTextFilter = false
                     }
+
                     is Doujinshi -> if (canAddTextFilter && it.state.isNotEmpty()) {
                         addQueryParameter("filter[doujinshi]", it.state)
                         canAddTextFilter = false
                     }
+
                     is Status -> addQueryParameter("filter[status]", it.toUriPart())
+
                     is SortBy -> addQueryParameter("sort", it.toUriPart())
+
                     else -> return@forEach
                 }
             }
@@ -166,39 +167,56 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override fun pageListParse(document: Document): List<Page> = document
         .select("div.text-center div.lazy")
-        .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
+        .mapIndexed { idx, element -> Page(idx, imageUrl = element.absUrl("data-src")) }
+
+    override fun imageRequest(page: Page): Request {
+        val rawUrl = page.imageUrl!!
+        val imageUrl = when {
+            rawUrl.startsWith("//") -> "https:$rawUrl"
+            else -> rawUrl
+        }
+        return GET(imageUrl, imageHeaders)
+    }
+
+    private val imageHeaders by lazy {
+        headersBuilder()
+            .set("Origin", baseUrl)
+            .set("Token", "364b9dccc5ef526587f108c4d4fd63ee35286e19e36ec55b93bd4d79410dbbf6")
+            .build()
+    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, state: Int = 0) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
     }
 
-    private class SortBy(state: Int = 0) : UriPartFilter(
-        "Sắp xếp theo",
-        arrayOf(
-            Pair("Mới cập nhật", "-updated_at"),
-            Pair("Mới nhất", "-created_at"),
-            Pair("Cũ nhất", "created_at"),
-            Pair("Xem nhiều", "-views"),
-            Pair("A-Z", "name"),
-            Pair("Z-A", "-name"),
-        ),
-        state,
-    )
+    private class SortBy(state: Int = 0) :
+        UriPartFilter(
+            "Sắp xếp theo",
+            arrayOf(
+                Pair("Mới cập nhật", "-updated_at"),
+                Pair("Mới nhất", "-created_at"),
+                Pair("Cũ nhất", "created_at"),
+                Pair("Xem nhiều", "-views"),
+                Pair("A-Z", "name"),
+                Pair("Z-A", "-name"),
+            ),
+            state,
+        )
 
-    private class Status() : UriPartFilter(
-        "Trạng thái",
-        arrayOf(
-            Pair("Tất cả", "ongoing,completed,paused"),
-            Pair("Đang tiến hành", "ongoing"),
-            Pair("Đã hoàn thành", "completed"),
-            Pair("Tạm ngưng", "paused"),
-        ),
-    )
+    private class Status :
+        UriPartFilter(
+            "Trạng thái",
+            arrayOf(
+                Pair("Tất cả", "ongoing,completed,paused"),
+                Pair("Đang tiến hành", "ongoing"),
+                Pair("Đã hoàn thành", "completed"),
+                Pair("Tạm ngưng", "paused"),
+            ),
+        )
 
     private class Genre(name: String, val id: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
@@ -342,7 +360,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+        val baseUrlPref = EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
             summary = BASE_URL_PREF_SUMMARY

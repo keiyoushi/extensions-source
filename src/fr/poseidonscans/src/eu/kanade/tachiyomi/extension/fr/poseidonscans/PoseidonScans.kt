@@ -27,7 +27,7 @@ import java.util.TimeZone
 class PoseidonScans : HttpSource() {
 
     override val name = "Poseidon Scans"
-    override val baseUrl = "https://poseidon-scans.com"
+    override val baseUrl = "https://poseidon-scans.co"
     override val lang = "fr"
     override val supportsLatest = true
     override val versionId = 2
@@ -35,9 +35,7 @@ class PoseidonScans : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    private fun String.toAbsoluteUrl(): String {
-        return if (this.startsWith("http")) this else baseUrl + this
-    }
+    private fun String.toAbsoluteUrl(): String = if (this.startsWith("http")) this else baseUrl + this
 
     private fun String.toApiCoverUrl(): String {
         if (this.startsWith("http")) return this
@@ -51,9 +49,7 @@ class PoseidonScans : HttpSource() {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/manga/lastchapters?limit=16&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga/lastchapters?limit=16&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val apiResponse = try {
@@ -76,9 +72,7 @@ class PoseidonScans : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -186,7 +180,14 @@ class PoseidonScans : HttpSource() {
                                 for (i in searchIdx downTo 0) {
                                     when (cleanedDataString[i]) {
                                         '}' -> braceDepth++
-                                        '{' -> { if (braceDepth == 0) { objectStartIndex = i; break }; braceDepth-- }
+
+                                        '{' -> {
+                                            if (braceDepth == 0) {
+                                                objectStartIndex = i
+                                                break
+                                            }
+                                            braceDepth--
+                                        }
                                     }
                                 }
                                 if (objectStartIndex != -1) {
@@ -279,6 +280,7 @@ class PoseidonScans : HttpSource() {
             if (!inString) {
                 when (char) {
                     '{' -> braceBalance++
+
                     '}' -> {
                         braceBalance--
                         if (braceBalance == 0) {
@@ -361,14 +363,12 @@ class PoseidonScans : HttpSource() {
         }
     }
 
-    private fun parseStatus(statusString: String?): Int {
-        return when (statusString?.trim()?.lowercase(Locale.FRENCH)) {
-            "en cours" -> SManga.ONGOING
-            "terminé" -> SManga.COMPLETED
-            "en pause", "hiatus" -> SManga.ON_HIATUS
-            "annulé", "abandonné" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(statusString: String?): Int = when (statusString?.trim()?.lowercase(Locale.FRENCH)) {
+        "en cours" -> SManga.ONGOING
+        "terminé" -> SManga.COMPLETED
+        "en pause", "hiatus" -> SManga.ON_HIATUS
+        "annulé", "abandonné" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -528,6 +528,6 @@ class PoseidonScans : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun imageUrlParse(response: Response): String { throw UnsupportedOperationException("Not used.") }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
     override fun getFilterList(): FilterList = FilterList()
 }

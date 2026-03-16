@@ -32,74 +32,68 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        popularMangaRequest(page)
+    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
 
-    override fun latestUpdatesFromElement(element: Element) =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun popularMangaSelector() = ".grid-items .layer-content"
 
     override fun popularMangaNextPageSelector() = ".paginate .next"
 
-    override fun popularMangaRequest(page: Int) =
-        httpUrl.request {
-            when (lang) {
-                "ja" -> {
-                    addEncodedPathSegments("page/$page/")
-                    addQueryParameter("archive", "raw")
-                }
-                else -> addEncodedPathSegments("page/$page")
+    override fun popularMangaRequest(page: Int) = httpUrl.request {
+        when (lang) {
+            "ja" -> {
+                addEncodedPathSegments("page/$page/")
+                addQueryParameter("archive", "raw")
             }
-        }
 
-    override fun popularMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".title_link > a").let {
-                title = it!!.text()
-                setUrlWithoutDomain(it.absUrl("href"))
-            }
-            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            else -> addEncodedPathSegments("page/$page")
         }
+    }
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".title_link > a").let {
+            title = it!!.text()
+            setUrlWithoutDomain(it.absUrl("href"))
+        }
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        httpUrl.request {
-            addEncodedPathSegments("page/$page")
-            addQueryParameter("keyword", query)
-            addQueryParameter("_wpnonce", WP_NONCE)
-        }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = httpUrl.request {
+        addEncodedPathSegments("page/$page")
+        addQueryParameter("keyword", query)
+        addQueryParameter("_wpnonce", WP_NONCE)
+    }
 
-    override fun searchMangaFromElement(element: Element) =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        SManga.create().apply {
-            description = document.select(
-                ".manga-subtitle + p + p",
-            ).joinToString("\n") {
-                it
-                    .apply { select(Evaluator.Tag("br")).prepend("\\n") }
-                    .text()
-                    .replace("\\n", "\n")
-                    .replace("\n ", "\n")
-            }.trim()
-            genre = document.select(
-                ".tags-list a[href*=/parody/]," +
-                    ".tags-list a[href*=/tags/]," +
-                    ".tags-list a[href*=/character/]",
-            ).joinToString { it.text() }
-            artist = document.selectFirst(
-                ".tags-list a[href*=/artist/]",
-            )?.text()
-            author = document.selectFirst(
-                ".tags-list a[href*=/group/]",
-            )?.text() ?: artist
-            status = SManga.COMPLETED
-        }
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        description = document.select(
+            ".manga-subtitle + p + p",
+        ).joinToString("\n") {
+            it
+                .apply { select(Evaluator.Tag("br")).prepend("\\n") }
+                .text()
+                .replace("\\n", "\n")
+                .replace("\n ", "\n")
+        }.trim()
+        genre = document.select(
+            ".tags-list a[href*=/parody/]," +
+                ".tags-list a[href*=/tags/]," +
+                ".tags-list a[href*=/character/]",
+        ).joinToString { it.text() }
+        artist = document.selectFirst(
+            ".tags-list a[href*=/artist/]",
+        )?.text()
+        author = document.selectFirst(
+            ".tags-list a[href*=/group/]",
+        )?.text() ?: artist
+        status = SManga.COMPLETED
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup(response.body.string())
@@ -135,9 +129,8 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document) =
-        document.select(".slideshow-container > img")
-            .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
+    override fun pageListParse(document: Document) = document.select(".slideshow-container > img")
+        .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
 
     private inline fun HttpUrl.request(
         block: HttpUrl.Builder.() -> HttpUrl.Builder,
@@ -146,14 +139,11 @@ class Hennojin(override val lang: String) : ParsedHttpSource() {
     private inline val Response.date: Long
         get() = headers["Last-Modified"]?.run(httpDate::parse)?.time ?: 0L
 
-    override fun chapterListSelector() =
-        throw UnsupportedOperationException()
+    override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     companion object {
         // Let's hope this doesn't change

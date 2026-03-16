@@ -76,11 +76,13 @@ class Hyakuro : HttpSource() {
                         }
                     }
                 }
+
                 is CategoryFilter -> {
                     filter.state.filter { it.state }.forEachIndexed { index, checkbox ->
                         url.addQueryParameter("filters[\$and][${index + 1}][Categories][\$containsi]", checkbox.name)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -90,9 +92,7 @@ class Hyakuro : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Details
-    override fun getMangaUrl(manga: SManga): String {
-        return baseUrl + manga.url
-    }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/manga/")
@@ -109,9 +109,7 @@ class Hyakuro : HttpSource() {
     }
 
     // Chapter
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaSlug = response.request.url.queryParameter("filters[slug][\$eq]")!!

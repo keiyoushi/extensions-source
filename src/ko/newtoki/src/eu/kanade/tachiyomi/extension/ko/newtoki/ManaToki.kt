@@ -81,88 +81,92 @@ object ManaToki : NewToki("ManaToki", "comic", manaTokiPreferences) {
     private class SearchCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
 
     // [...document.querySelectorAll("form.form td")[3].querySelectorAll("span.btn")].map((el, i) => `"${el.innerText.trim()}"`).join(',\n')
-    private class SearchPublishTypeList : Filter.Select<String>(
-        "Publish",
-        arrayOf(
-            "전체",
-            "주간",
-            "격주",
-            "월간",
-            "단편",
-            "단행본",
-            "완결",
-        ),
-    )
+    private class SearchPublishTypeList :
+        Filter.Select<String>(
+            "Publish",
+            arrayOf(
+                "전체",
+                "주간",
+                "격주",
+                "월간",
+                "단편",
+                "단행본",
+                "완결",
+            ),
+        )
 
     // [...document.querySelectorAll("form.form td")[4].querySelectorAll("span.btn")].map((el, i) => `"${el.innerText.trim()}"`).join(',\n')
-    private class SearchJaumTypeList : Filter.Select<String>(
-        "Jaum",
-        arrayOf(
-            "전체",
-            "ㄱ",
-            "ㄴ",
-            "ㄷ",
-            "ㄹ",
-            "ㅁ",
-            "ㅂ",
-            "ㅅ",
-            "ㅇ",
-            "ㅈ",
-            "ㅊ",
-            "ㅋ",
-            "ㅌ",
-            "ㅍ",
-            "ㅎ",
-            "0-9",
-            "a-z",
-        ),
-    )
+    private class SearchJaumTypeList :
+        Filter.Select<String>(
+            "Jaum",
+            arrayOf(
+                "전체",
+                "ㄱ",
+                "ㄴ",
+                "ㄷ",
+                "ㄹ",
+                "ㅁ",
+                "ㅂ",
+                "ㅅ",
+                "ㅇ",
+                "ㅈ",
+                "ㅊ",
+                "ㅋ",
+                "ㅌ",
+                "ㅍ",
+                "ㅎ",
+                "0-9",
+                "a-z",
+            ),
+        )
 
     // [...document.querySelectorAll("form.form td")[6].querySelectorAll("span.btn")].map((el, i) => `"${el.innerText.trim()}"`).join(',\n')
-    private class SearchGenreTypeList : Filter.Group<SearchCheckBox>(
-        "Genres",
-        arrayOf(
-            "전체",
-            "17",
-            "BL",
-            "SF",
-            "TS",
-            "개그",
-            "게임",
-            "도박",
-            "드라마",
-            "라노벨",
-            "러브코미디",
-            "먹방",
-            "백합",
-            "붕탁",
-            "순정",
-            "스릴러",
-            "스포츠",
-            "시대",
-            "애니화",
-            "액션",
-            "음악",
-            "이세계",
-            "일상",
-            "전생",
-            "추리",
-            "판타지",
-            "학원",
-            "호러",
-        ).map { SearchCheckBox(it) },
-    )
+    private class SearchGenreTypeList :
+        Filter.Group<SearchCheckBox>(
+            "Genres",
+            arrayOf(
+                "전체",
+                "17",
+                "BL",
+                "SF",
+                "TS",
+                "개그",
+                "게임",
+                "도박",
+                "드라마",
+                "라노벨",
+                "러브코미디",
+                "먹방",
+                "백합",
+                "붕탁",
+                "순정",
+                "스릴러",
+                "스포츠",
+                "시대",
+                "애니화",
+                "액션",
+                "음악",
+                "이세계",
+                "일상",
+                "전생",
+                "추리",
+                "판타지",
+                "학원",
+                "호러",
+            ).map { SearchCheckBox(it) },
+        )
 
-    private class SearchSortTypeList : Filter.Sort(
-        "Sort",
-        arrayOf(
-            "기본(날짜순)",
-            "인기순",
-            "추천순",
-            "업데이트순",
-        ),
-        Selection(0, false),
-    )
+    private class SearchSortTypeList :
+        Filter.Sort(
+            "Sort",
+            arrayOf(
+                "기본(날짜순)",
+                "인기순",
+                "추천순",
+                "업데이트순",
+            ),
+            Selection(0, false),
+        )
 
     override fun getFilterList() = FilterList(
         SearchSortTypeList(),

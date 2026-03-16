@@ -49,15 +49,13 @@ fun getBaseUrlPreference(context: Context) = EditTextPreference(context).apply {
     }
 }
 
-fun ciGetUrl(client: OkHttpClient): String {
-    return try {
-        val response = client.newCall(GET(LATEST_DOMAIN_URL)).execute()
-        response.body.string()
-    } catch (e: Throwable) {
-        println("::error ::Zerobyw: Failed to fetch latest URL")
-        e.printStackTrace()
-        DEFAULT_BASE_URL
-    }
+fun ciGetUrl(client: OkHttpClient): String = try {
+    val response = client.newCall(GET(LATEST_DOMAIN_URL)).execute()
+    response.body.string()
+} catch (e: Throwable) {
+    println("::error ::Zerobyw: Failed to fetch latest URL")
+    e.printStackTrace()
+    DEFAULT_BASE_URL
 }
 
 private fun checkBaseUrl(url: String) {

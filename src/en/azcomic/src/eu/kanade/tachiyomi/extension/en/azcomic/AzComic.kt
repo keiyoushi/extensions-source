@@ -68,8 +68,7 @@ class AzComic : HttpSource() {
         return Observable.just(sorted.toMangasPage(page))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -134,10 +133,8 @@ class AzComic : HttpSource() {
         return baseUrl + target
     }
 
-    private fun getSeries(): List<SeriesEntry> {
-        return cachedSeries ?: synchronized(this) {
-            cachedSeries ?: buildSeries(fetchComics()).also { cachedSeries = it }
-        }
+    private fun getSeries(): List<SeriesEntry> = cachedSeries ?: synchronized(this) {
+        cachedSeries ?: buildSeries(fetchComics()).also { cachedSeries = it }
     }
 
     private fun prefetchSeriesIfNeeded() {
@@ -238,15 +235,13 @@ class AzComic : HttpSource() {
         initialized = true
     }
 
-    private fun ComicEntry.toChapterEntry(seriesTitle: String): ChapterEntry {
-        return ChapterEntry(
-            name = title.chapterName(seriesTitle),
-            url = "/$url",
-            dateUpload = updatedAtMillis(),
-            chapterNumber = chapterNumber(),
-            order = num,
-        )
-    }
+    private fun ComicEntry.toChapterEntry(seriesTitle: String): ChapterEntry = ChapterEntry(
+        name = title.chapterName(seriesTitle),
+        url = "/$url",
+        dateUpload = updatedAtMillis(),
+        chapterNumber = chapterNumber(),
+        order = num,
+    )
 
     private fun ChapterEntry.toSChapter(): SChapter = SChapter.create().apply {
         name = this@toSChapter.name
@@ -306,11 +301,9 @@ class AzComic : HttpSource() {
             .firstNotNullOfOrNull { it?.toFloatOrNull() }
     }
 
-    private fun String.toSlug(): String {
-        return lowercase(Locale.ROOT)
-            .replace(SLUG_CLEANUP_REGEX, "-")
-            .trim('-')
-    }
+    private fun String.toSlug(): String = lowercase(Locale.ROOT)
+        .replace(SLUG_CLEANUP_REGEX, "-")
+        .trim('-')
 
     @Serializable
     private data class ComicEntry(
@@ -345,18 +338,20 @@ class AzComic : HttpSource() {
         val chapters: List<ChapterEntry>,
     )
 
-    private class CategoryFilter(categories: List<String>) : Filter.Select<String>(
-        "Category",
-        mutableListOf("All").apply { addAll(categories) }.toTypedArray(),
-    ) {
+    private class CategoryFilter(categories: List<String>) :
+        Filter.Select<String>(
+            "Category",
+            mutableListOf("All").apply { addAll(categories) }.toTypedArray(),
+        ) {
         private val categoryValues = categories
         val selected: String? get() = if (state == 0) null else categoryValues[state - 1]
     }
 
-    private class LetterFilter : Filter.Select<String>(
-        "Alphabetic",
-        LETTER_OPTIONS.toTypedArray(),
-    ) {
+    private class LetterFilter :
+        Filter.Select<String>(
+            "Alphabetic",
+            LETTER_OPTIONS.toTypedArray(),
+        ) {
         val selected: String? get() = if (state == 0) null else LETTER_OPTIONS[state]
     }
 

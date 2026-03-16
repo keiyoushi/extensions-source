@@ -37,14 +37,12 @@ class Miaoqu : MCCMSWeb("喵趣漫画", "https://www.miaoqumh.org") {
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters)).asObservable().map { response ->
-            if (response.code == 404) {
-                response.close()
-                throw Exception("服务器错误，无法搜索")
-            }
-            searchMangaParse(response)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters)).asObservable().map { response ->
+        if (response.code == 404) {
+            response.close()
+            throw Exception("服务器错误，无法搜索")
         }
+        searchMangaParse(response)
     }
 
     // Use mobile page
@@ -73,8 +71,7 @@ class Miaoqu : MCCMSWeb("喵趣漫画", "https://www.miaoqumh.org") {
     override fun chapterListSelector() = "ul.list > li"
 
     // Might return HTTP 500 with page data
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client.newCall(pageListRequest(chapter)).asObservable().map(::pageListParse)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter)).asObservable().map(::pageListParse)
 
     override fun pageListParse(response: Response): List<Page> {
         val cid = response.request.url.pathSegments.last().removeSuffix(".html").toInt()

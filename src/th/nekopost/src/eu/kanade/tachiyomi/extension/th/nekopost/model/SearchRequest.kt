@@ -14,3 +14,15 @@ data class SearchRequest(
     val status: Int,
     val paging: PagingInfo,
 )
+
+@Serializable
+data class PopularRequest(
+    val type: String,
+    val paging: PagingInfo,
+)
+
+@Serializable
+data class LatestRequest(
+    val type: String,
+    val paging: PagingInfo,
+)

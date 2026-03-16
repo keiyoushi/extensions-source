@@ -71,17 +71,16 @@ class ChapterManifest(
     @SerialName("readingOrder")
     private val pages: List<ChapterPage>,
 ) {
-    fun toPageList() =
-        pages
-            .filter { page ->
-                page.type.startsWith("image")
-            }.mapIndexed { i, page ->
-                Page(
-                    index = i,
-                    url = metadata.identifier,
-                    imageUrl = page.href,
-                )
-            }
+    fun toPageList() = pages
+        .filter { page ->
+            page.type.startsWith("image")
+        }.mapIndexed { i, page ->
+            Page(
+                index = i,
+                url = metadata.identifier,
+                imageUrl = page.href,
+            )
+        }
 }
 
 @Serializable

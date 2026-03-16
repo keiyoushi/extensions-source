@@ -81,35 +81,33 @@ class Astratoons : HttpSource() {
 
     // ======================== Chapter =========================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.fromCallable {
-            val document = client.newCall(mangaDetailsRequest(manga))
-                .execute().asJsoup()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val document = client.newCall(mangaDetailsRequest(manga))
+            .execute().asJsoup()
 
-            val mangaId = MANGA_ID.find(document.selectFirst("main[x-data]")!!.attr("x-data"))
-                ?.groupValues?.last()
+        val mangaId = MANGA_ID.find(document.selectFirst("main[x-data]")!!.attr("x-data"))
+            ?.groupValues?.last()
 
-            val urlBuilder = "$baseUrl/api/comics/$mangaId/chapters".toHttpUrl().newBuilder()
-                .addQueryParameter("search", "")
-                .addQueryParameter("order", "desc")
+        val urlBuilder = "$baseUrl/api/comics/$mangaId/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("search", "")
+            .addQueryParameter("order", "desc")
 
-            var page = 1
-            val chapters = mutableListOf<SChapter>()
-            do {
-                val url = urlBuilder
-                    .setQueryParameter("page", (page++).toString())
-                    .build()
+        var page = 1
+        val chapters = mutableListOf<SChapter>()
+        do {
+            val url = urlBuilder
+                .setQueryParameter("page", (page++).toString())
+                .build()
 
-                val chapterListDto = client.newCall(GET(url, headers)).execute()
-                    .parseAs<ChapterListDto>()
+            val chapterListDto = client.newCall(GET(url, headers)).execute()
+                .parseAs<ChapterListDto>()
 
-                val fragment = chapterListDto.asJsoup()
+            val fragment = chapterListDto.asJsoup()
 
-                chapters += fragment.select("a").map(::chapterFromElement)
-            } while (chapterListDto.hasMore)
+            chapters += fragment.select("a").map(::chapterFromElement)
+        } while (chapterListDto.hasMore)
 
-            chapters
-        }
+        chapters
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
@@ -126,8 +124,8 @@ class Astratoons : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("#reader-container canvas[data-src]").mapIndexed { index, element ->
-            val imageUrl = element.attr("data-src").replace("&amp;", "&")
+        return document.select("#reader-container img[src], #reader-container canvas[data-src]").mapIndexed { index, element ->
+            val imageUrl = element.attr("src").ifEmpty { element.attr("data-src") }
             Page(index, document.location(), imageUrl)
         }
     }

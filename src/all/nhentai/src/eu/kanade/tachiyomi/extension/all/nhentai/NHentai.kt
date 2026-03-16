@@ -7,10 +7,6 @@ import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getArtists
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getGroups
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTagDescription
 import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTags
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -24,6 +20,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.getPrefCustomUA
+import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -39,7 +39,8 @@ import uy.kohesive.injekt.injectLazy
 open class NHentai(
     override val lang: String,
     private val nhLang: String,
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource(),
+    ConfigurableSource {
 
     final override val baseUrl = "https://nhentai.net"
 
@@ -119,21 +120,21 @@ open class NHentai(
 
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val id = query.removePrefix(PREFIX_ID_SEARCH)
-                client.newCall(searchMangaByIdRequest(id))
-                    .asObservableSuccess()
-                    .map { response -> searchMangaByIdParse(response, id) }
-            }
-            query.toIntOrNull() != null -> {
-                client.newCall(searchMangaByIdRequest(query))
-                    .asObservableSuccess()
-                    .map { response -> searchMangaByIdParse(response, query) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val id = query.removePrefix(PREFIX_ID_SEARCH)
+            client.newCall(searchMangaByIdRequest(id))
+                .asObservableSuccess()
+                .map { response -> searchMangaByIdParse(response, id) }
         }
+
+        query.toIntOrNull() != null -> {
+            client.newCall(searchMangaByIdRequest(query))
+                .asObservableSuccess()
+                .map { response -> searchMangaByIdParse(response, query) }
+        }
+
+        else -> super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -316,16 +317,17 @@ open class NHentai(
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only", false)
 
-    private class SortFilter : UriPartFilter(
-        "Sort By",
-        arrayOf(
-            Pair("Popular: All Time", "popular"),
-            Pair("Popular: Month", "popular-month"),
-            Pair("Popular: Week", "popular-week"),
-            Pair("Popular: Today", "popular-today"),
-            Pair("Recent", "date"),
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "Sort By",
+            arrayOf(
+                Pair("Popular: All Time", "popular"),
+                Pair("Popular: Month", "popular-month"),
+                Pair("Popular: Week", "popular-week"),
+                Pair("Popular: Today", "popular-today"),
+                Pair("Recent", "date"),
+            ),
+        )
 
     private inline fun <reified T> String.parseAs(): T {
         val data = Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
@@ -335,8 +337,7 @@ open class NHentai(
             data,
         )
     }
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

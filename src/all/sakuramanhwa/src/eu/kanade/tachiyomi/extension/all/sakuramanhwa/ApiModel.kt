@@ -50,7 +50,7 @@ internal class PageInfo(
     val id: String,
     val number: Float,
     val title: String?,
-    val images: List<String>,
+    val images: List<List<String>>,
 )
 
 @Serializable

@@ -17,7 +17,7 @@ var domainNumber = ""
             return prefValue
         }
 
-        val fallback = fallbackDomainNumber
+        val fallback = FALLBACK_DOMAIN_NUMBER
         domainNumber = fallback
         return fallback
     }
@@ -69,5 +69,5 @@ object DomainInterceptor : Interceptor {
         return response
     }
 
-    private val numberRegex by lazy { Regex("""\d+|$fallbackDomainNumber""") }
+    private val numberRegex by lazy { Regex("""\d+|$FALLBACK_DOMAIN_NUMBER""") }
 }

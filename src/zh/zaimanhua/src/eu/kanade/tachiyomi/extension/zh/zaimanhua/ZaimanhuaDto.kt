@@ -19,12 +19,6 @@ class MangaDto(
     private val types: List<TagDto>?,
     private val status: List<TagDto>?,
     private val authors: List<TagDto>?,
-    @SerialName("chapters")
-    private val chapterGroups: List<ChapterGroupDto>,
-    @SerialName("last_update_chapter_id")
-    private val lastUpdateChapterId: Int,
-    @SerialName("last_updatetime")
-    private val lastUpdateTime: Long,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
@@ -36,12 +30,28 @@ class MangaDto(
         thumbnail_url = cover
         initialized = true
     }
+}
 
+@Serializable
+class ChapterDataDto(
+    private val id: Int,
+    // Only `manhua.zaimanhua.com/api/v1/comic2/comic/detail?id=xxx`(pc) use `lastUpdateChapterId`,
+    // `lastUpdateTime`, `chapterList`.
+    // The app api use `last_update_chapter_id`, `last_updatetime`, `chapters`.
+    @JsonNames("last_update_chapter_id")
+    private val lastUpdateChapterId: Int,
+    @JsonNames("last_updatetime")
+    private val lastUpdateTime: Long,
+    @JsonNames("chapters")
+    val chapterList: List<ChapterGroupDto>?,
+    val isHideChapter: Int?,
+    val canRead: Boolean?,
+) {
     fun parseChapterList(): List<SChapter> {
         val mangaId = id.toString()
         val lastUpdateChapter = lastUpdateChapterId.toString()
-        val size = chapterGroups.sumOf { it.size }
-        return chapterGroups.flatMapTo(ArrayList(size)) {
+        val size = chapterList!!.sumOf { it.size }
+        return chapterList.flatMapTo(ArrayList(size)) {
             it.toSChapterList(mangaId, lastUpdateChapter, lastUpdateTime)
         }
     }
@@ -167,6 +177,7 @@ class UserDto(
 
 @Serializable
 class DataWrapperDto<T>(
+    @JsonNames("comicInfo")
     val data: T?,
 )
 
@@ -197,13 +208,11 @@ class CanReadDto(
 class CommentDataDto(
     val list: List<JsonArray>?,
 ) {
-    fun toCommentList(): List<String> {
-        return if (list.isNullOrEmpty()) {
-            listOf("没有吐槽")
-        } else {
-            list.map { item ->
-                item.last().jsonPrimitive.content
-            }
+    fun toCommentList(): List<String> = if (list.isNullOrEmpty()) {
+        listOf("没有吐槽")
+    } else {
+        list.map { item ->
+            item.last().jsonPrimitive.content
         }
     }
 }

@@ -9,26 +9,22 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 abstract class LectorMoe(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val organizationDomain: String = baseUrl.substringAfter("://"),
-    private val apiBaseUrl: String = "https://api.lector.moe",
+    private val organizationDomain: String = baseUrl.substringAfterLast("/"),
+    private val apiBaseUrl: String = "https://capibaratraductor.com",
 ) : HttpSource() {
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
@@ -39,16 +35,14 @@ abstract class LectorMoe(
         .add("Referer", "$baseUrl/")
 
     private val apiHeaders: Headers = headersBuilder()
-        .add("Organization-Domain", organizationDomain)
+        .add("x-organization", organizationDomain)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", apiHeaders)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -72,7 +66,7 @@ abstract class LectorMoe(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")!!.toInt()
-        val result = json.decodeFromString<Data<SeriesListDataDto>>(response.body.string())
+        val result = response.parseAs<Data<SeriesListDataDto>>()
 
         val mangas = result.data.series.map { it.toSManga() }
         val hasNextPage = page < result.data.maxPage
@@ -91,11 +85,10 @@ abstract class LectorMoe(
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
+        val result = response.parseAs<Data<SeriesDto>>()
         return result.data.toSMangaDetails()
     }
 
@@ -109,10 +102,10 @@ abstract class LectorMoe(
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
-        val seriesSlug = result.data.slug
+        val result = response.parseAs<Data<SeriesDto>>()
+        val seriesSlug = result.data.manga.slug
         return result.data.chapters
-            ?.filter { it.subscribersOnly.not() }
+            ?.filter { it.isUnreleased.not() }
             ?.map { it.toSChapter(seriesSlug) }
             ?.filter { it.date_upload < System.currentTimeMillis() }
             ?: emptyList()
@@ -126,7 +119,7 @@ abstract class LectorMoe(
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = json.decodeFromString<Data<List<PageDto>>>(response.body.string())
+        val result = response.parseAs<Data<List<PageDto>>>()
         return result.data.mapIndexed { i, page ->
             Page(i, imageUrl = page.imageUrl)
         }
@@ -136,8 +129,7 @@ abstract class LectorMoe(
 
     class SortByFilter(title: String, list: Array<Pair<String, String>>) : UriPartFilter(title, list)
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

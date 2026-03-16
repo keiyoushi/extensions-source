@@ -46,12 +46,10 @@ class GuyaUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun fromGuya(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 3) {
-            val slug = pathSegments[2]
-            "${Guya.SLUG_PREFIX}$slug"
-        } else {
-            null
-        }
+    private fun fromGuya(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 3) {
+        val slug = pathSegments[2]
+        "${Guya.SLUG_PREFIX}$slug"
+    } else {
+        null
     }
 }

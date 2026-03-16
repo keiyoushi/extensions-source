@@ -49,12 +49,13 @@ class StatusFilter(
     val checked get() = state.filter { it.state }.map { it.value }.takeUnless { it.isEmpty() }
 }
 
-class SortFilter(defaultSort: String? = null) : SelectFilter(
-    "Sort By",
-    listOf(
-        Pair("Title", "title"),
-        Pair("Popularity", "popularity"),
-        Pair("Latest", "latest"),
-    ),
-    defaultSort,
-)
+class SortFilter(defaultSort: String? = null) :
+    SelectFilter(
+        "Sort By",
+        listOf(
+            Pair("Title", "title"),
+            Pair("Popularity", "popularity"),
+            Pair("Latest", "latest"),
+        ),
+        defaultSort,
+    )

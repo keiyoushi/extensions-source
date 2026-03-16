@@ -59,9 +59,7 @@ class Embedded(
     @SerialName("wp:term")
     private val terms: List<List<Term>>,
 ) {
-    fun getTerms(type: String): List<String> {
-        return terms.find { it.getOrNull(0)?.taxonomy == type }?.map { it.name } ?: emptyList()
-    }
+    fun getTerms(type: String): List<String> = terms.find { it.getOrNull(0)?.taxonomy == type }?.map { it.name } ?: emptyList()
 }
 
 @Serializable

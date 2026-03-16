@@ -14,45 +14,53 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class MyComic : ParsedHttpSource(), ConfigurableSource {
+class MyComic :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://mycomic.com"
     override val lang: String = "zh"
     override val name: String = "MyComic"
     override val supportsLatest: Boolean = true
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
-    private val preferences by getPreferencesLazy()
-    private val requestUrl: String
-        get() = if (preferences.getString(PREF_KEY_LANG, "") == "zh-hans") {
-            "$baseUrl/cn"
-        } else {
-            baseUrl
+
+    private val preferences by getPreferencesLazy {
+        when (getString(PREF_LANGUAGE, "")) {
+            "zh-hant" -> edit().putString(PREF_LANGUAGE, "").apply()
+            "zh-hans" -> edit().putString(PREF_LANGUAGE, "cn").apply()
         }
+    }
+
+    private val requestUrl: String
+        get() = "$baseUrl/${preferences.getString(PREF_LANGUAGE, "")}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div[data-flux-card] + div div[x-data]")
+        val data = document.select("div[data-flux-card] + div div[x-data]")
+        val notes = data.select("> div:first-child > div:first-child").map(Element::text)
+        return data
             .eachAttr("x-data")
-            .map {
-                it.substringAfter("chapters:").substringBefore("\n").trim().removeSuffix(",")
-            }
-            .map {
-                it.parseAs<List<Chapter>>()
-            }
-            .flatten()
-            .map {
-                SChapter.create().apply {
-                    name = it.title
-                    // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
-                    // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
-                    url = "/chapters/${it.id}"
+            .map { CHAPTER_REGEX.find(it)!!.value.parseAs<Array<Chapter>>() }
+            .flatMapIndexed { i, chapters ->
+                chapters.map {
+                    SChapter.create().apply {
+                        name = it.title
+                        // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
+                        // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
+                        url = "/chapters/${it.id}"
+                        date_upload = DATE_FORMAT.tryParse(document.selectFirst("time[datetime]")?.text())
+                        scanlator = notes[i]
+                    }
                 }
             }
     }
@@ -67,8 +75,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(latestUpdateFilter))
+    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(latestUpdateFilter))
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
@@ -86,7 +93,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
             }
             detailElement.selectFirst("div[data-flux-badge] + div")?.let { element ->
                 author = element.selectFirst(":first-child a")?.text()
-                genre = element.select(":nth-child(3) a").joinToString { it.text() }
+                genre = element.select("> div:nth-child(2) ~ div a").joinToString { it.text() }
             }
             description =
                 detailElement.selectFirst("div[data-flux-badge] + div + div div[x-show=show]")
@@ -94,18 +101,15 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img[x-ref]").mapIndexed { index, element ->
-            Page(index, imageUrl = element.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img[x-ref]").mapIndexed { index, element ->
+        Page(index, imageUrl = element.imgAttr())
     }
 
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun popularMangaRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(popularFilter))
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(popularFilter))
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -129,13 +133,11 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            element.selectFirst("img")!!.let {
-                title = it.attr("alt")
-                thumbnail_url = it.imgAttr()
-            }
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        element.selectFirst("img")!!.let {
+            title = it.attr("alt")
+            thumbnail_url = it.imgAttr()
         }
     }
 
@@ -168,25 +170,23 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         return GET(url.build(), headers = headers)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(0),
-            RegionFilter(),
-            TagFilter(),
-            AudienceFilter(),
-            YearFilter(),
-            StatusFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(0),
+        RegionFilter(),
+        TagFilter(),
+        AudienceFilter(),
+        YearFilter(),
+        StatusFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addPreference(
             ListPreference(screen.context).apply {
-                key = PREF_KEY_LANG
+                key = PREF_LANGUAGE
                 title = "設置首選語言"
                 summary = "當前：%s"
                 entries = arrayOf("繁體中文", "简体中文")
-                entryValues = arrayOf("zh-hant", "zh-hans")
+                entryValues = arrayOf("", "cn")
                 setDefaultValue(entryValues[0])
             },
         )
@@ -204,9 +204,10 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
     }
 
     companion object {
+        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
+        val CHAPTER_REGEX = Regex("(?<=chapters: )\\[\\{.*?\\}]")
         val popularFilter = SortFilter(2)
         val latestUpdateFilter = SortFilter(1)
-
-        const val PREF_KEY_LANG = "pref_key_lang"
+        const val PREF_LANGUAGE = "pref_key_lang"
     }
 }

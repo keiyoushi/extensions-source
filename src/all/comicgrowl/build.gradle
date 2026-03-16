@@ -3,7 +3,7 @@ ext {
     extClass = '.ComicGrowl'
     themePkg = 'comiciviewer'
     baseUrl = 'https://comic-growl.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = false
 }
 

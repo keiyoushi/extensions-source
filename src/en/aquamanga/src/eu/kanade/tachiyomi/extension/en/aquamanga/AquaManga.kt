@@ -6,7 +6,7 @@ import okhttp3.Headers
 import kotlin.random.Random
 
 class AquaManga : Madara("Aqua Manga", "https://aquareader.net", "en") {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
@@ -41,7 +41,9 @@ class AquaManga : Madara("Aqua Manga", "https://aquareader.net", "en") {
     private val chromiumBrowserValue = "org.chromium.chrome"
 
     private val randomValue = when {
-        Random.nextInt(1, 11) == 1 -> chromiumBrowserValue // 10% chance
+        Random.nextInt(1, 11) == 1 -> chromiumBrowserValue
+
+        // 10% chance
         else -> randomStringValue // 90% chance
     }
 

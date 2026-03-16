@@ -2,7 +2,7 @@ ext {
     extName = '6ianfranc9'
     extClass = '.Sixianfranc9'
     themePkg = 'lectormoe'
-    baseUrl = 'https://6ianfranc9.capibaratraductor.com'
+    baseUrl = 'https://capibaratraductor.com/6ianfranc9'
     overrideVersionCode = 0
     isNsfw = false
 }

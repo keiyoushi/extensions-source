@@ -32,11 +32,9 @@ open class CheckBoxFilter(
     }
 }
 
-class PublisherFilter(values: List<Pair<String, Int>>) :
-    CheckBoxFilter("Publisher", "p", values)
+class PublisherFilter(values: List<Pair<String, Int>>) : CheckBoxFilter("Publisher", "p", values)
 
-class GenreFilter(values: List<Pair<String, Int>>) :
-    CheckBoxFilter("Genre", "g", values)
+class GenreFilter(values: List<Pair<String, Int>>) : CheckBoxFilter("Genre", "g", values)
 
 class TextBox(name: String) : Filter.Text(name)
 

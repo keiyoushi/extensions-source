@@ -43,7 +43,9 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Yidan : HttpSource(), ConfigurableSource {
+class Yidan :
+    HttpSource(),
+    ConfigurableSource {
     override val name get() = "一耽女孩"
     override val lang get() = "zh"
     override val supportsLatest get() = true
@@ -98,13 +100,11 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    private fun searchByKeyword(page: Int, query: String): Request {
-        return POST(
-            "$apiUrl/api/searchNovel",
-            headers,
-            KeywordSearchRequest(query).toJsonRequestBody(),
-        )
-    }
+    private fun searchByKeyword(page: Int, query: String): Request = POST(
+        "$apiUrl/api/searchNovel",
+        headers,
+        KeywordSearchRequest(query).toJsonRequestBody(),
+    )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -132,24 +132,20 @@ class Yidan : HttpSource(), ConfigurableSource {
         return createMangasPage(records, paginated = !searchByKeyword)
     }
 
-    private fun createMangasPage(records: List<Record>, paginated: Boolean = true): MangasPage {
-        return MangasPage(
-            records.map {
-                SManga.create().apply {
-                    url = "${it.id}"
-                    title = it.novelTitle
-                    thumbnail_url = it.imgUrl
-                }
-            },
-            paginated && records.size >= PAGE_SIZE,
-        )
-    }
+    private fun createMangasPage(records: List<Record>, paginated: Boolean = true): MangasPage = MangasPage(
+        records.map {
+            SManga.create().apply {
+                url = "${it.id}"
+                title = it.novelTitle
+                thumbnail_url = it.imgUrl
+            }
+        },
+        paginated && records.size >= PAGE_SIZE,
+    )
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/pages/comic/info".toHttpUrl().newBuilder()
-            .addQueryParameter("id", manga.url)
-            .toString()
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/pages/comic/info".toHttpUrl().newBuilder()
+        .addQueryParameter("id", manga.url)
+        .toString()
 
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
@@ -170,12 +166,10 @@ class Yidan : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/pages/comic/content".toHttpUrl().newBuilder()
-            .addQueryParameter("f", "1")
-            .addQueryParameter("s", chapter.chapter_number.toInt().toString())
-            .toString()
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/pages/comic/content".toHttpUrl().newBuilder()
+        .addQueryParameter("f", "1")
+        .addQueryParameter("s", chapter.chapter_number.toInt().toString())
+        .toString()
 
     override fun chapterListRequest(manga: SManga) = withUserId { userId ->
         POST(
@@ -252,7 +246,7 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     //region utils functions
 
-    private lateinit var _userId: String
+    private lateinit var userId: String
 
     @MainThread
     private fun WebView.readUserId(block: (userId: String) -> Unit) {
@@ -266,8 +260,8 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun <T> withUserId(block: (userId: String) -> T): T {
-        return if (this::_userId.isInitialized) {
-            block(_userId)
+        return if (this::userId.isInitialized) {
+            block(userId)
         } else {
             val mainHandler = Handler(Looper.getMainLooper())
             var latch = CountDownLatch(1)
@@ -284,7 +278,7 @@ class Yidan : HttpSource(), ConfigurableSource {
                 webView?.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         view?.readUserId {
-                            _userId = it
+                            userId = it
                             latch.countDown()
                         }
                     }
@@ -303,12 +297,12 @@ class Yidan : HttpSource(), ConfigurableSource {
                 webView?.loadUrl(baseUrl)
             }
             latch.await(15, TimeUnit.SECONDS)
-            if (!this::_userId.isInitialized) {
+            if (!this::userId.isInitialized) {
                 latch = CountDownLatch(1)
                 mainHandler.postDelayed(
                     {
                         webView?.readUserId {
-                            _userId = it
+                            userId = it
                             latch.countDown()
                         }
                     },
@@ -323,16 +317,15 @@ class Yidan : HttpSource(), ConfigurableSource {
                 }
                 webView = null
             }
-            if (!this::_userId.isInitialized) {
+            if (!this::userId.isInitialized) {
                 throw Exception("无法自动获取UserId，请先尝试通过内置WebView进入网站")
             }
-            block(_userId)
+            block(userId)
         }
     }
 
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json.encodeToString(this)
-            .toRequestBody("application/json".toMediaType())
+    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json.encodeToString(this)
+        .toRequestBody("application/json".toMediaType())
     //endregion
 
     companion object {

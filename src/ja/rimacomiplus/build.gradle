@@ -1,0 +1,10 @@
+ext {
+    extName = 'RimacomiPlus'
+    extClass = '.RimacomiPlus'
+    themePkg = 'comiciviewer'
+    baseUrl = 'https://rimacomiplus.jp'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

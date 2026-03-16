@@ -23,7 +23,7 @@ class Shinigami : HttpSource() {
 
     override val name = "Shinigami"
 
-    override val baseUrl = "https://08.shinigami.asia"
+    override val baseUrl = "https://09.shinigami.asia"
 
     private val apiUrl = "https://api.shngm.io"
 
@@ -75,7 +75,7 @@ class Shinigami : HttpSource() {
         val rootObject = response.parseAs<ShinigamiBrowseDto>()
         val projectList = rootObject.data.map(::popularMangaFromObject)
 
-        val hasNextPage = rootObject.meta.page < rootObject.meta.totalPage
+        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
 
         return MangasPage(projectList, hasNextPage)
     }
@@ -116,16 +116,14 @@ class Shinigami : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            SortFilter(),
-            SortOrderFilter(),
-            StatusFilter(),
-            FormatFilter(),
-            TypeFilter(),
-            GenreFilter(getGenres()),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        SortOrderFilter(),
+        StatusFilter(),
+        FormatFilter(),
+        TypeFilter(),
+        GenreFilter(getGenres()),
+    )
 
     private fun getGenres(): Array<Pair<String, String>> = arrayOf(
         Pair("Action", "action"),
@@ -172,9 +170,7 @@ class Shinigami : HttpSource() {
         Pair("Tragedy", "tragedy"),
     )
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/series/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Migration from old web urls to the new api based
@@ -201,17 +197,13 @@ class Shinigami : HttpSource() {
         }
     }
 
-    private fun Int.toStatus(): Int {
-        return when (this) {
-            1 -> SManga.ONGOING
-            2 -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun Int.toStatus(): Int = when (this) {
+        1 -> SManga.ONGOING
+        2 -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ShinigamiChapterListDto>()

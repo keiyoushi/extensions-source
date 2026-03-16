@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.ja.idolgravureprincessdate
 
 import eu.kanade.tachiyomi.multisrc.gravureblogger.GravureBlogger
 
-class IdolGravureprincessDate : GravureBlogger(
-    "Idol. gravureprincess .date",
-    "https://idol.gravureprincess.date",
-    "ja",
-) {
+class IdolGravureprincessDate :
+    GravureBlogger(
+        "Idol. gravureprincess .date",
+        "https://idol.gravureprincess.date",
+        "ja",
+    ) {
     override val labelFilters = buildMap {
         put("Idol", getIdols())
         put("Magazines", getMagazine())

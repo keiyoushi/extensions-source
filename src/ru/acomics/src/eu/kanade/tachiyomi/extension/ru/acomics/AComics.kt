@@ -84,6 +84,7 @@ class AComics : ParsedHttpSource() {
                             .map { it.toString() }
                         categories.addAll(selected)
                     }
+
                     is Ratings -> {
                         val selected = filter
                             .state
@@ -103,6 +104,7 @@ class AComics : ParsedHttpSource() {
                             else -> comicType
                         }
                     }
+
                     is Publication -> {
                         publication = when (filter.state) {
                             1 -> "no"
@@ -110,6 +112,7 @@ class AComics : ParsedHttpSource() {
                             else -> publication
                         }
                     }
+
                     is Subscription -> {
                         subscription = when (filter.state) {
                             1 -> "yes"
@@ -117,12 +120,14 @@ class AComics : ParsedHttpSource() {
                             else -> subscription
                         }
                     }
+
                     is MinPages -> {
                         minPages = filter.state
                             .toIntOrNull()
                             ?.toString()
                             ?: minPages
                     }
+
                     is Sort -> {
                         sort = when (filter.state) {
                             0 -> "last_update"
@@ -132,6 +137,7 @@ class AComics : ParsedHttpSource() {
                             else -> sort
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -216,38 +222,40 @@ class AComics : ParsedHttpSource() {
     private class Genre(name: String, val id: Int) : Filter.CheckBox(name)
     private class Rating(name: String, val id: Int) : Filter.CheckBox(name, state = true)
 
-    private class Categories : Filter.Group<Genre>(
-        "Категории",
-        listOf(
-            Genre("Животные", 1),
-            Genre("Драма", 2),
-            Genre("Фентези", 3),
-            Genre("Игры", 4),
-            Genre("Юмор", 5),
-            Genre("Журнал", 6),
-            Genre("Паранормальное", 7),
-            Genre("Конец света", 8),
-            Genre("Романтика", 9),
-            Genre("Фантастика", 10),
-            Genre("Бытовое", 11),
-            Genre("Стимпанк", 12),
-            Genre("Супергерои", 13),
-            Genre("Детектив", 14),
-            Genre("Историческое", 15),
-        ),
-    )
+    private class Categories :
+        Filter.Group<Genre>(
+            "Категории",
+            listOf(
+                Genre("Животные", 1),
+                Genre("Драма", 2),
+                Genre("Фентези", 3),
+                Genre("Игры", 4),
+                Genre("Юмор", 5),
+                Genre("Журнал", 6),
+                Genre("Паранормальное", 7),
+                Genre("Конец света", 8),
+                Genre("Романтика", 9),
+                Genre("Фантастика", 10),
+                Genre("Бытовое", 11),
+                Genre("Стимпанк", 12),
+                Genre("Супергерои", 13),
+                Genre("Детектив", 14),
+                Genre("Историческое", 15),
+            ),
+        )
 
-    private class Ratings : Filter.Group<Rating>(
-        "Возрастная категория",
-        listOf(
-            Rating("NR", 1),
-            Rating("G", 2),
-            Rating("PG", 3),
-            Rating("PG-13", 4),
-            Rating("R", 5),
-            Rating("NC-17", 6),
-        ),
-    )
+    private class Ratings :
+        Filter.Group<Rating>(
+            "Возрастная категория",
+            listOf(
+                Rating("NR", 1),
+                Rating("G", 2),
+                Rating("PG", 3),
+                Rating("PG-13", 4),
+                Rating("R", 5),
+                Rating("NC-17", 6),
+            ),
+        )
 
     private class ComicType : Filter.Select<String>("Тип комикса", arrayOf("Все", "Оригинальный", "Перевод")) // "0", "orig", "trans"
     private class Publication : Filter.Select<String>("Публикация", arrayOf("Все", "Завершенный", "Продолжающийся")) // "0", "no", "yes"

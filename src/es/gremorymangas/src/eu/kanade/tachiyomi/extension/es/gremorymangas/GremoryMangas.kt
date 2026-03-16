@@ -1,12 +1,15 @@
 package eu.kanade.tachiyomi.extension.es.gremorymangas
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GremoryMangas : MangaThemesia(
-    "Gremory Mangas",
-    "https://gremorymangas.com",
-    "es",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-)
+class GremoryMangas :
+    Madara(
+        "Gremory Mangas",
+        "https://gremoryhistorias.org",
+        "es",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
+    override val useNewChapterEndpoint = true
+}

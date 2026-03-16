@@ -27,7 +27,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class HenChan : MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"), ConfigurableSource {
+class HenChan :
+    MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"),
+    ConfigurableSource {
 
     override val id = 5504588601186153612
 
@@ -123,31 +125,29 @@ class HenChan : MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"), Confi
         return manga
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservable().doOnNext { response ->
-                if (!response.isSuccessful) {
-                    response.close()
-                    // Error message for exceeding last page
-                    if (response.code == 404) {
-                        Observable.just(
-                            listOf(
-                                SChapter.create().apply {
-                                    url = manga.url
-                                    name = "Chapter"
-                                    chapter_number = 1f
-                                },
-                            ),
-                        )
-                    } else {
-                        throw Exception("HTTP error ${response.code}")
-                    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservable().doOnNext { response ->
+            if (!response.isSuccessful) {
+                response.close()
+                // Error message for exceeding last page
+                if (response.code == 404) {
+                    Observable.just(
+                        listOf(
+                            SChapter.create().apply {
+                                url = manga.url
+                                name = "Chapter"
+                                chapter_number = 1f
+                            },
+                        ),
+                    )
+                } else {
+                    throw Exception("HTTP error ${response.code}")
                 }
             }
-            .map { response ->
-                chapterListParse(response)
-            }
-    }
+        }
+        .map { response ->
+            chapterListParse(response)
+        }
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = baseUrl + if (manga.thumbnail_url?.endsWith("#") == true) {
@@ -260,29 +260,27 @@ class HenChan : MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"), Confi
     ) : Filter.TriState(name)
 
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)
-    private class OrderBy : UriPartFilter(
-        "Сортировка",
-        arrayOf("Дата", "Популярность", "Алфавит"),
-        arrayOf("&n=dateasc" to "", "&n=favasc" to "&n=favdesc", "&n=abcdesc" to "&n=abcasc"),
-        arrayOf(
-            "manga/new&n=dateasc" to "manga/new",
-            "manga/new&n=favasc" to "mostfavorites&sort=manga",
-            "manga/new&n=abcdesc" to "manga/new&n=abcasc",
-        ),
-    )
+    private class OrderBy :
+        UriPartFilter(
+            "Сортировка",
+            arrayOf("Дата", "Популярность", "Алфавит"),
+            arrayOf("&n=dateasc" to "", "&n=favasc" to "&n=favdesc", "&n=abcdesc" to "&n=abcasc"),
+            arrayOf(
+                "manga/new&n=dateasc" to "manga/new",
+                "manga/new&n=favasc" to "mostfavorites&sort=manga",
+                "manga/new&n=abcdesc" to "manga/new&n=abcasc",
+            ),
+        )
 
     private open class UriPartFilter(
         displayName: String,
         sortNames: Array<String>,
         val withGenres: Array<Pair<String, String>>,
         val withoutGenres: Array<Pair<String, String>>,
-    ) :
-        Filter.Sort(displayName, sortNames, Selection(1, false)) {
-        fun toUriPartWithGenres() =
-            if (state!!.ascending) withGenres[state!!.index].first else withGenres[state!!.index].second
+    ) : Filter.Sort(displayName, sortNames, Selection(1, false)) {
+        fun toUriPartWithGenres() = if (state!!.ascending) withGenres[state!!.index].first else withGenres[state!!.index].second
 
-        fun toUriPartWithoutGenres() =
-            if (state!!.ascending) withoutGenres[state!!.index].first else withoutGenres[state!!.index].second
+        fun toUriPartWithoutGenres() = if (state!!.ascending) withoutGenres[state!!.index].first else withoutGenres[state!!.index].second
     }
 
     override fun getFilterList() = FilterList(

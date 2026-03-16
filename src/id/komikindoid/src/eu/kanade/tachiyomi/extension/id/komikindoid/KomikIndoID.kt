@@ -25,13 +25,9 @@ class KomikIndoID : ParsedHttpSource() {
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     // similar/modified theme of "https://bacakomik.my"
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/daftar-manga/page/$page/?order=popular", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/daftar-manga/page/$page/?order=popular", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/daftar-manga/page/$page/?order=update", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/daftar-manga/page/$page/?order=update", headers)
 
     override fun popularMangaSelector() = "div.animepost"
     override fun latestUpdatesSelector() = popularMangaSelector()
@@ -62,12 +58,15 @@ class KomikIndoID : ParsedHttpSource() {
                 is AuthorFilter -> {
                     url.addQueryParameter("author", filter.state)
                 }
+
                 is YearFilter -> {
                     url.addQueryParameter("yearx", filter.state)
                 }
+
                 is SortFilter -> {
                     url.addQueryParameter("order", filter.toUriPart())
                 }
+
                 is OriginalLanguageFilter -> {
                     filter.state.forEach { lang ->
                         if (lang.state) {
@@ -75,6 +74,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is FormatFilter -> {
                     filter.state.forEach { format ->
                         if (format.state) {
@@ -82,6 +82,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is DemographicFilter -> {
                     filter.state.forEach { demographic ->
                         if (demographic.state) {
@@ -89,6 +90,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is StatusFilter -> {
                     filter.state.forEach { status ->
                         if (status.state) {
@@ -96,6 +98,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is ContentRatingFilter -> {
                     filter.state.forEach { rating ->
                         if (rating.state) {
@@ -103,6 +106,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is ThemeFilter -> {
                     filter.state.forEach { theme ->
                         if (theme.state) {
@@ -110,6 +114,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 is GenreFilter -> {
                     filter.state.forEach { genre ->
                         if (genre.state) {
@@ -117,6 +122,7 @@ class KomikIndoID : ParsedHttpSource() {
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -165,41 +171,46 @@ class KomikIndoID : ParsedHttpSource() {
         return chapter
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return if (date.contains("yang lalu")) {
-            val value = date.split(' ')[0].toInt()
-            when {
-                "detik" in date -> Calendar.getInstance().apply {
-                    add(Calendar.SECOND, -value)
-                }.timeInMillis
-                "menit" in date -> Calendar.getInstance().apply {
-                    add(Calendar.MINUTE, -value)
-                }.timeInMillis
-                "jam" in date -> Calendar.getInstance().apply {
-                    add(Calendar.HOUR_OF_DAY, -value)
-                }.timeInMillis
-                "hari" in date -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value)
-                }.timeInMillis
-                "minggu" in date -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value * 7)
-                }.timeInMillis
-                "bulan" in date -> Calendar.getInstance().apply {
-                    add(Calendar.MONTH, -value)
-                }.timeInMillis
-                "tahun" in date -> Calendar.getInstance().apply {
-                    add(Calendar.YEAR, -value)
-                }.timeInMillis
-                else -> {
-                    0L
-                }
-            }
-        } else {
-            try {
-                dateFormat.parse(date)?.time ?: 0
-            } catch (_: Exception) {
+    private fun parseChapterDate(date: String): Long = if (date.contains("yang lalu")) {
+        val value = date.split(' ')[0].toInt()
+        when {
+            "detik" in date -> Calendar.getInstance().apply {
+                add(Calendar.SECOND, -value)
+            }.timeInMillis
+
+            "menit" in date -> Calendar.getInstance().apply {
+                add(Calendar.MINUTE, -value)
+            }.timeInMillis
+
+            "jam" in date -> Calendar.getInstance().apply {
+                add(Calendar.HOUR_OF_DAY, -value)
+            }.timeInMillis
+
+            "hari" in date -> Calendar.getInstance().apply {
+                add(Calendar.DATE, -value)
+            }.timeInMillis
+
+            "minggu" in date -> Calendar.getInstance().apply {
+                add(Calendar.DATE, -value * 7)
+            }.timeInMillis
+
+            "bulan" in date -> Calendar.getInstance().apply {
+                add(Calendar.MONTH, -value)
+            }.timeInMillis
+
+            "tahun" in date -> Calendar.getInstance().apply {
+                add(Calendar.YEAR, -value)
+            }.timeInMillis
+
+            else -> {
                 0L
             }
+        }
+    } else {
+        try {
+            dateFormat.parse(date)?.time ?: 0
+        } catch (_: Exception) {
+            0L
         }
     }
 
@@ -248,20 +259,20 @@ class KomikIndoID : ParsedHttpSource() {
 
     private class YearFilter : Filter.Text("Year")
 
-    private class SortFilter : UriPartFilter(
-        "Sort By",
-        arrayOf(
-            Pair("A-Z", "title"),
-            Pair("Z-A", "titlereverse"),
-            Pair("Latest Update", "update"),
-            Pair("Latest Added", "latest"),
-            Pair("Popular", "popular"),
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "Sort By",
+            arrayOf(
+                Pair("A-Z", "title"),
+                Pair("Z-A", "titlereverse"),
+                Pair("Latest Update", "update"),
+                Pair("Latest Added", "latest"),
+                Pair("Popular", "popular"),
+            ),
+        )
 
     private class OriginalLanguage(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class OriginalLanguageFilter(originalLanguage: List<OriginalLanguage>) :
-        Filter.Group<OriginalLanguage>("Original language", originalLanguage)
+    private class OriginalLanguageFilter(originalLanguage: List<OriginalLanguage>) : Filter.Group<OriginalLanguage>("Original language", originalLanguage)
     private fun getOriginalLanguage() = listOf(
         OriginalLanguage("Japanese (Manga)", "Manga"),
         OriginalLanguage("Chinese (Manhua)", "Manhua"),
@@ -269,16 +280,14 @@ class KomikIndoID : ParsedHttpSource() {
     )
 
     private class Format(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class FormatFilter(formatList: List<Format>) :
-        Filter.Group<Format>("Format", formatList)
+    private class FormatFilter(formatList: List<Format>) : Filter.Group<Format>("Format", formatList)
     private fun getFormat() = listOf(
         Format("Black & White", "0"),
         Format("Full Color", "1"),
     )
 
     private class Demographic(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class DemographicFilter(demographicList: List<Demographic>) :
-        Filter.Group<Demographic>("Publication Demographic", demographicList)
+    private class DemographicFilter(demographicList: List<Demographic>) : Filter.Group<Demographic>("Publication Demographic", demographicList)
     private fun getDemographic() = listOf(
         Demographic("Josei", "josei"),
         Demographic("Seinen", "seinen"),
@@ -287,16 +296,14 @@ class KomikIndoID : ParsedHttpSource() {
     )
 
     private class Status(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class StatusFilter(statusList: List<Status>) :
-        Filter.Group<Status>("Status", statusList)
+    private class StatusFilter(statusList: List<Status>) : Filter.Group<Status>("Status", statusList)
     private fun getStatus() = listOf(
         Status("Ongoing", "Ongoing"),
         Status("Completed", "Completed"),
     )
 
     private class ContentRating(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class ContentRatingFilter(contentRating: List<ContentRating>) :
-        Filter.Group<ContentRating>("Content Rating", contentRating)
+    private class ContentRatingFilter(contentRating: List<ContentRating>) : Filter.Group<ContentRating>("Content Rating", contentRating)
     private fun getContentRating() = listOf(
         ContentRating("Ecchi", "ecchi"),
         ContentRating("Gore", "gore"),
@@ -305,8 +312,7 @@ class KomikIndoID : ParsedHttpSource() {
     )
 
     private class Theme(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class ThemeFilter(themeList: List<Theme>) :
-        Filter.Group<Theme>("Story Theme", themeList)
+    private class ThemeFilter(themeList: List<Theme>) : Filter.Group<Theme>("Story Theme", themeList)
     private fun getTheme() = listOf(
         Theme("Alien", "aliens"),
         Theme("Animal", "animals"),
@@ -350,8 +356,7 @@ class KomikIndoID : ParsedHttpSource() {
     )
 
     private class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class GenreFilter(genreList: List<Genre>) :
-        Filter.Group<Genre>("Genre", genreList)
+    private class GenreFilter(genreList: List<Genre>) : Filter.Group<Genre>("Genre", genreList)
     private fun getGenre() = listOf(
         Genre("Action", "action"),
         Genre("Adventure", "adventure"),
@@ -382,8 +387,7 @@ class KomikIndoID : ParsedHttpSource() {
         Genre("Yuri", "yuri"),
     )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

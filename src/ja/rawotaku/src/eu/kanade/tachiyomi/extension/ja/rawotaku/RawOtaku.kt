@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
-class RawOtaku : MangaReader(
-    "Raw Otaku",
-    "https://rawotaku.com",
-    "ja",
-) {
+class RawOtaku :
+    MangaReader(
+        "Raw Otaku",
+        "https://rawotaku.com",
+        "ja",
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)
@@ -34,9 +35,7 @@ class RawOtaku : MangaReader(
 
     // =============================== Pages ================================
 
-    override fun getAjaxUrl(id: String): String {
-        return "$baseUrl/json/chapter?mode=vertical&id=$id"
-    }
+    override fun getAjaxUrl(id: String): String = "$baseUrl/json/chapter?mode=vertical&id=$id"
 
     // =============================== Filters ==============================
 
@@ -50,13 +49,11 @@ class RawOtaku : MangaReader(
         GenreFilter(),
     )
 
-    override fun sortFilterValues(): Array<Pair<String, String>> {
-        return arrayOf(
-            Pair("デフォルト", "default"),
-            Pair("最新の更新", "latest-updated"),
-            Pair("最も見られました", "most-viewed"),
-            Pair("Title [A-Z]", "title-az"),
-            Pair("Title [Z-A]", "title-za"),
-        )
-    }
+    override fun sortFilterValues(): Array<Pair<String, String>> = arrayOf(
+        Pair("デフォルト", "default"),
+        Pair("最新の更新", "latest-updated"),
+        Pair("最も見られました", "most-viewed"),
+        Pair("Title [A-Z]", "title-az"),
+        Pair("Title [Z-A]", "title-za"),
+    )
 }

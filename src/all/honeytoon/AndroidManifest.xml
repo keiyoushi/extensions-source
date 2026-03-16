@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".all.honeytoon.HoneytoonUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+
+                <data android:host="honeytoon.com" />
+                <data android:scheme="https" />
+                <data android:pathPattern="/comic/..*" />
+                <data android:pathPattern="/de/comic/..*" />
+                <data android:pathPattern="/es/comic/..*" />
+                <data android:pathPattern="/fr/comic/..*" />
+                <data android:pathPattern="/it/comic/..*" />
+                <data android:pathPattern="/pt/comic/..*" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

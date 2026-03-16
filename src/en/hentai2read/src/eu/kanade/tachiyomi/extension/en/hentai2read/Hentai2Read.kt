@@ -34,7 +34,7 @@ class Hentai2Read : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     companion object {
-        const val imageBaseUrl = "https://static.hentaicdn.com/hentai"
+        const val IMAGE_BASE_URL = "https://static.hentaicdn.com/hentai"
 
         const val PREFIX_ID_SEARCH = "id:"
 
@@ -49,19 +49,15 @@ class Hentai2Read : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/hentai-list/all/any/all/most-popular/$page/", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/hentai-list/all/any/all/most-popular/$page/", headers)
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/hentai-list/all/any/all/last-updated/$page/", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/hentai-list/all/any/all/last-updated/$page/", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            thumbnail_url = element.select("img").attr("abs:src")
-            element.select("div.overlay-title a").let {
-                title = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-            }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.select("img").attr("abs:src")
+        element.select("div.overlay-title a").let {
+            title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
         }
     }
 
@@ -71,16 +67,14 @@ class Hentai2Read : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(GET("$baseUrl/$id/", headers)).asObservableSuccess()
-                .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/$id/" }), false) }
-        } else {
-            val search = requestSearch(page, query, filters)
-            client.newCall(search.first).asObservableSuccess()
-                .map { parseSearch(it, page, search.second) }
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
+        val id = query.removePrefix(PREFIX_ID_SEARCH)
+        client.newCall(GET("$baseUrl/$id/", headers)).asObservableSuccess()
+            .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/$id/" }), false) }
+    } else {
+        val search = requestSearch(page, query, filters)
+        client.newCall(search.first).asObservableSuccess()
+            .map { parseSearch(it, page, search.second) }
     }
 
     private fun requestSearch(page: Int, query: String, filters: FilterList): Pair<Request, String?> {
@@ -97,21 +91,32 @@ class Hentai2Read : ParsedHttpSource() {
                 for (filter in if (filters.isEmpty()) getFilterList() else filters) {
                     when (filter) {
                         is MangaNameSelect -> add("cbo_wpm_pag_mng_sch_nme", filter.state.toString())
+
                         is ArtistName -> add("txt_wpm_pag_mng_sch_ats", filter.state)
+
                         is ArtistNameSelect -> add("cbo_wpm_pag_mng_sch_ats", filter.state.toString())
+
                         is CharacterName -> add("txt_wpm_pag_mng_sch_chr", filter.state)
+
                         is CharacterNameSelect -> add("cbo_wpm_pag_mng_sch_chr", filter.state.toString())
+
                         is ReleaseYear -> add("txt_wpm_pag_mng_sch_rls_yer", filter.state)
+
                         is ReleaseYearSelect -> add("cbo_wpm_pag_mng_sch_rls_yer", filter.state.toString())
+
                         is Status -> add("rad_wpm_pag_mng_sch_sts", filter.state.toString())
+
                         is TagSearchMode -> add("rad_wpm_pag_mng_sch_tag_mde", arrayOf("and", "or").getOrElse(filter.state) { "and" })
+
                         is TagList -> filter.state.forEach { tag ->
                             when (tag.state) {
                                 Filter.TriState.STATE_INCLUDE -> add("chk_wpm_pag_mng_sch_mng_tag_inc[]", tag.id.toString())
                                 Filter.TriState.STATE_EXCLUDE -> add("chk_wpm_pag_mng_sch_mng_tag_exc[]", tag.id.toString())
                             }
                         }
+
                         is SortOrder -> sortOrder = filter.toUriPart()
+
                         else -> {}
                     }
                 }
@@ -147,9 +152,7 @@ class Hentai2Read : ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -206,14 +209,12 @@ class Hentai2Read : ParsedHttpSource() {
 
     override fun chapterListSelector() = "ul.nav-chapters > li > div.media > a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            val time = element.select("div > small").text().substringAfter("about").substringBefore("ago")
-            name = element.ownText().trim()
-            if (time != "") {
-                date_upload = parseChapterDate(time)
-            }
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("href"))
+        val time = element.select("div > small").text().substringAfter("about").substringBefore("ago")
+        name = element.ownText().trim()
+        if (time != "") {
+            date_upload = parseChapterDate(time)
         }
     }
 
@@ -224,24 +225,31 @@ class Hentai2Read : ParsedHttpSource() {
             "second" in date -> Calendar.getInstance().apply {
                 add(Calendar.SECOND, -value)
             }.timeInMillis
+
             "minute" in date -> Calendar.getInstance().apply {
                 add(Calendar.MINUTE, -value)
             }.timeInMillis
+
             "hour" in date -> Calendar.getInstance().apply {
                 add(Calendar.HOUR_OF_DAY, -value)
             }.timeInMillis
+
             "day" in date -> Calendar.getInstance().apply {
                 add(Calendar.DATE, -value)
             }.timeInMillis
+
             "week" in date -> Calendar.getInstance().apply {
                 add(Calendar.DATE, -value * 7)
             }.timeInMillis
+
             "month" in date -> Calendar.getInstance().apply {
                 add(Calendar.MONTH, -value)
             }.timeInMillis
+
             "year" in date -> Calendar.getInstance().apply {
                 add(Calendar.YEAR, -value)
             }.timeInMillis
+
             else -> {
                 return 0
             }
@@ -254,7 +262,7 @@ class Hentai2Read : ParsedHttpSource() {
         var i = 0
         while (m.find()) {
             m.group(1)?.split(",")?.forEach {
-                pages.add(Page(i++, "", imageBaseUrl + it.trim('"').replace("""\/""", "/")))
+                pages.add(Page(i++, "", IMAGE_BASE_URL + it.trim('"').replace("""\/""", "/")))
             }
         }
         return pages
@@ -276,8 +284,7 @@ class Hentai2Read : ParsedHttpSource() {
     private class Tag(name: String, val id: Int) : Filter.TriState(name)
     private class TagList(title: String, tags: List<Tag>) : Filter.Group<Tag>(title, tags)
     private class SortOrder(values: Array<Pair<String, String?>>) : UriPartFilter("Order", values)
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String?>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String?>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals.getOrNull(state)?.second
     }
 

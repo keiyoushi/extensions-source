@@ -7,7 +7,9 @@ interface UrlQueryFilter {
     fun addQueryParameter(url: HttpUrl.Builder)
 }
 
-class StatusFilter : Filter.Select<String>("Status", statusPairs.map { it.first }.toTypedArray()), UrlQueryFilter {
+class StatusFilter :
+    Filter.Select<String>("Status", statusPairs.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun addQueryParameter(url: HttpUrl.Builder) {
         val value = statusPairs[state].second
         if (value.isNotEmpty()) {
@@ -28,7 +30,9 @@ class StatusFilter : Filter.Select<String>("Status", statusPairs.map { it.first 
     }
 }
 
-class FormatFilter : Filter.Select<String>("Formato", formatPairs.map { it.first }.toTypedArray()), UrlQueryFilter {
+class FormatFilter :
+    Filter.Select<String>("Formato", formatPairs.map { it.first }.toTypedArray()),
+    UrlQueryFilter {
     override fun addQueryParameter(url: HttpUrl.Builder) {
         val value = formatPairs[state].second
         if (value.isNotEmpty()) {
@@ -54,7 +58,9 @@ class FormatFilter : Filter.Select<String>("Formato", formatPairs.map { it.first
 
 class TagCheckBox(name: String, val id: String) : Filter.CheckBox(name)
 
-class TagFilter : Filter.Group<TagCheckBox>("Tags", tagsList), UrlQueryFilter {
+class TagFilter :
+    Filter.Group<TagCheckBox>("Tags", tagsList),
+    UrlQueryFilter {
     override fun addQueryParameter(url: HttpUrl.Builder) {
         val tags = state.filter { it.state }.joinToString(",") { it.id }
         if (tags.isNotEmpty()) {

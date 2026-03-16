@@ -1,9 +1,8 @@
 ext {
     extName = 'Alucard Scans'
     extClass = '.Alucardscans'
-    themePkg = 'mangathemesia'
     baseUrl = 'https://alucardscans.com'
-    overrideVersionCode = 0
+    extVersionCode = 31
     isNsfw = false
 }
 

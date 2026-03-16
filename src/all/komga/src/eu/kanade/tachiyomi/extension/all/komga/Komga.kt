@@ -45,7 +45,10 @@ import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 import java.util.Locale
 
-open class Komga(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
+open class Komga(private val suffix: String = "") :
+    HttpSource(),
+    ConfigurableSource,
+    UnmeteredSource {
 
     internal val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -105,29 +108,25 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             .dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
             .build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SeriesSort(Filter.Sort.Selection(1, true)),
-            ),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SeriesSort(Filter.Sort.Selection(1, true)),
+        ),
+    )
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        processSeriesPage(response, baseUrl)
+    override fun popularMangaParse(response: Response): MangasPage = processSeriesPage(response, baseUrl)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(
-            page,
-            "",
-            FilterList(
-                SeriesSort(Filter.Sort.Selection(3, false)),
-            ),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SeriesSort(Filter.Sort.Selection(3, false)),
+        ),
+    )
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        processSeriesPage(response, baseUrl)
+    override fun latestUpdatesParse(response: Response): MangasPage = processSeriesPage(response, baseUrl)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val collectionId = (filters.find { it is CollectionSelect } as? CollectionSelect)?.let {
@@ -157,6 +156,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         filterList.forEach { filter ->
             when (filter) {
                 is UriFilter -> filter.addToUri(url)
+
                 is Filter.Sort -> {
                     val state = filter.state ?: return@forEach
 
@@ -171,6 +171,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
                     url.addQueryParameter("sort", sortCriteria)
                 }
+
                 else -> {}
             }
         }
@@ -178,8 +179,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        processSeriesPage(response, baseUrl)
+    override fun searchMangaParse(response: Response): MangasPage = processSeriesPage(response, baseUrl)
 
     private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
         val data = if (response.isFromReadList()) {
@@ -197,14 +197,12 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return if (response.isFromReadList()) {
-            response.parseAs<ReadListDto>().toSManga(baseUrl)
-        } else if (response.isFromBook()) {
-            response.parseAs<BookDto>().toSManga(baseUrl)
-        } else {
-            response.parseAs<SeriesDto>().toSManga(baseUrl)
-        }
+    override fun mangaDetailsParse(response: Response): SManga = if (response.isFromReadList()) {
+        response.parseAs<ReadListDto>().toSManga(baseUrl)
+    } else if (response.isFromBook()) {
+        response.parseAs<BookDto>().toSManga(baseUrl)
+    } else {
+        response.parseAs<SeriesDto>().toSManga(baseUrl)
     }
 
     private val chapterNameTemplate
@@ -254,6 +252,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
                         .joinToString { it.name }
                     date_upload = when {
                         book.metadata.releaseDate != null -> parseDate(book.metadata.releaseDate)
+
                         book.created != null -> parseDateTime(book.created)
 
                         // XXX: `Book.fileLastModified` actually uses the server's running timezone,
@@ -285,9 +284,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers = headersBuilder().add("Accept", "image/*,*/*;q=0.8").build())
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers = headersBuilder().add("Accept", "image/*,*/*;q=0.8").build())
 
     override fun getFilterList(): FilterList {
         fetchFilterOptions()
@@ -521,8 +518,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     fun Response.isFromBook() = request.url.toString().isFromBook()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     private val logTag by lazy { "komga${if (suffix.isNotBlank()) ".$suffix" else ""}" }
 

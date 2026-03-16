@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.internal.format
 import java.util.Date
 
 @Serializable
@@ -43,7 +42,7 @@ class GalleryItem(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        url = format("/g/$slug")
+        url = "/g/$slug"
         thumbnail_url = cover
         status = SManga.COMPLETED
     }
@@ -75,7 +74,7 @@ class Gallery(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        url = format("/g/$slug")
+        url = "/g/$slug"
         thumbnail_url = cover
         author = tags
             ?.filterKeys { it == "Group" }
@@ -94,7 +93,7 @@ class Gallery(
 
     fun toSChapter() = SChapter.create().apply {
         name = "Chapter"
-        url = format("/g/$slug")
+        url = "/g/$slug"
         date_upload = try {
             date.toDate()!!.time
         } catch (e: Exception) {
@@ -147,11 +146,7 @@ class PagesList(
         .mapIndexed { sortedIndex, (pageNumber, originalIndex, _) ->
             Page(
                 sortedIndex,
-                imageUrl = format(
-                    "$root/$code/${
-                    pageNumber.padStart(4, '0')
-                    }-${hash[originalIndex]}-${rand[originalIndex]}.${type[originalIndex]}",
-                ),
+                imageUrl = "$root/$code/${pageNumber.padStart(4, '0')}-${hash[originalIndex]}-${rand[originalIndex]}.${type[originalIndex]}",
             )
         }
 }

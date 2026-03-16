@@ -4,268 +4,154 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNames
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
-import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
-class ResultDto<T>(
-    @SerialName("pagina")
-    val currentPage: Int = 0,
-    @SerialName("totalPaginas")
-    val lastPage: Int = 0,
-    @SerialName("obras")
-    @JsonNames("resultado", "resultados")
-    private val obras: T,
-) {
-    val results: T get() = obras
-
-    fun hasNextPage() = currentPage < lastPage
-
-    companion object {
-        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-    }
-}
-
-fun ResultDto<List<MangaDto>>.toSMangaList(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = true, defaultScanId: Int? = null): List<SManga> =
-    results.filter { it.type != "TEXTO" }.map { it.toSManga(cdnUrl, useWidth, includeSlug, defaultScanId) }
+data class GreenShitLoginRequestDto(
+    val login: String,
+    val senha: String,
+    @SerialName("tipo_usuario") val tipoUsuario: String,
+)
 
 @Serializable
-class MangaDto(
-    @JsonNames("obr_id", "id")
-    val id: Int,
-    @JsonNames("obr_nome", "name")
-    val name: String,
-    @JsonNames("obr_slug", "slug")
-    var slug: String? = null,
-    @JsonNames("obr_imagem", "image", "thumbnail")
-    val thumbnail: String? = null,
-    @JsonNames("obr_descricao", "description")
-    val description: String? = null,
-    @SerialName("scan_id")
-    val scanId: Int,
-    @JsonNames("status", "obr_status")
-    val status: MangaStatus? = null,
-    @JsonNames("tags", "genres")
-    val genres: List<Genre> = emptyList(),
-    @JsonNames("capitulos", "chapters")
-    val chapters: List<ChapterDto>? = null,
-    val type: String? = null,
+data class GreenShitLoginResponseDto(
+    @JsonNames("access_token", "token") val accessToken: String,
+    @SerialName("expires_in") val expiresIn: Long = 3600,
+)
+
+@Serializable
+data class GreenShitListDto<T>(
+    val obras: T,
+    @JsonNames("currentPage", "pagina_atual", "pagina") val currentPage: Int? = null,
+    @JsonNames("totalPages", "paginas", "totalPaginas") val totalPages: Int = 0,
 ) {
-    fun toSManga(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = false, defaultScanId: Int? = null) = SManga.create().apply {
-        title = name
-        val finalSlug = slug?.takeIf { it.isNotEmpty() } ?: name?.toSlug()
-        url = if (includeSlug) {
-            "/obra/$id/$finalSlug"
-        } else {
-            "/obra/$id"
-        }
-        thumbnail_url = buildThumbnailUrl(cdnUrl, useWidth, defaultScanId)
-        genre = genres.joinToString()
-        description = this@MangaDto.description?.takeIf { it.isNotBlank() }?.let { Jsoup.parseBodyFragment(it).text() }
-        status = this@MangaDto.status?.toStatus() ?: SManga.UNKNOWN
-        initialized = false
-    }
-
-    private fun buildThumbnailUrl(cdnUrl: String, useWidth: Boolean, defaultScanId: Int?): String? = thumbnail?.let {
-        when {
-            it.startsWith("http") -> it
-            it.contains("/") -> "$cdnUrl/$it"
-            else -> {
-                val width = if (useWidth) "?width=300" else ""
-                val scanId = scanId ?: defaultScanId
-                val mangaId = id
-                "$cdnUrl/scans/$scanId/obras/$mangaId/$it$width"
-            }
-        }
-    }
-
-    fun toSChapterList(): List<SChapter> =
-        chapters?.map { it.toSChapter() }?.sortedByDescending { it.chapter_number } ?: emptyList()
-
-    @Serializable
-    class Genre(@JsonNames("tag_nome", "name") val value: String) {
-        override fun toString() = value
-    }
-
-    @Serializable(with = MangaStatus.Serializer::class)
-    class MangaStatus(val value: String?) {
-        fun toStatus(): Int = when (value?.lowercase()) {
-            "em andamento" -> SManga.ONGOING
-            "completo" -> SManga.COMPLETED
-            "hiato" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-
-        object Serializer : KSerializer<MangaStatus> {
-            override val descriptor: SerialDescriptor =
-                PrimitiveSerialDescriptor("MangaStatus", PrimitiveKind.STRING)
-
-            override fun deserialize(decoder: Decoder): MangaStatus {
-                val jsonDecoder = decoder as? JsonDecoder ?: return MangaStatus(decoder.decodeString())
-                val element = jsonDecoder.decodeJsonElement()
-
-                val value = when (element) {
-                    is JsonPrimitive -> element.content
-                    is JsonObject -> listOf("stt_nome", "value", "name")
-                        .firstNotNullOfOrNull { key -> element[key]?.jsonPrimitive?.content }
-                    else -> null
-                }
-                return MangaStatus(value)
-            }
-
-            override fun serialize(encoder: Encoder, value: MangaStatus) {
-                encoder.encodeString(value.value ?: "")
-            }
-        }
-    }
+    val hasNextPage: Boolean get() = totalPages > (currentPage ?: 0)
 }
 
 @Serializable
-class ChapterDto(
-    @JsonNames("cap_id", "id")
-    val id: Int,
-    @JsonNames("cap_nome", "name")
-    val name: String,
-    @JsonNames("cap_numero", "number")
-    val numero: Float? = null,
-    @JsonNames("cap_lancado_em", "cap_liberar_em", "cap_criado_em")
-    val releaseDate: String? = null,
-) {
-    fun toSChapter() = SChapter.create().apply {
-        this.name = this@ChapterDto.name
-        url = "/capitulo/$id"
-        numero?.let { chapter_number = it }
-        date_upload = ResultDto.DATE_FORMAT.tryParse(releaseDate)
-    }
-}
-
-@Serializable
-class FiltersDto(
-    @SerialName("generos") val genres: List<Genre> = emptyList(),
-    @SerialName("formatos") val formats: List<Format> = emptyList(),
-    @SerialName("status") val statuses: List<Status> = emptyList(),
-    @SerialName("tags") val tags: List<Tag> = emptyList(),
+data class GreenShitTagDto(
+    @SerialName("tag_nome") val name: String = "",
 )
 
 @Serializable
-class Genre(
-    @JsonNames("gen_id", "id")
-    val id: Int,
-    @JsonNames("gen_nome", "name")
-    val name: String,
+data class GreenShitStatusDto(
+    @SerialName("stt_nome") val name: String,
 )
 
 @Serializable
-class Format(
-    @JsonNames("formt_id", "id")
-    val id: Int,
-    @JsonNames("formt_nome", "name")
-    val name: String,
+data class GreenShitChapterSimpleDto(
+    @SerialName("cap_id") val id: Int,
+    @SerialName("cap_nome") val name: String,
+    @SerialName("cap_numero") val number: Float? = null,
+    @SerialName("cap_criado_em") val createdAt: String? = null,
 )
 
 @Serializable
-class Status(
-    @JsonNames("stt_id", "id")
-    val id: Int,
-    @JsonNames("stt_nome", "name")
-    val name: String,
+data class GreenShitMangaDto(
+    @SerialName("obr_id") val id: Int,
+    @SerialName("obr_nome") val name: String,
+    @SerialName("obr_descricao") val description: String? = null,
+    @SerialName("obr_imagem") val image: String? = null,
+    val tags: List<GreenShitTagDto> = emptyList(),
+    val status: GreenShitStatusDto? = null,
+    @SerialName("scan_id") val scanId: Int = 0,
+    @SerialName("capitulos") val chapters: List<GreenShitChapterSimpleDto> = emptyList(),
 )
 
 @Serializable
-class Tag(
-    @JsonNames("tag_id", "id")
-    val id: Int,
-    @JsonNames("tag_nome", "name")
-    val name: String,
-)
-
-@Serializable
-class ChapterPagesDto(
-    @SerialName("obr_id") val mangaId: Int? = null,
-    @SerialName("cap_nome") val name: String = "",
-    @SerialName("cap_numero") private val _chapterNumber: JsonPrimitive? = null,
-    @SerialName("cap_paginas") val pages: List<PageDto> = emptyList(),
-    @SerialName("cap_texto") val text: String? = null,
-    @SerialName("cap_tipo") val type: String = "IMAGEM",
-) {
-    val chapterNumber: String? get() = _chapterNumber?.content
-
-    fun toPageList(cdnUrl: String): List<Page> {
-        if (type == "TEXTO") {
-            throw IllegalArgumentException("Novels are not supported")
-        }
-
-        return pages.mapIndexedNotNull { index, pageDto ->
-            pageDto.toPageOrNull(cdnUrl, mangaId, chapterNumber)?.let { Page(index, it.url, it.imageUrl) }
-        }
-    }
-}
-
-@Serializable
-class PageDto(
+data class GreenShitPageSrcDto(
     val src: String,
     val mime: String? = null,
-    var path: String? = null,
-    @SerialName("numero") private val _numero: JsonPrimitive? = null,
-) {
-    val numero: String? get() = _numero?.content
+)
 
-    fun toPageOrNull(cdnUrl: String, mangaId: Int?, chapterNumber: String?): Page? = runCatching { toPage(cdnUrl, mangaId, chapterNumber) }.getOrNull()
+@Serializable
+data class GreenShitChapterDetailDto(
+    @SerialName("cap_id") val id: Int,
+    @SerialName("cap_nome") val name: String,
+    @SerialName("cap_numero") val number: Float? = null,
+    @SerialName("cap_paginas") val pages: List<GreenShitPageSrcDto> = emptyList(),
+    @SerialName("obra") val manga: GreenShitMangaDto? = null,
+)
 
-    fun toPage(cdnUrl: String, mangaId: Int?, chapterNumber: String?): Page {
-        val cleanSrc = src.trim()
-        require(cleanSrc.isNotBlank()) { "Page src cannot be empty" }
+private fun isWpLikePath(src: String): Boolean = src.startsWith("uploads/") ||
+    src.startsWith("wp-content/") ||
+    src.startsWith("manga_") ||
+    src.startsWith("WP-manga")
 
-        if (cleanSrc.startsWith("http://") || cleanSrc.startsWith("https://")) {
-            return Page(0, imageUrl = cleanSrc)
+private fun normalizeSlashes(url: String): String = url.replace(Regex("(?<!:)/{2,}"), "/")
+
+fun buildImageUrl(
+    path: String = "",
+    src: String = "",
+    width: Int?,
+    base: String,
+    mime: String? = null,
+): String {
+    if (src.isBlank()) return ""
+    if (src.startsWith("http")) return src
+    if (isWpLikePath(src) || mime != null) {
+        return when {
+            src.startsWith("manga_") -> normalizeSlashes("$base/wp-content/uploads/WP-manga/data/$src")
+            src.startsWith("WP-manga") -> normalizeSlashes("$base/wp-content/uploads/$src")
+            src.startsWith("uploads/") -> normalizeSlashes("$base/wp-content/$src")
+            src.startsWith("wp-content/") -> normalizeSlashes("$base/$src")
+            else -> normalizeSlashes("$base/wp-content/uploads/WP-manga/data/${src.trimStart('/')}")
         }
+    }
+    val query = width?.let { "?width=$it" } ?: ""
+    val safePath = if (path.isNotBlank()) path.replace("//", "/").trimStart('/').trimEnd('/') else ""
+    val safeSrc = src.replace("//", "/").trimStart('/').trimEnd('/')
+    return normalizeSlashes("$base/$safePath/$safeSrc$query")
+}
 
-        val normalizedSrc = cleanSrc.removePrefix("/")
+fun GreenShitMangaDto.toSManga(cdnUrl: String, isDetails: Boolean = false): SManga {
+    val sManga = SManga.create().apply {
+        title = name
+        thumbnail_url = buildImageUrl(path = "/scans/$scanId/obras/$id/", src = image ?: "", width = 300, base = cdnUrl)
+        initialized = isDetails
+        url = "/obra/$id"
+        genre = tags.joinToString { it.name }
+    }
 
-        val imageUrl = when {
-            mime != null -> "$cdnUrl/wp-content/uploads/WP-manga/data/$normalizedSrc"
-            path != null -> {
-                val cleanPath = path!!.trim()
-                val absolutePath = if (cleanPath.startsWith("/")) cleanPath else "/$cleanPath"
-                if (absolutePath.endsWith(normalizedSrc, ignoreCase = true)) {
-                    "$cdnUrl$absolutePath"
-                } else {
-                    val pathWithoutTrailing = absolutePath.removeSuffix("/")
-                    "$cdnUrl$pathWithoutTrailing/$normalizedSrc"
-                }
-            }
-            else -> "$cdnUrl/scans/1/obras/${mangaId ?: 0}/capitulos/$chapterNumber/$normalizedSrc"
+    description?.let { sManga.description = Jsoup.parseBodyFragment(it).text() }
+
+    status?.let {
+        sManga.status = when (it.name.lowercase()) {
+            "Em Andamento", "ATIVO" -> SManga.ONGOING
+            "Concluído" -> SManga.COMPLETED
+            "Hiato" -> SManga.ON_HIATUS
+            "Cancelado" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
         }
+    }
+    return sManga
+}
 
-        return Page(0, imageUrl = imageUrl)
+fun GreenShitChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
+    name = this@toSChapter.name
+    chapter_number = number ?: 0f
+    url = "/capitulo/$id"
+    date_upload = dateFormat.tryParse(createdAt)
+}
+
+fun GreenShitChapterDetailDto.toPageList(cdnUrl: String): List<Page> {
+    val obraId = manga?.id ?: 0
+    val scanId = manga?.scanId ?: 0
+    val chapterNumber = number.toString()?.removeSuffix(".0") ?: "0"
+    return pages.mapIndexed { idx, p ->
+        val imageUrl = buildImageUrl(path = "/scans/$scanId/obras/$obraId/capitulos/$chapterNumber/", src = p.src, mime = p.mime, width = null, base = cdnUrl)
+        Page(idx, imageUrl = imageUrl)
     }
 }
 
-private val DiacriticsRegex = "\\p{InCombiningDiacriticalMarks}+".toRegex()
-private val NonAlfaRegex = "[^a-z0-9\\s-]".toRegex()
-private val WhitespaceRegex = "\\s+".toRegex()
-
-fun String?.toSlug(slugSeparator: String = "-"): String {
-    if (this == null) return ""
-    return Normalizer.normalize(this, Normalizer.Form.NFD)
-        .replace(DiacriticsRegex, "")
-        .lowercase()
-        .replace(NonAlfaRegex, "")
-        .replace(WhitespaceRegex, slugSeparator)
-        .trim(*slugSeparator.toCharArray())
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 }

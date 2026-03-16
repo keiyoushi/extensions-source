@@ -28,3 +28,8 @@ val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 
 const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
 val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
+
+// sort filters
+const val SMART_SORT = "_smart_"
+const val BEST_MATCH = ""
+const val RELEASED_ON = "released_on"

@@ -17,14 +17,12 @@ private fun buildPkcs8KeyFromPkcs1Key(innerKey: ByteArray): ByteArray {
     return result
 }
 
-fun getKey(bytes: ByteArray): RSAPrivateKey {
-    return try {
-        val keySpec = PKCS8EncodedKeySpec(bytes)
-        val keyFactory = KeyFactory.getInstance("RSA")
-        keyFactory.generatePrivate(keySpec) as RSAPrivateKey
-    } catch (_: InvalidKeySpecException) {
-        val keySpec = PKCS8EncodedKeySpec(buildPkcs8KeyFromPkcs1Key(bytes))
-        val keyFactory = KeyFactory.getInstance("RSA")
-        keyFactory.generatePrivate(keySpec) as RSAPrivateKey
-    }
+fun getKey(bytes: ByteArray): RSAPrivateKey = try {
+    val keySpec = PKCS8EncodedKeySpec(bytes)
+    val keyFactory = KeyFactory.getInstance("RSA")
+    keyFactory.generatePrivate(keySpec) as RSAPrivateKey
+} catch (_: InvalidKeySpecException) {
+    val keySpec = PKCS8EncodedKeySpec(buildPkcs8KeyFromPkcs1Key(bytes))
+    val keyFactory = KeyFactory.getInstance("RSA")
+    keyFactory.generatePrivate(keySpec) as RSAPrivateKey
 }

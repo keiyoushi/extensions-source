@@ -21,9 +21,7 @@ class BigSolo : HttpSource() {
     override val id = 4410528266393104437
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/data/series", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/data/series", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val series = response.parseAs<SeriesResponse>()
@@ -37,9 +35,7 @@ class BigSolo : HttpSource() {
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/data/series", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/data/series", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -89,9 +85,7 @@ class BigSolo : HttpSource() {
         return GET("$baseUrl/data/series/$slug", headers)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val serie = response.parseAs<Serie>()
@@ -158,7 +152,5 @@ class BigSolo : HttpSource() {
     }
 
     // Unsupported Stuff
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

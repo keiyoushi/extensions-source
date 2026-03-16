@@ -207,8 +207,7 @@ abstract class Makaru(
         addQueryParameter("start-index", startIndex.toString())
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     companion object {
         private const val MAX_MANGA_RESULTS = 20
