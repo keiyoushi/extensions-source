@@ -76,13 +76,14 @@ class LunarChapterDto(
     fun toSChapter(mangaSlug: String, isLocked: Boolean): SChapter = SChapter.create().apply {
         url = "/manga/$mangaSlug/$chapter?lang=$language"
         val prefix = if (isLocked) "🔒 " else ""
-        val chapterNum = "Chapter $chapter"
+        val chapterName = chapter.removeSuffix(".00").removeSuffix(".0")
+        val chapterNum = "Chapter $chapterName"
         name = prefix + if (chapterTitle.isNullOrBlank()) {
             chapterNum
-        } else if (chapterTitle.contains(chapterNum, ignoreCase = true) || chapterTitle.contains("Ch.$chapter", ignoreCase = true)) {
+        } else if (chapterTitle.contains(chapterNum, ignoreCase = true) || chapterTitle.contains("Ch.$chapterName", ignoreCase = true)) {
             chapterTitle
         } else {
-            "$chapterNum : $chapterTitle"
+            "$chapterNum: $chapterTitle"
         }
         chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber
         date_upload = uploadedAt?.let { parseChapterDate(it) } ?: 0L
