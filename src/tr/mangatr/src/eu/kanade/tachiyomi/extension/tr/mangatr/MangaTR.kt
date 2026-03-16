@@ -239,7 +239,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl/${chapter.url}"
+        val url = baseUrl + chapter.url
         return GET(url, headers)
     }
 
