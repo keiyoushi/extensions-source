@@ -3,7 +3,7 @@ ext {
     extClass = '.Komikindo'
     themePkg = 'mangathemesia'
     baseUrl = 'https://komikindo.club'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
