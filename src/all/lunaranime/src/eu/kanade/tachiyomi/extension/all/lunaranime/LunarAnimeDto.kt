@@ -80,7 +80,11 @@ class LunarChapterDto(
         val chapterNum = "Chapter $chapterName"
         name = prefix + if (chapterTitle.isNullOrBlank()) {
             chapterNum
-        } else if (chapterTitle.contains(chapterNum, ignoreCase = true) || chapterTitle.contains("Ch.$chapterName", ignoreCase = true)) {
+        } else if (chapterTitle.contains(chapterNum, ignoreCase = true) ||
+            chapterTitle.contains("Ch.$chapterName", ignoreCase = true) ||
+            chapterTitle.contains("Volume", ignoreCase = true) ||
+            chapterTitle.contains("Vol.", ignoreCase = true)
+        ) {
             chapterTitle
         } else {
             "$chapterNum: $chapterTitle"
