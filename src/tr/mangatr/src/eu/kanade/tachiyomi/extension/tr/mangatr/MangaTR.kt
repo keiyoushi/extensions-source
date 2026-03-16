@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.tr.mangaTR
+package eu.kanade.tachiyomi.extension.tr.mangatr
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -220,7 +220,7 @@ class MangaTR : ParsedHttpSource() {
 
     private fun parseDate(text: String): Long {
         for (fmt in dateFormats) {
-            try { return fmt.parse(text)!!.time } catch (_: Exception) {} // ktlint-disable
+            try { return fmt.parse(text)!!.time } catch (e: Exception) {} // ktlint-disable
         }
         return 0L
     }
