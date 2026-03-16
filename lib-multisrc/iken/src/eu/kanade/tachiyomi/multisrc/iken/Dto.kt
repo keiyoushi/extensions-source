@@ -129,6 +129,13 @@ class PageParseDto(
 @Serializable
 class Images(
     val images: List<PageParseDto>,
+    val id: Int? = null,
+)
+
+@Serializable
+class ViewQuery(
+    val postId: Int?,
+    val chapterId: Int?,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
