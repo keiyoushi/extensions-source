@@ -6,10 +6,10 @@ const val SEARCH_DEFAULT_SORT_STATE = 0
 
 const val FILTER_VALUE_IGNORE = "<ignore>"
 
-val ALBUM_LIST_REQUEST_GQL = """
-    query AlbumList(${'$'}input: AlbumListInput!) {
+val ALBUM_LIST_REQUEST_GQL = $$"""
+    query AlbumList($input: AlbumListInput!) {
         album {
-            list(input: ${'$'}input) {
+            list(input: $input) {
                 info {
                     page
                     has_next_page
@@ -20,10 +20,10 @@ val ALBUM_LIST_REQUEST_GQL = """
     }
 """.replace("\n", " ").replace("\\s+".toRegex(), " ")
 
-val ALBUM_PICTURES_REQUEST_GQL = """
-    query AlbumListOwnPictures(${'$'}input: PictureListInput!) {
+val ALBUM_PICTURES_REQUEST_GQL = $$"""
+    query AlbumListOwnPictures($input: PictureListInput!) {
         picture {
-            list(input: ${'$'}input) {
+            list(input: $input) {
                 info {
                     total_items
                     total_pages
@@ -46,10 +46,10 @@ val ALBUM_PICTURES_REQUEST_GQL = """
     }
 """.replace("\n", " ").replace("\\s+".toRegex(), " ")
 
-val albumInfoQuery = """
-query AlbumGet(${"$"}id: ID!) {
+val albumInfoQuery = $$"""
+query AlbumGet($id: ID!) {
     album {
-        get(id: ${"$"}id) {
+        get(id: $id) {
             ... on Album { ...AlbumStandard }
             ... on MutationError {
                 errors {
