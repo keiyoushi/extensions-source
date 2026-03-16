@@ -8,6 +8,9 @@ import okhttp3.Request
 
 class Jmanga : MangaReader("Jmanga", "https://jmanga.codes", "ja") {
 
+    private val baseDefaultUrl = "https://jmanga.codes"
+    override var baseUrl = baseDefaultUrl
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
