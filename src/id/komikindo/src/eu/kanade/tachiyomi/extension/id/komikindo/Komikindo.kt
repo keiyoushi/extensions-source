@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.komikindo
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -18,6 +19,7 @@ class Komikindo :
     private val cdnHeaders = imageRequest(Page(0, "$baseUrl/", baseUrl)).headers
 
     override val client = super.client.newBuilder()
+        .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
