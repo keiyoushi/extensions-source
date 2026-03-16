@@ -17,32 +17,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-/**
- * Manga-TR Extension — Mihon/Tachiyomi
- *
- * Site         : https://manga-tr.com
- * Eski domain  : manga-tr.net (bozuk eski extension bunu kullanıyordu)
- * CDN          : https://image.mangatr.site
- *
- * ── KORUMALAR ──────────────────────────────────────────────────────────────
- *
- * 1. Cloudflare DDoS koruma (liste/detay sayfaları)
- *    → cloudflareClient ile otomatik handle edilir.
- *    → İlk açılışta Mihon → "WebView'ı Aç" ile CF'yi bir kez çöz.
- *
- * 2. Özel sürükle-bırak captcha (OKUMA sayfaları)
- *    → Cloudflare değil, sitenin kendi custom captcha'sı.
- *    → Her yeni bölüm açıldığında çıkabilir.
- *    → ÇÖZÜM: WebView'da bölümü bir kez aç, captcha'yı çöz,
- *      sonra Tachiyomi'ye geri dön → sonraki isteklerde cookie taşınır.
- *
- * ── URL YAPISI ─────────────────────────────────────────────────────────────
- *
- * Manga liste  : /manga-list-sayfala.html?sort=views&sort_type=DESC&page=N
- * Manga detay  : /manga-{slug}.html
- * Bölüm okuma  : /id-{chapterID}-read-{slug}-chapter-{number}.html
- * Bölüm listesi: AJAX — /cek/bolum-listesi.php?manga={slug}&bolum_sayfa=1
- */
 class MangaTR : ParsedHttpSource() {
 
     override val name = "Manga-TR"
@@ -52,7 +26,6 @@ class MangaTR : ParsedHttpSource() {
 
     private val cdnUrl = "https://image.mangatr.site"
 
-    // ── HTTP ─────────────────────────────────────────────────────────────────
     override val client: OkHttpClient = network.cloudflareClient
         .newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
@@ -64,19 +37,17 @@ class MangaTR : ParsedHttpSource() {
         .add("Referer", "$baseUrl/")
         .add(
             "User-Agent",
-            "Mozilla/5.0 (Linux; Android 13; Pixel 8) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/120.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 13; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         )
 
-    // ── POPÜLER ──────────────────────────────────────────────────────────────
+    // Popular
+
     override fun popularMangaRequest(page: Int): Request = GET(
         "$baseUrl/manga-list-sayfala.html?sort=views&sort_type=DESC&page=$page&listType=pagination",
         headers,
     )
 
-    override fun popularMangaSelector() =
-        "div.col-md-2, div.col-sm-3, div.manga-item, div:has(>h3>a[href*='/manga-'])"
+    override fun popularMangaSelector() = "div.col-md-2, div.col-sm-3, div.manga-item, div:has(>h3>a[href*='/manga-'])"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val titleAnchor = element.selectFirst("h3 a, h4 a")
@@ -88,17 +59,16 @@ class MangaTR : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector() =
-        "ul.pagination li.next a, a[rel='next'], a.next_page"
+    override fun popularMangaNextPageSelector() = "ul.pagination li.next a, a[rel='next'], a.next_page"
 
-    // ── SON GÜNCELLENENLER ───────────────────────────────────────────────────
+    // Latest
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = if (page == 1) "$baseUrl/index.html" else "$baseUrl/index-sayfa-$page.html"
         return GET(url, headers)
     }
 
-    override fun latestUpdatesSelector() =
-        "div.col-md-1, div.col-sm-2, div:has(>img[title]):has(a[href*='/manga-'])"
+    override fun latestUpdatesSelector() = "div.col-md-1, div.col-sm-2, div:has(>img[title]):has(a[href*='/manga-'])"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         val mangaAnchor = element.selectFirst("a[href*='/manga-']")!!
@@ -110,10 +80,10 @@ class MangaTR : ParsedHttpSource() {
         }
     }
 
-    override fun latestUpdatesNextPageSelector() =
-        "ul.pagination a[href*='index-sayfa-'], a.next_page"
+    override fun latestUpdatesNextPageSelector() = "ul.pagination a[href*='index-sayfa-'], a.next_page"
 
-    // ── ARAMA ────────────────────────────────────────────────────────────────
+    // Search
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = "$baseUrl/manga-list-sayfala.html".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -151,27 +121,21 @@ class MangaTR : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    // ── MANGA DETAY ──────────────────────────────────────────────────────────
+    // Details
+
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        thumbnail_url = document.selectFirst(
-            "img[src*='image.mangatr.site'], img[src*='$cdnUrl']",
-        )?.attr("abs:src")
+        thumbnail_url = document.selectFirst("img[src*='image.mangatr.site'], img[src*='$cdnUrl']")?.attr("abs:src")
             ?: document.selectFirst("img[title]")?.attr("abs:src")
 
-        description = document.selectFirst(
-            "div.summary, p.summary, div.konu, div#tab1 p",
-        )?.text()?.trim()
+        description = document.selectFirst("div.summary, p.summary, div.konu, div#tab1 p")?.text()?.trim()
 
         author = document.selectFirst("a[href*='?author=']")?.text()?.trim()
 
-        artist = document.select("a[href*='?artist=']")
-            .joinToString { it.text().trim() }
-            .ifBlank { null }
+        artist = document.select("a[href*='?artist=']").joinToString { it.text().trim() }.ifBlank { null }
 
-        genre = document.select("a[href*='?tur=']")
-            .joinToString { it.text().trim() }
+        genre = document.select("a[href*='?tur=']").joinToString { it.text().trim() }
 
         val durum = document.selectFirst("a[href*='?durum=']")?.attr("href") ?: ""
         status = when {
@@ -184,8 +148,8 @@ class MangaTR : ParsedHttpSource() {
         }
     }
 
-    // ── BÖLÜM LİSTESİ ────────────────────────────────────────────────────────
-    // Bölümler AJAX ile geliyor: /cek/bolum-listesi.php?manga={slug}&bolum_sayfa=1
+    // Chapters
+
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url
             .removePrefix("/")
@@ -201,9 +165,7 @@ class MangaTR : ParsedHttpSource() {
         name = anchor.text().trim()
         setUrlWithoutDomain(anchor.attr("abs:href"))
 
-        date_upload = element.select("td").lastOrNull()
-            ?.text()?.trim()
-            ?.let { parseDate(it) } ?: 0L
+        date_upload = element.select("td").lastOrNull()?.text()?.trim()?.let { parseDate(it) } ?: 0L
 
         chapter_number = anchor.attr("href")
             .substringAfterLast("chapter-")
@@ -218,19 +180,23 @@ class MangaTR : ParsedHttpSource() {
         SimpleDateFormat("dd MMMM yyyy", Locale("tr")),
     )
 
+    @Suppress("SwallowedException")
     private fun parseDate(text: String): Long {
         for (fmt in dateFormats) {
-            try { return fmt.parse(text)!!.time } catch (e: Exception) {} // ktlint-disable
+            try {
+                return fmt.parse(text)!!.time
+            } catch (e: Exception) {
+                // try next format
+            }
         }
         return 0L
     }
 
-    // ── SAYFA LİSTESİ (Okuma) ────────────────────────────────────────────────
+    // Pages
+
     override fun pageListParse(document: Document): List<Page> {
-        // 1. Doğrudan DOM'dan resimler
         val imgs = document.select(
-            "div#page-container img, div.reading-content img, " +
-                "div.chapter-content img, div.content-wraper img",
+            "div#page-container img, div.reading-content img, div.chapter-content img, div.content-wraper img",
         )
         if (imgs.isNotEmpty()) {
             return imgs.mapIndexed { i, img ->
@@ -241,7 +207,6 @@ class MangaTR : ParsedHttpSource() {
             }
         }
 
-        // 2. JS değişkeninden resimler
         val scripts = document.select("script").joinToString("\n") { it.html() }
         val arrayRegex = Regex(
             """(?:images?|pages?|imgList|chapter_images?)\s*[=:]\s*\[([^\]]{20,})\]""",
@@ -267,7 +232,8 @@ class MangaTR : ParsedHttpSource() {
         headersBuilder().set("Referer", "$baseUrl/").build(),
     )
 
-    // ── FİLTRELER ────────────────────────────────────────────────────────────
+    // Filters
+
     override fun getFilterList() = FilterList(
         SortFilter(),
         StatusFilter(),
