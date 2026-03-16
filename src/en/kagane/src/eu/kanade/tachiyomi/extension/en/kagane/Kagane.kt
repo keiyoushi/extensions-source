@@ -118,17 +118,21 @@ class Kagane :
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(
-        page,
-        "",
-        FilterList(
-            SortFilter(Filter.Sort.Selection(1, false)),
-            ContentRatingFilter(
-                preferences.contentRating.toSet(),
+    override fun popularMangaRequest(page: Int): Request {
+        val sortValue = preferences.popularSort
+        val sortIndex = getSortFilter().indexOfFirst { it.value == sortValue }.coerceAtLeast(0)
+        return searchMangaRequest(
+            page,
+            "",
+            FilterList(
+                SortFilter(Filter.Sort.Selection(sortIndex, false)),
+                ContentRatingFilter(
+                    preferences.contentRating.toSet(),
+                ),
+                GenresFilter(emptyList()),
             ),
-            GenresFilter(emptyList()),
-        ),
-    )
+        )
+    }
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
@@ -650,6 +654,9 @@ class Kagane :
     private val SharedPreferences.chapterTitleMode
         get() = this.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
+    private val SharedPreferences.popularSort
+        get() = this.getString(POPULAR_SORT, POPULAR_SORT_DEFAULT) ?: POPULAR_SORT_DEFAULT
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = CONTENT_RATING
@@ -719,6 +726,15 @@ class Kagane :
             summary = "How the chapter title should be displayed"
             setDefaultValue(CHAPTER_TITLE_MODE_DEFAULT)
         }.let(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = POPULAR_SORT
+            title = "Popular tab sorting"
+            entries = POPULAR_SORT_NAMES
+            entryValues = POPULAR_SORT_VALUES
+            summary = "%s"
+            setDefaultValue(POPULAR_SORT_DEFAULT)
+        }.let(screen::addPreference)
     }
 
     // ============================= Utilities ==============================
@@ -760,6 +776,25 @@ class Kagane :
             "Title only (e.g. 'Manga Title' / 'Ch.5')",
             "Ch.X + title (e.g. 'Ch.5 Manga Title')",
             "Vol.X Ch.Y + title (e.g. 'Vol.1 Ch.5 Manga Title')",
+        )
+
+        private const val POPULAR_SORT = "pref_popular_sort"
+        private const val POPULAR_SORT_DEFAULT = "total_views"
+        internal val POPULAR_SORT_NAMES = arrayOf(
+            "Relevance",
+            "Popular (All Time)",
+            "Popular (Average)",
+            "Popular (Today)",
+            "Popular (Week)",
+            "Popular (Month)",
+        )
+        internal val POPULAR_SORT_VALUES = arrayOf(
+            "",
+            "total_views",
+            "avg_views",
+            "avg_views_today",
+            "avg_views_week",
+            "avg_views_month",
         )
     }
 

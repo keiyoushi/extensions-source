@@ -41,7 +41,7 @@ internal class SortFilter(
     }
 }
 
-private fun getSortFilter() = listOf(
+internal fun getSortFilter() = listOf(
     SelectFilterOption("Relevance", ""),
     SelectFilterOption("Popular (Total Views)", "total_views"),
     SelectFilterOption("Popular (Average Views)", "avg_views"),
