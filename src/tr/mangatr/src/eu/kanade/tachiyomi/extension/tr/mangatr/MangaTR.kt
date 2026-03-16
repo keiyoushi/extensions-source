@@ -20,7 +20,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.nio.charset.StandardCharsets
 import kotlin.concurrent.thread
 
 class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
@@ -246,113 +245,78 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
-    // getImgAttr artık kullanılmıyor, FMReader override zorunluluğu için null döndür
     override fun getImgAttr(element: Element?): String? = null
 
-    // ============================== Pages ================================
-    // Site resim URL'lerini şifreli olarak saklıyor:
-    //   - HTML'deki <div id="chapter-images" data-k1="..."> → k1 anahtarı
-    //   - JS'deki window.imageQueueData.k2 → k2 anahtarı
-    //   - İki anahtar XOR'lanarak şifre çözme anahtarı elde ediliyor
-    //   - Her resim, birden fazla Base64 chunk'a bölünmüş hâlde queue'da duruyor
-    //   - Chunk'lar birleştirilip XOR anahtarıyla decode ediliyor → gerçek URL
-    //   - "FAKE_..." ile başlayan entry'ler sahte, atlanıyor
+    // ============================== Pages =================================
+    //
+    // Site resim URL'lerini şifreleyerek saklıyor (sc.js ile):
+    //   1. HTML'deki <div id="chapter-images" data-k1="...">  → k1
+    //   2. JS'deki window.imageQueueData.k2                   → k2
+    //   3. finalXorKey = hex(int(k1,16) XOR 0x4eac8c90) + k2  (16 char)
+    //   4. Her resim birden fazla Base64 chunk'a bölünmüş
+    //   5. Chunk'lar birleştirilip xorDecrypt'e gönderiliyor
+    //   6. xorDecrypt: base64 decode → her byte'ı key char'ıyla XOR → URL
+    //
     override fun pageListParse(document: Document): List<Page> {
-        val tag = "MangaTR"
+        val k1 = document.selectFirst("div#chapter-images")
+            ?.attr("data-k1") ?: return emptyList()
 
-        // k1: HTML div attribute'u
-        val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1")
-        android.util.Log.d(tag, "k1=$k1")
-        if (k1.isNullOrEmpty()) {
-            android.util.Log.d(tag, "k1 bulunamadi, emptyList donuyor")
-            return emptyList()
-        }
-
-        val scripts = document.select("script:not([src])")
-        android.util.Log.d(tag, "script sayisi=${scripts.size}")
-
-        for ((si, script) in scripts.withIndex()) {
+        for (script in document.select("script:not([src])")) {
             val content = script.html()
-            if (!content.contains("imageQueueData") && !content.contains("queue")) continue
+            if (!content.contains("imageQueueData")) continue
 
-            android.util.Log.d(tag, "imageQueueData script bulundu, index=$si")
-            android.util.Log.d(tag, "script snippet=${content.take(300)}")
-
-            val k2Match = Regex("""\bk2\b\s*:\s*"([a-f0-9]+)"""").find(content)
-            android.util.Log.d(tag, "k2Match=${k2Match?.groupValues?.get(1)}")
-            if (k2Match == null) {
-                android.util.Log.d(tag, "k2 bulunamadi, sonraki scripte gec")
-                continue
-            }
+            val k2Match = Regex("""\bk2\b\s*:\s*"([a-f0-9]+)"""").find(content) ?: continue
             val k2 = k2Match.groupValues[1]
 
             val queueMatch = Regex(
                 """\bqueue\b\s*:\s*(\[[\s\S]*?\])\s*,\s*\blogo\b""",
-            ).find(content)
-            android.util.Log.d(tag, "queueMatch=${if (queueMatch != null) "bulundu" else "bulunamadi"}")
-            if (queueMatch == null) {
-                android.util.Log.d(tag, "queue bulunamadi, sonraki scripte gec")
-                continue
-            }
+            ).find(content) ?: continue
             val queueStr = queueMatch.groupValues[1]
-            android.util.Log.d(tag, "queueStr snippet=${queueStr.take(200)}")
 
-            val key = buildXorKey(k1, k2)
-            android.util.Log.d(tag, "key size=${key.size}")
-
+            val keyStr = buildFinalXorKey(k1, k2)
             val pages = mutableListOf<Page>()
             var idx = 0
 
-            val itemRegex = Regex("""\[([^\[\]]+)\]""")
-            val items = itemRegex.findAll(queueStr).toList()
-            android.util.Log.d(tag, "item sayisi=${items.size}")
-
-            for (item in items) {
+            for (item in Regex("""\[([^\[\]]+)\]""").findAll(queueStr)) {
                 val combined = Regex(""""([^"]+)"""")
                     .findAll(item.groupValues[1])
                     .joinToString("") { it.groupValues[1] }
 
-                if (combined.contains("FAKE")) {
-                    android.util.Log.d(tag, "FAKE atlandi")
-                    continue
-                }
+                if (combined.contains("FAKE")) continue
 
-                android.util.Log.d(tag, "combined snippet=${combined.take(50)}")
-                val url = xorDecodeUrl(combined, key)
-                android.util.Log.d(tag, "decoded url=$url")
-                if (url != null) pages.add(Page(idx++, imageUrl = url))
+                val url = xorDecodeUrl(combined, keyStr) ?: continue
+                pages.add(Page(idx++, imageUrl = url))
             }
 
-            android.util.Log.d(tag, "toplam page sayisi=${pages.size}")
             if (pages.isNotEmpty()) return pages
         }
 
-        android.util.Log.d(tag, "hicbir script eslesmedi, emptyList donuyor")
         return emptyList()
     }
 
-    // k1 ve k2 hex string'lerini byte dizisine çevir, XOR'la
-    private fun buildXorKey(k1: String, k2: String): ByteArray {
-        val b1 = k1.chunked(2).mapNotNull { it.toIntOrNull(16)?.toByte() }
-        val b2 = k2.chunked(2).mapNotNull { it.toIntOrNull(16)?.toByte() }
-        if (b1.isEmpty() || b2.isEmpty()) return ByteArray(0)
-        val len = maxOf(b1.size, b2.size)
-        return ByteArray(len) { i ->
-            (b1[i % b1.size].toInt() xor b2[i % b2.size].toInt()).toByte()
-        }
+    // finalXorKey = hex(int(k1, 16) XOR 0x4eac8c90).padStart(8,'0') + k2
+    private fun buildFinalXorKey(k1: String, k2: String): String {
+        val k1Long = k1.toLongOrNull(16) ?: return k2
+        val firstHalf = (k1Long xor 0x4eac8c90L)
+            .and(0xFFFFFFFFL)
+            .toString(16)
+            .padStart(8, '0')
+        return firstHalf + k2
     }
 
-    // Base64 string'i decode et, XOR anahtarıyla şifresini çöz, URL'yi döndür
+    // xorDecrypt: base64 decode → her byte'ı key char kodu ile XOR → URL string
     @Suppress("SwallowedException")
-    private fun xorDecodeUrl(base64: String, key: ByteArray): String? {
-        if (key.isEmpty()) return null
+    private fun xorDecodeUrl(base64Str: String, keyStr: String): String? {
+        if (keyStr.isEmpty()) return null
         return try {
-            val bytes = Base64.decode(base64, Base64.DEFAULT)
-            val xored = ByteArray(bytes.size) { i ->
-                (bytes[i].toInt() xor key[i % key.size].toInt()).toByte()
+            val padded = base64Str + "=".repeat((4 - base64Str.length % 4) % 4)
+            val bytes = Base64.decode(padded, Base64.DEFAULT)
+            val result = buildString {
+                bytes.forEachIndexed { i, b ->
+                    append(((b.toInt() and 0xFF) xor keyStr[i % keyStr.length].code).toChar())
+                }
             }
-            val url = String(xored, StandardCharsets.UTF_8)
-            if (url.startsWith("http")) url else null
+            if (result.startsWith("http")) result else null
         } catch (e: Exception) {
             null
         }
