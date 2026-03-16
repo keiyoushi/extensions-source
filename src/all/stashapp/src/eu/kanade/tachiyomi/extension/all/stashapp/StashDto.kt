@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonObject
  * [graphql over http](https://graphql.org/learn/serving-over-http)
  */
 @Serializable
-data class GraphQLRequest<T>(
+class GraphQLRequest<T>(
     val query: String,
     val operationName: String? = null,
     val variables: T? = null,
@@ -19,13 +19,13 @@ data class GraphQLRequest<T>(
 )
 
 @Serializable
-data class GraphQLErrorLocation(
+class GraphQLErrorLocation(
     val line: Int,
     val column: Int,
 )
 
 @Serializable
-data class GraphQLError(
+class GraphQLError(
     val message: String,
     val locations: List<GraphQLErrorLocation>? = null,
     val path: List<JsonElement>? = null,
@@ -36,7 +36,7 @@ data class GraphQLError(
  * [graphql over http](https://graphql.org/learn/serving-over-http)
  */
 @Serializable
-data class GraphQLResponse<T>(
+class GraphQLResponse<T>(
     val data: T? = null,
     val errors: List<GraphQLError>? = null,
     val extensions: JsonObject? = null,
@@ -45,42 +45,42 @@ data class GraphQLResponse<T>(
 // ===== StashApp Requests/Responses =====
 
 @Serializable
-data class MangaBriefVariables(
+class MangaBriefVariables(
     val filter: FindFilterType,
 )
 
 @Serializable
-data class MangaBriefData(
+class MangaBriefData(
     val findGalleries: FindGalleriesResultType,
 )
 
 @Serializable
-data class MangaDetailsVariables(
+class MangaDetailsVariables(
     val id: String,
 )
 
 @Serializable
-data class MangaDetailsData(
+class MangaDetailsData(
     val findGallery: Gallery,
 )
 
 @Serializable
-data class ChapterListVariables(
+class ChapterListVariables(
     val id: String,
 )
 
 @Serializable
-data class ChapterListData(
+class ChapterListData(
     val findGallery: Gallery,
 )
 
 @Serializable
-data class PageListVariables(
+class PageListVariables(
     val id: Int,
 )
 
 @Serializable
-data class PageListData(
+class PageListData(
     val findImages: FindImagesResultType,
 )
 
@@ -93,7 +93,7 @@ enum class SortDirectionEnum {
 }
 
 @Serializable
-data class FindFilterType(
+class FindFilterType(
     val q: String? = null,
     val page: Int? = null,
     /**
@@ -109,7 +109,7 @@ data class FindFilterType(
  * There is more field, ignored because not used
  */
 @Serializable
-data class Folder(
+class Folder(
     val path: String? = null,
 )
 
@@ -117,7 +117,7 @@ data class Folder(
  * There is more field, ignored because not used
  */
 @Serializable
-data class Tag(
+class Tag(
     val name: String = "",
 )
 
@@ -125,7 +125,7 @@ data class Tag(
  * There is more field, ignored because not used
  */
 @Serializable
-data class ImagePathsType(
+class ImagePathsType(
     val thumbnail: String? = null,
 )
 
@@ -133,7 +133,7 @@ data class ImagePathsType(
  * There is more field, ignored because not used
  */
 @Serializable
-data class VisualFile(
+class VisualFile(
     @SerialName("__typename")
     val __typename: String? = null,
 )
@@ -142,7 +142,7 @@ data class VisualFile(
  * There is more field, ignored because not used
  */
 @Serializable
-data class Image(
+class Image(
     val id: String? = null,
     val paths: ImagePathsType? = null,
     @SerialName("visual_files")
@@ -153,7 +153,7 @@ data class Image(
  * There is more field, ignored because not used
  */
 @Serializable
-data class Gallery(
+class Gallery(
     val id: String? = null,
     val title: String? = null,
     val folder: Folder? = null,
@@ -166,13 +166,13 @@ data class Gallery(
 )
 
 @Serializable
-data class FindGalleriesResultType(
+class FindGalleriesResultType(
     val count: Int? = null,
     val galleries: List<Gallery>? = null,
 )
 
 @Serializable
-data class FindImagesResultType(
+class FindImagesResultType(
     val count: Int? = null,
     /**
      * Total megapixels of the images

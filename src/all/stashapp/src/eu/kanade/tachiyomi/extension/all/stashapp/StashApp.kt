@@ -110,8 +110,7 @@ class StashApp :
     override fun popularMangaParse(response: Response): MangasPage = parseMangaBrief(response)
 
     // TODO support getFilterList
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        mangaBriefRequest(page, query, "path", SortDirectionEnum.ASC)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = mangaBriefRequest(page, query, "path", SortDirectionEnum.ASC)
 
     override fun searchMangaParse(response: Response): MangasPage = parseMangaBrief(response)
 
@@ -291,13 +290,11 @@ class StashApp :
         )
     }
 
-    private fun List<kotlinx.serialization.json.JsonElement>.toGraphQLPathString(): String =
-        joinToString(prefix = "[", postfix = "]", separator = ", ") { it.toString() }
+    private fun List<kotlinx.serialization.json.JsonElement>.toGraphQLPathString(): String = joinToString(prefix = "[", postfix = "]", separator = ", ") { it.toString() }
 
-    private fun List<GraphQLErrorLocation>.toGraphQLLocationsString(): String =
-        joinToString(prefix = "[", postfix = "]", separator = ", ") {
-            "{line=${it.line}, column=${it.column}}"
-        }
+    private fun List<GraphQLErrorLocation>.toGraphQLLocationsString(): String = joinToString(prefix = "[", postfix = "]", separator = ", ") {
+        "{line=${it.line}, column=${it.column}}"
+    }
 
     private fun Gallery.toTitle(): String = title?.takeIf(String::isNotBlank)
         ?: folder?.path?.takeIf(String::isNotBlank)?.let(::pathLast)
