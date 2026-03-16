@@ -23,10 +23,10 @@ jobs:
         run: ./gradlew :src:tr:mangatr:spotlessApply
 
       - name: Build MangaTR
-        run: ./gradlew :src:tr:mangatr:assembleRelease
+        run: ./gradlew :src:tr:mangatr:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MangaTR-apk
-          path: src/tr/mangatr/build/outputs/apk/release/*.apk
+          path: src/tr/mangatr/build/outputs/apk/debug/*.apk
