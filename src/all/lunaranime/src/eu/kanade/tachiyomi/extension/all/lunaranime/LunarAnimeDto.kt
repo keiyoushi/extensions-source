@@ -72,9 +72,10 @@ class LunarChapterDto(
     val language: String,
     @SerialName("uploaded_at") val uploadedAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String, isLocked: Boolean): SChapter = SChapter.create().apply {
         url = "/manga/$mangaSlug/$chapter?lang=$language"
-        name = chapterTitle?.takeIf { it.isNotBlank() } ?: "Chapter $chapter"
+        val prefix = if (isLocked) "🔒 " else ""
+        name = prefix + (chapterTitle?.takeIf { it.isNotBlank() } ?: "Chapter $chapter")
         chapter_number = this@LunarChapterDto.chapterNumber
         date_upload = uploadedAt?.let { parseChapterDate(it) } ?: 0L
         scanlator = language.uppercase(Locale.ROOT)
@@ -116,4 +117,16 @@ class LunarRecentResponse(
     val page: Int = 0,
     val limit: Int = 0,
     @SerialName("total_count") val totalCount: Int = 0,
+)
+
+@Serializable
+class LunarPasswordInfoResponse(
+    @SerialName("chapter_passwords") val chapterPasswords: List<LunarChapterPasswordDto> = emptyList(),
+    @SerialName("has_series_password") val hasSeriesPassword: Boolean = false,
+)
+
+@Serializable
+class LunarChapterPasswordDto(
+    @SerialName("chapter_number") val chapterNumber: String? = null,
+    val language: String? = null,
 )
