@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.fr.lanortrad
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class LanorMangaDto(
+class LanorMangaDto(
     val id: String = "",
     val title: String = "",
     val type: String = "",
