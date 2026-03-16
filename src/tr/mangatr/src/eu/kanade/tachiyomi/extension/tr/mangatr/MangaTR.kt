@@ -287,7 +287,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             val k2 = k2Match.groupValues[1]
 
             val queueMatch = Regex(
-                """\bqueue\b\s*:\s*(\[[\s\S]*?\])\s*,\s*\blog\b""",
+                """\bqueue\b\s*:\s*(\[[\s\S]*?\])\s*,\s*\blogo\b""",
             ).find(content)
             android.util.Log.d(tag, "queueMatch=${if (queueMatch != null) "bulundu" else "bulunamadi"}")
             if (queueMatch == null) {
