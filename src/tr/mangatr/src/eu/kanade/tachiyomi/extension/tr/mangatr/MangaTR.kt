@@ -258,48 +258,76 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     //   - Chunk'lar birleştirilip XOR anahtarıyla decode ediliyor → gerçek URL
     //   - "FAKE_..." ile başlayan entry'ler sahte, atlanıyor
     override fun pageListParse(document: Document): List<Page> {
+        val tag = "MangaTR"
+
         // k1: HTML div attribute'u
-        val k1 = document.selectFirst("div#chapter-images")
-            ?.attr("data-k1") ?: return emptyList()
+        val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1")
+        android.util.Log.d(tag, "k1=$k1")
+        if (k1.isNullOrEmpty()) {
+            android.util.Log.d(tag, "k1 bulunamadi, emptyList donuyor")
+            return emptyList()
+        }
 
         val scripts = document.select("script:not([src])")
-        for (script in scripts) {
-            val content = script.html()
+        android.util.Log.d(tag, "script sayisi=${scripts.size}")
 
-            // window.imageQueueData = { queue: [...], logo: "...", k2: "..." }
-            val k2Match = Regex("""\bk2\b\s*:\s*"([a-f0-9]+)"""").find(content) ?: continue
+        for ((si, script) in scripts.withIndex()) {
+            val content = script.html()
+            if (!content.contains("imageQueueData") && !content.contains("queue")) continue
+
+            android.util.Log.d(tag, "imageQueueData script bulundu, index=$si")
+            android.util.Log.d(tag, "script snippet=${content.take(300)}")
+
+            val k2Match = Regex("""\bk2\b\s*:\s*"([a-f0-9]+)"""").find(content)
+            android.util.Log.d(tag, "k2Match=${k2Match?.groupValues?.get(1)}")
+            if (k2Match == null) {
+                android.util.Log.d(tag, "k2 bulunamadi, sonraki scripte gec")
+                continue
+            }
             val k2 = k2Match.groupValues[1]
 
             val queueMatch = Regex(
                 """\bqueue\b\s*:\s*(\[[\s\S]*?\])\s*,\s*\blog\b""",
-            ).find(content) ?: continue
+            ).find(content)
+            android.util.Log.d(tag, "queueMatch=${if (queueMatch != null) "bulundu" else "bulunamadi"}")
+            if (queueMatch == null) {
+                android.util.Log.d(tag, "queue bulunamadi, sonraki scripte gec")
+                continue
+            }
             val queueStr = queueMatch.groupValues[1]
+            android.util.Log.d(tag, "queueStr snippet=${queueStr.take(200)}")
 
-            // XOR anahtarını oluştur
             val key = buildXorKey(k1, k2)
+            android.util.Log.d(tag, "key size=${key.size}")
 
             val pages = mutableListOf<Page>()
             var idx = 0
 
-            // Her item: ["chunk1","chunk2",...] veya "FAKE_..." string'i
-            // Önce FAKE_ string'leri atla, array'leri işle
             val itemRegex = Regex("""\[([^\[\]]+)\]""")
-            for (item in itemRegex.findAll(queueStr)) {
-                // Chunk'ları birleştir
+            val items = itemRegex.findAll(queueStr).toList()
+            android.util.Log.d(tag, "item sayisi=${items.size}")
+
+            for (item in items) {
                 val combined = Regex(""""([^"]+)"""")
                     .findAll(item.groupValues[1])
                     .joinToString("") { it.groupValues[1] }
 
-                // FAKE içeriyorsa atla
-                if (combined.contains("FAKE")) continue
+                if (combined.contains("FAKE")) {
+                    android.util.Log.d(tag, "FAKE atlandi")
+                    continue
+                }
 
-                val url = xorDecodeUrl(combined, key) ?: continue
-                pages.add(Page(idx++, imageUrl = url))
+                android.util.Log.d(tag, "combined snippet=${combined.take(50)}")
+                val url = xorDecodeUrl(combined, key)
+                android.util.Log.d(tag, "decoded url=$url")
+                if (url != null) pages.add(Page(idx++, imageUrl = url))
             }
 
+            android.util.Log.d(tag, "toplam page sayisi=${pages.size}")
             if (pages.isNotEmpty()) return pages
         }
 
+        android.util.Log.d(tag, "hicbir script eslesmedi, emptyList donuyor")
         return emptyList()
     }
 
