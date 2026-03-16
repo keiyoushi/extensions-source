@@ -1,8 +1,10 @@
 ext {
     extName = 'Manga-TR'
     extClass = '.MangaTR'
-    extVersionCode = 3
-    isNsfw = false
+    themePkg = 'fmreader'
+    baseUrl = 'https://manga-tr.com'
+    overrideVersionCode = 7
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
