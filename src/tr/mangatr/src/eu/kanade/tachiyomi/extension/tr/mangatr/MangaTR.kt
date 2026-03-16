@@ -269,7 +269,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             val k2 = k2Match.groupValues[1]
 
             val queueMatch = Regex(
-                """\bqueue\b\s*:\s*(\[[\s\S]*?\])\s*,\s*\blogo\b""",
+                """\bqueue\b\s*:\s*(\[[\s\S]*\])\s*,\s*\blogo\b""",
             ).find(content) ?: continue
             val queueStr = queueMatch.groupValues[1]
 
