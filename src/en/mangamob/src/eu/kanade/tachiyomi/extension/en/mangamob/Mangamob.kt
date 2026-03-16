@@ -90,7 +90,7 @@ class Mangamob : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.manga-poster") ?: return@apply
+        val link = element.selectFirst("a.manga-poster")!!
         val titleElement = element.selectFirst("h3.manga-name a")
         val imageElement = link.selectFirst("img")
 
@@ -148,7 +148,7 @@ class Mangamob : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = NEXT_PAGE_SELECTOR
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h2.manga-name")?.text()?.trim().orEmpty()
+        title = document.selectFirst("h2.manga-name")?.text()?.trim()!!
 
         val summary = document.selectFirst(".sort-desc .description")?.ownText()?.trim().orEmpty()
         val altName = document.selectFirst(".manga-name-or")?.text()?.trim().orEmpty()
