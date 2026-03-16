@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'src/tr/mangaTR/**'
+      - 'src/tr/mangatr/**'
 
 jobs:
   build:
@@ -19,11 +19,14 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Apply Spotless formatting
+        run: ./gradlew :src:tr:mangatr:spotlessApply
+
       - name: Build MangaTR
-        run: ./gradlew :src:tr:mangaTR:assembleRelease
+        run: ./gradlew :src:tr:mangatr:assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MangaTR-apk
-          path: src/tr/mangaTR/build/outputs/apk/release/*.apk
+          path: src/tr/mangatr/build/outputs/apk/release/*.apk
