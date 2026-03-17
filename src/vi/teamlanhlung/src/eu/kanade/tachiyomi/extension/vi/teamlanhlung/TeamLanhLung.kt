@@ -278,9 +278,7 @@ class TeamLanhLung : HttpSource() {
 
     // ============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
