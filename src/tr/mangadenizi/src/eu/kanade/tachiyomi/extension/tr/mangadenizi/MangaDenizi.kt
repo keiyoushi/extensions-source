@@ -6,137 +6,188 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDenizi : ParsedHttpSource() {
+class MangaDenizi : HttpSource() {
     override val name = "MangaDenizi"
-
     override val baseUrl = "https://www.mangadenizi.net"
-
     override val lang = "tr"
-
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
 
-    override fun popularMangaSelector() = "div.media-left"
+    private val json = Json { ignoreUnknownKeys = true }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga-list?page=$page", headers)
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        title = element.select("img").attr("alt")
-        thumbnail_url = element.select("img").attr("abs:src")
-    }
-
-    override fun popularMangaNextPageSelector() = "[rel=next]"
-
-    override fun latestUpdatesSelector() = "h3 > a"
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-release?page=$page", headers)
-
-    // No thumbnail on latest releases page
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.text()
-    }
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    private fun pageProps(response: Response): PageProps {
         val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector())
-            .distinctBy { it.text().trim() }
-            .map { latestUpdatesFromElement(it) }
-        val hasNextPage = latestUpdatesNextPageSelector().let { selector ->
-            document.select(selector).first()
-        } != null
+        val raw = document.selectFirst("div#app")!!.attr("data-page")
+        return json.decodeFromString<InertiaPage>(raw).props
+    }
 
+    // ============================== Popular ===============================
+
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/manga?sort=views&page=$page", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val props = pageProps(response)
+        val mangas = props.manga!!.data.map { it.toSManga() }
+        val hasNextPage = props.manga.next_page_url != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaSelector() = "Unused"
+    // ============================== Latest ================================
+
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/manga?sort=latest&page=$page", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        popularMangaParse(response)
+
+    // ============================== Search ================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("query", query)
+        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
     }
 
-    override fun searchMangaNextPageSelector() = "Unused"
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage =
+        popularMangaParse(response)
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val mangaListJson = Json.decodeFromString<SearchMangaJson>(response.body.string())
-        val mangaList = mangaListJson.suggestions.map {
-            SManga.create().apply {
-                title = it.value
-                url = "/manga/${it.data}"
-            }
-        }
-        return MangasPage(mangaList, false)
+    // =========================== Manga Details ============================
+
+    override fun mangaDetailsRequest(manga: SManga): Request =
+        GET("$baseUrl${manga.url}", headers)
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val manga = pageProps(response).manga!!.data.firstOrNull()
+            ?: pageProps(response).singleManga!!
+        return manga.toSManga()
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        description = document.select(".well > p").text()
-        genre = document.select("dd > a[href*=category]").joinToString { it.text() }
-        status = parseStatus(document.select(".label.label-success").text())
-        thumbnail_url = document.select("img.img-responsive").attr("abs:src")
+    // ============================== Chapters ==============================
+
+    override fun chapterListRequest(manga: SManga): Request =
+        GET("$baseUrl${manga.url}", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val props = pageProps(response)
+        val manga = props.singleManga ?: props.manga?.data?.firstOrNull() ?: return emptyList()
+        return manga.chapters.map { it.toSChapter(manga.slug) }.reversed()
     }
 
-    private fun parseStatus(status: String) = when {
-        status.contains("Devam Ediyor") -> SManga.ONGOING
-        status.contains("Tamamlandı") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    // ============================== Pages =================================
 
-    override fun chapterListSelector() = "ul.chapters li"
+    override fun pageListRequest(chapter: SChapter): Request =
+        GET("$baseUrl${chapter.url}", headers)
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        name = "${element.select("a").text()}: ${element.select("em").text()}"
-        date_upload = try {
-            dateFormat.parse(element.select("div.date-chapter-title-rtl").text().trim())?.time ?: 0
-        } catch (_: Exception) {
-            0
+    override fun pageListParse(response: Response): List<Page> {
+        val pages = pageProps(response).pages ?: return emptyList()
+        return pages.mapIndexed { idx, page ->
+            Page(idx, imageUrl = page.image_url)
         }
     }
 
-    companion object {
-        val dateFormat by lazy {
-            SimpleDateFormat("dd MMM. yyyy", Locale.US)
-        }
-    }
-
-    override fun pageListParse(document: Document): List<Page> = document.select("img.img-responsive").mapIndexed { i, element ->
-        val url = if (element.hasAttr("data-src")) element.attr("abs:data-src") else element.attr("abs:src")
-        Page(i, "", url)
-    }
-
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String =
+        throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 
+    // =========================== Serialization ============================
+
+    private fun MangaItem.toSManga() = SManga.create().apply {
+        url = "/manga/$slug"
+        title = this@toSManga.title
+        thumbnail_url = cover_url
+        description = this@toSManga.description
+        author = authors.firstOrNull()?.name
+        genre = categories.joinToString { it.name }
+        status = when (this@toSManga.status) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    private fun ChapterItem.toSChapter(mangaSlug: String) = SChapter.create().apply {
+        url = "/read/$mangaSlug/$slug"
+        name = buildString {
+            append("Bölüm $number")
+            if (!title.isNullOrBlank()) append(": $title")
+        }
+        date_upload = runCatching {
+            dateFormat.parse(published_at.substringBefore("T"))?.time ?: 0L
+        }.getOrDefault(0L)
+        chapter_number = number.toFloat()
+    }
+
+    companion object {
+        val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    }
+
+    // =========================== Data Classes =============================
+
     @Serializable
-    data class SearchMangaJson(
-        val suggestions: List<MangaJson>,
+    data class InertiaPage(val props: PageProps)
+
+    @Serializable
+    data class PageProps(
+        val manga: MangaPaginated? = null,
+        val pages: List<PageItem>? = null,
+    ) {
+        // Manga detay sayfasında manga tek obje olarak gelir
+        val singleManga: MangaItem? get() = manga?.data?.firstOrNull()
+    }
+
+    @Serializable
+    data class MangaPaginated(
+        val data: List<MangaItem> = emptyList(),
+        val next_page_url: String? = null,
     )
 
     @Serializable
-    data class MangaJson(
-        val value: String,
-        val data: String,
+    data class MangaItem(
+        val id: Int,
+        val title: String,
+        val slug: String,
+        val description: String? = null,
+        val cover_url: String? = null,
+        val status: String? = null,
+        val authors: List<AuthorItem> = emptyList(),
+        val categories: List<CategoryItem> = emptyList(),
+        val chapters: List<ChapterItem> = emptyList(),
+    )
+
+    @Serializable
+    data class AuthorItem(val name: String)
+
+    @Serializable
+    data class CategoryItem(val name: String)
+
+    @Serializable
+    data class ChapterItem(
+        val id: Int,
+        val number: Double,
+        val title: String? = null,
+        val slug: String,
+        val published_at: String,
+    )
+
+    @Serializable
+    data class PageItem(
+        val page_number: Int,
+        val image_url: String,
     )
 }
