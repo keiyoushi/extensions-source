@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
-import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -13,10 +12,8 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -282,9 +279,7 @@ class TeamLanhLung : HttpSource() {
     // ============================== Pages ===============================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = baseUrl + chapter.url
-        syncPostPasswordCookie(url)
-        return GET(url, headers)
+        return GET(baseUrl + chapter.url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -307,20 +302,6 @@ class TeamLanhLung : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun syncPostPasswordCookie(url: String) {
-        val rawCookies = CookieManager.getInstance().getCookie(url) ?: return
-        val httpUrl = url.toHttpUrl()
-
-        val cookies = rawCookies.split(";")
-            .map { it.trim() }
-            .filter { it.startsWith("wp-postpass_") }
-            .mapNotNull { Cookie.parse(httpUrl, it) }
-
-        if (cookies.isNotEmpty()) {
-            client.cookieJar.saveFromResponse(httpUrl, cookies)
-        }
-    }
 
     override fun getFilterList(): FilterList = getFilters()
 
