@@ -31,6 +31,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
@@ -140,10 +141,24 @@ abstract class MangoTheme :
         throw java.io.IOException(loginRequiredMessage)
     }
 
+    private val decryptInterceptor = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+        if (!response.headers[ENCRYPTED_HEADER].toBoolean()) {
+            return@Interceptor response
+        }
+
+        val decryptedBody = MangoThemeDecrypt.decrypt(response.body.string(), encryptionKey)
+
+        response.newBuilder()
+            .body(decryptedBody.toResponseBody(JSON_MEDIA_TYPE))
+            .build()
+    }
+
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
             .addInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, emptyList()))
             .addInterceptor(authInterceptor)
+            .addInterceptor(decryptInterceptor)
             .rateLimit(2)
             .build()
     }
@@ -155,14 +170,14 @@ abstract class MangoTheme :
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/obras/top10/views?periodo=total", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseDecryptedAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
+        val result = response.parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
         return MangasPage(result.items.map { it.toSManga(cdnUrl) }, false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/capitulos/recentes?pagina=$page&limite=$latestPageSize", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseDecryptedAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
+        val result = response.parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
         return MangasPage(
             mangas = result.items.map { it.toSManga(cdnUrl) },
             hasNextPage = result.pagination?.hasNextPage == true,
@@ -183,7 +198,7 @@ abstract class MangoTheme :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseDecryptedAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
+        val result = response.parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
         return MangasPage(
             mangas = result.items.map { it.toSManga(cdnUrl) },
             hasNextPage = result.pagination?.hasNextPage == true,
@@ -215,13 +230,13 @@ abstract class MangoTheme :
             .build(),
     )
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseDecryptedAs<MangoThemeResponse<MangoThemeMangaDto>>()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangoThemeResponse<MangoThemeMangaDto>>()
         .items
         .toSManga(cdnUrl, response.request.header(STORED_SLUG_HEADER))
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseDecryptedAs<MangoThemeResponse<MangoThemeMangaDto>>()
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangoThemeResponse<MangoThemeMangaDto>>()
         .items
         .let { manga ->
             val fallbackSlug = manga.slug ?: response.request.header(STORED_SLUG_HEADER)
@@ -238,7 +253,7 @@ abstract class MangoTheme :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseDecryptedAs<MangoThemeResponse<MangoThemePageChapterDto>>()
+        val pages = response.parseAs<MangoThemeResponse<MangoThemePageChapterDto>>()
             .items
             .paginas
             .sortedBy { it.numero }
@@ -438,16 +453,12 @@ abstract class MangoTheme :
         return abs(hash.toLong()).toString(36)
     }
 
-    private inline fun <reified T> Response.parseDecryptedAs(): T {
-        val decryptedBody = MangoThemeDecrypt.decrypt(body.string(), encryptionKey)
-        return decryptedBody.parseAs<T>()
-    }
-
     companion object {
         private const val PREF_EMAIL = "pref_email"
         private const val PREF_PASSWORD = "pref_password"
         private const val PREF_TOKEN = "pref_token"
         private const val STORED_SLUG_HEADER = "X-MangoTheme-Stored-Slug"
+        private const val ENCRYPTED_HEADER = "x-encrypted"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
