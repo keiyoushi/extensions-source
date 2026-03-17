@@ -134,7 +134,7 @@ class Mokuro : HttpSource() {
         synchronized(this) {
             inFlight?.let { return it }
 
-            val observable = client.newCall(popularMangaRequest(1))
+            val observable = client.newCall(GET("$apiBaseUrl/library", headers))
                 .asObservableSuccess()
                 .map { updateLibraryCache(it) }
                 .doOnTerminate { inFlight = null }
