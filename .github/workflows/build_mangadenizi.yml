@@ -1,0 +1,32 @@
+name: Build MangaDenizi
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/tr/mangadenizi/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Apply Spotless formatting
+        run: ./gradlew :src:tr:mangadenizi:spotlessApply
+
+      - name: Build MangaDenizi
+        run: ./gradlew :src:tr:mangadenizi:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MangaDenizi-apk
+          path: src/tr/mangadenizi/build/outputs/apk/debug/*.apk
