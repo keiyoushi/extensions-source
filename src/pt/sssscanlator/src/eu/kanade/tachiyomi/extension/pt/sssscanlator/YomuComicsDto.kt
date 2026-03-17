@@ -3,138 +3,108 @@ package eu.kanade.tachiyomi.extension.pt.sssscanlator
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
-class HomeDto(
-    val featuredManga: List<MangaDto> = emptyList(),
+class LibraryResponseDto(
+    val data: List<LibraryMangaDto> = emptyList(),
+    val pagination: LibraryPaginationDto = LibraryPaginationDto(),
 )
 
 @Serializable
-class MangaDto(
+class LibraryPaginationDto(
+    val page: Int = 1,
+    val totalPages: Int = 1,
+)
+
+@Serializable
+class LibraryMangaDto(
     val title: String,
-    val slug: String,
     val cover: String? = null,
+    @SerialName("slug")
+    val mangaSlug: String,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaDto.title
-        thumbnail_url = cover
-        url = "/obra/$slug"
+        title = this@LibraryMangaDto.title.ifBlank { mangaSlug }
+        thumbnail_url = cover?.takeUnless(String::isBlank)
+        url = "/obra/$mangaSlug"
     }
 }
 
 @Serializable
-class UpdatesDto(
-    val updates: List<UpdateMangaDto> = emptyList(),
-)
-
-@Serializable
-class UpdateMangaDto(
-    val title: String,
-    val slug: String,
-    val cover: String? = null,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@UpdateMangaDto.title
-        thumbnail_url = cover
-        url = "/obra/$slug"
-    }
-}
-
-@Serializable
-class SearchResponseDto(
-    val results: List<SearchMangaDto> = emptyList(),
-    val pagination: PaginationDto? = null,
-)
-
-@Serializable
-class SearchMangaDto(
-    val id: Int,
-    val name: String,
-    val slug: String? = null,
+class SeriesPayloadDto(
+    val description: String? = null,
+    val author: String? = null,
+    val artist: String? = null,
     val coverImage: String? = null,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@SearchMangaDto.name
-        thumbnail_url = coverImage
-        url = if (slug != null) "/obra/$slug" else "/series/$id"
-    }
-}
-
-@Serializable
-class PaginationDto(
-    val page: Int,
-    val pages: Int,
+    val chapters: List<SeriesChapterDto> = emptyList(),
+    val obraId: String,
+    @SerialName("slug")
+    val mangaSlug: String,
 )
 
 @Serializable
-class ChapterDto(
-    val id: Int,
-    val index: Double,
-    val name: String,
-    val createdAt: String? = null,
+class SeriesChapterDto(
+    val number: Double,
+    val title: String,
+    val releaseDate: String? = null,
+    @SerialName("id")
+    val chapterId: String,
+    val releaseAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String, mangaId: Int): SChapter = SChapter.create().apply {
-        val numberStr = index.toString().removeSuffix(".0")
-        name = this@ChapterDto.name
-        chapter_number = index.toFloat()
-        url = "/ler/$mangaSlug/capitulo-$numberStr?id=$mangaId"
-        date_upload = DATE_FORMATTER.tryParse(createdAt)
+    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
+        val chapterNumberLabel = number.toChapterNumberString()
+
+        url = "/ler/$mangaSlug/$chapterNumberLabel?chapterId=$chapterId"
+        name = title.ifBlank { "Capitulo $chapterNumberLabel" }
+        chapter_number = number.toFloat()
+        date_upload = parseChapterDate(releaseAt, releaseDate)
     }
 
     companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+        private val RELEASE_AT_MILLIS by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
         }
+
+        private val RELEASE_AT_SECONDS by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+        }
+
+        private val RELEASE_DATE by lazy {
+            SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        }
+
+        private fun parseChapterDate(releaseAt: String?, releaseDate: String?): Long {
+            RELEASE_AT_MILLIS.tryParse(releaseAt).takeIf { it != 0L }?.let { return it }
+            RELEASE_AT_SECONDS.tryParse(releaseAt).takeIf { it != 0L }?.let { return it }
+            return RELEASE_DATE.tryParse(releaseDate)
+        }
     }
 }
+
+@Serializable
+class ChapterPagesResponseDto(
+    val chapter: ChapterPagesDto = ChapterPagesDto(),
+)
 
 @Serializable
 class ChapterPagesDto(
-    val pages: List<PageDto> = emptyList(),
+    val content: List<String> = emptyList(),
 )
 
-@Serializable
-class PageDto(
-    val url: String,
-)
-
-@Serializable
-class CsrfDto(val csrfToken: String)
-
-@Serializable
-class SeriesDto(
-    val id: Int,
-    val name: String,
-    val sinopse: String? = null,
-    val description: String? = null,
-    val status: String? = null,
-    val posterImage: String? = null,
-    val coverImage: String? = null,
-    val genres: List<GenreDto> = emptyList(),
-    val chapters: List<ChapterDto> = emptyList(),
-) {
-    fun toSManga(slug: String): SManga = SManga.create().apply {
-        title = this@SeriesDto.name
-        thumbnail_url = coverImage ?: posterImage
-        description = sinopse ?: description
-        genre = genres.joinToString { it.name }
-        status = when (this@SeriesDto.status) {
-            "ATIVO", "EM_DIA" -> SManga.ONGOING
-            "CONCLUIDO" -> SManga.COMPLETED
-            "HIATO" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-        url = "/obra/$slug"
+fun Double.toChapterNumberString(): String {
+    val integerValue = toLong()
+    return if (this == integerValue.toDouble()) {
+        integerValue.toString()
+    } else {
+        toString()
     }
 }
-
-@Serializable
-class GenreDto(
-    val name: String,
-)

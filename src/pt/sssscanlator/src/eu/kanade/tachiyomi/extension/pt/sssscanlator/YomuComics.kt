@@ -1,33 +1,22 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferences
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
-import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
-import java.io.IOException
 
-class YomuComics :
-    HttpSource(),
-    ConfigurableSource {
+class YomuComics : HttpSource() {
 
     override val name = "Yomu Comics"
 
@@ -40,266 +29,215 @@ class YomuComics :
     // SSSScanlator
     override val id = 1497838059713668619
 
-    private val json: Json by injectLazy()
-
-    private val preferences = getPreferences()
-
-    private var sessionToken: String? = null
-
-    private val authInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val token = synchronized(this) {
-            sessionToken ?: login()
-        }
-
-        val newRequest = if (token.isNotEmpty()) {
-            request.newBuilder()
-                .header("Cookie", "__Secure-authjs.session-token=$token")
-                .build()
-        } else {
-            request
-        }
-
-        chain.proceed(newRequest)
-    }
-
-    override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimit(2)
-            .addInterceptor(authInterceptor)
-            .build()
-    }
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private fun login(): String {
-        val email = preferences.getString(PREF_EMAIL, "") ?: ""
-        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
+    // Popular
 
-        if (email.isEmpty() || password.isEmpty()) return ""
-
-        val client = network.cloudflareClient
-
-        return try {
-            val csrfRequest = GET("$baseUrl/api/auth/csrf", headers)
-            val csrfResponse = client.newCall(csrfRequest).execute()
-            if (!csrfResponse.isSuccessful) {
-                csrfResponse.close()
-                return ""
-            }
-            val csrfToken = csrfResponse.parseAs<CsrfDto>().csrfToken
-
-            val loginBody = FormBody.Builder()
-                .add("email", email)
-                .add("password", password)
-                .add("csrfToken", csrfToken)
-                .add("callbackUrl", "/")
-                .build()
-
-            val loginRequest = POST("$baseUrl/api/auth/callback/credentials?", headers, loginBody)
-            val loginResponse = client.newCall(loginRequest).execute()
-            val cookies = loginResponse.headers.values("Set-Cookie")
-            loginResponse.close()
-
-            val token = cookies.find { it.startsWith("__Secure-authjs.session-token=") }
-                ?.substringAfter("=")
-                ?.substringBefore(";")
-                ?: return ""
-
-            sessionToken = token
-            token
-        } catch (e: Exception) {
-            e.printStackTrace()
-            ""
-        }
-    }
-
-    // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/home", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val homeDto = response.parseAs<HomeDto>()
-        val mangas = homeDto.featuredManga.map { it.toSManga() }
-        return MangasPage(mangas, false)
-    }
-
-    // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/updates?page=$page&limit=50", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val updatesDto = response.parseAs<UpdatesDto>()
-        val mangas = updatesDto.updates.map { it.toSManga() }
-        return MangasPage(mangas, mangas.isNotEmpty())
-    }
-
-    // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/public/series".toHttpUrl().newBuilder()
-
-        val pageStr = page.toString()
-        val limitStr = "12"
-        var sortStr = "createdAt"
-        var orderStr = "desc"
-
-        filters.forEach { filter ->
-            if (filter is SortFilter) {
-                sortStr = filter.toUriPart()
-                if (sortStr == "name") {
-                    orderStr = "asc"
-                }
-            }
-        }
-
-        url.addQueryParameter("page", pageStr)
-        url.addQueryParameter("limit", limitStr)
-        url.addQueryParameter("sort", sortStr)
-        url.addQueryParameter("order", orderStr)
-
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("query", query)
-        }
-
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    if (filter.state != 0) {
-                        url.addQueryParameter("genre", filter.toUriPart())
-                    }
-                }
-
-                is TypeFilter -> {
-                    if (filter.state != 0) {
-                        val part = filter.toUriPart()
-                        url.addQueryParameter("type", part)
-                        if (part == "MANGA") {
-                            url.addQueryParameter("subType", "MANGA")
-                        }
-                    }
-                }
-
-                is StatusFilter -> {
-                    if (filter.state != 0) {
-                        url.addQueryParameter("status", filter.toUriPart())
-                    }
-                }
-
-                is AdultFilter -> {
-                    if (filter.state) {
-                        url.addQueryParameter("showAdult", "true")
-                    }
-                }
-
-                else -> {}
-            }
-        }
-
-        val searchHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl/obras")
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/api/library".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("sort", "popular")
+            .addQueryParameter("type", DEFAULT_TYPE)
             .build()
 
-        return GET(url.build(), searchHeaders)
+        return GET(url, bibliotecaHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponseDto>()
-        val mangas = result.results.map { it.toSManga() }
-        val hasNextPage = result.pagination?.let { it.page < it.pages } ?: false
-        return MangasPage(mangas, hasNextPage)
+    override fun popularMangaParse(response: Response): MangasPage = parseLibraryResponse(response)
+
+    // Latest
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl/api/library".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("sort", "recent")
+            .addQueryParameter("type", DEFAULT_TYPE)
+            .build()
+
+        return GET(url, bibliotecaHeaders)
     }
 
-    // =============================== Details ==============================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val path = manga.url
-            .removePrefix(baseUrl)
-            .removePrefix("/")
+    override fun latestUpdatesParse(response: Response): MangasPage = parseLibraryResponse(response)
 
-        val slug = if (path.startsWith("obra/")) {
-            path.removePrefix("obra/")
-        } else {
-            path
-        }
+    // Search
 
-        return GET("$baseUrl/api/public/series/$slug", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.selectedValue.orEmpty()
+        val type = filters.firstInstanceOrNull<TypeFilter>()?.selectedValue ?: DEFAULT_TYPE
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.selectedValue ?: DEFAULT_STATUS
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.selectedValue ?: DEFAULT_SORT
+
+        val url = "$baseUrl/api/library".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("limit", PAGE_SIZE.toString())
+            addQueryParameter("sort", sort)
+            addQueryParameter("type", type)
+
+            if (genre.isNotBlank()) {
+                addQueryParameter("genre", genre)
+            }
+
+            if (status != DEFAULT_STATUS) {
+                addQueryParameter("status", status)
+            }
+
+            if (query.isNotBlank()) {
+                addQueryParameter("search", query)
+            }
+        }.build()
+
+        return GET(url, bibliotecaHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val seriesDto = response.parseAs<SeriesDto>()
-        val slug = response.request.url.pathSegments.last()
-        return seriesDto.toSManga(slug)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = parseLibraryResponse(response)
+
+    // Details
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
+
+    override fun mangaDetailsParse(response: Response): SManga = parseSeriesPage(response).manga
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    // =============================== Chapters =============================
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore('?')
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    // Chapters
+
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val seriesDto = response.parseAs<SeriesDto>()
-        val slug = response.request.url.pathSegments.last()
-        return seriesDto.chapters.map { it.toSChapter(slug, seriesDto.id) }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = parseSeriesPage(response).chapters
 
-    // ================================ Pages ===============================
+    // Pages
+
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.startsWith("http")) {
-            chapter.url.toHttpUrl()
-        } else {
-            "$baseUrl${chapter.url}".toHttpUrl()
-        }
+        val chapterId = resolveChapterId(chapter)
+        val requestHeaders = headers.newBuilder()
+            .set("Referer", getChapterUrl(chapter))
+            .build()
 
-        val mangaId = url.queryParameter("id")
-            ?: throw IOException("ID da obra não encontrado na URL do capítulo")
-        val chapterNumber = url.pathSegments.last().removePrefix("capitulo-").replace("-", ".")
-
-        return GET("$baseUrl/api/public/chapters/$mangaId/$chapterNumber", headers)
+        return GET("$baseUrl/api/chapters?id=$chapterId", requestHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pagesDto = response.parseAs<ChapterPagesDto>()
+        val pages = response.parseAs<ChapterPagesResponseDto>()
+            .chapter
+            .content
+            .filter(String::isNotBlank)
 
-        return pagesDto.pages.mapIndexed { index, pageDto ->
-            Page(index, imageUrl = baseUrl + pageDto.url)
+        if (pages.isEmpty()) {
+            throw IllegalStateException("Nenhuma pagina encontrada para este capitulo")
+        }
+
+        return pages.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================== Settings ==============================
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val emailPref = EditTextPreference(screen.context).apply {
-            key = PREF_EMAIL
-            title = "Email"
-            summary = "Email para login na Yomu Comics"
-            setDefaultValue("")
-            dialogTitle = "Email"
-        }
-        val passwordPref = EditTextPreference(screen.context).apply {
-            key = PREF_PASSWORD
-            title = "Senha"
-            summary = "Senha para login na Yomu Comics"
-            setDefaultValue("")
-            dialogTitle = "Senha"
-        }
+    // Filters
 
-        screen.addPreference(emailPref)
-        screen.addPreference(passwordPref)
-    }
-
-    // =============================== Filters ==============================
     override fun getFilterList() = FilterList(
         GenreFilter(),
         TypeFilter(),
         StatusFilter(),
-        AdultFilter(),
         SortFilter(),
     )
 
-    companion object {
-        private const val PREF_EMAIL = "email"
-        private const val PREF_PASSWORD = "password"
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+    // Utils
+
+    private fun parseLibraryResponse(response: Response): MangasPage {
+        val result = response.parseAs<LibraryResponseDto>()
+        val mangas = result.data.map(LibraryMangaDto::toSManga)
+        val hasNextPage = result.pagination.page < result.pagination.totalPages
+        return MangasPage(mangas, hasNextPage)
     }
+
+    private fun parseSeriesPage(response: Response): SeriesPageData {
+        val mangaSlug = response.request.url.pathSegments.lastOrNull().orEmpty()
+        val document = response.asJsoup()
+        val payload = extractSeriesPayload(document, mangaSlug)
+
+        val titleElement = document.selectFirst("h1")
+        val title = titleElement?.text().orEmpty().ifBlank {
+            mangaSlug.ifBlank { "Sem titulo" }
+        }
+        val badgeTexts = extractBadgeTexts(titleElement)
+        val statusText = badgeTexts.firstOrNull(::isStatusBadge)
+        val genres = badgeTexts.filterNot(::isStatusBadge)
+
+        val manga = SManga.create().apply {
+            this.title = title
+            thumbnail_url = payload.coverImage?.takeUnless(String::isBlank)
+            description = payload.description?.takeUnless(String::isBlank)
+            author = payload.author?.takeUnless(String::isBlank)
+            artist = payload.artist?.takeUnless(String::isBlank)
+            genre = genres.joinToString().takeUnless(String::isBlank)
+            status = parseStatus(statusText)
+            url = "/obra/$mangaSlug"
+        }
+
+        val chapters = payload.chapters.map { chapter ->
+            chapter.toSChapter(mangaSlug)
+        }
+
+        return SeriesPageData(manga, chapters)
+    }
+
+    private fun buildChapterHttpUrl(chapterUrl: String) = when {
+        chapterUrl.startsWith("http") -> chapterUrl.toHttpUrl()
+        else -> "$baseUrl$chapterUrl".toHttpUrl()
+    }
+
+    private fun resolveChapterId(chapter: SChapter): String {
+        val chapterUrl = buildChapterHttpUrl(chapter.url)
+        chapterUrl.queryParameter("chapterId")?.let { return it }
+
+        val pathSegments = chapterUrl.pathSegments
+        val readerSegmentIndex = pathSegments.indexOf("ler")
+        if (readerSegmentIndex == -1 || pathSegments.size <= readerSegmentIndex + 2) {
+            throw IllegalStateException("chapterId nao encontrado na URL do capitulo")
+        }
+
+        val mangaSlug = pathSegments[readerSegmentIndex + 1]
+        val chapterNumberLabel = pathSegments[readerSegmentIndex + 2]
+        val request = GET("$baseUrl/obra/$mangaSlug", headers)
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("Falha ao recarregar a obra para resolver chapterId")
+            }
+
+            val payload = extractSeriesPayload(response.asJsoup(), mangaSlug)
+
+            return payload.chapters
+                .firstOrNull { it.number.toChapterNumberString() == chapterNumberLabel }
+                ?.chapterId
+                ?: throw IllegalStateException("chapterId nao encontrado para $mangaSlug/$chapterNumberLabel")
+        }
+    }
+
+    private data class SeriesPageData(
+        val manga: SManga,
+        val chapters: List<SChapter>,
+    )
+
+    private companion object {
+        const val PAGE_SIZE = 20
+        const val DEFAULT_TYPE = "all"
+        const val DEFAULT_STATUS = "all"
+        const val DEFAULT_SORT = "popular"
+    }
+
+    private val bibliotecaHeaders
+        get() = headers.newBuilder()
+            .set("Referer", "$baseUrl/biblioteca")
+            .build()
 }
