@@ -10,6 +10,9 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -26,10 +29,13 @@ class MangaDenizi : HttpSource() {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun pageProps(response: Response): PageProps {
-        val document = response.asJsoup()
-        val raw = document.selectFirst("div#app")!!.attr("data-page")
-        return json.decodeFromString<InertiaPage>(raw).props
+    // data-page JSON'undan props'u çek
+    private fun rawProps(response: Response): JsonElement {
+        val raw = response.asJsoup()
+            .selectFirst("div#app")!!
+            .attr("data-page")
+        return json.parseToJsonElement(raw)
+            .jsonObject["props"]!!
     }
 
     // ============================== Popular ===============================
@@ -38,10 +44,10 @@ class MangaDenizi : HttpSource() {
         GET("$baseUrl/manga?sort=views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val props = pageProps(response)
-        val mangas = props.manga!!.data.map { it.toSManga() }
-        val hasNextPage = props.manga.next_page_url != null
-        return MangasPage(mangas, hasNextPage)
+        val props = rawProps(response)
+        val paginated = json.decodeFromJsonElement<MangaPaginated>(props.jsonObject["manga"]!!)
+        val mangas = paginated.data.map { it.toSManga() }
+        return MangasPage(mangas, paginated.next_page_url != null)
     }
 
     // ============================== Latest ================================
@@ -54,13 +60,14 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        GET(
+            "$baseUrl/manga".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("page", page.toString())
+                .build(),
+            headers,
+        )
 
     override fun searchMangaParse(response: Response): MangasPage =
         popularMangaParse(response)
@@ -71,9 +78,9 @@ class MangaDenizi : HttpSource() {
         GET("$baseUrl${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = pageProps(response).manga!!.data.firstOrNull()
-            ?: pageProps(response).singleManga!!
-        return manga.toSManga()
+        val props = rawProps(response)
+        val item = json.decodeFromJsonElement<MangaItem>(props.jsonObject["manga"]!!)
+        return item.toSManga()
     }
 
     // ============================== Chapters ==============================
@@ -82,9 +89,9 @@ class MangaDenizi : HttpSource() {
         GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val props = pageProps(response)
-        val manga = props.singleManga ?: props.manga?.data?.firstOrNull() ?: return emptyList()
-        return manga.chapters.map { it.toSChapter(manga.slug) }.reversed()
+        val props = rawProps(response)
+        val item = json.decodeFromJsonElement<MangaItem>(props.jsonObject["manga"]!!)
+        return item.chapters.map { it.toSChapter(item.slug) }.reversed()
     }
 
     // ============================== Pages =================================
@@ -93,10 +100,9 @@ class MangaDenizi : HttpSource() {
         GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val pages = pageProps(response).pages ?: return emptyList()
-        return pages.mapIndexed { idx, page ->
-            Page(idx, imageUrl = page.image_url)
-        }
+        val props = rawProps(response)
+        val pages = json.decodeFromJsonElement<List<PageItem>>(props.jsonObject["pages"]!!)
+        return pages.mapIndexed { idx, page -> Page(idx, imageUrl = page.image_url) }
     }
 
     override fun imageUrlParse(response: Response): String =
@@ -104,7 +110,7 @@ class MangaDenizi : HttpSource() {
 
     override fun getFilterList() = FilterList()
 
-    // =========================== Serialization ============================
+    // =========================== Helpers ==================================
 
     private fun MangaItem.toSManga() = SManga.create().apply {
         url = "/manga/$slug"
@@ -138,18 +144,6 @@ class MangaDenizi : HttpSource() {
     }
 
     // =========================== Data Classes =============================
-
-    @Serializable
-    data class InertiaPage(val props: PageProps)
-
-    @Serializable
-    data class PageProps(
-        val manga: MangaPaginated? = null,
-        val pages: List<PageItem>? = null,
-    ) {
-        // Manga detay sayfasında manga tek obje olarak gelir
-        val singleManga: MangaItem? get() = manga?.data?.firstOrNull()
-    }
 
     @Serializable
     data class MangaPaginated(
