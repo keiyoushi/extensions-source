@@ -73,13 +73,7 @@ class LectorTmo :
         .set("Referer", "$baseUrl/")
         .build()
 
-    @SuppressLint("CustomX509TrustManager")
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-        }
         val naiveTrustManager =
             @SuppressLint("CustomX509TrustManager")
             object : X509TrustManager {
@@ -107,7 +101,7 @@ class LectorTmo :
 
     private var lastCFDomain: String = ""
 
-    // Used on all request except on image requests
+    // Used on all requests except image requests
     private val safeClient: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
             .addInterceptor { chain ->
@@ -155,11 +149,6 @@ class LectorTmo :
 
         return GET(url.build(), tmoHeaders)
     }
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = safeClient.newCall(popularMangaRequest(page))
-        .asObservableSuccess()
-        .map { response ->
-            popularMangaParse(response)
-        }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = safeClient.newCall(popularMangaRequest(page))
         .asObservableSuccess()
@@ -182,9 +171,6 @@ class LectorTmo :
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = safeClient.newCall(latestUpdatesRequest(page))
         .asObservableSuccess()
         .map { latestUpdatesParse(it) }
-        .map { response ->
-            latestUpdatesParse(response)
-        }
 
     override fun latestUpdatesRequest(page: Int) = libraryRequest(page, "creation")
 
@@ -196,7 +182,6 @@ class LectorTmo :
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
         val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-
         safeClient.newCall(searchMangaBySlugRequest(realQuery))
             .asObservableSuccess()
             .map { response ->
@@ -208,9 +193,6 @@ class LectorTmo :
         safeClient.newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map { searchMangaParse(it) }
-            .map { response ->
-                searchMangaParse(response)
-            }
     }
 
     private fun searchMangaBySlugRequest(slug: String) = GET("$baseUrl/$PREFIX_LIBRARY/$slug", tmoHeaders)
@@ -235,28 +217,8 @@ class LectorTmo :
                     filter.state?.let {
                         url.addQueryParameter("order_item", SORTABLES[it.index].second)
                         url.addQueryParameter("order_dir", if (it.ascending) "asc" else "desc")
-                is Types -> {
-                    url.addQueryParameter("type", filter.toUriPart())
-                }
-
-                is Demography -> {
-                    url.addQueryParameter("demography", filter.toUriPart())
-                }
-
-                is SortBy -> {
-                    if (filter.state != null) {
-                        url.addQueryParameter("order_item", SORTABLES[filter.state!!.index].second)
-                        url.addQueryParameter(
-                            "order_dir",
-                            if (filter.state!!.ascending) {
-                                "asc"
-                            } else {
-                                "desc"
-                            },
-                        )
                     }
                 }
-
                 is ContentTypeList -> {
                     filter.state.forEach { content ->
                         when (content.state) {
@@ -266,7 +228,6 @@ class LectorTmo :
                         }
                     }
                 }
-
                 is GenreList -> {
                     filter.state.forEach { genre ->
                         when (genre.state) {
@@ -279,8 +240,6 @@ class LectorTmo :
                     }
                 }
                 else -> Unit
-
-                else -> {}
             }
         }
 
@@ -301,9 +260,6 @@ class LectorTmo :
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = safeClient.newCall(mangaDetailsRequest(manga))
         .asObservableSuccess()
         .map { mangaDetailsParse(it).apply { initialized = true } }
-        .map { response ->
-            mangaDetailsParse(response).apply { initialized = true }
-        }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, tmoHeaders)
 
@@ -342,9 +298,6 @@ class LectorTmo :
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = safeClient.newCall(chapterListRequest(manga))
         .asObservableSuccess()
         .map { chapterListParse(it) }
-        .map { response ->
-            chapterListParse(response)
-        }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
@@ -394,16 +347,6 @@ class LectorTmo :
         .map { pageListParse(it) }
 
     override fun pageListRequest(chapter: SChapter) = GET(chapter.url, tmoHeaders)
-    private fun parseChapterDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        .parse(date)?.time ?: 0
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = safeClient.newCall(pageListRequest(chapter))
-        .asObservableSuccess()
-        .map { response ->
-            pageListParse(response)
-        }
-
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, tmoHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         var doc = redirectToReadPage(document)
@@ -491,10 +434,6 @@ class LectorTmo :
     }
 
     private fun Element.imgAttr(): String = if (this.hasAttr("data-src")) this.attr("abs:data-src") else this.attr("abs:src")
-    private fun Element.imgAttr(): String = when {
-        this.hasAttr("data-src") -> this.attr("abs:data-src")
-        else -> this.attr("abs:src")
-    }
 
     private fun String.unescapeUrl(): String = if (this.startsWith("http:\\/\\/") || this.startsWith("https:\\/\\/")) {
         this.replace("\\/", "/")
