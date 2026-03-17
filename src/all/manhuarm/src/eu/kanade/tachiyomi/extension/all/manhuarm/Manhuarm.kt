@@ -11,6 +11,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.CloudflareWarmupInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInterceptor
+import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.OcrUrlInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.google.GoogleTranslator
@@ -119,6 +120,8 @@ class Manhuarm(
         preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
     private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
+
+    private val ocrUrlInterceptor by lazy { OcrUrlInterceptor(headers) }
 
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
@@ -301,9 +304,7 @@ class Manhuarm(
             .add("Cache-Control", "no-cache")
             .build()
 
-        val script = document.select("script").find { it.data().contains("fetch-ocr.php") }?.data() ?: return pages
-
-        val ocrUrl = extractOcrUrl(script) ?: return pages
+        val ocrUrl = ocrUrlInterceptor.getUrl(chapterUrl.toString()) ?: return pages
 
         val dialog = try {
             val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()

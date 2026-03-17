@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mahouirexnohentaikarte'
+    extClass = '.Mahouirexnohentaikarte'
+    themePkg = 'madara'
+    baseUrl = 'https://mahouirexnohentaikarte.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

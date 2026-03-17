@@ -1,0 +1,10 @@
+ext {
+    extName = 'Omicaso'
+    extClass = '.Omicaso'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://omicaso.in'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
