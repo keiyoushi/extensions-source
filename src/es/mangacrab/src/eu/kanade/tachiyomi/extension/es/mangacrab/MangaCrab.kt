@@ -7,9 +7,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -31,12 +30,11 @@ class MangaCrab :
     private val preferences: SharedPreferences = getPreferences()
 
     override val client = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(1, 2)
         .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .setRandomUserAgent()
 
     override val mangaSubString = "series"
     override val useLoadMoreRequest = LoadMoreStrategy.Never
@@ -48,8 +46,10 @@ class MangaCrab :
     override val mangaDetailsSelectorTitle = "h1.post-title"
     override val mangaDetailsSelectorDescription = "div.c-page__content div.modal-contenido"
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
