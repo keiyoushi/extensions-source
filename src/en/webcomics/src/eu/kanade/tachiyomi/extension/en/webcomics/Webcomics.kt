@@ -12,12 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.PREF_KEY_RANDOM_UA
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -37,10 +33,10 @@ class Webcomics :
 
     override val supportsLatest = true
 
-    private val preferences = getPreferences()
-
     override fun headersBuilder() = super.headersBuilder()
+        .setRandomUserAgent()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .addInterceptor { chain ->
@@ -59,10 +55,6 @@ class Webcomics :
             }
             chain.proceed(request)
         }
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .build()
 
     private fun Request.isSearchRequest(): Boolean = url.pathSegments.contains("search") || url.pathSegments.count { segment -> segment == "All" } == 1
@@ -156,6 +148,8 @@ class Webcomics :
         }
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     // ========================== Chapter ====================================
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -236,16 +230,7 @@ class Webcomics :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
-
-        preferences.getString(PREF_KEY_RANDOM_UA, "off")?.let {
-            if (it != "off") {
-                return@let
-            }
-            preferences.edit()
-                .putString(PREF_KEY_RANDOM_UA, "mobile")
-                .apply()
-        }
+        screen.addRandomUAPreference()
     }
 
     companion object {

@@ -2,8 +2,8 @@ ext {
     extName = 'RichtoScan'
     extClass = '.RichtoScan'
     themePkg = 'madara'
-    baseUrl = 'https://lascanderichto.com/'
-    overrideVersionCode = 2
+    baseUrl = 'https://r1.richtoon.top'
+    overrideVersionCode = 3
     isNsfw = false
 }
 

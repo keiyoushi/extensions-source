@@ -30,6 +30,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import rx.Observable
 import java.util.concurrent.ConcurrentHashMap
 
 abstract class Iken(
@@ -105,6 +106,30 @@ abstract class Iken(
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // search
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (!query.startsWith("http")) {
+            return super.fetchSearchManga(page, query, filters)
+        }
+
+        val url = query.toHttpUrl()
+        val baseHost = baseUrl.toHttpUrl().host
+
+        if (url.host != baseHost) throw Exception("Unsupported URL")
+
+        val pathSegments = url.pathSegments
+        val slug = pathSegments.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+            ?: throw Exception("Invalid URL format")
+
+        val manga = SManga.create().apply {
+            this@apply.url = "$slug#"
+        }
+
+        return fetchMangaDetails(manga)
+            .map { MangasPage(listOf(it), false) }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())

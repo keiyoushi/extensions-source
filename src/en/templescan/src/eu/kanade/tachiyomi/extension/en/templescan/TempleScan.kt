@@ -12,12 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
@@ -39,18 +35,13 @@ class TempleScan :
 
     override val versionId = 3
 
-    private val preferences = getPreferences()
-
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
+        .setRandomUserAgent()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .build()
 
     private val json: Json by injectLazy()
@@ -180,6 +171,8 @@ class TempleScan :
         }
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = DETAILS_REGEX.find(response.body.string())!!.groupValues[1]
             .unescape()
@@ -212,7 +205,7 @@ class TempleScan :
         }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 
     private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
