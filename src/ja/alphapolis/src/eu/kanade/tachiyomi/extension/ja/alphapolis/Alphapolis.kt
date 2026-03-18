@@ -33,6 +33,7 @@ class Alphapolis :
     override val baseUrl = "https://www.alphapolis.co.jp"
     override val lang = "ja"
     override val supportsLatest = true
+    override val versionId = 2
 
     private var xsrfToken: String? = null
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -45,11 +46,13 @@ class Alphapolis :
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            response.headers("Set-Cookie").firstOrNull { it.startsWith("XSRF-TOKEN=") }?.let {
-                xsrfToken = it.substringAfter("XSRF-TOKEN=").substringBefore(";").let { encoded ->
-                    URLDecoder.decode(encoded, "UTF-8")
-                }
-            }
+            response.headers("Set-Cookie")
+                .firstOrNull { it.startsWith("XSRF-TOKEN=") }
+                ?.substringAfter("XSRF-TOKEN=")
+                ?.substringBefore(";")
+                ?.let { URLDecoder.decode(it, "UTF-8") }
+                ?.also { xsrfToken = it }
+
             if (response.code == 419) {
                 response.close()
                 val token = getXsrfToken() ?: throw Exception("XSRF-Token not found")
@@ -91,21 +94,12 @@ class Alphapolis :
             url.addQueryParameter("query", query)
         }
 
-        filters.firstInstance<CategoryFilter>().state
-            .filter { it.state }
-            .forEachIndexed { index, option -> url.addQueryParameter("category[$index]", option.value) }
+        fun Filter.Group<FilterTag>.addParams(key: String) = state.filter { it.state }.forEachIndexed { i, values -> url.addQueryParameter("$key[$i]", values.value) }
 
-        filters.firstInstance<LabelFilter>().state
-            .filter { it.state }
-            .forEachIndexed { index, option -> url.addQueryParameter("label[$index]", option.value) }
-
-        filters.firstInstance<StatusFilter>().state
-            .filter { it.state }
-            .forEachIndexed { index, option -> url.addQueryParameter("complete[$index]", option.value) }
-
-        filters.firstInstance<RentalFilter>().state
-            .filter { it.state }
-            .forEachIndexed { index, option -> url.addQueryParameter("rental[$index]", option.value) }
+        filters.firstInstance<CategoryFilter>().addParams("category")
+        filters.firstInstance<LabelFilter>().addParams("label")
+        filters.firstInstance<StatusFilter>().addParams("complete")
+        filters.firstInstance<RentalFilter>().addParams("rental")
 
         if (filters.firstInstance<DailyFreeFilter>().state) {
             url.addQueryParameter("is_free_daily", "enable")
@@ -151,13 +145,8 @@ class Alphapolis :
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = (baseUrl + manga.url).toHttpUrl().pathSegments.last().toInt()
-        val url = "$baseUrl/manga/official/episodes.json"
-        val token = xsrfToken ?: getXsrfToken() ?: throw Exception("XSRF-Token not found")
-        val newHeaders = headersBuilder()
-            .set("X-XSRF-TOKEN", token)
-            .build()
         val body = ChapterRequestBody(mangaId).toJsonString().toRequestBody(MEDIA_TYPE)
-        return POST(url, newHeaders, body)
+        return POST("$baseUrl/manga/official/episodes.json", xsrfHeaders(), body)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -178,12 +167,8 @@ class Alphapolis :
             val parts = "$baseUrl/${chapter.url}".toHttpUrl()
             val mangaId = parts.pathSegments.first().toInt()
             val episodeId = parts.fragment!!.toInt()
-            val token = xsrfToken ?: getXsrfToken() ?: throw Exception("XSRF-Token not found")
             val viewerUrl = "$baseUrl/manga/official/viewer.json"
-            val newHeaders = headersBuilder()
-                .set("X-XSRF-TOKEN", token)
-                .set("Referer", getChapterUrl(chapter))
-                .build()
+            val newHeaders = xsrfHeaders(getChapterUrl(chapter))
 
             fun getPages(resolution: String): List<Page> {
                 val body = ViewerRequestBody(episodeId, false, mangaId, false, resolution).toJsonString().toRequestBody(MEDIA_TYPE)
@@ -203,6 +188,13 @@ class Alphapolis :
             pages
         }
     }
+
+    private fun requireXsrfToken() = xsrfToken ?: getXsrfToken() ?: throw Exception("XSRF-Token not found")
+
+    private fun xsrfHeaders(referer: String? = null) = headersBuilder()
+        .set("X-XSRF-TOKEN", requireXsrfToken())
+        .apply { if (referer != null) set("Referer", referer) }
+        .build()
 
     private fun getXsrfToken(): String? {
         val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
