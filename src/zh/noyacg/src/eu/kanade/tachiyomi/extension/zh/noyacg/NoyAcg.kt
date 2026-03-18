@@ -12,11 +12,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -24,7 +21,6 @@ import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
 class NoyAcg :
     HttpSource(),
@@ -44,38 +40,21 @@ class NoyAcg :
     override fun headersBuilder() = super.headersBuilder().add("referer", "$baseUrl/")
         .add("allow-adult", pref.getString(ADULT_PREF, "both")!!)
 
-    private val json: Json by injectLazy()
-
-    private fun Response.parseMangaDetail(): MangaDetailDto = try {
-        body.byteStream().use { inputStream ->
-            val jsonObject = json.decodeFromStream<JsonElement>(inputStream).jsonObject
-
-            val status = jsonObject["status"]?.jsonPrimitive?.contentOrNull ?: "error"
-            val book = jsonObject["book"]?.jsonObject?.get("info")?.let {
-                json.decodeFromJsonElement<MangaDto>(it)
+    private fun Response.parseMangaDetail(): MangaDetailDto {
+        val jsonObject = parseAs<JsonObject>()
+        val status = jsonObject["status"]?.jsonPrimitive?.contentOrNull ?: "error"
+        val book = jsonObject["book"]?.jsonObject?.get("info")?.parseAs<MangaDto>()
+        val categories = jsonObject["chapters"]?.jsonObject?.get("categories")?.jsonArray?.map { it.parseAs<CategoryDto>() } ?: emptyList()
+        val chaptersMap = mutableMapOf<Int, List<ChapterDto>>()
+        jsonObject["chapters"]?.jsonObject?.get("data")?.jsonObject?.forEach { (key, value) ->
+            key.toIntOrNull()?.let { categoryId ->
+                chaptersMap[categoryId] = value.jsonArray.map { it.parseAs<ChapterDto>() }
             }
-            val categories = jsonObject["chapters"]?.jsonObject?.get("categories")?.jsonArray?.map {
-                json.decodeFromJsonElement<CategoryDto>(it)
-            } ?: emptyList()
-            val chaptersMap = mutableMapOf<Int, List<ChapterDto>>()
-            jsonObject["chapters"]?.jsonObject?.get("data")?.jsonObject?.forEach { (key, value) ->
-                val categoryId = key.toIntOrNull()
-                if (categoryId != null) {
-                    val chapterList = value.jsonArray.map { item ->
-                        json.decodeFromJsonElement<ChapterDto>(item)
-                    }
-                    chaptersMap[categoryId] = chapterList
-                }
-            }
-            val chapters = categories.map { category ->
-                category.name to (chaptersMap[category.id] ?: emptyList())
-            }
-            MangaDetailDto(status, book, chapters)
         }
-    } catch (_: Exception) {
-        throw Exception("請在 WebView 中登入")
-    } finally {
-        close()
+        val chapters = categories.map { category ->
+            category.name to (chaptersMap[category.id] ?: emptyList())
+        }
+        return MangaDetailDto(status, book, chapters)
     }
 
     // Popular
