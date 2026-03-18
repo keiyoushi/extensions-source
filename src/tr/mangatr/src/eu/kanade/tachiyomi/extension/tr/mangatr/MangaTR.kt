@@ -249,29 +249,39 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun getImgAttr(element: Element?): String? = null
 
     // Pages
-    // Şifreleme: key = k1 + k2, xorDecrypt = atob(chunks.join('')) XOR key
+    // Şifreleme: k2 = div#chapter-images üzerindeki k_ attribute'larından (data-o- sırasına göre)
+    // k3 = imageQueueData.k3
+    // finalXorKey = k2 + k3
 
     override fun pageListParse(document: Document): List<Page> {
-        val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1") ?: return emptyList()
+        // k2: #chapter-images üzerindeki k_ attribute'larından oluşuyor
+        val container = document.selectFirst("div#chapter-images") ?: return emptyList()
+        val k2 = container.attributes()
+            .filter { it.key.startsWith("k_") }
+            .mapNotNull { attr ->
+                val order = container.attr("data-o-${attr.key}").toIntOrNull() ?: return@mapNotNull null
+                Pair(order, attr.value)
+            }
+            .sortedBy { it.first }
+            .joinToString("") { it.second }
+
+        if (k2.isEmpty()) return emptyList()
 
         for (script in document.select("script:not([src])")) {
             val js = script.html()
             if (!js.contains("imageQueueData")) continue
 
-            // k2 değerini al
-            val k2 = Regex("""\bk2\b\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: continue
+            val k3 = Regex("""\bk3\b\s*:\s*"([a-f0-9]+)"""").find(js)?.groupValues?.get(1) ?: continue
 
-            // queue array'ini al — "queue" ile "logo" arasındaki her şey
             val queueStart = js.indexOf("queue")
             val logoIndex = js.indexOf("logo", queueStart)
             if (queueStart < 0 || logoIndex < 0) continue
             val queueSection = js.substring(queueStart, logoIndex)
 
-            val key = k1 + k2
+            val key = k2 + k3
             val pages = mutableListOf<Page>()
             var idx = 0
 
-            // Her [ ... ] bloğunu bul
             var pos = 0
             while (pos < queueSection.length) {
                 val open = queueSection.indexOf('[', pos)
@@ -281,7 +291,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
                 pos = close + 1
 
                 val block = queueSection.substring(open + 1, close)
-                // Chunk string'lerini topla
                 val chunks = Regex(""""([^"]+)"""").findAll(block)
                     .map { it.groupValues[1] }
                     .toList()
@@ -417,4 +426,4 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             "Özel Tür",
             arrayOf("Tümü", "Yetişkin"),
         )
-}
+                                   }
