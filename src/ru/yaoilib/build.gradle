@@ -3,7 +3,7 @@ ext {
     extClass = '.YaoiLib'
     themePkg = 'libgroup'
     baseUrl = 'https://slashlib.me'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 

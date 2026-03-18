@@ -124,7 +124,7 @@ abstract class LibGroup(
         val req = chain.request().newBuilder()
         val url = chain.request().url.toString()
         if (url.contains(apiDomain) && !url.contains("/api/auth/me")) {
-            if (bearerToken.isNullOrBlank()) {
+            if (bearerToken.isNullOrBlank() || bearerToken == "none") {
                 val token = loadToken()
                 if (token != null) {
                     bearerToken = token.getToken()
