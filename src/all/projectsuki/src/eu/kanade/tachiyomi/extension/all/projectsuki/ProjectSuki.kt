@@ -19,8 +19,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
@@ -199,6 +198,7 @@ class ProjectSuki :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        screen.addRandomUAPreference()
         with(preferences) { screen.configure() }
     }
 
@@ -210,12 +210,11 @@ class ProjectSuki :
      * most client options are already set as they should be, including the [Cache][okhttp3.Cache].
      */
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            userAgentType = preferences.shared.getPrefUAType(),
-            customUA = preferences.shared.getPrefCustomUA(),
-        )
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .setRandomUserAgent()
 
     /**
      * Specify what request will be sent to the server.
@@ -579,6 +578,8 @@ class ProjectSuki :
             genre = data.details[DataExtractor.BookDetail.Genre]!!.detailData
         }
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     /**
      * Handles the [Response] given by [chapterListRequest]'s [Request].

@@ -44,12 +44,15 @@ class Readcomiconline :
 
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder().set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .setRandomUserAgent(
+            userAgentType = UserAgentType.DESKTOP,
+            filterInclude = listOf("chrome"),
+        )
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().setRandomUserAgent(
-        userAgentType = UserAgentType.DESKTOP,
-        filterInclude = listOf("chrome"),
-    ).addNetworkInterceptor(::captchaInterceptor).build()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addNetworkInterceptor(::captchaInterceptor).build()
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -203,7 +206,12 @@ class Readcomiconline :
         return manga
     }
 
-    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
+    override fun getMangaUrl(manga: SManga): String {
+        val url = captchaUrl?.also { captchaUrl = null }
+            ?: "$baseUrl${manga.url}"
+
+        return url
+    }
 
     private fun parseStatus(status: String) = when {
         status.contains("Ongoing") -> SManga.ONGOING

@@ -3,18 +3,18 @@ package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SearchResponseDto(
-    val data: List<SearchEntryDto>,
-    val success: Boolean,
+class SearchResponseDto(
+    val data: List<SearchEntryDto> = emptyList(),
+    val success: Boolean = false,
 )
 
 @Serializable
 class SearchEntryDto(
-    val cstatus: String = "",
-    val img: String = "",
-    val isocm: Int = 0,
-    val link: String = "",
-    val star: Float = 0f,
-    val title: String = "",
-    val vote: String = "",
+    val cstatus: String? = null,
+    val img: String? = null,
+    val isocm: Int? = null,
+    val link: String? = null,
+    val star: Float? = null,
+    val title: String? = null,
+    val vote: String? = null,
 )
