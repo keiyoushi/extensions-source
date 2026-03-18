@@ -3,9 +3,17 @@ package eu.kanade.tachiyomi.multisrc.mangotheme
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -98,6 +106,7 @@ class MangoThemeChapterDto(
     @JsonNames("obra_id")
     val mangaId: Int,
     @JsonNames("numero")
+    @Serializable(with = StringOrNumberSerializer::class)
     val number: String,
     @JsonNames("nome", "title")
     val title: String? = null,
@@ -130,6 +139,7 @@ class MangoThemePageChapterDto(
     @JsonNames("obra_id")
     val mangaId: Int,
     @JsonNames("numero")
+    @Serializable(with = StringOrNumberSerializer::class)
     val number: String,
     @JsonNames("nome", "title")
     val title: String? = null,
@@ -249,3 +259,17 @@ private val DATE_FORMATTERS = listOf(
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT),
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT),
 )
+
+private object StringOrNumberSerializer : KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleString", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String = when (decoder) {
+        is JsonDecoder -> decoder.decodeJsonElement().jsonPrimitive.content
+        else -> decoder.decodeString()
+    }
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
+}
