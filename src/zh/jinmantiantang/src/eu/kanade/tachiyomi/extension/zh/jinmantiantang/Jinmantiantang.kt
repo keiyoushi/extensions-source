@@ -14,9 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
@@ -54,13 +52,13 @@ class Jinmantiantang :
             preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_PREF_DEFAULT)!!.toInt(),
             preferences.getString(MAINSITE_RATELIMIT_PERIOD, MAINSITE_RATELIMIT_PERIOD_DEFAULT)!!.toLong(),
         )
-        .setRandomUserAgent(preferences.getPrefUAType(), preferences.getPrefCustomUA())
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor).build()
 
     // 添加额外的header增加规避Cloudflare可能性
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+        .setRandomUserAgent()
 
     // 点击量排序(人气)
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums?o=mv&page=$page", headers)
@@ -207,6 +205,8 @@ class Jinmantiantang :
         status = selectDetailsStatusAndGenre(document, 1).trim().toInt()
         description = document.selectFirst("#intro-block .p-t-5.p-b-5")!!.text().substringAfter("敘述：").trim()
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     private fun Element.extractThumbnailUrl(): String = when {
         hasAttr("data-original") -> attr("data-original")
@@ -445,7 +445,7 @@ class Jinmantiantang :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferenceList(screen.context, preferences, updateUrlInterceptor.isUpdated).forEach(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
     companion object {
         private const val PREFIX_ID_SEARCH_NO_COLON = "JM"

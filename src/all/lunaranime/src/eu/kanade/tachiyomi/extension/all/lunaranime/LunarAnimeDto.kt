@@ -68,14 +68,28 @@ class LunarChapterListResponse(
 class LunarChapterDto(
     val chapter: String,
     @SerialName("chapter_number") val chapterNumber: Float,
+    @SerialName("chapter_subnumber") val chapterSubnumber: Float? = null,
     @SerialName("chapter_title") val chapterTitle: String? = null,
     val language: String,
     @SerialName("uploaded_at") val uploadedAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String, isLocked: Boolean): SChapter = SChapter.create().apply {
         url = "/manga/$mangaSlug/$chapter?lang=$language"
-        name = chapterTitle?.takeIf { it.isNotBlank() } ?: "Chapter $chapter"
-        chapter_number = this@LunarChapterDto.chapterNumber
+        val prefix = if (isLocked) "🔒 " else ""
+        val chapterName = chapter.removeSuffix(".00").removeSuffix(".0")
+        val chapterNum = "Chapter $chapterName"
+        name = prefix + if (chapterTitle.isNullOrBlank()) {
+            chapterNum
+        } else if (chapterTitle.contains(chapterNum, ignoreCase = true) ||
+            chapterTitle.contains("Ch.$chapterName", ignoreCase = true) ||
+            chapterTitle.contains("Volume", ignoreCase = true) ||
+            chapterTitle.contains("Vol.", ignoreCase = true)
+        ) {
+            chapterTitle
+        } else {
+            "$chapterNum: $chapterTitle"
+        }
+        chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber
         date_upload = uploadedAt?.let { parseChapterDate(it) } ?: 0L
         scanlator = language.uppercase(Locale.ROOT)
     }
@@ -116,4 +130,16 @@ class LunarRecentResponse(
     val page: Int = 0,
     val limit: Int = 0,
     @SerialName("total_count") val totalCount: Int = 0,
+)
+
+@Serializable
+class LunarPasswordInfoResponse(
+    @SerialName("chapter_passwords") val chapterPasswords: List<LunarChapterPasswordDto> = emptyList(),
+    @SerialName("has_series_password") val hasSeriesPassword: Boolean = false,
+)
+
+@Serializable
+class LunarChapterPasswordDto(
+    @SerialName("chapter_number") val chapterNumber: String? = null,
+    val language: String? = null,
 )

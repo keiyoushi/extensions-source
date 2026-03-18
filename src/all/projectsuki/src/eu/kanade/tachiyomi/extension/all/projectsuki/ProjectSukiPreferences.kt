@@ -5,7 +5,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
 import java.util.Locale
 
 /**
@@ -99,8 +98,6 @@ class ProjectSukiPreferences(internal val shared: SharedPreferences) {
     }
 
     fun PreferenceScreen.configure() {
-        addRandomUAPreferenceToScreen(this)
-
         addPreference(defaultSearchMode.run { constructPreference() })
         addPreference(whitelistedLanguages.run { constructPreference() })
         addPreference(blacklistedLanguages.run { constructPreference() })

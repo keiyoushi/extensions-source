@@ -8,13 +8,10 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -37,19 +34,15 @@ class SushiScan :
     private val preferences = getPreferences()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .addCustomUA()
+        .setRandomUserAgent()
         .set("Referer", "$baseUrl$mangaUrlDirectory")
 
     override val altNamePrefix = "Nom alternatif : "
@@ -79,6 +72,8 @@ class SushiScan :
         status = document.select(seriesStatusSelector).text().parseStatus()
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     override fun pageListParse(document: Document): List<Page> {
         val scriptContent = document.selectFirst("script:containsData(ts_reader)")?.data()
             ?: return super.pageListParse(document)
@@ -86,13 +81,6 @@ class SushiScan :
         val tsReader = json.decodeFromString<TSReader>(jsonString)
         val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()
         return imageUrls.mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl.replace("http://", "https://")) }
-    }
-
-    private fun Headers.Builder.addCustomUA(): Headers.Builder {
-        preferences.getPrefCustomUA()
-            .takeIf { !it.isNullOrBlank() }
-            ?.let { set("User-Agent", it) }
-        return this
     }
 
     @Serializable

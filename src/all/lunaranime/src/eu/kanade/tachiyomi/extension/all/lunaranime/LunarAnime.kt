@@ -145,6 +145,14 @@ class LunarAnime : HttpSource() {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val slug = manga.url.substringAfterLast("/")
+
+        val passwordUrl = API_URL.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga/password/info")
+            .addPathSegment(slug)
+            .build()
+        val passwordRequest = GET(passwordUrl.toString(), headers)
+        val passwordInfo = client.newCall(passwordRequest).execute().parseAs<LunarPasswordInfoResponse>()
+
         val requestUrl = API_URL.toHttpUrl().newBuilder()
             .addPathSegments("api/manga")
             .addPathSegment(slug)
@@ -153,7 +161,13 @@ class LunarAnime : HttpSource() {
 
         val result = client.newCall(request).execute().parseAs<LunarChapterListResponse>()
 
-        result.data.map { it.toSChapter(slug) }.reversed()
+        result.data.map { chapter ->
+            val isLocked = passwordInfo.hasSeriesPassword ||
+                passwordInfo.chapterPasswords.any {
+                    it.chapterNumber == chapter.chapter && (it.language == null || it.language == chapter.language)
+                }
+            chapter.toSChapter(slug, isLocked)
+        }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException("Not used.")
