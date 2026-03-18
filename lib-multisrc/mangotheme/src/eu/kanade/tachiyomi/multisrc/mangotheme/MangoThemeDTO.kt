@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.mangotheme
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -12,29 +13,25 @@ import java.util.Locale
 
 @Serializable
 class MangoThemeResponse<T>(
-    val sucesso: Boolean = false,
-    val dados: T? = null,
-    val obras: T? = null,
-    val obra: T? = null,
-    val data: T? = null,
-    val capitulos: T? = null,
-    val capitulo: T? = null,
-    val formatos: T? = null,
-    val status: T? = null,
-    val tags: T? = null,
+    @JsonNames("sucesso")
+    val success: Boolean = false,
+    @JsonNames("dados", "obras", "obra", "data", "capitulos", "capitulo", "formatos", "status", "tags")
+    val payload: T? = null,
     val pagination: MangoThemePaginationDto? = null,
 ) {
     val items: T
-        get() = dados ?: obras ?: obra ?: data ?: capitulos ?: capitulo ?: formatos ?: status ?: tags
-            ?: throw NoSuchElementException("Response payload not found")
+        get() = payload ?: throw NoSuchElementException("Response payload not found")
 }
 
 @Serializable
 class MangoThemePaginationDto(
-    val pagina: Int = 0,
-    val limite: Int = 0,
+    @JsonNames("pagina")
+    val page: Int = 0,
+    @JsonNames("limite")
+    val limit: Int = 0,
     val total: Int = 0,
-    val totalPaginas: Int = 0,
+    @JsonNames("totalPaginas")
+    val totalPages: Int = 0,
     val hasNextPage: Boolean = false,
     val hasPreviousPage: Boolean = false,
 )
@@ -48,17 +45,27 @@ class MangoThemeMangaDto(
     val slug: String? = null,
     @JsonNames("coverImage", "imagem")
     val coverImage: String? = null,
-    val descricao: String? = null,
-    val formato_id: Int? = null,
-    val status_id: Int? = null,
-    val total_capitulos: Int? = null,
-    val criada_em: String? = null,
-    val atualizada_em: String? = null,
-    val banner_imagem: String? = null,
-    val formato_nome: String? = null,
-    val status_nome: String? = null,
+    @JsonNames("descricao")
+    val description: String? = null,
+    @JsonNames("formato_id")
+    val formatId: Int? = null,
+    @JsonNames("status_id")
+    val statusId: Int? = null,
+    @JsonNames("total_capitulos")
+    val totalChapters: Int? = null,
+    @JsonNames("criada_em")
+    val createdAt: String? = null,
+    @JsonNames("atualizada_em")
+    val updatedAt: String? = null,
+    @JsonNames("banner_imagem")
+    val bannerImage: String? = null,
+    @JsonNames("formato_nome")
+    val formatName: String? = null,
+    @JsonNames("status_nome")
+    val statusName: String? = null,
     val tags: List<MangoThemeTagDto> = emptyList(),
-    val capitulos: List<MangoThemeChapterDto> = emptyList(),
+    @JsonNames("capitulos")
+    val chapters: List<MangoThemeChapterDto> = emptyList(),
 ) {
     fun toSManga(cdnUrl: String, fallbackSlug: String? = null): SManga = SManga.create().apply {
         title = this@MangoThemeMangaDto.title
@@ -66,12 +73,12 @@ class MangoThemeMangaDto(
             mangaId = id ?: error("Missing manga id"),
             mangaSlug = slug ?: fallbackSlug,
         )
-        thumbnail_url = (coverImage ?: banner_imagem).toAbsoluteUrl(cdnUrl)
-        description = descricao?.takeIf { it.isNotBlank() }
+        thumbnail_url = (coverImage ?: bannerImage).toAbsoluteUrl(cdnUrl)
+        description = this@MangoThemeMangaDto.description?.takeIf { it.isNotBlank() }
         genre = tags.map { it.name.trim() }
             .takeIf { it.isNotEmpty() }
             ?.joinToString()
-        status = parseStatus(status_nome, status_id)
+        status = parseStatus(statusName, statusId)
     }
 }
 
@@ -80,57 +87,72 @@ class MangoThemeTagDto(
     val id: Int,
     @JsonNames("nome", "name")
     val name: String,
-    val criado_em: String? = null,
+    @JsonNames("criado_em")
+    val createdAt: String? = null,
     val color: String? = null,
 )
 
 @Serializable
 class MangoThemeChapterDto(
     val id: Int? = null,
-    val obra_id: Int,
-    val numero: String,
+    @JsonNames("obra_id")
+    val mangaId: Int,
+    @JsonNames("numero")
+    val number: String,
     @JsonNames("nome", "title")
     val title: String? = null,
     val paywall: Boolean? = null,
-    val data_fim_paywall: String? = null,
-    val criado_em: String? = null,
-    val atualizado_em: String? = null,
-    val total_paginas: Int? = null,
+    @JsonNames("data_fim_paywall")
+    val paywallEndDate: String? = null,
+    @JsonNames("criado_em")
+    val createdAt: String? = null,
+    @JsonNames("atualizado_em")
+    val updatedAt: String? = null,
+    @JsonNames("total_paginas")
+    val totalPages: Int? = null,
 ) {
     fun toSChapter(mangaSlug: String? = null): SChapter = SChapter.create().apply {
-        val formattedNumber = numero.formatChapterNumber()
+        val formattedNumber = number.formatChapterNumber()
         name = "Capitulo $formattedNumber"
-        chapter_number = numero.toFloatOrNull() ?: -1f
+        chapter_number = number.toFloatOrNull() ?: -1f
         url = buildInternalChapterUrl(
-            mangaId = obra_id,
+            mangaId = mangaId,
             chapterNumber = formattedNumber,
             mangaSlug = mangaSlug,
         )
-        date_upload = parseApiDate(criado_em ?: atualizado_em)
+        date_upload = parseApiDate(createdAt ?: updatedAt)
     }
 }
 
 @Serializable
 class MangoThemePageChapterDto(
     val id: Int? = null,
-    val obra_id: Int,
-    val numero: String,
-    val nome: String? = null,
-    val paginas: List<MangoThemePageDto> = emptyList(),
-    val criado_em: String? = null,
-    val atualizado_em: String? = null,
+    @JsonNames("obra_id")
+    val mangaId: Int,
+    @JsonNames("numero")
+    val number: String,
+    @JsonNames("nome", "title")
+    val title: String? = null,
+    @JsonNames("paginas")
+    val pages: List<MangoThemePageDto> = emptyList(),
+    @JsonNames("criado_em")
+    val createdAt: String? = null,
+    @JsonNames("atualizado_em")
+    val updatedAt: String? = null,
 )
 
 @Serializable
 class MangoThemePageDto(
-    val numero: Int,
+    @JsonNames("numero")
+    val number: Int,
     @JsonNames("cdn_id", "imagem", "image", "src", "link", "path", "arquivo")
     val url: String? = null,
 )
 
 @Serializable
 class MangoThemeLoginResponseDto(
-    val sucesso: Boolean = false,
+    @JsonNames("sucesso")
+    val success: Boolean = false,
     @JsonNames("token", "access_token")
     val token: String? = null,
 )
@@ -138,7 +160,8 @@ class MangoThemeLoginResponseDto(
 @Serializable
 class MangoThemeAuthRequestDto(
     val email: String,
-    val senha: String,
+    @SerialName("senha")
+    val password: String,
 )
 
 internal fun String.formatChapterNumber(): String = toFloatOrNull()

@@ -19,9 +19,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.encodeToString
+import keiyoushi.utils.toJsonString
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -100,8 +99,6 @@ abstract class MangoTheme :
 
     protected val preferences by getPreferencesLazy()
 
-    protected val json by lazy { jsonInstance }
-
     override val supportsLatest = true
 
     private val authInterceptor = Interceptor { chain ->
@@ -138,7 +135,7 @@ abstract class MangoTheme :
             retriedResponse.close()
         }
 
-        throw java.io.IOException(loginRequiredMessage)
+        throw IOException(loginRequiredMessage)
     }
 
     private val decryptInterceptor = Interceptor { chain ->
@@ -240,7 +237,7 @@ abstract class MangoTheme :
         .items
         .let { manga ->
             val fallbackSlug = manga.slug ?: response.request.header(STORED_SLUG_HEADER)
-            manga.capitulos.map { chapter ->
+            manga.chapters.map { chapter ->
                 chapter.toSChapter(fallbackSlug)
             }
         }
@@ -255,8 +252,8 @@ abstract class MangoTheme :
     override fun pageListParse(response: Response): List<Page> {
         val pages = response.parseAs<MangoThemeResponse<MangoThemePageChapterDto>>()
             .items
-            .paginas
-            .sortedBy { it.numero }
+            .pages
+            .sortedBy { it.number }
             .mapNotNull { page ->
                 page.url
                     ?.takeIf { it.isNotBlank() }
@@ -344,12 +341,10 @@ abstract class MangoTheme :
     }
 
     protected open fun login(email: String, password: String): String = runCatching {
-        val body = json.encodeToString(
-            MangoThemeAuthRequestDto(
-                email = email,
-                senha = password,
-            ),
-        ).toRequestBody(JSON_MEDIA_TYPE)
+        val body = MangoThemeAuthRequestDto(
+            email = email,
+            password = password,
+        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
         val request = POST("$apiUrl/auth/login", headers, body)
         network.client.newCall(request).execute().use { response ->
