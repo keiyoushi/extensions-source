@@ -11,15 +11,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -29,8 +28,6 @@ class NarasiNinja : HttpSource() {
     override val baseUrl = "https://narasininja.net"
     override val lang = "id"
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     // ── CSRF ──────────────────────────────────────────────────────────────────
 
@@ -214,7 +211,6 @@ class NarasiNinja : HttpSource() {
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
     private fun parseDate(text: String): Long = dateFormat.tryParse(text)
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     // ── FILTERS ───────────────────────────────────────────────────────────────
 
