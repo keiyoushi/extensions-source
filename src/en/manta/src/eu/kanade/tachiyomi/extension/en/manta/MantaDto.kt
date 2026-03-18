@@ -65,7 +65,7 @@ data class Episode(
 
     override fun toString() = buildString {
         append(data?.title ?: "Episode $ord")
-        if (lockData.isLocked) append(" \uD83D\uDD12")
+        if (lockData.isLocked) append(" 🔒")
     }
 }
 
