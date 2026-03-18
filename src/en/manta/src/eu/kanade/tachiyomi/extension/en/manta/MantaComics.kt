@@ -8,16 +8,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
-import okhttp3.Cookie
-import okhttp3.CookieJar
-import okhttp3.HttpUrl
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class MantaComics : HttpSource() {
     override val name = "Manta"
@@ -28,37 +23,46 @@ class MantaComics : HttpSource() {
 
     override val supportsLatest = false
 
-    private var token: String? = null
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            val cookies = client.cookieJar.loadForRequest(url)
+            val token = cookies.find { it.name == "token" }?.value
 
-    override val client = network.cloudflareClient.newBuilder()
-        .cookieJar(
-            object : CookieJar {
-                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                    token = cookies.find { it.matches(url) && it.name == "token" }?.value
-                }
-
-                override fun loadForRequest(url: HttpUrl) = emptyList<Cookie>()
-            },
-        ).build()
-
-    private val json by injectLazy<Json>()
+            if (token != null) {
+                val newRequest = request.newBuilder()
+                    .header("Authorization", "Bearer $token")
+                    .build()
+                chain.proceed(newRequest)
+            } else {
+                chain.proceed(request)
+            }
+        }
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", baseUrl).set("Authorization", "Bearer $token")
+        .set("Origin", baseUrl)
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manta/v1/search/series?cat=New", headers)
 
     override fun fetchPopularManga(page: Int) = latestUpdatesRequest(page).fetch(::searchMangaParse)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = filters.category.ifEmpty { if (query.isEmpty()) "New" else "" }.let {
-        val url = "$baseUrl/manta/v1/search/series".toHttpUrl().newBuilder()
-            .addQueryParameter("cat", it)
-            .addQueryParameter("q", query)
-            .build()
-        GET(url, headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/manta/v1/search/series".toHttpUrl().newBuilder().apply {
+            if (query.isNotEmpty()) {
+                addQueryParameter("q", query)
+            } else {
+                val category = filters.category
+                val selected = if (category.second.isEmpty()) "cat=New" else category.second
+                val (key, value) = selected.split("=")
+                addQueryParameter(key, value)
+            }
+        }.build()
+        return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = response.parse<List<Series<Title>>>().map {
+    override fun searchMangaParse(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data!!.map {
         SManga.create().apply {
             title = it.toString()
             url = it.id.toString()
@@ -71,7 +75,7 @@ class MantaComics : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/front/v1/series/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val data = response.parse<Series<Details>>().data
+        val data = response.parseAs<MantaResponse<Series<Details>>>().data!!.data
         description = data.toString()
         genre = data.tags.joinToString()
         artist = data.artists.joinToString()
@@ -87,7 +91,7 @@ class MantaComics : HttpSource() {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response) = response.parse<Series<Title>>().episodes!!.map {
+    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data!!.episodes!!.map {
         SChapter.create().apply {
             name = it.toString()
             url = it.id.toString()
@@ -100,7 +104,7 @@ class MantaComics : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/front/v1/episodes/${chapter.url}", headers)
 
-    override fun pageListParse(response: Response) = response.parse<Episode>().cutImages?.mapIndexed { idx, img ->
+    override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data!!.cutImages?.mapIndexed { idx, img ->
         Page(idx, "", img.toString())
     } ?: emptyList()
 
@@ -122,10 +126,6 @@ class MantaComics : HttpSource() {
 
     private fun <R> Request.fetch(parse: (Response) -> R) = client.newCall(this).asObservable().map { res ->
         if (res.isSuccessful) return@map parse(res)
-        error(res.parse<Status>("status").toString())
+        error(res.parseAs<MantaResponse<Unit>>().status.toString())
     }!!
-
-    private inline fun <reified T> Response.parse(key: String = "data") = json.decodeFromJsonElement<T>(
-        json.parseToJsonElement(body.string()).jsonObject[key]!!,
-    )
 }
