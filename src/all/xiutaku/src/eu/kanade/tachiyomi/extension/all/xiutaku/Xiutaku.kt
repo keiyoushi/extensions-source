@@ -29,10 +29,11 @@ class Xiutaku : ParsedHttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
-        .setRandomUserAgent(UserAgentType.MOBILE)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .setRandomUserAgent(UserAgentType.MOBILE)
 
     // Latest
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
@@ -74,6 +75,8 @@ class Xiutaku : ParsedHttpSource() {
         genre = document.selectFirst(".article-tags")
             ?.select(".tags > .tag")?.joinToString { it.text().removePrefix("#") }
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
