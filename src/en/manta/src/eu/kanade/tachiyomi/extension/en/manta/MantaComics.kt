@@ -45,9 +45,21 @@ class MantaComics : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manta/v1/search/series?cat=New", headers)
+    // ============================== Popular ===============================
+
+    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun fetchPopularManga(page: Int) = latestUpdatesRequest(page).fetch(::searchMangaParse)
+
+    // =============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manta/v1/search/series?cat=New", headers)
+
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/manta/v1/search/series".toHttpUrl().newBuilder().apply {
@@ -73,6 +85,8 @@ class MantaComics : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = searchMangaRequest(page, query, filters).fetch(::searchMangaParse)
 
+    // =========================== Manga Details ============================
+
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/front/v1/series/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
@@ -90,6 +104,8 @@ class MantaComics : HttpSource() {
 
     override fun fetchMangaDetails(manga: SManga) = mangaDetailsRequest(manga).fetch(::mangaDetailsParse)
 
+    // ============================ Chapter List ============================
+
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data.episodes!!.map {
@@ -103,6 +119,8 @@ class MantaComics : HttpSource() {
 
     override fun fetchChapterList(manga: SManga) = chapterListRequest(manga).fetch(::chapterListParse)
 
+    // ============================= Page List ==============================
+
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/front/v1/episodes/${chapter.url}", headers)
 
     override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
@@ -111,9 +129,9 @@ class MantaComics : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter) = pageListRequest(chapter).fetch(::pageListParse)
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/episodes/${chapter.url}"
+    // ============================== Filters ===============================
 
     override fun getFilterList() = FilterList(
         Filter.Header("Filters are ignored when searching"),
@@ -121,13 +139,11 @@ class MantaComics : HttpSource() {
         Category(),
     )
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    // ============================= Utilities ==============================
 
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
 
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/episodes/${chapter.url}"
 
     private fun <R> Request.fetch(parse: (Response) -> R) = client.newCall(this).asObservable().map { res ->
         if (res.isSuccessful) return@map parse(res)
