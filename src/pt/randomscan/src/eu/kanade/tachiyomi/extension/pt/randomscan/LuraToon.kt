@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.randomscan
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Capitulo
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
@@ -17,12 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
-import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
+import keiyoushi.lib.randomua.addRandomUAPreference
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -44,17 +38,11 @@ class LuraToon :
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
     override val client = network.cloudflareClient
         .newBuilder()
         .addInterceptor(::loggedVerifyInterceptor)
         .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
         .rateLimit(3)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .build()
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
@@ -64,8 +52,10 @@ class LuraToon :
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val data = response.parseAs<Manga>()

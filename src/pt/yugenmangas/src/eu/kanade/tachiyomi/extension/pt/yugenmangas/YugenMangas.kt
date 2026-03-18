@@ -14,13 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.PREF_KEY_RANDOM_UA
-import keiyoushi.lib.randomua.RANDOM_UA_VALUES
-import keiyoushi.lib.randomua.UserAgentType
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
-import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -54,20 +48,11 @@ class YugenMangas :
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy {
-        if (getPrefUAType() != UserAgentType.OFF || getPrefCustomUA().isNullOrBlank().not()) {
-            return@getPreferencesLazy
-        }
-        edit().putString(PREF_KEY_RANDOM_UA, RANDOM_UA_VALUES.last()).apply()
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .rateLimitHost(apiUrl.toHttpUrl(), 2)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .build()
 
     override val versionId = 2
@@ -136,6 +121,8 @@ class YugenMangas :
         }
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     // ================================ Chapters =======================================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -194,7 +181,7 @@ class YugenMangas :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
