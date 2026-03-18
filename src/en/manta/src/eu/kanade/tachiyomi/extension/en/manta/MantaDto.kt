@@ -14,7 +14,7 @@ private inline val String?.timestamp: Long
 
 @Serializable
 data class MantaResponse<T>(
-    val data: T? = null,
+    val data: T,
     val status: Status? = null,
 )
 
@@ -100,10 +100,10 @@ data class Description(
 data class Cover(
     private val `1280x1840_480`: Image? = null,
     private val `1280x1840_720`: Image? = null,
-    private val `1440x1440_480`: Image? = null,
     private val `1440x3072`: Image? = null,
+    private val `1440x1440_480`: Image? = null,
 ) {
-    override fun toString() = (`1280x1840_480` ?: `1280x1840_720` ?: `1440x1440_480` ?: `1440x3072`)?.toString() ?: ""
+    override fun toString() = (`1280x1840_480` ?: `1280x1840_720` ?: `1440x3072` ?: `1440x1440_480`)?.toString().orEmpty()
 }
 
 @Serializable

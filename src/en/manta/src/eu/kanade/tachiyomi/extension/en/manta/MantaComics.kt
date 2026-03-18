@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.manta
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -54,7 +55,7 @@ class MantaComics : HttpSource() {
                 addQueryParameter("q", query)
             } else {
                 val category = filters.category
-                val selected = if (category.second.isEmpty()) "cat=New" else category.second
+                val selected = if (category.second.isEmpty()) "tagId=288" else category.second
                 val (key, value) = selected.split("=")
                 addQueryParameter(key, value)
             }
@@ -62,7 +63,7 @@ class MantaComics : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data!!.map {
+    override fun searchMangaParse(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data.map {
         SManga.create().apply {
             title = it.toString()
             url = it.id.toString()
@@ -75,7 +76,7 @@ class MantaComics : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/front/v1/series/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val data = response.parseAs<MantaResponse<Series<Details>>>().data!!.data
+        val data = response.parseAs<MantaResponse<Series<Details>>>().data.data
         description = data.toString()
         genre = data.tags.joinToString()
         artist = data.artists.joinToString()
@@ -91,7 +92,7 @@ class MantaComics : HttpSource() {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data!!.episodes!!.map {
+    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data.episodes!!.map {
         SChapter.create().apply {
             name = it.toString()
             url = it.id.toString()
@@ -104,7 +105,7 @@ class MantaComics : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/front/v1/episodes/${chapter.url}", headers)
 
-    override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data!!.cutImages?.mapIndexed { idx, img ->
+    override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
         Page(idx, "", img.toString())
     } ?: emptyList()
 
@@ -114,7 +115,11 @@ class MantaComics : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/episodes/${chapter.url}"
 
-    override fun getFilterList() = FilterList(Category())
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filters are ignored when searching"),
+        Filter.Separator(),
+        Category(),
+    )
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 

@@ -7,8 +7,6 @@ class Category :
         "Category",
         values.map { it.first }.toTypedArray(),
     ) {
-    val selected get() = values[state]
-
     companion object {
         val values = arrayOf(
             Pair("Any", ""),
