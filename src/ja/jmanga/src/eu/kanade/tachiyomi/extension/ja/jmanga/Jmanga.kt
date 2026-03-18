@@ -74,7 +74,7 @@ class Jmanga :
         private const val BASE_URL_PREF_KEY = "BASE_URL"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF_TITLE = "Base URL"
-        private const val URL_PREF_SUMMARY= "Change if the site moves to a new domain. Leave blank to use default URL"
+        private const val URL_PREF_SUMMARY = "Change if the site moves to a new domain. Leave blank to use default URL"
         private const val RESTART_APP_MESSAGE = "Restart app to apply new setting."
     }
 }
