@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -138,7 +139,7 @@ class NarasiNinja : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
         return SManga.create().apply {
-            title = doc.selectFirst("h1.entry-title")?.text() ?: ""
+            title = doc.selectFirst("h1.entry-title")!!.text()
             thumbnail_url = doc.selectFirst(".thumb img")?.attr("abs:src")
             description = doc.selectFirst(".entry-content.entry-content-single p")?.text()
             status = doc.selectFirst(".infotable tr:contains(Status) td:last-child")
@@ -212,12 +213,7 @@ class NarasiNinja : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
-    private fun parseDate(text: String): Long = try {
-        dateFormat.parse(text)!!.time
-    } catch (_: Exception) {
-        0L
-    }
-
+    private fun parseDate(text: String): Long = dateFormat.tryParse(text)
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     // ── FILTERS ───────────────────────────────────────────────────────────────
