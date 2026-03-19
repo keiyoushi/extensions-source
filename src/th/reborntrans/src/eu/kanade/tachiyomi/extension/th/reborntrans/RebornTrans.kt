@@ -140,7 +140,7 @@ class RebornTrans : HttpSource() {
     private fun parseMangaAjax(response: Response): MangasPage {
         val ajax = response.parseAs<AjaxResponse>()
         val html = ajax.data?.html.orEmpty()
-        val doc = org.jsoup.Jsoup.parseBodyFragment(html, baseUrl)
+        val document = org.jsoup.Jsoup.parseBodyFragment(html, baseUrl)
         val mangas =
             doc.select("a.manga-card").map { el ->
                 SManga.create().apply {
