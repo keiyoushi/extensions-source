@@ -138,6 +138,8 @@ class ScansFR :
 
     // ============================== Details ===============================
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.removePrefix("/manga/")
         return GET("$apiUrl/api/v1/mangas/$slug", headers)
