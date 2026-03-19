@@ -37,7 +37,7 @@ class Cmoa :
     override val supportsLatest = true
 
     private val json = Injekt.get<Json>()
-    private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
+    private val reader by lazy { SpeedBinbReader(client, headers, json, true) } // 1.7070.1001
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
@@ -126,14 +126,14 @@ class Cmoa :
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
-            author = document.select("div.title_details_author_name a").joinToString { it.text() }
+            author = document.select("div.title_details_author_name a")?.joinToString { it.text() }
             description = document.selectFirst("div#comic_description > p")?.text()
             genre = buildList {
                 document.selectFirst("a.comic_mark_thum")?.text()?.let { add(it) }
-                document.select("div.category_line_f_r_l.genre_detail a").mapTo(this) { it.text() }
+                document.select("div.category_line_f_r_l.genre_detail a")?.mapTo(this) { it.text() }
             }.joinToString()
-            val completed = document.selectFirst("div.volume")?.text().orEmpty().contains("完結")
-            status = if (completed) SManga.COMPLETED else SManga.ONGOING
+            val completed = document.selectFirst("div.volume")?.text()?.contains("完結")
+            status = if (completed == true) SManga.COMPLETED else SManga.ONGOING
             thumbnail_url = document.selectFirst("div.thumBox img")?.absUrl("src")
         }
     }
