@@ -233,9 +233,7 @@ class RebornTrans : HttpSource() {
         val document = response.asJsoup()
 
         val scriptText =
-            document.select("script").map { it.data() }.firstOrNull {
-                it.contains("episodeId=")
-            }
+            document.selectFirst("script:contains(episodeId=")!!.data()
                 ?: throw Exception("[$TAG] No episode script block found in HTML")
 
         val episodeId =
