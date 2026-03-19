@@ -118,7 +118,7 @@ class Mangadotnet :
                     val chapter = SChapter.create().apply {
                         this.url = ChapterUrl(
                             id = url.pathSegments[1],
-                            source = url.queryParameter("source") ?: "scrap",
+                            source = url.queryParameter("source") ?: "scraper",
                             isVolume = url.queryParameter("mode") == "volume",
                         ).toJsonString()
                     }
