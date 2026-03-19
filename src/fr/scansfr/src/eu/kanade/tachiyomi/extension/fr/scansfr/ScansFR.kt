@@ -183,7 +183,7 @@ class ScansFR :
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val parts = chapter.url.trim('/').split("/")
