@@ -70,7 +70,7 @@ class MangaData(
 class Manga(
     private val id: Int,
     private val title: String,
-    private val genre: List<String> = emptyList(),
+    private val genres: List<String> = emptyList(),
     private val description: String? = null,
     private val photo: String? = null,
     private val hiatus: String? = null,
@@ -104,12 +104,10 @@ class Manga(
                 "KR" -> add("Manhwa")
                 "CN" -> add("Manhua")
             }
-            this@Manga.genre.mapTo(this) {
-                add(it.trim())
-            }
+            this@Manga.genres.forEach { add(it.trim()) }
         }.joinToString()
         status = when {
-            "One Shot" in this@Manga.genre -> SManga.COMPLETED
+            "One Shot" in this@Manga.genres -> SManga.COMPLETED
             this@Manga.hiatus == "Yes" -> SManga.ON_HIATUS
             else -> when (this@Manga.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
@@ -165,7 +163,6 @@ class Chapter(
     val number: String,
     @SerialName("chapter_title")
     val name: String,
-    val language: String,
     @SerialName("group_name")
     val group: String? = null,
     @SerialName("scanlator_name")

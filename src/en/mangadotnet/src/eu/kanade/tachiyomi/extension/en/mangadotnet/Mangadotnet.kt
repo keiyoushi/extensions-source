@@ -192,7 +192,7 @@ class Mangadotnet :
         return MangasPage(data.mangaList.map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage")
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage", headers)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
@@ -207,7 +207,6 @@ class Mangadotnet :
             val chapters = async {
                 val response = client.newCall(chapterListRequest(manga)).await()
                 response.parseAs<List<Chapter>>()
-                    .filter { it.language == "en" }
                     .map { chapter ->
                         SChapter.create().apply {
                             url = ChapterUrl(chapter.id.toInt(), chapter.source, false).toJsonString()
@@ -255,7 +254,7 @@ class Mangadotnet :
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/${manga.url}/chapters/list", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/${manga.url}/chapters/list?lang=en", headers)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
