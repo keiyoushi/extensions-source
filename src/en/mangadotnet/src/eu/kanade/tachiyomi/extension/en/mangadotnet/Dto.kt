@@ -16,6 +16,7 @@ class MangaList(
     @JsonNames("results", "manga_list")
     val mangaList: List<BrowseManga>,
     private val pagination: Pagination,
+    val allGenres: List<String> = emptyList(),
 ) {
     fun hasNextPage() = pagination.current < pagination.total
 
@@ -27,6 +28,12 @@ class MangaList(
         val current: Int,
     )
 }
+
+@Serializable
+class ViewAllData(
+    val data: MangaList,
+    val allGenres: List<String> = emptyList(),
+)
 
 @Serializable
 class BrowseManga(

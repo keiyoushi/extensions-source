@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangadotnet
 
+import android.app.Application
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -30,10 +31,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.File
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class Mangadotnet :
     HttpSource(),
@@ -64,9 +70,13 @@ class Mangadotnet :
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.decodeRscAs<Data<Data<MangaList>>>().data.data
+        val data = response.decodeRscAs<Data<ViewAllData>>().data
+        updateGenres(data.allGenres)
 
-        return MangasPage(data.mangaList.map { it.toSManga(baseUrl) }, data.hasNextPage())
+        return MangasPage(
+            data.data.mangaList.map { it.toSManga(baseUrl) },
+            data.data.hasNextPage(),
+        )
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -172,11 +182,12 @@ class Mangadotnet :
         SortFilter(),
         StatusFilter(),
         TypeFilter(),
-        GenreFilter(),
+        GenreFilter(getGenres()),
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
+        updateGenres(data.allGenres)
 
         return MangasPage(data.mangaList.map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
@@ -301,6 +312,39 @@ class Mangadotnet :
     private fun adultModePref() = preferences.getBoolean(NSFW_MODE, false)
 
     private fun fetchVolumesPref() = preferences.getBoolean(VOLUME_FETCH, false)
+
+    private val genreCacheFile: File by lazy {
+        Injekt.get<Application>().cacheDir.resolve("source_$id/genres.json")
+    }
+
+    private val genresLock = ReentrantLock()
+
+    private fun getGenres(): List<String> {
+        genresLock.withLock {
+            if (genreCacheFile.exists()) {
+                return genreCacheFile.readText().parseAs<List<String>>()
+            }
+            return this::class.java
+                .getResourceAsStream("/assets/genres.json")!!
+                .bufferedReader().use { it.readText() }
+                .parseAs<List<String>>()
+        }
+    }
+
+    private fun updateGenres(newGenres: List<String>) {
+        if (newGenres.isEmpty()) return
+        if (!genresLock.tryLock()) return
+        try {
+            if (genreCacheFile.exists() && System.currentTimeMillis() - genreCacheFile.lastModified() < 60_000) return
+            val currentGenres = getGenres()
+            if (newGenres.toSet() != currentGenres.toSet()) {
+                genreCacheFile.parentFile?.mkdirs()
+                genreCacheFile.writeText(newGenres.toJsonString())
+            }
+        } finally {
+            genresLock.unlock()
+        }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
