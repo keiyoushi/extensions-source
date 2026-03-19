@@ -2,9 +2,9 @@ ext{
     extName = "Manga Drama"
     extClass = ".MangaDrama"
     themePkg = "madara"
-    overrideVersionCode=0
-    isNsfw=true
-    baseUrl="https://mangadrama.com"
+    overrideVersionCode = 0
+    isNsfw = true
+    baseUrl = "https://mangadrama.com"
 }
 
 apply from: "$rootDir/common.gradle"
