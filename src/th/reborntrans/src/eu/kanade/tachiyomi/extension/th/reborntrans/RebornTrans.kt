@@ -208,7 +208,7 @@ class RebornTrans : HttpSource() {
         val document = response.asJsoup()
         return document.select("a.manga-single-episode-item").map { el ->
             SChapter.create().apply {
-                setUrlWithoutDomain(el.attr("href"))
+                setUrlWithoutDomain(el.absUrl("href"))
                 name =
                     el.selectFirst("h3.manga-single-episode-item__title")?.text()?.trim()
                         ?: "ตอนที่ ${el.attr("data-episode-number")}"
