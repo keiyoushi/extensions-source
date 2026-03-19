@@ -14,7 +14,7 @@
             <data android:host="mangadot.net" />
             <data android:scheme="https" />
             <data android:pathPattern="/manga/..*" />
-            <data android:host="/chapter/..*" />
+            <data android:pathPattern="/chapter/..*" />
         </intent-filter>
     </activity>
 </application>

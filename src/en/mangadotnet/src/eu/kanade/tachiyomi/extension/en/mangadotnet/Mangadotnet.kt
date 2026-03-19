@@ -111,7 +111,7 @@ class Mangadotnet :
                 } else {
                     val chapter = SChapter.create().apply {
                         this.url = ChapterUrl(
-                            id = url.pathSegments[1].toInt(),
+                            id = url.pathSegments[1],
                             source = url.queryParameter("source") ?: "scrap",
                             isVolume = url.queryParameter("mode") == "volume",
                         ).toJsonString()
@@ -209,7 +209,7 @@ class Mangadotnet :
                 response.parseAs<List<Chapter>>()
                     .map { chapter ->
                         SChapter.create().apply {
-                            url = ChapterUrl(chapter.id.toInt(), chapter.source, false).toJsonString()
+                            url = ChapterUrl(chapter.id, chapter.source, false).toJsonString()
                             name = buildString {
                                 val number = chapter.number.toFloat().toString().substringBefore(".0")
                                 if (!chapter.name.contains(number)) append("Chapter ", number, ": ")
@@ -228,7 +228,7 @@ class Mangadotnet :
                     response.parseAs<List<Volume>>()
                         .map { volume ->
                             SChapter.create().apply {
-                                url = ChapterUrl(volume.id, "user", true).toJsonString()
+                                url = ChapterUrl(volume.id.toString(), "user", true).toJsonString()
                                 name = "Volume ${volume.volume.toString().substringBefore(".0")}"
                                 chapter_number = -2f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
@@ -261,15 +261,15 @@ class Mangadotnet :
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val (chapterId, source, _) = chapter.url.parseAs<ChapterUrl>()
+        val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
         val url = "$baseUrl/api/".toHttpUrl().newBuilder().apply {
-            if (source == "user") {
+            if (chapterUrl.source == "user") {
                 addPathSegment("uploads")
             } else {
                 addPathSegment("chapters")
             }
-            addPathSegment(chapterId.toString())
+            addPathSegment(chapterUrl.id)
             addPathSegment("images")
         }.build()
 
@@ -277,15 +277,15 @@ class Mangadotnet :
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (chapterId, source, isVolume) = chapter.url.parseAs<ChapterUrl>()
+        val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("chapter")
-            addPathSegment(chapterId.toString())
-            if (isVolume || source == "user") {
+            addPathSegment(chapterUrl.id)
+            if (chapterUrl.isVolume || chapterUrl.source == "user") {
                 addQueryParameter("source", "user")
             }
-            if (isVolume) {
+            if (chapterUrl.isVolume) {
                 addQueryParameter("mode", "volume")
             }
         }.toString()

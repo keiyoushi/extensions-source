@@ -185,8 +185,8 @@ class Volume(
 )
 
 @Serializable
-data class ChapterUrl(
-    val id: Int,
+class ChapterUrl(
+    val id: String,
     val source: String,
     val isVolume: Boolean,
 )
