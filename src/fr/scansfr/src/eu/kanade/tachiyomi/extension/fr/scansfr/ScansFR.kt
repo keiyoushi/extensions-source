@@ -161,6 +161,8 @@ class ScansFR :
 
     // ============================== Chapters ==============================
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -184,8 +186,6 @@ class ScansFR :
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
-
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val parts = chapter.url.trim('/').split("/")
