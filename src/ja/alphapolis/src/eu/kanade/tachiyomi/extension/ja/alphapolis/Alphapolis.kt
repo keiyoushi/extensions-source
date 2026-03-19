@@ -18,6 +18,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -87,23 +88,19 @@ class Alphapolis :
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        fun Builder.addFilter(param: String, filter: Filter.Group<FilterTag>) = filter.state.filter { it.state }.forEachIndexed { i, option -> addQueryParameter("$param[$i]", option.value) }
+        fun Builder.addFilter(param: String, value: String, filter: Filter.CheckBox) = apply { if (filter.state) addQueryParameter(param, value) }
+
         val url = "$baseUrl/manga/official/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-
-        if (query.isNotBlank()) {
-            url.addQueryParameter("query", query)
-        }
-
-        fun Filter.Group<FilterTag>.addParams(key: String) = state.filter { it.state }.forEachIndexed { i, values -> url.addQueryParameter("$key[$i]", values.value) }
-
-        filters.firstInstance<CategoryFilter>().addParams("category")
-        filters.firstInstance<LabelFilter>().addParams("label")
-        filters.firstInstance<StatusFilter>().addParams("complete")
-        filters.firstInstance<RentalFilter>().addParams("rental")
-
-        if (filters.firstInstance<DailyFreeFilter>().state) {
-            url.addQueryParameter("is_free_daily", "enable")
-        }
+            .apply {
+                if (query.isNotBlank()) addQueryParameter("query", query)
+                addFilter("category", filters.firstInstance<CategoryFilter>())
+                addFilter("label", filters.firstInstance<LabelFilter>())
+                addFilter("complete", filters.firstInstance<StatusFilter>())
+                addFilter("rental", filters.firstInstance<RentalFilter>())
+                addFilter("is_free_daily", "enable", filters.firstInstance<DailyFreeFilter>())
+            }
         return GET(url.build(), headers)
     }
 
