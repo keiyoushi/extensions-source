@@ -193,9 +193,14 @@ class ChapterUrl(
 
 @Serializable
 class Images(
-    val manga: BrowseManga,
+    val manga: MangaId,
     val images: List<Image>,
 ) {
+    @Serializable
+    class MangaId(
+        val id: Int,
+    )
+
     @Serializable
     class Image(
         val url: String,

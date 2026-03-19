@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import android.app.Application
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -27,9 +29,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.internal.closeQuietly
+import okio.IOException
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -119,8 +125,12 @@ class Mangadotnet :
 
                     client.newCall(pageListRequest(chapter))
                         .asObservableSuccess()
-                        .map {
-                            it.parseAs<Images>().manga.toSManga(baseUrl)
+                        .switchMap {
+                            val manga = SManga.create().apply {
+                                this.url = it.parseAs<Images>().manga.id.toString()
+                            }
+
+                            fetchMangaDetails(manga)
                         }
                 }.map {
                     MangasPage(listOf(it), false)
@@ -294,6 +304,8 @@ class Mangadotnet :
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<Images>()
 
+        countViews(data.manga.id)
+
         return data.images.mapIndexed { index, image ->
             Page(
                 index = index,
@@ -306,6 +318,25 @@ class Mangadotnet :
                 },
             )
         }.filter { it.imageUrl != null }
+    }
+
+    private fun countViews(mangaId: Int) {
+        val request = POST("$baseUrl/api/manga/$mangaId/view", headers)
+
+        client.newCall(request)
+            .enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        response.closeQuietly()
+                        if (!response.isSuccessful) {
+                            Log.e(name, "Failed to count views: HTTP Error ${response.code}")
+                        }
+                    }
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(name, "Failed to count views", e)
+                    }
+                },
+            )
     }
 
     private fun adultModePref() = preferences.getBoolean(NSFW_MODE, false)
