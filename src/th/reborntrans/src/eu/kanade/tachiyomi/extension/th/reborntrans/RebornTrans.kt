@@ -49,7 +49,7 @@ class RebornTrans : HttpSource() {
     private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.US)
     private val ajaxUrl = "$baseUrl/wp-admin/admin-ajax.php"
     private val jsonMediaType = "application/json".toMediaType()
-    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true }
 
     // Lazy so it's only created when first used, by which point the main looper exists
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
