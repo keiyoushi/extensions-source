@@ -96,7 +96,7 @@ class Cmoa : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1.titleName")!!.text().replace(Regex("\\s+(\\d+巻|第\\d+話).*$"), "")
+            title = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
             author = document.select("div.title_details_author_name a").joinToString { it.text() }
             description = document.selectFirst("div#comic_description > p")?.text()
             genre = buildList {
@@ -118,7 +118,7 @@ class Cmoa : HttpSource() {
             val response = client.newCall(request).execute()
             val document = response.asJsoup()
 
-            val mangaTitle = document.selectFirst("h1.titleName")!!.text().replace(Regex("\\s+(\\d+巻|第\\d+話).*$"), "")
+            val mangaTitle = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
 
             chapters += document.select("ul.title_vol_vox_vols li").map {
                 SChapter.create().apply {
@@ -168,4 +168,8 @@ class Cmoa : HttpSource() {
     override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val TITLE_REGEX = Regex("(?:(?<=\\s|】)(第?\\d+巻|第?\\d+話|\\d+(?=\\s*$))|（[０-９0-9]+）|【第?\\d+[巻話]】).*$")
+    }
 }
