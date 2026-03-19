@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import android.text.Html
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -24,6 +24,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -36,6 +38,10 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+/*
+Author: keegang, Claude Opus4.6, Gemini 3.1 Pro
+
+*/
 class RebornTrans : HttpSource() {
     override val name = "Reborn Trans"
     override val baseUrl = "https://reborntrans.com"
@@ -51,20 +57,19 @@ class RebornTrans : HttpSource() {
     private val jsonMediaType = "application/json".toMediaType()
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Lazy so it's only created when first used, by which point the main looper exists
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val context
         get() = Injekt.get<Application>()
 
     companion object {
-        private const val TAG = "RebornTrans"
         private const val WEBVIEW_TIMEOUT = 45L
+        private val EPISODE_ID_REGEX = Regex("""episodeId=(\d+)""")
 
         private val FETCH_INTERCEPT_JS =
             """
             (function() {
-                if (window.__rtIntercepted) return;
-                window.__rtIntercepted = true;
+                if (window._0x3f2a) return;
+                window._0x3f2a = true;
                 var _origFetch = window.fetch;
                 window.fetch = function(input, init) {
                     var url = (typeof input === 'string') ? input : (input && input.url) || '';
@@ -73,16 +78,11 @@ class RebornTrans : HttpSource() {
                             var body = JSON.parse(init.body);
                             if (body.turnstile_token) {
                                 window.TachiyomiRT.onToken(body.turnstile_token);
-                            } else {
-                                window.TachiyomiRT.onLog('fetch /images — no token in body: ' + init.body);
                             }
-                        } catch(e) {
-                            window.TachiyomiRT.onLog('parse error: ' + e);
-                        }
+                        } catch(e) {}
                     }
                     return _origFetch.apply(this, arguments);
                 };
-                window.TachiyomiRT.onLog('fetch interceptor installed');
             })();
             """.trimIndent()
     }
@@ -122,9 +122,9 @@ class RebornTrans : HttpSource() {
             posts.map { post ->
                 SManga.create().apply {
                     title =
-                        android.text.Html.fromHtml(
+                        Html.fromHtml(
                             post.title.rendered,
-                            android.text.Html.FROM_HTML_MODE_LEGACY,
+                            Html.FROM_HTML_MODE_LEGACY,
                         )
                             .toString()
                             .trim()
@@ -142,7 +142,7 @@ class RebornTrans : HttpSource() {
         val html = ajax.data?.html.orEmpty()
         val document = org.jsoup.Jsoup.parseBodyFragment(html, baseUrl)
         val mangas =
-            doc.select("a.manga-card").map { el ->
+            document.select("a.manga-card").map { el ->
                 SManga.create().apply {
                     title = el.selectFirst("h3")!!.text()
                     setUrlWithoutDomain(el.attr("abs:href"))
@@ -155,7 +155,7 @@ class RebornTrans : HttpSource() {
     // ============================== Details ===============================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.removeSuffix("/").substringAfterLast("/")
+        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last { it.isNotEmpty() }
         val url =
             "$baseUrl/wp-json/wp/v2/posts"
                 .toHttpUrl()
@@ -172,9 +172,9 @@ class RebornTrans : HttpSource() {
         val post = response.parseAs<List<WpPost>>().first()
         return SManga.create().apply {
             title =
-                android.text.Html.fromHtml(
+                Html.fromHtml(
                     post.title.rendered,
-                    android.text.Html.FROM_HTML_MODE_LEGACY,
+                    Html.FROM_HTML_MODE_LEGACY,
                 )
                     .toString()
                     .trim()
@@ -208,14 +208,14 @@ class RebornTrans : HttpSource() {
         val document = response.asJsoup()
         return document.select("a.manga-single-episode-item").map { el ->
             SChapter.create().apply {
-                setUrlWithoutDomain(el.absUrl("href"))
+                setUrlWithoutDomain(el.attr("href"))
                 name =
                     el.selectFirst("h3.manga-single-episode-item__title")?.text()?.trim()
                         ?: "ตอนที่ ${el.attr("data-episode-number")}"
                 chapter_number = el.attr("data-episode-number").toFloatOrNull() ?: -1f
                 date_upload =
                     el.selectFirst(".manga-single-episode-item__date")?.text()?.let {
-                        parseDate(it)
+                        dateFormat.tryParse(it)
                     }
                         ?: 0L
             }
@@ -228,28 +228,26 @@ class RebornTrans : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterUrl = response.request.url.toString()
-        Log.d(TAG, "pageListParse: $chapterUrl")
-
         val document = response.asJsoup()
 
-        val scriptText =
-            document.selectFirst("script:contains(episodeId=")!!.data()
-                ?: throw Exception("[$TAG] No episode script block found in HTML")
+        var scriptText: String? = null
+        for (element in document.select("script")) {
+            if (element.data().contains("episodeId=")) {
+                scriptText = element.data()
+                break
+            }
+        }
+        if (scriptText == null) throw Exception("No episode script block found in HTML")
 
         val episodeId =
-            Regex("""episodeId=(\d+)""").find(scriptText)?.groupValues?.get(1)
-                ?: throw Exception("[$TAG] episodeId not found in script")
-
-        Log.d(TAG, "episodeId=$episodeId — starting WebView")
+            EPISODE_ID_REGEX.find(scriptText)?.groupValues?.get(1)
+                ?: throw Exception("episodeId not found in script")
 
         val token =
             fetchTurnstileToken(chapterUrl, episodeId)
                 ?: throw Exception(
-                    "[$TAG] Turnstile token not received within ${WEBVIEW_TIMEOUT}s\n" +
-                        "episodeId=$episodeId — check logcat tag=$TAG",
+                    "Turnstile token not received within ${WEBVIEW_TIMEOUT}s",
                 )
-
-        Log.d(TAG, "episodeId=$episodeId — token len=${token.length}, calling API")
 
         val ts = System.currentTimeMillis()
         val apiUrl = "$baseUrl/wp-json/manga-eagle/v1/episodes/$episodeId/images?_t=$ts"
@@ -269,19 +267,17 @@ class RebornTrans : HttpSource() {
                 .execute()
 
         val rawBody = apiResponse.peekBody(Long.MAX_VALUE).string()
-        Log.d(TAG, "API ${apiResponse.code}: $rawBody")
 
         val result =
             try {
                 json.decodeFromString<ImageApiResponse>(rawBody)
             } catch (e: Exception) {
-                throw Exception("[$TAG] JSON parse failed: ${e.message} — raw: $rawBody")
+                throw Exception("JSON parse failed: ${e.message}")
             }
 
-        if (!result.success) throw Exception("[$TAG] API success=false — raw: $rawBody")
-        if (result.assets.isEmpty()) throw Exception("[$TAG] API returned 0 assets — raw: $rawBody")
+        if (!result.success) throw Exception("API success=false")
+        if (result.assets.isEmpty()) throw Exception("API returned 0 assets")
 
-        Log.d(TAG, "episodeId=$episodeId — ${result.assets.size} pages")
         return result.assets.mapIndexed { i, asset -> Page(i, imageUrl = asset.url) }
     }
 
@@ -291,7 +287,6 @@ class RebornTrans : HttpSource() {
         var token: String? = null
         var webView: WebView? = null
 
-        // WebView must be created on the main thread
         mainHandler.post {
             val wv = WebView(context)
             webView = wv
@@ -304,39 +299,25 @@ class RebornTrans : HttpSource() {
                 object : Any() {
                     @JavascriptInterface
                     fun onToken(t: String) {
-                        Log.d(TAG, "episodeId=$episodeId bridge.onToken len=${t.length}")
                         if (token == null) {
                             token = t
                             latch.countDown()
                         }
                     }
 
-                    @JavascriptInterface
-                    fun onLog(msg: String) {
-                        Log.d(TAG, "episodeId=$episodeId JS: $msg")
-                    }
+                    @JavascriptInterface fun onLog(msg: String) {}
                 },
                 "TachiyomiRT",
             )
 
             wv.webViewClient =
                 object : WebViewClient() {
-                    // shouldInterceptRequest runs on a background thread — no handler.post
-                    // needed,
-                    // but we cannot call evaluateJavascript here (requires main thread).
-                    // Instead use onPageFinished which is always on main thread.
                     override fun shouldInterceptRequest(
                         view: WebView,
                         request: WebResourceRequest,
-                    ): WebResourceResponse? {
-                        Log.d(TAG, "episodeId=$episodeId intercept: ${request.url}")
-                        return null
-                    }
+                    ): WebResourceResponse? = null
 
                     override fun onPageFinished(view: WebView, pageUrl: String) {
-                        // onPageFinished is called on the main thread — safe to
-                        // evaluateJavascript
-                        Log.d(TAG, "episodeId=$episodeId onPageFinished: $pageUrl")
                         view.evaluateJavascript(FETCH_INTERCEPT_JS, null)
                     }
 
@@ -346,29 +327,18 @@ class RebornTrans : HttpSource() {
                         errorCode: Int,
                         description: String,
                         failingUrl: String,
-                    ) {
-                        Log.e(
-                            TAG,
-                            "episodeId=$episodeId WebView error $errorCode '$description' @ $failingUrl",
-                        )
-                    }
+                    ) {}
                 }
 
-            Log.d(TAG, "episodeId=$episodeId WebView.loadUrl($url)")
             wv.loadUrl(url)
         }
 
         val completed = latch.await(WEBVIEW_TIMEOUT, TimeUnit.SECONDS)
-        Log.d(
-            TAG,
-            "episodeId=$episodeId latch completed=$completed token=${if (token != null) "ok(${token?.length})" else "null"}",
-        )
 
         mainHandler.post {
             webView?.stopLoading()
             webView?.destroy()
             webView = null
-            Log.d(TAG, "episodeId=$episodeId WebView destroyed")
         }
 
         return token
@@ -377,6 +347,4 @@ class RebornTrans : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
-
-    private fun parseDate(text: String): Long = runCatching { dateFormat.parse(text)?.time }.getOrNull() ?: 0L
 }
