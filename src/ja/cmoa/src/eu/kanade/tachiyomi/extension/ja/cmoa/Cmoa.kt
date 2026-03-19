@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,8 +16,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -67,7 +70,7 @@ class Cmoa :
                 setUrlWithoutDomain(id)
             }
         }
-        val hasNextPage = document.selectFirst("li.next a") != null
+        val hasNextPage = document.selectFirst("li.next:not(.nopage)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -88,11 +91,28 @@ class Cmoa :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/result".toHttpUrl().newBuilder()
-            .addQueryParameter("word", query)
-            .addQueryParameter("sort", "10")
-            .addQueryParameter("page", page.toString())
-            .build()
+        fun Builder.addFilter(param: String, filter: Filter.Text) = filter.state.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
+        fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
+        fun Builder.addFilter(param: String, filter: Filter.CheckBox) = filter.state.takeIf { it }?.let { addQueryParameter(param, "1") }
+
+        val url = "$baseUrl/search/result".toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) addQueryParameter("word", query)
+            addFilter("title_nm", filters.firstInstance<TitleFilter>())
+            addFilter("author_nm", filters.firstInstance<AuthorFilter>())
+            addFilter("magazine_nm", filters.firstInstance<MagazineFilter>())
+            addFilter("publisher_nm", filters.firstInstance<PublisherFilter>())
+            addFilter("titletag_nm", filters.firstInstance<TitleTagFilter>())
+            addFilter("genre_id", filters.firstInstance<GenreFilter>())
+            addFilter("point", filters.firstInstance<PriceFilter>())
+            addFilter("review", filters.firstInstance<ReviewFilter>())
+            addFilter("sort", filters.firstInstance<SortFilter>())
+            addFilter("free_cam_flg", filters.firstInstance<FreeFilter>())
+            addFilter("sample_up_flg", filters.firstInstance<SampleFilter>())
+            addFilter("campaign_flg", filters.firstInstance<CampaignFilter>())
+            addFilter("newest_flg", filters.firstInstance<NewestFilter>())
+            addFilter("complete_flg", filters.firstInstance<CompleteFilter>())
+            addQueryParameter("page", page.toString())
+        }.build()
         return GET(url, headers)
     }
 
@@ -175,6 +195,29 @@ class Cmoa :
         }
         throw Exception("Log in via WebView and purchase this product to read.")
     }
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Note: Search and active filters are applied together"),
+        Filter.Header("Note: Novels are not supported!"),
+        TitleFilter(),
+        AuthorFilter(),
+        MagazineFilter(),
+        PublisherFilter(),
+        TitleTagFilter(),
+        GenreFilter(),
+        PriceFilter(),
+        ReviewFilter(),
+        SortFilter(),
+        Filter.Separator(),
+        Filter.Header("お得（複数選択可）"),
+        FreeFilter(),
+        SampleFilter(),
+        CampaignFilter(),
+        Filter.Separator(),
+        Filter.Header("作品の条件（複数選択可）"),
+        NewestFilter(),
+        CompleteFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
