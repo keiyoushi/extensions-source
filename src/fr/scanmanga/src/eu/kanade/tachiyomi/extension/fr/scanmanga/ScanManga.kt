@@ -188,7 +188,7 @@ class ScanManga :
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
         val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
             ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
 
@@ -249,7 +249,7 @@ class ScanManga :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
+        val packedScript = document.selectFirst("script:containsData(eval\\(function\\()")!!.data()
 
         val unpackedScript = decodeHunter(packedScript)
         val parametersRegex = Regex("""sml = '([^']+)';\n?.*var sme = '([^']+)'""")
