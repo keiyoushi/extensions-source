@@ -144,7 +144,7 @@ class RebornTrans : HttpSource() {
         val mangas =
             doc.select("a.manga-card").map { el ->
                 SManga.create().apply {
-                    title = el.selectFirst("h3")!!.text().trim()
+                    title = el.selectFirst("h3")!!.text()
                     setUrlWithoutDomain(el.attr("abs:href"))
                     thumbnail_url = el.selectFirst("img")?.absUrl("src")
                 }
