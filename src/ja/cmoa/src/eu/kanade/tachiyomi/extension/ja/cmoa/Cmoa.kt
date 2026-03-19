@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.cmoa
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +15,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -19,7 +24,9 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Cmoa : HttpSource() {
+class Cmoa :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "C'moA"
     private val domain = "cmoa.jp"
     override val baseUrl = "https://www.$domain"
@@ -28,6 +35,7 @@ class Cmoa : HttpSource() {
 
     private val json = Injekt.get<Json>()
     private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
@@ -37,6 +45,7 @@ class Cmoa : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        // load desktop selectors
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
 
     override fun popularMangaRequest(page: Int): Request {
@@ -110,6 +119,7 @@ class Cmoa : HttpSource() {
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
         var page = 1
 
@@ -120,7 +130,7 @@ class Cmoa : HttpSource() {
 
             val mangaTitle = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
 
-            chapters += document.select("ul.title_vol_vox_vols li").map {
+            chapters += document.select("ul.title_vol_vox_vols li").mapNotNull {
                 SChapter.create().apply {
                     val chapterUrl = it.selectFirst("div.title_vol_btn_box_w a[href*=content_id]")
                         ?.absUrl("href")
@@ -135,6 +145,8 @@ class Cmoa : HttpSource() {
                     val hasFreeOrOwned = it.selectFirst("div.GA_free.btn, div.title_vol_btn_box_w a[href*=browserviewer]") != null
                     val hasPreview = !hasFreeOrOwned && it.selectFirst("div.title_vol_each_free_btn.GA_free") != null
                     val isLocked = !hasFreeOrOwned && it.selectFirst("div.title_vol_btn_box_w a.cart_into_btn, div.title_vol_btn_box_w a.auto_buy_btn_s") != null
+
+                    if (hideLocked && (isLocked || hasPreview)) return@mapNotNull null
 
                     name = when {
                         hasFreeOrOwned -> rawName
@@ -164,12 +176,21 @@ class Cmoa : HttpSource() {
         throw Exception("Log in via WebView and purchase this product to read.")
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     // Unsupported
     override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
         private val TITLE_REGEX = Regex("(?:(?<=\\s|】)(第?\\d+巻|第?\\d+話|\\d+(?=\\s*$))|（[０-９0-9]+）|【第?\\d+[巻話]】).*$")
     }
 }
