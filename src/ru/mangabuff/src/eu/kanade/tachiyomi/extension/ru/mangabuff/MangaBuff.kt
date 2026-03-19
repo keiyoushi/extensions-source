@@ -263,6 +263,8 @@ class MangaBuff : ParsedHttpSource() {
         date_upload = runCatching {
             dateFormat.parse(element.selectFirst(".chapters__add-date")!!.text())!!.time
         }.getOrDefault(0L)
+        chapter_number = element.select(".chapters__value").text()
+            .substringAfter(" ").toFloatOrNull() ?: -1f
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
