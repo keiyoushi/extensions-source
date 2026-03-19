@@ -3,7 +3,7 @@ ext {
     extClass = '.Comicazen'
     themePkg = 'comicaso'
     baseUrl = 'https://comicazen.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
