@@ -81,7 +81,7 @@ class ChapterDto(
     private val number: Float,
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String = "",
-    @SerialName("is_premium") val isPremium: Boolean = false,
+    @SerialName("is_locked") val isLocked: Boolean = false,
     val pages: List<PageDto>? = emptyList(),
     @SerialName("series_slug") private val seriesSlug: String? = null,
 ) {
@@ -89,7 +89,7 @@ class ChapterDto(
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"
         name = buildString {
-            if (isPremium) append("🔒 ")
+            if (isLocked) append("🔒 ")
             append("Chapter $numberStr")
             title?.let { append(" - $it") }
         }

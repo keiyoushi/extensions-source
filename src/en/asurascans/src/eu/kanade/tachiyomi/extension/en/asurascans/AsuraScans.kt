@@ -134,7 +134,7 @@ class AsuraScans :
         val hidePremium = preferences.hidePremiumChapters()
 
         return chaptersData.data.orEmpty()
-            .filterNot { hidePremium && it.isPremium }
+            .filterNot { hidePremium && it.isLocked }
             .map { it.toSChapter() }
     }
 
