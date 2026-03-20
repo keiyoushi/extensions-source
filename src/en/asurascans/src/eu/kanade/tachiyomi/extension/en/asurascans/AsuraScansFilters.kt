@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.asurascans
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class Genre(title: String, val id: Int) : Filter.CheckBox(title)
+class Genre(title: String, val value: String) : Filter.CheckBox(title)
 class GenreFilter(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
 
 class StatusFilter(title: String, statuses: List<Pair<String, String>>) : UriPartFilter(title, statuses)
