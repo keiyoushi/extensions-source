@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -47,7 +48,7 @@ class MangaDto(
         thumbnail_url = cover
         author = this@MangaDto.author
         artist = this@MangaDto.artist
-        description = this@MangaDto.description
+        description = this@MangaDto.description?.let { Jsoup.parseBodyFragment(it) }?.text()
         genre = genres?.joinToString { it.name }
         status = parseStatus()
     }
