@@ -3,23 +3,17 @@ package eu.kanade.tachiyomi.extension.id.mikoroku
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Request
 import okhttp3.Response
 
-class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
+class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.top", "id") {
 
-    // ============================== Popular ===============================
-    override val popularMangaSelector = "div.PopularPosts div.grid > *"
-    override val popularMangaSelectorTitle = "figcaption a, .post-title a"
-    override val popularMangaSelectorUrl = "figcaption a, .post-title a"
+    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    // ============================== Filters ===============================
     override val hasFilters = true
-
-    // The source actually has both, but they return no result, so its useless.
     override val hasLanguageFilter = false
     override val hasTypeFilter = false
 
@@ -27,6 +21,8 @@ class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
         Status("Semua", ""),
         Status("Ongoing", "Ongoing"),
         Status("Completed", "Completed"),
+        Status("Hiatus", "Hiatus"),
+        Status("Dropped", "Dropped"),
     )
 
     override fun getGenreList() = listOf(
@@ -36,14 +32,12 @@ class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
         Genre("Dark Fantasy", "Dark Fantasy"),
         Genre("Drama", "Drama"),
         Genre("Fantasy", "Fantasy"),
-        Genre("Harem", "H4rem"),
         Genre("Historical", "Historical"),
         Genre("Horror", "Horror"),
         Genre("Isekai", "Isekai"),
         Genre("Magic", "Magic"),
         Genre("Mecha", "Mecha"),
         Genre("Military", "Military"),
-        Genre("Monsters", "Monsters"),
         Genre("Mystery", "Mystery"),
         Genre("Psychological", "Psychological"),
         Genre("Romance", "Romance"),
@@ -57,25 +51,39 @@ class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.my.id", "id") {
         Genre("Tragedy", "Tragedy"),
     )
 
-    // =========================== Manga Details ============================
-    override val mangaDetailsSelectorGenres = "div.mt-15 > a[rel=tag]"
-
-    // ============================ Chapter List ============================
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        return document.select("div#chapterContainer a.chap-btn").map { element ->
-            SChapter.create().apply {
-                name = element.selectFirst(".chap-num")?.text() ?: element.text()
-                url = element.attr("href").substringAfter(baseUrl)
-            }
+        val header = document.selectFirst("header[itemprop=mainEntity]")
+            ?: document.selectFirst("header.bg-white")!!
+
+        return SManga.create().apply {
+            thumbnail_url = header.selectFirst("img.thumb")?.attr("abs:src")
+            title = header.selectFirst("h1[itemprop=name]")?.text()!!
+            status = parseStatus(header.selectFirst("span[data-status]")?.text()!!)
+            description = document.selectFirst("#synopsis")?.ownText()?.trim()
+            author = document.select("#extra-info .y6x11p")
+                .firstOrNull { it.ownText().contains("Author", ignoreCase = true) }
+                ?.selectFirst("span.dt")?.text()
         }
     }
 
-    // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url
-        return GET(url, headers)
-    }
+    override val chapterCategory: String = "Chapter"
 
-    override val pageListSelector = "div.separator"
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val images = when {
+            document.selectFirst("div.check-box") != null ->
+                document.select("div.check-box div.separator img[src]")
+            document.selectFirst("div[data=imageProtection]") != null ->
+                document.select("div[data=imageProtection] div.separator img[src]")
+            document.selectFirst("#post-body div.separator") != null ->
+                document.select("#post-body div.separator img[src]")
+            else ->
+                document.select(".post-body div.separator img[src]")
+        }
+
+        return images.mapIndexed { index, img ->
+            Page(index, imageUrl = img.attr("abs:src"))
+        }
+    }
 }
