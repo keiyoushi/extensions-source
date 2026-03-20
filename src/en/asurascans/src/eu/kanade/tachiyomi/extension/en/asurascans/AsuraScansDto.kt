@@ -11,7 +11,7 @@ import java.util.TimeZone
 
 @Serializable
 class DataDto<T>(
-    val data: T,
+    val data: T? = null,
     val meta: MetaDto? = null,
 )
 
@@ -56,7 +56,7 @@ class MangaDto(
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
         "hiatus" -> SManga.ON_HIATUS
-        "cancelled" -> SManga.CANCELLED
+        "dropped" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 }

@@ -96,12 +96,16 @@ class AsuraScans :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<DataDto<List<MangaDto>>>()
-        val mangas = result.data.map { it.toSManga() }
+        val mangas = result.data.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, result.meta!!.hasMore)
     }
 
     override fun getFilterList(): FilterList = FilterList(
         SortFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        GenresFilter(),
+        MinChaptersFilter(),
     )
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}".replace("/series/", "/comics/")
@@ -129,7 +133,7 @@ class AsuraScans :
         val chaptersData = response.parseAs<DataDto<List<ChapterDto>>>()
         val hidePremium = preferences.hidePremiumChapters()
 
-        return chaptersData.data
+        return chaptersData.data.orEmpty()
             .filterNot { hidePremium && it.isPremium }
             .map { it.toSChapter() }
     }
@@ -142,7 +146,7 @@ class AsuraScans :
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterData = response.parseAs<DataDto<ChapterWrapperDto>>().data
-        return chapterData.chapter.pages.orEmpty().mapIndexed { index, pageDto ->
+        return chapterData!!.chapter.pages.orEmpty().mapIndexed { index, pageDto ->
             Page(index, imageUrl = pageDto.url)
         }
     }
