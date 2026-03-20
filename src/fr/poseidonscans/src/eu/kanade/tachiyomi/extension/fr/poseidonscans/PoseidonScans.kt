@@ -80,11 +80,7 @@ class PoseidonScans :
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/popular?limit=16&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val apiResponse = try {
-            response.parseAs<LatestApiResponse>()
-        } catch (e: Exception) {
-            return MangasPage(emptyList(), false)
-        }
+        val apiResponse = response.parseAs<LatestApiResponse>()
 
         val mangas = apiResponse.data.mapNotNull { apiManga ->
             if (apiManga.slug.isBlank()) {
