@@ -144,6 +144,24 @@ abstract class LibGroup(
 
     @SuppressLint("ApplySharedPref")
     private fun loadToken(): AuthToken? {
+        // Try to get manually configured token from preferences
+        val manualToken = preferences.getString("bearer_token", "")
+        val userId = preferences.getString("user_id", "")
+        val expiresIn = preferences.getString("expires_in", "3600000")?.toLongOrNull() ?: 3600000
+
+        if (!manualToken.isNullOrBlank()) {
+            return AuthToken(
+                auth = AuthToken.Auth(
+                    id = userId?.toIntOrNull() ?: 0,
+                ),
+                token = AuthToken.Token(
+                    timestamp = System.currentTimeMillis(),
+                    expiresIn = expiresIn,
+                    tokenType = "Bearer",
+                    accessToken = manualToken,
+                ),
+            )
+        }
         try {
             var token = preferences.getString(TOKEN_STORE, "")!!.parseAs<AuthToken>()
             if (token.isExpired() || !isUserTokenValid(token.getToken())) {
@@ -670,12 +688,67 @@ abstract class LibGroup(
             }
         }
 
+        // Authentication fields
+        val bearerTokenPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = "bearer_token"
+            title = "Bearer Token"
+            summary = "Токен авторизации (оставьте пустым для автоматического получения)"
+            dialogTitle = "Введите Bearer Token"
+            setDefaultValue("")
+        }
+
+        val userIdPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = "user_id"
+            title = "User ID"
+            summary = "ID пользователя (оставьте пустым для автоматического получения)"
+            dialogTitle = "Введите User ID"
+            setDefaultValue("")
+        }
+
+        val expiresInPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = "expires_in"
+            title = "Expires In (ms)"
+            summary = "Время жизни токена в миллисекундах (по умолчанию 3600000)"
+            dialogTitle = "Введите время жизни токена"
+            setDefaultValue("3600000")
+        }
+
+        val clearAuthPref = androidx.preference.CheckBoxPreference(screen.context).apply {
+            key = "clear_auth"
+            title = "Очистить данные аутентификации"
+            summary = "Отметьте, чтобы очистить сохраненные токены"
+            setOnPreferenceChangeListener { _, isChecked ->
+                if (isChecked == true) {
+                    preferences.edit()
+                        .remove("bearer_token")
+                        .remove("user_id")
+                        .remove("expires_in")
+                        .apply()
+
+                    // Also clear the main preferences
+                    preferences.edit()
+                        .remove(TOKEN_STORE)
+                        .apply()
+
+                    Toast.makeText(screen.context, "Данные аутентификации очищены", Toast.LENGTH_LONG).show()
+
+                    // Uncheck immediately
+                    setChecked(false)
+                }
+                true
+            }
+        }
+
         screen.addPreference(serverPref)
         screen.addPreference(sortingPref)
         screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates()))
         screen.addPreference(scanlatorUsername)
         screen.addPreference(titleLanguagePref)
         screen.addPreference(domainApiPref)
+        screen.addPreference(bearerTokenPref)
+        screen.addPreference(userIdPref)
+        screen.addPreference(expiresInPref)
+        screen.addPreference(clearAuthPref)
     }
     private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
         key = title
