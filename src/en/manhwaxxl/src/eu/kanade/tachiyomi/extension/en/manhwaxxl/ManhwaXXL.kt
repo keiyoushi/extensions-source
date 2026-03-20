@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.manhwaxxl
 
+import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,22 +13,20 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class ManhwaXXL : ParsedHttpSource() {
+class ManhwaXXL :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val name = "Manhwa XXL"
 
@@ -39,19 +41,21 @@ class ManhwaXXL : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/hot-releases" + (if (page > 1) "/page/$page" else ""))
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/recommended" + (if (page > 1) "/page/$page" else ""))
 
-    override fun popularMangaSelector() = "a.comic-tmb"
+    override fun popularMangaSelector() = ".comic-card a"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         title = element.attr("title")
-        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun popularMangaNextPageSelector() = "ul.pagination li.active:not(:last-child)"
+    override fun popularMangaNextPageSelector() = "a[title=Next]"
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest" + (if (page > 1) "/page/$page" else ""))
 
@@ -87,12 +91,12 @@ class ManhwaXXL : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        author = document.selectFirst("div.comic-details__item_links span")?.ownText()
-        description = document.selectFirst("section#post-decription h2 + p")?.text()
-        genre = document.select("div.comic-details__item a[href*=genre]").joinToString { it.text() }
-        status = when (document.selectFirst("div.card h5")?.text()) {
-            "Completed" -> SManga.ONGOING
-            "Ongoing" -> SManga.COMPLETED
+        author = document.selectFirst("i[title=Artists] + span a")?.text()
+        description = document.selectFirst("#synopsisText")?.text()
+        genre = document.select(".genre-item").joinToString { it.text() }
+        status = when (document.selectFirst("i[title=Status]")?.text()?.lowercase()) {
+            "completed" -> SManga.ONGOING
+            "ongoing" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
     }
@@ -101,36 +105,44 @@ class ManhwaXXL : ParsedHttpSource() {
     // but we save a bunch of calls, since each page is like 12 chapters.
     override fun chapterListParse(response: Response): List<SChapter> {
         val detailsDocument = response.asJsoup()
-        val script = detailsDocument.selectFirst("script:containsData(post_id)")?.data()
+        val mangaId = detailsDocument.selectFirst("#post_manga_id")?.attr("value")
             ?: throw Exception("Failed to get chapter id")
-        val data = script.substringAfter("viewsCacheL10n = ").substringBefore(";")
-            .let { json.parseToJsonElement(it).jsonObject }
 
-        val form = FormBody.Builder().add("action", "baka_ajax").add("type", "get_chapters_list")
-            .add("id", data.getContent("post_id"))
-            .add("chapters_list_nonce", data.getContent("nonce")).build()
+        val form = FormBody.Builder()
+            .add("action", "baka_ajax")
+            .add("type", "load_chapters_paginated")
+            .add("parent_id", mangaId)
+            .add("per_page", "10000")
+            .add("order", "newest_first")
+            .build()
 
         val ajaxResponse = client.newCall(
             POST("$baseUrl/wp-admin/admin-ajax.php", headers, form),
         ).execute()
 
-        val jsonObject = json.decodeFromString<JsonObject>(ajaxResponse.body.string())
-        return jsonObject["data"]!!.jsonObject["chapters"]!!.jsonArray.map {
+        val jsonObject = json.decodeFromString<ChaptersHtmlDTO>(ajaxResponse.body.string())
+        val chapterDoc = Jsoup.parse(jsonObject.data.html)
+
+        return chapterDoc.select(".comic-card").mapNotNull { element ->
+            val link = element.selectFirst("a") ?: return@mapNotNull null
+            val isVip = element.selectFirst(".fa-crown") != null
+
+            if (isVip && preferences.getBoolean(HIDE_VIP_PREF, false)) {
+                return@mapNotNull null
+            }
+
             SChapter.create().apply {
-                setUrlWithoutDomain(it.getContent("link"))
-                name = it.getContent("title")
+                setUrlWithoutDomain(link.absUrl("href"))
+                name = (if (isVip) "🔒 " else "") + link.attr("title")
             }
         }
     }
-
-    private fun JsonElement?.getContent(key: String): String = this?.jsonObject?.get(key)?.jsonPrimitive?.content
-        ?: throw Exception("Key $key not found")
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> = document.select("section#viewer img").mapIndexed { i, it ->
+    override fun pageListParse(document: Document): List<Page> = document.select(".page-image").mapIndexed { i, it ->
         Page(i, imageUrl = it.absUrl("src"))
     }
 
@@ -140,6 +152,14 @@ class ManhwaXXL : ParsedHttpSource() {
         Filter.Header("Ignored if using text search"),
         GenreFilter(getGenreList()),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = HIDE_VIP_PREF
+            title = "Hide VIP chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
     private data class Genre(val name: String, val id: String) {
         override fun toString() = name
@@ -166,4 +186,8 @@ class ManhwaXXL : ParsedHttpSource() {
         Genre("Uncensore", "uncensore"),
         Genre("Webtoon", "webtoon"),
     )
+
+    companion object {
+        private const val HIDE_VIP_PREF = "hide_vip_chapters"
+    }
 }

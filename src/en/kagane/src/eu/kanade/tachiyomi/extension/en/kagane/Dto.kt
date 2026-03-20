@@ -82,10 +82,8 @@ class AlternateSeries(
 class DetailsDto(
     val title: String,
     val description: String?,
-    @SerialName("publication_status")
-    val publicationStatus: String,
     @SerialName("upload_status")
-    val uploadStatus: String,
+    val publicationStatus: String,
     val format: String?,
     @SerialName("source_id")
     val sourceId: String?,
@@ -97,6 +95,8 @@ class DetailsDto(
     val seriesAlternateTitles: List<AlternateTitle> = emptyList(),
     @SerialName("series_books")
     val seriesBooks: List<ChapterDto.Book> = emptyList(),
+    @SerialName("edition_info")
+    val editionInfo: String? = null,
 ) {
     @Serializable
     class SeriesStaff(
@@ -122,13 +122,22 @@ class DetailsDto(
         val label: String?,
     )
 
-    fun toSManga(sourceName: String? = null): SManga = SManga.create().apply {
+    fun toSManga(sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
+        val base = this@DetailsDto.title.trim()
+        val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
+        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition
         val desc = StringBuilder()
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
             desc.append(it.trim())
             desc.append("\n")
+        }
+
+        // Add source name
+        if (sourceName != null && this@DetailsDto.sourceId != null) {
+            if (desc.isNotEmpty()) desc.append("\n")
+            desc.append("Source: [$sourceName]($baseUrl/sources/${this@DetailsDto.sourceId})\n")
         }
 
         // Add alternate titles at the end
@@ -154,7 +163,10 @@ class DetailsDto(
         artist = artists
         author = authors.joinToString()
         description = desc.toString().trim()
-        genre = genres.joinToString { it.genreName }
+        genre = buildList {
+            this@DetailsDto.format?.takeIf { it.isNotBlank() }?.let { add(it) }
+            addAll(genres.map { it.genreName })
+        }.joinToString()
         status = this@DetailsDto.publicationStatus.toStatus()
     }
 
@@ -162,7 +174,7 @@ class DetailsDto(
         "ONGOING" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
         "HIATUS" -> SManga.ON_HIATUS
-        "CANCELLED" -> SManga.CANCELLED
+        "ABANDONED" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 }
@@ -206,7 +218,7 @@ class ChapterDto(
             return when (mode) {
                 "optional" -> {
                     when {
-                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Chapter $chapterNo"
+                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Ch.$chapterNo"
                         else -> trimmedTitle
                     }
                 }
@@ -214,13 +226,24 @@ class ChapterDto(
                 "always" -> {
                     when {
                         chapterNo.isNullOrBlank() -> trimmedTitle
-                        trimmedTitle.isEmpty() -> "Chapter $chapterNo"
-                        else -> "($chapterNo) $trimmedTitle"
+                        trimmedTitle.isEmpty() -> "Ch.$chapterNo"
+                        else -> "Ch.$chapterNo $trimmedTitle"
                     }
                 }
 
-                else -> {}
-            } as String
+                "vol_chapter" -> {
+                    val volPart = if (!volumeNo.isNullOrBlank()) "Vol.$volumeNo " else ""
+                    val chPart = if (!chapterNo.isNullOrBlank()) "Ch.$chapterNo" else ""
+                    val numPart = "$volPart$chPart".trim()
+                    when {
+                        numPart.isEmpty() -> trimmedTitle
+                        trimmedTitle.isEmpty() -> numPart
+                        else -> "$numPart $trimmedTitle"
+                    }
+                }
+
+                else -> trimmedTitle
+            }
         }
     }
 

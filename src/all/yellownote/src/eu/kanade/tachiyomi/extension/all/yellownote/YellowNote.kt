@@ -145,7 +145,6 @@ class YellowNote :
             .removeSuffix(".html")
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
-                chapter_number = 0F
                 setUrlWithoutDomain("$basePageUrl/$page.html")
                 name = "Page $page"
                 date_upload = uploadAt

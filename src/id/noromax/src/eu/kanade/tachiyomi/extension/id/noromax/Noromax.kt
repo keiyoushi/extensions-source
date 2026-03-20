@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 class Noromax :
     MangaThemesia(
         "Noromax",
-        "https://noromax01.my.id",
+        "https://noromax02.my.id",
         "id",
     ) {
 

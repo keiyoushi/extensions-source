@@ -10,9 +10,8 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.lib.randomua.getPrefCustomUA
-import keiyoushi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import okhttp3.FormBody
@@ -33,10 +32,6 @@ class MangaLivre :
     private val preferences by lazy { getPreferences() }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(2)
         .build()
 
@@ -49,6 +44,9 @@ class MangaLivre :
         .set("Cache-Control", "no-cache")
         .set("Pragma", "no-cache")
         .set("Upgrade-Insecure-Requests", "1")
+        .setRandomUserAgent()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"
 
@@ -77,7 +75,7 @@ class MangaLivre :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
 
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF

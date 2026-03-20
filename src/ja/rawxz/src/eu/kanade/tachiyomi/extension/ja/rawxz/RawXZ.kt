@@ -6,11 +6,12 @@ import java.util.Locale
 
 class RawXZ :
     Madara(
-        "RawXZ",
-        "https://rawxjp.com",
+        "RawJX",
+        "https://rawjx.net",
         "ja",
         dateFormat = SimpleDateFormat("M月 d, yyyy", Locale.ROOT),
     ) {
+    override val id = 7950551186567193810
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 }

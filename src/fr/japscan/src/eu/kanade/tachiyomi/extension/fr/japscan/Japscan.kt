@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
-import android.util.Base64
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -287,39 +286,16 @@ class Japscan :
     )
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        try {
-            val document = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute().asJsoup()
-            // Get only usable crypted b64
-            val atad = document.select("i[data-atad]").attr("data-atad").substring(7)
-            val mapping =
-                "M7HXtiwLKdpIBkEbQ2OaF8Sxmz1yGReU4q5DncgsT6jVA3Pfv0WuJ9YCZNhlor".reversed()
-            val reference =
-                "uGJ657yOSbZRtplgHEYPBwCqaxQIizDWmTLMsAeNocnX0d98rf4Kj1kvh3UFV2".reversed()
-            val decrypted =
-                atad.replace(Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)) { matchResult ->
-                    val char = matchResult.value[0]
-                    val index = reference.indexOf(char)
-                    (if (index != -1) mapping[index] else char).toString()
-                }
-            val fromB64 = String(Base64.decode(decrypted, Base64.DEFAULT)).parseAs<ChapterDetails>()
-            if (fromB64.imagesLink.isEmpty()) throw UnsupportedOperationException("Can't parse Images")
-            return Observable.just(
-                fromB64.imagesLink.mapIndexed { i, url ->
-                    Page(i, imageUrl = "$url?o=1")
-                },
-            )
-        } catch (e: Exception) {
-            return fallbackFetchPageList(chapter)
-        }
-    }
-
-    fun fallbackFetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
         var webView: WebView? = null
+        val request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
+        val pageContent = request.body.string()
+        val pValue = Regex("""p:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
+        val vValue = Regex("""v:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
 
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
@@ -376,7 +352,7 @@ class Japscan :
             .images
             .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
-                Page(i, imageUrl = url)
+                Page(i, imageUrl = "$url&$pValue=$vValue")
             }
 
         return Observable.just(images)

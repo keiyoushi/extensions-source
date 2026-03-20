@@ -2,8 +2,8 @@ ext {
     extName = 'Luvyaa'
     extClass = '.Luvyaa'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://luvyaa.id'
-    overrideVersionCode = 1
+    baseUrl = 'https://luvyaa.org'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

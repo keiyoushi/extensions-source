@@ -2,8 +2,8 @@ ext {
     extName = 'Tortuga Ceviri'
     extClass = '.TortugaCeviri'
     themePkg = 'madara'
-    baseUrl = 'https://tortuga-ceviri.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://tortugaceviri.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 

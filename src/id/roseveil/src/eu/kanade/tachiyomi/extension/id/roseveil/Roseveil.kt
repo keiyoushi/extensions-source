@@ -1,254 +1,215 @@
 package eu.kanade.tachiyomi.extension.id.roseveil
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import okhttp3.Response
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Roseveil :
-    Madara(
-        "Roseveil",
-        "https://roseveil.org",
-        "id",
-        SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-    ) {
-    override val mangaSubString = "comic"
+class Roseveil : HttpSource() {
+
+    // URL path change (/manga/ -> /comic/)
+    override val versionId = 2
+
+    override val name = "Roseveil"
+
+    override val baseUrl = "https://roseveil.org"
+
+    private val apiUrl = "https://api.roseveil.org/api"
+
+    override val lang = "id"
+
+    override val supportsLatest = true
+
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
+
+    override fun headersBuilder() = Headers.Builder()
+        .add("Referer", "$baseUrl/")
 
     // ============================== Popular & Latest ==============================
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$apiUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "COMIC")
+            addQueryParameter("limit", "20")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("sort", "views")
+            addQueryParameter("order", "desc")
+        }.build()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$mangaSubString/${searchPage(page)}?manga_order=views", headers)
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$mangaSubString/${searchPage(page)}?manga_order=latest", headers)
-
-    override fun popularMangaSelector() = "article"
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun popularMangaNextPageSelector() = ".next.page-numbers"
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.selectFirst("h3 a")!!.let {
-            setUrlWithoutDomain(it.attr("abs:href"))
-            title = it.text().trim()
-        }
-        thumbnail_url = imageFromElement(element.selectFirst("img")!!)
+        return GET(url, headers)
     }
 
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response)
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "COMIC")
+            addQueryParameter("limit", "20")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("sort", "new")
+            addQueryParameter("order", "desc")
+        }.build()
+
+        return GET(url, headers)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response)
+
+    // =============================== Search =======================================
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$apiUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "COMIC")
+            addQueryParameter("limit", "20")
+            addQueryParameter("page", page.toString())
+
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
+            }
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is StatusFilter -> {
+                        if (filter.toUriPart().isNotBlank()) {
+                            addQueryParameter("status", filter.toUriPart())
+                        }
+                    }
+                    is SortFilter -> {
+                        addQueryParameter("sort", filter.toUriPart())
+                    }
+                    is OrderFilter -> {
+                        addQueryParameter("order", filter.toUriPart())
+                    }
+                    is TypeFilter -> {
+                        if (filter.toUriPart().isNotBlank()) {
+                            addQueryParameter("subtype", filter.toUriPart())
+                        }
+                    }
+                    is GenreFilter -> {
+                        if (filter.toUriPart().isNotBlank()) {
+                            addQueryParameter("genre", filter.toUriPart())
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }.build()
+
+        return GET(url, headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage = parseMangaPage(response)
 
     // =============================== Manga Details ================================
-    override val mangaDetailsSelectorTitle = "h1.text-4xl"
-    override val mangaDetailsSelectorThumbnail = "div.lg\\:col-span-3 img.wp-post-image"
-    override val mangaDetailsSelectorDescription = ".tab-panel#panel-synopsis .prose"
-    override val mangaDetailsSelectorStatus = ".tw-status-badge .tw-label"
-    override val mangaDetailsSelectorAuthor = "a[href*='/author/']"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
 
-    override val seriesTypeSelector = ".flex:has(.fa-text-width) .inline-block"
-    override val altNameSelector = ".mb-2 .text-gray-400"
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series/comic/${manga.url}", headers)
+
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val data = response.parseAs<MangaDetailDto>()
+        title = data.title
+        author = data.author
+        artist = data.artist
+        description = data.synopsis
+        genre = data.genres.joinToString { it.name }
+        status = when (data.status?.uppercase()) {
+            "ONGOING" -> SManga.ONGOING
+            "COMPLETED" -> SManga.COMPLETED
+            "HIATUS" -> SManga.ON_HIATUS
+            "CANCELED" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = data.thumbnail
+        initialized = true
+    }
 
     // =============================== Chapters =====================================
-    override val useNewChapterEndpoint = false
-
-    override fun chapterListSelector() = "#lone-ch-list li.wp-manga-chapter"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.selectFirst("a")!!.let {
-            setUrlWithoutDomain(it.attr("abs:href"))
-            name = it.selectFirst("h3")?.text() ?: it.text()
-        }
-        date_upload = parseChapterDate(element.selectFirst("p")?.text())
+    override fun getChapterUrl(chapter: SChapter): String {
+        val parts = chapter.url.split("/")
+        return "$baseUrl/comic/${parts[0]}/chapter/${parts[2]}"
     }
 
-    override val chapterUrlSuffix = ""
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    // =============================== Page List ====================================
-    override val pageListParseSelector = ".reading-content .page-break img"
-
-    // =============================== Filters ======================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$mangaSubString/${searchPage(page)}".toHttpUrl().newBuilder()
-        url.addQueryParameter("manga_search", query)
-
-        filters.forEach { filter ->
-            when (filter) {
-                is OrderByFilter -> {
-                    url.addQueryParameter("manga_order", filter.toUriPart())
-                }
-
-                is StatusSelectFilter -> {
-                    if (filter.toUriPart().isNotBlank()) {
-                        url.addQueryParameter("manga_status", filter.toUriPart())
-                    }
-                }
-
-                is TypeSelectFilter -> {
-                    if (filter.toUriPart().isNotBlank()) {
-                        url.addQueryParameter("manga_type", filter.toUriPart())
-                    }
-                }
-
-                is TagSelectFilter -> {
-                    if (filter.toUriPart().isNotBlank()) {
-                        url.addQueryParameter("manga_tag", filter.toUriPart())
-                    }
-                }
-
-                is GenreSelectFilter -> {
-                    if (filter.toUriPart().isNotBlank()) {
-                        url.addQueryParameter("manga_genre", filter.toUriPart())
-                    }
-                }
-
-                is AuthorSelectFilter -> {
-                    if (filter.toUriPart().isNotBlank()) {
-                        url.addQueryParameter("manga_author", filter.toUriPart())
-                    }
-                }
-
-                else -> {}
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val data = response.parseAs<MangaDetailDto>()
+        val seriesSlug = data.slug
+        return data.units.map { unit ->
+            SChapter.create().apply {
+                url = "$seriesSlug/chapter/${unit.slug}"
+                name = "Chapter ${formatChapterNumber(unit.number)}"
+                chapter_number = unit.number.toFloatOrNull() ?: -1f
+                date_upload = dateFormat.tryParse(unit.date)
             }
         }
-        return GET(url.build(), headers)
     }
 
+    // =============================== Page List ====================================
+    override fun pageListRequest(chapter: SChapter): Request {
+        val parts = chapter.url.split("/")
+        val seriesSlug = parts[0]
+        val chapterSlug = parts[2]
+        return GET("$apiUrl/series/comic/$seriesSlug/chapter/$chapterSlug", headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val data = response.parseAs<PageListDto>()
+        return data.chapter.pages.map { page ->
+            Page(page.index - 1, "", page.url)
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .build()
+
+        return GET(page.imageUrl!!, newHeaders)
+    }
+
+    // =============================== Utilities ====================================
+    private fun parseMangaPage(response: Response): MangasPage {
+        val data = response.parseAs<SearchResponseDto>()
+        val mangas = data.data.map { item ->
+            SManga.create().apply {
+                url = item.slug
+                title = item.title
+                thumbnail_url = item.thumbnail
+            }
+        }
+        return MangasPage(mangas, data.page < data.totalPages)
+    }
+
+    private fun formatChapterNumber(number: String): String = number.toFloatOrNull()?.let {
+        chapterNumberFormatter.format(it)
+    } ?: number
+
+    private val chapterNumberFormatter = DecimalFormat("#.##", DecimalFormatSymbols(Locale.US))
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+
+    // =============================== Filters ======================================
     override fun getFilterList(): FilterList = FilterList(
-        AuthorSelectFilter("Translator", getAuthorList()),
-        OrderByFilter("Urutkan Berdasarkan", getOrderList()),
-        StatusSelectFilter("Status", getStatusList()),
-        TypeSelectFilter("Tipe", getTypeList()),
-        TagSelectFilter("Tags", getTagList()),
-        GenreSelectFilter("Genre", getGenreList()),
+        SortFilter(),
+        OrderFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        GenreFilter(),
     )
-
-    private fun getOrderList() = listOf(
-        Pair("Latest Update", "latest"),
-        Pair("Most Viewed", "views"),
-        Pair("Best Rating", "rating"),
-        Pair("A-Z", "title"),
-    )
-
-    private fun getStatusList() = listOf(
-        Pair("Semua", ""),
-        Pair("OnGoing", "on-going"),
-        Pair("Completed", "end"),
-        Pair("On Hold", "on-hold"),
-        Pair("Canceled", "canceled"),
-    )
-
-    private fun getTypeList() = listOf(
-        Pair("Semua", ""),
-        Pair("Manga", "manga"),
-        Pair("Manhwa", "manhwa"),
-        Pair("Manhua", "manhua"),
-        Pair("Comic", "comic"),
-    )
-
-    private fun getAuthorList() = listOf(
-        Pair("Semua", ""),
-        Pair("Anatery", "43"),
-        Pair("Arata", "659"),
-        Pair("arhzell", "710"),
-        Pair("Ayou Rare", "52"),
-        Pair("Bang Banggu", "47"),
-        Pair("Black Swann", "48"),
-        Pair("Curry Tale", "49"),
-        Pair("Dark Espresso", "898"),
-        Pair("Edelweis 20", "81"),
-        Pair("Haju_Otakukomik", "727"),
-        Pair("hazelqueen", "690"),
-        Pair("kazuu_", "45"),
-        Pair("letaak", "590"),
-        Pair("Loviatar", "688"),
-        Pair("Mapledesu", "3"),
-        Pair("Pandy Cat", "44"),
-        Pair("rose", "2"),
-        Pair("Roseveil", "1"),
-        Pair("Shana", "784"),
-        Pair("sted", "961"),
-        Pair("whatisthisac", "774"),
-        Pair("Woni", "108"),
-        Pair("Xiao Chen", "46"),
-    )
-
-    private fun getTagList() = listOf(
-        Pair("Semua", ""),
-        Pair("Historical", "historical"),
-        Pair("Korea", "korea"),
-        Pair("Korean", "korean"),
-        Pair("Manga", "manga"),
-        Pair("Manhua", "manhua"),
-        Pair("Manhwa", "manhwa"),
-        Pair("Mirror", "mirror"),
-        Pair("Novel", "novel"),
-        Pair("Project", "project"),
-        Pair("Romance", "romance"),
-    )
-
-    private fun getGenreList() = listOf(
-        Pair("Semua", ""),
-        Pair("Action", "action"),
-        Pair("Adult", "adult"),
-        Pair("Adventure", "adventure"),
-        Pair("Animals", "animals"),
-        Pair("Boys Love", "boys-love"),
-        Pair("Comedy", "comedy"),
-        Pair("Demon", "demon"),
-        Pair("Drama", "drama"),
-        Pair("Ecchi", "ecchi"),
-        Pair("Fantasy", "fantasy"),
-        Pair("Game", "game"),
-        Pair("Gender Bender", "gender-bender"),
-        Pair("Harem", "harem"),
-        Pair("Historical", "historical"),
-        Pair("Horror", "horror"),
-        Pair("Isekai", "isekai"),
-        Pair("Josei", "josei"),
-        Pair("Magic", "magic"),
-        Pair("Martial Arts", "martial-arts"),
-        Pair("Mature", "mature"),
-        Pair("Medical", "medical"),
-        Pair("Mirror", "mirror"),
-        Pair("Mystery", "mystery"),
-        Pair("Office Workers", "office-workers"),
-        Pair("Project", "project"),
-        Pair("Psychological", "psychological"),
-        Pair("Regression", "regression"),
-        Pair("Reincarnation", "reincarnation"),
-        Pair("Revenge", "revenge"),
-        Pair("Reverse Harem", "reverse-harem"),
-        Pair("Romance", "romance"),
-        Pair("Royalty", "royalty"),
-        Pair("School Life", "school-life"),
-        Pair("Sci-Fi", "sci-fi"),
-        Pair("Seinen", "seinen"),
-        Pair("Shoujo", "shoujo"),
-        Pair("Shounen", "shounen"),
-        Pair("Slice of Life", "slice-of-life"),
-        Pair("Smut", "smut"),
-        Pair("Super Power", "super-power"),
-        Pair("Supernatural", "supernatural"),
-        Pair("Survival", "survival"),
-        Pair("Thriller", "thriller"),
-        Pair("Transmigration", "transmigration"),
-        Pair("Yaoi", "yaoi"),
-    )
-
-    private open class AuthorSelectFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options.toTypedArray())
-    private open class StatusSelectFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options.toTypedArray())
-    private open class TypeSelectFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options.toTypedArray())
-    private open class TagSelectFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options.toTypedArray())
-    private open class GenreSelectFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options.toTypedArray())
-
-    override fun parseGenres(document: Document): List<Genre> = emptyList()
 }

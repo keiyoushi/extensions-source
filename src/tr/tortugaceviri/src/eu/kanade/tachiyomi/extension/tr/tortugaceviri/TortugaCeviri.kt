@@ -7,7 +7,7 @@ import java.util.Locale
 class TortugaCeviri :
     Madara(
         "Tortuga Ceviri",
-        "https://tortuga-ceviri.com",
+        "https://tortugaceviri.com",
         "tr",
         SimpleDateFormat("MMM d, yyy", Locale("tr")),
     ) {

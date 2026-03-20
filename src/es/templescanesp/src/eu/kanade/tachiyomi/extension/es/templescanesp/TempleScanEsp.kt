@@ -28,7 +28,7 @@ import java.util.Locale
 class TempleScanEsp :
     Madara(
         "Temple Scan",
-        "https://aedexnox.kawi.lat",
+        "https://aedexnox.pwhost.xyz",
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),

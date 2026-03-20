@@ -23,7 +23,7 @@ class ChapterListDto(
 
 @Serializable
 class ChapterDto(
-    private val id: String,
+    val id: String,
     private val title: String? = null,
     private val chapter: String? = null,
     private val volume: String? = null,
@@ -31,7 +31,7 @@ class ChapterDto(
     val language: String = "",
     private val data: List<PageData>? = null,
     @SerialName("data_optimized") private val dataOptimized: List<PageData>? = null,
-    private val relationships: ChapterRelationshipsDto? = null,
+    val relationships: ChapterRelationshipsDto? = null,
 ) {
     @Contextual
     private val helper = WeebDexHelper()
@@ -70,7 +70,7 @@ class ChapterDto(
             name = Parser.unescapeEntities(chapterName.joinToString(" "), false)
             chapter_number = helper.parseChapterNumber(chapter)
             date_upload = helper.parseDate(publishedAt)
-            scanlator = relationships?.groups?.joinToString(", ") { it.name }
+            scanlator = relationships?.groups?.joinToString(", ") { it.name }?.takeIf { it.isNotBlank() } ?: "No Group"
         }
     }
     fun toPageList(dataSaver: Boolean): List<Page> {
@@ -96,6 +96,7 @@ class ChapterDto(
 @Serializable
 class ChapterRelationshipsDto(
     val groups: List<NamedEntity> = emptyList(),
+    val manga: MangaDto? = null,
 )
 
 @Serializable

@@ -7,7 +7,7 @@ import java.util.Locale
 class NTRManga :
     MangaThemesia(
         "NTR-Manga",
-        "https://www.ntr-manga.com",
+        "https://www.ntr-manga.net",
         "th",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
     )

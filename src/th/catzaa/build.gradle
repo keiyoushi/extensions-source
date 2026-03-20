@@ -2,8 +2,8 @@ ext {
     extName = 'Catzaa'
     extClass = '.Catzaa'
     themePkg = 'madara'
-    baseUrl = 'https://catzaa.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://catzaa.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

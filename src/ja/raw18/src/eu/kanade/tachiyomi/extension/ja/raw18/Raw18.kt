@@ -13,7 +13,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Raw18 : WPComics("Raw18", "https://raw18.net", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
+class Raw18 : WPComics("Raw18", "https://raw18.rest", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
     override val searchPath = "search/manga"
 
     override val genresUrlDelimiter = "="

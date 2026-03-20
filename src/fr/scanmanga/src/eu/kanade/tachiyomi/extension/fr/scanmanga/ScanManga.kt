@@ -1,8 +1,17 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -18,9 +28,15 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
-class ScanManga : HttpSource() {
+class ScanManga :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Scan-Manga"
 
     override val baseUrl = "https://m.scan-manga.com"
@@ -30,13 +46,40 @@ class ScanManga : HttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
-        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36")
-        .set("X-Requested-With", "XMLHttpRequest")
+    protected val preferences by getPreferencesLazy()
+
+    override fun headersBuilder(): Headers.Builder {
+        val currentChromeVersion = super.headersBuilder().build().get("User-Agent")?.let {
+            Regex("Chrome/(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull()
+        } ?: 145
+
+        return Headers.Builder()
+//            .add(
+//                "sec-ch-ua",
+//                "\"Not:A-Brand\";v=\"99\", \"Google Chrome\";v=\"$currentChromeVersion\", \"Chromium\";v=\"$currentChromeVersion\"",
+//            )
+//            .add("sec-ch-ua-mobile", "?1")
+//            .add("sec-ch-ua-platform", "\"Android\"")
+            .add("upgrade-insecure-requests", "1")
+            .add(
+                "user-agent",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$currentChromeVersion.0.0.0 Mobile Safari/537.36",
+            )
+            .add(
+                "accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            )
+            .add("sec-fetch-site", "none")
+//            .add("sec-fetch-mode", "navigate")
+//            .add("sec-fetch-user", "?1")
+//            .add("sec-fetch-dest", "document")
+            .add("accept-language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+//            .add("priority", "u=0, i")
+            .add("X-Requested-With", "")
+    }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
@@ -145,7 +188,7 @@ class ScanManga : HttpSource() {
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
         val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
             ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
 
@@ -174,7 +217,13 @@ class ScanManga : HttpSource() {
         }
     }
 
+    private val multipleSpaces = Regex("""\s+""")
+
     private fun dataAPI(data: String, idc: Int): UrlPayload {
+        if (data.contains("error")) {
+            error("Received error response from data API: ${multipleSpaces.replace(data, " ").trim()}")
+        }
+
         // Step 1: Base64 decode the input
         val compressedBytes = Base64.decode(data, Base64.NO_WRAP or Base64.NO_PADDING)
 
@@ -200,7 +249,7 @@ class ScanManga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
+        val packedScript = document.selectFirst("script:containsData(eval\\(function\\()")!!.data()
 
         val unpackedScript = decodeHunter(packedScript)
         val parametersRegex = Regex("""sml = '([^']+)';\n?.*var sme = '([^']+)'""")
@@ -213,12 +262,12 @@ class ScanManga : HttpSource() {
             ?: error("Failed to extract chapter ID.")
 
         val mediaType = "application/json; charset=UTF-8".toMediaType()
-        val requestBody = """{"a":"$sme","b":"$sml"}"""
+        val requestBody = """{"a":"$sme","b":"$sml","c":"${getFingerprint()}"}"""
 
         val documentUrl = document.baseUri().toHttpUrl()
 
         val pageListRequest = POST(
-            "$baseUrl/api/lel/$chapterId.json",
+            "https://bqj.${baseUrl.toHttpUrl().topPrivateDomain()}/lel/$chapterId.json",
             headers.newBuilder()
                 .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
                 .add("Referer", documentUrl.toString())
@@ -247,5 +296,79 @@ class ScanManga : HttpSource() {
             .build()
 
         return GET(page.imageUrl!!, imgHeaders)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun getFingerprint(): String {
+        var currentValue = preferences.getString("gpu_renderer", null)
+
+        if (currentValue.isNullOrEmpty()) {
+            val latch = CountDownLatch(1)
+            var returnValue = "SUMK" // Default to "IC" if something goes wrong
+
+            Handler(Looper.getMainLooper()).post {
+                val webView = WebView(Injekt.get<Application>())
+                webView.settings.javaScriptEnabled = true
+
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        val script = """
+                        (function() {
+                            try {
+                                const canvas = document.createElement("canvas");
+                                const gl = canvas.getContext("webgl");
+                                const debugInfo = gl ? gl.getExtension("WEBGL_debug_renderer_info") : null;
+                                const gpu = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "IC";
+
+                                return btoa(gpu);
+                            } catch (e) {
+                                return btoa("IC");
+                            }
+                        })();
+                        """.trimIndent()
+
+                        view?.evaluateJavascript(script) {
+                            returnValue = it?.removeSurrounding("\"") ?: "SUMK" // btoa("IC") = "SUMK"
+                            view.stopLoading()
+                            view.destroy()
+                            latch.countDown()
+                        }
+                    }
+                }
+                webView.loadUrl("about:blank")
+            }
+
+            try {
+                latch.await(5, TimeUnit.SECONDS)
+            } catch (e: InterruptedException) {
+            }
+
+            val decodedValue = String(Base64.decode(returnValue, Base64.DEFAULT))
+
+            preferences.edit().putString("gpu_renderer", decodedValue).apply()
+            currentValue = decodedValue
+        }
+
+        return Base64.encodeToString(
+            """{"gpu":"$currentValue","connection":"cellular"}""".toByteArray(),
+            Base64.NO_WRAP,
+        )
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = "gpu_renderer"
+            title = "Unmasked GPU renderer"
+            summary =
+                "Set and cache your GPU renderer string here to bypass fingerprint-based blocking. You can find your GPU renderer by visiting a site like https://www.browserleaks.com/webgl. Make sure to enter the exact string as shown on the site, without any extra spaces or characters and use Google Chrome on Android."
+            setDefaultValue(null)
+            dialogTitle = "GPU Renderer"
+            dialogMessage =
+                "Enter your GPU renderer string here. This is used to bypass blocking based on WebGL fingerprinting. You can find your GPU renderer by visiting a site like https://www.browserleaks.com/webgl using Google Chrome on Android. Make sure to enter the exact string as shown on the site, without any extra spaces or characters."
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(key, newValue as String).commit()
+            }
+        }.also { screen.addPreference(it) }
     }
 }
