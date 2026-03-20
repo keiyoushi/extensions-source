@@ -1,138 +1,103 @@
 package eu.kanade.tachiyomi.extension.pt.mangotoons
 
-import eu.kanade.tachiyomi.source.model.Filter
-import okhttp3.HttpUrl
+import eu.kanade.tachiyomi.multisrc.mangotheme.MangoThemeTagFilterOption
 
-interface UrlQueryFilter {
-    fun addQueryParameter(url: HttpUrl.Builder)
-}
+internal typealias MangoToonsTagFilterOption = MangoThemeTagFilterOption
 
-class StatusFilter :
-    Filter.Select<String>("Status", statusPairs.map { it.first }.toTypedArray()),
-    UrlQueryFilter {
-    override fun addQueryParameter(url: HttpUrl.Builder) {
-        val value = statusPairs[state].second
-        if (value.isNotEmpty()) {
-            url.addQueryParameter("status_id", value)
-        }
-    }
+internal object MangoToonsFilters {
 
-    companion object {
-        private val statusPairs = arrayOf(
-            Pair("Todos", ""),
-            Pair("Ativo", "6"),
-            Pair("Cancelado", "4"),
-            Pair("Concluído", "3"),
-            Pair("Em Andamento", "1"),
-            Pair("Hiato", "5"),
-            Pair("Pausado", "2"),
-        )
-    }
-}
+    val statusOptions = arrayOf(
+        "Todos" to "",
+        "Ativo" to "6",
+        "Cancelado" to "4",
+        "Conclu\u00eddo" to "3",
+        "Em Andamento" to "1",
+        "Hiato" to "5",
+        "Pausado" to "2",
+    )
 
-class FormatFilter :
-    Filter.Select<String>("Formato", formatPairs.map { it.first }.toTypedArray()),
-    UrlQueryFilter {
-    override fun addQueryParameter(url: HttpUrl.Builder) {
-        val value = formatPairs[state].second
-        if (value.isNotEmpty()) {
-            url.addQueryParameter("formato_id", value)
-        }
-    }
+    val formatOptions = arrayOf(
+        "Todos" to "",
+        "Comic" to "20",
+        "Hentai" to "23",
+        "Manga" to "24",
+        "Manhua" to "17",
+        "Manhwa" to "25",
+        "Novel" to "18",
+        "Shoujo" to "19",
+        "Webtoon" to "26",
+        "Yaoi" to "21",
+        "Yuri" to "22",
+    )
 
-    companion object {
-        private val formatPairs = arrayOf(
-            Pair("Todos", ""),
-            Pair("Comic", "20"),
-            Pair("Hentai", "23"),
-            Pair("Manga", "24"),
-            Pair("Manhwa", "25"),
-            Pair("Novel", "18"),
-            Pair("Shoujo", "19"),
-            Pair("Webtoon", "26"),
-            Pair("Yaoi", "21"),
-            Pair("Yuri", "22"),
-        )
-    }
-}
-
-class TagCheckBox(name: String, val id: String) : Filter.CheckBox(name)
-
-class TagFilter :
-    Filter.Group<TagCheckBox>("Tags", tagsList),
-    UrlQueryFilter {
-    override fun addQueryParameter(url: HttpUrl.Builder) {
-        val tags = state.filter { it.state }.joinToString(",") { it.id }
-        if (tags.isNotEmpty()) {
-            url.addQueryParameter("tag_ids", tags)
-        }
-    }
-
-    companion object {
-        private val tagsList = listOf(
-            TagCheckBox("+18", "48"),
-            TagCheckBox("Ação", "2"),
-            TagCheckBox("Adulto", "64"),
-            TagCheckBox("Apocalipse", "33"),
-            TagCheckBox("Apocalíptico", "58"),
-            TagCheckBox("Artes Marciais", "24"),
-            TagCheckBox("Aventura", "3"),
-            TagCheckBox("Bullying", "60"),
-            TagCheckBox("Comédia", "6"),
-            TagCheckBox("Crime", "51"),
-            TagCheckBox("Culinaria", "28"),
-            TagCheckBox("Cultivo", "23"),
-            TagCheckBox("Demônios", "39"),
-            TagCheckBox("Drama", "7"),
-            TagCheckBox("Dungeon", "25"),
-            TagCheckBox("Ecchi", "42"),
-            TagCheckBox("Escolar", "56"),
-            TagCheckBox("Esportes", "38"),
-            TagCheckBox("Fantasia", "4"),
-            TagCheckBox("Fatia da Vida/Slice of Life", "41"),
-            TagCheckBox("Ficção Científica", "40"),
-            TagCheckBox("Finalizado", "55"),
-            TagCheckBox("Gore", "59"),
-            TagCheckBox("Harém", "44"),
-            TagCheckBox("Histórico", "11"),
-            TagCheckBox("Horror", "9"),
-            TagCheckBox("Isekai", "19"),
-            TagCheckBox("Jogo", "46"),
-            TagCheckBox("Josei", "17"),
-            TagCheckBox("Luta", "35"),
-            TagCheckBox("máfia", "36"),
-            TagCheckBox("Magia", "29"),
-            TagCheckBox("manhua", "45"),
-            TagCheckBox("Militar", "14"),
-            TagCheckBox("Mistério", "43"),
-            TagCheckBox("Moderno", "54"),
-            TagCheckBox("Monstros", "37"),
-            TagCheckBox("Murim", "31"),
-            TagCheckBox("Necromante", "32"),
-            TagCheckBox("One-shot", "18"),
-            TagCheckBox("Oneshot", "49"),
-            TagCheckBox("Policial", "52"),
-            TagCheckBox("Psicológico", "27"),
-            TagCheckBox("Reencarnação", "21"),
-            TagCheckBox("Regressão", "47"),
-            TagCheckBox("Retorno", "20"),
-            TagCheckBox("Romance", "5"),
-            TagCheckBox("Sci-Fi", "62"),
-            TagCheckBox("Seinen", "34"),
-            TagCheckBox("Shoujo", "16"),
-            TagCheckBox("Shounen", "15"),
-            TagCheckBox("Shounen Ai", "63"),
-            TagCheckBox("Sistema", "22"),
-            TagCheckBox("Slice of Life", "61"),
-            TagCheckBox("Sobrenatural", "13"),
-            TagCheckBox("SuperPoder", "30"),
-            TagCheckBox("Super Poderes", "57"),
-            TagCheckBox("Suspense", "10"),
-            TagCheckBox("Terror", "8"),
-            TagCheckBox("Tragédia", "26"),
-            TagCheckBox("Viagem no Tempo", "53"),
-            TagCheckBox("Vida escolar", "12"),
-            TagCheckBox("Yuri", "50"),
-        )
-    }
+    val tagOptions = listOf(
+        MangoToonsTagFilterOption("+18", "48"),
+        MangoToonsTagFilterOption("A\u00e7\u00e3o", "2"),
+        MangoToonsTagFilterOption("Adulto", "64"),
+        MangoToonsTagFilterOption("Alien\u00edgenas", "65"),
+        MangoToonsTagFilterOption("Apocalipse", "33"),
+        MangoToonsTagFilterOption("Apocal\u00edptico", "58"),
+        MangoToonsTagFilterOption("Artes Marciais", "24"),
+        MangoToonsTagFilterOption("Aventura", "3"),
+        MangoToonsTagFilterOption("Bullying", "60"),
+        MangoToonsTagFilterOption("Com\u00e9dia", "6"),
+        MangoToonsTagFilterOption("Crime", "51"),
+        MangoToonsTagFilterOption("Culinaria", "28"),
+        MangoToonsTagFilterOption("Cultivo", "23"),
+        MangoToonsTagFilterOption("Dem\u00f4nios", "39"),
+        MangoToonsTagFilterOption("Drama", "7"),
+        MangoToonsTagFilterOption("Dungeon", "25"),
+        MangoToonsTagFilterOption("Ecchi", "42"),
+        MangoToonsTagFilterOption("Escolar", "56"),
+        MangoToonsTagFilterOption("Esportes", "38"),
+        MangoToonsTagFilterOption("Fantasia", "4"),
+        MangoToonsTagFilterOption("Fatia da Vida/Slice of Life", "41"),
+        MangoToonsTagFilterOption("Fic\u00e7\u00e3o Cient\u00edfica", "40"),
+        MangoToonsTagFilterOption("Finalizado", "55"),
+        MangoToonsTagFilterOption("Gore", "59"),
+        MangoToonsTagFilterOption("Har\u00e9m", "44"),
+        MangoToonsTagFilterOption("Hist\u00f3rico", "11"),
+        MangoToonsTagFilterOption("Horror", "9"),
+        MangoToonsTagFilterOption("Isekai", "19"),
+        MangoToonsTagFilterOption("Jogo", "46"),
+        MangoToonsTagFilterOption("Jogos", "66"),
+        MangoToonsTagFilterOption("Josei", "17"),
+        MangoToonsTagFilterOption("Luta", "35"),
+        MangoToonsTagFilterOption("m\u00e1fia", "36"),
+        MangoToonsTagFilterOption("Magia", "29"),
+        MangoToonsTagFilterOption("manhua", "45"),
+        MangoToonsTagFilterOption("Manhwa", "67"),
+        MangoToonsTagFilterOption("Militar", "14"),
+        MangoToonsTagFilterOption("Mist\u00e9rio", "43"),
+        MangoToonsTagFilterOption("Moderno", "54"),
+        MangoToonsTagFilterOption("Monstros", "37"),
+        MangoToonsTagFilterOption("Murim", "31"),
+        MangoToonsTagFilterOption("Necromante", "32"),
+        MangoToonsTagFilterOption("One-shot", "18"),
+        MangoToonsTagFilterOption("Oneshot", "49"),
+        MangoToonsTagFilterOption("Policial", "52"),
+        MangoToonsTagFilterOption("P\u00f3s Apocal\u00edptico", "68"),
+        MangoToonsTagFilterOption("Psicol\u00f3gico", "27"),
+        MangoToonsTagFilterOption("Reencarna\u00e7\u00e3o", "21"),
+        MangoToonsTagFilterOption("Regress\u00e3o", "47"),
+        MangoToonsTagFilterOption("Retorno", "20"),
+        MangoToonsTagFilterOption("Romance", "5"),
+        MangoToonsTagFilterOption("Sci-Fi", "62"),
+        MangoToonsTagFilterOption("Seinen", "34"),
+        MangoToonsTagFilterOption("Shoujo", "16"),
+        MangoToonsTagFilterOption("Shounen", "15"),
+        MangoToonsTagFilterOption("Shounen Ai", "63"),
+        MangoToonsTagFilterOption("Sistema", "22"),
+        MangoToonsTagFilterOption("Slice of Life", "61"),
+        MangoToonsTagFilterOption("Sobrenatural", "13"),
+        MangoToonsTagFilterOption("SuperPoder", "30"),
+        MangoToonsTagFilterOption("Super Poderes", "57"),
+        MangoToonsTagFilterOption("Suspense", "10"),
+        MangoToonsTagFilterOption("Terror", "8"),
+        MangoToonsTagFilterOption("teste", "1"),
+        MangoToonsTagFilterOption("Trag\u00e9dia", "26"),
+        MangoToonsTagFilterOption("Viagem no Tempo", "53"),
+        MangoToonsTagFilterOption("Vida escolar", "12"),
+        MangoToonsTagFilterOption("Yuri", "50"),
+    )
 }
