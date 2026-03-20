@@ -117,7 +117,12 @@ class AsuraScans :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val mangaData = response.parseAs<MangaDetailsDto>()
+        val json = response.body.string()
+        val mangaData = run {
+            val wrapper = json.parseAs<DataDto<MangaDetailsDto>>()
+            wrapper.data ?: json.parseAs<MangaDetailsDto>()
+        }
+
         return mangaData.series.toSMangaDetails()
     }
 
