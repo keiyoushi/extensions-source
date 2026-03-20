@@ -88,11 +88,11 @@ class ChapterDto(
     fun toSChapter() = SChapter.create().apply {
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"
-        var chapterName = "Chapter $numberStr" + (title?.let { " - $it" } ?: "")
-        if (isPremium) {
-            chapterName = "🔒 $chapterName"
+        name = buildString {
+            if (isPremium) append("🔒 ")
+            append("Chapter $numberStr")
+            title?.let { append(" - $it") }
         }
-        name = chapterName
         date_upload = dateFormat.tryParse(createdAt)
     }
 }
