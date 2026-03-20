@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.manta
 
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -9,7 +10,13 @@ private val isoDate by lazy {
 }
 
 private inline val String?.timestamp: Long
-    get() = this?.substringBefore('.')?.let(isoDate::parse)?.time ?: 0L
+    get() = isoDate.tryParse(this?.substringBefore('.'))
+
+@Serializable
+data class MantaResponse<T>(
+    val data: T,
+    val status: Status? = null,
+)
 
 @Serializable
 data class Series<T : Any>(
@@ -58,7 +65,7 @@ data class Episode(
 
     override fun toString() = buildString {
         append(data?.title ?: "Episode $ord")
-        if (lockData.isLocked) append(" \uD83D\uDD12")
+        if (lockData.isLocked) append(" 🔒")
     }
 }
 
@@ -83,15 +90,20 @@ data class Creator(
 @Serializable
 data class Description(
     private val long: String,
-    private val short: String,
+    private val short: String? = null,
 ) {
-    override fun toString() = "$short\n\n$long"
+    override fun toString() = listOfNotNull(short, long).joinToString("\n\n")
 }
 
 @Serializable
 @Suppress("PrivatePropertyName")
-data class Cover(private val `1280x1840_480`: Image) {
-    override fun toString() = `1280x1840_480`.toString()
+data class Cover(
+    private val `1280x1840_480`: Image? = null,
+    private val `1280x1840_720`: Image? = null,
+    private val `1440x3072`: Image? = null,
+    private val `1440x1440_480`: Image? = null,
+) {
+    override fun toString() = (`1280x1840_480` ?: `1280x1840_720` ?: `1440x3072` ?: `1440x1440_480`)?.toString().orEmpty()
 }
 
 @Serializable
