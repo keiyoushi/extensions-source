@@ -1,8 +1,17 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -18,9 +28,15 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
-class ScanManga : HttpSource() {
+class ScanManga :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Scan-Manga"
 
     override val baseUrl = "https://m.scan-manga.com"
@@ -29,6 +45,8 @@ class ScanManga : HttpSource() {
     override val lang = "fr"
 
     override val supportsLatest = true
+
+    protected val preferences by getPreferencesLazy()
 
     override fun headersBuilder(): Headers.Builder {
         val currentChromeVersion = super.headersBuilder().build().get("User-Agent")?.let {
@@ -170,7 +188,7 @@ class ScanManga : HttpSource() {
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
         val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
             ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
 
@@ -231,7 +249,7 @@ class ScanManga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
+        val packedScript = document.selectFirst("script:containsData(eval\\(function\\()")!!.data()
 
         val unpackedScript = decodeHunter(packedScript)
         val parametersRegex = Regex("""sml = '([^']+)';\n?.*var sme = '([^']+)'""")
@@ -244,7 +262,7 @@ class ScanManga : HttpSource() {
             ?: error("Failed to extract chapter ID.")
 
         val mediaType = "application/json; charset=UTF-8".toMediaType()
-        val requestBody = """{"a":"$sme","b":"$sml"}"""
+        val requestBody = """{"a":"$sme","b":"$sml","c":"${getFingerprint()}"}"""
 
         val documentUrl = document.baseUri().toHttpUrl()
 
@@ -278,5 +296,79 @@ class ScanManga : HttpSource() {
             .build()
 
         return GET(page.imageUrl!!, imgHeaders)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun getFingerprint(): String {
+        var currentValue = preferences.getString("gpu_renderer", null)
+
+        if (currentValue.isNullOrEmpty()) {
+            val latch = CountDownLatch(1)
+            var returnValue = "SUMK" // Default to "IC" if something goes wrong
+
+            Handler(Looper.getMainLooper()).post {
+                val webView = WebView(Injekt.get<Application>())
+                webView.settings.javaScriptEnabled = true
+
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        val script = """
+                        (function() {
+                            try {
+                                const canvas = document.createElement("canvas");
+                                const gl = canvas.getContext("webgl");
+                                const debugInfo = gl ? gl.getExtension("WEBGL_debug_renderer_info") : null;
+                                const gpu = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "IC";
+
+                                return btoa(gpu);
+                            } catch (e) {
+                                return btoa("IC");
+                            }
+                        })();
+                        """.trimIndent()
+
+                        view?.evaluateJavascript(script) {
+                            returnValue = it?.removeSurrounding("\"") ?: "SUMK" // btoa("IC") = "SUMK"
+                            view.stopLoading()
+                            view.destroy()
+                            latch.countDown()
+                        }
+                    }
+                }
+                webView.loadUrl("about:blank")
+            }
+
+            try {
+                latch.await(5, TimeUnit.SECONDS)
+            } catch (e: InterruptedException) {
+            }
+
+            val decodedValue = String(Base64.decode(returnValue, Base64.DEFAULT))
+
+            preferences.edit().putString("gpu_renderer", decodedValue).apply()
+            currentValue = decodedValue
+        }
+
+        return Base64.encodeToString(
+            """{"gpu":"$currentValue","connection":"cellular"}""".toByteArray(),
+            Base64.NO_WRAP,
+        )
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = "gpu_renderer"
+            title = "Unmasked GPU renderer"
+            summary =
+                "Set and cache your GPU renderer string here to bypass fingerprint-based blocking. You can find your GPU renderer by visiting a site like https://www.browserleaks.com/webgl. Make sure to enter the exact string as shown on the site, without any extra spaces or characters and use Google Chrome on Android."
+            setDefaultValue(null)
+            dialogTitle = "GPU Renderer"
+            dialogMessage =
+                "Enter your GPU renderer string here. This is used to bypass blocking based on WebGL fingerprinting. You can find your GPU renderer by visiting a site like https://www.browserleaks.com/webgl using Google Chrome on Android. Make sure to enter the exact string as shown on the site, without any extra spaces or characters."
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(key, newValue as String).commit()
+            }
+        }.also { screen.addPreference(it) }
     }
 }
