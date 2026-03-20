@@ -15,7 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.randomua.addRandomUAPreferenceToScreen
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
@@ -406,6 +407,8 @@ class DoujinDesu :
     private val htmlTagRegex = Regex("<[^>]*>")
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("section.metadata")!!
         val authorName = if (infoElement.select("td:contains(Author) ~ td").isEmpty()) {
@@ -585,6 +588,7 @@ class DoujinDesu :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
+        .setRandomUserAgent()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -632,6 +636,6 @@ class DoujinDesu :
                 true
             }
         }.also(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 }
