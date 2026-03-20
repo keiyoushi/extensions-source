@@ -1,36 +1,24 @@
 package eu.kanade.tachiyomi.extension.pt.imperiodabritannia
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.TimeUnit
+import eu.kanade.tachiyomi.multisrc.mangotheme.MangoTheme
 
-class ImperioDaBritannia :
-    Madara(
-        "Sagrado Império da Britannia",
-        "https://imperiodabritannia.com",
-        "pt-BR",
-        SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
-    ) {
+class ImperioDaBritannia : MangoTheme() {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .build()
+    override val name = "Sagrado Imp\u00e9rio da Britannia"
 
-    override val useNewChapterEndpoint = true
+    override val baseUrl = "https://imperiodabritannia.net"
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val lang = "pt-BR"
 
-    override val mangaDetailsSelectorTag = ""
+    override val cdnUrl = "https://cdn.imperiodabritannia.net"
 
-    override val mangaDetailsSelectorAuthor =
-        ".summary-heading:has(h5:contains(Autor)) + div > ${super.mangaDetailsSelectorAuthor}"
-    override val mangaDetailsSelectorArtist =
-        ".summary-heading:has(h5:contains(Artista)) + div > ${super.mangaDetailsSelectorArtist}"
-    override val mangaDetailsSelectorStatus =
-        ".summary-heading:has(h5:contains(Status)) + ${super.mangaDetailsSelectorStatus}"
+    override val encryptionKey = "mangotoons_encryption_key_2025"
+
+    override val webMangaPathSegment = "manga"
+
+    override fun getStatusFilterOptions() = ImperioDaBritanniaFilters.statusOptions
+
+    override fun getFormatFilterOptions() = ImperioDaBritanniaFilters.formatOptions
+
+    override fun getTagFilterOptions() = ImperioDaBritanniaFilters.tagOptions
 }
