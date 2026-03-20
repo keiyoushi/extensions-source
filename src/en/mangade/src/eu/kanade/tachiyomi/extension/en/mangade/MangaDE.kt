@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,15 +22,16 @@ class MangaDE : HttpSource() {
 
     override val name = "MangaDE"
     override val baseUrl = "https://mangade.io"
+    private val apiUrl = "https://api.mangade.io/api"
     override val lang = "en"
     override val supportsLatest = true
 
-    private var genresList: List<Genre> = emptyList()
+    private var genresList: List<Pair<String, String>> = emptyList()
     private var genresFetched: Boolean = false
     private var fetchGenresAttempts: Int = 0
 
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -42,7 +42,7 @@ class MangaDE : HttpSource() {
     // ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$API_URL/comics".toHttpUrl().newBuilder()
+        val url = "$apiUrl/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("size", "20")
             .addQueryParameter("sort", "most-viewed")
@@ -58,7 +58,7 @@ class MangaDE : HttpSource() {
     // ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$API_URL/comics".toHttpUrl().newBuilder()
+        val url = "$apiUrl/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("size", "20")
             .addQueryParameter("sort", "newest")
@@ -74,7 +74,7 @@ class MangaDE : HttpSource() {
     // ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$API_URL/comics".toHttpUrl().newBuilder()
+        val url = "$apiUrl/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("size", "20")
 
@@ -119,19 +119,7 @@ class MangaDE : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val payload = response.parseAs<PayloadDto<MangaListPageDto>>()
-        val data = payload.data
-        val totalPage = data.totalPage
-        val currentPage = data.page.toInt()
-
-        val mangas = data.list.map { manga ->
-            SManga.create().apply {
-                title = manga.name
-                thumbnail_url = manga.image
-                url = "/${manga.slug}?mid=${manga.id}"
-            }
-        }
-
-        return MangasPage(mangas, currentPage < totalPage)
+        return payload.data.toMangasPage()
     }
 
     // ===============================
@@ -140,30 +128,18 @@ class MangaDE : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.substringAfter("mid=")
-        return GET("$API_URL/comics/$id/view", headers)
+        return GET("$apiUrl/comics/$id/view", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val payload = response.parseAs<PayloadDto<MangaDto>>()
-        val manga = payload.data
-
-        return SManga.create().apply {
-            title = manga.name
-            thumbnail_url = manga.image
-            description = manga.description
-            genre = manga.genre_names?.replace(",", ", ")
-            status = when (manga.status) {
-                "Ongoing", "Releasing" -> SManga.ONGOING
-                "Completed" -> SManga.COMPLETED
-                "On Hiatus" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-        }
+        return payload.data.toSManga()
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.substringBefore("?").removePrefix("/")
-        val mid = manga.url.substringAfter("mid=")
+        val url = "$baseUrl${manga.url}".toHttpUrl()
+        val slug = url.pathSegments[0]
+        val mid = url.queryParameter("mid")
 
         return "$baseUrl/comic/$slug-pid$mid"
     }
@@ -174,32 +150,19 @@ class MangaDE : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfter("mid=")
-        return GET("$API_URL/comics/$id/view?size=500", headers)
+        return GET("$apiUrl/comics/$id/view?size=500", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val payload = response.parseAs<PayloadDto<MangaDto>>()
-        val manga = payload.data
-        val mangaUrl = manga.slug?.let { "/$it" } ?: ""
-        val chapterList = manga.news_chapters
-
-        return chapterList.map { chapter ->
-            SChapter.create().apply {
-                name = chapter.name
-                chapter_number = chapter.chapter_number?.toFloatOrNull() ?: -1f
-                url = "/${manga.slug}/${chapter.slug}?cid=${chapter.id}&mid=${manga.id}"
-                date_upload = dateFormat.tryParse(chapter.published_date)
-            }
-        }
+        return payload.data.toSChapterList(dateFormat)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val path = chapter.url.substringBefore("?").removePrefix("/")
-        val mid = chapter.url.substringAfter("mid=")
-
-        val parts = path.split("/")
-        val mangaSlug = parts[0]
-        val chapterSlug = parts.getOrNull(1) ?: ""
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+        val mid = url.queryParameter("mid")
+        val mangaSlug = url.pathSegments[0]
+        val chapterSlug = url.pathSegments[1]
 
         return "$baseUrl/comic/$mangaSlug-$mid/$chapterSlug"
     }
@@ -210,17 +173,12 @@ class MangaDE : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfter("cid=").substringBefore("&")
-        return GET("$API_URL/chapters/$id/view", headers)
+        return GET("$apiUrl/chapters/$id/view", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<PayloadDto<ChapterDto>>()
-        val chapter = payload.data
-        val images = chapter.chapter_images
-
-        return images.mapIndexed { index, page ->
-            Page(index, "", page.image)
-        }
+        return payload.data.toPageList()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -243,7 +201,7 @@ class MangaDE : HttpSource() {
         if (genresList.isNotEmpty()) {
             filters += listOf(
                 Filter.Separator(),
-                GenreFilter(genresList),
+                GenreFilter(genresList.map { Genre(it.first, it.second) }),
             )
         } else {
             filters += listOf(
@@ -257,9 +215,9 @@ class MangaDE : HttpSource() {
     private fun fetchGenres() {
         if (fetchGenresAttempts < 3 && !genresFetched) {
             try {
-                client.newCall(GET("$API_URL/genres?size=500", headers)).execute().use { response ->
+                client.newCall(GET("$apiUrl/genres?size=500", headers)).execute().use { response ->
                     val payload = response.parseAs<PayloadDto<GenreListPageDto>>()
-                    genresList = payload.data.genres.map { Genre(it.name, it.id) }
+                    genresList = payload.data.genres.map { it.name to it.id }
                     genresFetched = true
                 }
             } catch (_: Exception) {
@@ -267,9 +225,5 @@ class MangaDE : HttpSource() {
                 fetchGenresAttempts++
             }
         }
-    }
-
-    companion object {
-        private const val API_URL = "https://api.mangade.io/api"
     }
 }

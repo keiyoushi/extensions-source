@@ -1,55 +1,94 @@
 package eu.kanade.tachiyomi.extension.en.mangade
 
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
 
 @Serializable
-data class PayloadDto<T>(
-    val success: Boolean,
-    val message: String,
+class PayloadDto<T>(
     val data: T,
 )
 
 @Serializable
-data class MangaListPageDto(
-    val list: List<MangaDto>,
-    val totalPage: Int,
-    val page: String,
-)
+class MangaListPageDto(
+    private val list: List<MangaDto>,
+    private val totalPage: Int,
+    private val page: String,
+) {
+    fun toMangasPage(): MangasPage {
+        val mangas = list.map { it.toSManga() }
+        return MangasPage(mangas, page.toInt() < totalPage)
+    }
+}
 
 @Serializable
-data class MangaDto(
-    val id: String,
-    val name: String,
-    val slug: String? = null,
-    val image: String,
-    val description: String? = null,
-    val genre_names: String? = null,
-    val status: String? = null,
-    val news_chapters: List<ChapterDto> = emptyList(),
-)
+class MangaDto(
+    private val id: String,
+    private val name: String,
+    private val slug: String? = null,
+    private val image: String,
+    private val description: String? = null,
+    @SerialName("genre_names") private val genreNames: String? = null,
+    private val status: String? = null,
+    @SerialName("news_chapters") private val newsChapters: List<ChapterDto> = emptyList(),
+) {
+    fun toSManga() = SManga.create().apply {
+        title = name
+        thumbnail_url = image
+        url = "/$slug?mid=$id"
+        description = this@MangaDto.description
+        genre = genreNames?.replace(",", ", ")
+        status = when (this@MangaDto.status) {
+            "Ongoing", "Releasing" -> SManga.ONGOING
+            "Completed" -> SManga.COMPLETED
+            "On Hiatus" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    fun toSChapterList(dateFormat: SimpleDateFormat): List<SChapter> = newsChapters.map { it.toSChapter(id, slug, dateFormat) }
+}
 
 @Serializable
-data class ChapterDto(
-    val id: String,
-    val name: String,
-    val slug: String? = null,
-    val chapter_number: String? = null,
-    val published_date: String? = null,
-    val chapter_images: List<PageDto> = emptyList(),
-)
+class ChapterDto(
+    private val id: String,
+    private val name: String,
+    private val slug: String? = null,
+    @SerialName("chapter_number") private val chapterNumber: String? = null,
+    @SerialName("published_date") private val publishedDate: String? = null,
+    @SerialName("chapter_images") private val chapterImages: List<PageDto> = emptyList(),
+) {
+    fun toSChapter(mangaId: String, mangaSlug: String?, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+        name = this@ChapterDto.name
+        chapter_number = this@ChapterDto.chapterNumber?.toFloatOrNull() ?: -1f
+        url = "/$mangaSlug/$slug?cid=$id&mid=$mangaId"
+        date_upload = dateFormat.tryParse(publishedDate)
+    }
+
+    fun toPageList(): List<Page> = chapterImages.mapIndexed { index, pageDto ->
+        pageDto.toPage(index)
+    }
+}
 
 @Serializable
-data class PageDto(
-    val image: String,
-)
+class PageDto(
+    private val image: String,
+) {
+    fun toPage(index: Int) = Page(index, imageUrl = image)
+}
 
 @Serializable
-data class GenreListPageDto(
+class GenreListPageDto(
     val genres: List<GenreDto>,
 )
 
 @Serializable
-data class GenreDto(
+class GenreDto(
     val id: String,
     val name: String,
 )
