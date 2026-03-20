@@ -18,14 +18,12 @@ import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.jsonInstance
 import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class Cmoa :
     HttpSource(),
@@ -36,14 +34,12 @@ class Cmoa :
     override val lang = "ja"
     override val supportsLatest = true
 
-    private val json = Injekt.get<Json>()
-    private val reader by lazy { SpeedBinbReader(client, headers, json, true) } // 1.7070.1001
+    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) } // 1.7070.1001 SBC
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(json))
-        .addNetworkInterceptor(CookieInterceptor(domain, "safesearch" to "0"))
-        .addNetworkInterceptor(CookieInterceptor(domain, "R18user" to "1"))
+        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
+        .addNetworkInterceptor(CookieInterceptor(domain, listOf("safesearch" to "0", "R18user" to "1")))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
