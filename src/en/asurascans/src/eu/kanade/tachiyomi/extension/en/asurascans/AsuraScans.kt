@@ -16,8 +16,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -466,54 +471,18 @@ class AsuraScans :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val scriptData = document.select("script:containsData(self.__next_f.push)")
-            .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
-
-        val chapterDataMatch = CHAPTER_DATA_REGEX.find(scriptData)
-        val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1)
-
-        if (chapterDataMatch != null && pagesData != null) {
-            val chapterId = chapterDataMatch.groupValues[1].toIntOrNull()
-            val pages = try {
-                pagesData.unescape().parseAs<List<PageDto>>()
-            } catch (_: Exception) {
-                emptyList()
-            }
-
-            if (pages.isNotEmpty()) {
-                return pages.sortedBy(PageDto::order).toPageList()
-            }
-
-            if (chapterId != null) {
-                return fetchChapterImages(chapterId)
-            }
+        val astroImages = extractAstroChapterReaderImageUrls(document)
+        if (astroImages.isNotEmpty()) {
+            return astroImages.toImagePages()
         }
 
-        // Prefer explicit image nodes before falling back to a raw HTML scan.
         val images = document.select("img[src*=/chapters/], img[data-src*=/chapters/]")
             .mapNotNull { el ->
                 el.attr("abs:src").ifBlank { el.attr("abs:data-src") }.ifBlank { null }
             }
             .map(::normalizeChapterImageUrl)
+            .filter(::isValidChapterImageUrl)
             .distinct()
-
-        val scriptImages = extractChapterImageUrlsFromHtml(scriptData.unescape())
-
-        // The site occasionally leaves chapter CDN URLs only in embedded HTML/script payloads.
-        val htmlImages = extractChapterImageUrlsFromHtml(document.html())
-
-        val inferredImages = inferSequentialChapterImageUrls(document, scriptImages + htmlImages + images)
-        if (inferredImages.isNotEmpty()) {
-            return inferredImages.toImagePages()
-        }
-
-        if (scriptImages.isNotEmpty()) {
-            return scriptImages.toImagePages()
-        }
-
-        if (htmlImages.isNotEmpty()) {
-            return htmlImages.toImagePages()
-        }
 
         if (images.isNotEmpty()) {
             return images.toImagePages()
@@ -694,71 +663,42 @@ class AsuraScans :
         .replace("&amp;", "&")
         .let { if (it.startsWith("//")) "https:$it" else it }
 
-    private fun extractChapterImageUrlsFromHtml(html: String): List<String> = normalizeChapterImageUrl(html)
-        .let(NORMALIZED_CHAPTER_IMAGE_URL_REGEX::findAll)
-        .map { it.value }
-        .filter(::isValidChapterImageUrl)
-        .distinct()
-        .toList()
+    private fun extractAstroChapterReaderImageUrls(document: Document): List<String> {
+        val propsPayload = document.select(ASTRO_CHAPTER_READER_SELECTOR)
+            .firstOrNull()
+            ?.attr("props")
+            .orEmpty()
 
-    private fun inferSequentialChapterImageUrls(document: Document, seedImages: List<String>): List<String> {
-        val knownImages = seedImages
-            .filter(::isValidChapterImageUrl)
-            .distinct()
-            .sortedWith(compareBy({ extractChapterImageNumber(it) ?: Int.MAX_VALUE }, { it }))
+        if (propsPayload.isBlank()) {
+            return emptyList()
+        }
 
-        val pageCount = extractVisiblePageCount(document) ?: return emptyList()
-        if (knownImages.isEmpty()) return emptyList()
+        val root = runCatching {
+            jsonInstance.parseToJsonElement(propsPayload) as? JsonObject
+        }.getOrNull() ?: return emptyList()
 
-        val knownByPage = knownImages.associateBy { extractChapterImageNumber(it) }
-        val highestKnownPage = knownByPage.keys.filterNotNull().maxOrNull() ?: knownImages.size
-        if (pageCount <= highestKnownPage) return knownImages
+        val pages = root["pages"].astroArrayItems().orEmpty()
 
-        val pattern = buildChapterImagePattern(knownImages) ?: return knownImages
-
-        return (1..pageCount).map { pageNumber ->
-            knownByPage[pageNumber] ?: pattern.pageUrl(pageNumber)
+        return pages.mapNotNull { page ->
+            page.astroObjectValue()
+                ?.get("url")
+                .astroStringValue()
+                ?.let(::normalizeChapterImageUrl)
         }
     }
 
-    private fun extractVisiblePageCount(document: Document): Int? {
-        val labeledPageCount = PAGE_LABEL_REGEX.findAll(document.html())
-            .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
-            .maxOrNull()
+    private fun JsonElement?.astroValue(): JsonElement? = (this as? JsonArray)?.getOrNull(1)
 
-        val pagerPageCount = CONSECUTIVE_PAGE_NUMBER_REGEX.findAll(document.text())
-            .mapNotNull { match ->
-                match.value.trim()
-                    .split(WHITESPACE_REGEX)
-                    .mapNotNull(String::toIntOrNull)
-                    .takeIf { values ->
-                        values.size >= 3 && values.zipWithNext().all { (left, right) -> right == left + 1 }
-                    }
-                    ?.lastOrNull()
-            }
-            .maxOrNull()
+    private fun JsonElement?.astroArrayItems(): List<JsonElement>? = astroValue() as? JsonArray
 
-        return listOfNotNull(labeledPageCount, pagerPageCount).maxOrNull()
+    private fun JsonElement?.astroObjectValue(): JsonObject? = astroValue() as? JsonObject
+
+    private fun JsonElement?.astroStringValue(): String? = astroValue()?.let { value ->
+        when (value) {
+            is kotlinx.serialization.json.JsonPrimitive -> value.contentOrNull
+            else -> null
+        }
     }
-
-    private fun buildChapterImagePattern(seedImages: List<String>): ChapterImagePattern? {
-        val firstMatch = seedImages.firstNotNullOfOrNull(CHAPTER_IMAGE_SEQUENCE_REGEX::find) ?: return null
-        val secondMatch = seedImages
-            .mapNotNull(CHAPTER_IMAGE_SEQUENCE_REGEX::find)
-            .firstOrNull { it.groupValues[2].toIntOrNull() == 2 }
-
-        val prefix = firstMatch.groupValues[1]
-        val width = firstMatch.groupValues[2].length
-        val suffix = firstMatch.groupValues[4]
-        val subsequentPageVariant = secondMatch?.groupValues?.get(3).orEmpty()
-
-        return ChapterImagePattern(prefix, width, subsequentPageVariant, suffix)
-    }
-
-    private fun extractChapterImageNumber(url: String): Int? = CHAPTER_IMAGE_SEQUENCE_REGEX.find(url)
-        ?.groupValues
-        ?.getOrNull(2)
-        ?.toIntOrNull()
 
     private fun isValidChapterImageUrl(url: String): Boolean {
         val httpUrl = url.toHttpUrlOrNull() ?: return false
@@ -801,40 +741,19 @@ class AsuraScans :
         return normalized.replace("/comics/$oldSlug", "/comics/$newSlug")
     }
 
-    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
-
-    private data class ChapterImagePattern(
-        val prefix: String,
-        val width: Int,
-        val subsequentPageVariant: String,
-        val suffix: String,
-    ) {
-        fun pageUrl(pageNumber: Int): String {
-            val page = pageNumber.toString().padStart(width, '0')
-            val variant = if (pageNumber == 1) "" else subsequentPageVariant
-            return "$prefix$page$variant$suffix"
-        }
-    }
-
     companion object {
+        private const val ASTRO_CHAPTER_READER_SELECTOR = "astro-island[component-url*=ChapterReader], astro-island[opts*=ChapterReader]"
         private const val COMIC_LINK_SELECTOR = "a[href^=/comics/]:not([href*=/chapter/])"
         private const val CHAPTER_LINK_SELECTOR = "a[href*=/chapter/]"
         private const val NEXT_PAGE_SELECTOR = "a:contains(Next page), div.flex > a.flex.bg-themecolor:contains(Next)"
         private const val HOMEPAGE_SECTION_HEADING_SELECTOR = "h2, h3"
 
-        private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val WHITESPACE_REGEX = """\\s+""".toRegex()
         private val TRAILING_CHAPTER_NUMBER_REGEX = """\s+\d+(?:\.\d+)?$""".toRegex()
         private val CHAPTER_DATE_SUFFIX_REGEX = """\s+(Just now|last week|\d+\s+(?:minute|minutes|hour|hours|day|days|week|weeks|month|months)\s+ago|[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})$""".toRegex()
-        private val PAGES_REGEX = """\\"pages\\":(\[.*?])""".toRegex()
-        private val NORMALIZED_CHAPTER_IMAGE_URL_REGEX = """(?:https?:)?//cdn\.asurascans\.com/asura-images/chapters/[^"'\s<>]+""".toRegex()
         private val CHAPTER_IMAGE_FILENAME_REGEX = """/(\d+(?:_p\d+)?)\.(?:webp|jpg|jpeg|png)$""".toRegex(RegexOption.IGNORE_CASE)
-        private val CHAPTER_IMAGE_SEQUENCE_REGEX = """^(.*?/)(\d+)(?:(_p\d+))?(\.[A-Za-z0-9]+(?:\?.*)?)$""".toRegex()
-        private val CHAPTER_DATA_REGEX = """\\"chapter\\":\{\\"id\\":(\d+).*?\\"is_early_access\\":(true|false)""".toRegex(RegexOption.DOT_MATCHES_ALL)
         private val CHAPTER_ENTRY_REGEX = """(?i)\bchapter\s+\d""".toRegex()
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
-        private val PAGE_LABEL_REGEX = """Page\s+(\d+)\s*-\s*Chapter""".toRegex(RegexOption.IGNORE_CASE)
-        private val CONSECUTIVE_PAGE_NUMBER_REGEX = """(?:^|\D)(\d{1,3}(?:\s+\d{1,3}){2,})(?=\D|$)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
         private val OPTIMIZED_IMAGE_PATH_REGEX = """^/storage/media/(\d+)/conversions/(.*)-optimized\.webp$""".toRegex()
