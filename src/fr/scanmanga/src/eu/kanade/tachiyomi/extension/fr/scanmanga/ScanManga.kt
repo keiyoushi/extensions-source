@@ -304,7 +304,7 @@ class ScanManga :
 
         if (currentValue.isNullOrEmpty()) {
             val latch = CountDownLatch(1)
-            var returnValue = "IC"
+            var returnValue = "SUMK" // Default to "IC" if something goes wrong
 
             Handler(Looper.getMainLooper()).post {
                 val webView = WebView(Injekt.get<Application>())
@@ -328,14 +328,14 @@ class ScanManga :
                         """.trimIndent()
 
                         view?.evaluateJavascript(script) {
-                            returnValue = it
+                            returnValue = it?.removeSurrounding("\"") ?: "SUMK" // btoa("IC") = "SUMK"
                             view.stopLoading()
                             view.destroy()
                             latch.countDown()
                         }
                     }
                 }
-                webView.loadUrl("https://example.com")
+                webView.loadUrl("about:blank")
             }
 
             try {
