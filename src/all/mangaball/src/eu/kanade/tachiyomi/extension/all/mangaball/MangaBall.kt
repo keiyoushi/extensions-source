@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -38,11 +40,15 @@ class MangaBall(
     ConfigurableSource {
 
     override val name = "Manga Ball"
-    override val baseUrl = "https://mangaball.net"
+    private val domain = "mangaball.net"
+    override val baseUrl = "https://$domain"
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
+        .addNetworkInterceptor(
+            CookieInterceptor(domain, "show18PlusContent" to hideNsfwPreference().not().toString()),
+        )
         .addInterceptor { chain ->
             var request = chain.request()
             if (request.url.pathSegments[0] == "api") {
@@ -54,8 +60,9 @@ class MangaBall(
                 val response = chain.proceed(request)
                 if (!response.isSuccessful && response.code == 403) {
                     response.close()
+                    updateCSRF()
                     request = request.newBuilder()
-                        .header("X-CSRF-TOKEN", getCSRF(forceReset = true))
+                        .header("X-CSRF-TOKEN", getCSRF())
                         .build()
 
                     chain.proceed(request)
@@ -71,16 +78,21 @@ class MangaBall(
     private var csrf: String? = null
 
     @Synchronized
-    private fun getCSRF(document: Document? = null, forceReset: Boolean = false): String {
-        if (csrf == null || document != null || forceReset) {
-            val doc = document ?: client.newCall(
-                GET(baseUrl, headers),
-            ).execute().asJsoup()
+    private fun updateCSRF(document: Document? = null) {
+        val doc = document ?: client.newCall(
+            GET(baseUrl, headers),
+        ).execute().asJsoup()
 
-            doc.selectFirst("meta[name=csrf-token]")
-                ?.attr("content")
-                ?.takeIf { it.isNotBlank() }
-                ?.also { csrf = it }
+        doc.selectFirst("meta[name=csrf-token]")
+            ?.attr("content")
+            ?.takeIf { it.isNotBlank() }
+            ?.also { csrf = it }
+    }
+
+    @Synchronized
+    private fun getCSRF(): String {
+        if (csrf == null) {
+            updateCSRF()
         }
 
         return csrf ?: throw Exception("CSRF token not found")
@@ -103,10 +115,48 @@ class MangaBall(
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
-        deepLink(query)
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            return deepLink(query)
+        }
+
+        val defaultFilterState = run {
+            filters.filterIsInstance<TriStateGroupFilter<String>>().all { filter -> filter.state.all { it.isIgnored() } } &&
+                filters.firstInstance<DemographicFilter>().state == 0 &&
+                filters.firstInstance<StatusFilter>().state == 0
+        }
+
+        if (query.isNotBlank() && defaultFilterState) {
+            return if (page == 1) {
+                querySearch(query)
+            } else {
+                super.fetchSearchManga(page - 1, query, filters)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
+    private fun querySearch(query: String): Observable<MangasPage> {
+        val url = "$baseUrl/api/v1/smart-search/search/"
+        val body = FormBody.Builder()
+            .add("search_input", query.trim())
+            .build()
+
+        return client.newCall(POST(url, headers, body))
+            .asObservableSuccess()
+            .map {
+                val mangas = it.parseAs<QuerySearchResponse>().data.manga
+                    .map { manga ->
+                        SManga.create().apply {
+                            this.url = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
+                            title = manga.title
+                            thumbnail_url = manga.img
+                        }
+                    }
+
+                MangasPage(mangas, true)
+            }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -154,12 +204,8 @@ class MangaBall(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        val hideNsfw = hideNsfwPreference()
 
         val mangas = data.data
-            .filterNot {
-                it.isAdult && hideNsfw
-            }
             .map {
                 SManga.create().apply {
                     url = it.url.toHttpUrl().pathSegments[1]
@@ -167,10 +213,6 @@ class MangaBall(
                     thumbnail_url = it.cover
                 }
             }
-
-        if (mangas.isEmpty() && hideNsfw) {
-            throw Exception("All results filtered out due to nsfw filter")
-        }
 
         return MangasPage(mangas, data.hasNextPage())
     }
@@ -214,7 +256,7 @@ class MangaBall(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        getCSRF(document)
+        updateCSRF(document)
 
         return SManga.create().apply {
             url = document.location().toHttpUrl().pathSegments[1]
@@ -324,7 +366,7 @@ class MangaBall(
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        getCSRF(document)
+        updateCSRF(document)
 
         document.select("script:containsData(titleId)").joinToString(";") { it.data() }.also {
             val titleId = titleIdRegex.find(it)
@@ -377,6 +419,7 @@ class MangaBall(
         SwitchPreferenceCompat(screen.context).apply {
             key = NSFW_PREF
             title = "Hide NSFW content"
+            summary = "Restart of the app required"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }

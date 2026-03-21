@@ -24,8 +24,24 @@ class SearchManga(
     val url: String,
     val name: String,
     val cover: String,
-    val isAdult: Boolean,
 )
+
+@Serializable
+class QuerySearchResponse(
+    val data: MangaList,
+) {
+    @Serializable
+    class MangaList(
+        val manga: List<Manga>,
+    ) {
+        @Serializable
+        class Manga(
+            val title: String,
+            val img: String,
+            val url: String,
+        )
+    }
+}
 
 @Serializable
 class ChapterListResponse(
