@@ -37,9 +37,9 @@ class StatusFilter :
         "Status",
         arrayOf(
             Pair("All", ""),
-            Pair("Ongoing", "ongoing"),
-            Pair("Completed", "completed"),
-            Pair("Hiatus", "hiatus"),
+            Pair("Ongoing", "ONGOING"),
+            Pair("Completed", "COMPLETED"),
+            Pair("Hiatus", "HIATUS"),
         ),
     )
 
@@ -115,8 +115,8 @@ class ColorFilter :
         "Color",
         arrayOf(
             Pair("All", ""),
-            Pair("Full Color", "full_color"),
-            Pair("B&W", "bw"),
+            Pair("Full Color", "FULL_COLOR"),
+            Pair("B&W", "BW"),
         ),
     )
 
@@ -125,8 +125,8 @@ class ReadingFilter :
         "Reading Mode",
         arrayOf(
             Pair("All", ""),
-            Pair("Vertical Scroll", "vertical_scroll"),
-            Pair("Page", "page"),
+            Pair("Vertical Scroll", "VERTICAL_SCROLL"),
+            Pair("Page", "PAGE"),
         ),
     )
 

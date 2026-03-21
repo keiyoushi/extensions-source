@@ -78,37 +78,18 @@ class AinzScansID : HttpSource() {
             .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
 
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("q", query)
-        }
+        url.addQueryParameter("q", query)
 
         filters.forEach { filter ->
             when (filter) {
                 is SortFilter -> url.addQueryParameter("sort", filter.selectedValue())
                 is OrderFilter -> url.addQueryParameter("order", filter.selectedValue())
-                is StatusFilter -> {
-                    val status = filter.selectedValue()
-                    if (status.isNotEmpty()) url.addQueryParameter("status", status)
-                }
-                is GenreFilter -> {
-                    val genre = filter.selectedValue()
-                    if (genre.isNotEmpty()) url.addQueryParameter("genre", genre)
-                }
-                is TypeFilter -> {
-                    val type = filter.selectedValue()
-                    if (type.isNotEmpty()) url.addQueryParameter("comic_subtype", type)
-                }
-                is ColorFilter -> {
-                    val color = filter.selectedValue()
-                    if (color.isNotEmpty()) url.addQueryParameter("color_format", color)
-                }
-                is ReadingFilter -> {
-                    val reading = filter.selectedValue()
-                    if (reading.isNotEmpty()) url.addQueryParameter("reading_format", reading)
-                }
-                is TextFilter -> {
-                    if (filter.state.isNotEmpty()) url.addQueryParameter(filter.queryKey, filter.state)
-                }
+                is StatusFilter -> url.addQueryParameter("status", filter.selectedValue())
+                is GenreFilter -> url.addQueryParameter("genre", filter.selectedValue())
+                is TypeFilter -> url.addQueryParameter("comic_type", filter.selectedValue())
+                is ColorFilter -> url.addQueryParameter("color_format", filter.selectedValue())
+                is ReadingFilter -> url.addQueryParameter("reading_format", filter.selectedValue())
+                is TextFilter -> url.addQueryParameter(filter.queryKey, filter.state)
                 else -> {}
             }
         }
@@ -118,12 +99,14 @@ class AinzScansID : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
     // =============================== Details ===============================
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDetailDto>().toSManga()
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // ============================== Chapters ===============================
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
@@ -133,8 +116,6 @@ class AinzScansID : HttpSource() {
         val comicSlug = dto.toSManga().url.substringAfterLast("/")
         return dto.units.map { it.toSChapter(comicSlug, dateFormat) }
     }
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/series${chapter.url}", headers)
