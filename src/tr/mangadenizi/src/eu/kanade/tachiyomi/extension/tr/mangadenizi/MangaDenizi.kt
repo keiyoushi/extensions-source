@@ -31,16 +31,14 @@ class MangaDenizi : HttpSource() {
 
     private inline fun <reified T> JsonElement.parseAs(): T = json.decodeFromJsonElement(this)
 
-    private fun rawProps(response: Response): JsonObject =
-        response.asJsoup()
-            .selectFirst("div#app")!!
-            .attr("data-page")
-            .let { json.parseToJsonElement(it).jsonObject["props"]!!.jsonObject }
+    private fun rawProps(response: Response): JsonObject = response.asJsoup()
+        .selectFirst("div#app")!!
+        .attr("data-page")
+        .let { json.parseToJsonElement(it).jsonObject["props"]!!.jsonObject }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manga?sort=views&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga?sort=views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val props = rawProps(response)
@@ -51,30 +49,25 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/manga?sort=latest&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga?sort=latest&page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET(
-            "$baseUrl/manga".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("page", page.toString())
-                .build(),
-            headers,
-        )
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
+        "$baseUrl/manga".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+            .build(),
+        headers,
+    )
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$baseUrl${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val props = rawProps(response)
@@ -83,8 +76,7 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val props = rawProps(response)
@@ -94,8 +86,7 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Pages =================================
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET("$baseUrl${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val props = rawProps(response)
@@ -103,8 +94,7 @@ class MangaDenizi : HttpSource() {
         return pages.mapIndexed { idx, page -> Page(idx, imageUrl = page.imageUrl) }
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 
