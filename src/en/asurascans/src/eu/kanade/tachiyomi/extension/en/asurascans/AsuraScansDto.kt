@@ -28,7 +28,9 @@ class MangaDetailsDto(
 
 @Serializable
 class MangaDto(
-    private val slug: String,
+    @SerialName("public_url")
+    val publicUrl: String,
+    val slug: String,
     private val title: String,
     private val cover: String,
     private val author: String? = null,
@@ -77,30 +79,41 @@ class ChapterListDto(
 )
 
 @Serializable
-class ChapterWrapperDto(
-    val chapter: ChapterDto,
-)
-
-@Serializable
 class ChapterDto(
     private val number: Float,
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String = "",
     @SerialName("is_locked") val isLocked: Boolean = false,
-    val pages: List<PageDto>? = emptyList(),
     @SerialName("series_slug") private val seriesSlug: String? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"
         name = buildString {
-            if (isLocked) append("🔒 ")
+            if (isLocked) append("$LOCK ")
             append("Chapter $numberStr")
             title?.let { append(" - $it") }
         }
         date_upload = dateFormat.tryParse(createdAt)
     }
 }
+
+const val LOCK = "🔒"
+
+@Serializable
+class PremiumPageListDto(
+    val data: ChapterWrapper,
+) {
+    @Serializable
+    class ChapterWrapper(
+        val chapter: PageListDto,
+    )
+}
+
+@Serializable
+class PageListDto(
+    val pages: List<PageDto>,
+)
 
 @Serializable
 class PageDto(

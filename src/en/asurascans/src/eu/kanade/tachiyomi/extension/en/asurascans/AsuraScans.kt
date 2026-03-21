@@ -20,10 +20,18 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -32,7 +40,8 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import kotlin.text.replace
+import org.jsoup.nodes.Document
+import java.util.Collections
 
 class AsuraScans :
     HttpSource(),
@@ -78,28 +87,6 @@ class AsuraScans :
     }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            if (url.pathSegments[0] == "api") {
-                val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-                val token = cookies.find { it.name == "access_token" }?.value
-
-                if (token != null) {
-                    val newRequest = request.newBuilder().apply {
-                        header("Authorization", "Bearer $token")
-                        if (request.url.pathSegments[3] == "chapters") {
-                            header("X-Page-Token", "asura-reader-2026")
-                        }
-                    }.build()
-                    chain.proceed(newRequest)
-                } else {
-                    chain.proceed(request)
-                }
-            } else {
-                chain.proceed(request)
-            }
-        }
         .addNetworkInterceptor(::scrambledImageInterceptor)
         .rateLimit(2, 2)
         .build()
@@ -135,6 +122,10 @@ class AsuraScans :
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<DataDto<List<MangaDto>>>()
         val mangas = result.data.orEmpty().map { it.toSManga() }
+        result.data.orEmpty().forEach {
+            slugMap[it.slug] = "$baseUrl${it.publicUrl}".toHttpUrl().pathSegments.last()
+        }
+        slugMap.persist()
         return MangasPage(mangas, result.meta!!.hasMore)
     }
 
@@ -146,12 +137,20 @@ class AsuraScans :
         MinChaptersFilter(),
     )
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}".replace("/series/", "/comics/")
+    override fun getMangaUrl(manga: SManga): String {
+        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
+        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
+        val randomSlug = slugMap[slug] ?: slug
+
+        return "$baseUrl/comics/$randomSlug"
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
         val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
-        return GET("$apiUrl/series/$slug", headers)
+        val randomSlug = slugMap[slug] ?: slug
+
+        return GET("$apiUrl/series/$randomSlug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -160,23 +159,28 @@ class AsuraScans :
             val wrapper = json.parseAs<DataDto<MangaDetailsDto>>()
             wrapper.data ?: json.parseAs<MangaDetailsDto>()
         }
-
+        slugMap[mangaData.series.slug] = "$baseUrl${mangaData.series.publicUrl}".toHttpUrl().pathSegments.last()
+        slugMap.persist()
         return mangaData.series.toSMangaDetails()
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}".replace("/series/", "/comics/")
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaSlug = chapter.url.substringAfter("/series/").substringBefore("/")
+        val randomSlug = slugMap[mangaSlug] ?: mangaSlug
+        val number = chapter.url.substringAfter("/chapter/")
+
+        return "$baseUrl/comics/$randomSlug/chapter/$number"
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
         val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
-        return GET("$baseUrl/comics/$slug", headers)
+        val randomSlug = slugMap[slug] ?: slug
+        return GET("$baseUrl/comics/$randomSlug", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chaptersProps = document.selectFirst("[props*=chapters]")!!.attr("props")
-        val jsonElement = Json.parseToJsonElement(chaptersProps).unwrapAstroProps()
-        val chaptersData = jsonElement.parseAs<ChapterListDto>()
+        val chaptersData = response.extractAstroProp<ChapterListDto>("chapters")
         val hidePremium = preferences.hidePremiumChapters()
 
         return chaptersData.chapters
@@ -184,31 +188,33 @@ class AsuraScans :
             .map { it.toSChapter() }
     }
 
-    private fun JsonElement.unwrapAstroProps(insideArray: Boolean = false): JsonElement = when (this) {
-        is JsonArray -> {
-            if (insideArray) {
-                JsonArray(this.map { it.unwrapAstroProps() })
-            } else {
-                this[1].unwrapAstroProps(true)
-            }
-        }
-        is JsonObject -> {
-            JsonObject(
-                this.mapValues { it.value.unwrapAstroProps() },
-            )
-        }
-        else -> this
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val mangaSlug = chapter.url.substringAfter("/series/").substringBefore("/")
-        val number = chapter.url.substringAfter("/chapter/")
-        return GET("$apiUrl/series/$mangaSlug/chapters/$number", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterData = response.parseAs<DataDto<ChapterWrapperDto>>().data
-        return chapterData!!.chapter.pages.orEmpty().mapIndexed { index, pageDto ->
+        val document = response.asJsoup()
+        var pages = document.extractAstroProp<PageListDto>("pages").pages
+
+        if (pages.isEmpty()) {
+            val accessToken = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+                .find { it.name == "access_token" }?.value
+                ?: throw Exception("Premium Chapter")
+            val pageToken = document.selectFirst("script:containsData(pageToken)")
+                ?.data()?.let { pageTokenRegex.find(it)?.groupValues?.get(1) }
+                ?: "asura-reader-2026"
+
+            val mangaSlug = response.request.url.pathSegments[1]
+            val number = response.request.url.pathSegments[3]
+            val url = "$apiUrl/series/$mangaSlug/chapters/$number"
+            val headers = headersBuilder()
+                .set("Authorization", "Bearer $accessToken")
+                .set("X-Page-Token", pageToken)
+                .build()
+
+            pages = client.newCall(GET(url, headers)).execute()
+                .parseAs<PremiumPageListDto>().data.chapter.pages
+        }
+
+        return pages.mapIndexed { index, pageDto ->
             val url = if (pageDto.tiles.orEmpty().isNotEmpty()) {
                 val data = PageData(
                     pageDto.tiles!!,
@@ -225,6 +231,8 @@ class AsuraScans :
             Page(index, imageUrl = url)
         }
     }
+
+    val pageTokenRegex = Regex("""pageToken\*=\*"([^"]+)"""")
 
     private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -286,11 +294,53 @@ class AsuraScans :
         true,
     )
 
+    private inline fun <reified T> Document.extractAstroProp(key: String): T {
+        val prop = selectFirst("[props*=$key]")?.attr("props")
+            ?: throw Exception("Unable to find prop with $key")
+        val json = prop.parseAs<JsonElement>()
+        val unwrapped = json.unwrapAstro()
+
+        return unwrapped.parseAs()
+    }
+
+    private inline fun <reified T> Response.extractAstroProp(key: String): T = asJsoup().extractAstroProp(key)
+
+    private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
+        is JsonArray -> when {
+            size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+            else -> JsonArray(map { it.unwrapAstro() })
+        }
+        is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
+        else -> this
+    }
+
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    private val slugMap: MutableMap<String, String> =
+        Collections.synchronizedMap(preferences.getString(SLUG_MAP, "{}")!!.parseAs())
+
+    private val flushScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var flushJob: Job? = null
+    private val flushLock = Mutex()
+
+    private fun MutableMap<String, String>.persist() {
+        flushScope.launch {
+            flushLock.withLock {
+                flushJob?.cancel()
+                flushJob = launch {
+                    delay(500)
+                    flushLock.withLock {
+                        preferences.edit().putString(SLUG_MAP, this@persist.toJsonString()).apply()
+                    }
+                }
+            }
+        }
+    }
 
     companion object {
         private const val PER_PAGE_LIMIT = 20
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
+        private const val SLUG_MAP = "slug_map_v2"
     }
 }
