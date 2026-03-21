@@ -1,0 +1,10 @@
+ext {
+    extName = 'KL Raw'
+    extClass = '.KLRaw'
+    themePkg = 'mangareader'
+    baseUrl = 'https://www.klraw.info'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
