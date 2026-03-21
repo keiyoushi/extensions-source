@@ -29,10 +29,8 @@ class MangaDenizi : HttpSource() {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Genel parseAs yardımcısı — JsonElement üzerinden tip-güvenli dönüşüm
     private inline fun <reified T> JsonElement.parseAs(): T = json.decodeFromJsonElement(this)
 
-    // data-page HTML özniteliğinden props nesnesini çek
     private fun rawProps(response: Response): JsonObject =
         response.asJsoup()
             .selectFirst("div#app")!!
@@ -142,6 +140,5 @@ class MangaDenizi : HttpSource() {
     }
 }
 
-// tryParse — SimpleDateFormat için güvenli ayrıştırma yardımcısı
 fun SimpleDateFormat.tryParse(string: String): Long =
     runCatching { parse(string)?.time }.getOrNull() ?: 0L
