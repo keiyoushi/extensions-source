@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
+import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.MangaListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.UpdatesListDto
@@ -211,7 +212,25 @@ open class WeebDex(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
-        return manga.toSManga(coverQuality)
+        return manga.toSManga(coverQuality).applyFirstVolumeCover(manga.id)
+    }
+
+    private fun SManga.applyFirstVolumeCover(mangaId: String? = null): SManga {
+        if (!useFirstVolumeCover) return this
+        val id = mangaId ?: url.removePrefix("/manga/")
+        runCatching {
+            val coversResponse = client.newCall(GET("${WeebDexConstants.API_URL}/manga/$id/covers", headers)).execute()
+            if (coversResponse.isSuccessful) {
+                val covers = coversResponse.parseAs<List<CoverDto>>()
+                val firstCover = covers.filter { !it.volume.isNullOrBlank() }
+                    .minByOrNull { it.volume?.toFloatOrNull() ?: Float.MAX_VALUE }
+
+                if (firstCover != null) {
+                    thumbnail_url = WeebDexHelper().buildCoverUrl(id, firstCover, coverQuality)
+                }
+            }
+        }
+        return this
     }
 
     // -------------------- Chapters --------------------
@@ -280,6 +299,13 @@ open class WeebDex(
             summary = "Enable to use lower quality images in the chapter"
             setDefaultValue(DATA_SAVER_DEFAULT)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = USE_FIRST_VOLUME_COVER_PREFERENCE
+            title = "Use the first volume cover as cover"
+            summary = "May need to manually refresh entries already in library. Otherwise, clear database to have new covers to show up."
+            setDefaultValue(USE_FIRST_VOLUME_COVER_DEFAULT)
+        }.also(screen::addPreference)
     }
 
     private val coverQuality: String
@@ -287,6 +313,9 @@ open class WeebDex(
 
     private val dataSaver: Boolean
         get() = preferences.getBoolean(DATA_SAVER_PREFERENCE, DATA_SAVER_DEFAULT)
+
+    private val useFirstVolumeCover: Boolean
+        get() = preferences.getBoolean(USE_FIRST_VOLUME_COVER_PREFERENCE, USE_FIRST_VOLUME_COVER_DEFAULT)
 }
 
 private const val COVER_QUALITY_PREFERENCE = "cover_quality"
@@ -294,3 +323,6 @@ private const val COVER_QUALITY_ORIGINAL = ""
 
 private const val DATA_SAVER_PREFERENCE = "data_saver"
 private const val DATA_SAVER_DEFAULT = false
+
+private const val USE_FIRST_VOLUME_COVER_PREFERENCE = "use_first_volume_cover"
+private const val USE_FIRST_VOLUME_COVER_DEFAULT = false
