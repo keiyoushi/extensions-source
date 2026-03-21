@@ -364,7 +364,7 @@ class YuriGarden :
 
     companion object {
         private const val LIMIT = 15
-        private const val AES_PASSWORD = "OAqg95LgrfPM8r68"
+        private const val AES_PASSWORD = "FYgicJ8oFdIYfgLv"
         private const val CLOUDFLARE_VERIFY_MESSAGE = "Mở webview để xác minh cloudflare cho chương này"
         private val COMIC_ID_REGEX = """"comic"\s*:\s*\{\s*"id"\s*:\s*(\d+)""".toRegex()
         private const val PREF_SHOW_R18 = "pref_show_r18"
