@@ -79,9 +79,14 @@ class GocTruyenTranhVui :
         return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        "$apiUrl/search?p=${page - 1}&orders%5B%5D=recentDate",
-        xhrHeaders,
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortByList(getSortByList()).apply {
+                state[3].state = true
+            },
+        ),
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -245,7 +250,7 @@ class GocTruyenTranhVui :
                 }
             }
         }.build()
-        return GET(url, headers)
+        return GET(url, xhrHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
