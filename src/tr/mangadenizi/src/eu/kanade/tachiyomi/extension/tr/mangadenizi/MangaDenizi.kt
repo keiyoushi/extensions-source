@@ -130,5 +130,4 @@ class MangaDenizi : HttpSource() {
     }
 }
 
-fun SimpleDateFormat.tryParse(string: String): Long =
-    runCatching { parse(string)?.time }.getOrNull() ?: 0L
+fun SimpleDateFormat.tryParse(string: String): Long = runCatching { parse(string)?.time }.getOrNull() ?: 0L
