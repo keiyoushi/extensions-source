@@ -48,17 +48,10 @@ internal data class ChapterBriefDto(
 )
 
 @Serializable
-internal data class ChapterDetailDto(
+internal data class ChapterTokenDto(
+    val sig: String,
+    val exp: Long,
+    val sessionHash: String,
+    val chapterId: String,
     val pageCount: Int,
-)
-
-@Serializable
-internal data class TokensResponseDto(
-    val tokens: List<TokenDto>,
-)
-
-@Serializable
-internal data class TokenDto(
-    val pageNumber: Int,
-    val token: String,
 )
