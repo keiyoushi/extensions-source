@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import kotlin.text.replace
@@ -67,7 +68,26 @@ class AsuraScans :
         }
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            if (url.pathSegments[0] == "api") {
+                val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+                val token = cookies.find { it.name == "access_token" }?.value
+
+                if (token != null) {
+                    val newRequest = request.newBuilder()
+                        .header("Authorization", "Bearer $token")
+                        .build()
+                    chain.proceed(newRequest)
+                } else {
+                    chain.proceed(request)
+                }
+            } else {
+                chain.proceed(request)
+            }
+        }
         .rateLimit(2, 2)
         .build()
 
