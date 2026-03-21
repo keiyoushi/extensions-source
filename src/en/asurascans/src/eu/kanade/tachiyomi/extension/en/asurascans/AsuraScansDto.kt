@@ -104,5 +104,17 @@ class ChapterDto(
 
 @Serializable
 class PageDto(
-    val url: String = "",
+    val url: String,
+    val tiles: List<Int>? = null,
+    @SerialName("tile_cols")
+    val tileCols: Int? = null,
+    @SerialName("tile_rows")
+    val tileRows: Int? = null,
+)
+
+@Serializable
+class PageData(
+    val tiles: List<Int>,
+    val tileCols: Int,
+    val tileRows: Int,
 )
