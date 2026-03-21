@@ -12,6 +12,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,6 +30,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
@@ -86,6 +88,20 @@ class GocTruyenTranhVui :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
 
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        // B1: call manga detail url refresh cookie
+        val refreshReq = GET(getMangaUrl(manga), headers)
+
+        return client.newCall(refreshReq)
+            .asObservableSuccess()
+            .flatMap { _ ->
+                // B2: recall chapter list request
+                client.newCall(chapterListRequest(manga))
+                    .asObservableSuccess()
+                    .map(::chapterListParse)
+            }
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
@@ -99,6 +115,13 @@ class GocTruyenTranhVui :
             throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
         }
         return chapterJson.result.chapters.map { it.toSChapter(slug) }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = chapter.url
+        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
+        return "$baseUrl/truyen/$slug/chuong-$numberChapter"
     }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
