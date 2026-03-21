@@ -27,6 +27,23 @@ class SearchManga(
 )
 
 @Serializable
+class QuerySearchResponse(
+    val data: MangaList,
+) {
+    @Serializable
+    class MangaList(
+        val manga: List<Manga>,
+    ) {
+        @Serializable
+        class Manga(
+            val title: String,
+            val img: String,
+            val url: String,
+        )
+    }
+}
+
+@Serializable
 class ChapterListResponse(
     @SerialName("ALL_CHAPTERS")
     val chapters: List<ChapterContainer>,

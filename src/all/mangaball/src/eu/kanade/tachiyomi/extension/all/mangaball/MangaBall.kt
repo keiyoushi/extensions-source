@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -114,10 +115,48 @@ class MangaBall(
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
-        deepLink(query)
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            return deepLink(query)
+        }
+
+        val defaultFilterState = run {
+            filters.filterIsInstance<TriStateGroupFilter<String>>().all { filter -> filter.state.all { it.isIgnored() } } &&
+                filters.firstInstance<DemographicFilter>().state == 0 &&
+                filters.firstInstance<StatusFilter>().state == 0
+        }
+
+        if (query.isNotBlank() && defaultFilterState) {
+            return if (page == 1) {
+                querySearch(query)
+            } else {
+                super.fetchSearchManga(page - 1, query, filters)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
+    private fun querySearch(query: String): Observable<MangasPage> {
+        val url = "$baseUrl/api/v1/smart-search/search/"
+        val body = FormBody.Builder()
+            .add("search_input", query.trim())
+            .build()
+
+        return client.newCall(POST(url, headers, body))
+            .asObservableSuccess()
+            .map {
+                val mangas = it.parseAs<QuerySearchResponse>().data.manga
+                    .map { manga ->
+                        SManga.create().apply {
+                            this.url = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
+                            title = manga.title
+                            thumbnail_url = manga.img
+                        }
+                    }
+
+                MangasPage(mangas, true)
+            }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
