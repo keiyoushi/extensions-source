@@ -13,13 +13,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -106,7 +103,7 @@ class ScansFR :
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val hasChaptersOnly = filters.filterIsInstance<HasChaptersFilter>().firstOrNull()?.state == true
+        val hasChaptersOnly = filters.firstInstanceOrNull<HasChaptersFilter>()?.state == true
         return client.newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map { response -> parseSearchManga(response, query, hasChaptersOnly) }
@@ -193,23 +190,19 @@ class ScansFR :
         val chapterNumber = parts[1]
         val chapterId = "$mangaSlug-$chapterNumber"
 
-        return client.newCall(GET("$apiUrl/api/v1/chapters/$chapterId", headers))
-            .asObservableSuccess()
-            .flatMap { chapterResponse ->
-                val pageCount = chapterResponse.parseAs<ChapterDetailDto>().pageCount
-                val body = buildJsonObject {
-                    putJsonArray("pages") { (1..pageCount).forEach { add(it) } }
-                    put("sessionId", sessionId)
-                }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        val body = "{}".toRequestBody(JSON_MEDIA_TYPE)
+        val tokenHeaders = headersBuilder()
+            .add("X-Session-ID", sessionId)
+            .build()
 
-                client.newCall(
-                    POST("$apiUrl/api/v1/chapters/$chapterId/tokens", headers, body),
-                ).asObservableSuccess()
-            }
-            .map { tokenResponse ->
-                tokenResponse.parseAs<TokensResponseDto>().tokens
-                    .sortedBy { it.pageNumber }
-                    .map { token -> Page(token.pageNumber - 1, imageUrl = "$apiUrl/api/v1/images/${token.token}") }
+        return client.newCall(POST("$apiUrl/api/v1/chapters/$chapterId/token", tokenHeaders, body))
+            .asObservableSuccess()
+            .map { response ->
+                val dto = response.parseAs<ChapterTokenDto>()
+                (1..dto.pageCount).map { pageNumber ->
+                    val imageUrl = "$apiUrl/api/v1/images/${dto.chapterId}/$pageNumber?sig=${dto.sig}&exp=${dto.exp}&s=${dto.sessionHash}"
+                    Page(pageNumber - 1, imageUrl = imageUrl)
+                }
             }
     }
 
@@ -233,7 +226,7 @@ class ScansFR :
         else -> SManga.UNKNOWN
     }
 
-    private fun String?.parseDate(): Long = this?.let { DATE_FORMATTER.tryParse(it) } ?: 0L
+    private fun String?.parseDate(): Long = DATE_FORMATTER.tryParse(this)
 
     companion object {
         private const val PREF_SHOW_NSFW = "pref_show_nsfw"
