@@ -30,9 +30,6 @@ class AinzScansID : HttpSource() {
         .rateLimit(3)
         .build()
 
-    // URL path change (/series/ -> /comic/)
-    override val versionId = 2
-
     private val apiUrl = "https://api.ainzscans01.com/api"
 
     override fun headersBuilder() = super.headersBuilder()
@@ -99,10 +96,10 @@ class AinzScansID : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${getNormalizedMangaUrl(manga)}"
 
     // =============================== Details ===============================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series${getNormalizedMangaUrl(manga)}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDetailDto>().toSManga()
 
@@ -137,6 +134,12 @@ class AinzScansID : HttpSource() {
         TextFilter("Artist", "artist"),
         TextFilter("Publisher", "publisher"),
     )
+
+    private fun getNormalizedMangaUrl(manga: SManga): String = if (manga.url.startsWith("/series/")) {
+        "/comic/${manga.url.substringAfter("/series/").removeSuffix("/")}"
+    } else {
+        manga.url
+    }
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
