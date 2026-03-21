@@ -20,6 +20,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -66,9 +67,7 @@ class ComicFury(
      */
     private val archiveSelector = "a:has(div.archive-chapter)"
     private val chapterSelector = "a:has(div.archive-comic)"
-    private val nextArchivePageSelector = "#scroll-content > .onsite-viewer-back-link + .archive-pages a"
-    private val nextChapterPageSelector = "#scroll-content > .webcomic-title-content-inner + .archive-pages a"
-    private lateinit var currentPage: org.jsoup.nodes.Document
+    private val nextPageSelector = "span.vfpagecurrent + a.vfpage"
 
     private fun Element.toSManga(): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(this@toSManga.attr("abs:href"))
@@ -76,31 +75,38 @@ class ComicFury(
         date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
     }
 
-    private fun collect(url: String): List<SChapter> = client.newCall(GET(url, headers)).execute().asJsoup()
-        .also { currentPage = it }
-        .select(chapterSelector)
-        .map { element -> element.toSManga() }
+    private fun collect(startPage: Document): List<SChapter> {
+        val chapters = mutableListOf<SChapter>()
+        var currentPage = startPage
+
+        while (true) {
+            // Get all chapters on the current page.
+            chapters.addAll(
+                currentPage.select(chapterSelector).map { element ->
+                    element.toSManga()
+                },
+            )
+
+            // Fetch the next page and repeat. If there are no more pages, exit.
+            val nextPageButton = currentPage.selectFirst(nextPageSelector) ?: break
+            val url = nextPageButton.attr("abs:href")
+            currentPage = client.newCall(GET(url, headers)).execute().asJsoup()
+        }
+
+        return chapters
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsp = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
 
         if (jsp.selectFirst(archiveSelector) != null) {
-            jsp.select(archiveSelector).eachAttr("abs:href").map { url ->
-                chapters.addAll(collect(url))
-                currentPage.select(nextArchivePageSelector).eachAttr("abs:href")
-                    .mapNotNull { nextUrl -> chapters.addAll(collect(nextUrl)) }
+            jsp.select(archiveSelector).eachAttr("abs:href").forEach { url ->
+                val currentPage = client.newCall(GET(url, headers)).execute().asJsoup()
+                chapters.addAll(collect(currentPage))
             }
         } else {
-            chapters.addAll(
-                jsp.select(chapterSelector).map { element ->
-                    element.toSManga()
-                },
-            )
-            jsp.select(nextChapterPageSelector).eachAttr("abs:href")
-                .mapNotNull { nextUrl ->
-                    chapters.addAll(collect(nextUrl))
-                }
+            chapters.addAll(collect(jsp))
         }
 
         return chapters
