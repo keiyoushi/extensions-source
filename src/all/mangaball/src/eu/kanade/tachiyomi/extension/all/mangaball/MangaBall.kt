@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -38,11 +39,15 @@ class MangaBall(
     ConfigurableSource {
 
     override val name = "Manga Ball"
-    override val baseUrl = "https://mangaball.net"
+    private val domain = "mangaball.net"
+    override val baseUrl = "https://$domain"
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
+        .addNetworkInterceptor(
+            CookieInterceptor(domain, "show18PlusContent" to hideNsfwPreference().not().toString()),
+        )
         .addInterceptor { chain ->
             var request = chain.request()
             if (request.url.pathSegments[0] == "api") {
@@ -160,12 +165,8 @@ class MangaBall(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        val hideNsfw = hideNsfwPreference()
 
         val mangas = data.data
-            .filterNot {
-                it.isAdult && hideNsfw
-            }
             .map {
                 SManga.create().apply {
                     url = it.url.toHttpUrl().pathSegments[1]
@@ -173,10 +174,6 @@ class MangaBall(
                     thumbnail_url = it.cover
                 }
             }
-
-        if (mangas.isEmpty() && hideNsfw) {
-            throw Exception("All results filtered out due to nsfw filter")
-        }
 
         return MangasPage(mangas, data.hasNextPage())
     }
@@ -383,6 +380,7 @@ class MangaBall(
         SwitchPreferenceCompat(screen.context).apply {
             key = NSFW_PREF
             title = "Hide NSFW content"
+            summary = "Restart of the app required"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }

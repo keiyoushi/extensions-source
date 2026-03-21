@@ -24,7 +24,6 @@ class SearchManga(
     val url: String,
     val name: String,
     val cover: String,
-    val isAdult: Boolean,
 )
 
 @Serializable
