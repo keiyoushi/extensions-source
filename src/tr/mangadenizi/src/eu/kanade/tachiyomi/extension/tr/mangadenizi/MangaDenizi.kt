@@ -8,9 +8,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,14 +29,15 @@ class MangaDenizi : HttpSource() {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    // data-page JSON'undan props'u çek
-    private fun rawProps(response: Response): JsonElement {
-        val raw = response.asJsoup()
+    // Genel parseAs yardımcısı — JsonElement üzerinden tip-güvenli dönüşüm
+    private inline fun <reified T> JsonElement.parseAs(): T = json.decodeFromJsonElement(this)
+
+    // data-page HTML özniteliğinden props nesnesini çek
+    private fun rawProps(response: Response): JsonObject =
+        response.asJsoup()
             .selectFirst("div#app")!!
             .attr("data-page")
-        return json.parseToJsonElement(raw)
-            .jsonObject["props"]!!
-    }
+            .let { json.parseToJsonElement(it).jsonObject["props"]!!.jsonObject }
 
     // ============================== Popular ===============================
 
@@ -45,9 +46,9 @@ class MangaDenizi : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val props = rawProps(response)
-        val paginated = json.decodeFromJsonElement<MangaPaginated>(props.jsonObject["manga"]!!)
+        val paginated = props["manga"]!!.parseAs<MangaPaginated>()
         val mangas = paginated.data.map { it.toSManga() }
-        return MangasPage(mangas, paginated.next_page_url != null)
+        return MangasPage(mangas, paginated.nextPageUrl != null)
     }
 
     // ============================== Latest ================================
@@ -79,8 +80,7 @@ class MangaDenizi : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val props = rawProps(response)
-        val item = json.decodeFromJsonElement<MangaItem>(props.jsonObject["manga"]!!)
-        return item.toSManga()
+        return props["manga"]!!.parseAs<MangaItem>().toSManga()
     }
 
     // ============================== Chapters ==============================
@@ -90,7 +90,7 @@ class MangaDenizi : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val props = rawProps(response)
-        val item = json.decodeFromJsonElement<MangaItem>(props.jsonObject["manga"]!!)
+        val item = props["manga"]!!.parseAs<MangaItem>()
         return item.chapters.map { it.toSChapter(item.slug) }.reversed()
     }
 
@@ -101,8 +101,8 @@ class MangaDenizi : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val props = rawProps(response)
-        val pages = json.decodeFromJsonElement<List<PageItem>>(props.jsonObject["pages"]!!)
-        return pages.mapIndexed { idx, page -> Page(idx, imageUrl = page.image_url) }
+        val pages = props["pages"]!!.parseAs<List<PageItem>>()
+        return pages.mapIndexed { idx, page -> Page(idx, imageUrl = page.imageUrl) }
     }
 
     override fun imageUrlParse(response: Response): String =
@@ -115,7 +115,7 @@ class MangaDenizi : HttpSource() {
     private fun MangaItem.toSManga() = SManga.create().apply {
         url = "/manga/$slug"
         title = this@toSManga.title
-        thumbnail_url = cover_url
+        thumbnail_url = coverUrl
         description = this@toSManga.description
         author = authors.firstOrNull()?.name
         genre = categories.joinToString { it.name }
@@ -133,55 +133,15 @@ class MangaDenizi : HttpSource() {
             append("Bölüm $number")
             if (!title.isNullOrBlank()) append(": $title")
         }
-        date_upload = runCatching {
-            dateFormat.parse(published_at.substringBefore("T"))?.time ?: 0L
-        }.getOrDefault(0L)
+        date_upload = dateFormat.tryParse(publishedAt.substringBefore("T"))
         chapter_number = number.toFloat()
     }
 
     companion object {
         val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     }
-
-    // =========================== Data Classes =============================
-
-    @Serializable
-    data class MangaPaginated(
-        val data: List<MangaItem> = emptyList(),
-        val next_page_url: String? = null,
-    )
-
-    @Serializable
-    data class MangaItem(
-        val id: Int,
-        val title: String,
-        val slug: String,
-        val description: String? = null,
-        val cover_url: String? = null,
-        val status: String? = null,
-        val authors: List<AuthorItem> = emptyList(),
-        val categories: List<CategoryItem> = emptyList(),
-        val chapters: List<ChapterItem> = emptyList(),
-    )
-
-    @Serializable
-    data class AuthorItem(val name: String)
-
-    @Serializable
-    data class CategoryItem(val name: String)
-
-    @Serializable
-    data class ChapterItem(
-        val id: Int,
-        val number: Double,
-        val title: String? = null,
-        val slug: String,
-        val published_at: String,
-    )
-
-    @Serializable
-    data class PageItem(
-        val page_number: Int,
-        val image_url: String,
-    )
 }
+
+// tryParse — SimpleDateFormat için güvenli ayrıştırma yardımcısı
+fun SimpleDateFormat.tryParse(string: String): Long =
+    runCatching { parse(string)?.time }.getOrNull() ?: 0L
