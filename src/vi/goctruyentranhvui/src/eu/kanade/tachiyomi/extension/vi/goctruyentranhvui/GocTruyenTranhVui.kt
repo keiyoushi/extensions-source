@@ -238,7 +238,7 @@ class GocTruyenTranhVui :
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("searchValue", query)
+            if (query.isNotEmpty()) addQueryParameter("searchValue", query)
             for (filter in filters) {
                 when (filter) {
                     is FilterGroup ->
