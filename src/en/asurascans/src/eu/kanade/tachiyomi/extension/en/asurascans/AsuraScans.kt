@@ -12,8 +12,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -131,16 +136,35 @@ class AsuraScans :
     override fun chapterListRequest(manga: SManga): Request {
         val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
         val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
-        return GET("$apiUrl/series/$slug/chapters?offset=0&limit=500", headers)
+        return GET("$baseUrl/comics/$slug", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chaptersData = response.parseAs<DataDto<List<ChapterDto>>>()
+        val document = response.asJsoup()
+        val chaptersProps = document.selectFirst("[props*=chapters]")!!.attr("props")
+        val jsonElement = Json.parseToJsonElement(chaptersProps).unwrapAstroProps()
+        val chaptersData = jsonElement.parseAs<ChapterListDto>()
         val hidePremium = preferences.hidePremiumChapters()
 
-        return chaptersData.data.orEmpty()
+        return chaptersData.chapters
             .filterNot { hidePremium && it.isLocked }
             .map { it.toSChapter() }
+    }
+
+    private fun JsonElement.unwrapAstroProps(insideArray: Boolean = false): JsonElement = when (this) {
+        is JsonArray -> {
+            if (insideArray) {
+                JsonArray(this.map { it.unwrapAstroProps() })
+            } else {
+                this[1].unwrapAstroProps(true)
+            }
+        }
+        is JsonObject -> {
+            JsonObject(
+                this.mapValues { it.value.unwrapAstroProps() },
+            )
+        }
+        else -> this
     }
 
     override fun pageListRequest(chapter: SChapter): Request {

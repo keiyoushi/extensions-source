@@ -72,6 +72,11 @@ val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply
 }
 
 @Serializable
+class ChapterListDto(
+    val chapters: List<ChapterDto> = emptyList(),
+)
+
+@Serializable
 class ChapterWrapperDto(
     val chapter: ChapterDto,
 )
