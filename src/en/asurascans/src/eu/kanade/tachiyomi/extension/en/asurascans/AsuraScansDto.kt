@@ -90,15 +90,13 @@ class ChapterDto(
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"
         name = buildString {
-            if (isLocked) append("$LOCK ")
+            if (isLocked) append("🔒 ")
             append("Chapter $numberStr")
             title?.let { append(" - $it") }
         }
         date_upload = dateFormat.tryParse(createdAt)
     }
 }
-
-const val LOCK = "🔒"
 
 @Serializable
 class PremiumPageListDto(
