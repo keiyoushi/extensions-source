@@ -54,8 +54,9 @@ class MangaBall(
                 val response = chain.proceed(request)
                 if (!response.isSuccessful && response.code == 403) {
                     response.close()
+                    updateCSRF()
                     request = request.newBuilder()
-                        .header("X-CSRF-TOKEN", getCSRF(forceReset = true))
+                        .header("X-CSRF-TOKEN", getCSRF())
                         .build()
 
                     chain.proceed(request)
@@ -71,16 +72,21 @@ class MangaBall(
     private var csrf: String? = null
 
     @Synchronized
-    private fun getCSRF(document: Document? = null, forceReset: Boolean = false): String {
-        if (csrf == null || document != null || forceReset) {
-            val doc = document ?: client.newCall(
-                GET(baseUrl, headers),
-            ).execute().asJsoup()
+    private fun updateCSRF(document: Document? = null) {
+        val doc = document ?: client.newCall(
+            GET(baseUrl, headers),
+        ).execute().asJsoup()
 
-            doc.selectFirst("meta[name=csrf-token]")
-                ?.attr("content")
-                ?.takeIf { it.isNotBlank() }
-                ?.also { csrf = it }
+        doc.selectFirst("meta[name=csrf-token]")
+            ?.attr("content")
+            ?.takeIf { it.isNotBlank() }
+            ?.also { csrf = it }
+    }
+
+    @Synchronized
+    private fun getCSRF(): String {
+        if (csrf == null) {
+            updateCSRF()
         }
 
         return csrf ?: throw Exception("CSRF token not found")
@@ -214,7 +220,7 @@ class MangaBall(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        getCSRF(document)
+        updateCSRF(document)
 
         return SManga.create().apply {
             url = document.location().toHttpUrl().pathSegments[1]
@@ -324,7 +330,7 @@ class MangaBall(
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        getCSRF(document)
+        updateCSRF(document)
 
         document.select("script:containsData(titleId)").joinToString(";") { it.data() }.also {
             val titleId = titleIdRegex.find(it)
