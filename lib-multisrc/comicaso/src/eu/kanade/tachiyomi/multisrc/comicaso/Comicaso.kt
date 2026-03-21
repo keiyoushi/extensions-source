@@ -175,10 +175,12 @@ abstract class Comicaso(
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("img.mjv2-page-image").mapIndexed { index, img ->
-            val imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
-            Page(index, document.location(), imageUrl)
-        }
+        return document.select("img.mjv2-page-image")
+            .map { it.attr("abs:src").ifEmpty { it.attr("abs:data-src") } }
+            .distinct()
+            .mapIndexed { index, imageUrl ->
+                Page(index, document.location(), imageUrl)
+            }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
