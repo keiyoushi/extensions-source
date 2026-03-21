@@ -426,4 +426,4 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             "Özel Tür",
             arrayOf("Tümü", "Yetişkin"),
         )
-                                   }
+}
