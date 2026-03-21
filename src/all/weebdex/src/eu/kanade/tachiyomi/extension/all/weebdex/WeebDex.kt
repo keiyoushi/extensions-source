@@ -64,7 +64,7 @@ open class WeebDex(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
-        val mangas = mangaListDto.toSMangaList(coverQuality).applyFirstVolumeCover()
+        val mangas = mangaListDto.toSMangaList(coverQuality)
         return MangasPage(mangas, mangaListDto.hasNextPage)
     }
 
@@ -85,7 +85,7 @@ open class WeebDex(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesListDto = response.parseAs<UpdatesListDto>()
-        val mangas = updatesListDto.toSMangaList(coverQuality).applyFirstVolumeCover()
+        val mangas = updatesListDto.toSMangaList(coverQuality)
         return MangasPage(mangas, updatesListDto.hasNextPage)
     }
 
@@ -188,7 +188,7 @@ open class WeebDex(
         .asObservableSuccess()
         .map { response ->
             val manga = response.parseAs<MangaDto>()
-            MangasPage(listOf(manga.toSManga(coverQuality).applyFirstVolumeCover(manga.id)), false)
+            MangasPage(listOf(manga.toSManga(coverQuality)), false)
         }
 
     private fun fetchMangaByChapterId(id: String): Observable<MangasPage> = client.newCall(GET("${WeebDexConstants.API_URL}/chapter/$id", headers))
@@ -197,7 +197,7 @@ open class WeebDex(
             val chapter = response.parseAs<ChapterDto>()
             val manga = chapter.relationships?.manga
                 ?: throw Exception("Could not find manga for chapter $id")
-            MangasPage(listOf(manga.toSManga(coverQuality).applyFirstVolumeCover(manga.id)), false)
+            MangasPage(listOf(manga.toSManga(coverQuality)), false)
         }
 
     // -------------------- Manga details --------------------
@@ -213,11 +213,6 @@ open class WeebDex(
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
         return manga.toSManga(coverQuality).applyFirstVolumeCover(manga.id)
-    }
-
-    private fun List<SManga>.applyFirstVolumeCover(): List<SManga> {
-        if (!useFirstVolumeCover) return this
-        return map { it.applyFirstVolumeCover() }
     }
 
     private fun SManga.applyFirstVolumeCover(mangaId: String? = null): SManga {
@@ -308,7 +303,7 @@ open class WeebDex(
         SwitchPreferenceCompat(screen.context).apply {
             key = USE_FIRST_VOLUME_COVER_PREFERENCE
             title = "Use the first volume cover as cover"
-            summary = "May need to manually refresh entries already in library. Otherwise, clear database to have new covers to show up. Entries will take longer to load."
+            summary = "May need to manually refresh entries already in library. Otherwise, clear database to have new covers to show up."
             setDefaultValue(USE_FIRST_VOLUME_COVER_DEFAULT)
         }.also(screen::addPreference)
     }
