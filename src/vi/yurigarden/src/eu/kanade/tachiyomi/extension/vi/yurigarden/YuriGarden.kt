@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.extension.vi.yurigarden
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -19,7 +23,9 @@ import org.jsoup.Jsoup
 import rx.Observable
 import java.util.concurrent.TimeUnit
 
-class YuriGarden : HttpSource() {
+class YuriGarden :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "YuriGarden"
 
@@ -32,6 +38,8 @@ class YuriGarden : HttpSource() {
     private val apiUrl = baseUrl.replace("://", "://api.") + "/api"
 
     private val dbUrl = baseUrl.replace("://", "://db.")
+
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -52,16 +60,44 @@ class YuriGarden : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/comics".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", LIMIT.toString())
-            .addQueryParameter("full", "true")
+        val url = "$apiUrl/comics/rank/trending".toHttpUrl().newBuilder()
+            .addQueryParameter("type", "day")
+            .addQueryParameter("r18", allowR18.toString())
             .build()
 
         return GET(url, apiHeaders())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<List<TrendingComic>>()
+
+        val mangaList = result.map { comic ->
+            SManga.create().apply {
+                url = "/comic/${comic.id}"
+                title = comic.title
+                thumbnail_url = comic.image?.toThumbnailUrl()
+            }
+        }
+
+        val hasNextPage = false // The trending endpoint does not support pagination
+
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    // ============================== Latest ================================
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/comics".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", LIMIT.toString())
+            .addQueryParameter("r18", allowR18.toString())
+            .addQueryParameter("full", "true")
+            .build()
+
+        return GET(url, apiHeaders())
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<ComicsResponse>()
 
         val mangaList = result.comics.map { comic ->
@@ -77,20 +113,16 @@ class YuriGarden : HttpSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    // ============================== Latest ================================
-
-    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
     // ============================== Search ================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/comics".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", LIMIT.toString())
+            addQueryParameter("allowR18", allowR18.toString())
             addQueryParameter("full", "true")
-            addQueryParameter("searchBy", "title,anotherNames")
+
+            setQueryParameter("searchBy", "title,anotherNames")
 
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
@@ -100,11 +132,6 @@ class YuriGarden : HttpSource() {
 
             filterList.forEach { filter ->
                 when (filter) {
-                    is GenreFilter -> {
-                        if (filter.slug.isNotEmpty()) {
-                            addQueryParameter("genre", filter.slug)
-                        }
-                    }
                     is StatusFilter -> {
                         if (filter.slug.isNotEmpty()) {
                             addQueryParameter("status", filter.slug)
@@ -113,9 +140,20 @@ class YuriGarden : HttpSource() {
                     is SortFilter -> {
                         addQueryParameter("sort", filter.slug)
                     }
-                    is R18Filter -> {
-                        if (filter.state) {
-                            addQueryParameter("allowR18", "true")
+                    is GenreFilter -> {
+                        val selected = filter.state
+                            .filter { it.state }
+                            .joinToString(",") { it.value }
+                        if (selected.isNotEmpty()) {
+                            addQueryParameter("genre", selected)
+                        }
+                    }
+                    is SearchByFilter -> {
+                        val selected = filter.state
+                            .filter { it.state }
+                            .joinToString(",") { it.value }
+                        if (selected.isNotEmpty()) {
+                            setQueryParameter("searchBy", selected)
                         }
                     }
                     else -> {}
@@ -123,10 +161,10 @@ class YuriGarden : HttpSource() {
             }
         }.build()
 
-        return GET(url, apiHeaders())
+        return GET(url.toString(), apiHeaders())
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     // ============================== Filters ===============================
 
@@ -212,7 +250,7 @@ class YuriGarden : HttpSource() {
         return result.pages.mapIndexed { index, page ->
             val rawUrl = page.url.replace("_credit", "").trimStart('/')
 
-            if (rawUrl.startsWith("comics/")) {
+            if (rawUrl.startsWith("comics/") || rawUrl.startsWith("teams/")) {
                 val key = page.key
                 val url = "$dbUrl/storage/v1/object/public/yuri-garden-store/$rawUrl"
                     .toHttpUrl().newBuilder().apply {
@@ -310,10 +348,26 @@ class YuriGarden : HttpSource() {
 
     private fun String.toThumbnailUrl(): String = if (startsWith("http")) this else "$dbUrl/storage/v1/object/public/yuri-garden-store/$this"
 
+    // ============================== Peferences ================================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_R18
+            title = "Hiển thị nội dung R18"
+            summary = "Bật để hiển thị truyện có nội dung người lớn (18+)"
+            setDefaultValue(PREF_SHOW_R18_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    private val allowR18: Boolean
+        get() = preferences.getBoolean(PREF_SHOW_R18, PREF_SHOW_R18_DEFAULT)
+
     companion object {
         private const val LIMIT = 15
         private const val AES_PASSWORD = "OAqg95LgrfPM8r68"
         private const val CLOUDFLARE_VERIFY_MESSAGE = "Mở webview để xác minh cloudflare cho chương này"
         private val COMIC_ID_REGEX = """"comic"\s*:\s*\{\s*"id"\s*:\s*(\d+)""".toRegex()
+        private const val PREF_SHOW_R18 = "pref_show_r18"
+        private const val PREF_SHOW_R18_DEFAULT = false
     }
 }
