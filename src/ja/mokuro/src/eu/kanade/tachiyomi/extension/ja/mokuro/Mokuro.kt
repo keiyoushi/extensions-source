@@ -80,6 +80,20 @@ class Mokuro :
         series.volumes.asReversed().map { it.toSChapter(series) }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (seriesPath, volumeName) = chapter.url.split("|", limit = 2)
+
+        val cbzUrl = "$baseUrl/mokuro-reader".toHttpUrl().newBuilder()
+            .addPathSegment(seriesPath)
+            .addPathSegment("$volumeName.cbz")
+            .build()
+            .toString()
+
+        val encodedUrl = java.net.URLEncoder.encode(cbzUrl, "UTF-8")
+
+        return "https://reader.mokuro.app/#/upload?cbz=$encodedUrl"
+    }
+
     // ===============================
     // Pages
     // ===============================
