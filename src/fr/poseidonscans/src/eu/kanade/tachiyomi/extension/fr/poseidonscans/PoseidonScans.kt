@@ -40,6 +40,8 @@ class PoseidonScans :
 
     override val client = network.cloudflareClient
 
+    val rscHeaders = headersBuilder().add("RSC", "1").build()
+
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun String.toAbsoluteUrl(): String = if (this.startsWith("http")) this else baseUrl + this
@@ -152,7 +154,7 @@ class PoseidonScans :
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers.newBuilder().add("RSC", "1").build())
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val url = response.request.url
@@ -256,6 +258,8 @@ class PoseidonScans :
         }
         return isoDateFormatter.tryParse(cleanedDateString)
     }
+
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val pageDataDto = response.extractNextJs<PageData>()
