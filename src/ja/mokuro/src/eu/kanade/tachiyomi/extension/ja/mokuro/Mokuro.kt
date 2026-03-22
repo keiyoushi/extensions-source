@@ -112,8 +112,8 @@ class Mokuro :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_USE_LATEST_VOLUME_COVER
-            title = "Use latest volume cover"
-            summary = "Use the latest volume's cover as the manga thumbnail instead of the default series cover."
+            title = "最新巻の表紙を使用"
+            summary = "デフォルトのシリーズ表紙の代わりに、最新巻の表紙を漫画のサムネイルとして使用します。"
             setDefaultValue(PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
         }.also(screen::addPreference)
     }
