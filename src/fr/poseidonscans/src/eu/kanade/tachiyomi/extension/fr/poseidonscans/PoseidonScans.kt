@@ -337,7 +337,6 @@ class PoseidonScans :
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
-    override fun getFilterList(): FilterList = FilterList()
 
     // ========================== Preference =============================
 
