@@ -18,10 +18,15 @@ class SeriesDto(
     private val cover: String? = null,
     val volumes: List<VolumeDto>,
 ) {
-    fun toSManga(apiBaseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(apiBaseUrl: String, useLatestVolumeCover: Boolean = false): SManga = SManga.create().apply {
         title = name
         url = path
-        thumbnail_url = cover?.let {
+        val mangaCover = if (useLatestVolumeCover) {
+            volumes.lastOrNull()?.cover ?: cover
+        } else {
+            cover
+        }
+        thumbnail_url = mangaCover?.let {
             apiBaseUrl.toHttpUrl().newBuilder()
                 .addPathSegment("cover")
                 .addQueryParameter("path", it)
@@ -34,7 +39,7 @@ class SeriesDto(
 @Serializable
 class VolumeDto(
     val name: String,
-    private val cover: String? = null,
+    internal val cover: String? = null,
 ) {
     fun toSChapter(series: SeriesDto): SChapter = SChapter.create().apply {
         name = this@VolumeDto.name
