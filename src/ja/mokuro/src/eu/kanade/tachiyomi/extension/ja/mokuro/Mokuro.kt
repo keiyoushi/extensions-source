@@ -25,7 +25,7 @@ class Mokuro : HttpSource() {
     private val apiBaseUrl = "$baseUrl/catalog/api"
 
     override val client = network.client.newBuilder()
-        .addInterceptor(MokuroInterceptor())
+        .addInterceptor(CbzInterceptor())
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -36,7 +36,7 @@ class Mokuro : HttpSource() {
     // ===============================
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = getLibrary().map { library ->
-        MangasPage(library.series.map { it.toSManga() }, false)
+        MangasPage(library.series.map { it.toSManga(apiBaseUrl) }, false)
     }
 
     // ===============================
@@ -45,8 +45,8 @@ class Mokuro : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = getLibrary().map { library ->
         val mangas = library.series
-            .filter { it.name.contains(query, ignoreCase = true) }
-            .map { it.toSManga() }
+            .filter { it.name.contains(query.trim(), ignoreCase = true) }
+            .map { it.toSManga(apiBaseUrl) }
         MangasPage(mangas, false)
     }
 
@@ -55,7 +55,7 @@ class Mokuro : HttpSource() {
     // ===============================
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = getLibrary().map { library ->
-        library.series.find { it.path == manga.url }?.toSManga()
+        library.series.find { it.path == manga.url }?.toSManga(apiBaseUrl)
             ?: throw Exception("Series not found")
     }
 
@@ -71,10 +71,6 @@ class Mokuro : HttpSource() {
 
         series.volumes.asReversed().map { it.toSChapter(series) }
     }
-
-    private fun parseChapterNumber(name: String): Float = chapterNumberRegex.findAll(name).lastOrNull()?.value?.toFloatOrNull() ?: -1f
-
-    private val chapterNumberRegex = """(\d+(\.\d+)?)""".toRegex()
 
     // ===============================
     // Pages
@@ -145,26 +141,8 @@ class Mokuro : HttpSource() {
         }
     }
 
-    private fun SeriesDto.toSManga() = SManga.create().apply {
-        title = name
-        url = path
-        thumbnail_url = cover?.let { getCoverUrl(it) }
-    }
-
-    private fun VolumeDto.toSChapter(series: SeriesDto) = SChapter.create().apply {
-        name = this@toSChapter.name
-        chapter_number = parseChapterNumber(this@toSChapter.name)
-        url = series.path + "|" + this@toSChapter.name
-    }
-
-    private fun getCoverUrl(path: String): String = apiBaseUrl.toHttpUrl().newBuilder()
-        .addPathSegment("cover")
-        .addQueryParameter("path", path)
-        .build()
-        .toString()
-
     // ===============================
-    // Unsupported
+    // Unused
     // ===============================
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
