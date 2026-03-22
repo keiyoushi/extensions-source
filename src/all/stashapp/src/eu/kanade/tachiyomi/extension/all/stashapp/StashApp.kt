@@ -41,7 +41,7 @@ class StashApp :
     override val supportsLatest = true
 
     override val baseUrl: String
-        get() = preferences.getString(PREF_BASE_URL, DEFAULT_BASE_URL)!!.trim()
+        get() = preferences.getString(PREF_BASE_URL, DEFAULT_BASE_URL)!!.trim().trimEnd('/')
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
         preferences.getString(PREF_API_KEY, null)
@@ -213,10 +213,6 @@ class StashApp :
             title = "Server URL"
             summary = "Example: http://localhost:9999"
             setDefaultValue(DEFAULT_BASE_URL)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_BASE_URL, (newValue as String).trimEnd('/')).commit()
-            }
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
@@ -224,10 +220,6 @@ class StashApp :
             title = "API key"
             summary = "Settings | Security | Authentication | API Key"
             setDefaultValue("")
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(PREF_API_KEY, newValue as String).commit()
-            }
         }.let(screen::addPreference)
     }
 
@@ -298,7 +290,7 @@ class StashApp :
 
     private fun Gallery.toTitle(): String = title?.takeIf(String::isNotBlank)
         ?: folder?.path?.takeIf(String::isNotBlank)?.let(::pathLast)
-        ?: "Untitled"
+        ?: id!!
 
     private fun Image.toThumbnailUrl(): String? {
         if (visualFiles.firstOrNull()?.isImage() != true) return null
