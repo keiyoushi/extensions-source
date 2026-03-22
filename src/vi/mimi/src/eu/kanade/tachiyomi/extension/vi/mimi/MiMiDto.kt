@@ -37,7 +37,7 @@ class MangaDto(
             appendIfNotEmpty("Tên khác", differentNames)
             appendIfNotEmpty("Parody", parody)
             appendIfNotEmpty("Nhân vật", characters)
-
+            append("Code: $id\n\n")
             append(this@MangaDto.description)
         }
         author = authors.joinToString { it.name }

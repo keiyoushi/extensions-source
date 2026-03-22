@@ -164,10 +164,7 @@ class MiMi : HttpSource() {
 
     // ============================== Details ======================================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/info/$mangaId", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/info/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
@@ -175,10 +172,7 @@ class MiMi : HttpSource() {
 
     // ============================== Chapters ======================================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/gallery/$mangaId", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/gallery/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val segments = response.request.url.pathSegments
@@ -196,7 +190,7 @@ class MiMi : HttpSource() {
     // ============================== Pages ======================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/")
+        val chapterId = chapter.url.substringAfter("/")
         return GET("$apiUrl/chapter?id=$chapterId", headers)
     }
 
