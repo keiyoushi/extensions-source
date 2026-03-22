@@ -78,6 +78,8 @@ class ScanManga :
             .add("X-Requested-With", "")
     }
 
+    private fun fetchHeadersBuilder(): Headers.Builder = headersBuilder().removeAll("X-Requested-With")
+
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
 
@@ -268,7 +270,7 @@ class ScanManga :
 
         val pageListRequest = POST(
             "https://bqj.${baseUrl.toHttpUrl().topPrivateDomain()}/lel/$chapterId.json",
-            headers.newBuilder()
+            fetchHeadersBuilder()
                 .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
                 .add("Referer", documentUrl.toString())
                 .add("Token", "yf")
