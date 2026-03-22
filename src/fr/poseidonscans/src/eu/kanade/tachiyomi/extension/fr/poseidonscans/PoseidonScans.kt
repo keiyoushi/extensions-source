@@ -33,7 +33,7 @@ class PoseidonScans :
     ConfigurableSource {
 
     override val name = "Poseidon Scans"
-    override val baseUrl = "https://poseidon-scans.co"
+    override val baseUrl = "https://poseidon-scans.net"
     override val lang = "fr"
     override val supportsLatest = true
     override val versionId = 2
