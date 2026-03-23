@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
 
-import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -249,81 +248,32 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun getImgAttr(element: Element?): String? = null
 
     // Pages
-    // Şifreleme: k2 = div#chapter-images üzerindeki k_ attribute'larından (data-o- sırasına göre)
-    // k3 = imageQueueData.k3
-    // finalXorKey = k2 + k3
+    // queue[i].src formatında direkt URL geliyor
 
     override fun pageListParse(document: Document): List<Page> {
-        // k2: #chapter-images üzerindeki k_ attribute'larından oluşuyor
-        val container = document.selectFirst("div#chapter-images") ?: return emptyList()
-        val k2 = container.attributes()
-            .filter { it.key.startsWith("k_") }
-            .mapNotNull { attr ->
-                val order = container.attr("data-o-${attr.key}").toIntOrNull() ?: return@mapNotNull null
-                Pair(order, attr.value)
-            }
-            .sortedBy { it.first }
-            .joinToString("") { it.second }
-
-        if (k2.isEmpty()) return emptyList()
-
         for (script in document.select("script:not([src])")) {
             val js = script.html()
             if (!js.contains("imageQueueData")) continue
-
-            val k3 = Regex("""\bk3\b\s*:\s*"([a-f0-9]+)"""").find(js)?.groupValues?.get(1) ?: continue
 
             val queueStart = js.indexOf("queue")
             val logoIndex = js.indexOf("logo", queueStart)
             if (queueStart < 0 || logoIndex < 0) continue
             val queueSection = js.substring(queueStart, logoIndex)
 
-            val key = k2 + k3
             val pages = mutableListOf<Page>()
             var idx = 0
 
-            var pos = 0
-            while (pos < queueSection.length) {
-                val open = queueSection.indexOf('[', pos)
-                if (open < 0) break
-                val close = queueSection.indexOf(']', open)
-                if (close < 0) break
-                pos = close + 1
-
-                val block = queueSection.substring(open + 1, close)
-                val chunks = Regex(""""([^"]+)"""").findAll(block)
-                    .map { it.groupValues[1] }
-                    .toList()
-                if (chunks.isEmpty()) continue
-
-                val combined = chunks.joinToString("")
-                if (combined.contains("FAKE")) continue
-
-                val url = xorDecrypt(combined, key) ?: continue
-                pages.add(Page(idx++, imageUrl = url))
+            Regex(""""src"\s*:\s*"([^"]+)"""").findAll(queueSection).forEach { match ->
+                val url = match.groupValues[1]
+                if (url.startsWith("http")) {
+                    pages.add(Page(idx++, imageUrl = url))
+                }
             }
 
             if (pages.isNotEmpty()) return pages
         }
 
         return emptyList()
-    }
-
-    @Suppress("SwallowedException")
-    private fun xorDecrypt(base64Str: String, key: String): String? {
-        if (key.isEmpty()) return null
-        return try {
-            val pad = (4 - base64Str.length % 4) % 4
-            val bytes = Base64.decode(base64Str + "=".repeat(pad), Base64.DEFAULT)
-            val result = buildString {
-                bytes.forEachIndexed { i, b ->
-                    append(((b.toInt() and 0xFF) xor key[i % key.length].code).toChar())
-                }
-            }
-            if (result.startsWith("http")) result else null
-        } catch (e: Exception) {
-            null
-        }
     }
 
     // List Parse
