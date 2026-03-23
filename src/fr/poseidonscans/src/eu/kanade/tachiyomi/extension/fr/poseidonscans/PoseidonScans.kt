@@ -74,7 +74,7 @@ class PoseidonScans :
             SManga.create().apply {
                 title = apiManga.title
                 url = "/serie/${apiManga.slug}"
-                thumbnail_url = apiManga.coverImage?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
+                thumbnail_url = apiManga.slug.toApiCoverUrl() + ".webp"
             }
         }
         val hasNextPage = mangas.size == 16
