@@ -12,6 +12,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,6 +30,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
@@ -77,14 +79,33 @@ class GocTruyenTranhVui :
         return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        "$apiUrl/search?p=${page - 1}&orders%5B%5D=recentDate",
-        xhrHeaders,
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortByList(getSortByList()).apply {
+                state[3].state = true
+            },
+        ),
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        // B1: call manga detail url refresh cookie
+        val refreshReq = GET(getMangaUrl(manga), headers)
+
+        return client.newCall(refreshReq)
+            .asObservableSuccess()
+            .flatMap { _ ->
+                // B2: recall chapter list request
+                client.newCall(chapterListRequest(manga))
+                    .asObservableSuccess()
+                    .map(::chapterListParse)
+            }
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringBefore(':')
@@ -99,6 +120,13 @@ class GocTruyenTranhVui :
             throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
         }
         return chapterJson.result.chapters.map { it.toSChapter(slug) }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = chapter.url
+        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
+        return "$baseUrl/truyen/$slug/chuong-$numberChapter"
     }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
@@ -210,7 +238,7 @@ class GocTruyenTranhVui :
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("searchValue", query)
+            if (query.isNotEmpty()) addQueryParameter("searchValue", query)
             for (filter in filters) {
                 when (filter) {
                     is FilterGroup ->
@@ -222,7 +250,7 @@ class GocTruyenTranhVui :
                 }
             }
         }.build()
-        return GET(url, headers)
+        return GET(url, xhrHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
