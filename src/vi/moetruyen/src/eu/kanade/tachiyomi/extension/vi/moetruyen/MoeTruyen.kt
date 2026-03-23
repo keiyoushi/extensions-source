@@ -175,11 +175,16 @@ class MoeTruyen : HttpSource() {
         while (visitedPages.add(currentPageUrl)) {
             chapters += parseChapterList(currentDocument)
 
-            val nextChapterPageUrl = currentDocument
-                .selectFirst("nav[aria-label*='Phân trang chương'] a[aria-label='Trang chương sau']:not(.is-disabled)")
-                ?.takeUnless { it.attr("href") == "#" }
-                ?.absUrl("href")
-                ?.ifEmpty { null }
+            val nextChapterLinkElement: Element? = currentDocument.selectFirst(
+                "nav[aria-label*='Phân trang chương'] a[aria-label='Trang chương sau']:not(.is-disabled)",
+            )
+            val nextChapterPageUrl: String? = nextChapterLinkElement?.let { link ->
+                if (link.attr("href") == "#") {
+                    null
+                } else {
+                    link.absUrl("href").ifEmpty { null }
+                }
+            }
 
             if (nextChapterPageUrl == null || visitedPages.contains(nextChapterPageUrl)) {
                 break
