@@ -177,7 +177,7 @@ class MiMi : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         val checkUrl = if (manga.url.startsWith("/g/")) manga.url.replace("/g/", "") else manga.url
-        return GET("$apiUrl/chapter?id=$checkUrl", headers)
+        return GET("$apiUrl/gallery/$checkUrl", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
