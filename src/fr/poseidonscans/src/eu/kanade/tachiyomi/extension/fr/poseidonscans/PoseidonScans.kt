@@ -297,6 +297,8 @@ class PoseidonScans :
         return GET(page.imageUrl!!, imageHeaders)
     }
 
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -345,8 +347,6 @@ class PoseidonScans :
 
         return MangasPage(mangas, hasNextPage)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
     // ========================== Preference =============================
 
