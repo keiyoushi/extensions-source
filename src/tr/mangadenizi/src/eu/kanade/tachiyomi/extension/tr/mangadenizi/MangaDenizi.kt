@@ -38,18 +38,19 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga?sort=views&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/manga?sort=views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val props = rawProps(response)
         val paginated = props["manga"]!!.parseAs<MangaPaginated>()
-        val mangas = paginated.data.map { it.toSManga() }
-        return MangasPage(mangas, paginated.nextPageUrl != null)
+        return MangasPage(paginated.data.map { it.toSManga() }, paginated.nextPageUrl != null)
     }
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga?sort=latest&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/manga?sort=latest&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -126,8 +127,9 @@ class MangaDenizi : HttpSource() {
     }
 
     companion object {
-        val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+        private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     }
 }
 
-fun SimpleDateFormat.tryParse(string: String): Long = runCatching { parse(string)?.time }.getOrNull() ?: 0L
+private fun SimpleDateFormat.tryParse(string: String): Long =
+    runCatching { parse(string)?.time }.getOrNull() ?: 0L
