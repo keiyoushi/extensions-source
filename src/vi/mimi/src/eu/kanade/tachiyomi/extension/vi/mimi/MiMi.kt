@@ -203,7 +203,7 @@ class MiMi : HttpSource() {
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageDto>().toPage()
 
     companion object {
-        private const val PREFIX_ID_SEARCH = "id:"
+        const val PREFIX_ID_SEARCH = "id:"
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
