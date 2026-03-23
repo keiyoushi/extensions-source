@@ -1,13 +1,17 @@
 package eu.kanade.tachiyomi.extension.ja.mokuro
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,7 +19,9 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Mokuro : HttpSource() {
+class Mokuro :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Mokuro"
     override val baseUrl = "https://mokuro.moe"
@@ -25,18 +31,20 @@ class Mokuro : HttpSource() {
     private val apiBaseUrl = "$baseUrl/catalog/api"
 
     override val client = network.client.newBuilder()
-        .addInterceptor(MokuroInterceptor())
+        .addInterceptor(CbzInterceptor())
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/catalog")
+
+    private val preferences by getPreferencesLazy()
 
     // ===============================
     // Popular
     // ===============================
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = getLibrary().map { library ->
-        MangasPage(library.series.map { it.toSManga() }, false)
+        MangasPage(library.series.map { it.toSManga(apiBaseUrl, useLatestVolumeCover) }, false)
     }
 
     // ===============================
@@ -45,8 +53,8 @@ class Mokuro : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = getLibrary().map { library ->
         val mangas = library.series
-            .filter { it.name.contains(query, ignoreCase = true) }
-            .map { it.toSManga() }
+            .filter { it.name.contains(query.trim(), ignoreCase = true) }
+            .map { it.toSManga(apiBaseUrl, useLatestVolumeCover) }
         MangasPage(mangas, false)
     }
 
@@ -55,7 +63,7 @@ class Mokuro : HttpSource() {
     // ===============================
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = getLibrary().map { library ->
-        library.series.find { it.path == manga.url }?.toSManga()
+        library.series.find { it.path == manga.url }?.toSManga(apiBaseUrl, useLatestVolumeCover)
             ?: throw Exception("Series not found")
     }
 
@@ -72,9 +80,19 @@ class Mokuro : HttpSource() {
         series.volumes.asReversed().map { it.toSChapter(series) }
     }
 
-    private fun parseChapterNumber(name: String): Float = chapterNumberRegex.findAll(name).lastOrNull()?.value?.toFloatOrNull() ?: -1f
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (seriesPath, volumeName) = chapter.url.split("|", limit = 2)
 
-    private val chapterNumberRegex = """(\d+(\.\d+)?)""".toRegex()
+        val cbzUrl = "$baseUrl/mokuro-reader".toHttpUrl().newBuilder()
+            .addPathSegment(seriesPath)
+            .addPathSegment("$volumeName.cbz")
+            .build()
+            .toString()
+
+        val encodedUrl = java.net.URLEncoder.encode(cbzUrl, "UTF-8")
+
+        return "https://reader.mokuro.app/#/upload?cbz=$encodedUrl"
+    }
 
     // ===============================
     // Pages
@@ -99,6 +117,27 @@ class Mokuro : HttpSource() {
         return mokuro.pages.mapIndexed { index, page ->
             Page(index, imageUrl = "$cbzUrl#${page.imgPath}")
         }
+    }
+
+    // ===============================
+    // Settings
+    // ===============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_LATEST_VOLUME_COVER
+            title = "最新巻の表紙を使用"
+            summary = "デフォルトのシリーズ表紙の代わりに、最新巻の表紙を漫画のサムネイルとして使用します。"
+            setDefaultValue(PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    private val useLatestVolumeCover: Boolean
+        get() = preferences.getBoolean(PREF_USE_LATEST_VOLUME_COVER, PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
+
+    companion object {
+        private const val PREF_USE_LATEST_VOLUME_COVER = "pref_use_latest_volume_cover"
+        private const val PREF_USE_LATEST_VOLUME_COVER_DEFAULT = false
     }
 
     // ===============================
@@ -145,26 +184,8 @@ class Mokuro : HttpSource() {
         }
     }
 
-    private fun SeriesDto.toSManga() = SManga.create().apply {
-        title = name
-        url = path
-        thumbnail_url = cover?.let { getCoverUrl(it) }
-    }
-
-    private fun VolumeDto.toSChapter(series: SeriesDto) = SChapter.create().apply {
-        name = this@toSChapter.name
-        chapter_number = parseChapterNumber(this@toSChapter.name)
-        url = series.path + "|" + this@toSChapter.name
-    }
-
-    private fun getCoverUrl(path: String): String = apiBaseUrl.toHttpUrl().newBuilder()
-        .addPathSegment("cover")
-        .addQueryParameter("path", path)
-        .build()
-        .toString()
-
     // ===============================
-    // Unsupported
+    // Unused
     // ===============================
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
