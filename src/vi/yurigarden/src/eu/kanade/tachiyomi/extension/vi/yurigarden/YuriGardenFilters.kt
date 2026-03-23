@@ -150,6 +150,8 @@ private val genres = arrayOf(
     Pair("Zombie", "zombie"),
 )
 
+val genreMap = genres.associate { it.second to it.first }
+
 private val statuses = arrayOf(
     Pair("Tất cả", ""),
     Pair("Sắp ra mắt", "upcoming"),
