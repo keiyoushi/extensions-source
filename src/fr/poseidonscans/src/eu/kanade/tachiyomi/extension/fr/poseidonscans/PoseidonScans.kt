@@ -138,13 +138,13 @@ class PoseidonScans :
             }
 
             if (potentialDescription.isNullOrBlank()) {
-                val jsonDescription = mangaDto.description?.trim()
-                if (!jsonDescription.isNullOrBlank() && jsonDescription.length > 5 && !jsonDescription.startsWith("$")) {
+                val jsonDescription = mangaDto.description.trim()
+                if (jsonDescription.isNotBlank() && jsonDescription.length > 5 && !jsonDescription.startsWith("$")) {
                     potentialDescription = jsonDescription
                 }
             }
 
-            var finalDesc = potentialDescription?.takeIf { it.isNotBlank() } ?: "Aucune description."
+            val finalDesc = potentialDescription?.takeIf { it.isNotBlank() } ?: "Aucune description."
             description = finalDesc
             setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }

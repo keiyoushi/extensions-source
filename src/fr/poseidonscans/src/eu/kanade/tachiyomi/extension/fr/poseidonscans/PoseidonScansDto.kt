@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 class LatestApiManga(
     val title: String,
     val slug: String,
-    val coverImage: String?,
 )
 
 @Serializable
