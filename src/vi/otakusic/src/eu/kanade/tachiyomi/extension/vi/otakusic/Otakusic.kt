@@ -26,7 +26,7 @@ class Otakusic : HttpSource() {
     override val baseUrl = "https://otakusic.com"
     override val supportsLatest = true
 
-    private val imgBaseUrl = "https://img.otakusic.com"
+    private val imgBaseUrl = baseUrl.replace("://", "://img.")
 
     private val json: Json by injectLazy()
 
