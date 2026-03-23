@@ -1,7 +1,6 @@
 ext {
     extName = 'Riztranslation'
     extClass = '.Riztranslation'
-    baseUrl = 'https://riztranslation.pages.dev'
     extVersionCode = 1
     isNsfw = false
 }

@@ -4,41 +4,40 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class BookDto {
-    var id: Int? = null
-    var judul: String? = null
-    var cover: String? = null
-    var status: String? = null
-    var author: String? = null
-    var artist: String? = null
-    var synopsis: String? = null
-    var genres: List<BookGenreDto>? = null
-}
+class BookDto(
+    val id: Int,
+    val judul: String,
+    val cover: String? = null,
+    val status: String? = null,
+    val author: String? = null,
+    val artist: String? = null,
+    val synopsis: String? = null,
+    val genres: List<BookGenreDto>? = null,
+)
 
 @Serializable
-class LatestChapterDto {
+class LatestChapterDto(
     @SerialName("Book")
-    var book: BookDto? = null
-}
+    val book: BookDto? = null,
+)
 
 @Serializable
-class BookGenreDto {
-    var genre: GenreDto? = null
-}
+class BookGenreDto(
+    val genre: GenreDto? = null,
+)
 
 @Serializable
-class GenreDto {
-    var nama: String? = null
-}
+class GenreDto(
+    val nama: String? = null,
+)
 
 @Serializable
-class ChapterDto {
-    var id: Int? = null
-    var chapter: Float? = null
-    var nama: String? = null
-
+class ChapterDto(
+    val id: Int,
+    val bookId: Int,
+    val chapter: Float? = null,
+    val nama: String? = null,
     @SerialName("created_at")
-    var createdAt: String? = null
-    var isigambar: String? = null
-    var bookId: Int? = null
-}
+    val createdAt: String? = null,
+    val isigambar: String? = null,
+)
