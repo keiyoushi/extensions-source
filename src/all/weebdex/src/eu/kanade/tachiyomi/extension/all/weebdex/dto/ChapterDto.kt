@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.weebdex.dto
 
-import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants
 import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -29,6 +28,7 @@ class ChapterDto(
     private val volume: String? = null,
     @SerialName("published_at") private val publishedAt: String = "",
     val language: String = "",
+    private val node: String?,
     private val data: List<PageData>? = null,
     @SerialName("data_optimized") private val dataOptimized: List<PageData>? = null,
     val relationships: ChapterRelationshipsDto? = null,
@@ -60,7 +60,7 @@ class ChapterDto(
             }
         }
 
-        // if volume, chapter and title is empty its a oneshot
+        // if volume, chapter and title is empty it's a oneshot
         if (chapterName.isEmpty()) {
             chapterName.add("Oneshot")
         }
@@ -86,7 +86,7 @@ class ChapterDto(
             val filename = pageData.name
             val chapterId = id
             val imageUrl = filename?.takeIf { it.isNotBlank() && chapterId.isNotBlank() }
-                ?.let { "${WeebDexConstants.CDN_DATA_URL}/$chapterId/$it" }
+                ?.let { "$node/data/$chapterId/$it" }
             pages.add(Page(index, imageUrl = imageUrl))
         }
         return pages

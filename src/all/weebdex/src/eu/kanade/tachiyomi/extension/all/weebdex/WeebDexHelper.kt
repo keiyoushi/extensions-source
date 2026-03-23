@@ -19,14 +19,14 @@ class WeebDexHelper {
         else -> SManga.UNKNOWN
     }
 
-    fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String): String? {
+    fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String, baseUrl: String): String? {
         if (cover == null) return null
         val ext = when (coverQuality) {
             "256" -> ".256.webp"
             "512" -> ".512.webp"
             else -> cover.ext
         }
-        return "${WeebDexConstants.CDN_COVER_URL}/$mangaId/${cover.id}$ext"
+        return "$baseUrl/covers/$mangaId/${cover.id}$ext"
     }
 
     fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)

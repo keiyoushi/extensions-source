@@ -64,7 +64,7 @@ open class WeebDex(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
-        val mangas = mangaListDto.toSMangaList(coverQuality)
+        val mangas = mangaListDto.toSMangaList(coverQuality, baseUrl)
         return MangasPage(mangas, mangaListDto.hasNextPage)
     }
 
@@ -85,7 +85,7 @@ open class WeebDex(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesListDto = response.parseAs<UpdatesListDto>()
-        val mangas = updatesListDto.toSMangaList(coverQuality)
+        val mangas = updatesListDto.toSMangaList(coverQuality, baseUrl)
         return MangasPage(mangas, updatesListDto.hasNextPage)
     }
 
@@ -188,7 +188,7 @@ open class WeebDex(
         .asObservableSuccess()
         .map { response ->
             val manga = response.parseAs<MangaDto>()
-            MangasPage(listOf(manga.toSManga(coverQuality)), false)
+            MangasPage(listOf(manga.toSManga(coverQuality, baseUrl)), false)
         }
 
     private fun fetchMangaByChapterId(id: String): Observable<MangasPage> = client.newCall(GET("${WeebDexConstants.API_URL}/chapter/$id", headers))
@@ -197,7 +197,7 @@ open class WeebDex(
             val chapter = response.parseAs<ChapterDto>()
             val manga = chapter.relationships?.manga
                 ?: throw Exception("Could not find manga for chapter $id")
-            MangasPage(listOf(manga.toSManga(coverQuality)), false)
+            MangasPage(listOf(manga.toSManga(coverQuality, baseUrl)), false)
         }
 
     // -------------------- Manga details --------------------
@@ -212,7 +212,7 @@ open class WeebDex(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
-        return manga.toSManga(coverQuality).applyFirstVolumeCover(manga.id)
+        return manga.toSManga(coverQuality, baseUrl).applyFirstVolumeCover(manga.id)
     }
 
     private fun SManga.applyFirstVolumeCover(mangaId: String? = null): SManga {
@@ -226,7 +226,7 @@ open class WeebDex(
                     .minByOrNull { it.volume?.toFloatOrNull() ?: Float.MAX_VALUE }
 
                 if (firstCover != null) {
-                    thumbnail_url = WeebDexHelper().buildCoverUrl(id, firstCover, coverQuality)
+                    thumbnail_url = WeebDexHelper().buildCoverUrl(id, firstCover, coverQuality, baseUrl)
                 }
             }
         }
