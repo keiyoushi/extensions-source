@@ -20,7 +20,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import kotlin.concurrent.thread
 
 class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun headersBuilder() = super.headersBuilder()
@@ -53,7 +52,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .addQueryParameter("sort_type", "DESC")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("listType", "pagination")
-            .addQueryParameter("icerik", "1")
             .build()
         return GET(url, headers)
     }
@@ -66,7 +64,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .addQueryParameter("sort_type", "DESC")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("listType", "pagination")
-            .addQueryParameter("icerik", "1")
             .build()
         return GET(url, headers)
     }
@@ -74,11 +71,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     // Search
 
     private var cachedGenres: List<FMReader.Genre> = emptyList()
-
-    @Volatile private var isLoadingGenres: Boolean = false
+    private var captchaUrl: String? = null
 
     override fun getFilterList(): FilterList {
-        loadGenresAsync()
         val baseFilters = mutableListOf<Filter<*>>(
             Filter.Header("Metin araması ile filtreler birlikte kullanılmaz"),
             PublicationStatusFilter(),
@@ -131,7 +126,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             if (value.isNotEmpty()) url.addQueryParameter("yas", value)
         }
         filters.firstInstanceOrNull<ContentTypeFilter>()?.let { f ->
-            val value = arrayOf("", "1", "2", "3", "4")[f.state]
+            val value = arrayOf("", "1", "3", "5")[f.state]
             if (value.isNotEmpty()) url.addQueryParameter("icerik", value)
         }
         filters.firstInstanceOrNull<SpecialTypeFilter>()?.let { f ->
@@ -147,7 +142,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return if (path.contains("/arama.html")) {
             val mangas = response.asJsoup()
                 .select("div.row a[data-toggle]")
-                .filterNot { it.siblingElements().text().contains("Novel") }
+                .filterNot {
+                    it.parent()?.selectFirst("a.anime-r, a.novel-r") != null
+                }
                 .map(::searchMangaFromElement)
             MangasPage(mangas, false)
         } else {
@@ -162,6 +159,14 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // Details
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        captchaUrl?.let { url ->
+            captchaUrl = null
+            return GET(url, headers)
+        }
+        return super.mangaDetailsRequest(manga)
+    }
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
@@ -171,13 +176,13 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         description = document.selectFirst("div.info-desc, div#tab1 p, div.summary")
             ?.text()?.trim()
 
-        author = document.selectFirst("a[href*='?author=']")?.text()?.trim()
+        author = document.selectFirst("div.manga-meta-item:contains(Yazar) a[href*='?author='], div.manga-meta-value a[href*='?author=']")?.text()?.trim()
 
-        artist = document.select("a[href*='?artist=']")
+        artist = document.select("div.manga-meta-item:contains(Sanatçı) a[href*='?artist='], div.manga-meta-value a[href*='?artist=']")
             .joinToString { it.text().trim() }
             .ifBlank { null }
 
-        genre = document.select("a[href*='?tur=']")
+        genre = document.select("div.manga-meta-item:contains(Tür) a[href*='?tur='], div.manga-meta-value a[href*='?tur=']")
             .joinToString { it.text().trim() }
 
         val durumHref = document.selectFirst("a[href*='?durum=']")?.attr("href") ?: ""
@@ -235,9 +240,18 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val link = element.selectFirst("div.chapter-title a")!!
         setUrlWithoutDomain(link.attr("href"))
-        name = link.text().trim()
+        val chapterNum = link.selectFirst("span:last-child")?.text()?.trim()
+            ?: link.text().trim()
+        val sub = element.selectFirst("div.chapter-sub")?.text()?.trim()
+        name = when {
+            sub.isNullOrEmpty() -> chapterNum
+            sub.contains("Bölüm") -> sub // zaten bölüm numarası içeriyor
+            else -> "$chapterNum: $sub" // sadece başlık, numarayı başa ekle
+        }
         date_upload = parseRelativeDate(element.selectFirst("div.stats")?.ownText() ?: "")
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = if (chapter.url.startsWith("/")) baseUrl + chapter.url else "$baseUrl/${chapter.url}"
@@ -252,13 +266,26 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     // Şifreleme: key = k1 + k2, xorDecrypt = atob(chunks.join('')) XOR key
 
     override fun pageListParse(document: Document): List<Page> {
-        val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1") ?: return emptyList()
+        if (document.selectFirst("canvas#sliderCanvas, div.box h2:contains(Güvenlik Doğrulaması)") != null) {
+            captchaUrl = document.location()
+            throw Exception("Lütfen WebView'da Bot Korumasını geçin.")
+        }
 
         for (script in document.select("script:not([src])")) {
             val js = script.html()
             if (!js.contains("imageQueueData")) continue
 
-            // k2 değerini al
+            // --- Yeni Format: Doğrudan src URL'leri (sig parametreli) ---
+            val srcUrls = Regex(""""src"\s*:\s*"(https?://[^"]+)"""").findAll(js)
+                .map { it.groupValues[1] }
+                .filterNot { it.contains("logo") }
+                .toList()
+            if (srcUrls.isNotEmpty()) {
+                return srcUrls.mapIndexed { idx, url -> Page(idx, imageUrl = url) }
+            }
+
+            // --- Eski Format: k1 + k2 XOR şifreli ---
+            val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1") ?: continue
             val k2 = Regex("""\bk2\b\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: continue
 
             // queue array'ini al — "queue" ile "logo" arasındaki her şey
@@ -342,7 +369,12 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             }
         }
 
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val mangas = document.select(popularMangaSelector())
+            .filterNot {
+                it.selectFirst("a.anime-r, a.novel-r") != null
+            }
+            .map { popularMangaFromElement(it) }
+
         val hasNextPage = (document.select(popularMangaNextPageSelector()).first()?.text() ?: "").let {
             if (it.contains(Regex("""\w*\s\d*\s\w*\s\d*"""))) {
                 it.split(" ").let { p -> p[1] != p[3] }
@@ -351,39 +383,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             }
         }
         return MangasPage(mangas, hasNextPage)
-    }
-
-    private fun loadGenresAsync() {
-        if (cachedGenres.isNotEmpty() || isLoadingGenres) return
-        isLoadingGenres = true
-        thread(name = "mangatr-load-genres", start = true) {
-            try {
-                val doc = client.newCall(GET("$baseUrl/manga-list.html", headers)).execute().asJsoup()
-                val options = doc.select("#genreSelect option")
-                if (options.isNotEmpty()) {
-                    cachedGenres = options.mapNotNull { opt ->
-                        val value = opt.attr("value").trim()
-                        val text = opt.text().trim()
-                        if (text.isEmpty() || value.isEmpty()) null else FMReader.Genre(text, value)
-                    }
-                    return@thread
-                }
-                val container = doc.selectFirst("*:matchesOwn(Tür Seçiniz)")?.parent()
-                    ?: doc.selectFirst("div:has(:matchesOwn(Tür Seçiniz))")
-                val anchors = when {
-                    container != null -> container.select("a")
-                    else -> doc.select("a[href*=manga-list], a[href*=genre], a[href*=tur]")
-                }
-                val items = anchors.map { it.text().trim() }.filter { it.length > 1 }.distinct()
-                if (items.isNotEmpty()) {
-                    cachedGenres = items.map { name -> FMReader.Genre(name, name.replace(' ', '+')) }
-                }
-            } catch (e: Throwable) {
-                // ignore
-            } finally {
-                isLoadingGenres = false
-            }
-        }
     }
 
     // Filters
@@ -409,7 +408,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     private class ContentTypeFilter :
         Filter.Select<String>(
             "İçerik Türü",
-            arrayOf("Tümü", "Manga", "Novel", "Webtoon", "Anime"),
+            arrayOf("Tümü", "Manga", "Webtoon", "Çizgi Roman"),
         )
 
     private class SpecialTypeFilter :
