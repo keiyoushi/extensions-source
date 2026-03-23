@@ -48,6 +48,21 @@ class ScanManga :
 
     protected val preferences by getPreferencesLazy()
 
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val originalRequest = chain.request()
+            val header = originalRequest.header("X-Requested-With")
+            if (header != null && header.isEmpty()) {
+                return@addNetworkInterceptor chain.proceed(
+                    originalRequest.newBuilder()
+                        .removeHeader("X-Requested-With")
+                        .build(),
+                )
+            }
+            return@addNetworkInterceptor chain.proceed(originalRequest)
+        }
+        .build()
+
     override fun headersBuilder(): Headers.Builder {
         val currentChromeVersion = super.headersBuilder().build().get("User-Agent")?.let {
             Regex("Chrome/(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull()
@@ -77,8 +92,6 @@ class ScanManga :
 //            .add("priority", "u=0, i")
             .add("X-Requested-With", "")
     }
-
-    private fun fetchHeadersBuilder(): Headers.Builder = headersBuilder().removeAll("X-Requested-With")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
@@ -270,7 +283,7 @@ class ScanManga :
 
         val pageListRequest = POST(
             "https://bqj.${baseUrl.toHttpUrl().topPrivateDomain()}/lel/$chapterId.json",
-            fetchHeadersBuilder()
+            headers.newBuilder()
                 .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
                 .add("Referer", documentUrl.toString())
                 .add("Token", "yf")
