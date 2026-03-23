@@ -41,6 +41,7 @@ abstract class Luscious(
     override val baseUrl: String = getMirrorPref()!!
 
     private val apiBaseUrl: String = "$baseUrl/graphql/nobatch/"
+    private val cdnHost: String = "ah-img.luscious.net"
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -226,7 +227,7 @@ abstract class Luscious(
         }
 
         picture.urlToVideo != null -> {
-            picture.urlToVideo.toHttpUrl().newBuilder().host("ah-img.luscious.net").build().toString().replace(".mp4", ".gif")
+            picture.urlToVideo.replace(".mp4", ".gif")
         }
 
         picture.urlToOriginal != null -> {
@@ -280,11 +281,11 @@ abstract class Luscious(
                     val pictureItems = parsePictures(data)
                     pictureItems.forEach {
                         val chapter = SChapter.create().apply {
-                            url = it.url
                             chapter_number = it.index.toFloat()
                             name = "${it.index} - ${it.title}"
                             date_upload = (it.created ?: 0) * 1000
                         }
+                        chapter.setUrlWithoutDomain(it.url)
                         chapters.add(chapter)
                     }
                     if (nextPage) {
@@ -334,7 +335,7 @@ abstract class Luscious(
         while (nextPage) {
             nextPage = data.data.picture.list.info.hasNextPage
             val pictureItems = parsePictures(data)
-            pages.addAll(pictureItems.map { Page(it.index, it.url, it.url) })
+            pages.addAll(pictureItems.map { Page(it.index, "", it.url.toHttpUrl().newBuilder().host(cdnHost).build().toString()) })
             if (nextPage) {
                 val newPage = client.newCall(GET(buildAlbumPicturesPageUrl(id, page))).execute()
                 data = newPage.parseAs<AlbumListOwnPicturesResponse>()
@@ -354,7 +355,7 @@ abstract class Luscious(
         }
 
         false -> {
-            Observable.just(listOf(Page(0, chapter.url, chapter.url)))
+            Observable.just(listOf(Page(0, "", "https://$cdnHost${chapter.url}")))
         }
     }
 
@@ -362,17 +363,16 @@ abstract class Luscious(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun fetchImageUrl(page: Page): Observable<String> {
-        if (page.imageUrl != null) {
-            return Observable.just(page.imageUrl)
+    override fun fetchImageUrl(page: Page): Observable<String> = throw UnsupportedOperationException()
+
+    override fun getChapterUrl(chapter: SChapter): String = when (getMergeChapterPref()) {
+        true -> {
+            "$baseUrl${chapter.url}"
         }
 
-        return client.newCall(GET(page.url, headers))
-            .asObservableSuccess()
-            .map {
-                val data = it.parseAs<AlbumListOwnPicturesResponse>().data.picture.list
-                getPictureUrl(data.items[page.index % 50])
-            }
+        else -> {
+            "https://$cdnHost${chapter.url}"
+        }
     }
 
     // Details

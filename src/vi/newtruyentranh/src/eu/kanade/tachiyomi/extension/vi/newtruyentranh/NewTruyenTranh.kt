@@ -28,7 +28,7 @@ class NewTruyenTranh :
     ConfigurableSource {
     override val name = "NewTruyenTranh"
     override val lang = "vi"
-    private val defaultBaseUrl = "https://newtruyentranh7.com"
+    private val defaultBaseUrl = "https://newtruyentranh8.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
     override val supportsLatest = true
 
