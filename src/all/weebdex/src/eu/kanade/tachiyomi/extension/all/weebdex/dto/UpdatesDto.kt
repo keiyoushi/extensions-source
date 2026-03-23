@@ -14,11 +14,11 @@ class UpdatesListDto(
     val hasNextPage: Boolean
         get() = page * limit < total
 
-    fun toSMangaList(coverQuality: String, baseUrl: String): List<SManga> {
+    fun toSMangaList(coverQuality: String): List<SManga> {
         val mangaMap = map?.manga ?: return emptyList()
         val seenIds = linkedSetOf<String>()
         data.forEach { chapter -> chapter.mangaId?.let { seenIds.add(it) } }
-        return seenIds.mapNotNull { mangaMap[it]?.toSManga(coverQuality, baseUrl) }
+        return seenIds.mapNotNull { mangaMap[it]?.toSManga(coverQuality) }
     }
 }
 

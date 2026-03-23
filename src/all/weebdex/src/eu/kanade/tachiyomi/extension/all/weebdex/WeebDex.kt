@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.weebdex
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants.BASE_URL
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
@@ -34,7 +35,7 @@ open class WeebDex(
 ) : HttpSource(),
     ConfigurableSource {
     override val name = "WeebDex"
-    override val baseUrl = "https://weebdex.org"
+    override val baseUrl = BASE_URL
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
@@ -64,7 +65,7 @@ open class WeebDex(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
-        val mangas = mangaListDto.toSMangaList(coverQuality, baseUrl)
+        val mangas = mangaListDto.toSMangaList(coverQuality)
         return MangasPage(mangas, mangaListDto.hasNextPage)
     }
 
@@ -85,7 +86,7 @@ open class WeebDex(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesListDto = response.parseAs<UpdatesListDto>()
-        val mangas = updatesListDto.toSMangaList(coverQuality, baseUrl)
+        val mangas = updatesListDto.toSMangaList(coverQuality)
         return MangasPage(mangas, updatesListDto.hasNextPage)
     }
 
@@ -188,7 +189,7 @@ open class WeebDex(
         .asObservableSuccess()
         .map { response ->
             val manga = response.parseAs<MangaDto>()
-            MangasPage(listOf(manga.toSManga(coverQuality, baseUrl)), false)
+            MangasPage(listOf(manga.toSManga(coverQuality)), false)
         }
 
     private fun fetchMangaByChapterId(id: String): Observable<MangasPage> = client.newCall(GET("${WeebDexConstants.API_URL}/chapter/$id", headers))
@@ -197,7 +198,7 @@ open class WeebDex(
             val chapter = response.parseAs<ChapterDto>()
             val manga = chapter.relationships?.manga
                 ?: throw Exception("Could not find manga for chapter $id")
-            MangasPage(listOf(manga.toSManga(coverQuality, baseUrl)), false)
+            MangasPage(listOf(manga.toSManga(coverQuality)), false)
         }
 
     // -------------------- Manga details --------------------
@@ -212,7 +213,7 @@ open class WeebDex(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = response.parseAs<MangaDto>()
-        return manga.toSManga(coverQuality, baseUrl).applyFirstVolumeCover(manga.id)
+        return manga.toSManga(coverQuality).applyFirstVolumeCover(manga.id)
     }
 
     private fun SManga.applyFirstVolumeCover(mangaId: String? = null): SManga {
@@ -226,7 +227,7 @@ open class WeebDex(
                     .minByOrNull { it.volume?.toFloatOrNull() ?: Float.MAX_VALUE }
 
                 if (firstCover != null) {
-                    thumbnail_url = WeebDexHelper().buildCoverUrl(id, firstCover, coverQuality, baseUrl)
+                    thumbnail_url = WeebDexHelper().buildCoverUrl(id, firstCover, coverQuality)
                 }
             }
         }

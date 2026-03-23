@@ -14,7 +14,7 @@ class MangaListDto(
 ) {
     val hasNextPage: Boolean
         get() = page * limit < total
-    fun toSMangaList(coverQuality: String, baseUrl: String): List<SManga> = data.map { it.toSManga(coverQuality, baseUrl) }
+    fun toSMangaList(coverQuality: String): List<SManga> = data.map { it.toSManga(coverQuality) }
 }
 
 @Serializable
@@ -27,11 +27,11 @@ class MangaDto(
 ) {
     @Contextual
     private val helper = WeebDexHelper()
-    fun toSManga(coverQuality: String, baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(coverQuality: String): SManga = SManga.create().apply {
         title = this@MangaDto.title
         description = this@MangaDto.description
         status = helper.parseStatus(this@MangaDto.status)
-        thumbnail_url = helper.buildCoverUrl(id, relationships?.cover, coverQuality, baseUrl)
+        thumbnail_url = helper.buildCoverUrl(id, relationships?.cover, coverQuality)
         url = "/manga/$id"
         relationships?.let { rel ->
             author = rel.authors.joinToString(", ") { it.name }

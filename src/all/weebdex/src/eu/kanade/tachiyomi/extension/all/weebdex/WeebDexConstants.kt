@@ -3,7 +3,9 @@ package eu.kanade.tachiyomi.extension.all.weebdex
 object WeebDexConstants {
 
     // API Base URLs
-    const val API_URL = "https://api.weebdex.org"
+    const val DOMAIN = "weebdex.org"
+    const val BASE_URL = "https://$DOMAIN"
+    const val API_URL = "https://api.$DOMAIN"
 
     // API Endpoints
     const val API_MANGA_URL = "$API_URL/manga"

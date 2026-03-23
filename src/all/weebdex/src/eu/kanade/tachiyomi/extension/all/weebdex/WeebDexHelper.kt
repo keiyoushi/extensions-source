@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.weebdex
 
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants.BASE_URL
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
@@ -19,14 +20,14 @@ class WeebDexHelper {
         else -> SManga.UNKNOWN
     }
 
-    fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String, baseUrl: String): String? {
+    fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String): String? {
         if (cover == null) return null
         val ext = when (coverQuality) {
             "256" -> ".256.webp"
             "512" -> ".512.webp"
             else -> cover.ext
         }
-        return "$baseUrl/covers/$mangaId/${cover.id}$ext"
+        return "$BASE_URL/covers/$mangaId/${cover.id}$ext"
     }
 
     fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
