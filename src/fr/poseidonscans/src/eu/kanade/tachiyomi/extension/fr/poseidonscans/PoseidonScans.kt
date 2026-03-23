@@ -60,6 +60,8 @@ class PoseidonScans :
 
     // found /manga/all too
 
+    // =============================== Latest ===============================
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga/lastchapters?limit=16&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -79,6 +81,8 @@ class PoseidonScans :
         return MangasPage(mangas, hasNextPage)
     }
 
+    // ============================== Popular ===============================
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/popular?limit=16&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -97,6 +101,8 @@ class PoseidonScans :
         val hasNextPage = mangas.size == 16
         return MangasPage(mangas, hasNextPage)
     }
+
+    // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -153,6 +159,8 @@ class PoseidonScans :
         "annulé", "abandonné" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
+
+    // ============================== Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
@@ -259,6 +267,8 @@ class PoseidonScans :
         return isoDateFormatter.tryParse(cleanedDateString)
     }
 
+    // =============================== Pages ================================
+
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
@@ -288,6 +298,8 @@ class PoseidonScans :
             .build()
         return GET(page.imageUrl!!, imageHeaders)
     }
+
+    // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
