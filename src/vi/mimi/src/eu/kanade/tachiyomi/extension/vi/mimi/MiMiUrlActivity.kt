@@ -23,6 +23,8 @@ class MiMiUrlActivity : Activity() {
             } catch (e: Exception) {
                 Log.e("MiMiUrlActivity", "Error: " + e.message)
             }
+        } else {
+            Log.e("MiMiUrlActivity", "Unable to parse URI: $data")
         }
 
         finish()
