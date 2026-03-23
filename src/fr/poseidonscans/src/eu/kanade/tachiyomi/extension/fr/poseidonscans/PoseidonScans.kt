@@ -188,7 +188,7 @@ class PoseidonScans :
             SHOW_PREMIUM_KEY,
             SHOW_PREMIUM_DEFAULT,
         )
-        return mangaPageDto.mangaDetailsData.chapters
+        return mangaPageDto.manga.chapters
             .mapNotNull { ch ->
                 // If chapter is premium, check if premium period has expired
                 if (ch.isPremium == true && !showPremium) {
@@ -238,7 +238,7 @@ class PoseidonScans :
                             if (ch.isPremium == true) append("🔒 ")
                             append(baseName)
                         }
-                    setUrlWithoutDomain("/serie/${mangaPageDto.mangaDetailsData.slug}/chapter/$chapterNumberString")
+                    setUrlWithoutDomain("/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString")
                     date_upload = parseIsoDate(ch.createdAt)
                     chapter_number = ch.number
                 }
