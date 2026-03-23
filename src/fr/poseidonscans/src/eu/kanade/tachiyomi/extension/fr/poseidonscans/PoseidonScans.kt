@@ -83,23 +83,21 @@ class PoseidonScans :
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/popular?limit=16&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, rscHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val apiResponse = response.parseAs<LatestApiResponse>()
+        val document = response.body.string()
+        val mangaDtos = document.extractNextJsRsc<List<PopularMangaData>>()
+            ?: throw Exception("Cant scape data from nextjs")
 
-        val mangas = apiResponse.data.mapNotNull { apiManga ->
-            if (apiManga.slug.isBlank()) {
-                return@mapNotNull null
-            }
+        val mangas = mangaDtos.map { mangaDto ->
             SManga.create().apply {
-                title = apiManga.title
-                url = "/serie/${apiManga.slug}"
-                thumbnail_url = apiManga.coverImage?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
+                title = mangaDto.title
+                url = "/serie/${mangaDto.slug}"
+                thumbnail_url = mangaDto.slug.toApiCoverUrl() + ".webp"
             }
         }
-        val hasNextPage = mangas.size == 16
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, false)
     }
 
     // =========================== Manga Details ============================
