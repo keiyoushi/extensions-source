@@ -11,9 +11,7 @@ class LatestApiManga(
 
 @Serializable
 class LatestApiResponse(
-    val success: Boolean,
     val data: List<LatestApiManga> = emptyList(),
-    val total: Int? = null,
 )
 
 @Serializable
