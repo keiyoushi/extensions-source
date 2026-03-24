@@ -1,9 +1,0 @@
-ext {
-    extName = 'Gaiatoon'
-    extClass = '.Gaiatoon'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://gaiatoon.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
