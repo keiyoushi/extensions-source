@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -85,8 +86,8 @@ class MoeTruyen : HttpSource() {
     // ============================== Search ================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val status = filters.findInstance<StatusFilter>()?.toUriPart()
-        val includedGenres = filters.findInstance<GenreFilter>()
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()
+        val includedGenres = filters.firstInstanceOrNull<GenreFilter>()
             ?.state
             ?.filter { it.state }
             .orEmpty()
@@ -116,8 +117,6 @@ class MoeTruyen : HttpSource() {
     // ============================== Filters ===============================
 
     override fun getFilterList(): FilterList = getFilters()
-
-    private inline fun <reified T> FilterList.findInstance(): T? = firstOrNull { it is T } as? T
 
     // ============================== Details ===============================
 
