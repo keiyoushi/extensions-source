@@ -267,7 +267,7 @@ abstract class Iken(
         return FilterList(filters)
     }
 
-    fun <T> MutableList<T>.addIfNotEmpty(options: List<*>, filter: () -> T) {
+    private fun <T> MutableList<T>.addIfNotEmpty(options: List<*>, filter: () -> T) {
         if (options.isNotEmpty()) add(filter())
     }
 
@@ -336,7 +336,18 @@ abstract class Iken(
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<Manga>()!!.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val body = response.body.string()
+        val manga = body.extractNextJsRsc<Manga>()!!
+
+        return manga.toSManga().apply {
+            if (manga.postContent?.startsWith('$') == true) {
+                body.extractNextJsRsc<DescriptionDto>()?.description.let {
+                    description = manga.getDescription(it)
+                }
+            }
+        }
+    }
 
     // chapters
 
