@@ -93,6 +93,7 @@ class Chapter(
     private val id: Int,
     private val slug: String,
     private val number: JsonPrimitive,
+    private val title: String? = null,
     private val createdAt: String,
     private val chapterStatus: String,
     private val isAccessible: Boolean,
@@ -108,9 +109,10 @@ class Chapter(
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
         val prefix = if (!isAccessible()) "🔒 " else ""
+        val suffix = if (!title.isNullOrBlank()) " - $title" else ""
         val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
-        name = "${prefix}Chapter $number"
+        name = "${prefix}Chapter $number$suffix"
         date_upload = dateFormat.tryParse(createdAt)
     }
 }
