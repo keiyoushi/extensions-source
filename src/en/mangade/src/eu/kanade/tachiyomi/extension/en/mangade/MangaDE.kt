@@ -150,7 +150,7 @@ class MangaDE : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfter("mid=")
-        return GET("$apiUrl/comics/$id/view?size=500", headers)
+        return GET("$apiUrl/comics/$id/view", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
