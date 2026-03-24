@@ -126,7 +126,7 @@ class Otakusic : HttpSource() {
             title = document.selectFirst("h1")!!.text()
 
             author = document.select("h2:contains(Tác giả) + div a, h2:contains(Tác giả) ~ a")
-                .joinToString { it.text().trim() }
+                .joinToString { it.text() }
                 .ifEmpty {
                     document.selectFirst("h2:contains(Tác giả)")
                         ?.parent()
