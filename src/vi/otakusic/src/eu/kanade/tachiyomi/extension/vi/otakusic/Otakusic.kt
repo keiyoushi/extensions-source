@@ -105,7 +105,7 @@ class Otakusic : HttpSource() {
             .filter { it.selectFirst("img") != null }
             .map { element ->
                 SManga.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href").toHttpUrl().encodedPath)
+                    setUrlWithoutDomain(element.absUrl("href"))
                     title = element.selectFirst("img")!!.attr("alt")
                     thumbnail_url = element.selectFirst("img")?.absUrl("src")
                 }
