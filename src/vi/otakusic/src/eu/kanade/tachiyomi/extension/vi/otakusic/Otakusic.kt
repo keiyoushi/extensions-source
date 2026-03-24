@@ -139,7 +139,7 @@ class Otakusic : HttpSource() {
             genre = document.select("div.flex.flex-wrap.gap-2 a")
                 .joinToString { it.text() }
 
-            description = document.selectFirst("#description")?.text()?.trim()
+            description = document.selectFirst("#description")?.text()
 
             thumbnail_url = document.selectFirst("img[alt]")?.absUrl("src")
 
