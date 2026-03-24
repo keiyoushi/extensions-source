@@ -86,8 +86,7 @@ class PoseidonScans :
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, rscHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.body.string()
-        val mangaDtos = document.extractNextJsRsc<List<PopularMangaData>>()
+        val mangaDtos = response.extractNextJs<List<PopularMangaData>>()
             ?: throw Exception("Cant scape data from nextjs")
 
         val mangas = mangaDtos.map { mangaDto ->
