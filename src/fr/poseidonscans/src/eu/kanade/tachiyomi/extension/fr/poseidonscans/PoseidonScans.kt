@@ -143,7 +143,7 @@ class PoseidonScans :
                 }
             }
 
-            val finalDesc = potentialDescription?.takeIf { it.isNotBlank() } ?: "Aucune description."
+            val finalDesc = potentialDescription?.takeIf { it.isNotBlank() }
             description = finalDesc
             setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }
