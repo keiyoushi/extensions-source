@@ -22,7 +22,7 @@ object ScrambledImageInterceptor : Interceptor {
         if (!url.toString().contains("media/photos", ignoreCase = true)) return response // 对非漫画图片连接直接放行
         val pathSegments = url.pathSegments
         val aid = pathSegments[pathSegments.size - 2].toInt()
-        if (aid < scrambleId) return response // 对在漫画章节ID为220980之前的图片未进行图片分割,直接放行
+        if (aid < SCRAMBLE_ID) return response // 对在漫画章节ID为220980之前的图片未进行图片分割,直接放行
         // 章节ID:220980(包含)之后的漫画(2020.10.27之后)图片进行了分割getRows倒序处理
         val responseBuilder = response.newBuilder()
         val imgIndex: String = pathSegments.last().substringBefore('.')
@@ -46,7 +46,7 @@ object ScrambledImageInterceptor : Interceptor {
     // 220980
     // 算法 html页面 1800 行左右
     // 图片开始分割的ID编号
-    private const val scrambleId = 220980
+    private const val SCRAMBLE_ID = 220980
 
     private fun md5LastCharCode(input: String): Int {
         val md5 = MessageDigest.getInstance("MD5")

@@ -8,12 +8,13 @@ import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTilkisi : Madara(
-    "MangaTilkisi",
-    "https://www.tilkiscans.com",
-    "tr",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr")),
-) {
+class MangaTilkisi :
+    Madara(
+        "MangaTilkisi",
+        "https://www.tilkiscans.com",
+        "tr",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 

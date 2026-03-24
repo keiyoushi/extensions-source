@@ -12,11 +12,12 @@ abstract class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
     defaultValue: String? = null,
-) : FormBodyFilter, Filter.Select<String>(
+) : Filter.Select<String>(
     name,
     options.map { it.first }.toTypedArray(),
     options.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
-) {
+),
+    FormBodyFilter {
     abstract val formParameter: String
     override fun addFormParameter(form: FormBody.Builder) {
         form.add(formParameter, options[state].second)
@@ -68,10 +69,12 @@ class CheckBoxFilter(
     val value: String,
 ) : Filter.CheckBox(name)
 
-class GenreFilter : FormBodyFilter, Filter.Group<CheckBoxFilter>(
-    "Genre",
-    genres.map { CheckBoxFilter(it.first, it.second) },
-) {
+class GenreFilter :
+    Filter.Group<CheckBoxFilter>(
+        "Genre",
+        genres.map { CheckBoxFilter(it.first, it.second) },
+    ),
+    FormBodyFilter {
     override fun addFormParameter(form: FormBody.Builder) {
         state.filter { it.state }.forEach {
             form.add("genres_checked[]", it.value)

@@ -1,0 +1,10 @@
+ext {
+    extName = 'AllPornComic.io'
+    extClass = '.AllPornComicIo'
+    themePkg = 'madara'
+    baseUrl = 'https://allporncomic.io'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

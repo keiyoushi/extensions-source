@@ -13,12 +13,13 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class MangaCan : MangaThemesia(
-    "Manga Can",
-    "https://mangacanblog.com",
-    "id",
-    "/",
-) {
+class MangaCan :
+    MangaThemesia(
+        "Manga Can",
+        "https://mangacanblog.com",
+        "id",
+        "/",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
@@ -29,12 +30,10 @@ class MangaCan : MangaThemesia(
 
     override val pageSelector = "div.images img"
 
-    override fun imageRequest(page: Page): Request {
-        return super.imageRequest(page).newBuilder()
-            .removeHeader("Referer")
-            .addHeader("Referer", "$baseUrl/")
-            .build()
-    }
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .removeHeader("Referer")
+        .addHeader("Referer", "$baseUrl/")
+        .build()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
@@ -89,11 +88,9 @@ class MangaCan : MangaThemesia(
         return FilterList(filters)
     }
 
-    override fun parseGenres(document: Document): List<GenreData> {
-        return mutableListOf(GenreData("All", "")).apply {
-            this += document.select(".textwidget.custom-html-widget a").map { element ->
-                GenreData(element.text(), element.attr("href"))
-            }
+    override fun parseGenres(document: Document): List<GenreData> = mutableListOf(GenreData("All", "")).apply {
+        this += document.select(".textwidget.custom-html-widget a").map { element ->
+            GenreData(element.text(), element.attr("href"))
         }
     }
 

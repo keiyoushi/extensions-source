@@ -10,12 +10,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SapphireScan : Madara(
-    "SapphireScan",
-    "https://sapphirescan.com",
-    "es",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class SapphireScan :
+    Madara(
+        "SapphireScan",
+        "https://sapphirescan.com",
+        "es",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
         .build()
@@ -23,11 +24,9 @@ class SapphireScan : Madara(
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            if (element.select("span.required-login").isNotEmpty()) {
-                name = "🔒 $name"
-            }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        if (element.select("span.required-login").isNotEmpty()) {
+            name = "🔒 $name"
         }
     }
 

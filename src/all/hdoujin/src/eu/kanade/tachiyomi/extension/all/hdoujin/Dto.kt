@@ -111,9 +111,7 @@ class MangaDetail(
         }
     }
 
-    private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
-        return this.ifEmpty { null }
-    }
+    private fun <T> Collection<T>.emptyToNull(): Collection<T>? = this.ifEmpty { null }
 }
 
 @Serializable

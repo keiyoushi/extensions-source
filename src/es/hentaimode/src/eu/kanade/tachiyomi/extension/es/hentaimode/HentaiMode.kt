@@ -46,32 +46,22 @@ class HentaiMode : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/g/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client.newCall(GET("$baseUrl/g/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
@@ -117,11 +107,9 @@ class HentaiMode : ParsedHttpSource() {
         }
     }
 
-    private fun Element.getInfo(text: String): String? {
-        return select("div.tag-container:containsOwn($text) a.tag")
-            .joinToString { it.text() }
-            .takeUnless(String::isBlank)
-    }
+    private fun Element.getInfo(text: String): String? = select("div.tag-container:containsOwn($text) a.tag")
+        .joinToString { it.text() }
+        .takeUnless(String::isBlank)
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -134,13 +122,9 @@ class HentaiMode : ParsedHttpSource() {
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
@@ -158,9 +142,7 @@ class HentaiMode : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {
         const val PREFIX_SEARCH = "id:"

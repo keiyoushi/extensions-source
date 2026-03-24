@@ -12,11 +12,12 @@ abstract class SelectFilter(
     val selected get() = options[state].second
 }
 
-class SearchType : SelectFilter(
-    name = "Search Type",
-    options = listOf(
-        "ALL" to null,
-        "Originals" to "originals",
-        "Canvas" to "canvas",
-    ),
-)
+class SearchType :
+    SelectFilter(
+        name = "Search Type",
+        options = listOf(
+            "ALL" to null,
+            "Originals" to "originals",
+            "Canvas" to "canvas",
+        ),
+    )

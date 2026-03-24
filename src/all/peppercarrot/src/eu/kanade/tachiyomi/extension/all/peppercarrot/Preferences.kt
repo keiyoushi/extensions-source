@@ -39,8 +39,7 @@ val SharedPreferences.lang: List<String>
         return lang.split(", ")
     }
 
-fun SharedPreferences.Editor.setLang(value: Iterable<String>): SharedPreferences.Editor =
-    putString(LANG_PREF, value.joinToString())
+fun SharedPreferences.Editor.setLang(value: Iterable<String>): SharedPreferences.Editor = putString(LANG_PREF, value.joinToString())
 
 val SharedPreferences.langData: List<LangData>
     get() {
@@ -132,11 +131,9 @@ private fun fetchTitles(client: OkHttpClient, headers: Headers): Map<String, Str
 
 private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-private inline fun <reified T> ProtoBuf.decodeFromBase64(base64: String): T =
-    decodeFromByteArray(Base64.decode(base64, Base64.NO_WRAP))
+private inline fun <reified T> ProtoBuf.decodeFromBase64(base64: String): T = decodeFromByteArray(Base64.decode(base64, Base64.NO_WRAP))
 
-private inline fun <reified T> ProtoBuf.encodeToBase64(value: T): String =
-    Base64.encodeToString(encodeToByteArray(value), Base64.NO_WRAP)
+private inline fun <reified T> ProtoBuf.encodeToBase64(value: T): String = Base64.encodeToString(encodeToByteArray(value), Base64.NO_WRAP)
 
 private val json: Json by injectLazy()
 

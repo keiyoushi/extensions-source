@@ -38,8 +38,8 @@ fun ExGalleryMetadata.copyTo(manga: SManga) {
     manga.status = SManga.COMPLETED
     title?.let { t ->
         if (ONGOING_SUFFIX.any {
-            t.endsWith(it, ignoreCase = true)
-        }
+                t.endsWith(it, ignoreCase = true)
+            }
         ) {
             manga.status = SManga.ONGOING
         }

@@ -19,10 +19,12 @@ class MangaPlusUrlActivity : Activity() {
                 pathSegments[0].equals("viewer") -> {
                     MangaPlus.PREFIX_CHAPTER_ID_SEARCH + pathSegments[1]
                 }
+
                 pathSegments[0].equals("sns_share") -> {
                     intent?.data?.getQueryParameter("title_id")
                         ?.let { MangaPlus.PREFIX_ID_SEARCH + it }
                 }
+
                 else -> MangaPlus.PREFIX_ID_SEARCH + pathSegments[1]
             }
 

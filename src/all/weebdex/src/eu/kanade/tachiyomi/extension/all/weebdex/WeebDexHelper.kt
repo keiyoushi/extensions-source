@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.weebdex
 
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants.BASE_URL
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
@@ -11,14 +12,12 @@ class WeebDexHelper {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    fun parseStatus(status: String?): Int {
-        return when (status?.lowercase(Locale.ROOT)) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "hiatus" -> SManga.ON_HIATUS
-            "cancelled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    fun parseStatus(status: String?): Int = when (status?.lowercase(Locale.ROOT)) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     fun buildCoverUrl(mangaId: String, cover: CoverDto?, coverQuality: String): String? {
@@ -28,12 +27,10 @@ class WeebDexHelper {
             "512" -> ".512.webp"
             else -> cover.ext
         }
-        return "${WeebDexConstants.CDN_COVER_URL}/$mangaId/${cover.id}$ext"
+        return "$BASE_URL/covers/$mangaId/${cover.id}$ext"
     }
 
-    fun parseDate(dateStr: String): Long {
-        return dateFormat.tryParse(dateStr)
-    }
+    fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
 
     fun parseChapterNumber(chapter: String?): Float {
         if (chapter.isNullOrBlank()) return -2F

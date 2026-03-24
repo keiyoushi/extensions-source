@@ -77,9 +77,7 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
 }
 
 class FilterInfo(name: String, val id: String) : Filter.CheckBox(name) {
-    override fun toString(): String {
-        return name
-    }
+    override fun toString(): String = name
 }
 
 interface QueryParamFilter {
@@ -90,71 +88,68 @@ class SelectOneFilter(
     name: String,
     private val queryParam: String,
     options: List<FilterInfo>,
-) : QueryParamFilter, Filter.Select<FilterInfo>(
+) : Filter.Select<FilterInfo>(
     name,
     options.toTypedArray(),
     max(0, options.indexOfFirst { it.id == "2" }), // Default to manga
-) {
-    override fun getQueryParams(): List<Pair<String, String>> {
-        return listOf(queryParam to values[state].id)
-    }
+),
+    QueryParamFilter {
+    override fun getQueryParams(): List<Pair<String, String>> = listOf(queryParam to values[state].id)
 }
 
 class SelectMultipleFilter(
     name: String,
     private val queryParam: String,
     options: List<FilterInfo>,
-) : QueryParamFilter, Filter.Group<FilterInfo>(name, options) {
-    override fun getQueryParams(): List<Pair<String, String>> {
-        return listOf(
-            queryParam to state.filter { it.state }.joinToString(",") { it.id },
-        )
-    }
+) : Filter.Group<FilterInfo>(name, options),
+    QueryParamFilter {
+    override fun getQueryParams(): List<Pair<String, String>> = listOf(
+        queryParam to state.filter { it.state }.joinToString(",") { it.id },
+    )
 }
 
-class OthersFilter : QueryParamFilter, Filter.Group<FilterInfo>(
-    "Others",
-    listOf(
-        FilterInfo("On Sale", "qspp"),
-        FilterInfo("Coin Boost", "qcon"),
-        FilterInfo("Pre-Order", "qcos"),
-        FilterInfo("Completed", "qcpl"),
-        FilterInfo("Bonus Item", "qspe"),
-        FilterInfo("Exclude Purchased", "qseq"),
+class OthersFilter :
+    Filter.Group<FilterInfo>(
+        "Others",
+        listOf(
+            FilterInfo("On Sale", "qspp"),
+            FilterInfo("Coin Boost", "qcon"),
+            FilterInfo("Pre-Order", "qcos"),
+            FilterInfo("Completed", "qcpl"),
+            FilterInfo("Bonus Item", "qspe"),
+            FilterInfo("Exclude Purchased", "qseq"),
+        ),
     ),
-) {
-    override fun getQueryParams(): List<Pair<String, String>> {
-        return state.filter { it.state }.map { it.id to "1" }
-    }
+    QueryParamFilter {
+    override fun getQueryParams(): List<Pair<String, String>> = state.filter { it.state }.map { it.id to "1" }
 }
 
-class ExcludeFilter : QueryParamFilter, Filter.Text("Exclude search terms (comma-separated)") {
-    override fun getQueryParams(): List<Pair<String, String>> {
-        return state.split(',')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { "qnot[]" to it.replace(" ", "+") }
-    }
+class ExcludeFilter :
+    Filter.Text("Exclude search terms (comma-separated)"),
+    QueryParamFilter {
+    override fun getQueryParams(): List<Pair<String, String>> = state.split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { "qnot[]" to it.replace(" ", "+") }
 }
 
 class TextFilter(
     name: String,
     private val queryParam: String,
     defaultValue: String = "",
-) : QueryParamFilter, Filter.Text(name, defaultValue) {
-    override fun getQueryParams(): List<Pair<String, String>> {
-        return listOf(queryParam to state)
-    }
+) : Filter.Text(name, defaultValue),
+    QueryParamFilter {
+    override fun getQueryParams(): List<Pair<String, String>> = listOf(queryParam to state)
 }
 
-class PriceFilter : QueryParamFilter, Filter.Group<TextFilter>(
-    "Price",
-    listOf(
-        TextFilter("Min Price ($)", "qpri_min"),
-        TextFilter("Max Price ($)", "qpri_max"),
+class PriceFilter :
+    Filter.Group<TextFilter>(
+        "Price",
+        listOf(
+            TextFilter("Min Price ($)", "qpri_min"),
+            TextFilter("Max Price ($)", "qpri_max"),
+        ),
     ),
-) {
-    override fun getQueryParams(): List<Pair<String, String>> {
-        return state.filter { it.state.isNotEmpty() }.flatMap { it.getQueryParams() }
-    }
+    QueryParamFilter {
+    override fun getQueryParams(): List<Pair<String, String>> = state.filter { it.state.isNotEmpty() }.flatMap { it.getQueryParams() }
 }

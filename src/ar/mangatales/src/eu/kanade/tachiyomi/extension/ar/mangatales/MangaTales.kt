@@ -11,15 +11,14 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 
-class MangaTales : Gmanga(
-    "Manga Tales",
-    "https://www.mangatales.com",
-    "ar",
-    "https://media.mangatales.com",
-) {
-    override fun createThumbnail(mangaId: String, cover: String): String {
-        return "$cdnUrl/uploads/manga/cover/$mangaId/large_$cover"
-    }
+class MangaTales :
+    Gmanga(
+        "Manga Tales",
+        "https://www.mangatales.com",
+        "ar",
+        "https://media.mangatales.com",
+    ) {
+    override fun createThumbnail(mangaId: String, cover: String): String = "$cdnUrl/uploads/manga/cover/$mangaId/large_$cover"
 
     override fun getTypesFilter() = listOf(
         TagFilterData("1", "عربية", Filter.TriState.STATE_INCLUDE),

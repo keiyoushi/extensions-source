@@ -157,9 +157,7 @@ class MangaKawaii : ParsedHttpSource() {
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: today
-    }
+    private fun parseDate(date: String): Long = SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(date)?.time ?: today
 
     // Pages
     override fun pageListParse(document: Document): List<Page> {

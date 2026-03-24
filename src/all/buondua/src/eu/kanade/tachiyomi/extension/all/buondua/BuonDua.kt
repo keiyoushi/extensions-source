@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.buondua
 
-import eu.kanade.tachiyomi.lib.randomua.UserAgentType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
@@ -11,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.randomua.UserAgentType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -21,7 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class BuonDua() : ParsedHttpSource() {
+class BuonDua : ParsedHttpSource() {
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
@@ -29,10 +29,11 @@ class BuonDua() : ParsedHttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
-        .setRandomUserAgent(UserAgentType.MOBILE)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .setRandomUserAgent(UserAgentType.MOBILE)
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -45,18 +46,14 @@ class BuonDua() : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = ".pagination-next:not([disabled])"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?start=${20 * (page - 1)}")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}")
 
     override fun latestUpdatesSelector() = ".blog > div"
 
     // Popular
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/hot?start=${20 * (page - 1)}")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}")
 
     override fun popularMangaSelector() = latestUpdatesSelector()
 
@@ -73,6 +70,8 @@ class BuonDua() : ParsedHttpSource() {
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga {
@@ -110,10 +109,8 @@ class BuonDua() : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".article-fulltext img")
-            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select(".article-fulltext img")
+        .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.comicboost
 
-import eu.kanade.tachiyomi.lib.publus.Publus.Decoder
-import eu.kanade.tachiyomi.lib.publus.Publus.PublusInterceptor
-import eu.kanade.tachiyomi.lib.publus.Publus.generatePages
-import eu.kanade.tachiyomi.lib.publus.PublusPage
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +8,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.publus.Publus.Decoder
+import keiyoushi.lib.publus.Publus.PublusInterceptor
+import keiyoushi.lib.publus.Publus.generatePages
+import keiyoushi.lib.publus.PublusPage
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -65,9 +65,7 @@ class ComicBoost : HttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -157,9 +155,7 @@ class ComicBoost : HttpSource() {
         return generatePages(pageContent, result.keys, cPhp)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        return response.request.url.toString()
-    }
+    override fun imageUrlParse(response: Response): String = response.request.url.toString()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()

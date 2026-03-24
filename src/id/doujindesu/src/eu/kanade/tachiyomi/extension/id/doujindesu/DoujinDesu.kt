@@ -5,7 +5,6 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -16,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
@@ -28,7 +29,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
+class DoujinDesu :
+    ParsedHttpSource(),
+    ConfigurableSource {
     // Information : DoujinDesu use EastManga WordPress Theme
     override val name = "Doujindesu"
     override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
@@ -40,7 +43,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val DATE_FORMAT by lazy {
+    private val dateFormat by lazy {
         SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id"))
     }
 
@@ -51,27 +54,19 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     private class Category(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class Genre(name: String, val id: String = name) : Filter.CheckBox(name) {
-        override fun toString(): String {
-            return id
-        }
+        override fun toString(): String = id
     }
 
     private class Order(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class Status(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private val orderBy = arrayOf(
@@ -281,28 +276,21 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return manga
     }
 
-    private fun imageFromElement(element: Element): String {
-        return when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ")
-            else -> element.attr("abs:src")
-        }
+    private fun imageFromElement(element: Element): String = when {
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+        element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ")
+        else -> element.attr("abs:src")
     }
 
-    private fun getNumberFromString(epsStr: String?): Float {
-        return epsStr?.substringBefore(" ")?.toFloatOrNull() ?: -1f
-    }
+    private fun getNumberFromString(epsStr: String?): Float = epsStr?.substringBefore(" ")?.toFloatOrNull() ?: -1f
 
-    private fun reconstructDate(dateStr: String): Long {
-        return runCatching { DATE_FORMAT.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun reconstructDate(dateStr: String): Long = runCatching { dateFormat.parse(dateStr)?.time }
+        .getOrNull() ?: 0L
 
     // Popular
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        basicInformationFromElement(element)
+    override fun popularMangaFromElement(element: Element): SManga = basicInformationFromElement(element)
 
     override fun popularMangaRequest(page: Int): Request {
         // Original url $baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=popular
@@ -311,8 +299,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Latest
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        basicInformationFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = basicInformationFromElement(element)
 
     override fun latestUpdatesRequest(page: Int): Request {
         // Original url $baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=update
@@ -395,8 +382,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(finalUrl, headers)
     }
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        basicInformationFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga = basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
         Filter.Header("NB: Fitur Emergency, jadi maklumi aja jika ada bug!"),
@@ -420,6 +406,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterListRegex = Regex("""\d+[-–]?\d*\..+<br>""", RegexOption.IGNORE_CASE)
     private val htmlTagRegex = Regex("<[^>]*>")
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("section.metadata")!!
@@ -597,10 +585,10 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return chapter
     }
 
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("X-Requested-With", "XMLHttpRequest")
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("X-Requested-With", "XMLHttpRequest")
+        .setRandomUserAgent()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -614,8 +602,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListSelector(): String = "#chapter_list li"
 
     // More parser stuff
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
         val id = document.select("#reader").attr("data-id")
@@ -649,6 +636,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 true
             }
         }.also(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 }

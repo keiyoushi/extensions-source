@@ -1,16 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.randomscan
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Capitulo
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.MainPage
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -21,8 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
+import keiyoushi.lib.randomua.addRandomUAPreference
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -33,7 +27,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon : HttpSource(), ConfigurableSource {
+class LuraToon :
+    HttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://luratoons.net"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
@@ -42,17 +38,11 @@ class LuraToon : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
     override val client = network.cloudflareClient
         .newBuilder()
         .addInterceptor(::loggedVerifyInterceptor)
         .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
         .rateLimit(3)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .build()
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
@@ -62,8 +52,10 @@ class LuraToon : HttpSource(), ConfigurableSource {
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val data = response.parseAs<Manga>()
@@ -83,9 +75,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
         description = "Tipo: $category\n\n$synopsis"
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString<T>(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
@@ -101,13 +91,11 @@ class LuraToon : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
-            .asObservable()
-            .map { response ->
-                chapterListParse(manga, response)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservable()
+        .map { response ->
+            chapterListParse(manga, response)
+        }
 
     fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
         if (response.code == 404) {

@@ -23,9 +23,11 @@ class ImageInterceptor : Interceptor {
             fragment.startsWith("scramble_seed_v2=") -> {
                 Pair(fragment.substringAfter("scramble_seed_v2=").toLong(), 2)
             }
+
             fragment.startsWith("scramble_seed=") -> {
                 Pair(fragment.substringAfter("scramble_seed=").toLong(), 1)
             }
+
             else -> return chain.proceed(request)
         }
 
@@ -83,6 +85,7 @@ class ImageInterceptor : Interceptor {
                 val getTile = { size: Int -> (size / 32) * 8 }
                 Pair(getTile(originalWidth), getTile(originalHeight))
             }
+
             else -> {
                 val getTile = { size: Int -> (size / 8 * 8) / 4 }
                 Pair(getTile(originalWidth), getTile(originalHeight))

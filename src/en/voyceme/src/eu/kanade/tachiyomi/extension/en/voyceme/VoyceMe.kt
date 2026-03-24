@@ -141,10 +141,8 @@ class VoyceMe : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<VoyceMeSeriesResponse>()
-            .data.series.first().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<VoyceMeSeriesResponse>()
+        .data.series.first().toSManga()
 
     override fun chapterListRequest(manga: SManga): Request {
         val comicSlug = manga.url
@@ -198,12 +196,10 @@ class VoyceMe : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<VoyceMeChapterImagesResponse>().data.images
-            .mapIndexed { i, page ->
-                Page(i, baseUrl, STATIC_URL + page.image)
-            }
-    }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<VoyceMeChapterImagesResponse>().data.images
+        .mapIndexed { i, page ->
+            Page(i, baseUrl, STATIC_URL + page.image)
+        }
 
     override fun imageUrlParse(response: Response): String = ""
 

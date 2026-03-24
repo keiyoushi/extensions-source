@@ -10,11 +10,12 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class GourmetScans : Madara(
-    "Gourmet Scans",
-    "https://gourmetsupremacy.com",
-    "en",
-) {
+class GourmetScans :
+    Madara(
+        "Gourmet Scans",
+        "https://gourmetsupremacy.com",
+        "en",
+    ) {
     override val mangaSubString = "project"
 
     override val useNewChapterEndpoint = false
@@ -34,10 +35,12 @@ class GourmetScans : Madara(
                 url.addPathSegment("release-year")
                 url.addPathSegment(yearFilter.state)
             }
+
             genreFilter?.state?.equals(0)?.not() ?: false -> {
                 url.addPathSegment("genre")
                 url.addPathSegment(genreFilter!!.toUriPart())
             }
+
             else -> {
                 url.addPathSegment(mangaSubString)
             }
@@ -60,19 +63,16 @@ class GourmetScans : Madara(
 
     override fun genresRequest(): Request = GET("$baseUrl/$mangaSubString", headers)
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return document.select("div.row.genres ul li a")
-            .orEmpty()
-            .map { li ->
-                Genre(
-                    li.text(),
-                    li.attr("href").split("/").last { it.isNotBlank() },
-                )
-            }
-    }
+    override fun parseGenres(document: Document): List<Genre> = document.select("div.row.genres ul li a")
+        .orEmpty()
+        .map { li ->
+            Genre(
+                li.text(),
+                li.attr("href").split("/").last { it.isNotBlank() },
+            )
+        }
 
-    class GenreFilter(vals: List<Genre>) :
-        UriPartFilter("Genre", vals.map { Pair(it.name, it.id) }.toTypedArray())
+    class GenreFilter(vals: List<Genre>) : UriPartFilter("Genre", vals.map { Pair(it.name, it.id) }.toTypedArray())
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
@@ -100,9 +100,7 @@ class GourmetScans : Madara(
 
     // Chapters
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            url = this.url.substringBefore("?style=list")
-        }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        url = this.url.substringBefore("?style=list")
     }
 }

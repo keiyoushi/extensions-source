@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 typealias EntityAccessMapDto = ResponseDto<EntityAccessMapDataDto>
 
 @Serializable
-@SerialName(NamiComiConstants.entityAccessMap)
+@SerialName(NamiComiConstants.ENTITY_ACCESS_MAP)
 class EntityAccessMapDataDto(
     override val attributes: EntityAccessMapAttributesDto? = null,
 ) : EntityDto()

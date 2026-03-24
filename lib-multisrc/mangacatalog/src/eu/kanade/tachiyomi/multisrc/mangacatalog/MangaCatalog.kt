@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -20,6 +21,11 @@ abstract class MangaCatalog(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
+    override val client: OkHttpClient = network.cloudflareClient
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
     open val sourceList = listOf(
         Pair("$name", "$baseUrl"),
     ).sortedBy { it.first }.distinctBy { it.second }
@@ -29,9 +35,7 @@ abstract class MangaCatalog(
     override val supportsLatest: Boolean = false
 
     // Popular
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false))
     private fun popularMangaFromPair(name: String, sourceurl: String): SManga = SManga.create().apply {
         title = name
         url = sourceurl
@@ -66,15 +70,9 @@ abstract class MangaCatalog(
 
     // Get Override
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     // Details
 
@@ -100,10 +98,8 @@ abstract class MangaCatalog(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select(".js-pages-container img.js-page,.img_container img").mapIndexed { index, img ->
-            Page(index, "", img.attr("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("img[data-src]")
+        .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

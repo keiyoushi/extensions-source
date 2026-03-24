@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.xkcd.translations
 
 import eu.kanade.tachiyomi.extension.all.xkcd.Xkcd
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import okhttp3.Response
 
 class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
@@ -42,9 +42,7 @@ class XkcdFR : Xkcd("https://xkcd.lapin.org", "fr") {
         return chapters.reversed()
     }
 
-    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
-        return container.selectFirst("img[src^='strips/']")
-    }
+    override fun extractImageFromContainer(container: org.jsoup.nodes.Element): org.jsoup.nodes.Element? = container.selectFirst("img[src^='strips/']")
 
     override fun pageListParse(response: Response): List<Page> {
         val container = response.asJsoup().selectFirst(imageSelector)

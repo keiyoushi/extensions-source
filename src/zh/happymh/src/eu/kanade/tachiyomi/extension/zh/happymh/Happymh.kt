@@ -34,7 +34,9 @@ import uy.kohesive.injekt.injectLazy
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
-class Happymh : HttpSource(), ConfigurableSource {
+class Happymh :
+    HttpSource(),
+    ConfigurableSource {
     override val name: String = "嗨皮漫画"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
@@ -56,7 +58,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
         if (originalResponse.headers("Content-Type")
-            .contains("application/octet-stream") && originalResponse.request.url.toString()
+                .contains("application/octet-stream") && originalResponse.request.url.toString()
                 .contains(".jpg")
         ) {
             val orgBody = originalResponse.body.source()
@@ -149,14 +151,12 @@ class Happymh : HttpSource(), ConfigurableSource {
         return MangasPage(popularMangaParse(response).mangas, false)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            GenreFilter(),
-            AreaFilter(),
-            AudienceFilter(),
-            StatusFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        GenreFilter(),
+        AreaFilter(),
+        AudienceFilter(),
+        StatusFilter(),
+    )
 
     // Details
 
@@ -191,14 +191,12 @@ class Happymh : HttpSource(), ConfigurableSource {
     private fun fetchChapterByPageAsObservable(
         manga: SManga,
         page: Int,
-    ): Observable<Pair<Int, ChapterByPageResponseData>> {
-        return Observable.just(fetchChapterByPage(manga, page)).concatMap {
-            if (it.isPageEnd()) {
-                Observable.just(page to it)
-            } else {
-                Observable.just(page to it)
-                    .concatWith(fetchChapterByPageAsObservable(manga, page + 1))
-            }
+    ): Observable<Pair<Int, ChapterByPageResponseData>> = Observable.just(fetchChapterByPage(manga, page)).concatMap {
+        if (it.isPageEnd()) {
+            Observable.just(page to it)
+        } else {
+            Observable.just(page to it)
+                .concatWith(fetchChapterByPageAsObservable(manga, page + 1))
         }
     }
 
@@ -250,20 +248,18 @@ class Happymh : HttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListResponseDto>().data.scans
-            // If n == 1, the image is from next chapter
-            .filter { it.n == 0 }
-            .mapIndexed { index, it ->
-                // Strip q=... for large images (> 16383px) to avoid WebpExceedRange error
-                val url = if (it.width > 16383 || it.height > 16383) {
-                    it.url.substringBefore("?q=")
-                } else {
-                    it.url
-                }
-                Page(index, "", url)
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().data.scans
+        // If n == 1, the image is from next chapter
+        .filter { it.n == 0 }
+        .mapIndexed { index, it ->
+            // Strip q=... for large images (> 16383px) to avoid WebpExceedRange error
+            val url = if (it.width > 16383 || it.height > 16383) {
+                it.url.substringBefore("?q=")
+            } else {
+                it.url
             }
-    }
+            Page(index, "", url)
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -299,9 +295,7 @@ class Happymh : HttpSource(), ConfigurableSource {
         json.decodeFromStream(it.body.byteStream())
     }
 
-    private fun ChapterByPageResponseData.isPageEnd(): Boolean {
-        return isEnd == 1 || items.isEmpty()
-    }
+    private fun ChapterByPageResponseData.isPageEnd(): Boolean = isEnd == 1 || items.isEmpty()
 
     companion object {
         private const val DUMMY_CHAPTER_MARK = "dummy-mark"

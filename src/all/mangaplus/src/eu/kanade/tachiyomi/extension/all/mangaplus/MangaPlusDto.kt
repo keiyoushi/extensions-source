@@ -1,10 +1,15 @@
 package eu.kanade.tachiyomi.extension.all.mangaplus
 
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.jsonObject
 
 @Serializable
 class MangaPlusResponse(
@@ -15,8 +20,7 @@ class MangaPlusResponse(
 @Serializable
 class ErrorResult(val popups: List<Popup> = emptyList()) {
 
-    fun langPopup(lang: Language): Popup? =
-        popups.firstOrNull { it.language == lang }
+    fun langPopup(lang: Language): Popup? = popups.firstOrNull { it.language == lang }
 }
 
 @Serializable
@@ -86,6 +90,7 @@ class TitleDetailView(
     val rating: Rating = Rating.ALL_AGES,
     val chaptersDescending: Boolean = true,
     val titleLabels: TitleLabels,
+    @Serializable(with = LabelSerializer::class)
     val label: Label? = Label(LabelCode.WEEKLY_SHOUNEN_JUMP),
 ) {
 
@@ -100,8 +105,8 @@ class TitleDetailView(
         get() = chapterList.isNotEmpty() && chapterList.all(Chapter::isVerticalOnly)
 
     private val isOneShot: Boolean
-        get() = chapterList.size == 1 && chapterList.firstOrNull()
-            ?.name?.equals("one-shot", true) == true
+        get() = titleLabels.releaseSchedule == ReleaseSchedule.ONE_SHOT ||
+            (chapterList.size == 1 && chapterList.firstOrNull()?.name?.equals("one-shot", true) == true)
 
     private val isReEdition: Boolean
         get() = viewingPeriodDescription.contains(REEDITION_REGEX)
@@ -115,7 +120,7 @@ class TitleDetailView(
         get() = isSimulReleased || titleLabels.isSimulpub
 
     private val isOnHiatus: Boolean
-        get() = nonAppearanceInfo.contains(HIATUS_REGEX)
+        get() = nonAppearanceInfo.contains(HIATUS_REGEX) || titleLabels.releaseSchedule == ReleaseSchedule.HIATUS
 
     private fun createGenres(intl: Intl): List<String> = buildList {
         if (isSimulpub && !isReEdition && !isOneShot && !isCompleted) {
@@ -173,6 +178,7 @@ class TitleLabels(
     val isSimulpub: Boolean = false,
 )
 
+@Serializable
 enum class ReleaseSchedule {
     DISABLED,
     EVERYDAY,
@@ -183,6 +189,8 @@ enum class ReleaseSchedule {
     TRIMONTHLY,
     OTHER,
     COMPLETED,
+    ONE_SHOT,
+    HIATUS,
 }
 
 @Serializable
@@ -194,6 +202,22 @@ enum class Rating {
     @SerialName("TEENPLUS")
     TEEN_PLUS,
     MATURE,
+}
+
+object LabelSerializer : JsonTransformingSerializer<Label>(Label.serializer()) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        val labelValue = element.jsonObject["label"] ?: return element
+
+        if (labelValue is JsonPrimitive && !labelValue.isString) {
+            return JsonObject(
+                element.jsonObject.toMutableMap().apply {
+                    put("label", JsonPrimitive("OTHERS"))
+                },
+            )
+        }
+
+        return element
+    }
 }
 
 @Serializable

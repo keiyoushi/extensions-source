@@ -81,12 +81,10 @@ class ComicRyu : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return if (manga.url.startsWith(subDomain)) {
-            GET(manga.url, headers)
-        } else {
-            super.mangaDetailsRequest(manga)
-        }
+    override fun mangaDetailsRequest(manga: SManga): Request = if (manga.url.startsWith(subDomain)) {
+        GET(manga.url, headers)
+    } else {
+        super.mangaDetailsRequest(manga)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -132,12 +130,10 @@ class ComicRyu : HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return if (chapter.url.startsWith(subDomain)) {
-            GET(chapter.url, headers)
-        } else {
-            super.pageListRequest(chapter)
-        }
+    override fun pageListRequest(chapter: SChapter): Request = if (chapter.url.startsWith(subDomain)) {
+        GET(chapter.url, headers)
+    } else {
+        super.pageListRequest(chapter)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -154,14 +150,15 @@ class ComicRyu : HttpSource() {
         StatusFilter(),
     )
 
-    private inner class StatusFilter : Filter.Select<FilterOption>(
-        "Status",
-        arrayOf(
-            FilterOption("連載中", "シリーズ一覧-連載中"),
-            FilterOption("完結作品", "完結作品"),
-            FilterOption("(ユニコーン) 連載中", "$subDomain/シリーズ一覧-連載中"),
-        ),
-    )
+    private inner class StatusFilter :
+        Filter.Select<FilterOption>(
+            "Status",
+            arrayOf(
+                FilterOption("連載中", "シリーズ一覧-連載中"),
+                FilterOption("完結作品", "完結作品"),
+                FilterOption("(ユニコーン) 連載中", "$subDomain/シリーズ一覧-連載中"),
+            ),
+        )
 
     private class FilterOption(private val name: String, val value: String) {
         override fun toString() = name

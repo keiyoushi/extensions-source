@@ -6,11 +6,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class ErosScans : MangaThemesia(
-    "Eros Scans",
-    "https://erosxsun.xyz",
-    "en",
-) {
+class ErosScans :
+    MangaThemesia(
+        "Eros Scans",
+        "https://erosxsun.xyz",
+        "en",
+    ) {
     override val client = super.client.newBuilder()
         .addInterceptor(::cdnRedirectInterceptor)
         .rateLimit(3)

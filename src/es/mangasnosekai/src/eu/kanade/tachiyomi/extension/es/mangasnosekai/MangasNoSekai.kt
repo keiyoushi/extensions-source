@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -8,6 +7,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.synchrony.Deobfuscator
 import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,12 +19,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangasNoSekai : Madara(
-    "Mangas No Sekai",
-    "https://mangasnosekai.com",
-    "es",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-) {
+class MangasNoSekai :
+    Madara(
+        "Mangas No Sekai",
+        "https://mangasnosekai.com",
+        "es",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+    ) {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
@@ -34,9 +35,7 @@ class MangasNoSekai : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=views", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=views", headers)
 
     override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
 
@@ -64,9 +63,7 @@ class MangasNoSekai : Madara(
         return manga
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=latest", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=latest", headers)
 
     override fun searchMangaNextPageSelector() = "nav.navigation a.next"
 

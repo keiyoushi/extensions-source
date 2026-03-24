@@ -20,7 +20,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -34,7 +33,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.concurrent.thread
 
-class IkigaiMangas : HttpSource(), ConfigurableSource {
+class IkigaiMangas :
+    HttpSource(),
+    ConfigurableSource {
 
     private val isCi = System.getenv("CI") == "true"
 
@@ -298,8 +299,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return mangas
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(fetchedDomainUrl + chapter.url.substringBefore("#"), headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(fetchedDomainUrl + chapter.url.substringBefore("#"), headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val request = response.request
@@ -382,7 +382,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             title = SHOW_NSFW_PREF_TITLE
             setDefaultValue(SHOW_NSFW_PREF_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                _cachedNsfwPref = newValue as Boolean
+                cachedNsfwPref = newValue as Boolean
                 true
             }
         }.also { screen.addPreference(it) }
@@ -410,34 +410,33 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
 
-    private var _cachedBaseUrl: String? = null
+    private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            if (cachedBaseUrl == null) {
+                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
-            return _cachedBaseUrl!!
+            return cachedBaseUrl!!
         }
         set(value) {
-            _cachedBaseUrl = value
+            cachedBaseUrl = value
             edit().putString(BASE_URL_PREF, value).apply()
         }
 
-    private var _cachedNsfwPref: Boolean? = null
+    private var cachedNsfwPref: Boolean? = null
     private var SharedPreferences.showNsfwPref: Boolean
         get() {
-            if (_cachedNsfwPref == null) {
-                _cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
+            if (cachedNsfwPref == null) {
+                cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
             }
-            return _cachedNsfwPref!!
+            return cachedNsfwPref!!
         }
         set(value) {
-            _cachedNsfwPref = value
+            cachedNsfwPref = value
             edit().putBoolean(SHOW_NSFW_PREF, value).apply()
         }
 
-    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
-        filterIsInstance<R>().firstOrNull()
+    private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 

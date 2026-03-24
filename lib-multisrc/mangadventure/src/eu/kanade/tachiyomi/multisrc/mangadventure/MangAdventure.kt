@@ -49,121 +49,104 @@ abstract class MangAdventure(
 
     override val supportsLatest = true
 
-    override fun headersBuilder() =
-        super.headersBuilder().set("User-Agent", userAgent)
+    override fun headersBuilder() = super.headersBuilder().set("User-Agent", userAgent)
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$apiUrl/series?page=$page&sort=-latest_upload", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/series?page=$page&sort=-latest_upload", headers)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl/series?page=$page&sort=-views", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/series?page=$page&sort=-views", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        apiUrl.toHttpUrl().newBuilder().addEncodedPathSegment("series").run {
-            if (query.startsWith(SLUG_QUERY)) {
-                addQueryParameter("slug", query.substringAfter(SLUG_QUERY))
-            } else {
-                addQueryParameter("page", page.toString())
-                addQueryParameter("title", query)
-                filters.filterIsInstance<UriFilter>().forEach {
-                    addQueryParameter(it.param, it.toString())
-                }
-            }
-
-            GET(build(), headers)
-        }
-
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$apiUrl/series/${manga.url}", headers)
-
-    override fun chapterListRequest(manga: SManga) =
-        GET("$apiUrl/series/${manga.url}/chapters?date_format=timestamp", headers)
-
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$apiUrl/chapters/${chapter.url}/pages?track=true", headers)
-
-    override fun latestUpdatesParse(response: Response) =
-        response.decode<Paginator<Series>>().let {
-            MangasPage(it.map(::mangaFromJSON), !it.last)
-        }
-
-    override fun searchMangaParse(response: Response) =
-        latestUpdatesParse(response)
-
-    override fun popularMangaParse(response: Response) =
-        latestUpdatesParse(response)
-
-    override fun chapterListParse(response: Response) =
-        response.decode<Results<Chapter>>().map { chapter ->
-            SChapter.create().apply {
-                url = chapter.id.toString()
-                name = buildString {
-                    append(chapter.fullTitle)
-                    if (chapter.final) append(" [END]")
-                }
-                chapter_number = chapter.number
-                date_upload = chapter.published.toLong()
-                scanlator = chapter.groups.joinToString()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = apiUrl.toHttpUrl().newBuilder().addEncodedPathSegment("series").run {
+        if (query.startsWith(SLUG_QUERY)) {
+            addQueryParameter("slug", query.substringAfter(SLUG_QUERY))
+        } else {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("title", query)
+            filters.filterIsInstance<UriFilter>().forEach {
+                addQueryParameter(it.param, it.toString())
             }
         }
 
-    override fun mangaDetailsParse(response: Response) =
-        response.decode<Series>().let(::mangaFromJSON)
+        GET(build(), headers)
+    }
 
-    override fun pageListParse(response: Response) =
-        response.decode<Results<MAPage>>().map { page ->
-            Page(page.number, imageUrl = page.image)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/series/${manga.url}", headers)
+
+    override fun chapterListRequest(manga: SManga) = GET("$apiUrl/series/${manga.url}/chapters?date_format=timestamp", headers)
+
+    override fun pageListRequest(chapter: SChapter) = GET("$apiUrl/chapters/${chapter.url}/pages?track=true", headers)
+
+    override fun latestUpdatesParse(response: Response) = response.decode<Paginator<Series>>().let {
+        MangasPage(it.map(::mangaFromJSON), !it.last)
+    }
+
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+
+    override fun chapterListParse(response: Response) = response.decode<Results<Chapter>>().map { chapter ->
+        SChapter.create().apply {
+            url = chapter.id.toString()
+            name = buildString {
+                append(chapter.fullTitle)
+                if (chapter.final) append(" [END]")
+            }
+            chapter_number = chapter.number
+            date_upload = chapter.published.toLong()
+            scanlator = chapter.groups.joinToString()
         }
+    }
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = response.decode<Series>().let(::mangaFromJSON)
+
+    override fun pageListParse(response: Response) = response.decode<Results<MAPage>>().map { page ->
+        Page(page.number, imageUrl = page.image)
+    }
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/reader/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter) = "$apiUrl/chapters/${chapter.url}/read"
 
-    override fun getFilterList() =
-        FilterList(
-            Author(),
-            Artist(),
-            Status(statuses),
-            SortOrder(orders),
-            CategoryList(categories),
-        )
+    override fun getFilterList() = FilterList(
+        Author(),
+        Artist(),
+        Status(statuses),
+        SortOrder(orders),
+        CategoryList(categories),
+    )
 
     /** Decodes the JSON response as an object. */
-    private inline fun <reified T> Response.decode() =
-        json.decodeFromJsonElement<T>(json.parseToJsonElement(body.string()))
+    private inline fun <reified T> Response.decode() = json.decodeFromJsonElement<T>(json.parseToJsonElement(body.string()))
 
     /** Converts a [Series] object to an [SManga]. */
-    private fun mangaFromJSON(series: Series) =
-        SManga.create().apply {
-            url = series.slug
-            title = series.title
-            thumbnail_url = series.cover
-            description = buildString {
-                series.description?.let(::append)
-                series.aliases.let {
-                    if (!it.isNullOrEmpty()) {
-                        it.joinTo(this, "\n", "\n\nAlternative titles:\n")
-                    }
-                }
-            }
-            author = series.authors?.joinToString()
-            artist = series.artists?.joinToString()
-            genre = series.categories?.joinToString()
-            status = if (series.licensed == true) {
-                SManga.LICENSED
-            } else {
-                when (series.status) {
-                    "completed" -> SManga.COMPLETED
-                    "ongoing" -> SManga.ONGOING
-                    "hiatus" -> SManga.ON_HIATUS
-                    "canceled" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
+    private fun mangaFromJSON(series: Series) = SManga.create().apply {
+        url = series.slug
+        title = series.title
+        thumbnail_url = series.cover
+        description = buildString {
+            series.description?.let(::append)
+            series.aliases.let {
+                if (!it.isNullOrEmpty()) {
+                    it.joinTo(this, "\n", "\n\nAlternative titles:\n")
                 }
             }
         }
+        author = series.authors?.joinToString()
+        artist = series.artists?.joinToString()
+        genre = series.categories?.joinToString()
+        status = if (series.licensed == true) {
+            SManga.LICENSED
+        } else {
+            when (series.status) {
+                "completed" -> SManga.COMPLETED
+                "ongoing" -> SManga.ONGOING
+                "hiatus" -> SManga.ON_HIATUS
+                "canceled" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+        }
+    }
 
     companion object {
         /** Manga categories from MangAdventure `categories.xml` fixture. */

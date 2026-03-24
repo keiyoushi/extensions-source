@@ -34,20 +34,18 @@ class MangaDraft : HttpSource() {
     override val supportsLatest = true
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
-            baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("api")
-                addPathSegment("catalog")
-                addPathSegment("projects")
-                addQueryParameter("order", "popular")
-                addQueryParameter("type", "all")
-                addQueryParameter("page", page.toString())
-                addQueryParameter("number", "20")
-            }.build(),
-            headers,
-        )
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(
+        baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("catalog")
+            addPathSegment("projects")
+            addQueryParameter("order", "popular")
+            addQueryParameter("type", "all")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("number", "20")
+        }.build(),
+        headers,
+    )
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<MangaDraftCatalogResponseDto>()
 
@@ -68,20 +66,18 @@ class MangaDraft : HttpSource() {
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(
-            baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("api")
-                addPathSegment("catalog")
-                addPathSegment("projects")
-                addQueryParameter("order", "news")
-                addQueryParameter("type", "all")
-                addQueryParameter("page", page.toString())
-                addQueryParameter("number", "20")
-            }.build(),
-            headers,
-        )
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("catalog")
+            addPathSegment("projects")
+            addQueryParameter("order", "news")
+            addQueryParameter("type", "all")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("number", "20")
+        }.build(),
+        headers,
+    )
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
@@ -188,26 +184,26 @@ class MangaDraft : HttpSource() {
         return chapterList
     }
 
-    private fun chapterFromElement(element: Element, index: Int): SChapter =
-        SChapter.create().apply {
-            chapter_number = index.toFloat()
-            name = "$chapter_number. ${element.selectFirst(".group-hover\\:text-secondary")?.text() ?: ""}"
+    private fun chapterFromElement(element: Element, index: Int): SChapter = SChapter.create().apply {
+        chapter_number = index.toFloat()
+        name = "$chapter_number. ${element.selectFirst(".group-hover\\:text-secondary")?.text() ?: ""}"
 
-            url = "${element.absUrl("href")}"
+        url = "${element.absUrl("href")}"
 
-            val dateText = element.selectFirst("div>span")?.text()
-            if (!dateText.isNullOrBlank()) {
-                name = name.substringBefore(dateText)
-                date_upload = dateFormat.tryParse(dateText)
-            }
+        val dateText = element.selectFirst("div>span")?.text()
+        if (!dateText.isNullOrBlank()) {
+            name = name.substringBefore(dateText)
+            date_upload = dateFormat.tryParse(dateText)
         }
+    }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.contains("c.")) {
             val request = GET(chapter.url, headers)
 
             // switch base url with actual url once we try to get the pages
-            client.newCall(request).execute().use { response -> // final URL after redirects
+            client.newCall(request).execute().use { response ->
+                // final URL after redirects
                 // get this api request with the id of the first page of the chapter after redirect
                 val responseChapterNum =
                     response.request.url.toString().substringAfterLast('/').filter { it.isDigit() }
@@ -229,14 +225,11 @@ class MangaDraft : HttpSource() {
             Page(it.number, "${it.url}?size=full", "${it.url}?size=full")
         }
     }
-    fun findCategoryByPageId(pagesByCategory: PagesByCategory, pageId: Long): List<MangaDraftPageDTO> {
-        return pagesByCategory.values
-            .first { pageList -> pageList.any { it.id == pageId } }
-    }
+    fun findCategoryByPageId(pagesByCategory: PagesByCategory, pageId: Long): List<MangaDraftPageDTO> = pagesByCategory.values
+        .first { pageList -> pageList.any { it.id == pageId } }
 
     companion object {
-        private fun getApiDateFormat() =
-            SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
+        private fun getApiDateFormat() = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
 
         val dateFormat by lazy { getApiDateFormat() }
     }

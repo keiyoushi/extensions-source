@@ -153,9 +153,7 @@ class InManga : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    private fun parseChapterDate(string: String): Long {
-        return DATE_FORMATTER.parse(string)?.time ?: 0L
-    }
+    private fun parseChapterDate(string: String): Long = DATE_FORMATTER.parse(string)?.time ?: 0L
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
         val chapterId = document.select("input#ChapterIdentification").attr("value")

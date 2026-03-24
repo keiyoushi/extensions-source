@@ -1,9 +1,8 @@
 ext {
     extName = 'DreamTeams Scans'
     extClass = '.DreamTeamsScans'
-    themePkg = 'mangathemesia'
+    extVersionCode = 31
     baseUrl = 'https://dreamteams.space'
-    overrideVersionCode = 0
     isNsfw = true
 }
 

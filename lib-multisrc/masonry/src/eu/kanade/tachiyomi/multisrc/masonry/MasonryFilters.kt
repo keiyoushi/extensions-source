@@ -13,22 +13,23 @@ abstract class SelectFilter(
 }
 
 class SortFilter : SelectFilter("Sort by", sortFilterOptions) {
-    fun getUriPartIfNeeded(part: String) =
-        when (part) {
-            "search" -> {
-                when (state) {
-                    2 -> ""
-                    else -> selected
-                }
+    fun getUriPartIfNeeded(part: String) = when (part) {
+        "search" -> {
+            when (state) {
+                2 -> ""
+                else -> selected
             }
-            "tag" -> {
-                when (state) {
-                    0 -> ""
-                    else -> selected
-                }
-            }
-            else -> ""
         }
+
+        "tag" -> {
+            when (state) {
+                0 -> ""
+                else -> selected
+            }
+        }
+
+        else -> ""
+    }
 }
 
 private val sortFilterOptions = listOf(

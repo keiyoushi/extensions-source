@@ -7,11 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class CulturedWorks : MangaThemesia(
-    "CulturedWorks",
-    "https://culturedworks.com",
-    "en",
-) {
+class CulturedWorks :
+    MangaThemesia(
+        "CulturedWorks",
+        "https://culturedworks.com",
+        "en",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

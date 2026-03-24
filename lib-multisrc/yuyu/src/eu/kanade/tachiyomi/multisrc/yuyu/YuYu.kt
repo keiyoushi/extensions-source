@@ -78,12 +78,11 @@ abstract class YuYu(
         return MangasPage(mangas, document.hasNextPage())
     }
 
-    private fun Document.hasNextPage() =
-        selectFirst(latestUpdatesNextPageSelector())?.absUrl("href")?.let {
-            selectFirst("a.page-link.active")
-                ?.absUrl("href")
-                .equals(it, ignoreCase = true).not()
-        } ?: false
+    private fun Document.hasNextPage() = selectFirst(latestUpdatesNextPageSelector())?.absUrl("href")?.let {
+        selectFirst("a.page-link.active")
+            ?.absUrl("href")
+            .equals(it, ignoreCase = true).not()
+    } ?: false
 
     // ============================== Search ===============================
 
@@ -133,14 +132,12 @@ abstract class YuYu(
         }
     }
 
-    protected fun String.toStatus(): Int {
-        return when (lowercase()) {
-            "em andamento" -> SManga.ONGOING
-            "completo" -> SManga.COMPLETED
-            "cancelado" -> SManga.CANCELLED
-            "hiato" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    protected fun String.toStatus(): Int = when (lowercase()) {
+        "em andamento" -> SManga.ONGOING
+        "completo" -> SManga.COMPLETED
+        "cancelado" -> SManga.CANCELLED
+        "hiato" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
     }
 
     protected open fun getMangaId(manga: SManga): String {
@@ -186,10 +183,8 @@ abstract class YuYu(
 
     // ============================== Pages ===============================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("picture img").mapIndexed { idx, element ->
-            Page(idx, imageUrl = element.absUrl("src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("picture img").mapIndexed { idx, element ->
+        Page(idx, imageUrl = element.absUrl("src"))
     }
 
     override fun imageUrlParse(document: Document) = ""

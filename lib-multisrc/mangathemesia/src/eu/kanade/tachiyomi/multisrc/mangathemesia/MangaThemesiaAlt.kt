@@ -27,7 +27,8 @@ abstract class MangaThemesiaAlt(
     mangaUrlDirectory: String = "/manga",
     dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
     private val randomUrlPrefKey: String = "pref_auto_random_url",
-) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat), ConfigurableSource {
+) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat),
+    ConfigurableSource {
 
     protected open val listUrl = "$mangaUrlDirectory/list-mode/"
     protected open val listSelector = "div#content div.soralist ul li a.series"
@@ -97,12 +98,10 @@ abstract class MangaThemesiaAlt(
         }
     }
 
-    protected fun getUrlMap(cached: Boolean = false): Map<String, String> {
-        return if (cached && cachedValue == null) {
-            preferences.urlMapCache
-        } else {
-            runBlocking { getUrlMapInternal() }
-        }
+    protected fun getUrlMap(cached: Boolean = false): Map<String, String> = if (cached && cachedValue == null) {
+        preferences.urlMapCache
+    } else {
+        runBlocking { getUrlMapInternal() }
     }
 
     // cache in preference for webview urls
@@ -127,17 +126,15 @@ abstract class MangaThemesiaAlt(
         return MangasPage(mangas, mp.hasNextPage)
     }
 
-    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
-        return onEach {
-            val slug = it.url
-                .removeSuffix("/")
-                .substringAfterLast("/")
+    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> = onEach {
+        val slug = it.url
+            .removeSuffix("/")
+            .substringAfterLast("/")
 
-            val permaSlug = slug
-                .replaceFirst(slugRegex, "")
+        val permaSlug = slug
+            .replaceFirst(slugRegex, "")
 
-            it.url = "$mangaUrlDirectory/$permaSlug/"
-        }
+        it.url = "$mangaUrlDirectory/$permaSlug/"
     }
 
     protected open val slugRegex = Regex("""^(\d+-)""")

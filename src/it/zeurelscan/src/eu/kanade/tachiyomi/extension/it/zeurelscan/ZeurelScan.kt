@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.it.zeurelscan
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,7 +13,6 @@ import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -34,7 +34,7 @@ class ZeurelScan : HttpSource() {
     // Popular (not actually sorted as site has no such functionality)
 
     override fun popularMangaRequest(page: Int): Request = GET(
-        baseUrl + "/series.php",
+        baseUrl + "/series",
         headers,
     )
 
@@ -54,7 +54,7 @@ class ZeurelScan : HttpSource() {
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
-        baseUrl + "/ultimi.php",
+        baseUrl + "/ultimi",
         headers,
     )
 
@@ -112,8 +112,14 @@ class ZeurelScan : HttpSource() {
 
     // Chapters
 
+    // Continue parsing even if the server returns HTTP 400
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservable()
+        .map(::pageListParse)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val list = response.asJsoup().select("div.chapter")
+        var lastChapter = 0f
         return list.map {
             val str = it.selectFirst("a")!!.wholeOwnText().substringAfter("#")
 
@@ -123,8 +129,14 @@ class ZeurelScan : HttpSource() {
             val chapterNum = if (chapterNumStr.contains("_")) {
                 chapterNumStr.substringBefore("_").toFloat() + 0.1f
             } else {
-                chapterNumStr.toFloat()
+                try {
+                    chapterNumStr.toFloat()
+                } catch (e: NumberFormatException) {
+                    // Handle chapters with non-number chapter number
+                    lastChapter + 0.1f
+                }
             }
+            lastChapter = chapterNum
 
             val tmpTitle = str.substringAfter("–").trim()
             val title = if (tmpTitle.length != 0) {

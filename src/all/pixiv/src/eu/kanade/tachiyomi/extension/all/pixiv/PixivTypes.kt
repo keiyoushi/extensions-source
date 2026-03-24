@@ -125,6 +125,9 @@ internal data class PixivUserData(
 
 @Serializable
 internal data class PixivUserInfo(
-    val id: String,
+    val userId: String,
     val name: String,
+    val image: String? = null,
+    val imageBig: String? = null,
+    val comment: String? = null,
 )

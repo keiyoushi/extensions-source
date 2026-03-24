@@ -42,9 +42,7 @@ class HentaiCosplay : HttpSource() {
         return super.fetchPopularManga(page)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/ranking/page/$page/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/page/$page/", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -97,9 +95,7 @@ class HentaiCosplay : HttpSource() {
         return super.fetchLatestUpdates(page)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/recently/page/$page/", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently/page/$page/", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -120,6 +116,7 @@ class HentaiCosplay : HttpSource() {
                             return GET("$baseUrl${filter.selected}page/$page/", headers)
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -173,16 +170,14 @@ class HentaiCosplay : HttpSource() {
 
     private class TagFilter(name: String, options: List<Pair<String, String>>) : SelectFilter(name, options)
 
-    override fun getFilterList(): FilterList {
-        return if (tagCache.isEmpty()) {
-            FilterList(Filter.Header("Press reset to attempt to load filters"))
-        } else {
-            FilterList(
-                Filter.Header("Ignored with text search"),
-                Filter.Separator(),
-                TagFilter("Ranked Tags", tagCache),
-            )
-        }
+    override fun getFilterList(): FilterList = if (tagCache.isEmpty()) {
+        FilterList(Filter.Header("Press reset to attempt to load filters"))
+    } else {
+        FilterList(
+            Filter.Header("Ignored with text search"),
+            Filter.Separator(),
+            TagFilter("Ranked Tags", tagCache),
+        )
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -220,12 +215,10 @@ class HentaiCosplay : HttpSource() {
 
     override fun imageUrlParse(response: Response) = imageUrlParse(response.asJsoup())
 
-    private fun imageUrlParse(document: Document): String {
-        return document.selectFirst("#display_image_detail img, #detail_list img")!!
-            .absUrl("src")
-            .replace("http://", "https://")
-            .replace(hdRegex, "/")
-    }
+    private fun imageUrlParse(document: Document): String = document.selectFirst("#display_image_detail img, #detail_list img")!!
+        .absUrl("src")
+        .replace("http://", "https://")
+        .replace(hdRegex, "/")
 
     companion object {
         private val tagNumRegex = Regex("""(\(\d+\))""")

@@ -1,127 +1,64 @@
 package eu.kanade.tachiyomi.extension.en.qiscans
 
-import eu.kanade.tachiyomi.multisrc.iken.GenreFilter
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.iken.Iken
-import eu.kanade.tachiyomi.multisrc.iken.SelectFilter
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Response
+import org.jsoup.parser.Parser
 import rx.Observable
-import rx.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 
-class QiScans : Iken(
-    "Qi Scans",
-    "en",
-    "https://qiscans.org",
-    "https://api.qiscans.org",
-) {
+class QiScans :
+    Iken(
+        "Qi Scans",
+        "en",
+        "https://qimanhwa.com",
+        "https://api.qimanhwa.com",
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", "18")
-            addQueryParameter("orderBy", "totalViews")
-        }.build()
-        return GET(url, headers)
+    override fun searchMangaParse(response: Response): MangasPage = super.searchMangaParse(response).apply {
+        mangas.forEach(::normalizeMangaTextFields)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = super.fetchMangaDetails(manga).map(::normalizeMangaTextFields)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply { // 'query' instead of 'posts'
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", "18")
-            addQueryParameter("orderBy", "updatedAt")
-        }.build()
-        return GET(url, headers)
-    }
-
-    @Serializable
-    class PageParseDto(
-        val url: String,
-        val order: Int,
-    )
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-
-        if (document.selectFirst("svg.lucide-lock") != null) {
-            throw Exception("Unlock chapter in webview")
+    override fun pageListParse(response: Response): List<Page> = try {
+        super.pageListParse(response)
+    } catch (e: Exception) {
+        if (e.message == "Unlock chapter in webview") {
+            throw Exception("Paid chapter unavailable.")
         }
-
-        return document.getNextJson("images").parseAs<List<PageParseDto>>().sortedBy { it.order }.mapIndexed { idx, p ->
-            Page(idx, imageUrl = p.url)
-        }
+        throw e
     }
 
-    private var genresList: List<Pair<String, String>> = emptyList()
-    private var fetchGenresAttempts = 0
-
-    private fun fetchGenres() {
-        try {
-            val response = client.newCall(GET("$apiUrl/api/genres", headers)).execute()
-            genresList = response.parseAs<List<GenreDto>>()
-                .map { Pair(it.name, it.id.toString()) }
-        } catch (e: Throwable) {
-        } finally {
-            fetchGenresAttempts++
-        }
+    private fun normalizeMangaTextFields(manga: SManga): SManga {
+        manga.title = decodeHtmlEntities(manga.title)
+        manga.author = manga.author?.let(::decodeHtmlEntities)
+        manga.artist = manga.artist?.let(::decodeHtmlEntities)
+        manga.description = manga.description?.let(::decodeHtmlEntities)
+        manga.genre = manga.genre?.let(::decodeHtmlEntities)
+        return manga
     }
 
-    override fun getFilterList(): FilterList {
-        if (genresList.isEmpty() && fetchGenresAttempts < 3) {
-            Observable.fromCallable { fetchGenres() }
-                .subscribeOn(Schedulers.io())
-                .subscribe()
-        }
-
-        val filters = mutableListOf<Filter<*>>(
-            SortFilter(),
-            StatusFilter(),
-        )
-
-        if (genresList.isNotEmpty()) {
-            filters.add(GenreFilter(genresList))
-        } else {
-            filters.add(Filter.Header("Press 'Reset' to attempt to load genres"))
-        }
-        return FilterList(filters)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_LOCKED_CHAPTER_PREF_KEY
+            title = "Display paid chapters"
+            summaryOn = "Paid chapters will appear."
+            summaryOff = "Only free chapters will be displayed."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
 
-    private class SortFilter : SelectFilter(
-        "Sort",
-        "orderBy",
-        listOf(
-            Pair("Popularity", "totalViews"),
-            Pair("Latest", "updatedAt"),
-        ),
-    )
-
-    private class StatusFilter : SelectFilter(
-        "Status",
-        "seriesStatus",
-        listOf(
-            Pair("All", ""),
-            Pair("Ongoing", "ONGOING"),
-            Pair("Hiatus", "HIATUS"),
-            Pair("Completed", "COMPLETED"),
-            Pair("Dropped", "DROPPED"),
-        ),
-    )
+    companion object {
+        private fun decodeHtmlEntities(value: String): String = Parser.unescapeEntities(value, false)
+    }
 }

@@ -6,6 +6,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -34,11 +35,13 @@ import okio.IOException
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class Comick(
     override val lang: String,
     private val siteLang: String = lang,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "Comick (Unoriginal)"
 
@@ -68,6 +71,7 @@ class Comick(
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
+        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
@@ -101,8 +105,7 @@ class Comick(
         )
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/api/chapters/latest?order=new&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/chapters/latest?order=new&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<Data<List<BrowseComic>>>()
@@ -313,8 +316,7 @@ class Comick(
         return@runBlocking FilterList(filters)
     }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/comic/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/comic/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.asJsoup()
@@ -335,9 +337,12 @@ class Comick(
             author = data.authors.joinToString { it.name }
             artist = data.artists.joinToString { it.name }
             description = buildString {
-                append(
-                    Jsoup.parseBodyFragment(data.desc).wholeText(),
-                )
+                val des = Jsoup.parseBodyFragment(data.desc).wholeText()
+                    .replace(Regex("\\s+"), " ") // collapse multiple whitespaces into a single space
+                    .replace(Regex("(?<=[^.]{12})(?<!\\bMr|\\bMs|\\bMrs|\\bDr|\\bProf|\\bSr|\\bJr|\\bVol|\\bCh)\\.\\s+"), ".\n\n") // insert line breaks after periods
+                    .replace(Regex("(?<=[^:]{12})(?<!\\b[a-zA-Z]{1,10}):\\s+"), ":\n\n") // insert line breaks after colons
+                    .trim()
+                append(des)
 
                 if (data.titles.isNotEmpty()) {
                     append("\n\n Alternative Titles: \n")
@@ -361,8 +366,7 @@ class Comick(
         }
     }
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$siteLang", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$siteLang", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var data = response.parseAs<ChapterList>()
@@ -412,9 +416,7 @@ class Comick(
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {

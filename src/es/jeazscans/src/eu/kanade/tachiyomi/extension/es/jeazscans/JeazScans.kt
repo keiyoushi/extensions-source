@@ -6,12 +6,13 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class JeazScans : Madara(
-    "Jeaz Scans",
-    "https://lectorhub.j5z.xyz",
-    "es",
-    dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("es")),
-) {
+class JeazScans :
+    Madara(
+        "Jeaz Scans",
+        "https://lectorhub.j5z.xyz",
+        "es",
+        dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("es")),
+    ) {
     override val id = 5292079548510508306
 
     override val useNewChapterEndpoint = true

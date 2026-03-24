@@ -31,16 +31,11 @@ android {
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
+        freeCompilerArgs.add("-Xcontext-parameters")
     }
 }
 
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
     implementation(project(":core"))
-}
-
-tasks.register("printDependentExtensions") {
-    doLast {
-        project.printDependentExtensions()
-    }
 }

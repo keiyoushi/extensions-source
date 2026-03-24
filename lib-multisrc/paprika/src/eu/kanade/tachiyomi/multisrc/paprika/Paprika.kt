@@ -31,29 +31,23 @@ abstract class Paprika(
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular-manga?page=$page")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popular-manga?page=$page")
 
     override fun popularMangaSelector() = "div.media"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select("a:has(h4)").let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-            }
-            thumbnail_url = element.select("img").attr("abs:src")
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select("a:has(h4)").let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
+        thumbnail_url = element.select("img").attr("abs:src")
     }
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/latest-manga?page=$page")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest-manga?page=$page")
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -63,21 +57,19 @@ abstract class Paprika(
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank()) {
-            GET("$baseUrl/search?q=$query&page=$page")
-        } else {
-            val url = "$baseUrl/mangas/".toHttpUrl().newBuilder()
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> url.addPathSegment(filter.toUriPart())
-                    is OrderFilter -> url.addQueryParameter("orderby", filter.toUriPart())
-                    else -> {}
-                }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
+        GET("$baseUrl/search?q=$query&page=$page")
+    } else {
+        val url = "$baseUrl/mangas/".toHttpUrl().newBuilder()
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> url.addPathSegment(filter.toUriPart())
+                is OrderFilter -> url.addQueryParameter("orderby", filter.toUriPart())
+                else -> {}
             }
-            url.addQueryParameter("page", page.toString())
-            GET(url.build(), headers)
         }
+        url.addQueryParameter("page", page.toString())
+        GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -88,22 +80,20 @@ abstract class Paprika(
 
     // Manga details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.select("div.manga-detail h1").text()
-            thumbnail_url = document.select("div.manga-detail img").attr("abs:src")
-            document.select("div.media-body p").html().split("<br>").forEach {
-                with(Jsoup.parse(it).text()) {
-                    when {
-                        this.startsWith("Author") -> author = this.substringAfter(":").trim()
-                        this.startsWith("Artist") -> artist = this.substringAfter(":").trim()
-                        this.startsWith("Genre") -> genre = this.substringAfter(":").trim().replace(";", ",")
-                        this.startsWith("Status") -> status = this.substringAfter(":").trim().toStatus()
-                    }
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("div.manga-detail h1").text()
+        thumbnail_url = document.select("div.manga-detail img").attr("abs:src")
+        document.select("div.media-body p").html().split("<br>").forEach {
+            with(Jsoup.parse(it).text()) {
+                when {
+                    this.startsWith("Author") -> author = this.substringAfter(":").trim()
+                    this.startsWith("Artist") -> artist = this.substringAfter(":").trim()
+                    this.startsWith("Genre") -> genre = this.substringAfter(":").trim().replace(";", ",")
+                    this.startsWith("Status") -> status = this.substringAfter(":").trim().toStatus()
                 }
             }
-            description = document.select("div.manga-content p").joinToString("\n") { it.text() }
         }
+        description = document.select("div.manga-content p").joinToString("\n") { it.text() }
     }
 
     fun String?.toStatus() = when {
@@ -129,18 +119,14 @@ abstract class Paprika(
     override fun chapterListSelector() = "div.total-chapter:has(h2) li"
 
     // never called
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    open fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
-        return SChapter.create().apply {
-            element.select("a").let {
-                name = it.text().substringAfter("$mangaTitle ")
-                setUrlWithoutDomain(it.attr("href"))
-            }
-            date_upload = element.select("div.small").firstOrNull()?.text().toDate()
+    open fun chapterFromElement(element: Element, mangaTitle: String): SChapter = SChapter.create().apply {
+        element.select("a").let {
+            name = it.text().substringAfter("$mangaTitle ")
+            setUrlWithoutDomain(it.attr("href"))
         }
+        date_upload = element.select("div.small").firstOrNull()?.text().toDate()
     }
 
     private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
@@ -150,6 +136,7 @@ abstract class Paprika(
         return try {
             when {
                 this.contains("yesterday", ignoreCase = true) -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+
                 this.contains("ago", ignoreCase = true) -> {
                     val trimmedDate = this.substringBefore(" ago").removeSuffix("s").split(" ")
                     val num = trimmedDate[0].toIntOrNull() ?: 1 // for "an hour ago"
@@ -162,6 +149,7 @@ abstract class Paprika(
                         else -> null
                     }?.timeInMillis ?: 0L
                 }
+
                 else ->
                     SimpleDateFormat("MMM d yy", Locale.US)
                         .parse("${this.substringBefore(",")} $currentYear")?.time ?: 0
@@ -173,10 +161,8 @@ abstract class Paprika(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#arraydata").text().split(",").mapIndexed { i, url ->
-            Page(i, "", url)
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#arraydata").text().split(",").mapIndexed { i, url ->
+        Page(i, "", url)
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -301,8 +287,7 @@ abstract class Paprika(
         Pair("Zombies", "zombies"),
     )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

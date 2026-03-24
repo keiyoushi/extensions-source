@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-class MangaNow : MangaReader(
-    "MangaNow",
-    "https://manganow.to",
-    "en",
-) {
+class MangaNow :
+    MangaReader(
+        "MangaNow",
+        "https://manganow.to",
+        "en",
+    ) {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)

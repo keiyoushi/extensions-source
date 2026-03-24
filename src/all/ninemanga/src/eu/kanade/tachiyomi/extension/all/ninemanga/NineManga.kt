@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.ninemanga
 
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -149,10 +149,15 @@ open class NineManga(
         filters.forEach { filter ->
             when (filter) {
                 is QueryCBEFilter -> url.addQueryParameter("name_sel", filter.toUriPart())
+
                 is AuthorCBEFilter -> url.addQueryParameter("author_sel", filter.toUriPart())
+
                 is AuthorFilter -> url.addQueryParameter("author", filter.state)
+
                 is ArtistCBEFilter -> url.addQueryParameter("artist_sel", filter.toUriPart())
+
                 is ArtistFilter -> url.addQueryParameter("artist", filter.state)
+
                 is GenreList -> {
                     var genreInclude = ""
                     var genreExclude = ""
@@ -163,7 +168,9 @@ open class NineManga(
                     url.addQueryParameter("category_id", genreInclude)
                     url.addQueryParameter("out_category_id", genreExclude)
                 }
+
                 is CompletedFilter -> url.addQueryParameter("completed_series", filter.toUriPart())
+
                 else -> {}
             }
         }
@@ -185,32 +192,33 @@ open class NineManga(
     class AuthorFilter : Filter.Text("Author")
     class ArtistFilter : Filter.Text("Artist")
 
-    protected open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    protected open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    protected open class ContainBeginEndFilter(name: String) : UriPartFilter(
-        name,
-        arrayOf(
-            Pair("Contain", "contain"),
-            Pair("Begin", "begin"),
-            Pair("End", "end"),
-        ),
-    )
+    protected open class ContainBeginEndFilter(name: String) :
+        UriPartFilter(
+            name,
+            arrayOf(
+                Pair("Contain", "contain"),
+                Pair("Begin", "begin"),
+                Pair("End", "end"),
+            ),
+        )
 
     private class QueryCBEFilter : ContainBeginEndFilter("Query")
     private class AuthorCBEFilter : ContainBeginEndFilter("Author")
     private class ArtistCBEFilter : ContainBeginEndFilter("Artist")
 
-    private class CompletedFilter : UriPartFilter(
-        "Completed",
-        arrayOf(
-            Pair("Either", "either"),
-            Pair("Yes", "yes"),
-            Pair("No", "no"),
-        ),
-    )
+    private class CompletedFilter :
+        UriPartFilter(
+            "Completed",
+            arrayOf(
+                Pair("Either", "either"),
+                Pair("Yes", "yes"),
+                Pair("No", "no"),
+            ),
+        )
 
     override fun getFilterList() = FilterList(
         QueryCBEFilter(),

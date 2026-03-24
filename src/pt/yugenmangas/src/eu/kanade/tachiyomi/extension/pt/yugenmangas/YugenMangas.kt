@@ -3,13 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.yugenmangas
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
-import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_VALUES
-import eu.kanade.tachiyomi.lib.randomua.UserAgentType
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -21,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -31,7 +25,9 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class YugenMangas : HttpSource(), ConfigurableSource {
+class YugenMangas :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Yugen Mangás"
 
@@ -52,20 +48,11 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy {
-        if (getPrefUAType() != UserAgentType.OFF || getPrefCustomUA().isNullOrBlank().not()) {
-            return@getPreferencesLazy
-        }
-        edit().putString(PREF_KEY_RANDOM_UA, RANDOM_UA_VALUES.last()).apply()
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .rateLimitHost(apiUrl.toHttpUrl(), 2)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .build()
 
     override val versionId = 2
@@ -83,8 +70,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Popular =======================================
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/biblioteca?page=$page&sort_order=desc&sort_by=total_views", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/biblioteca?page=$page&sort_order=desc&sort_by=total_views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.getJsonBody().parseAs<LibraryWrapper<MangaDto>>()
@@ -134,6 +120,8 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             }
         }
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     // ================================ Chapters =======================================
 
@@ -193,7 +181,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
@@ -213,11 +201,9 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Utils =======================================
 
-    private fun Element?.attrImageSet(): String? {
-        return this?.attr("srcset")?.split(SRCSET_DELIMITER_REGEX)
-            ?.map(String::trim)?.last(String::isNotBlank)
-            ?.let { "$baseUrl$it" }
-    }
+    private fun Element?.attrImageSet(): String? = this?.attr("srcset")?.split(SRCSET_DELIMITER_REGEX)
+        ?.map(String::trim)?.last(String::isNotBlank)
+        ?.let { "$baseUrl$it" }
 
     private fun Response.getJsonBody(): String {
         val document = asJsoup()

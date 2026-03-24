@@ -20,7 +20,9 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class EgoToons : HttpSource(), ConfigurableSource {
+class EgoToons :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Ego Toons"
 
@@ -95,11 +97,13 @@ class EgoToons : HttpSource(), ConfigurableSource {
                         url.addQueryParameter("genres", it.name)
                     }
                 }
+
                 is TagFilter -> {
                     filter.state.filter { it.state }.forEach {
                         url.addQueryParameter("tags", it.name)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -129,9 +133,7 @@ class EgoToons : HttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<EgoToonsMangaDto>().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<EgoToonsMangaDto>().toSManga()
 
     // ============================== Chapters ===============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {

@@ -12,20 +12,19 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class OneManga : MangaThemesia(
-    "One-Manga",
-    "https://one-manga.com",
-    "th",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Bangkok")
-    },
-) {
-    override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(document).apply {
-            // Add 'color' badge as a genre
-            if (document.selectFirst(".thumb .colored") != null) {
-                genre = genre?.plus(", Color")
-            }
+class OneManga :
+    MangaThemesia(
+        "One-Manga",
+        "https://one-manga.com",
+        "th",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Bangkok")
+        },
+    ) {
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        // Add 'color' badge as a genre
+        if (document.selectFirst(".thumb .colored") != null) {
+            genre = genre?.plus(", Color")
         }
     }
 
@@ -40,18 +39,23 @@ class OneManga : MangaThemesia(
                 is AuthorFilter -> {
                     url.addQueryParameter("author", filter.state)
                 }
+
                 is YearFilter -> {
                     url.addQueryParameter("yearx", filter.state)
                 }
+
                 is StatusFilter -> {
                     url.addQueryParameter("status", filter.selectedValue())
                 }
+
                 is TypeFilter -> {
                     url.addQueryParameter("type", filter.selectedValue())
                 }
+
                 is OrderByFilter -> {
                     url.addQueryParameter("order", filter.selectedValue())
                 }
+
                 is GenreListFilter -> {
                     filter.state
                         .filter { it.state != Filter.TriState.STATE_IGNORE }
@@ -60,12 +64,14 @@ class OneManga : MangaThemesia(
                             url.addQueryParameter("genre[]", value)
                         }
                 }
+
                 // if site has project page, default value "hasProjectPage" = false
                 is ProjectFilter -> {
                     if (filter.selectedValue() == "project-filter-on") {
                         url.setPathSegment(0, projectPageString.substring(1))
                     }
                 }
+
                 else -> { /* Do Nothing */ }
             }
         }

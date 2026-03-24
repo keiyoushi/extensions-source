@@ -9,12 +9,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class InfraFandub : Madara(
-    "InfraFandub",
-    "https://infrafandub.com",
-    "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-) {
+class InfraFandub :
+    Madara(
+        "InfraFandub",
+        "https://infrafandub.com",
+        "es",
+        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
+    ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()

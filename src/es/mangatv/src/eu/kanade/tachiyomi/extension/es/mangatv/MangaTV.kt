@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.mangatv
 
 import android.util.Base64
-import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.lib.unpacker.Unpacker
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -14,13 +14,14 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTV : MangaThemesia(
-    "Manga  TV",
-    "https://mangatv.net",
-    "es",
-    mangaUrlDirectory = "/lista",
-    dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
-) {
+class MangaTV :
+    MangaThemesia(
+        "Manga  TV",
+        "https://mangatv.net",
+        "es",
+        mangaUrlDirectory = "/lista",
+        dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
+    ) {
 
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
 

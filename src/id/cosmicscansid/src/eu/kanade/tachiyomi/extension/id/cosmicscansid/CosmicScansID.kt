@@ -4,15 +4,14 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,7 +24,7 @@ import java.util.concurrent.TimeUnit
 class CosmicScansID :
     MangaThemesia(
         "CosmicScans.id",
-        "https://lc4.cosmicscans.asia",
+        "https://lc5.cosmicscans.asia",
         "id",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
     ),
@@ -44,6 +43,11 @@ class CosmicScansID :
         }
     }
 
+    override fun headersBuilder() = super.headersBuilder()
+        .setRandomUserAgent()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
     private val isCi = System.getenv("CI") == "true"
 
     override val baseUrl: String get() = when {
@@ -52,25 +56,21 @@ class CosmicScansID :
     }
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(20, 4, TimeUnit.SECONDS)
         .build()
 
     override val hasProjectPage = true
 
-    private var _cachedBaseUrl: String? = null
+    private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            if (cachedBaseUrl == null) {
+                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
-            return _cachedBaseUrl!!
+            return cachedBaseUrl!!
         }
         set(value) {
-            _cachedBaseUrl = value
+            cachedBaseUrl = value
             edit().putString(BASE_URL_PREF, value).apply()
         }
 
@@ -97,7 +97,7 @@ class CosmicScansID :
     override val pageSelector = "div#readerarea img:not(noscript img):not([alt=''])"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
 
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF

@@ -38,13 +38,11 @@ abstract class LectorMoe(
         .add("x-organization", organizationDomain)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", apiHeaders)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -87,8 +85,7 @@ abstract class LectorMoe(
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<Data<SeriesDto>>()
@@ -132,8 +129,7 @@ abstract class LectorMoe(
 
     class SortByFilter(title: String, list: Array<Pair<String, String>>) : UriPartFilter(title, list)
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

@@ -119,26 +119,22 @@ class Multporn : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    private fun buildTextSearchFilterRequests(page: Int, filters: List<TextSearchFilter>): List<Request> {
-        return filters.map {
-            it.stateURIs.map { queryURI ->
-                GET("$baseUrl/${it.uri}/$queryURI?page=0,$page")
-            }
-        }.flatten()
-    }
+    private fun buildTextSearchFilterRequests(page: Int, filters: List<TextSearchFilter>): List<Request> = filters.map {
+        it.stateURIs.map { queryURI ->
+            GET("$baseUrl/${it.uri}/$queryURI?page=0,$page")
+        }
+    }.flatten()
 
-    private fun squashMangasPageObservables(observables: List<Observable<MangasPage?>>): Observable<MangasPage> {
-        return Observable.from(observables)
-            .flatMap { it.observeOn(Schedulers.io()) }
-            .toList()
-            .map { it.filterNotNull() }
-            .map { pages ->
-                MangasPage(
-                    pages.map { it.mangas }.flatten().distinctBy { it.url },
-                    pages.any { it.hasNextPage },
-                )
-            }
-    }
+    private fun squashMangasPageObservables(observables: List<Observable<MangasPage?>>): Observable<MangasPage> = Observable.from(observables)
+        .flatMap { it.observeOn(Schedulers.io()) }
+        .toList()
+        .map { it.filterNotNull() }
+        .map { pages ->
+            MangasPage(
+                pages.map { it.mangas }.flatten().distinctBy { it.url },
+                pages.any { it.hasNextPage },
+            )
+        }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -162,14 +158,17 @@ class Multporn : ParsedHttpSource() {
                     },
                 )
             }
+
             query.isNotEmpty() || sortByFilterType == SEARCH_REQUEST_TYPE -> {
                 val request = buildSearchMangaRequest(page - 1, query, filters)
                 client.newCall(request).asObservableSuccess().map { searchMangaParse(it) }
             }
+
             sortByFilterType == LATEST_REQUEST_TYPE -> {
                 val request = buildLatestMangaRequest(page - 1, filters)
                 client.newCall(request).asObservableSuccess().map { latestUpdatesParse(it) }
             }
+
             else -> {
                 val request = buildPopularMangaRequest(page - 1, filters)
                 client.newCall(request).asObservableSuccess().map { popularMangaParse(it) }
@@ -201,41 +200,39 @@ class Multporn : ParsedHttpSource() {
         "field-name-field-rule-63-section",
     ).map { document.select(".$it a").map { a -> a.text().trim() } }.flatten()
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.select("h1#page-title").text()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.select("h1#page-title").text()
 
-            val infoMap = listOf(
-                "Section",
-                "Characters",
-                "Tags",
-                "Author",
-            ).map {
-                it to document.select(".field:has(.field-label:contains($it:)) .links a").map { t -> t.text().trim() }
-            }.toMap()
+        val infoMap = listOf(
+            "Section",
+            "Characters",
+            "Tags",
+            "Author",
+        ).map {
+            it to document.select(".field:has(.field-label:contains($it:)) .links a").map { t -> t.text().trim() }
+        }.toMap()
 
-            artist = (infoMap.getValue("Author") + parseUnlabelledAuthorNames(document))
-                .distinct().joinToString()
-            author = artist
+        artist = (infoMap.getValue("Author") + parseUnlabelledAuthorNames(document))
+            .distinct().joinToString()
+        author = artist
 
-            genre = listOf("Tags", "Section", "Characters")
-                .map { infoMap.getValue(it) }.flatten().distinct().joinToString()
+        genre = listOf("Tags", "Section", "Characters")
+            .map { infoMap.getValue(it) }.flatten().distinct().joinToString()
 
-            status = infoMap["Section"]?.firstOrNull { it == "Ongoings" }?.let { SManga.ONGOING } ?: SManga.COMPLETED
+        status = infoMap["Section"]?.firstOrNull { it == "Ongoings" }?.let { SManga.ONGOING } ?: SManga.COMPLETED
 
-            val pageCount = document.select(".jb-image img").size
+        val pageCount = document.select(".jb-image img").size
 
-            description = infoMap
-                .filter { it.key in arrayOf("Section", "Characters") }
-                .filter { it.value.isNotEmpty() }
-                .map { "${it.key}:\n${it.value.joinToString()}" }
-                .let {
-                    it + listOf(
-                        "Pages:\n$pageCount",
-                    )
-                }
-                .joinToString("\n\n")
-        }
+        description = infoMap
+            .filter { it.key in arrayOf("Section", "Characters") }
+            .filter { it.value.isNotEmpty() }
+            .map { "${it.key}:\n${it.value.joinToString()}" }
+            .let {
+                it + listOf(
+                    "Pages:\n$pageCount",
+                )
+            }
+            .joinToString("\n\n")
     }
 
     // Chapters
@@ -258,10 +255,8 @@ class Multporn : ParsedHttpSource() {
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".jb-image img").mapIndexed { i, image ->
-            Page(i, imageUrl = image.attr("abs:src").replace("/styles/juicebox_2k/public", "").substringBefore("?"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".jb-image img").mapIndexed { i, image ->
+        Page(i, imageUrl = image.attr("abs:src").replace("/styles/juicebox_2k/public", "").substringBefore("?"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -278,8 +273,7 @@ class Multporn : ParsedHttpSource() {
         override val uri: String,
     ) : URIFilter(name, uri)
 
-    open class URISelectFilter(name: String, open val filters: List<URIFilter>, state: Int = 0) :
-        Filter.Select<String>(name, filters.map { it.name }.toTypedArray(), state) {
+    open class URISelectFilter(name: String, open val filters: List<URIFilter>, state: Int = 0) : Filter.Select<String>(name, filters.map { it.name }.toTypedArray(), state) {
         open val selected: URIFilter
             get() = filters[state]
     }
@@ -306,7 +300,10 @@ class Multporn : ParsedHttpSource() {
         URISelectFilter(
             "Sort By",
             filters.map { filter ->
-                filter.let { it.name = "[${it.requestType}] ${it.name}"; it }
+                filter.let {
+                    it.name = "[${it.requestType}] ${it.name}"
+                    it
+                }
             },
             state,
         ) {

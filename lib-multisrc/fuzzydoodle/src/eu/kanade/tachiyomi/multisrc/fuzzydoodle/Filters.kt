@@ -11,10 +11,11 @@ abstract class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
     private val urlParameter: String,
-) : UrlPartFilter, Filter.Select<String>(
+) : Filter.Select<String>(
     name,
     options.map { it.first }.toTypedArray(),
-) {
+),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         url.addQueryParameter(urlParameter, options[state].second)
     }
@@ -26,10 +27,11 @@ abstract class CheckBoxGroup(
     name: String,
     options: List<Pair<String, String>>,
     private val urlParameter: String,
-) : UrlPartFilter, Filter.Group<CheckBoxFilter>(
+) : Filter.Group<CheckBoxFilter>(
     name,
     options.map { CheckBoxFilter(it.first, it.second) },
-) {
+),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         state.filter { it.state }.forEach {
             url.addQueryParameter(urlParameter, it.value)

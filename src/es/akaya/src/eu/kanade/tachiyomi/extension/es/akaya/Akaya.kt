@@ -75,8 +75,7 @@ class Akaya : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page", headers)
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -84,8 +83,7 @@ class Akaya : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/collection/0031a504-706c-4666-9782-a4ae30cad973?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/collection/0031a504-706c-4666-9782-a4ae30cad973?page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -176,8 +174,7 @@ class Akaya : ParsedHttpSource() {
         description = document.selectFirst("section.main div.container div.sidebar > p")!!.text()
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET(baseUrl + manga.url + "?order_direction=desc", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "?order_direction=desc", headers)
 
     override fun chapterListSelector() = "div.chapter-desktop div.chapter-item"
 
@@ -194,12 +191,10 @@ class Akaya : ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("es"))
 
-    private fun parseDate(date: String): Long {
-        return try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (e: ParseException) {
-            0L
-        }
+    private fun parseDate(date: String): Long = try {
+        dateFormat.parse(date)?.time ?: 0L
+    } catch (e: ParseException) {
+        0L
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -210,10 +205,8 @@ class Akaya : ParsedHttpSource() {
         return super.pageListRequest(chapter)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("main.separatorReading div.container img.img-fluid").mapIndexed { i, img ->
-            Page(i, imageUrl = img.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("main.separatorReading div.container img.img-fluid").mapIndexed { i, img ->
+        Page(i, imageUrl = img.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()

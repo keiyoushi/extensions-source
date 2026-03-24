@@ -80,23 +80,21 @@ private object DialogListSerializer :
         )
     }
 
-    private fun getCoordinates(element: JsonElement): JsonArray {
-        return when (element) {
-            is JsonArray -> element.jsonArray[0].jsonArray
-            else -> element.jsonObject["box"]?.jsonArray
-                ?: throw IOException("Dialog box position not found")
-        }
+    private fun getCoordinates(element: JsonElement): JsonArray = when (element) {
+        is JsonArray -> element.jsonArray[0].jsonArray
+
+        else -> element.jsonObject["box"]?.jsonArray
+            ?: throw IOException("Dialog box position not found")
     }
 
-    private fun getDialogs(element: JsonElement): JsonObject {
-        return buildJsonObject {
-            when (element) {
-                is JsonArray -> put("text", element.jsonArray[1])
-                else -> {
-                    element.jsonObject.entries
-                        .filter { it.value.isString }
-                        .forEach { put(it.key, it.value) }
-                }
+    private fun getDialogs(element: JsonElement): JsonObject = buildJsonObject {
+        when (element) {
+            is JsonArray -> put("text", element.jsonArray[1])
+
+            else -> {
+                element.jsonObject.entries
+                    .filter { it.value.isString }
+                    .forEach { put(it.key, it.value) }
             }
         }
     }

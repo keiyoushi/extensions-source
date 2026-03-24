@@ -11,11 +11,10 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.CloudflareWarmupInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInterceptor
+import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.OcrUrlInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.google.GoogleTranslator
-import eu.kanade.tachiyomi.lib.i18n.Intl
-import eu.kanade.tachiyomi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
@@ -24,6 +23,8 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
+import keiyoushi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
@@ -36,7 +37,6 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Base64
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -120,6 +120,8 @@ class Manhuarm(
         preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
     private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
+
+    private val ocrUrlInterceptor by lazy { OcrUrlInterceptor(headers) }
 
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
@@ -298,19 +300,11 @@ class Manhuarm(
         val jsonHeaders = Headers.Builder()
             .add("Referer", chapterUrl.toString())
             .add("Accept", "*/*")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .add("Cache-Control", "no-cache")
             .build()
 
-        val encoded = Regex("""_0xraw\s*=\s*"([^"]+)"""")
-            .find(document.html())
-            ?.groupValues
-            ?.get(1)
-            ?: return pages
-
-        val ocrUrl = try {
-            String(Base64.getDecoder().decode(encoded))
-        } catch (_: Exception) {
-            return pages
-        }
+        val ocrUrl = ocrUrlInterceptor.getUrl(chapterUrl.toString()) ?: return pages
 
         val dialog = try {
             val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()

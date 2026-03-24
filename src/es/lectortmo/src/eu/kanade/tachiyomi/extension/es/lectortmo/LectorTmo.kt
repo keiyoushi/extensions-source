@@ -35,7 +35,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class LectorTmo : ParsedHttpSource(), ConfigurableSource {
+class LectorTmo :
+    ParsedHttpSource(),
+    ConfigurableSource {
 
     override val id = 4146344224513899730
 
@@ -55,12 +57,13 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-        }
+        val naiveTrustManager =
+            @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+            }
 
         val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
             val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
@@ -100,13 +103,11 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
     private fun getSFWUrlPart(): String = if (getSFWModePref()) "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false" else ""
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return safeClient.newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                popularMangaParse(response)
-            }
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = safeClient.newCall(popularMangaRequest(page))
+        .asObservableSuccess()
+        .map { response ->
+            popularMangaParse(response)
+        }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/library?order_item=likes_count&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
 
@@ -122,13 +123,11 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return safeClient.newCall(latestUpdatesRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                latestUpdatesParse(response)
-            }
-    }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = safeClient.newCall(latestUpdatesRequest(page))
+        .asObservableSuccess()
+        .map { response ->
+            latestUpdatesParse(response)
+        }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/library?order_item=creation&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
 
@@ -138,24 +137,22 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
 
-            safeClient.newCall(searchMangaBySlugRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$PREFIX_LIBRARY/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            safeClient.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+        safeClient.newCall(searchMangaBySlugRequest(realQuery))
+            .asObservableSuccess()
+            .map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$PREFIX_LIBRARY/$realQuery"
+                MangasPage(listOf(details), false)
+            }
+    } else {
+        safeClient.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                searchMangaParse(response)
+            }
     }
 
     private fun searchMangaBySlugRequest(slug: String) = GET("$baseUrl/$PREFIX_LIBRARY/$slug", tmoHeaders)
@@ -176,18 +173,25 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
                 is Types -> {
                     url.addQueryParameter("type", filter.toUriPart())
                 }
+
                 is Demography -> {
                     url.addQueryParameter("demography", filter.toUriPart())
                 }
+
                 is SortBy -> {
                     if (filter.state != null) {
                         url.addQueryParameter("order_item", SORTABLES[filter.state!!.index].second)
                         url.addQueryParameter(
                             "order_dir",
-                            if (filter.state!!.ascending) { "asc" } else { "desc" },
+                            if (filter.state!!.ascending) {
+                                "asc"
+                            } else {
+                                "desc"
+                            },
                         )
                     }
                 }
+
                 is ContentTypeList -> {
                     filter.state.forEach { content ->
                         if (!getSFWModePref() || (getSFWModePref() && content.id != "erotic")) {
@@ -199,6 +203,7 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 is GenreList -> {
                     filter.state.forEach { genre ->
                         when (genre.state) {
@@ -207,6 +212,7 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 else -> {}
             }
         }
@@ -223,13 +229,11 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         return super.getMangaUrl(manga)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return safeClient.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = safeClient.newCall(mangaDetailsRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            mangaDetailsParse(response).apply { initialized = true }
+        }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, tmoHeaders)
 
@@ -263,13 +267,11 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         return super.getChapterUrl(chapter)
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return safeClient.newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = safeClient.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response)
+        }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
@@ -312,22 +314,16 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         } ?: 0
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            .parse(date)?.time ?: 0
-    }
+    private fun parseChapterDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        .parse(date)?.time ?: 0
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return safeClient.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .map { response ->
-                pageListParse(response)
-            }
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = safeClient.newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            pageListParse(response)
+        }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, tmoHeaders)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, tmoHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         var doc = redirectToReadPage(document)
@@ -433,19 +429,15 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         return document
     }
 
-    private fun Element.imgAttr(): String {
-        return when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            else -> this.attr("abs:src")
-        }
+    private fun Element.imgAttr(): String = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        else -> this.attr("abs:src")
     }
 
-    private fun String.unescapeUrl(): String {
-        return if (this.startsWith("http:\\/\\/") || this.startsWith("https:\\/\\/")) {
-            this.replace("\\/", "/")
-        } else {
-            this
-        }
+    private fun String.unescapeUrl(): String = if (this.startsWith("http:\\/\\/") || this.startsWith("https:\\/\\/")) {
+        this.replace("\\/", "/")
+    } else {
+        this
     }
 
     override fun imageRequest(page: Page) = GET(
@@ -469,46 +461,50 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
         GenreList(getGenreList()),
     )
 
-    private class FilterBy : UriPartFilter(
-        "Buscar por",
-        arrayOf(
-            Pair("Título", "title"),
-            Pair("Autor", "author"),
-            Pair("Compañia", "company"),
-        ),
-    )
+    private class FilterBy :
+        UriPartFilter(
+            "Buscar por",
+            arrayOf(
+                Pair("Título", "title"),
+                Pair("Autor", "author"),
+                Pair("Compañia", "company"),
+            ),
+        )
 
-    class SortBy : Filter.Sort(
-        "Ordenar por",
-        SORTABLES.map { it.first }.toTypedArray(),
-        Selection(0, false),
-    )
+    class SortBy :
+        Filter.Sort(
+            "Ordenar por",
+            SORTABLES.map { it.first }.toTypedArray(),
+            Selection(0, false),
+        )
 
-    private class Types : UriPartFilter(
-        "Filtrar por tipo",
-        arrayOf(
-            Pair("Ver todo", ""),
-            Pair("Manga", "manga"),
-            Pair("Manhua", "manhua"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Novela", "novel"),
-            Pair("One shot", "one_shot"),
-            Pair("Doujinshi", "doujinshi"),
-            Pair("Oel", "oel"),
-        ),
-    )
+    private class Types :
+        UriPartFilter(
+            "Filtrar por tipo",
+            arrayOf(
+                Pair("Ver todo", ""),
+                Pair("Manga", "manga"),
+                Pair("Manhua", "manhua"),
+                Pair("Manhwa", "manhwa"),
+                Pair("Novela", "novel"),
+                Pair("One shot", "one_shot"),
+                Pair("Doujinshi", "doujinshi"),
+                Pair("Oel", "oel"),
+            ),
+        )
 
-    private class Demography : UriPartFilter(
-        "Filtrar por demografía",
-        arrayOf(
-            Pair("Ver todo", ""),
-            Pair("Seinen", "seinen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Shounen", "shounen"),
-            Pair("Josei", "josei"),
-            Pair("Kodomo", "kodomo"),
-        ),
-    )
+    private class Demography :
+        UriPartFilter(
+            "Filtrar por demografía",
+            arrayOf(
+                Pair("Ver todo", ""),
+                Pair("Seinen", "seinen"),
+                Pair("Shoujo", "shoujo"),
+                Pair("Shounen", "shounen"),
+                Pair("Josei", "josei"),
+                Pair("Kodomo", "kodomo"),
+            ),
+        )
 
     private fun getContentTypeList() = listOf(
         ContentType("Webcomic", "webcomic"),

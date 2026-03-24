@@ -62,9 +62,18 @@ class MangaDetailResponse(
         title = this@MangaDetailResponse.title
         author = this@MangaDetailResponse.author
         description = buildString {
-            this@MangaDetailResponse.description?.let { append(it); append("\n\n") }
-            copyright?.let { append(it); append("\n\n") }
-            schedule?.let { append(it); append("\n\n") }
+            this@MangaDetailResponse.description?.let {
+                append(it)
+                append("\n\n")
+            }
+            copyright?.let {
+                append(it)
+                append("\n\n")
+            }
+            schedule?.let {
+                append(it)
+                append("\n\n")
+            }
             warning?.let { append(it) }
         }.trim()
         genre = tags?.joinToString { it.name }

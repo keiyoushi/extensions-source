@@ -23,7 +23,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class PepperCarrot : HttpSource(), ConfigurableSource {
+class PepperCarrot :
+    HttpSource(),
+    ConfigurableSource {
     override val name = TITLE
     override val lang = "all"
     override val supportsLatest = false
@@ -130,12 +132,11 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
         initialized = true
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Single.create<List<SChapter>> {
-            updateLangData(client, headers, preferences)
-            val response = client.newCall(chapterListRequest(manga)).execute()
-            it.onSuccess(chapterListParse(response))
-        }.toObservable()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Single.create<List<SChapter>> {
+        updateLangData(client, headers, preferences)
+        val response = client.newCall(chapterListRequest(manga)).execute()
+        it.onSuccess(chapterListParse(response))
+    }.toObservable()
 
     override fun chapterListRequest(manga: SManga): Request {
         val key = manga.url

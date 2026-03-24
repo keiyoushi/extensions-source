@@ -21,17 +21,13 @@ class Zazamanga : Madara("Zazamanga", "https://www.zazamanga.com", "en") {
         return GET(url, request.headers)
     }
 
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers)
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
-    override fun imageFromElement(element: Element): String? {
-        return when {
-            element.hasAttr("data-src") -> element.attr("data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("srcset").getSrcSetImage()
-            element.hasAttr("data-cfsrc") -> element.attr("data-cfsrc")
-            else -> element.attr("src")
-        }
+    override fun imageFromElement(element: Element): String? = when {
+        element.hasAttr("data-src") -> element.attr("data-src")
+        element.hasAttr("data-lazy-src") -> element.attr("data-lazy-src")
+        element.hasAttr("srcset") -> element.attr("srcset").getSrcSetImage()
+        element.hasAttr("data-cfsrc") -> element.attr("data-cfsrc")
+        else -> element.attr("src")
     }
 }

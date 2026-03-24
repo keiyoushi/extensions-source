@@ -28,12 +28,10 @@ class SourcesDto(
 )
 
 @Serializable
-class SourceDto(
-    @SerialName("source_id")
-    val sourceId: String,
+data class SourceDto(
+    @SerialName("source_id") val sourceId: String,
+    @SerialName("source_type") val sourceType: String, // "Official", "Unofficial", "Mixed"
     val title: String,
-    @SerialName("source_type")
-    val sourceType: String,
 )
 
 @Serializable
@@ -84,10 +82,8 @@ class AlternateSeries(
 class DetailsDto(
     val title: String,
     val description: String?,
-    @SerialName("publication_status")
-    val publicationStatus: String,
     @SerialName("upload_status")
-    val uploadStatus: String,
+    val publicationStatus: String,
     val format: String?,
     @SerialName("source_id")
     val sourceId: String?,
@@ -99,6 +95,8 @@ class DetailsDto(
     val seriesAlternateTitles: List<AlternateTitle> = emptyList(),
     @SerialName("series_books")
     val seriesBooks: List<ChapterDto.Book> = emptyList(),
+    @SerialName("edition_info")
+    val editionInfo: String? = null,
 ) {
     @Serializable
     class SeriesStaff(
@@ -124,13 +122,22 @@ class DetailsDto(
         val label: String?,
     )
 
-    fun toSManga(sourceName: String? = null): SManga = SManga.create().apply {
+    fun toSManga(sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
+        val base = this@DetailsDto.title.trim()
+        val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
+        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition
         val desc = StringBuilder()
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
             desc.append(it.trim())
             desc.append("\n")
+        }
+
+        // Add source name
+        if (sourceName != null && this@DetailsDto.sourceId != null) {
+            if (desc.isNotEmpty()) desc.append("\n")
+            desc.append("Source: [$sourceName]($baseUrl/sources/${this@DetailsDto.sourceId})\n")
         }
 
         // Add alternate titles at the end
@@ -156,7 +163,10 @@ class DetailsDto(
         artist = artists
         author = authors.joinToString()
         description = desc.toString().trim()
-        genre = genres.joinToString { it.genreName }
+        genre = buildList {
+            this@DetailsDto.format?.takeIf { it.isNotBlank() }?.let { add(it) }
+            addAll(genres.map { it.genreName })
+        }.joinToString()
         status = this@DetailsDto.publicationStatus.toStatus()
     }
 
@@ -164,7 +174,7 @@ class DetailsDto(
         "ONGOING" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
         "HIATUS" -> SManga.ON_HIATUS
-        "CANCELLED" -> SManga.CANCELLED
+        "ABANDONED" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 }
@@ -191,27 +201,56 @@ class ChapterDto(
         val chapterNo: String?,
         @SerialName("volume_no")
         val volumeNo: String?,
+        val groups: List<Group> = emptyList(),
     ) {
-        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
+        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
             url = "/series/$actualSeriesId/reader/$id"
-            name = buildChapterName()
+            name = buildChapterName(chapterTitleMode)
             date_upload = dateFormat.tryParse(createdAt)
             if (useSourceChapterNumber) {
                 chapter_number = number
             }
+            scanlator = groups.joinToString(", ") { it.title }
         }
 
-        private fun buildChapterName(): String = if (!chapterNo.isNullOrBlank()) {
-            if (title.isNotBlank()) {
-                "Chapter $chapterNo: $title"
-            } else {
-                "Chapter $chapterNo"
+        private fun buildChapterName(mode: String = "optional"): String {
+            val trimmedTitle = title.trim()
+            return when (mode) {
+                "optional" -> {
+                    when {
+                        trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Ch.$chapterNo"
+                        else -> trimmedTitle
+                    }
+                }
+
+                "always" -> {
+                    when {
+                        chapterNo.isNullOrBlank() -> trimmedTitle
+                        trimmedTitle.isEmpty() -> "Ch.$chapterNo"
+                        else -> "Ch.$chapterNo $trimmedTitle"
+                    }
+                }
+
+                "vol_chapter" -> {
+                    val volPart = if (!volumeNo.isNullOrBlank()) "Vol.$volumeNo " else ""
+                    val chPart = if (!chapterNo.isNullOrBlank()) "Ch.$chapterNo" else ""
+                    val numPart = "$volPart$chPart".trim()
+                    when {
+                        numPart.isEmpty() -> trimmedTitle
+                        trimmedTitle.isEmpty() -> numPart
+                        else -> "$numPart $trimmedTitle"
+                    }
+                }
+
+                else -> trimmedTitle
             }
-        } else {
-            title
         }
     }
 
+    @Serializable
+    class Group(
+        val title: String,
+    )
     companion object {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
     }

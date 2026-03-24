@@ -185,8 +185,7 @@ class MangaBuff : ParsedHttpSource() {
         thumbnail_url = "$baseUrl/img/manga/posters/$slug.jpg"
     }
 
-    override fun searchMangaNextPageSelector() =
-        ".pagination .pagination__button--active + li:not(:last-child)"
+    override fun searchMangaNextPageSelector() = ".pagination .pagination__button--active + li:not(:last-child)"
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -264,6 +263,8 @@ class MangaBuff : ParsedHttpSource() {
         date_upload = runCatching {
             dateFormat.parse(element.selectFirst(".chapters__add-date")!!.text())!!.time
         }.getOrDefault(0L)
+        chapter_number = element.select(".chapters__value").text()
+            .substringAfter(" ").toFloatOrNull() ?: -1f
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -298,10 +299,8 @@ class MangaBuff : ParsedHttpSource() {
     // Pages
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".reader__pages img").mapIndexed { i, img ->
-            Page(i, document.location(), img.imgAttr())
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select(".reader__pages img").mapIndexed { i, img ->
+        Page(i, document.location(), img.imgAttr())
     }
 
     // Other
@@ -332,8 +331,7 @@ class MangaBuff : ParsedHttpSource() {
         else -> absUrl("src")
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     @Serializable
     class WrappedHtmlDto(

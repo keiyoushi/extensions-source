@@ -239,9 +239,7 @@ class NextDataDto(
 object MissingFieldSerializer : KSerializer<String?> {
     override val descriptor = buildClassSerialDescriptor("MissingField")
 
-    override fun deserialize(decoder: Decoder): String? {
-        return decoder.decodeString().takeIf { it != "N/A" }
-    }
+    override fun deserialize(decoder: Decoder): String? = decoder.decodeString().takeIf { it != "N/A" }
 
     override fun serialize(encoder: Encoder, value: String?) {
         encoder.encodeString(value ?: "N/A")

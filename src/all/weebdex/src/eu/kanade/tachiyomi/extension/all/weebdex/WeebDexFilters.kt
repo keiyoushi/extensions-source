@@ -23,83 +23,92 @@ internal fun buildFilterList() = FilterList(
     YearToFilter(),
 )
 
-internal class SortFilter : Filter.Select<String>(
-    "Sort by",
-    WeebDexConstants.sortList.map { it.first }.toTypedArray(),
-    0,
-) {
+internal class SortFilter :
+    Filter.Select<String>(
+        "Sort by",
+        WeebDexConstants.sortList.map { it.first }.toTypedArray(),
+        0,
+    ) {
     val selected: String
         get() = WeebDexConstants.sortList[state].second
 }
 
-internal class OrderFilter : Filter.Select<String>(
-    "Order",
-    arrayOf("Descending", "Ascending"),
-    0,
-) {
+internal class OrderFilter :
+    Filter.Select<String>(
+        "Order",
+        arrayOf("Descending", "Ascending"),
+        0,
+    ) {
     val selected: String
         get() = if (state == 0) "desc" else "asc"
 }
 
-internal class StatusFilter : Filter.Select<String>(
-    "Status",
-    WeebDexConstants.statusList.map { it.first }.toTypedArray(),
-    0,
-) {
+internal class StatusFilter :
+    Filter.Select<String>(
+        "Status",
+        WeebDexConstants.statusList.map { it.first }.toTypedArray(),
+        0,
+    ) {
     val selected: String?
         get() = WeebDexConstants.statusList[state].second
 }
 
 class TagCheckBox(name: String) : Filter.CheckBox(name, false)
 class TagList(tags: Array<String>) : Filter.Group<TagCheckBox>("Tags", tags.map { TagCheckBox(it) })
-class TagsExcludeFilter(tags: Array<String>) : Filter.Group<TagCheckBox>(
-    "Tags to Exclude",
-    tags.map { TagCheckBox(it) },
-)
+class TagsExcludeFilter(tags: Array<String>) :
+    Filter.Group<TagCheckBox>(
+        "Tags to Exclude",
+        tags.map { TagCheckBox(it) },
+    )
 
-class TagModeFilter : Filter.Select<String>(
-    "Tag mode",
-    arrayOf("AND", "OR"), // what user sees
-    0,
-) {
+class TagModeFilter :
+    Filter.Select<String>(
+        "Tag mode",
+        arrayOf("AND", "OR"), // what user sees
+        0,
+    ) {
     val selected: String
         get() = if (state == 0) "0" else "1" // backend wants 0=AND, 1=OR
 }
 
-class TagExcludeModeFilter : Filter.Select<String>(
-    "Exclude tag mode",
-    arrayOf("OR", "AND"), // what user sees
-    0,
-) {
+class TagExcludeModeFilter :
+    Filter.Select<String>(
+        "Exclude tag mode",
+        arrayOf("OR", "AND"), // what user sees
+        0,
+    ) {
     val selected: String
         get() = if (state == 0) "0" else "1" // backend wants 0=OR, 1=AND
 }
 
-internal class DemographicFilter : Filter.Select<String>(
-    "Demographic",
-    WeebDexConstants.demographics.map { it.first }.toTypedArray(),
-    0,
-) {
+internal class DemographicFilter :
+    Filter.Select<String>(
+        "Demographic",
+        WeebDexConstants.demographics.map { it.first }.toTypedArray(),
+        0,
+    ) {
     val selected: String?
         get() = WeebDexConstants.demographics[state].second
 }
 
-internal class ContentRatingFilter : Filter.Select<String>(
-    "Content Rating",
-    arrayOf("Any", "Safe", "Suggestive", "Erotica", "Pornographic"),
-    0,
-) {
+internal class ContentRatingFilter :
+    Filter.Select<String>(
+        "Content Rating",
+        arrayOf("Any", "Safe", "Suggestive", "Erotica", "Pornographic"),
+        0,
+    ) {
     private val apiValues = arrayOf(null, "safe", "suggestive", "erotica", "pornographic")
 
     val selected: String?
         get() = apiValues[state]
 }
 
-internal class LangFilter : Filter.Select<String>(
-    "Original Language",
-    WeebDexConstants.langList.map { it.first }.toTypedArray(),
-    0,
-) {
+internal class LangFilter :
+    Filter.Select<String>(
+        "Original Language",
+        WeebDexConstants.langList.map { it.first }.toTypedArray(),
+        0,
+    ) {
     val query: String?
         get() = WeebDexConstants.langList[state].second
 }

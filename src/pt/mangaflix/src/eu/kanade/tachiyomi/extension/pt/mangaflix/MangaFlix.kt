@@ -54,9 +54,7 @@ class MangaFlix : HttpSource() {
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/browse", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/browse", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<BrowseResponseDto>()
@@ -70,9 +68,7 @@ class MangaFlix : HttpSource() {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/latest-releases?selected_language=pt-br", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/latest-releases?selected_language=pt-br", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<LatestResponseDto>()
@@ -138,6 +134,8 @@ class MangaFlix : HttpSource() {
     }
 
     // =========================== Manga Details ============================
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("/")
         return GET("$apiUrl/mangas/$id", headers)
@@ -157,17 +155,17 @@ class MangaFlix : HttpSource() {
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<MangaDetailsResponseDto>()
         return result.data.chapters.map { chapter ->
             SChapter.create().apply {
-                name = "Capítulo ${chapter.number}"
+                chapter_number = chapter.number.toFloatOrNull() ?: 0F
+                name = chapter.name?.ifBlank { null } ?: "Capítulo ${chapter.number}"
                 url = "/br/manga/${chapter._id}"
                 date_upload = chapter.iso_date?.let { dateFormat.tryParse(it) } ?: 0L
+                scanlator = chapter.owners.joinToString(separator = ",", transform = { it.name })
             }
         }
     }
@@ -185,9 +183,7 @@ class MangaFlix : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun MangaDto.toSManga() = SManga.create().apply {
         title = name
@@ -199,7 +195,7 @@ class MangaFlix : HttpSource() {
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
+            timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
         }
     }
 }

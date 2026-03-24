@@ -89,13 +89,12 @@ fun MangaDto.toSMangaDetails() = this.toSManga().apply {
     update_strategy = status.toUpdateStrategy()
 }
 
-fun ChapterDto.toSChapter(mangaSlug: String, dateFormat: SimpleDateFormat) =
-    SChapter.create().apply {
-        url = "$mangaSlug/$slug"
-        name = "Capítulo $num"
-        date_upload = dateFormat.tryParse(createdAt)
-        chapter_number = num
-    }
+fun ChapterDto.toSChapter(mangaSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    url = "$mangaSlug/$slug"
+    name = "Capítulo $num"
+    date_upload = dateFormat.tryParse(createdAt)
+    chapter_number = num
+}
 
 fun FilterResponseDto.toMangasPage() = MangasPage(
     mangas = data.map { it.toSManga() },

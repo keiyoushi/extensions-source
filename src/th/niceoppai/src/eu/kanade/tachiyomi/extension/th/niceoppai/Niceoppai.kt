@@ -39,9 +39,7 @@ class Niceoppai : ParsedHttpSource() {
         .build()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga_list/all/any/most-popular-monthly/$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga_list/all/any/most-popular-monthly/$page", headers)
     override fun popularMangaSelector() = "div.nde"
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("div.det a")!!.text()
@@ -53,9 +51,7 @@ class Niceoppai : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = "ul.pgg li a"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga_list/all/any/last-updated/$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga_list/all/any/last-updated/$page", headers)
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
@@ -75,19 +71,17 @@ class Niceoppai : ParsedHttpSource() {
     override fun searchMangaSelector(): String = popularMangaSelector()
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map {
-                val document = it.asJsoup()
-                val mangas: List<SManga> =
-                    document.select(searchMangaSelector()).map { element ->
-                        searchMangaFromElement(element)
-                    }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
+        .asObservableSuccess()
+        .map {
+            val document = it.asJsoup()
+            val mangas: List<SManga> =
+                document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
 
-                MangasPage(mangas, false)
-            }
-    }
+            MangasPage(mangas, false)
+        }
 
     // Manga summary page
     private fun getStatus(status: String) = when (status) {
@@ -115,12 +109,10 @@ class Niceoppai : ParsedHttpSource() {
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long {
-            return try {
-                parse(string)?.time ?: 0
-            } catch (_: ParseException) {
-                0
-            }
+        fun SimpleDateFormat.tryParse(string: String): Long = try {
+            parse(string)?.time ?: 0
+        } catch (_: ParseException) {
+            0
         }
 
         return when {
@@ -134,6 +126,7 @@ class Niceoppai : ParsedHttpSource() {
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
             }
+
             WordSet("today").startsWith(date) -> {
                 Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0)
@@ -142,6 +135,7 @@ class Niceoppai : ParsedHttpSource() {
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
             }
+
             WordSet("يومين").startsWith(date) -> {
                 Calendar.getInstance().apply {
                     add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
@@ -151,6 +145,7 @@ class Niceoppai : ParsedHttpSource() {
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
             }
+
             WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
                 parseRelativeDate(date)
             }
@@ -166,6 +161,7 @@ class Niceoppai : ParsedHttpSource() {
                 }
                     .let { dateFormat.tryParse(it.joinToString(" ")) }
             }
+
             else -> dateFormat.tryParse(date)
         }
     }
@@ -212,9 +208,7 @@ class Niceoppai : ParsedHttpSource() {
         return chapter
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/${manga.url}", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -251,17 +245,14 @@ class Niceoppai : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.mng_rdr div#image-container img").mapIndexed { i, img ->
-            if (img.hasAttr("data-src")) {
-                Page(i, "", img.attr("abs:data-src"))
-            } else {
-                Page(i, "", img.attr("abs:src"))
-            }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.mng_rdr div#image-container img").mapIndexed { i, img ->
+        if (img.hasAttr("data-src")) {
+            Page(i, "", img.attr("abs:data-src"))
+        } else {
+            Page(i, "", img.attr("abs:src"))
         }
     }
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filter
     private val orderByFilterTitle: String = "Order By เรียกตาม"
@@ -283,12 +274,9 @@ class Niceoppai : ParsedHttpSource() {
 }
 
 class WordSet(private vararg val words: String) {
-    fun anyWordIn(dateString: String): Boolean =
-        words.any { dateString.contains(it, ignoreCase = true) }
+    fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
 
-    fun startsWith(dateString: String): Boolean =
-        words.any { dateString.startsWith(it, ignoreCase = true) }
+    fun startsWith(dateString: String): Boolean = words.any { dateString.startsWith(it, ignoreCase = true) }
 
-    fun endsWith(dateString: String): Boolean =
-        words.any { dateString.endsWith(it, ignoreCase = true) }
+    fun endsWith(dateString: String): Boolean = words.any { dateString.endsWith(it, ignoreCase = true) }
 }

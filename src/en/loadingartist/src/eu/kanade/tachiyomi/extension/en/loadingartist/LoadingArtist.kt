@@ -41,51 +41,44 @@ class LoadingArtist : HttpSource() {
 
     // Popular Section (list of comic archives by year)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(
-            MangasPage(
-                listOf(
-                    SManga.create().apply {
-                        title = "Loading Artist"
-                        setUrlWithoutDomain("/archives")
-                        thumbnail_url = "$baseUrl/img/bg/logo-text_dark.png"
-                        artist = "Loading Artist"
-                        author = artist
-                        status = SManga.ONGOING
-                    },
-                ),
-                false,
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
+        MangasPage(
+            listOf(
+                SManga.create().apply {
+                    title = "Loading Artist"
+                    setUrlWithoutDomain("/archives")
+                    thumbnail_url = "$baseUrl/img/bg/logo-text_dark.png"
+                    artist = "Loading Artist"
+                    author = artist
+                    status = SManga.ONGOING
+                },
             ),
-        )
-    }
+            false,
+        ),
+    )
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        throw Exception("Search not available for this source")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Search not available for this source")
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(GET("$baseUrl/search.json", headers))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response)
-            }
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(GET("$baseUrl/search.json", headers))
+        .asObservableSuccess()
+        .map { response ->
+            chapterListParse(response)
+        }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val comics = json.decodeFromString<List<Comic>>(response.body.string())

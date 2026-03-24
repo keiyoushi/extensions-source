@@ -9,11 +9,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import rx.Observable
 
-class BattleInFiveSecondsAfterMeeting : Madara(
-    "Battle In 5 Seconds After Meeting",
-    "https://www.deatte5.com",
-    "en",
-) {
+class BattleInFiveSecondsAfterMeeting :
+    Madara(
+        "Battle In 5 Seconds After Meeting",
+        "https://www.deatte5.com",
+        "en",
+    ) {
     override val supportsLatest = false
     override val fetchGenres = false
 
@@ -31,9 +32,7 @@ class BattleInFiveSecondsAfterMeeting : Madara(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return fetchPopularManga(page)
-    }
+    ): Observable<MangasPage> = fetchPopularManga(page)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
@@ -67,7 +66,5 @@ class BattleInFiveSecondsAfterMeeting : Madara(
         }
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList()
-    }
+    override fun getFilterList(): FilterList = FilterList()
 }

@@ -8,12 +8,13 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FleurBlanche : Madara(
-    "Fleur Blanche",
-    "https://fbsquadx.com",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class FleurBlanche :
+    Madara(
+        "Fleur Blanche",
+        "https://fbsquadx.com",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
 
     override val client = super.client.newBuilder()
         .addInterceptor(::authWarningIntercept)

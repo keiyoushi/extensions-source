@@ -32,12 +32,10 @@ class Komiku : ParsedHttpSource() {
     // popular
     override fun popularMangaSelector() = "div.bge"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return if (page == 1) {
-            GET("$baseUrlApi/other/hot/?orderby=meta_value_num", headers)
-        } else {
-            GET("$baseUrlApi/other/hot/page/$page/?orderby=meta_value_num", headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
+        GET("$baseUrlApi/other/hot/?orderby=meta_value_num", headers)
+    } else {
+        GET("$baseUrlApi/other/hot/page/$page/?orderby=meta_value_num", headers)
     }
 
     private val coverRegex = Regex("""(/Manga-|/Manhua-|/Manhwa-)""")
@@ -65,12 +63,10 @@ class Komiku : ParsedHttpSource() {
     // latest
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return if (page == 1) {
-            GET("$baseUrlApi/other/hot/?orderby=modified&category_name=", headers)
-        } else {
-            GET("$baseUrlApi/other/hot/page/$page/?orderby=modified&category_name=", headers)
-        }
+    override fun latestUpdatesRequest(page: Int): Request = if (page == 1) {
+        GET("$baseUrlApi/other/hot/?orderby=modified&category_name=", headers)
+    } else {
+        GET("$baseUrlApi/other/hot/page/$page/?orderby=modified&category_name=", headers)
     }
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -88,28 +84,34 @@ class Komiku : ParsedHttpSource() {
                     val category = filter.values[filter.state]
                     url.addQueryParameter("category_name", category.key)
                 }
+
                 is OrderBy -> {
                     val order = filter.values[filter.state]
                     url.addQueryParameter("orderby", order.key)
                 }
+
                 is GenreList1 -> {
                     val genre = filter.values[filter.state]
                     url.addQueryParameter("genre", genre.key)
                 }
+
                 is GenreList2 -> {
                     val genre = filter.values[filter.state]
                     url.addQueryParameter("genre2", genre.key)
                 }
+
                 is StatusList -> {
                     val status = filter.values[filter.state]
                     url.addQueryParameter("status", status.key)
                 }
+
                 is ProjectList -> {
                     val project = filter.values[filter.state]
                     if (project.key == "project-filter-on") {
                         url = ("$baseUrl/pustaka" + if (page > 1) "/page/$page/" else "" + "?tipe=projek").toHttpUrl().newBuilder()
                     }
                 }
+
                 else -> {}
             }
         }
@@ -121,27 +123,19 @@ class Komiku : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = "a.next"
 
     private class Category(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class Genre(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class Order(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class Status(title: String, val key: String) : Filter.TriState(title) {
-        override fun toString(): String {
-            return name
-        }
+        override fun toString(): String = name
     }
 
     private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Category", categories, 0)
@@ -298,10 +292,8 @@ class Komiku : ParsedHttpSource() {
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#Baca_Komik img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("#Baca_Komik img").mapIndexed { i, element ->
+        Page(i, "", element.attr("abs:src"))
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

@@ -54,8 +54,7 @@ abstract class ZeroTheme(
 
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        MangasPage(response.toDto<LatestDto>().toSMangaList(sourceLocation), hasNextPage = false)
+    override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(response.toDto<LatestDto>().toSMangaList(sourceLocation), hasNextPage = false)
 
     // =========================== Search =================================
 
@@ -99,8 +98,7 @@ abstract class ZeroTheme(
         return GET(getChapterUrl(chapter), headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.toDto<PageDto>().toPageList(sourceLocation)
+    override fun pageListParse(response: Response): List<Page> = response.toDto<PageDto>().toPageList(sourceLocation)
 
     override fun imageUrlParse(response: Response) = ""
 

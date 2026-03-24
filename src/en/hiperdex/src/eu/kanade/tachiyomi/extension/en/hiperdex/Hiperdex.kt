@@ -7,14 +7,12 @@ import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.getPreferences
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -38,12 +36,11 @@ class Hiperdex :
 
     override val client = super.client.newBuilder()
         .addNetworkInterceptor(ClearanceInterceptor())
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(3)
         .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .setRandomUserAgent()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
@@ -113,7 +110,7 @@ class Hiperdex :
             }
         }.also { screen.addPreference(it) }
 
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 
     override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
@@ -140,6 +137,8 @@ class Hiperdex :
             title = cleanedTitle
         }
     }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     private fun String.cleanTitleIfNeeded(): String {
         var tempTitle = this

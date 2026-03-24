@@ -9,11 +9,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class PinkRosa : ZeistManga(
-    "Pink Rosa",
-    "https://scanpinkrosa.blogspot.com",
-    "pt-BR",
-) {
+class PinkRosa :
+    ZeistManga(
+        "Pink Rosa",
+        "https://scanpinkrosa.blogspot.com",
+        "pt-BR",
+    ) {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

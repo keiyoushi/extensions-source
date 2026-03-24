@@ -1,6 +1,6 @@
 ext {
     extName = 'Manga-Corporation'
-    extClass = '.mangacorporation'
+    extClass = '.MangaCorporation'
     themePkg = 'pizzareader'
     baseUrl = 'https://manga-corporation.com'
     overrideVersionCode = 0

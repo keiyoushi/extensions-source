@@ -3,11 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.sakuramangas
 import android.util.Base64
 import android.util.Log
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -20,7 +15,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -33,7 +30,9 @@ import java.security.MessageDigest
 import java.util.Calendar
 import kotlin.concurrent.thread
 
-class SakuraMangas : HttpSource(), ConfigurableSource {
+class SakuraMangas :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -42,13 +41,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
 
     override val baseUrl = "https://sakuramangas.org"
 
-    private val preferences = getPreferences()
-
     override val client = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(3, 2)
         .build()
 
@@ -68,23 +61,17 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         .set("X-Requested-With", "XMLHttpRequest")
         .set("Connection", "keep-alive")
         .set("Cache-Control", "no-cache")
-        .apply {
-            if (!preferences.getPrefCustomUA().isNullOrEmpty()) {
-                set("User-Agent", preferences.getPrefCustomUA()!!)
-            }
-        }
+        .setRandomUserAgent()
 
     // ================================ Popular =======================================
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", FilterList())
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // ================================ Latest =======================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/dist/sakura/models/home/__.home_ultimos.php", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/dist/sakura/models/home/__.home_ultimos.php", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<List<String>>()
@@ -128,8 +115,11 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
                 }
 
                 is DemographyFilter -> demography = filter.getValue().ifEmpty { null }
+
                 is ClassificationFilter -> classification = filter.getValue().ifEmpty { null }
+
                 is OrderByFilter -> orderBy = filter.getValue().ifEmpty { null }
+
                 else -> {}
             }
         }
@@ -450,6 +440,6 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        addRandomUAPreferenceToScreen(screen)
+        screen.addRandomUAPreference()
     }
 }

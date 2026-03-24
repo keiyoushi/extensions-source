@@ -4,9 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.lib.unpacker.Unpacker
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -20,14 +20,15 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaKimi : MangaThemesia(
-    "MangaKimi",
-    "https://www.mangakimi.com",
-    "th",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Bangkok")
-    },
-) {
+class MangaKimi :
+    MangaThemesia(
+        "MangaKimi",
+        "https://www.mangakimi.com",
+        "th",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Bangkok")
+        },
+    ) {
 
     override val client = super.client.newBuilder()
         .addNetworkInterceptor(::imageDescrambler)

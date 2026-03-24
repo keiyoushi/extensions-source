@@ -37,9 +37,7 @@ class HentaiVNx : ParsedHttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList(SortByList(1)))
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortByList(1)))
 
     override fun popularMangaSelector(): String = ".items .item"
 
@@ -58,9 +56,7 @@ class HentaiVNx : ParsedHttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
 
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -76,17 +72,16 @@ class HentaiVNx : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
-            query.startsWith(PREFIX_ID_SEARCH) -> {
-                val slug = query.removePrefix(PREFIX_ID_SEARCH).trim()
-                val mangaUrl = "/truyen-hentai/$slug"
-                fetchMangaDetails(
-                    SManga.create().apply { url = mangaUrl },
-                ).map { MangasPage(listOf(it), false) }
-            }
-            else -> super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val slug = query.removePrefix(PREFIX_ID_SEARCH).trim()
+            val mangaUrl = "/truyen-hentai/$slug"
+            fetchMangaDetails(
+                SManga.create().apply { url = mangaUrl },
+            ).map { MangasPage(listOf(it), false) }
         }
+
+        else -> super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -105,9 +100,13 @@ class HentaiVNx : ParsedHttpSource() {
                                 Filter.TriState.STATE_EXCLUDE -> addQueryParameter("notgenres", genre.genre)
                             }
                         }
+
                         is ChapterCountList -> addQueryParameter("minchapter", filter.values[filter.state].genre)
+
                         is SortByList -> addQueryParameter("sort", filter.values[filter.state].genre)
+
                         is TextField -> addQueryParameter("contain", filter.state)
+
                         else -> {}
                     }
                 }
@@ -118,9 +117,7 @@ class HentaiVNx : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun getFilterList(): FilterList = FilterList(
         GenreFilter(getGenreList()),
@@ -194,12 +191,10 @@ class HentaiVNx : ParsedHttpSource() {
 
     // ============================== Pages ===============================
 
-    private fun imageElement(element: Element): String? {
-        return when {
-            element.hasAttr("data-original") -> element.attr("abs:data-original")
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            else -> element.attr("abs:src")
-        }
+    private fun imageElement(element: Element): String? = when {
+        element.hasAttr("data-original") -> element.attr("abs:data-original")
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        else -> element.attr("abs:src")
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -211,9 +206,7 @@ class HentaiVNx : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"

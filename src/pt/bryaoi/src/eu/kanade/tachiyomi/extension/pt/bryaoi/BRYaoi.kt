@@ -77,14 +77,12 @@ class BRYaoi : HttpSource() {
 
     // ====================== Chapters ================================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select(".capitulos a").map { element ->
-            SChapter.create().apply {
-                name = element.text()
-                setUrlWithoutDomain(element.absUrl("href"))
-            }
-        }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".capitulos a").map { element ->
+        SChapter.create().apply {
+            name = element.text()
+            setUrlWithoutDomain(element.absUrl("href"))
+        }
+    }.reversed()
 
     // ====================== Pages ================================
 

@@ -60,11 +60,9 @@ class ComicHubFree : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document) = ""
 
-    private fun Element.imageAttr(): String {
-        return when {
-            hasAttr("data-src") -> absUrl("data-src")
-            else -> absUrl("src")
-        }
+    private fun Element.imageAttr(): String = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -98,22 +96,16 @@ class ComicHubFree : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            title = element.selectFirst("h3")!!.text()
-            val image = element.selectFirst("img")
-            thumbnail_url = image?.imageAttr()
-        }
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst("h3")!!.text()
+        val image = element.selectFirst("img")
+        thumbnail_url = image?.imageAttr()
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlElement = element.selectFirst("a")!!
@@ -128,12 +120,10 @@ class ComicHubFree : ParsedHttpSource() {
         return chapter
     }
 
-    private fun parseStatus(status: String): Int {
-        return when (status) {
-            "Ongoing" -> SManga.ONGOING
-            "Completed" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String): Int = when (status) {
+        "Ongoing" -> SManga.ONGOING
+        "Completed" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -156,10 +146,8 @@ class ComicHubFree : ParsedHttpSource() {
         return manga
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.chapter_img").mapIndexed { index, element ->
-            val img = element.imageAttr()
-            Page(index, imageUrl = img)
-        }.distinctBy { it.imageUrl }
-    }
+    override fun pageListParse(document: Document): List<Page> = document.select("img.chapter_img").mapIndexed { index, element ->
+        val img = element.imageAttr()
+        Page(index, imageUrl = img)
+    }.distinctBy { it.imageUrl }
 }

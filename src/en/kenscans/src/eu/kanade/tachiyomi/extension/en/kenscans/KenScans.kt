@@ -6,12 +6,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 import okhttp3.Response
 
-class KenScans : Iken(
-    "Ken Scans",
-    "en",
-    "https://kencomics.com",
-    "https://api.kencomics.com",
-) {
+class KenScans :
+    Iken(
+        "Ken Scans",
+        "en",
+        "https://kencomics.com",
+        "https://api.kencomics.com",
+    ) {
     override fun chapterListRequest(manga: SManga): Request {
         // Migration from old web theme to the new one(Keyoapp -> Iken)
         if (manga.url.startsWith("/series/")) {

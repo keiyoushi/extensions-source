@@ -12,6 +12,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,15 +30,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
+class GocTruyenTranhVui :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui20.com"
+    override val baseUrl = "https://goctruyentranhvui21.com"
 
     override val name = "Goc Truyen Tranh Vui"
 
@@ -75,14 +79,33 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        "$apiUrl/search?p=${page - 1}&orders%5B%5D=recentDate",
-        xhrHeaders,
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortByList(getSortByList()).apply {
+                state[3].state = true
+            },
+        ),
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        // B1: call manga detail url refresh cookie
+        val refreshReq = GET(getMangaUrl(manga), headers)
+
+        return client.newCall(refreshReq)
+            .asObservableSuccess()
+            .flatMap { _ ->
+                // B2: recall chapter list request
+                client.newCall(chapterListRequest(manga))
+                    .asObservableSuccess()
+                    .map(::chapterListParse)
+            }
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringBefore(':')
@@ -92,8 +115,18 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slug = response.request.url.fragment!!
-        val chapterJson = response.parseAs<ResultDto<ChapterListDto>>()
+        val chapterJson = runCatching { response.parseAs<ResultDto<ChapterListDto>>() }.getOrNull()
+        if (chapterJson == null || chapterJson.result.chapters.isEmpty()) {
+            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
+        }
         return chapterJson.result.chapters.map { it.toSChapter(slug) }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = chapter.url
+        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
+        return "$baseUrl/truyen/$slug/chuong-$numberChapter"
     }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
@@ -105,7 +138,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         thumbnail_url = document.selectFirst("img.image")?.absUrl("src")
         status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")?.text())
         author = document.selectFirst(".mb-1:contains(Tác giả:) span")?.text()
-        description = document.select(".v-card-text").joinToString { it.wholeText() }
+        description = document.select(".v-card-text").joinToString { it.wholeText().trim() }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -131,16 +164,28 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val jsonPage = response.parseAs<ResultDto<ImageListDto>>().result.data ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+        val jsonResult = runCatching { response.parseAs<ResultDto<ImageListDto>>() }
+        jsonResult.onFailure {
+            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại")
+        }
 
-        return jsonPage.mapIndexed { i, url ->
-            val finalUrl = if (url.startsWith("/image/")) { baseUrl + url } else { url }
+        val imageList = jsonResult.getOrThrow().result.data
+        if (imageList.isNullOrEmpty()) {
+            throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+        }
+
+        return imageList.mapIndexed { i, url ->
+            val finalUrl = if (url.startsWith("/image/")) {
+                baseUrl + url
+            } else {
+                url
+            }
             Page(i, imageUrl = finalUrl)
         }
     }
 
     private val pageHeaders by lazy {
-        getToken()?.let {
+        token?.let {
             headersBuilder()
                 .set("X-Requested-With", "XMLHttpRequest")
                 .set("Origin", baseUrl)
@@ -148,42 +193,44 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
                 .build()
         } ?: xhrHeaders
     }
+
     private var _token: String? = null
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun getToken(): String? {
-        _token?.also { return it }
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        if (!customToken().isNullOrBlank()) {
-            return customToken()
-        }
-        if (_token != null) return _token
-
-        handler.post {
-            val webview = WebView(Injekt.get<Application>())
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
+    @get:SuppressLint("SetJavaScriptEnabled")
+    val token: String?
+        get() {
+            _token?.also { return it }
+            val handler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
+            if (!customToken().isNullOrBlank()) {
+                return customToken()
             }
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    // Get token
-                    view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
-                        _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
-                        latch.countDown()
-                        webview.destroy()
+            if (_token != null) return _token
+
+            handler.post {
+                val webview = WebView(Injekt.get<Application>())
+                with(webview.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    blockNetworkImage = true
+                }
+                webview.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        // Get token
+                        view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
+                            _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
+                            latch.countDown()
+                            webview.destroy()
+                        }
                     }
                 }
+                webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
             }
-            webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
-        }
 
-        latch.await(10, TimeUnit.SECONDS)
-        return _token
-    }
+            latch.await(10, TimeUnit.SECONDS)
+            return _token
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -191,7 +238,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("searchValue", query)
+            if (query.isNotEmpty()) addQueryParameter("searchValue", query)
             for (filter in filters) {
                 when (filter) {
                     is FilterGroup ->
@@ -203,7 +250,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
                 }
             }
         }.build()
-        return GET(url, headers)
+        return GET(url, xhrHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
