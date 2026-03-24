@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manhwa18.net'
-    extClass = '.Manhwa18Net'
-    baseUrl = 'https://manhwa18.net'
-    extVersionCode = 11
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'CosplayTele'
-    extClass = '.CosplayTele'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
