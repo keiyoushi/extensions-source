@@ -171,7 +171,7 @@ class Otakusic : HttpSource() {
                     // Store manga slug and chapter info for page list retrieval
                     url = "$CHAPTER_URL_PREFIX$mangaSlug/${dto.chapterOriginalSlug}/${dto.chapterSlug}"
                     name = "Chương ${dto.chapterName.content}"
-                    date_upload = dto.updatedAt?.let { dateFormat.tryParse(it) } ?: 0L
+                    date_upload = (dto.publicAt ?: dto.updatedAt)?.let { dateFormat.tryParse(it) } ?: 0L
                 }
             }
     }
@@ -217,7 +217,7 @@ class Otakusic : HttpSource() {
     // ============================== Helpers ================================
 
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
     }
