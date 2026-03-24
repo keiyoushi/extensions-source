@@ -42,7 +42,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a.pull-left")!!
         setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("h3.media-heading a")?.text()?.trim() ?: ""
+        title = element.selectFirst("h3.media-heading a")?.text() ?: ""
         thumbnail_url = link.selectFirst("img.media-object")?.absUrl("src")
     }
 
@@ -70,8 +70,11 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // Search
 
-    private var cachedGenres: List<FMReader.Genre> = emptyList()
     private var captchaUrl: String? = null
+    private var cachedGenres: List<FMReader.Genre> = emptyList()
+    private val srcUrlRegex = Regex(""""src"\s*:\s*"(https?://[^"]+)"""")
+    private val k2Regex = Regex("""\bk2\b\s*:\s*"([^"]+)"""")
+    private val chunkRegex = Regex(""""([^"]+)"""")
 
     override fun getFilterList(): FilterList {
         val baseFilters = mutableListOf<Filter<*>>(
@@ -159,31 +162,25 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        captchaUrl?.let { url ->
-            captchaUrl = null
-            return GET(url, headers)
-        }
-        return super.mangaDetailsRequest(manga)
-    }
+    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")?.text()?.trim() ?: ""
+        title = document.selectFirst("h1")?.text() ?: ""
 
         thumbnail_url = document.selectFirst("img[src*='image.mangatr.site']")?.absUrl("src")
             ?: document.selectFirst("img[title]")?.absUrl("src")
 
         description = document.selectFirst("div.info-desc, div#tab1 p, div.summary")
-            ?.text()?.trim()
+            ?.text()
 
-        author = document.selectFirst("div.manga-meta-item:contains(Yazar) a[href*='?author='], div.manga-meta-value a[href*='?author=']")?.text()?.trim()
+        author = document.selectFirst("div.manga-meta-item:contains(Yazar) a[href*='?author='], div.manga-meta-value a[href*='?author=']")?.text()
 
         artist = document.select("div.manga-meta-item:contains(Sanatçı) a[href*='?artist='], div.manga-meta-value a[href*='?artist=']")
-            .joinToString { it.text().trim() }
+            .joinToString { it.text() }
             .ifBlank { null }
 
         genre = document.select("div.manga-meta-item:contains(Tür) a[href*='?tur='], div.manga-meta-value a[href*='?tur=']")
-            .joinToString { it.text().trim() }
+            .joinToString { it.text() }
 
         val durumHref = document.selectFirst("a[href*='?durum=']")?.attr("href") ?: ""
         status = when {
@@ -240,9 +237,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val link = element.selectFirst("div.chapter-title a")!!
         setUrlWithoutDomain(link.attr("href"))
-        val chapterNum = link.selectFirst("span:last-child")?.text()?.trim()
-            ?: link.text().trim()
-        val sub = element.selectFirst("div.chapter-sub")?.text()?.trim()
+        val chapterNum = link.selectFirst("span:last-child")?.text()
+            ?: link.text()
+        val sub = element.selectFirst("div.chapter-sub")?.text()
         name = when {
             sub.isNullOrEmpty() -> chapterNum
             sub.contains("Bölüm") -> sub // zaten bölüm numarası içeriyor
@@ -253,10 +250,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.startsWith("/")) baseUrl + chapter.url else "$baseUrl/${chapter.url}"
-        return GET(url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
@@ -276,7 +270,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             if (!js.contains("imageQueueData")) continue
 
             // --- Yeni Format: Doğrudan src URL'leri (sig parametreli) ---
-            val srcUrls = Regex(""""src"\s*:\s*"(https?://[^"]+)"""").findAll(js)
+            val srcUrls = srcUrlRegex.findAll(js)
                 .map { it.groupValues[1] }
                 .filterNot { it.contains("logo") }
                 .toList()
@@ -286,7 +280,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
             // --- Eski Format: k1 + k2 XOR şifreli ---
             val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1") ?: continue
-            val k2 = Regex("""\bk2\b\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: continue
+            val k2 = k2Regex.find(js)?.groupValues?.get(1) ?: continue
 
             // queue array'ini al — "queue" ile "logo" arasındaki her şey
             val queueStart = js.indexOf("queue")
@@ -309,7 +303,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
                 val block = queueSection.substring(open + 1, close)
                 // Chunk string'lerini topla
-                val chunks = Regex(""""([^"]+)"""").findAll(block)
+                val chunks = chunkRegex.findAll(block)
                     .map { it.groupValues[1] }
                     .toList()
                 if (chunks.isEmpty()) continue
@@ -353,19 +347,16 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             val options = document.select("#genreSelect option")
             if (options.isNotEmpty()) {
                 cachedGenres = options.mapNotNull { opt ->
-                    val value = opt.attr("value").trim()
-                    val text = opt.text().trim()
+                    val value = opt.attr("value")
+                    val text = opt.text()
                     if (text.isEmpty() || value.isEmpty()) null else FMReader.Genre(text, value)
                 }
             } else {
-                val container = document.selectFirst("*:matchesOwn(Tür Seçiniz)")?.parent()
-                    ?: document.selectFirst("div:has(:matchesOwn(Tür Seçiniz))")
-                val anchors = container?.select("a")
-                    ?: document.select("a[href*=manga-list], a[href*=genre], a[href*=tur]")
-                val items = anchors.map { it.text().trim() }.filter { it.length > 1 }.distinct()
-                if (items.isNotEmpty()) {
-                    cachedGenres = items.map { name -> FMReader.Genre(name, name.replace(' ', '+')) }
-                }
+                cachedGenres = document.select("a[href*='?tur=']").mapNotNull { a ->
+                    val tur = a.attr("href").substringAfter("?tur=", "").substringBefore("&")
+                    val text = a.text()
+                    if (text.isEmpty() || tur.isEmpty()) null else FMReader.Genre(text, tur)
+                }.distinctBy { it.id }
             }
         }
 
