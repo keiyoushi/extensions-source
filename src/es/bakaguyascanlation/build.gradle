@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bakaguya Scanlation'
+    extClass = '.BakaguyaScanlation'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/bakaguya'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'WaifusWithSalsa Scan'
+    extClass = '.WaifusWithSalsaScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/wws'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
