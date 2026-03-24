@@ -38,8 +38,9 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manga?sort=views&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        return GET("$baseUrl/manga?sort=views&page=$page", headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val props = rawProps(response)
@@ -49,8 +50,9 @@ class MangaDenizi : HttpSource() {
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/manga?sort=latest&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET("$baseUrl/manga?sort=latest&page=$page", headers)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -131,5 +133,6 @@ class MangaDenizi : HttpSource() {
     }
 }
 
-private fun SimpleDateFormat.tryParse(string: String): Long =
-    runCatching { parse(string)?.time }.getOrNull() ?: 0L
+private fun SimpleDateFormat.tryParse(string: String): Long {
+    return runCatching { parse(string)?.time }.getOrNull() ?: 0L
+}
