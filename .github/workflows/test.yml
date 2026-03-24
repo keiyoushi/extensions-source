@@ -1,36 +1,32 @@
-name: Test Build Extension
+name: Build Poseidon Scan
 
 on:
-  workflow_dispatch: # Te permet de lancer le build manuellement dans l'onglet "Actions"
+  workflow_dispatch: # Déclenchement manuel depuis l'onglet Actions
 
 jobs:
   build:
-    name: Build Debug APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          java-version: 17
-          distribution: temurin
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build with Gradle
-        run: |
-          # On lance le build en mode Debug (pas besoin de signature)
-          # Cela va compiler toutes les extensions modifiées
-          ./gradlew assembleDebug
+      - name: Build Debug APK
+        # La commande cible précisément le module Poseidon Scan
+        # On utilise assembleDebug pour éviter d'avoir besoin d'une clé JKS
+        run: ./gradlew :src:fr:poseidonscan:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apks
-          path: "**/*.apk"
-          retention-days: 1
+          name: PoseidonScan-Debug-APK
+          # Le chemin vers l'APK généré par Gradle
+          path: src/fr/poseidonscan/build/outputs/apk/debug/*.apk
