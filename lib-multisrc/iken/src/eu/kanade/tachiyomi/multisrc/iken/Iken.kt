@@ -123,7 +123,7 @@ abstract class Iken(
             ?: throw Exception("Invalid URL format")
 
         val manga = SManga.create().apply {
-            this@apply.url = "$slug#"
+            this@apply.url = slug
         }
 
         return fetchMangaDetails(manga)
@@ -332,11 +332,7 @@ abstract class Iken(
 
     // details
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.substringBeforeLast("#")
-
-        return "$baseUrl/series/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
@@ -344,7 +340,7 @@ abstract class Iken(
 
     // chapters
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", rscHeaders)
+    override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val id = response.request.url.fragment!!
@@ -352,7 +348,7 @@ abstract class Iken(
         val body = response.body.string()
 
         // Detect vShield / BalooPow challenge pagege
-        if (vShieldRegex.containsMatchIn(body)) throw Exception("vShield challenge detected. Open in WebView to solve it.")
+        if (vShieldRegex.containsMatchIn(body)) throw Exception(V_SHIELD_MESSAGE)
 
         launchIO { updateViews(id.toInt()) }
 
@@ -383,7 +379,7 @@ abstract class Iken(
         val document = response.asJsoup()
 
         if (document.select("#publicSalt, #challenge").isNotEmpty()) {
-            throw Exception("vShield challenge detected. Open in WebView to solve it.")
+            throw Exception(V_SHIELD_MESSAGE)
         }
 
         if (document.selectFirst("svg.lucide-lock") != null) {
@@ -430,6 +426,7 @@ abstract class Iken(
     companion object {
         const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        const val V_SHIELD_MESSAGE = "vShield challenge detected. Open in WebView to solve it"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val vShieldRegex = Regex("""balooPow\.min\.js|Completing challenge|publicSalt|_2__vShield_v""")
         val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
