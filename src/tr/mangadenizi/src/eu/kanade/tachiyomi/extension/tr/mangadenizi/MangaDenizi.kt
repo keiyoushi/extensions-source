@@ -136,6 +136,5 @@ class MangaDenizi : HttpSource() {
 }
 
 private fun SimpleDateFormat.tryParse(string: String): Long {
-    val result = runCatching { parse(string)?.time }
-    return result.getOrElse { 0L }
+    return runCatching { parse(string)?.time ?: 0L }.getOrElse { 0L }
 }
