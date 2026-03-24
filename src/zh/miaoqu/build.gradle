@@ -1,9 +1,0 @@
-ext {
-    extName = 'Miaoqu Manhua'
-    extClass = '.Miaoqu'
-    themePkg = 'mccms'
-    baseUrl = 'https://www.miaoqumh.org'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

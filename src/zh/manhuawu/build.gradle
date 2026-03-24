@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manhuawu'
-    extClass = '.Manhuawu'
-    themePkg = 'mccms'
-    baseUrl = 'https://www.mhua5.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
