@@ -1,7 +1,0 @@
-ext {
-    extName = "ManhuaRock"
-    extClass = ".ManhuaRock"
-    extVersionCode = 16
-}
-
-apply from: "$rootDir/common.gradle"
