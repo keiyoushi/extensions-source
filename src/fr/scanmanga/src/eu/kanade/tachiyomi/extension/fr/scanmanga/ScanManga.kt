@@ -69,12 +69,6 @@ class ScanManga :
         } ?: 145
 
         return Headers.Builder()
-//            .add(
-//                "sec-ch-ua",
-//                "\"Not:A-Brand\";v=\"99\", \"Google Chrome\";v=\"$currentChromeVersion\", \"Chromium\";v=\"$currentChromeVersion\"",
-//            )
-//            .add("sec-ch-ua-mobile", "?1")
-//            .add("sec-ch-ua-platform", "\"Android\"")
             .add("upgrade-insecure-requests", "1")
             .add(
                 "user-agent",
@@ -85,11 +79,7 @@ class ScanManga :
                 "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             )
             .add("sec-fetch-site", "none")
-//            .add("sec-fetch-mode", "navigate")
-//            .add("sec-fetch-user", "?1")
-//            .add("sec-fetch-dest", "document")
             .add("accept-language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
-//            .add("priority", "u=0, i")
             .add("X-Requested-With", "")
     }
 
@@ -203,33 +193,54 @@ class ScanManga :
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
-        val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
-            ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
-
-        val interval = intervalStr.toInt()
-        val option = optionStr.toInt()
-        val delimiter = mask[option]
-        val tokens = encoded.split(delimiter).filter { it.isNotEmpty() }
-        val reversedMap = mask.withIndex().associate { it.value to it.index }
-
-        return buildString {
-            for (token in tokens) {
-                // Reverse the hashIt() operation: convert masked characters back to digits
-                val digitString = token.map { c ->
-                    reversedMap[c]?.toString() ?: error("Invalid masked character: $c")
-                }.joinToString("")
-
-                // Convert from base `option` to decimal
-                val number = digitString.toIntOrNull(option)
-                    ?: error("Failed to parse token: $digitString as base $option")
-
-                // Reverse the shift done during encodeIt()
-                val originalCharCode = number - interval
-
-                append(originalCharCode.toChar())
+        // Format 1: eval(function(p,a,c,k,e,d){...}("...", ...))  — ancien format packed
+        val packedRegex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val packedMatch = packedRegex.find(obfuscatedJs)
+        if (packedMatch != null) {
+            val (encoded, mask, intervalStr, optionStr) = packedMatch.destructured
+            val interval = intervalStr.toInt()
+            val option = optionStr.toInt()
+            val delimiter = mask[option]
+            val tokens = encoded.split(delimiter).filter { it.isNotEmpty() }
+            val reversedMap = mask.withIndex().associate { it.value to it.index }
+            return buildString {
+                for (token in tokens) {
+                    val digitString = token.map { c ->
+                        reversedMap[c]?.toString() ?: error("Invalid masked character: $c")
+                    }.joinToString("")
+                    val number = digitString.toIntOrNull(option)
+                        ?: error("Failed to parse token: $digitString as base $option")
+                    val originalCharCode = number - interval
+                    append(originalCharCode.toChar())
+                }
             }
         }
+
+        // Format 2: var _0xXXXX = [...]; — nouveau format array-based (_0x style)
+        val arrayRegex = Regex("""var\s+(_0x[a-f0-9]+)\s*=\s*\[([^\]]+)\]""")
+        val arrayMatch = arrayRegex.find(obfuscatedJs)
+            ?: error("Failed to match obfuscation pattern: ${obfuscatedJs.take(120)}")
+
+        val rawItems = arrayMatch.groupValues[2]
+        // Extraire les strings du tableau (entre guillemets simples ou doubles)
+        val stringArray = Regex("""["']([^"']*)["']""").findAll(rawItems)
+            .map { it.groupValues[1] }.toList()
+
+        // Trouver le nom de la fonction helper (_0xABCD)
+        val fnName = Regex("""function\s+(_0x[a-f0-9]+)\s*\(_0x[a-f0-9]+,\s*_0x[a-f0-9]+\)""")
+            .find(obfuscatedJs)?.groupValues?.get(1)
+
+        // Remplacer tous les appels _0xABCD(0xNN) par leur valeur réelle
+        var result = obfuscatedJs
+        if (fnName != null) {
+            val callRegex = Regex("""\Q$fnName\E\((0x[a-f0-9]+)\)""")
+            result = callRegex.replace(result) { mr ->
+                val index = mr.groupValues[1].removePrefix("0x").toIntOrNull(16)
+                    ?: return@replace mr.value
+                stringArray.getOrElse(index) { mr.value }
+            }
+        }
+        return result
     }
 
     private val multipleSpaces = Regex("""\s+""")
@@ -264,16 +275,19 @@ class ScanManga :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val packedScript = document.selectFirst("script:containsData(eval\\(function\\()")!!.data()
+        val packedScript = document.selectFirst("script:containsData(eval\\(function\\()")
+            ?: document.selectFirst("script:containsData(_0x)")
+            ?: error("Could not find obfuscated script in page.")
 
-        val unpackedScript = decodeHunter(packedScript)
+        val scriptData = packedScript.data()
+        val unpackedScript = decodeHunter(scriptData)
         val parametersRegex = Regex("""sml = '([^']+)';\n?.*var sme = '([^']+)'""")
 
         val (sml, sme) = parametersRegex.find(unpackedScript)?.destructured
             ?: error("Failed to extract parameters from script.")
 
         val chapterInfoRegex = Regex("""const idc = (\d+)""")
-        val (chapterId) = chapterInfoRegex.find(packedScript)?.destructured
+        val (chapterId) = chapterInfoRegex.find(scriptData)?.destructured
             ?: error("Failed to extract chapter ID.")
 
         val mediaType = "application/json; charset=UTF-8".toMediaType()
