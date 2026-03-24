@@ -214,7 +214,6 @@ class Otakusic : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-
     // ============================== Helpers ================================
 
     private val dateFormat by lazy {
