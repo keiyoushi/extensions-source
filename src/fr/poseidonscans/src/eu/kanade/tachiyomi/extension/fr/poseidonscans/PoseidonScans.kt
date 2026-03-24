@@ -138,7 +138,7 @@ class PoseidonScans :
 
             if (potentialDescription.isNullOrBlank()) {
                 val jsonDescription = mangaDto.description.trim()
-                if (jsonDescription.isNotBlank() && jsonDescription.length > 5 && !jsonDescription.startsWith("$")) {
+                if (jsonDescription.length > 5 && !jsonDescription.startsWith("$")) {
                     potentialDescription = jsonDescription
                 }
             }
