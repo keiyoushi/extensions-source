@@ -137,7 +137,7 @@ class Otakusic : HttpSource() {
                 }
 
             genre = document.select("div.flex.flex-wrap.gap-2 a")
-                .joinToString { it.text().trim() }
+                .joinToString { it.text() }
                 .ifEmpty { null }
 
             description = document.selectFirst("#description")?.text()?.trim()
