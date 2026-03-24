@@ -214,12 +214,6 @@ class Otakusic : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun imageRequest(page: Page): Request {
-        val headers = headers.newBuilder()
-            .set("Referer", "$baseUrl/")
-            .build()
-        return GET(page.imageUrl!!, headers)
-    }
 
     // ============================== Helpers ================================
 
