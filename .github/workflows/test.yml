@@ -1,0 +1,36 @@
+name: Test Build Extension
+
+on:
+  workflow_dispatch: # Te permet de lancer le build manuellement dans l'onglet "Actions"
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build with Gradle
+        run: |
+          # On lance le build en mode Debug (pas besoin de signature)
+          # Cela va compiler toutes les extensions modifiées
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apks
+          path: "**/*.apk"
+          retention-days: 1
