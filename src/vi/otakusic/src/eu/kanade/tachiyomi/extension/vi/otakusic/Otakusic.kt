@@ -133,7 +133,7 @@ class Otakusic : HttpSource() {
                         ?.ownText()
                         ?.replace(":", "")
                         ?.trim()
-                        ?.takeIf { it.isNotBlank() && it != "Đang cập nhật" }
+                        ?.takeIf { it.isNotEmpty() && it != "Đang cập nhật" }
                 }
 
             genre = document.select("div.flex.flex-wrap.gap-2 a")
