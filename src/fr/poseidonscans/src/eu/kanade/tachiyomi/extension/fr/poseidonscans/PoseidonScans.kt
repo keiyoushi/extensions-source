@@ -270,10 +270,10 @@ class PoseidonScans :
 
     override fun pageListParse(response: Response): List<Page> {
         val pageDataDto = response.extractNextJs<PageData>()
-            ?: throw Exception("Cant scape data from nextjs")
+            ?: throw Exception("Cant scape data from Next.js")
         if (pageDataDto.currentChapter.isPremium) {
             if (pageDataDto.sessionStatus == "unauthenticated") {
-                throw Exception("This chapter is premium. Please connect via the webview to view.")
+                throw Exception("This chapter is premium. Please connect via the WebView to view.")
             }
             if (!pageDataDto.isPremiumUser) {
                 throw Exception("This chapter is premium. You are not a premium user.")
