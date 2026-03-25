@@ -141,7 +141,6 @@ class MoeTruyen : HttpSource() {
                 .ifEmpty { null }
             description = document.selectFirst("[data-description-content]")
                 ?.text()
-                ?.trim()
                 ?.ifEmpty { null }
                 ?: document.selectFirst(".manga-description__text")
                     ?.text()
