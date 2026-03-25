@@ -123,8 +123,10 @@ abstract class LibGroup(
     private fun checkForToken(chain: Interceptor.Chain): Response {
         val req = chain.request().newBuilder()
         val url = chain.request().url.toString()
+        val manualToken = preferences.getString("bearer_token", "")
         if (url.contains(apiDomain) && !url.contains("/api/auth/me")) {
-            if (bearerToken.isNullOrBlank() || bearerToken == "none") {
+            // Force change token if use manual
+            if (bearerToken.isNullOrBlank() || (!manualToken.isNullOrBlank() && bearerToken != manualToken)) {
                 val token = loadToken()
                 if (token != null) {
                     bearerToken = token.getToken()
@@ -147,7 +149,7 @@ abstract class LibGroup(
         // Try to get manually configured token from preferences
         val manualToken = preferences.getString("bearer_token", "")
         val userId = preferences.getString("user_id", "")
-        val expiresIn = preferences.getString("expires_in", "3600000")?.toLongOrNull() ?: 3600000
+        val expiresIn = preferences.getString("expires_in", "0")?.toLongOrNull() ?: 0
 
         if (!manualToken.isNullOrBlank()) {
             return AuthToken(
@@ -708,35 +710,9 @@ abstract class LibGroup(
         val expiresInPref = androidx.preference.EditTextPreference(screen.context).apply {
             key = "expires_in"
             title = "Expires In (ms)"
-            summary = "Время жизни токена в миллисекундах (по умолчанию 3600000)"
+            summary = "Время жизни токена в миллисекундах (оставьте пустым для автоматического получения)"
             dialogTitle = "Введите время жизни токена"
-            setDefaultValue("3600000")
-        }
-
-        val clearAuthPref = androidx.preference.CheckBoxPreference(screen.context).apply {
-            key = "clear_auth"
-            title = "Очистить данные аутентификации"
-            summary = "Отметьте, чтобы очистить сохраненные токены"
-            setOnPreferenceChangeListener { _, isChecked ->
-                if (isChecked == true) {
-                    preferences.edit()
-                        .remove("bearer_token")
-                        .remove("user_id")
-                        .remove("expires_in")
-                        .apply()
-
-                    // Also clear the main preferences
-                    preferences.edit()
-                        .remove(TOKEN_STORE)
-                        .apply()
-
-                    Toast.makeText(screen.context, "Данные аутентификации очищены", Toast.LENGTH_LONG).show()
-
-                    // Uncheck immediately
-                    setChecked(false)
-                }
-                true
-            }
+            setDefaultValue("")
         }
 
         screen.addPreference(serverPref)
@@ -748,7 +724,6 @@ abstract class LibGroup(
         screen.addPreference(bearerTokenPref)
         screen.addPreference(userIdPref)
         screen.addPreference(expiresInPref)
-        screen.addPreference(clearAuthPref)
     }
     private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
         key = title
