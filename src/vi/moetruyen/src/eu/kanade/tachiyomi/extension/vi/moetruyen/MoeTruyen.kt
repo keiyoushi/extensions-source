@@ -125,7 +125,7 @@ class MoeTruyen : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h1.manga-detail-title")!!.text().trim()
+            title = document.selectFirst("h1.manga-detail-title")!!.text()
             author = document.select("p.manga-detail-meta-line")
                 .firstOrNull { line ->
                     line.selectFirst(".manga-detail-meta-label")
