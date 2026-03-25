@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -191,10 +192,32 @@ class HentaiVNx : ParsedHttpSource() {
 
     // ============================== Pages ===============================
 
-    private fun imageElement(element: Element): String? = when {
-        element.hasAttr("data-original") -> element.attr("abs:data-original")
-        element.hasAttr("data-src") -> element.attr("abs:data-src")
-        else -> element.attr("abs:src")
+    private fun imageElement(element: Element): String? {
+        val rawUrl = when {
+            element.hasAttr("data-original") -> element.attr("abs:data-original")
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            else -> element.attr("abs:src")
+        }
+
+        return normalizeImageUrl(rawUrl)
+    }
+
+    private fun normalizeImageUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+
+        val parsedUrl = url.toHttpUrlOrNull() ?: return url
+
+        return when {
+            parsedUrl.host == "external-content.duckduckgo.com" &&
+                parsedUrl.encodedPath == "/iu/" ->
+                parsedUrl.queryParameter("u")?.takeIf { it.isNotBlank() } ?: url
+
+            parsedUrl.host == "images2-focus-opensocial.googleusercontent.com" &&
+                parsedUrl.encodedPath.endsWith("/gadgets/proxy") ->
+                parsedUrl.queryParameter("url")?.takeIf { it.isNotBlank() } ?: url
+
+            else -> url
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
