@@ -200,7 +200,7 @@ class MoeTruyen : HttpSource() {
             name = element.selectFirst(".chapter-num")!!.text()
 
             val chapterTime = element.selectFirst(".chapter-time")
-            val relativeDate = chapterTime?.text()?.trim()
+            val relativeDate = chapterTime?.text()
             val absoluteDate = chapterTime?.attr("title")
                 ?.substringAfter("Cập nhật", missingDelimiterValue = "")
                 ?.trim()
