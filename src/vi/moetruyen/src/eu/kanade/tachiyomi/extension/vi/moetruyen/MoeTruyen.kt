@@ -47,7 +47,7 @@ class MoeTruyen : HttpSource() {
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        title = element.selectFirst(".homepage-ranking-item__title")!!.text().trim()
+        title = element.selectFirst(".homepage-ranking-item__title")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
