@@ -219,13 +219,20 @@ class Comix :
             if (current == null) {
                 chapterMap[key] = ch
             } else {
-                // Prefer official scan group
-                val officialNew = (ch.scanlationGroupId == 9275 || ch.isOfficial == 1)
-                val officialCurrent = (current.scanlationGroupId == 9275 || current.isOfficial == 1)
-                val better = when {
-                    officialNew && !officialCurrent -> true
+                // Prefer official flag first, then "Official?" group, then votes/updatedAt
+                val newIsOfficial = ch.isOfficial == 1
+                val currentIsOfficial = current.isOfficial == 1
+                val newIsGroup10702 = ch.scanlationGroupId == 10702
+                val currentIsGroup10702 = current.scanlationGroupId == 10702
 
-                    !officialNew && officialCurrent -> false
+                val better = when {
+                    // Prefer official-marked chapters
+                    newIsOfficial && !currentIsOfficial -> true
+                    !newIsOfficial && currentIsOfficial -> false
+
+                    // If neither official, prefer group "Official?"
+                    newIsGroup10702 && !currentIsGroup10702 -> true
+                    !newIsGroup10702 && currentIsGroup10702 -> false
 
                     // compare votes then updatedAt
                     else -> when {
