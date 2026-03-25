@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.weebdex
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants.BASE_URL
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
@@ -34,7 +35,7 @@ open class WeebDex(
 ) : HttpSource(),
     ConfigurableSource {
     override val name = "WeebDex"
-    override val baseUrl = "https://weebdex.org"
+    override val baseUrl = BASE_URL
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
