@@ -233,7 +233,6 @@ class MoeTruyen : HttpSource() {
 
     // ============================== Pages =================================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
