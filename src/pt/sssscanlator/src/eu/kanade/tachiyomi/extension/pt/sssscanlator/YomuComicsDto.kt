@@ -98,6 +98,4 @@ class ChapterPagesDto(
     val content: List<String> = emptyList(),
 )
 
-fun Double.toChapterNumberString(): String {
-    return toString().removeSuffix(".0")
-}
+fun Double.toChapterNumberString(): String = toString().removeSuffix(".0")
