@@ -250,8 +250,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
-
     override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
     override fun getImgAttr(element: Element?): String? = null
