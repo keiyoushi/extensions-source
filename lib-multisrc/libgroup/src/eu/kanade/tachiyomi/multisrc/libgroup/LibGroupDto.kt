@@ -210,11 +210,17 @@ class Chapter(
         @SerialName("branch_id") val branchId: Int?,
         @SerialName("created_at") val createdAt: String,
         val teams: List<Team>,
+        @SerialName("restricted_view") val restrictedView: RestrictedView?,
         val user: User,
     ) {
         @Serializable
         class Team(
             val name: String,
+        )
+
+        @Serializable
+        class RestrictedView(
+            @SerialName("is_open") val isOpen: Boolean,
         )
 
         @Serializable
@@ -229,8 +235,11 @@ class Chapter(
 
     private fun getUserName(branchId: Int? = null): String? = runCatching { first(branchId)!!.user.username }.getOrNull()
 
+    private fun getIsMangaOpen(branchId: Int? = null, defaultValue: Boolean = true): Boolean = first(branchId)?.restrictedView?.isOpen ?: defaultValue
+
     fun toSChapter(slugUrl: String, branchId: Int? = null, isScanUser: Boolean): SChapter = SChapter.create().apply {
-        val chapterName = "Том $volume. Глава $number"
+        val paidChapterTitle = if (!getIsMangaOpen(branchId)) "\$Платная глава\$ " else ""
+        val chapterName = paidChapterTitle + "Том $volume. Глава $number"
         name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
         val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
         url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"

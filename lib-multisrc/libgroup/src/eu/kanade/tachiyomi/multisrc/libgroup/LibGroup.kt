@@ -362,7 +362,7 @@ abstract class LibGroup(
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         if (manga.status == SManga.LICENSED) {
-            throw Exception("Лицензировано - Нет глав")
+            Log.d("MangaLib", "Manga is licensed: ${manga.title}")
         }
         return client.newCall(chapterListRequest(manga))
             .asObservable().doOnNext { response ->
