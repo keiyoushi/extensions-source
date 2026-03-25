@@ -358,7 +358,7 @@ abstract class Iken(
         val slug = response.request.url.pathSegments.last()
         val body = response.body.string()
 
-        // Detect vShield / BalooPow challenge pagege
+        // Detect vShield / BalooPow challenge page
         if (vShieldRegex.containsMatchIn(body)) throw Exception(V_SHIELD_MESSAGE)
 
         launchIO { updateViews(id.toInt()) }
