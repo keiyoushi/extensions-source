@@ -158,11 +158,9 @@ class MoeTruyen : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> {
-        return rx.Observable.fromCallable {
-            client.newCall(chapterListRequest(manga)).execute().use { response ->
-                chapterListParsePaginated(response)
-            }
+    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> = rx.Observable.fromCallable {
+        client.newCall(chapterListRequest(manga)).execute().use { response ->
+            chapterListParsePaginated(response)
         }
     }
 
