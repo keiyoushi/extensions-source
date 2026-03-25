@@ -147,7 +147,6 @@ class MoeTruyen : HttpSource() {
                     ?.ifEmpty { null }
             status = parseStatus(document.selectFirst(".manga-status-pill")?.text())
             thumbnail_url = document.selectFirst(".detail-cover img")?.absUrl("src")
-            initialized = true
         }
     }
 
