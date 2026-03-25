@@ -212,10 +212,6 @@ class HentaiVNx : ParsedHttpSource() {
                 parsedUrl.encodedPath == "/iu/" ->
                 parsedUrl.queryParameter("u")?.takeIf { it.isNotBlank() } ?: url
 
-            parsedUrl.host == "images2-focus-opensocial.googleusercontent.com" &&
-                parsedUrl.encodedPath.endsWith("/gadgets/proxy") ->
-                parsedUrl.queryParameter("url")?.takeIf { it.isNotBlank() } ?: url
-
             else -> url
         }
     }
