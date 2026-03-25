@@ -134,7 +134,7 @@ class MoeTruyen : HttpSource() {
                         ?: false
                 }
                 ?.select("a.inline-link")
-                ?.joinToString { it.text().trim() }
+                ?.joinToString { it.text() }
                 ?.ifEmpty { null }
             genre = document.select(".manga-detail-genre-chips a.chip")
                 .joinToString { it.text().trim() }
