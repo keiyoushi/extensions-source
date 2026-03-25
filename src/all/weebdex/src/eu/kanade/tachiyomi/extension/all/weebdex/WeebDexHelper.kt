@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.weebdex
 
+import eu.kanade.tachiyomi.extension.all.weebdex.WeebDexConstants.BASE_URL
 import eu.kanade.tachiyomi.extension.all.weebdex.dto.CoverDto
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
@@ -26,7 +27,7 @@ class WeebDexHelper {
             "512" -> ".512.webp"
             else -> cover.ext
         }
-        return "${WeebDexConstants.CDN_COVER_URL}/$mangaId/${cover.id}$ext"
+        return "$BASE_URL/covers/$mangaId/${cover.id}$ext"
     }
 
     fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
