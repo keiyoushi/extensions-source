@@ -100,17 +100,11 @@ class YomuComics : HttpSource() {
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
-
     override fun mangaDetailsParse(response: Response): SManga = parseSeriesPage(response).manga
-
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore('?')
 
     // Chapters
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> = parseSeriesPage(response).chapters
 
@@ -166,9 +160,7 @@ class YomuComics : HttpSource() {
         val payload = extractSeriesPayload(document, mangaSlug)
 
         val titleElement = document.selectFirst("h1")
-        val title = titleElement?.text().orEmpty().ifBlank {
-            mangaSlug.ifBlank { "Sem titulo" }
-        }
+        val title = titleElement!!.text()
         val badgeTexts = extractBadgeTexts(titleElement)
         val statusText = badgeTexts.firstOrNull(::isStatusBadge)
         val genres = badgeTexts.filterNot(::isStatusBadge)

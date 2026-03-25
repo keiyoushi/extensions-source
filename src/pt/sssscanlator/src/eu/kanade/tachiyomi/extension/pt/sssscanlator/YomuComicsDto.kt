@@ -25,13 +25,12 @@ class LibraryPaginationDto(
 class LibraryMangaDto(
     val title: String,
     val cover: String? = null,
-    @SerialName("slug")
-    val mangaSlug: String,
+    val slug: String,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        title = this@LibraryMangaDto.title.ifBlank { mangaSlug }
+        title = this@LibraryMangaDto.title
         thumbnail_url = cover?.takeUnless(String::isBlank)
-        url = "/obra/$mangaSlug"
+        url = "/obra/$slug"
     }
 }
 
@@ -43,8 +42,7 @@ class SeriesPayloadDto(
     val coverImage: String? = null,
     val chapters: List<SeriesChapterDto> = emptyList(),
     val obraId: String,
-    @SerialName("slug")
-    val mangaSlug: String,
+    val slug: String,
 )
 
 @Serializable
@@ -101,10 +99,5 @@ class ChapterPagesDto(
 )
 
 fun Double.toChapterNumberString(): String {
-    val integerValue = toLong()
-    return if (this == integerValue.toDouble()) {
-        integerValue.toString()
-    } else {
-        toString()
-    }
+    return toString().removeSuffix(".0")
 }

@@ -31,7 +31,7 @@ internal fun extractBadgeTexts(titleElement: Element?): List<String> {
     return nearbyElements
         .flatMap { element -> element.select("span[data-slot=badge]") }
         .map { it.text() }
-        .filter(String::isNotBlank)
+        .filter(String::isNotEmpty)
         .distinct()
 }
 
