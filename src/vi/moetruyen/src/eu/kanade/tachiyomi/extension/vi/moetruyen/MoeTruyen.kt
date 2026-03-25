@@ -197,7 +197,7 @@ class MoeTruyen : HttpSource() {
     private fun parseChapterList(document: Document): List<SChapter> = document.select("ul.chapter-list li.chapter a.chapter-link").map { element ->
         SChapter.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
-            name = element.selectFirst(".chapter-num")!!.text().trim()
+            name = element.selectFirst(".chapter-num")!!.text()
 
             val chapterTime = element.selectFirst(".chapter-time")
             val relativeDate = chapterTime?.text()?.trim()
