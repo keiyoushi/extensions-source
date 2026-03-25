@@ -26,7 +26,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class PoseidonScans : HttpSource(), ConfigurableSource {
+class PoseidonScans :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Poseidon Scans"
     override val baseUrl = "https://poseidon-scans.net"
@@ -157,16 +159,22 @@ class PoseidonScans : HttpSource(), ConfigurableSource {
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 val isVolume = ch.isVolume == true || (ch.number % 1 == 0f && ch.title?.contains("volume", ignoreCase = true) == true)
 
-                val baseName = if (isVolume) "Volume $chapterNumberString"
-                else "Chapitre $chapterNumberString"
+                val baseName = if (isVolume) {
+                    "Volume $chapterNumberString"
+                } else {
+                    "Chapitre $chapterNumberString"
+                }
                 val title = ch.title?.trim()?.takeIf { it.isNotBlank() }
 
                 name = buildString {
                     if (isLocked) append("🔒 ")
 
                     append(
-                        if (title != null) "$baseName - $title"
-                        else baseName,
+                        if (title != null) {
+                            "$baseName - $title"
+                        } else {
+                            baseName
+                        },
                     )
 
                     if (isLocked) {
