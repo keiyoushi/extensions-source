@@ -72,7 +72,6 @@ class MangaDenizi : HttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val props = rawProps(response)
