@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -26,11 +25,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.getValue
 
-class PoseidonScans :
-    HttpSource(),
-    ConfigurableSource {
+class PoseidonScans : HttpSource(), ConfigurableSource {
 
     override val name = "Poseidon Scans"
     override val baseUrl = "https://poseidon-scans.net"
@@ -67,10 +63,7 @@ class PoseidonScans :
     override fun latestUpdatesParse(response: Response): MangasPage {
         val apiResponse = response.parseAs<LatestApiResponse>()
 
-        val mangas = apiResponse.data.mapNotNull { apiManga ->
-            if (apiManga.slug.isBlank()) {
-                return@mapNotNull null
-            }
+        val mangas = apiResponse.data.map { apiManga ->
             SManga.create().apply {
                 title = apiManga.title
                 url = "/serie/${apiManga.slug}"
@@ -86,8 +79,7 @@ class PoseidonScans :
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, rscHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangaDtos = response.extractNextJs<List<PopularMangaData>>()
-            ?: throw Exception("Cant scape data from nextjs")
+        val mangaDtos = response.extractNextJs<List<PopularMangaData>>() ?: throw Exception("Cant scape data from Next.js")
 
         val mangas = mangaDtos.map { mangaDto ->
             SManga.create().apply {
@@ -103,48 +95,21 @@ class PoseidonScans :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val mangaDto = document.extractNextJs<MangaDetailsData>()
-            ?: throw Exception("Cant scape data from nextjs")
+        val mangaDto = document.extractNextJs<MangaDetailsData>() ?: throw Exception("Cant scape data from Next.js")
 
         return SManga.create().apply {
             title = mangaDto.title
             thumbnail_url = "$baseUrl/api/covers/${mangaDto.slug}.webp"
-            author = mangaDto.author?.takeIf { it.isNotBlank() }
-            artist = mangaDto.artist?.takeIf { it.isNotBlank() }
+            author = mangaDto.author
+            artist = mangaDto.artist
 
-            val genresList = mangaDto.categories.map { it.name.trim() }.filter { it.isNotBlank() }.toMutableList()
-            genre = genresList.joinToString(", ") { genreName ->
-                genreName.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.FRENCH) else it.toString() }
+            genre = mangaDto.categories.mapNotNull { it.name.trim().takeIf { name -> name.isNotBlank() } }.joinToString(", ") {
+                it.replaceFirstChar { char -> char.titlecase(Locale.FRENCH) }
             }
 
             status = parseStatus(mangaDto.status)
 
-            var potentialDescription: String? = null
-            val descriptionSelector = "p.text-gray-300.leading-relaxed"
-
-            try {
-                val htmlDescriptionElement = document.selectFirst(descriptionSelector)
-                if (htmlDescriptionElement != null) {
-                    val htmlText = htmlDescriptionElement.text()?.trim()
-                    if (!htmlText.isNullOrBlank()) {
-                        potentialDescription = htmlText
-                            .replaceFirst("Dans : ${mangaDto.title}", "")
-                            .trim()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("PoseidonScans", "Error fetching HTML description: ${e.message}")
-            }
-
-            if (potentialDescription.isNullOrBlank()) {
-                val jsonDescription = mangaDto.description.trim()
-                if (jsonDescription.length > 5 && !jsonDescription.startsWith("$")) {
-                    potentialDescription = jsonDescription
-                }
-            }
-
-            val finalDesc = potentialDescription?.takeIf { it.isNotBlank() }
-            description = finalDesc
+            description = mangaDto.description.trim().takeIf { it.isNotBlank() }
             setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }
     }
@@ -168,81 +133,61 @@ class PoseidonScans :
         if (chapters.isNotEmpty()) return chapters
 
         // RSC data can be partial on first load; retry with cache-busting
-        val retryUrl = url.newBuilder()
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .build()
-        val retryRequest = response.request.newBuilder()
-            .url(retryUrl)
-            .header("Cache-Control", "no-cache")
-            .build()
+        val retryUrl = url.newBuilder().addQueryParameter("_", System.currentTimeMillis().toString()).build()
+        val retryRequest = response.request.newBuilder().url(retryUrl).header("Cache-Control", "no-cache").build()
         val retryResponse = client.newCall(retryRequest).execute()
         return chapterListRsc(retryResponse.body.string())
     }
 
     fun chapterListRsc(rscBody: String): List<SChapter> {
-        val mangaPageDto = rscBody.extractNextJsRsc<MangaPageDetailsData>()
-            ?: throw Exception("Cant scape data from nextjs")
+        val mangaPageDto = rscBody.extractNextJsRsc<MangaPageDetailsData>() ?: throw Exception("Cant scape data from Next.js")
 
         val showPremium = preferences.getBoolean(
             SHOW_PREMIUM_KEY,
             SHOW_PREMIUM_DEFAULT,
         )
-        return mangaPageDto.manga.chapters
-            .mapNotNull { ch ->
-                // If chapter is premium, check if premium period has expired
-                if (ch.isPremium == true && !showPremium) {
-                    ch.premiumUntil?.let { premiumUntilString ->
-                        val premiumUntilDate = parseIsoDate(premiumUntilString)
-                        if (premiumUntilDate > 0) {
-                            // Exclude if premium period is still active
-                            if (System.currentTimeMillis() <= premiumUntilDate) {
-                                return@mapNotNull null
-                            }
-                        } else {
-                            // If we can't parse the premium until date, exclude the chapter for safety
-                            return@mapNotNull null
-                        }
-                    } ?: return@mapNotNull null // If premiumUntil is null but isPremium is true, exclude
-                }
-                val chapterNumberString = ch.number.toString().removeSuffix(".0")
-                SChapter.create().apply {
-                    val isVolume = ch.isVolume == true || (
-                        ch.number == ch.number.toInt().toFloat() &&
-                            ch.title?.lowercase()?.contains("volume") == true
-                        )
+        return mangaPageDto.manga.chapters.mapNotNull { ch ->
+            val isLocked = ch.isPremium == true && !mangaPageDto.isPremiumUser
 
-                    val baseName = if (isVolume) {
-                        "Volume $chapterNumberString"
-                    } else {
-                        "Chapitre $chapterNumberString"
-                    }
-
-                    name = ch.title?.trim()?.takeIf { it.isNotBlank() }
-                        ?.let { title ->
-                            buildString {
-                                if (ch.isPremium == true && !mangaPageDto.isPremiumUser) append("🔒 ")
-                                append("$baseName - $title")
-                                if (ch.isPremium == true && !mangaPageDto.isPremiumUser) {
-                                    val splittedDate = formatTimestamp(parseIsoDate(ch.premiumUntil)).split(" ")
-                                    append(" - Free the ")
-                                    append(splittedDate[0])
-                                    append(" ")
-                                    append(splittedDate[1])
-                                    append(" at ")
-                                    append(splittedDate[2])
-                                }
-                            }
-                        }
-                        ?: buildString {
-                            if (ch.isPremium == true) append("🔒 ")
-                            append(baseName)
-                        }
-                    setUrlWithoutDomain("/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString")
-                    date_upload = parseIsoDate(ch.createdAt)
-                    chapter_number = ch.number
-                }
+            if (isLocked && !showPremium) {
+                val premiumUntilDate = ch.premiumUntil?.let { parseIsoDate(it) } ?: 0L
+                if (System.currentTimeMillis() <= premiumUntilDate) return@mapNotNull null
             }
-            .sortedByDescending { it.chapter_number }
+            SChapter.create().apply {
+                val chapterNumberString = ch.number.toString().removeSuffix(".0")
+                val isVolume = ch.isVolume == true || (ch.number % 1 == 0f && ch.title?.contains("volume", ignoreCase = true) == true)
+
+                val baseName = if (isVolume) "Volume $chapterNumberString"
+                else "Chapitre $chapterNumberString"
+                val title = ch.title?.trim()?.takeIf { it.isNotBlank() }
+
+                name = buildString {
+                    if (isLocked) append("🔒 ")
+
+                    append(
+                        if (title != null) "$baseName - $title"
+                        else baseName,
+                    )
+
+                    if (isLocked) {
+                        val dateParts = formatTimestamp(
+                            parseIsoDate(
+                                ch.premiumUntil,
+                            ),
+                        ).split(" ")
+                        // formatTimestamp gives: [dd, MMMM, HH:mm]
+                        append(
+                            " - Free the ${dateParts.take(2).joinToString(" ")} at ${dateParts.getOrNull(2) ?: ""}",
+                        )
+                    }
+                }.trim()
+                setUrlWithoutDomain(
+                    "/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString",
+                )
+                date_upload = parseIsoDate(ch.createdAt)
+                chapter_number = ch.number
+            }
+        }.sortedByDescending { it.chapter_number }
     }
 
     fun formatTimestamp(timestamp: Long): String {
@@ -252,16 +197,10 @@ class PoseidonScans :
 
     private fun parseIsoDate(dateString: String?): Long {
         if (dateString.isNullOrBlank()) return 0L
-        val cleanedDateString = if (dateString.startsWith("\"\$D")) {
-            dateString.removePrefix("\"\$D").removeSuffix("\"")
-        } else if (dateString.startsWith("\$D")) {
-            dateString.removePrefix("\$D")
-        } else if (dateString.startsWith("\"") && dateString.endsWith("\"") && dateString.length > 2) {
-            dateString.substring(1, dateString.length - 1)
-        } else {
-            dateString
-        }
-        return isoDateFormatter.tryParse(cleanedDateString)
+
+        val cleaned = dateString.removeSurrounding("\"").removePrefix($$"$D")
+
+        return isoDateFormatter.tryParse(cleaned)
     }
 
     // =============================== Pages ================================
@@ -269,8 +208,7 @@ class PoseidonScans :
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val pageDataDto = response.extractNextJs<PageData>()
-            ?: throw Exception("Cant scape data from Next.js")
+        val pageDataDto = response.extractNextJs<PageData>() ?: throw Exception("Cant scape data from Next.js")
         if (pageDataDto.currentChapter.isPremium) {
             if (pageDataDto.sessionStatus == "unauthenticated") {
                 throw Exception("This chapter is premium. Please connect via the WebView to view.")
@@ -289,10 +227,10 @@ class PoseidonScans :
 
     override fun imageRequest(page: Page): Request {
         val refererUrl = page.url
-        val imageHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("Referer", if (refererUrl.isNotBlank()) refererUrl else "$baseUrl/")
-            .build()
+        val imageHeaders = headersBuilder().set(
+            "Accept",
+            "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        ).set("Referer", refererUrl.ifBlank { "$baseUrl/" }).build()
         return GET(page.imageUrl!!, imageHeaders)
     }
 
@@ -317,28 +255,18 @@ class PoseidonScans :
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select("div.grid a.block.group").mapNotNull { element ->
-            try {
-                val url = element.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val title = element.selectFirst("h2")?.text()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val mangas = document.select("div.grid a.block.group").map { element ->
+            val url = element.attr("href")
+            val title = element.selectFirst("h2")?.text()!!
 
-                val thumbnailUrlPath = element.selectFirst("img[alt]")
-                    ?.attr("srcset")
-                    ?.substringBefore(" ")
-                    ?.let {
-                        URLDecoder.decode(it, "UTF-8")
-                            .substringAfter("url=")
-                            .substringBefore("&")
-                    }
+            val thumbnailUrlPath = element.selectFirst("img[alt]")?.attr("srcset")?.substringBefore(" ")?.let {
+                URLDecoder.decode(it, "UTF-8").substringAfter("url=").substringBefore("&")
+            }
 
-                SManga.create().apply {
-                    this.setUrlWithoutDomain(url)
-                    this.title = title
-                    this.thumbnail_url = thumbnailUrlPath?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
-                }
-            } catch (e: Exception) {
-                Log.e("PoseidonScans", "Error parsing manga from HTML element", e)
-                null
+            SManga.create().apply {
+                this.setUrlWithoutDomain(url)
+                this.title = title
+                this.thumbnail_url = thumbnailUrlPath?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
             }
         }
 
