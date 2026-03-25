@@ -72,7 +72,6 @@ class MangaDenizi : HttpSource() {
 
     // =========================== Manga Details ============================
 
-
     override fun mangaDetailsParse(response: Response): SManga {
         val props = rawProps(response)
         return props["manga"]!!.parseAs<MangaItem>().toSManga()
@@ -134,5 +133,5 @@ class MangaDenizi : HttpSource() {
     }
 }
 
-    private fun SimpleDateFormat.tryParse(dateString: String): Long =
-        runCatching { parse(dateString)?.time ?: 0L }.getOrElse { 0L }
+private fun SimpleDateFormat.tryParse(dateString: String): Long =
+    runCatching { parse(dateString)?.time ?: 0L }.getOrElse { 0L }
