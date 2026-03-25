@@ -66,7 +66,7 @@ class MoeTruyen : HttpSource() {
     private fun latestMangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("a[href^=/manga/]")!!
         setUrlWithoutDomain(linkElement.absUrl("href"))
-        title = element.selectFirst("h3")!!.text().trim()
+        title = element.selectFirst("h3")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
