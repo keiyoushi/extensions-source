@@ -1,0 +1,11 @@
+ext {
+    extName = 'Dokiraw'
+    extClass = '.Dokiraw'
+    baseUrl = 'https://dokiraw.club'
+    themePkg = 'liliana'
+    extVersionCode = 1
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
