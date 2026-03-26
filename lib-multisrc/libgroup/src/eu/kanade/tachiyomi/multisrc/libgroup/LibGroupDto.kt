@@ -237,15 +237,20 @@ class Chapter(
 
     private fun getIsMangaOpen(branchId: Int? = null, defaultValue: Boolean = true): Boolean = first(branchId)?.restrictedView?.isOpen ?: defaultValue
 
-    fun toSChapter(slugUrl: String, branchId: Int? = null, isScanUser: Boolean): SChapter = SChapter.create().apply {
-        val paidChapterTitle = if (!getIsMangaOpen(branchId)) "\$Платная глава\$ " else ""
-        val chapterName = paidChapterTitle + "Том $volume. Глава $number"
-        name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
-        val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
-        url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
-        scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
-        date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
-        chapter_number = number.toFloat()
+    fun toSChapter(slugUrl: String, branchId: Int? = null, isScanUser: Boolean, showPaidChapter: Boolean = false): SChapter? {
+        // Return empty SChapter if manga is not open (restricted)
+        if (!showPaidChapter && !getIsMangaOpen(branchId)) return null
+
+        return SChapter.create().apply {
+            val paidChapterTitle = if (!getIsMangaOpen(branchId)) "$$ " else ""
+            val chapterName = paidChapterTitle + "Том $volume. Глава $number"
+            name = if (this@Chapter.name.isNullOrBlank()) chapterName else "$chapterName - ${this@Chapter.name}"
+            val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
+            url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
+            scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
+            date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
+            chapter_number = number.toFloat()
+        }
     }
 }
 

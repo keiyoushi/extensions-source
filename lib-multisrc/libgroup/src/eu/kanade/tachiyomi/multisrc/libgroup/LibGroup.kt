@@ -336,6 +336,7 @@ abstract class LibGroup(
         } else {
             null
         }
+        val showPaidChapters = preferences.getBoolean(PAID_CHAPTER_DISPLAY_PREF, false)
 
         return chaptersData.data.flatMap { chapter ->
             when {
@@ -345,19 +346,19 @@ abstract class LibGroup(
                         ?: chapter.branches.first().branchId
 
                     listOf(
-                        chapter.toSChapter(slugUrl, branch, isScanUser()),
+                        chapter.toSChapter(slugUrl, branch, isScanUser(), showPaidChapters),
                     )
                 }
 
                 (chapter.branchesCount > 1) && (sortingList == "ms_combining") -> {
                     chapter.branches.map { branch ->
-                        chapter.toSChapter(slugUrl, branch.branchId, isScanUser())
+                        chapter.toSChapter(slugUrl, branch.branchId, isScanUser(), showPaidChapters)
                     }
                 }
 
-                else -> listOf(chapter.toSChapter(slugUrl, isScanUser = isScanUser()))
+                else -> listOf(chapter.toSChapter(slugUrl, isScanUser = isScanUser(), showPaidChapter = showPaidChapters))
             }
-        }.reversed()
+        }.filterNotNull().reversed()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -379,6 +380,7 @@ abstract class LibGroup(
     override fun pageListRequest(chapter: SChapter): Request {
         // throw exception if old url
         if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
+        if (chapter.name.contains("$$")) throw Exception("Глава не куплена")
 
         return GET("$apiDomain/api/manga${chapter.url}", headers)
     }
@@ -615,6 +617,10 @@ abstract class LibGroup(
         private const val API_DOMAIN_TITLE = "Выбор домена API"
         private const val API_DOMAIN_DEFAULT = "https://api.cdnlibs.org"
 
+        private const val PAID_CHAPTER_DISPLAY_PREF = "MangaLibPaidChapterDisplay"
+
+        private const val PAID_CHAPTER_DISPLAY_TITLE = "Показывать все платные главы"
+
         private const val TOKEN_STORE = "TokenStore"
 
         val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
@@ -690,6 +696,13 @@ abstract class LibGroup(
             }
         }
 
+        val paidChapterDisplayPref = androidx.preference.CheckBoxPreference(screen.context).apply {
+            key = PAID_CHAPTER_DISPLAY_PREF // This key links to SharedPreferences
+            title = PAID_CHAPTER_DISPLAY_TITLE
+            summary = "Показывает не купленные главы и отмечает их $$ (может вызвать ошибки при обновлении/автозагрузке)"
+            setDefaultValue(false) // Default value when no saved value exists
+        }
+
         // Authentication fields
         val bearerTokenPref = androidx.preference.EditTextPreference(screen.context).apply {
             key = "bearer_token"
@@ -720,6 +733,7 @@ abstract class LibGroup(
         screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates()))
         screen.addPreference(scanlatorUsername)
         screen.addPreference(titleLanguagePref)
+        screen.addPreference(paidChapterDisplayPref)
         screen.addPreference(domainApiPref)
         screen.addPreference(bearerTokenPref)
         screen.addPreference(userIdPref)
