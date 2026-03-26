@@ -165,7 +165,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")?.text() ?: ""
+        title = document.selectFirst("h1")!!.text()
 
         thumbnail_url = document.selectFirst("img[src*='image.mangatr.site']")?.absUrl("src")
             ?: document.selectFirst("img[title]")?.absUrl("src")
