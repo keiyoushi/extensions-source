@@ -111,7 +111,22 @@ class PoseidonScans :
 
             status = parseStatus(mangaDto.status)
 
-            description = mangaDto.description.trim().takeIf { it.isNotBlank() }
+            var potentialDescription: String? = null
+
+            val jsonDescription = mangaDto.description.trim()
+            if (!jsonDescription.matches(Regex("^\\$[a-f0-9]+$"))) {
+                potentialDescription = jsonDescription
+            }
+
+            // Workaround for cases where description is a pointer to a chunk in the RSC data.
+            description = potentialDescription.takeIf { !it.isNullOrBlank() }
+                ?: document.selectFirst("p.text-gray-300.leading-relaxed")
+                    ?.text()
+                    ?.trim()
+                    ?.replaceFirst("Dans : ${mangaDto.title}", "")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+
             setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }
     }
