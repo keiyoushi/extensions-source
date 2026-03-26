@@ -42,7 +42,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a.pull-left")!!
         setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("h3.media-heading a")?.text() ?: ""
+        title = element.selectFirst("h3.media-heading a")!!.text()
         thumbnail_url = link.selectFirst("img.media-object")?.absUrl("src")
     }
 
