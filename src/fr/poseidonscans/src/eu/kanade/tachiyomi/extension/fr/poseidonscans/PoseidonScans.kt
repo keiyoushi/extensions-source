@@ -123,7 +123,7 @@ class PoseidonScans :
                 ?: document.selectFirst("p.text-gray-300.leading-relaxed")
                     ?.text()
                     ?.trim()
-                    ?.replaceFirst("Dans : ${mangaDto.title}", "")
+                    ?.replaceFirst("${mangaDto.title} : ", "")
                     ?.trim()
                     ?.takeIf { it.isNotBlank() }
 
