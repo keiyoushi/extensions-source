@@ -90,9 +90,9 @@ open class MangaTaro(
                     .map {
                         SManga.create().apply {
                             url = MangaUrl(it.id.toString(), it.slug).toJsonString()
-                            title = it.title
+                            title = it.title.unescapeHtml()
                             thumbnail_url = it.thumbnail
-                            description = it.description
+                            description = it.description.unescapeHtml()
                             status = when (it.status) {
                                 "Ongoing" -> SManga.ONGOING
                                 "Completed" -> SManga.COMPLETED
@@ -147,9 +147,9 @@ open class MangaTaro(
             .map {
                 SManga.create().apply {
                     url = MangaUrl(id = it.id, slug = it.url.toSlug()).toJsonString()
-                    title = it.title
+                    title = it.title.unescapeHtml()
                     thumbnail_url = it.cover
-                    description = it.description
+                    description = it.description.unescapeHtml()
                     status = when (it.status) {
                         "Ongoing" -> SManga.ONGOING
                         "Completed" -> SManga.COMPLETED
@@ -215,8 +215,8 @@ open class MangaTaro(
 
         return SManga.create().apply {
             url = MangaUrl(data.id.toString(), data.slug).toJsonString()
-            title = Parser.unescapeEntities(data.title.rendered, false)
-            description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
+            title = data.title.rendered.unescapeHtml()
+            description = Jsoup.parseBodyFragment(data.content.rendered).wholeText().unescapeHtml()
             genre = buildSet {
                 addAll(data.embedded.getTerms("post_tag"))
                 if (listOf("Manhwa", "Manhua", "Manga").none { this.contains(it) }) {
@@ -277,10 +277,8 @@ open class MangaTaro(
                 name = buildString {
                     append("Chapter ")
                     append(it.chapter)
-                    it.title.also { title ->
-                        if (title !in placeholders) {
-                            append(": ", title)
-                        }
+                    it.title?.takeIf { it !in placeholders }?.let { title ->
+                        append(": ", title.unescapeHtml())
                     }
                 }
                 it.groupName.let { group ->
@@ -460,4 +458,13 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) :
         private const val GROUP_PREF = "groupPref"
         private const val RESTART_APP = "Restart app to apply new setting."
     }
+}
+
+internal fun String.unescapeHtml(): String {
+    var decoded = this
+    do {
+        val previous = decoded
+        decoded = Parser.unescapeEntities(decoded, false)
+    } while (decoded != previous)
+    return decoded
 }
