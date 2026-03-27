@@ -230,20 +230,14 @@ abstract class Iken(
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
 
-        val filters = mutableListOf<Filter<*>>().apply {
-            addIfNotEmpty(statusFilterOptions) {
-                StatusFilter(intl["status_filter_title"], statusFilterKey, statusFilterOptions)
-            }
-            addIfNotEmpty(typeFilterOptions) {
-                TypeFilter(intl["type_filter_title"], typeFilterKey, typeFilterOptions)
-            }
-            addIfNotEmpty(sortOptions) {
-                SortFilter(intl["sort_by_title"], sortFilterKey, sortOptions)
-            }
-            addIfNotEmpty(sortDirectionOptions) {
-                SortFilter(intl["sort_direction_title"], sortDirectionFilterKey, sortDirectionOptions)
-            }
-        }
+        val filters = mutableListOf<Filter<*>>(
+            StatusFilter(intl["status_filter_title"], statusFilterKey, statusFilterOptions),
+            TypeFilter(intl["type_filter_title"], typeFilterKey, typeFilterOptions),
+            SortFilter(intl["sort_by_title"], sortFilterKey, sortOptions),
+            SortFilter(intl["sort_direction_title"], sortDirectionFilterKey, sortDirectionOptions),
+        ).filterNot { filter ->
+            filter is Filter.Select<*> && filter.values.isEmpty()
+        }.toMutableList()
 
         if (genresList.isNotEmpty()) {
             filters +=
@@ -265,10 +259,6 @@ abstract class Iken(
         }
 
         return FilterList(filters)
-    }
-
-    private fun <T> MutableList<T>.addIfNotEmpty(options: List<*>, filter: () -> T) {
-        if (options.isNotEmpty()) add(filter())
     }
 
     /**
