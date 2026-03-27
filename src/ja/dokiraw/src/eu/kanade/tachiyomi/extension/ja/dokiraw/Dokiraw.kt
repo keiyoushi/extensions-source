@@ -92,7 +92,6 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
     override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
 
     override fun pageListParse(document: Document): List<Page> {
-
         val imageElements = document.select("div.page-chapter img")
 
         return imageElements.mapIndexed { index, element ->
