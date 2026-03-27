@@ -437,7 +437,7 @@ abstract class Iken(
     companion object {
         const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
-        const val V_SHIELD_MESSAGE = "vShield challenge detected. Open in WebView to solve it"
+        const val V_SHIELD_MESSAGE = "Open in WebView to pass bot verification"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val vShieldRegex = Regex("""balooPow\.min\.js|Completing challenge|publicSalt|_2__vShield_v""")
         val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
