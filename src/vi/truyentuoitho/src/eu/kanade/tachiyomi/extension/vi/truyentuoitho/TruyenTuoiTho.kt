@@ -5,9 +5,10 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -26,9 +27,16 @@ class TruyenTuoiTho :
         .rateLimit(3)
         .build()
 
+    private val chapterDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
+
     override val filterNonMangaItems = false
 
     override val useNewChapterEndpoint = true
+
+    override fun parseChapterDate(date: String?): Long {
+        val parsed = chapterDateFormat.tryParse(date?.trim())
+        return if (parsed != 0L) parsed else super.parseChapterDate(date)
+    }
 
     override fun xhrChaptersRequest(mangaUrl: String): Request {
         val normalizedMangaUrl = mangaUrl.removeSuffix("/")
@@ -44,43 +52,38 @@ class TruyenTuoiTho :
         val defaultPages = super.pageListParse(document)
         if (defaultPages.isNotEmpty()) return defaultPages
 
-        val script = document.select("div.reading-content script")
-            .asSequence()
-            .map { it.data() }
-            .firstOrNull { it.contains("split('').reverse().join('')") && it.contains("JSON[atob('cGFyc2U=')]") }
+        val decodedPayload = document.select("div.reading-content script")
+            .map { script ->
+                runCatching { decodeProtectedPayload(script.data()) }.getOrNull()
+            }
+            .firstInstanceOrNull<String>()
             ?: return emptyList()
 
-        val payloadRegex = Regex(
-            """const\s+[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?='([^']+)'""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
-        val match = payloadRegex.find(script) ?: return emptyList()
-
-        val key = runCatching {
-            buildString {
-                append(match.groupValues[1].decodeBase64())
-                append(match.groupValues[2].decodeBase64())
-                append(match.groupValues[3].decodeBase64())
-                append(match.groupValues[4].decodeBase64())
-            }
-        }.getOrElse { return emptyList() }
-        if (key.isEmpty()) return emptyList()
-
-        val encrypted = match.groupValues[5]
-        val decodedPayload = runCatching {
-            encrypted.reversed().decodeBase64().xorWithKey(key)
-        }.getOrElse { return emptyList() }
         val images = runCatching {
-            json.parseToJsonElement(decodedPayload)
-                .jsonObject["images"]
-                ?.jsonArray
-                ?.map { it.jsonPrimitive.content }
-                .orEmpty()
+            decodedPayload.parseAs<ChapterImagesPayload>().images
         }.getOrElse { emptyList() }
 
         return images.mapIndexed { index, imageUrl ->
             Page(index, document.location(), imageUrl)
         }
+    }
+
+    private fun decodeProtectedPayload(script: String): String {
+        if (!script.contains("split('').reverse().join('')") || !script.contains("JSON[atob('cGFyc2U=')]")) {
+            error("Not a protected payload script")
+        }
+
+        val match = protectedPayloadRegex.find(script) ?: error("Protected payload not found")
+        val key = buildString {
+            append(match.groupValues[1].decodeBase64())
+            append(match.groupValues[2].decodeBase64())
+            append(match.groupValues[3].decodeBase64())
+            append(match.groupValues[4].decodeBase64())
+        }
+        if (key.isEmpty()) error("Protected payload key is empty")
+
+        val encrypted = match.groupValues[5]
+        return encrypted.reversed().decodeBase64().xorWithKey(key)
     }
 
     private fun String.decodeBase64(): String = String(Base64.decode(this, Base64.DEFAULT), Charsets.UTF_8)
@@ -91,5 +94,17 @@ class TruyenTuoiTho :
             output[index] = (ch.code xor key[index % key.length].code).toChar()
         }
         return String(output)
+    }
+
+    @Serializable
+    private data class ChapterImagesPayload(
+        val images: List<String> = emptyList(),
+    )
+
+    companion object {
+        private val protectedPayloadRegex = Regex(
+            """const\s+[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?='([^']+)'""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
     }
 }
