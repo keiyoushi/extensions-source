@@ -157,23 +157,10 @@ class Komiku : HttpSource() {
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
                 setUrlWithoutDomain(element.selectFirst("a:has(h3)")!!.attr("href"))
-
-                // scraped image doesn't make for a good cover; so try to transform it
-                // make it take bad cover instead of null if it contains upload date as those URLs aren't very useful
-                val thumbnail = element.select("img").attr("abs:src").substringBefore("?")
-                if (thumbnail.contains(coverUploadRegex)) {
-                    thumbnail_url = thumbnail
-                } else {
-                    thumbnail_url = thumbnail.replace(coverRegex, "/Komik-")
-                }
+                thumbnail_url = element.select("img").attr("abs:src").substringBefore("?")
             }
         }
         val hasNextPage = document.selectFirst("span[hx-get]") != null || mangas.size >= 10
         return MangasPage(mangas, hasNextPage)
-    }
-
-    companion object {
-        private val coverRegex = Regex("""(/Manga-|/Manhua-|/Manhwa-)""")
-        private val coverUploadRegex = Regex("""/uploads/\d\d\d\d/\d\d/""")
     }
 }
