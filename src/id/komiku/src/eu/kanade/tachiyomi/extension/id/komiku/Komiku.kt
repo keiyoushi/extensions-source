@@ -32,18 +32,18 @@ class Komiku : HttpSource() {
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = if (page == 1) {
-        GET("$baseUrlApi/other/hot/?orderby=meta_value_num", headers)
+        GET("$baseUrlApi/manga/?orderby=meta_value_num", headers)
     } else {
-        GET("$baseUrlApi/other/hot/page/$page/?orderby=meta_value_num", headers)
+        GET("$baseUrlApi/manga/page/$page/?orderby=meta_value_num", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request = if (page == 1) {
-        GET("$baseUrlApi/other/hot/?orderby=modified", headers)
+        GET("$baseUrlApi/manga/?orderby=modified", headers)
     } else {
-        GET("$baseUrlApi/other/hot/page/$page/?orderby=modified", headers)
+        GET("$baseUrlApi/manga/page/$page/?orderby=modified", headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
