@@ -29,7 +29,7 @@ class Type : UriPartFilter("Tipe", "tipe", typeList)
 class Order : UriPartFilter("Order", "orderby", orderList)
 class Genre1 : UriPartFilter("Genre 1", "genre", genreList)
 class Genre2 : UriPartFilter("Genre 2", "genre2", genreList)
-class Status : UriPartFilter("Status", "status", statusList)
+class Status : UriPartFilter("Status", "statusmanga", statusList)
 
 fun getKomikuFilterList() = FilterList(
     Type(),
