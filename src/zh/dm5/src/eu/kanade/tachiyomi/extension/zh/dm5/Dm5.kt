@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.dm5
 
-import android.content.SharedPreferences
 import android.util.Log
 import android.webkit.CookieManager
 import android.widget.Toast
@@ -16,9 +15,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.unpacker.Unpacker
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -32,11 +30,9 @@ class Dm5 :
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫屋"
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(CommentsInterceptor)
-        .build()
+    override val client = network.cloudflareClient.newBuilder().addInterceptor(CommentsInterceptor).build()
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences by getPreferencesLazy()
     override val baseUrl = preferences.getString(MIRROR_PREF, MIRROR_ENTRIES[0])!!
 
     // Some mangas are blocked without this
@@ -87,20 +83,21 @@ class Dm5 :
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         // May need to click button on website to read
+        document.selectFirst(".warning-bar")?.let { throw Exception(it.text()) }
         val container = document.selectFirst("div#chapterlistload")
             ?: throw Exception("请到 WebView 确认；切换网络环境后可尝试扩展设置里面的“（动漫屋专用）清除 Cookie”")
-        val li = container.select("li > a").map {
-            SChapter.create().apply {
-                url = it.attr("href")
-                name = if (it.selectFirst("span.detail-lock, span.view-lock") != null) {
-                    "\uD83D\uDD12"
-                } else {
-                    ""
-                } + (it.selectFirst("p.title")?.text() ?: it.text())
+        val titles = document.select(".detail-list-title > a.block").map { it.text().substringBefore('（') }
 
-                val dateStr = it.selectFirst("p.tip")
-                if (dateStr != null) {
-                    date_upload = dateFormat.parse(dateStr.text())?.time ?: 0L
+        val li = container.select("> ul").flatMapIndexed { i, ul ->
+            ul.select("li > a").map {
+                SChapter.create().apply {
+                    url = it.attr("href")
+                    name = it.selectFirst("p.title")?.text() ?: it.text()
+                    it.selectFirst(".detail-lock, .view-lock")?.let { name = "\uD83D\uDD12 $name" }
+                    scanlator = titles[i]
+                    it.selectFirst("p.tip")?.let { date ->
+                        date_upload = dateFormat.parse(date.text())?.time ?: 0L
+                    }
                 }
             }
         }
@@ -117,6 +114,7 @@ class Dm5 :
             li
         }
     }
+
     override fun chapterListSelector(): String = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
@@ -184,6 +182,7 @@ class Dm5 :
         val query = script.substringAfter("pix+pvalue[i]+\"").substringBefore("\"")
         return pix + pvalue + query
     }
+
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
