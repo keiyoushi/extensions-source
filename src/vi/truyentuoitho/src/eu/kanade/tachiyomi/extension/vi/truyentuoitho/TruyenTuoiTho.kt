@@ -20,7 +20,7 @@ class TruyenTuoiTho :
         "TruyenTuoiTho",
         "https://truyentuoitho.com",
         "vi",
-        SimpleDateFormat("dd/MM/yyyy", Locale("vi")),
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     ) {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
