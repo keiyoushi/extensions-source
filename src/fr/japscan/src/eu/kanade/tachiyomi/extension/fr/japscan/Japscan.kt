@@ -301,7 +301,6 @@ class Japscan :
 
             val stripsMatch = stripsArrayRegex.find(pageContent)
             val stripsContent = stripsMatch?.groupValues?.get(1) ?: ""
-
             if (stripsContent != "") {
                 val items = elementRegex.findAll(stripsContent).map {
                     val uuid = it.groupValues[1]
@@ -328,13 +327,22 @@ class Japscan :
             }
         }
         if (captchaTry == 3) {
-            throw Exception("Impossible de passer le captcha.")
+            throw Exception("Impossible de passer le captcha. Veuillez réessayer.")
         }
 
-        val pValue = Regex("""p:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
-        val vValue = Regex("""v:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
-        val ilValue = Regex("""il:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
+        val keyValueVariableName = Regex("""\bfor\s*\(\s*var\s+i\s*=\s*0\s*;\s*i\s*<\s*([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*;\s*i\+\+\s*\)\s*s\s*\+=\s*\1\[i\]\s*;""").find(pageContent)?.groups?.get(1)?.value
+        val keyArrayLineRegex = Regex("""(?m)^\s*var\s+$keyValueVariableName\s*=\s*\[.*\] *;?\s*$""")
+        val quoteRegex = Regex(""""([^"]*)"""")
 
+        val result = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
+            val base64 = quoteRegex.findAll(headerLine).map { it.groupValues[1] }.joinToString("")
+            val decoded = kotlin.io.encoding.Base64.decode(base64)
+            String(decoded, Charsets.UTF_8)
+        } ?: throw Exception("Impossible de récupérer les values clés")
+
+        val pValue = Regex(""""p":\s*"([^"]*)"""").find(result)?.groups?.get(1)?.value
+        val vValue = Regex(""""v":\s*"([^"]*)"""").find(result)?.groups?.get(1)?.value
+        val ilValue = Regex(""""il":\s*"([^"]*)"""").find(result)?.groups?.get(1)?.value
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
 

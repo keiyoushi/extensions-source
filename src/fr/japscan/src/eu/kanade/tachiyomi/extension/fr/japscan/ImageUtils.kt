@@ -11,31 +11,70 @@ fun decodeBase64ToImage(b64: String): Bitmap {
 }
 
 fun edgeDifference(top: Bitmap, bottom: Bitmap): Long {
-    // Compare the bottom row of `top` with the top row of `bottom`
-    // Return the sum of absolute differences across RGB channels for each column
-    val topY = top.height - 1
-    val bottomY = 0
-    val w = minOf(top.width, bottom.width) // only compare overlapping width
-    var diff: Long = 0
-    for (x in 0 until w) {
-        val pxTop = top.getPixel(x, topY)
-        val pxBottom = bottom.getPixel(x, bottomY)
+    val ignoreTopRows = 3 // ignore first 3 rows at the top of each segment (fully noised)
+    val rows = 5 // number of rows to compare (bottom of top vs top of bottom)
+    val maxOffset = 1 // allow vertical shift -1..+1
+    val w = minOf(top.width, bottom.width)
 
-        // Extract RGB components from packed int pixel
-        val r1 = (pxTop shr 16) and 0xFF
-        val g1 = (pxTop shr 8) and 0xFF
-        val b1 = pxTop and 0xFF
+    val topH = top.height
+    val bottomH = bottom.height
 
-        val r2 = (pxBottom shr 16) and 0xFF
-        val g2 = (pxBottom shr 8) and 0xFF
-        val b2 = pxBottom and 0xFF
+    // Determine indices for the 5 rows taken from the bottom of `top`,
+    // but ensure we did not use any of the first 3 noisy rows.
+    // We want the last `rows` rows of `top`, but each index must be >= ignoreTopRows.
+    val topRowStart = (topH - rows).coerceAtLeast(ignoreTopRows)
+    val topRowIndices = IntArray(rows) { r -> (topRowStart + r).coerceIn(0, topH - 1) }
 
-        // Accumulate L1 color difference
-        diff += abs(r1 - r2)
-        diff += abs(g1 - g2)
-        diff += abs(b1 - b2)
+    // Determine indices for the 5 rows taken from the top of `bottom`,
+    // skipping its first `ignoreTopRows` rows.
+    val bottomRowStart = ignoreTopRows.coerceAtMost(bottomH - rows)
+    val bottomRowIndicesBase = IntArray(rows) { r -> (bottomRowStart + r).coerceIn(0, bottomH - 1) }
+
+    var bestScore = Long.MAX_VALUE
+
+    for (offset in -maxOffset..maxOffset) {
+        // per-column list of differences across the rows considered for this offset
+        val perColDiffs = Array(w) { mutableListOf<Int>() }
+
+        for (r in 0 until rows) {
+            val topY = topRowIndices[r]
+            val bottomY = (bottomRowIndicesBase[r] + offset).coerceIn(0, bottomH - 1)
+            for (x in 0 until w) {
+                val pxTop = top.getPixel(x, topY)
+                val pxBottom = bottom.getPixel(x, bottomY)
+
+                // Convert to grayscale (luma) for robustness
+                val r1 = (pxTop shr 16) and 0xFF
+                val g1 = (pxTop shr 8) and 0xFF
+                val b1 = pxTop and 0xFF
+                val l1 = (0.2126 * r1 + 0.7152 * g1 + 0.0722 * b1).toInt()
+
+                val r2 = (pxBottom shr 16) and 0xFF
+                val g2 = (pxBottom shr 8) and 0xFF
+                val b2 = pxBottom and 0xFF
+                val l2 = (0.2126 * r2 + 0.7152 * g2 + 0.0722 * b2).toInt()
+
+                perColDiffs[x].add(abs(l1 - l2))
+            }
+        }
+
+        // For each column take the median of the collected diffs, then sum across columns
+        var score: Long = 0
+        for (x in 0 until w) {
+            val list = perColDiffs[x].sorted()
+            val median = if (list.isEmpty()) {
+                0
+            } else {
+                val m = list.size / 2
+                if (list.size % 2 == 1) list[m] else (list[m - 1] + list[m]) / 2
+            }
+            score += median
+        }
+
+        if (score < bestScore) bestScore = score
     }
-    return diff
+
+    return bestScore
 }
 
 fun computeCostMatrix(segments: List<Bitmap>): Array<LongArray> {
