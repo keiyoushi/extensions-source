@@ -11,7 +11,7 @@ class Ariverse :
         "Ariverse",
         "https://arigl.com",
         "vi",
-        SimpleDateFormat("dd/MM/yyyy", Locale("vi")),
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     ) {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
