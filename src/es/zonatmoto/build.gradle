@@ -1,0 +1,8 @@
+ext {
+    extName = "Zonatmo.to (unoriginal)"
+    extClass = '.ZonatmoTo'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
