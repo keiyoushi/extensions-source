@@ -95,7 +95,7 @@ class HentaiCosplay : HttpSource() {
         return super.fetchLatestUpdates(page)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently/page/$page/", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/search/page/$page/", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
