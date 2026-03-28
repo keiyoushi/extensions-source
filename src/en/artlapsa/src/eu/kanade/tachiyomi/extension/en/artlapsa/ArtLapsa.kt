@@ -21,9 +21,9 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
         return MangasPage(mangas, false)
     }
 
-    override fun genresRequest() = GET("$baseUrl/search/", headers)
+    override fun genresRequest() = GET("$baseUrl/search", headers)
 
-    override fun parseGenres(document: Document): List<Genre> = document.select("[x-data*=genre] button").map { Genre(it.text(), it.attr("wire:key")) }
+    override fun parseGenres(document: Document): List<Genre> = document.select("[wire:model.live=genre] option[value~=\d+]").map { Genre(it.text(), it.attr("value")) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
