@@ -123,7 +123,7 @@ abstract class Iken(
             ?: throw Exception("Invalid URL format")
 
         val manga = SManga.create().apply {
-            this@apply.url = "$slug#"
+            this@apply.url = slug
         }
 
         return fetchMangaDetails(manga)
@@ -230,20 +230,14 @@ abstract class Iken(
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
 
-        val filters = mutableListOf<Filter<*>>().apply {
-            addIfNotEmpty(statusFilterOptions) {
-                StatusFilter(intl["status_filter_title"], statusFilterKey, statusFilterOptions)
-            }
-            addIfNotEmpty(typeFilterOptions) {
-                TypeFilter(intl["type_filter_title"], typeFilterKey, typeFilterOptions)
-            }
-            addIfNotEmpty(sortOptions) {
-                SortFilter(intl["sort_by_title"], sortFilterKey, sortOptions)
-            }
-            addIfNotEmpty(sortDirectionOptions) {
-                SortFilter(intl["sort_direction_title"], sortDirectionFilterKey, sortDirectionOptions)
-            }
-        }
+        val filters = mutableListOf<Filter<*>>(
+            StatusFilter(intl["status_filter_title"], statusFilterKey, statusFilterOptions),
+            TypeFilter(intl["type_filter_title"], typeFilterKey, typeFilterOptions),
+            SortFilter(intl["sort_by_title"], sortFilterKey, sortOptions),
+            SortFilter(intl["sort_direction_title"], sortDirectionFilterKey, sortDirectionOptions),
+        ).filterNot { filter ->
+            filter is Filter.Select<*> && filter.values.isEmpty()
+        }.toMutableList()
 
         if (genresList.isNotEmpty()) {
             filters +=
@@ -265,10 +259,6 @@ abstract class Iken(
         }
 
         return FilterList(filters)
-    }
-
-    fun <T> MutableList<T>.addIfNotEmpty(options: List<*>, filter: () -> T) {
-        if (options.isNotEmpty()) add(filter())
     }
 
     /**
@@ -332,27 +322,34 @@ abstract class Iken(
 
     // details
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.substringBeforeLast("#")
-
-        return "$baseUrl/series/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<Manga>()!!.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val body = response.body.string()
+        val manga = body.extractNextJsRsc<Manga>()!!
+
+        return manga.toSManga().apply {
+            if (manga.postContent?.startsWith('$') == true) {
+                body.extractNextJsRsc<DescriptionDto>()?.description.let {
+                    description = manga.getDescription(it)
+                }
+            }
+        }
+    }
 
     // chapters
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", rscHeaders)
+    override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val id = response.request.url.fragment!!
         val slug = response.request.url.pathSegments.last()
         val body = response.body.string()
 
-        // Detect vShield / BalooPow challenge pagege
-        if (vShieldRegex.containsMatchIn(body)) throw Exception("vShield challenge detected. Open in WebView to solve it.")
+        // Detect vShield / BalooPow challenge page
+        if (vShieldRegex.containsMatchIn(body)) throw Exception(V_SHIELD_MESSAGE)
 
         launchIO { updateViews(id.toInt()) }
 
@@ -383,7 +380,7 @@ abstract class Iken(
         val document = response.asJsoup()
 
         if (document.select("#publicSalt, #challenge").isNotEmpty()) {
-            throw Exception("vShield challenge detected. Open in WebView to solve it.")
+            throw Exception(V_SHIELD_MESSAGE)
         }
 
         if (document.selectFirst("svg.lucide-lock") != null) {
@@ -430,6 +427,7 @@ abstract class Iken(
     companion object {
         const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        const val V_SHIELD_MESSAGE = "Open in WebView to pass bot verification"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val vShieldRegex = Regex("""balooPow\.min\.js|Completing challenge|publicSalt|_2__vShield_v""")
         val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
