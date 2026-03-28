@@ -151,9 +151,9 @@ class DamCoNuong : HttpSource() {
     }
 
     private fun parseChapterDate(dateStr: String?): Long {
-        val relativeDate = parseRelativeDate(dateStr)
-        if (relativeDate != 0L) return relativeDate
-        return DATE_FORMAT.tryParse(dateStr)
+        return parseRelativeDate(dateStr)
+            .takeIf { it != 0L }
+            ?: DATE_FORMAT.tryParse(dateStr)
     }
 
     private fun parseRelativeDate(dateStr: String?): Long {
