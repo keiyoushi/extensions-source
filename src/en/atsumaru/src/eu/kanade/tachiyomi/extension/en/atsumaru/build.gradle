@@ -1,0 +1,10 @@
+package eu.kanade.tachiyomi.extension.en.atsumaru
+
+ext {
+    extName = 'Atsumaru'
+    extClass = '.Atsumaru'
+    extVersionCode = 13
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
