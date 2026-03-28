@@ -3,8 +3,8 @@ ext {
     extClass = '.Hwago'
     themePkg = 'madara'
     baseUrl = 'https://01.hwago.xyz'
-    overrideVersionCode = 3
-    isNsfw = false
+    overrideVersionCode = 4
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

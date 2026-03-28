@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -73,6 +74,9 @@ class Japscan :
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2)
         .build()
+
+    private val keyValueVariableNameRegex = Regex("""\bfor\s*\(\s*var\s+i\s*=\s*0\s*;\s*i\s*<\s*([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*;\s*i\+\+\s*\)\s*s\s*\+=\s*\1\[i\]\s*;""")
+    private val quoteRegex = Regex(""""([^"]*)"""")
 
     companion object {
         val dateFormat by lazy {
@@ -283,6 +287,13 @@ class Japscan :
         dateFormat.parse(date)!!.time
     }.getOrDefault(0L)
 
+    @Serializable
+    class KeyValues(
+        val p: String,
+        val v: String,
+        val il: String,
+    )
+
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
 
@@ -301,7 +312,6 @@ class Japscan :
 
             val stripsMatch = stripsArrayRegex.find(pageContent)
             val stripsContent = stripsMatch?.groupValues?.get(1) ?: ""
-
             if (stripsContent != "") {
                 val items = elementRegex.findAll(stripsContent).map {
                     val uuid = it.groupValues[1]
@@ -328,12 +338,17 @@ class Japscan :
             }
         }
         if (captchaTry == 3) {
-            throw Exception("Impossible de passer le captcha.")
+            throw Exception("Impossible de passer le captcha. Veuillez réessayer.")
         }
 
-        val pValue = Regex("""p:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
-        val vValue = Regex("""v:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
-        val ilValue = Regex("""il:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
+        val keyValueVariableName = keyValueVariableNameRegex.find(pageContent)?.groups?.get(1)?.value
+        val keyArrayLineRegex = Regex("""(?m)^\s*var\s+$keyValueVariableName\s*=\s*\[.*\] *;?\s*$""")
+
+        val keyValues = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
+            val base64 = quoteRegex.findAll(headerLine).map { it.groupValues[1] }.joinToString("")
+            val decoded = kotlin.io.encoding.Base64.decode(base64)
+            String(decoded, Charsets.UTF_8).parseAs<KeyValues>()
+        } ?: throw Exception("Impossible de récupérer les values clés")
 
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
@@ -351,7 +366,7 @@ class Japscan :
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(
                         """
-                            Object.defineProperty(Object.prototype, '$ilValue', {
+                            Object.defineProperty(Object.prototype, '${keyValues.il}', {
                                 set: function(value) {
                                     window.$interfaceName.passPayload(JSON.stringify(value));
                                     Object.defineProperty(this, '_imagesLink', {
@@ -378,7 +393,7 @@ class Japscan :
             )
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
@@ -390,7 +405,7 @@ class Japscan :
             .images
             .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
-                Page(i, imageUrl = "$url&$pValue=$vValue")
+                Page(i, imageUrl = "$url&${keyValues.p}=${keyValues.v}")
             }
 
         return Observable.just(images)

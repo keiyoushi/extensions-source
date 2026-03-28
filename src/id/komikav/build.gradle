@@ -3,8 +3,8 @@ ext {
     extClass = '.Apkomik'
     themePkg = 'mangathemesia'
     baseUrl = 'https://apkomik.cc'
-    overrideVersionCode = 2
-    isNsfw = true
+    overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

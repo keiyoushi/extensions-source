@@ -3,8 +3,8 @@ ext {
     extClass = '.CosmicScansID'
     themePkg = 'mangathemesia'
     baseUrl = 'https://lc5.cosmicscans.asia'
-    overrideVersionCode = 17
-    isNsfw = true
+    overrideVersionCode = 18
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
