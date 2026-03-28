@@ -46,7 +46,7 @@ class ScanManga :
 
     override val supportsLatest = true
 
-    protected val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
         .addNetworkInterceptor { chain ->
@@ -203,7 +203,7 @@ class ScanManga :
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
         val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
             ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
 
