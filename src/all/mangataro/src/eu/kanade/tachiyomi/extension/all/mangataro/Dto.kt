@@ -150,7 +150,7 @@ class ProjectList(
         val cover: String,
     ) {
         fun toSManga() = SManga.create().apply {
-            title = this@MangaDto.title
+            title = this@MangaDto.title.unescapeHtml()
             url = MangaUrl(id.toString(), slug, group).toJsonString()
             thumbnail_url = cover
         }

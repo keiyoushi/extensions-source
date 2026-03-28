@@ -3,8 +3,8 @@ ext {
     extClass = '.KlikManga'
     themePkg = 'madara'
     baseUrl = 'https://klikmanga.org'
-    overrideVersionCode = 4
-    isNsfw = true
+    overrideVersionCode = 5
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

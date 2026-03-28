@@ -1,8 +1,8 @@
 ext {
     extName = 'West Manga'
     extClass = '.WestManga'
-    extVersionCode = 39
-    isNsfw = true
+    extVersionCode = 40
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
