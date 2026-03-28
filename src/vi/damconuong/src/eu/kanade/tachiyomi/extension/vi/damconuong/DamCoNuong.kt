@@ -150,11 +150,9 @@ class DamCoNuong : HttpSource() {
         }
     }
 
-    private fun parseChapterDate(dateStr: String?): Long {
-        return parseRelativeDate(dateStr)
-            .takeIf { it != 0L }
-            ?: DATE_FORMAT.tryParse(dateStr)
-    }
+    private fun parseChapterDate(dateStr: String?): Long = parseRelativeDate(dateStr)
+        .takeIf { it != 0L }
+        ?: DATE_FORMAT.tryParse(dateStr)
 
     private fun parseRelativeDate(dateStr: String?): Long {
         if (dateStr.isNullOrBlank()) return 0L
