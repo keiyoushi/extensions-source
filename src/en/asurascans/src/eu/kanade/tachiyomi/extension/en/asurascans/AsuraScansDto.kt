@@ -28,7 +28,9 @@ class MangaDetailsDto(
 
 @Serializable
 class MangaDto(
-    private val slug: String,
+    @SerialName("public_url")
+    val publicUrl: String,
+    val slug: String,
     private val title: String,
     private val cover: String,
     private val author: String? = null,
@@ -72,8 +74,8 @@ val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply
 }
 
 @Serializable
-class ChapterWrapperDto(
-    val chapter: ChapterDto,
+class ChapterListDto(
+    val chapters: List<ChapterDto> = emptyList(),
 )
 
 @Serializable
@@ -82,7 +84,6 @@ class ChapterDto(
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String = "",
     @SerialName("is_locked") val isLocked: Boolean = false,
-    val pages: List<PageDto>? = emptyList(),
     @SerialName("series_slug") private val seriesSlug: String? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
@@ -98,6 +99,33 @@ class ChapterDto(
 }
 
 @Serializable
+class PremiumPageListDto(
+    val data: ChapterWrapper,
+) {
+    @Serializable
+    class ChapterWrapper(
+        val chapter: PageListDto,
+    )
+}
+
+@Serializable
+class PageListDto(
+    val pages: List<PageDto>,
+)
+
+@Serializable
 class PageDto(
-    val url: String = "",
+    val url: String,
+    val tiles: List<Int>? = null,
+    @SerialName("tile_cols")
+    val tileCols: Int? = null,
+    @SerialName("tile_rows")
+    val tileRows: Int? = null,
+)
+
+@Serializable
+class PageData(
+    val tiles: List<Int>,
+    val tileCols: Int,
+    val tileRows: Int,
 )

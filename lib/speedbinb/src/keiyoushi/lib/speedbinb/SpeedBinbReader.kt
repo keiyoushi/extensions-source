@@ -19,7 +19,7 @@ import org.jsoup.nodes.Document
  *
  * Versions (`SpeedBinb.VERSION` in DevTools console):
  * - Minimum version tested: `1.6650.0001`
- * - Maximum version tested: `1.6930.1101`
+ * - Maximum version tested: `1.7070.1001`
  *
  * These versions are only for reference purposes, and does not reflect the actual range
  * of versions this class can scrape.
@@ -173,7 +173,8 @@ private fun HttpUrl.Builder.buildImageUrl(
             contentItem.requestToken?.let { setQueryParameter("p", it) }
 
             if (!isSingleQuality) {
-                setQueryParameter("q", if (highQualityMode) "0" else "1")
+                val isTrial = contentItem.viewMode == ViewMode.NON_MEMBER_TRIAL || contentItem.viewMode == ViewMode.MEMBER_TRIAL
+                setQueryParameter("q", if (highQualityMode && !isTrial) "0" else "1")
             }
 
             setQueryParameter("vm", contentItem.viewMode.toString())

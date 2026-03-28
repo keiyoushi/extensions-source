@@ -46,7 +46,22 @@ class ScanManga :
 
     override val supportsLatest = true
 
-    protected val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
+
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val originalRequest = chain.request()
+            val header = originalRequest.header("X-Requested-With")
+            if (header != null && header.isEmpty()) {
+                return@addNetworkInterceptor chain.proceed(
+                    originalRequest.newBuilder()
+                        .removeHeader("X-Requested-With")
+                        .build(),
+                )
+            }
+            return@addNetworkInterceptor chain.proceed(originalRequest)
+        }
+        .build()
 
     override fun headersBuilder(): Headers.Builder {
         val currentChromeVersion = super.headersBuilder().build().get("User-Agent")?.let {
@@ -188,7 +203,7 @@ class ScanManga :
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val regex = Regex("""eval\(function\(\w,\w,\w,\w,\w,\w,\w\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
         val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
             ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
 
