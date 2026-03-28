@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -283,6 +284,13 @@ class Japscan :
         dateFormat.parse(date)!!.time
     }.getOrDefault(0L)
 
+    @Serializable
+    class KeyValues(
+        val p: String,
+        val v: String,
+        val il: String,
+    )
+
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
 
@@ -334,15 +342,12 @@ class Japscan :
         val keyArrayLineRegex = Regex("""(?m)^\s*var\s+$keyValueVariableName\s*=\s*\[.*\] *;?\s*$""")
         val quoteRegex = Regex(""""([^"]*)"""")
 
-        val result = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
+        val keyValues = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
             val base64 = quoteRegex.findAll(headerLine).map { it.groupValues[1] }.joinToString("")
             val decoded = kotlin.io.encoding.Base64.decode(base64)
-            String(decoded, Charsets.UTF_8)
+            String(decoded, Charsets.UTF_8).parseAs<KeyValues>()
         } ?: throw Exception("Impossible de récupérer les values clés")
 
-        val pValue = Regex(""""p":\s*"([^"]*)"""").find(result)?.groups?.get(1)?.value
-        val vValue = Regex(""""v":\s*"([^"]*)"""").find(result)?.groups?.get(1)?.value
-        val ilValue = Regex(""""il":\s*"([^"]*)"""").find(result)?.groups?.get(1)?.value
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
 
@@ -359,7 +364,7 @@ class Japscan :
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(
                         """
-                            Object.defineProperty(Object.prototype, '$ilValue', {
+                            Object.defineProperty(Object.prototype, '${keyValues.il}', {
                                 set: function(value) {
                                     window.$interfaceName.passPayload(JSON.stringify(value));
                                     Object.defineProperty(this, '_imagesLink', {
@@ -398,7 +403,7 @@ class Japscan :
             .images
             .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
-                Page(i, imageUrl = "$url&$pValue=$vValue")
+                Page(i, imageUrl = "$url&${keyValues.p}=${keyValues.v}")
             }
 
         return Observable.just(images)
