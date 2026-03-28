@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -19,13 +20,11 @@ import okhttp3.Response
 import rx.Observable
 import java.security.MessageDigest
 
-class LunarAnime : HttpSource() {
+class LunarAnime(override val lang: String, private val internalLang: String = lang) : HttpSource() {
 
     override val name = "Lunar Manga"
 
     override val baseUrl = "https://lunaranime.ru"
-
-    override val lang = "all"
 
     override val supportsLatest = true
 
@@ -58,11 +57,15 @@ class LunarAnime : HttpSource() {
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = API_URL.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga/recent")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", "30")
-            .build()
+        val url = API_URL.toHttpUrl().newBuilder().apply {
+            addPathSegments("api/manga/recent")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("limit", "30")
+
+            if (lang != "all") {
+                addQueryParameter("language", internalLang)
+            }
+        }.build()
         return GET(url.toString(), headers)
     }
 
@@ -83,6 +86,10 @@ class LunarAnime : HttpSource() {
             addQueryParameter("limit", "30")
             if (query.isNotBlank()) {
                 addQueryParameter("query", query)
+            }
+
+            if (lang != "all") {
+                addQueryParameter("language", internalLang)
             }
 
             filters.forEach { filter ->
@@ -161,7 +168,9 @@ class LunarAnime : HttpSource() {
 
         val result = client.newCall(request).execute().parseAs<LunarChapterListResponse>()
 
-        result.data.map { chapter ->
+        result.data.filter {
+            lang == "all" || it.language == internalLang
+        }.map { chapter ->
             val isLocked = passwordInfo.hasSeriesPassword ||
                 passwordInfo.chapterPasswords.any {
                     it.chapterNumber == chapter.chapter && (it.language == null || it.language == chapter.language)
@@ -220,13 +229,25 @@ class LunarAnime : HttpSource() {
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(): FilterList = FilterList(
-        StatusFilter(),
-        TypeFilter(),
-        LanguageFilter(),
-        YearFilter(),
-        GenreFilter(),
-    )
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>(
+            StatusFilter(),
+            TypeFilter(),
+        )
+
+        if (lang == "all") {
+            filters.add(LanguageFilter())
+        }
+
+        filters.addAll(
+            listOf(
+                YearFilter(),
+                GenreFilter(),
+            ),
+        )
+
+        return FilterList(filters)
+    }
 
     private fun String.sha256(): ByteArray = MessageDigest.getInstance("SHA-256").digest(toByteArray())
 
