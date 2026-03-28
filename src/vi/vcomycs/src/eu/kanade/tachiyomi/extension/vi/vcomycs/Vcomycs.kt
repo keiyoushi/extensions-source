@@ -13,11 +13,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 class Vcomycs : HttpSource() {
     override val name = "Vcomycs"
@@ -25,8 +27,25 @@ class Vcomycs : HttpSource() {
     override val baseUrl = "https://vivicomi18.info"
     override val supportsLatest = true
 
+    private val thumbnailFallbackInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val fallbackUrl = thumbFallbackMap.remove(request.url.toString()) ?: return@Interceptor response
+
+        val isBadCode = (response.code == 401 || response.code == 404)
+        if (!isBadCode) {
+            return@Interceptor response
+        }
+
+        response.close()
+
+        val fallbackRequest = GET(fallbackUrl, request.headers)
+        chain.proceed(fallbackRequest)
+    }
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(5)
+        .addInterceptor(thumbnailFallbackInterceptor)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -107,12 +126,20 @@ class Vcomycs : HttpSource() {
                 SManga.create().apply {
                     title = result.title
                     setUrlWithoutDomain(result.link.removePrefix(baseUrl))
-                    // Remove -150x150 size suffix from thumbnail URL to get full-size image
-                    thumbnail_url = result.img?.replace("-150x150", "")
+                    thumbnail_url = resolveSearchThumbnailUrl(result.img)
                 }
             }.distinctBy { it.url }
 
         return MangasPage(mangas, hasNextPage = false)
+    }
+
+    private fun resolveSearchThumbnailUrl(url: String?): String? {
+        if (url.isNullOrBlank() || !url.contains("-150x150")) return url
+
+        val removed = url.replace("-150x150", "")
+        val replaced = url.replace("-150x150", "-720x970")
+        thumbFallbackMap[removed] = replaced
+        return removed
     }
 
     // ========================= Details ===========================
@@ -184,6 +211,8 @@ class Vcomycs : HttpSource() {
     override fun getFilterList(): FilterList = getFilters()
 
     companion object {
+        private val thumbFallbackMap = ConcurrentHashMap<String, String>()
+
         private val DATE_FORMAT_SHORT by lazy {
             SimpleDateFormat("dd/MM/yy", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
