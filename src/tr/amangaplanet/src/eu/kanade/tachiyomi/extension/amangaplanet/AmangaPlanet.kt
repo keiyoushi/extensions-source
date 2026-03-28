@@ -9,5 +9,5 @@ class AmangaPlanet :
         name = "Amanga Planet",
         baseUrl = "https://www.amangaplanet.com.tr",
         lang = "tr",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr", "TR")),
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     )
