@@ -75,6 +75,9 @@ class Japscan :
         .rateLimit(1, 2)
         .build()
 
+    private val keyValueVariableNameRegex = Regex("""\bfor\s*\(\s*var\s+i\s*=\s*0\s*;\s*i\s*<\s*([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*;\s*i\+\+\s*\)\s*s\s*\+=\s*\1\[i\]\s*;""")
+    private val quoteRegex = Regex(""""([^"]*)"""")
+
     companion object {
         val dateFormat by lazy {
             SimpleDateFormat("dd MMM yyyy", Locale.US)
@@ -338,9 +341,8 @@ class Japscan :
             throw Exception("Impossible de passer le captcha. Veuillez réessayer.")
         }
 
-        val keyValueVariableName = Regex("""\bfor\s*\(\s*var\s+i\s*=\s*0\s*;\s*i\s*<\s*([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*;\s*i\+\+\s*\)\s*s\s*\+=\s*\1\[i\]\s*;""").find(pageContent)?.groups?.get(1)?.value
+        val keyValueVariableName = keyValueVariableNameRegex.find(pageContent)?.groups?.get(1)?.value
         val keyArrayLineRegex = Regex("""(?m)^\s*var\s+$keyValueVariableName\s*=\s*\[.*\] *;?\s*$""")
-        val quoteRegex = Regex(""""([^"]*)"""")
 
         val keyValues = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
             val base64 = quoteRegex.findAll(headerLine).map { it.groupValues[1] }.joinToString("")
