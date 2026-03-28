@@ -1,20 +1,34 @@
 package keiyoushi.utils
 
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.nextJsSerializer.DateSerializer
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.util.Date
 import kotlin.reflect.typeOf
 
 private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
+
+private val nextJsJsonInstance by lazy {
+    Json(jsonInstance) {
+        serializersModule = SerializersModule {
+            include(jsonInstance.serializersModule)
+            contextual(Date::class, DateSerializer)
+        }
+    }
+}
 
 private fun <T> extractValueNextJs(
     payload: JsonElement,
@@ -23,7 +37,7 @@ private fun <T> extractValueNextJs(
 ): T? {
     if (payload !is JsonObject && payload !is JsonArray) return null
     if (predicate(payload)) {
-        return jsonInstance.decodeFromJsonElement(deserializer, payload)
+        return nextJsJsonInstance.decodeFromJsonElement(deserializer, payload)
     }
     val children: Iterable<JsonElement> = when (payload) {
         is JsonObject -> payload.values
@@ -36,16 +50,40 @@ private fun <T> extractValueNextJs(
     return null
 }
 
-private fun Document.extractAppRouterPayloads(): List<JsonElement> = select("script:not([src])")
+/**
+ * Recursively walks the JSON tree to resolve Next.js RSC references using the provided [chunkCache].
+ * - `$$` -> Escaped string, drops the first `$`.
+ * - `$D` -> Date string, drops `$D` to expose the ISO-8601 string.
+ * - `$<id>` -> Looks up the ID in our ByteText cache.
+ */
+private fun resolveNextJsRefs(element: JsonElement, chunkCache: Map<String, String>): JsonElement = when (element) {
+    is JsonObject -> JsonObject(element.mapValues { resolveNextJsRefs(it.value, chunkCache) })
+    is JsonArray -> JsonArray(element.map { resolveNextJsRefs(it, chunkCache) })
+    is JsonPrimitive -> {
+        if (element.isString && element.content.startsWith("$") && element.content.length >= 2) {
+            val str = element.content
+            when (str[1]) {
+                '$' -> JsonPrimitive(str.substring(1)) // Escaped '$' -> keep one
+                'D' -> JsonPrimitive(str.substring(2)) // Date string -> strip '$D'
+                // RSC chunk reference -> look up in cache and replace with content if found
+                else -> chunkCache[str.substring(1)]?.let { JsonPrimitive(it) } ?: element
+            }
+        } else {
+            element
+        }
+    }
+}
+
+private fun Document.extractAppRouterPayloads(chunkCache: MutableMap<String, String>): List<JsonElement> = select("script:not([src])")
     .map { it.data() }
     .filter { "self.__next_f.push" in it }
     .flatMap { script ->
         try {
             val raw = NEXT_F_REGEX.find(script)?.groupValues?.get(1) ?: return@flatMap emptyList()
-            val arr = jsonInstance.parseToJsonElement(raw).jsonArray
+            val arr = nextJsJsonInstance.parseToJsonElement(raw).jsonArray
             val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@flatMap emptyList()
 
-            extractRscPayloads(content)
+            extractRscPayloads(content, chunkCache)
         } catch (_: Exception) {
             emptyList()
         }
@@ -54,7 +92,7 @@ private fun Document.extractAppRouterPayloads(): List<JsonElement> = select("scr
 private fun Document.extractPagesRouterPayloads(): List<JsonElement> {
     val data = selectFirst("script#__NEXT_DATA__")?.data() ?: return emptyList()
     return try {
-        val root = jsonInstance.parseToJsonElement(data)
+        val root = nextJsJsonInstance.parseToJsonElement(data)
         val pageProps = root.jsonObject["props"]?.jsonObject?.get("pageProps")
         listOfNotNull(pageProps, root)
     } catch (_: Exception) {
@@ -62,7 +100,7 @@ private fun Document.extractPagesRouterPayloads(): List<JsonElement> {
     }
 }
 
-private fun extractRscPayloads(body: String): List<JsonElement> {
+private fun extractRscPayloads(body: String, chunkCache: MutableMap<String, String>): List<JsonElement> {
     val results = mutableListOf<JsonElement>()
     var pos = 0
 
@@ -101,13 +139,20 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
                         bytes += 4
                         pos++ // consume the high surrogate; the loop increment handles the low
                     }
+
                     else -> bytes += 3
                 }
                 pos++
             }
+
+            // Extract the content and cache it by its hex ID locally
+            val chunkContent = body.substring(start, pos)
+            chunkCache[id] = chunkContent
+
             try {
-                results.add(jsonInstance.parseToJsonElement(body.substring(start, pos)))
-            } catch (_: Exception) {}
+                results.add(nextJsJsonInstance.parseToJsonElement(chunkContent))
+            } catch (_: Exception) {
+            }
         } else {
             // JSON chunk — parse by bracket depth
             val (element, end) = parseJsonAt(body, pos)
@@ -150,7 +195,7 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
             '{', '[' -> depth++
             '}', ']' -> if (--depth == 0) {
                 return try {
-                    Pair(jsonInstance.parseToJsonElement(body.substring(start, i)), i)
+                    Pair(nextJsJsonInstance.parseToJsonElement(body.substring(start, i)), i)
                 } catch (_: Exception) {
                     Pair(null, i)
                 }
@@ -158,7 +203,7 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
         }
         if (depth == 0 && c.isWhitespace()) {
             return try {
-                Pair(jsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
+                Pair(nextJsJsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
             } catch (_: Exception) {
                 Pair(null, i)
             }
@@ -188,10 +233,9 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
         serializer<T>().descriptor
     }
 
-    val requiredKeys = (0 until elementDescriptor.elementsCount)
-        .filterNot { elementDescriptor.isElementOptional(it) || elementDescriptor.getElementDescriptor(it).isNullable }
-        .map { elementDescriptor.getElementName(it) }
-        .toSet()
+    val requiredKeys = (0 until elementDescriptor.elementsCount).filterNot {
+        elementDescriptor.isElementOptional(it) || elementDescriptor.getElementDescriptor(it).isNullable
+    }.map { elementDescriptor.getElementName(it) }.toSet()
 
     require(requiredKeys.isNotEmpty()) {
         "Cannot infer a predicate for ${elementDescriptor.serialName}: all fields are optional or nullable. Provide an explicit predicate instead."
@@ -199,15 +243,11 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
 
     return if (isList) {
         { element ->
-            element is JsonArray &&
-                element.isNotEmpty() &&
-                element.first() is JsonObject &&
-                requiredKeys.all { it in element.first().jsonObject }
+            element is JsonArray && element.isNotEmpty() && element.first() is JsonObject && requiredKeys.all { it in element.first().jsonObject }
         }
     } else {
         { element ->
-            element is JsonObject &&
-                requiredKeys.all { it in element }
+            element is JsonObject && requiredKeys.all { it in element }
         }
     }
 }
@@ -235,9 +275,12 @@ fun <T> Document.extractNextJs(
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
 ): T? {
-    val payloads = extractAppRouterPayloads().ifEmpty { extractPagesRouterPayloads() }
+    val chunkCache = mutableMapOf<String, String>()
+    val payloads = extractAppRouterPayloads(chunkCache).ifEmpty { extractPagesRouterPayloads() }
+
     for (payload in payloads) {
-        val result = extractValueNextJs(payload, predicate, deserializer)
+        val resolvedPayload = resolveNextJsRefs(payload, chunkCache)
+        val result = extractValueNextJs(resolvedPayload, predicate, deserializer)
         if (result != null) return result
     }
     return null
@@ -286,8 +329,10 @@ fun <T> String.extractNextJsRsc(
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
 ): T? {
-    for (payload in extractRscPayloads(this)) {
-        val result = extractValueNextJs(payload, predicate, deserializer)
+    val chunkCache = mutableMapOf<String, String>()
+    for (payload in extractRscPayloads(this, chunkCache)) {
+        val resolvedPayload = resolveNextJsRefs(payload, chunkCache)
+        val result = extractValueNextJs(resolvedPayload, predicate, deserializer)
         if (result != null) return result
     }
     return null
