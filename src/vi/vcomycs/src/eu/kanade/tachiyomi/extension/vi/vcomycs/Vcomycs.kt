@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -26,8 +27,25 @@ class Vcomycs : HttpSource() {
     override val baseUrl = "https://vivicomi18.info"
     override val supportsLatest = true
 
+    private val thumbnailFallbackInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val fallbackUrl = thumbFallbackMap.remove(request.url.toString()) ?: return@Interceptor response
+
+        val isBadCode = (response.code == 401 || response.code == 404)
+        if (!isBadCode) {
+            return@Interceptor response
+        }
+
+        response.close()
+
+        val fallbackRequest = GET(fallbackUrl, request.headers)
+        chain.proceed(fallbackRequest)
+    }
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(5)
+        .addInterceptor(thumbnailFallbackInterceptor)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -119,35 +137,9 @@ class Vcomycs : HttpSource() {
         if (url.isNullOrBlank() || !url.contains("-150x150")) return url
 
         val removed = url.replace("-150x150", "")
-        if (isImageReachable(removed)) return removed
-
-        return url.replace("-150x150", "-720x970")
-    }
-
-    private fun isImageReachable(url: String): Boolean {
-        thumbReachableCache[url]?.let { return it }
-
-        val requestHeaders = headersBuilder().build()
-
-        val headRequest = GET(url, requestHeaders).newBuilder()
-            .head()
-            .build()
-
-        val reachable = runCatching {
-            client.newCall(headRequest).execute().use { response ->
-                when {
-                    response.isSuccessful -> true
-                    response.code == 403 || response.code == 405 ->
-                        client.newCall(GET(url, requestHeaders)).execute().use { getResponse ->
-                            getResponse.isSuccessful
-                        }
-                    else -> false
-                }
-            }
-        }.getOrDefault(false)
-
-        thumbReachableCache[url] = reachable
-        return reachable
+        val replaced = url.replace("-150x150", "-720x970")
+        thumbFallbackMap[removed] = replaced
+        return removed
     }
 
     // ========================= Details ===========================
@@ -219,7 +211,7 @@ class Vcomycs : HttpSource() {
     override fun getFilterList(): FilterList = getFilters()
 
     companion object {
-        private val thumbReachableCache = ConcurrentHashMap<String, Boolean>()
+        private val thumbFallbackMap = ConcurrentHashMap<String, String>()
 
         private val DATE_FORMAT_SHORT by lazy {
             SimpleDateFormat("dd/MM/yy", Locale.ROOT).apply {
