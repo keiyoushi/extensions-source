@@ -2,65 +2,78 @@ package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class GenreFilter : Filter.Select<String>("Gênero", genres.map { it.first }.toTypedArray()) {
-    fun toUriPart() = genres[state].second
+class GenreFilter : Filter.Select<String>("Gêneros", genreOptions.map { it.first }.toTypedArray()) {
+    val selectedValue: String
+        get() = genreOptions[state].second
 }
 
-class TypeFilter : Filter.Select<String>("Tipo", types.map { it.first }.toTypedArray()) {
-    fun toUriPart() = types[state].second
+class TypeFilter : Filter.Select<String>("Tipo", typeOptions.map { it.first }.toTypedArray()) {
+    val selectedValue: String
+        get() = typeOptions[state].second
 }
 
-class StatusFilter : Filter.Select<String>("Status", statusList.map { it.first }.toTypedArray()) {
-    fun toUriPart() = statusList[state].second
+class StatusFilter : Filter.Select<String>("Status", statusOptions.map { it.first }.toTypedArray()) {
+    val selectedValue: String
+        get() = statusOptions[state].second
 }
 
-class AdultFilter : Filter.CheckBox("Conteúdo +18", false)
-
-class SortFilter : Filter.Select<String>("Ordenar por", sortList.map { it.first }.toTypedArray()) {
-    fun toUriPart() = sortList[state].second
+class SortFilter : Filter.Select<String>("Ordenar por", sortOptions.map { it.first }.toTypedArray()) {
+    val selectedValue: String
+        get() = sortOptions[state].second
 }
 
-private val genres = listOf(
-    Pair("Todos", ""),
-    Pair("Ação", "Ação"),
-    Pair("Aventura", "Aventura"),
-    Pair("Artes Marciais", "Artes Marciais"),
-    Pair("Comédia", "Comédia"),
-    Pair("Drama", "Drama"),
-    Pair("Ecchi", "Ecchi"),
-    Pair("Fantasia", "Fantasia"),
-    Pair("Ficção Científica", "Ficção Científica"),
-    Pair("Harem", "Harem"),
-    Pair("Histórico", "Histórico"),
-    Pair("Maduro", "Maduro"),
-    Pair("Mistério", "Mistério"),
-    Pair("Psicológico", "Psicológico"),
-    Pair("Romance", "Romance"),
-    Pair("Seinen", "Seinen"),
-    Pair("Shoujo", "Shoujo"),
-    Pair("Shounen", "Shounen"),
-    Pair("Sobrenatural", "Sobrenatural"),
-    Pair("Tragédia", "Tragédia"),
-    Pair("Vida Escolar", "Vida Escolar"),
+private val genreOptions = listOf(
+    "Gêneros" to "",
+    "Ação" to "Ação",
+    "Aventura" to "Aventura",
+    "Artes Marciais" to "Artes Marciais",
+    "Comédia" to "Comédia",
+    "Drama" to "Drama",
+    "Ecchi" to "Ecchi",
+    "Fantasia" to "Fantasia",
+    "Ficção Científica" to "Ficção Científica",
+    "Harem" to "Harem",
+    "Histórico" to "Histórico",
+    "Maduro" to "Maduro",
+    "Mistério" to "Mistério",
+    "Psicológico" to "Psicológico",
+    "Romance" to "Romance",
+    "Seinen" to "Seinen",
+    "Shoujo" to "Shoujo",
+    "Shounen" to "Shounen",
+    "Sobrenatural" to "Sobrenatural",
+    "Tragédia" to "Tragédia",
+    "Vida Escolar" to "Vida Escolar",
 )
 
-private val types = listOf(
-    Pair("Todos", ""),
-    Pair("Manhwa", "MANHWA"),
-    Pair("Mangá", "MANGA"),
-    Pair("Manhua", "MANHUA"),
-    Pair("Webtoon", "WEBTOON"),
+private val typeOptions = listOf(
+    "Todos" to "all",
+    "Mangá" to "manga",
+    "Manhwa" to "manhwa",
+    "Manhua" to "manhua",
+    "Novel" to "novel",
+    "Yaoi" to "yaoi",
+    "Yuri" to "yuri",
+    "Shoujo" to "shoujo",
+    "English" to "english",
+    "Webtoon" to "webtoon",
+    "Doujinshi" to "doujinshi",
+    "Hentai" to "hentai",
+    "Pornhwa" to "pornhwa",
 )
 
-private val statusList = listOf(
-    Pair("Todos", ""),
-    Pair("Em andamento", "ATIVO"),
-    Pair("Completo", "CONCLUIDO"),
-    Pair("Em hiato", "HIATO"),
+private val statusOptions = listOf(
+    "Status" to "all",
+    "Em lançamento" to "ONGOING",
+    "Completo" to "COMPLETED",
+    "Hiato" to "HIATUS",
+    "Cancelado" to "CANCELED",
 )
 
-private val sortList = listOf(
-    Pair("Recentes", "createdAt"),
-    Pair("Nome (A-Z)", "name"),
-    Pair("Atualizados", "updatedAt"),
+private val sortOptions = listOf(
+    "Mais Populares" to "popular",
+    "Maior Avaliação" to "rating",
+    "Mais Recentes" to "recent",
+    "Novidades" to "new",
+    "A-Z" to "alphabetical",
 )
