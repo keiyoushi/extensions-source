@@ -386,7 +386,7 @@ class Japscan :
             )
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
