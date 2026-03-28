@@ -26,18 +26,17 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot", headers)
     override fun popularMangaSelector(): String = "div[class*=manga-item_item]"
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val anchor = element.selectFirst("a[href*=/manga/]")
-        setUrlWithoutDomain(anchor?.attr("abs:href") ?: "")
+        val anchor = element.selectFirst("a[href*=/manga/]")!!
+        setUrlWithoutDomain(anchor.attr("abs:href"))
 
-        title = element.select("h3")!!.text()
+        title = element.select("h3").text()
 
-        thumbnail_url = element
-            .select("img")
+        val thumbnail = element.selectFirst("img")!!
+
+        thumbnail_url = thumbnail
             .attr("abs:data-original")
             .ifEmpty {
-                element
-                    .select("img")
-                    .attr("abs:src")
+                thumbnail.attr("abs:src")
             }
     }
 
@@ -67,15 +66,15 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div[class*=manga-detail_boxInfo] h1")!!.text()
 
-        description = document.select("div.work-break p").lastOrNull()?.text() ?: ""
+        description = document.select("div.work-break p").lastOrNull()?.text()
 
         status = when {
-            document.select("span:contains(連載中)").isNotEmpty() -> SManga.ONGOING
-            document.select("span:contains(完結)").isNotEmpty() -> SManga.COMPLETED
+            document.selectFirst("span:contains(連載中)") != null -> SManga.ONGOING
+            document.selectFirst("span:contains(完結)") != null -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
-        thumbnail_url = document.select("img[src*=cover]").attr("abs:src")
+        thumbnail_url = document.selectFirst("img[src*=cover]")?.attr("abs:src")
     }
 
     // ============================== Chapters ==============================
@@ -83,23 +82,19 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
     override fun chapterListSelector() = "a:has(div[class*=manga-detail_chapter])"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val container = element.selectFirst("div[class*=manga-detail_chapter]")
+        val container = element.selectFirst("div[class*=manga-detail_chapter]")!!
+        val nameAndDate = container.select("span")
 
-        name = container?.selectFirst("span.font-bold")?.text()!!
+        name = nameAndDate.first()!!.text()
 
-        setUrlWithoutDomain(element.attr("href"))
+        setUrlWithoutDomain(element.attr("abs:href"))
 
-        // Parse japanese dates to a Long (1月前 -> 2.6e+9)
-        val dateText = container.selectFirst("span.text-gray-300")?.text() ?: ""
+        // Convert japanese dates to a Long (1月前 -> 2.6e+9)
+        val dateText = nameAndDate.getOrNull(1)?.text()
         date_upload = parseDate(dateText)
     }
 
     // =============================== Pages ================================
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = baseUrl + chapter.url
-        return GET(chapterUrl, headers)
-    }
 
     override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
 
@@ -122,17 +117,18 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
         }
     }
 
-    override fun imageRequest(page: Page): Request = GET(
-        page.imageUrl!!,
-        headersBuilder().apply {
-            add("Referer", baseUrl)
-        }.build(),
-    )
-
     // ============================= Utilities ==============================
 
-    private fun parseDate(dateStr: String): Long {
+    private fun parseDate(dateStr: String?): Long {
+        dateStr ?: return 0L
+
         val now = Calendar.getInstance()
+
+        // Special case for "Yesterday"
+        if ("昨日" in dateStr) {
+            now.add(Calendar.DAY_OF_MONTH, -1)
+            return now.timeInMillis
+        }
 
         val amount = dateRegex.find(dateStr)?.groupValues?.get(1)?.toIntOrNull() ?: return 0L
 
@@ -141,6 +137,7 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
             "分" in dateStr -> now.add(Calendar.MINUTE, -amount)
             "時" in dateStr -> now.add(Calendar.HOUR, -amount)
             "日" in dateStr -> now.add(Calendar.DAY_OF_MONTH, -amount)
+            "週" in dateStr -> now.add(Calendar.DAY_OF_MONTH, -amount * 7)
             "月" in dateStr -> now.add(Calendar.MONTH, -amount)
             "年" in dateStr -> now.add(Calendar.YEAR, -amount)
             else -> return 0L
