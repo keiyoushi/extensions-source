@@ -13,10 +13,15 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.Calendar
 
-class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
+class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
 
     override val supportsLatest = false
+
+    private val dateRegex = Regex("""(\d+)""")
+
+    // =============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot", headers)
     override fun popularMangaSelector(): String = "div[class*=manga-item_item]"
@@ -24,7 +29,7 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
         val anchor = element.selectFirst("a[href*=/manga/]")
         setUrlWithoutDomain(anchor?.attr("abs:href") ?: "")
 
-        title = element.select("h3").text()
+        title = element.select("h3")!!.text()
 
         thumbnail_url = element
             .select("img")
@@ -35,6 +40,8 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
                     .attr("abs:src")
             }
     }
+
+    // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search/manga"
@@ -55,11 +62,12 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title =
-            document.selectFirst("div[class*=manga-detail_boxInfo] h1")?.text() ?: "Unknown Title"
+    // =========================== Manga Details ============================
 
-        description = document.select("div.work-break p").lastOrNull()?.text()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("div[class*=manga-detail_boxInfo] h1")!!.text()
+
+        description = document.select("div.work-break p").lastOrNull()?.text() ?: ""
 
         status = when {
             document.select("span:contains(連載中)").isNotEmpty() -> SManga.ONGOING
@@ -70,19 +78,23 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
         thumbnail_url = document.select("img[src*=cover]").attr("abs:src")
     }
 
+    // ============================== Chapters ==============================
+
     override fun chapterListSelector() = "a:has(div[class*=manga-detail_chapter])"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val container = element.selectFirst("div[class*=manga-detail_chapter]")
 
-        name = container?.selectFirst("span.font-bold")?.text() ?: "Unknown Chapter"
+        name = container?.selectFirst("span.font-bold")?.text()!!
 
         setUrlWithoutDomain(element.attr("href"))
 
         // Parse japanese dates to a Long (1月前 -> 2.6e+9)
-        val dateText = container?.selectFirst("span.text-gray-300")?.text() ?: ""
+        val dateText = container.selectFirst("span.text-gray-300")?.text() ?: ""
         date_upload = parseDate(dateText)
     }
+
+    // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = baseUrl + chapter.url
@@ -117,19 +129,20 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.club", "ja") {
         }.build(),
     )
 
-    private fun parseDate(dateStr: String): Long {
-        val now = java.util.Calendar.getInstance()
+    // ============================= Utilities ==============================
 
-        val amount =
-            Regex("""(\d+)""").find(dateStr)?.groupValues?.get(1)?.toIntOrNull() ?: return 0L
+    private fun parseDate(dateStr: String): Long {
+        val now = Calendar.getInstance()
+
+        val amount = dateRegex.find(dateStr)?.groupValues?.get(1)?.toIntOrNull() ?: return 0L
 
         when {
-            "秒" in dateStr -> now.add(java.util.Calendar.SECOND, -amount)
-            "分" in dateStr -> now.add(java.util.Calendar.MINUTE, -amount)
-            "時" in dateStr -> now.add(java.util.Calendar.HOUR, -amount)
-            "日" in dateStr -> now.add(java.util.Calendar.DAY_OF_MONTH, -amount)
-            "月" in dateStr -> now.add(java.util.Calendar.MONTH, -amount)
-            "年" in dateStr -> now.add(java.util.Calendar.YEAR, -amount)
+            "秒" in dateStr -> now.add(Calendar.SECOND, -amount)
+            "分" in dateStr -> now.add(Calendar.MINUTE, -amount)
+            "時" in dateStr -> now.add(Calendar.HOUR, -amount)
+            "日" in dateStr -> now.add(Calendar.DAY_OF_MONTH, -amount)
+            "月" in dateStr -> now.add(Calendar.MONTH, -amount)
+            "年" in dateStr -> now.add(Calendar.YEAR, -amount)
             else -> return 0L
         }
         return now.timeInMillis
