@@ -26,25 +26,13 @@ class MangaLivre :
     ConfigurableSource {
 
     override val id: Long = 2834885536325274328
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val baseUrl by lazy { preferences.getString(BASE_URL_PREF, super.baseUrl)!! }
 
     private val preferences by lazy { getPreferences() }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
-        .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("sec-ch-ua", "\"Microsoft Edge\";v=\"146\", \"Chromium\";v=\"146\", \"Not/A)Brand\";v=\"24\"")
-                .header("sec-ch-ua-mobile", "?1")
-                .header("sec-ch-ua-platform", "\"Android\"")
-                .header("sec-fetch-dest", "document")
-                .header("sec-fetch-mode", "navigate")
-                .header("sec-fetch-site", "none")
-                .header("sec-fetch-user", "?1")
-                .build()
-            chain.proceed(request)
-        }
         .build()
 
     override val useNewChapterEndpoint = true
@@ -104,4 +92,4 @@ class MangaLivre :
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
     }
-}
+    }
