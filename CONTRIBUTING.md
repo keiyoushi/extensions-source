@@ -462,16 +462,48 @@ them may cause you more headache than necessary.
 
 #### URL intent filter
 
-Extensions can define URL intent filters by defining it inside a custom `AndroidManifest.xml` file.
-(Example TBD.)
+Extensions can define a URL pattern so that these URLs can be opened in Mihon.
 
-To test if the URL intent filter is working as expected, you can try opening the website in a browser
-and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively,
-you can use the `adb` command below.
+To do this, you need two files:
+- `AndroidManifest.xml` which must be placed in the root directory of your extension (Example: `src/id/riztranslation/AndroidManifest.xml`)
+- `UrlActivity.kt` which should be placed next to your main file. (Example: `src/id/riztranslation/src/eu/kanade/tachiyomi/extension/id/riztranslation/UrlActivity.kt`)
 
-```console
-$ adb shell am start -d "<your-link>" -a android.intent.action.VIEW
+`AndroidManifest.xml` example :
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".id.riztranslation.UrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="riztranslation.pages.dev"
+                    android:pathPattern="/..*"
+                    android:scheme="https" />
+                <data
+                    android:host="riztranslation.rf.gd"
+                    android:pathPattern="/..*"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
 ```
+
+The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the “path” of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
+
+Next, you have the `<data android:scheme=“https” android:host=“host” android:pathPattern=“/..*” />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://developer.android.com/guide/topics/manifest/data-element). 
+
+Now, as for `UrlActivity`, you can just use the example below.
 
 > [!CAUTION]
 > The activity does not support any Kotlin Intrinsics specific methods or calls,
@@ -480,6 +512,57 @@ $ adb shell am start -d "<your-link>" -a android.intent.action.VIEW
 >
 > You can use Kotlin Intrinsics in the extension source class, this limitation only
 > applies to the activity classes.
+
+To explain how it works, it will trigger Mihon's `SEARCH` action, passing the URL as a query and specifying that it comes from your extension to narrow down the search. Avoid putting any logic in this file; instead, implement it in your extension's class.
+
+```kotlin
+class UrlActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val intentData = intent?.data?.toString()
+        if (intentData != null) {
+            val mainIntent = Intent().apply {
+                action = "eu.kanade.tachiyomi.SEARCH"
+                putExtra("query", intentData)
+                putExtra("filter", packageName)
+            }
+            try {
+                startActivity(mainIntent)
+            } catch (e: ActivityNotFoundException) {
+                Log.e("RiztranslationUrl", e.toString())
+            }
+        } else {
+            Log.e("RiztranslationUrl", "could not parse uri from intent $intent")
+        }
+
+        finish()
+        exitProcess(0)
+    }
+}
+```
+
+Now all you need to do is adapt the search function (`fetchSearchManga`) in your extension so that, given a URL, it returns a single manga that matches that URL. For example:
+```kotlin
+if (query.startsWith("https://")) {
+    val url = query.toHttpUrlOrNull()
+    if (url != null && url.host == baseUrl.toHttpUrl().host) {
+        val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
+        if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
+            val id = url.pathSegments[typeIndex + 1]
+            return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
+        }
+    }
+}
+```
+
+To test if the URL intent filter is working as expected, you can try opening the website in a browser
+and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively,
+you can use the `adb` command below.
+
+```console
+$ adb shell am start -d "<your-link>" -a android.intent.action.VIEW
+```
+You can find a complete example of how URLs work in the [Riztranslation extension](https://github.com/keiyoushi/extensions-source/tree/main/src/id/riztranslation).
 
 #### Update strategy
 
