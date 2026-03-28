@@ -26,7 +26,7 @@ class MangaLivre :
     ConfigurableSource {
 
     override val id: Long = 2834885536325274328
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val baseUrl by lazy { preferences.getString(BASE_URL_PREF, super.baseUrl)!! }
 
     private val preferences by lazy { getPreferences() }
