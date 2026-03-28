@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.ja.alphapolis
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,9 +14,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -20,32 +26,45 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import java.net.URLDecoder
-import java.text.SimpleDateFormat
-import java.util.Locale
 
-class Alphapolis : HttpSource() {
+class Alphapolis :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Alphapolis"
     override val baseUrl = "https://www.alphapolis.co.jp"
     override val lang = "ja"
     override val supportsLatest = true
+    override val versionId = 2
+
+    private var xsrfToken: String? = null
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     // Load proper thumbnails
     override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
-
-    private val dateFormat = SimpleDateFormat("yyyy.MM.dd'更新'", Locale.ROOT)
-
-    private var xsrfToken: String? = null
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+        .add("X-Requested-With", "XMLHttpRequest")
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            response.headers("Set-Cookie").firstOrNull { it.startsWith("XSRF-TOKEN=") }?.let {
-                xsrfToken = it.substringAfter("XSRF-TOKEN=").substringBefore(";").let { encoded ->
-                    URLDecoder.decode(encoded, "UTF-8")
-                }
+            response.headers("Set-Cookie")
+                .firstOrNull { it.startsWith("XSRF-TOKEN=") }
+                ?.substringAfter("XSRF-TOKEN=")
+                ?.substringBefore(";")
+                ?.let { URLDecoder.decode(it, "UTF-8") }
+                ?.also { xsrfToken = it }
+
+            if (response.code == 419) {
+                response.close()
+                val token = getXsrfToken() ?: throw Exception("XSRF-Token not found")
+                xsrfToken = token
+                val newRequest = chain.request().newBuilder()
+                    .header("X-XSRF-TOKEN", token)
+                    .build()
+                chain.proceed(newRequest)
+            } else {
+                response
             }
-            response
         }
         .build()
 
@@ -57,8 +76,8 @@ class Alphapolis : HttpSource() {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 title = it.selectFirst(".official-manga-sub-like_ranking--list_title, .official-manga-sub-like_ranking--panel_title")!!.text()
-                thumbnail_url = it.selectFirst("img, .official-manga-sub-like_ranking--panel_thumbnail")
-                    ?.let { thumb -> thumb.absUrl("data-src").ifEmpty { thumb.absUrl("data-bg") } }
+                val thumb = it.selectFirst("img, .official-manga-sub-like_ranking--panel_thumbnail")
+                thumbnail_url = thumb?.absUrl("data-src")?.ifEmpty { thumb.absUrl("data-bg") }
             }
         }
         return MangasPage(mangas, false)
@@ -69,48 +88,19 @@ class Alphapolis : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        fun Builder.addFilter(param: String, filter: Filter.Group<FilterTag>) = filter.state.filter { it.state }.forEachIndexed { i, option -> addQueryParameter("$param[$i]", option.value) }
+        fun Builder.addFilter(param: String, value: String, filter: Filter.CheckBox) = apply { if (filter.state) addQueryParameter(param, value) }
+
         val url = "$baseUrl/manga/official/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("query", query)
-        }
-
-        filters.forEach { filter ->
-            when (filter) {
-                is CategoryFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, option ->
-                        url.addQueryParameter("category[$index]", option.value)
-                    }
-                }
-
-                is LabelFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, option ->
-                        url.addQueryParameter("label[$index]", option.value)
-                    }
-                }
-
-                is StatusFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, option ->
-                        url.addQueryParameter("complete[$index]", option.value)
-                    }
-                }
-
-                is RentalFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, option ->
-                        url.addQueryParameter("rental[$index]", option.value)
-                    }
-                }
-
-                is DailyFreeFilter -> {
-                    if (filter.state) {
-                        url.addQueryParameter("is_free_daily", "enable")
-                    }
-                }
-
-                else -> {}
+            .apply {
+                if (query.isNotBlank()) addQueryParameter("query", query)
+                addFilter("category", filters.firstInstance<CategoryFilter>())
+                addFilter("label", filters.firstInstance<LabelFilter>())
+                addFilter("complete", filters.firstInstance<StatusFilter>())
+                addFilter("rental", filters.firstInstance<RentalFilter>())
+                addFilter("is_free_daily", "enable", filters.firstInstance<DailyFreeFilter>())
             }
-        }
         return GET(url.build(), headers)
     }
 
@@ -150,58 +140,58 @@ class Alphapolis : HttpSource() {
         }
     }
 
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaId = (baseUrl + manga.url).toHttpUrl().pathSegments.last().toInt()
+        val body = ChapterRequestBody(mangaId).toJsonString().toRequestBody(MEDIA_TYPE)
+        return POST("$baseUrl/manga/official/episodes.json", xsrfHeaders(), body)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".episode-list .episode-unit").map {
-            SChapter.create().apply {
-                setUrlWithoutDomain(it.selectFirst("a.read-episode")!!.absUrl("href"))
-                val titleText = it.selectFirst(".title")!!.text()
-                val isRental = it.selectFirst(".rental-coin") != null ||
-                    it.selectFirst(".icon-zero-yen") != null
-                if (isRental) name = "\uD83E\uDE99 $titleText" else name = titleText
-                date_upload = dateFormat.tryParse(it.selectFirst(".up-time")?.text())
-            }
-        }
+        val result = response.parseAs<ChapterResponse>()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        return result.episodes.filter { !hideLocked || !it.isLocked }.map { it.toSChapter(baseUrl) }.reversed()
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val parts = "$baseUrl/${chapter.url}".toHttpUrl()
+        val mangaId = parts.pathSegments.first().toInt()
+        val episodeId = parts.fragment!!.toInt()
+        return "$baseUrl/manga/official/$mangaId/$episodeId"
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.fromCallable {
-            val parts = (baseUrl + chapter.url).toHttpUrl().pathSegments
-            val mangaId = parts[parts.size - 2].toInt()
-            val episodeId = parts.last().toInt()
-
-            val token = xsrfToken ?: getXsrfToken() ?: throw Exception("XSRF-Token not found")
-
+            val parts = "$baseUrl/${chapter.url}".toHttpUrl()
+            val mangaId = parts.pathSegments.first().toInt()
+            val episodeId = parts.fragment!!.toInt()
             val viewerUrl = "$baseUrl/manga/official/viewer.json"
-
-            val newHeaders = super.headersBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .add("X-XSRF-TOKEN", token)
-                .set("Referer", getChapterUrl(chapter))
-                .build()
+            val newHeaders = xsrfHeaders(getChapterUrl(chapter))
 
             fun getPages(resolution: String): List<Page> {
-                val body =
-                    ViewerRequestBody(episodeId, false, mangaId, false, resolution).toJsonString()
-                        .toRequestBody("application/json".toMediaType())
+                val body = ViewerRequestBody(episodeId, false, mangaId, false, resolution).toJsonString().toRequestBody(MEDIA_TYPE)
                 val request = POST(viewerUrl, newHeaders, body)
 
                 return client.newCall(request).execute().use {
-                    if (!it.isSuccessful) return emptyList()
                     it.parseAs<ViewerResponse>().page?.images?.mapIndexed { i, img ->
                         Page(i, imageUrl = img.url)
-                    } ?: throw Exception("Log in via WebView and purchase this chapter to read.")
+                    } ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
                 }
             }
 
             val resolutions = listOf("full_hd", "standard")
-            val pages = resolutions.asSequence().map { getPages(it) }
-                .firstOrNull { it.isNotEmpty() }
-                ?: throw Exception("Log in via WebView and purchase this chapter to read.")
+            val pages = resolutions.asSequence().map { getPages(it) }.firstOrNull { it.isNotEmpty() }
+                ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
 
             pages
         }
     }
+
+    private fun requireXsrfToken() = xsrfToken ?: getXsrfToken() ?: throw Exception("XSRF-Token not found")
+
+    private fun xsrfHeaders(referer: String? = null) = headersBuilder()
+        .set("X-XSRF-TOKEN", requireXsrfToken())
+        .apply { if (referer != null) set("Referer", referer) }
+        .build()
 
     private fun getXsrfToken(): String? {
         val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
@@ -210,66 +200,31 @@ class Alphapolis : HttpSource() {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Filters will be applied to search query"),
+        Filter.Header("Note: Search and active filters are applied together"),
         CategoryFilter(),
         LabelFilter(),
         StatusFilter(),
         RentalFilter(),
+        Filter.Separator(),
         DailyFreeFilter(),
     )
 
-    private class CategoryFilter :
-        Filter.Group<FilterTag>(
-            "カテゴリ",
-            listOf(
-                FilterTag("男性向け", "men"),
-                FilterTag("女性向け", "women"),
-                FilterTag("TL", "tl"),
-                FilterTag("BL", "bl"),
-            ),
-        )
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
-    private class LabelFilter :
-        Filter.Group<FilterTag>(
-            "レーベル",
-            listOf(
-                FilterTag("アルファポリス", "alphapolis"),
-                FilterTag("レジーナ", "regina"),
-                FilterTag("アルファノルン", "alphanorn"),
-                FilterTag("エタニティ", "eternity"),
-                FilterTag("ノーチェ", "noche"),
-                FilterTag("アンダルシュ", "andarche"),
-            ),
-        )
-
-    private class StatusFilter :
-        Filter.Group<FilterTag>(
-            "進行状況",
-            listOf(
-                FilterTag("連載中", "running"),
-                FilterTag("完結", "finished"),
-                FilterTag("休載中", "sleeping"),
-            ),
-        )
-
-    private class RentalFilter :
-        Filter.Group<FilterTag>(
-            "レンタル",
-            listOf(
-                FilterTag("レンタルあり", "enable"),
-                FilterTag("全話無料", "disable"),
-            ),
-        )
-
-    private class DailyFreeFilter : Filter.CheckBox("毎日¥0")
-
-    private class FilterTag(name: String, val value: String) : Filter.CheckBox(name)
+    companion object {
+        private val MEDIA_TYPE = "application/json".toMediaType()
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+    }
 }

@@ -1,0 +1,10 @@
+ext {
+    extName = 'StrayDog608'
+    extClass = '.StrayDog608'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/straydog608'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

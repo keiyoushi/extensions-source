@@ -19,7 +19,7 @@ class MangaListDto(
 
 @Serializable
 class MangaDto(
-    private val id: String,
+    val id: String,
     private val title: String,
     private val description: String = "",
     private val status: String? = null,
@@ -58,4 +58,5 @@ class NamedEntity(
 class CoverDto(
     val id: String,
     val ext: String = ".jpg",
+    val volume: String? = null,
 )

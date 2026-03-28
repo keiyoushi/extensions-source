@@ -9,6 +9,8 @@ import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -23,6 +25,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -31,6 +34,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -70,6 +74,9 @@ class Japscan :
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 2)
         .build()
+
+    private val keyValueVariableNameRegex = Regex("""\bfor\s*\(\s*var\s+i\s*=\s*0\s*;\s*i\s*<\s*([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*;\s*i\+\+\s*\)\s*s\s*\+=\s*\1\[i\]\s*;""")
+    private val quoteRegex = Regex(""""([^"]*)"""")
 
     companion object {
         val dateFormat by lazy {
@@ -281,8 +288,10 @@ class Japscan :
     }.getOrDefault(0L)
 
     @Serializable
-    class ChapterDetails(
-        val imagesLink: List<String>,
+    class KeyValues(
+        val p: String,
+        val v: String,
+        val il: String,
     )
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -292,10 +301,54 @@ class Japscan :
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
         var webView: WebView? = null
-        val request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
-        val pageContent = request.body.string()
-        val pValue = Regex("""p:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
-        val vValue = Regex("""v:\s*'([^']*)'""").find(pageContent)?.groups?.get(1)?.value
+        var captchaTry = 0
+        var request: Response?
+        var pageContent = ""
+        while (captchaTry != 3) {
+            request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
+            pageContent = request.body.string()
+            val stripsArrayRegex = """strips\s*:\s*(\[[^\]]*\])""".toRegex()
+            val elementRegex = """\{\s*"uuid"\s*:\s*"([^"]+)"\s*,\s*"src"\s*:\s*"([^"]*)"\s*\}""".toRegex()
+
+            val stripsMatch = stripsArrayRegex.find(pageContent)
+            val stripsContent = stripsMatch?.groupValues?.get(1) ?: ""
+            if (stripsContent != "") {
+                val items = elementRegex.findAll(stripsContent).map {
+                    val uuid = it.groupValues[1]
+                    val src = it.groupValues[2]
+                    uuid to src
+                }.toList()
+
+                val answer = orderUuidsByImageVerticality(items)
+                val token = Regex("""token\s*:\s*"([0-9a-fA-F]{64})"""").find(pageContent)?.groups?.get(1)?.value ?: ""
+                val multipartBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("token", token)
+                    .addFormDataPart("answer", answer.toJsonString())
+
+                val captchaRequest = client.newCall(POST("$internalBaseUrl/validate-captcha/", body = multipartBody.build(), headers = headers.newBuilder().add("Referer", "$internalBaseUrl${chapter.url}").build())).execute()
+                if (captchaRequest.body.string().contains("\"success\": true")) {
+                    request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
+                    pageContent = request.body.string()
+                    break
+                }
+                captchaTry += 1
+            } else {
+                break
+            }
+        }
+        if (captchaTry == 3) {
+            throw Exception("Impossible de passer le captcha. Veuillez réessayer.")
+        }
+
+        val keyValueVariableName = keyValueVariableNameRegex.find(pageContent)?.groups?.get(1)?.value
+        val keyArrayLineRegex = Regex("""(?m)^\s*var\s+$keyValueVariableName\s*=\s*\[.*\] *;?\s*$""")
+
+        val keyValues = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
+            val base64 = quoteRegex.findAll(headerLine).map { it.groupValues[1] }.joinToString("")
+            val decoded = kotlin.io.encoding.Base64.decode(base64)
+            String(decoded, Charsets.UTF_8).parseAs<KeyValues>()
+        } ?: throw Exception("Impossible de récupérer les values clés")
 
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
@@ -313,7 +366,7 @@ class Japscan :
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(
                         """
-                            Object.defineProperty(Object.prototype, 'imagesLink', {
+                            Object.defineProperty(Object.prototype, '${keyValues.il}', {
                                 set: function(value) {
                                     window.$interfaceName.passPayload(JSON.stringify(value));
                                     Object.defineProperty(this, '_imagesLink', {
@@ -340,7 +393,7 @@ class Japscan :
             )
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
@@ -352,7 +405,7 @@ class Japscan :
             .images
             .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
-                Page(i, imageUrl = "$url&$pValue=$vValue")
+                Page(i, imageUrl = "$url&${keyValues.p}=${keyValues.v}")
             }
 
         return Observable.just(images)
@@ -368,8 +421,8 @@ class Japscan :
     private class PageList(pages: Array<Int>) : Filter.Select<Int>("Page #", arrayOf(0, *pages))
 
     // Prefs
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val chapterListPref = androidx.preference.ListPreference(screen.context).apply {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val chapterListPref = ListPreference(screen.context).apply {
             key = SHOW_SPOILER_CHAPTERS_TITLE
             title = SHOW_SPOILER_CHAPTERS_TITLE
             entries = prefsEntries

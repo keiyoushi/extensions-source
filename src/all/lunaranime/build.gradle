@@ -1,7 +1,7 @@
 ext {
     extName = 'Lunar Manga'
-    extClass = '.LunarAnime'
-    extVersionCode = 3
+    extClass = '.LunarAnimeFactory'
+    extVersionCode = 4
     isNsfw = true
 }
 

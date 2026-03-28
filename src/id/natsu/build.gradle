@@ -3,8 +3,8 @@ ext {
     extClass = '.Natsu'
     themePkg = 'natsuid'
     baseUrl = 'https://natsu.tv'
-    overrideVersionCode = 30
-    isNsfw = true
+    overrideVersionCode = 31
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

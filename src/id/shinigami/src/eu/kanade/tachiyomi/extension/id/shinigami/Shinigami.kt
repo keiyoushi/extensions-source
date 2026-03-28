@@ -23,7 +23,7 @@ class Shinigami : HttpSource() {
 
     override val name = "Shinigami"
 
-    override val baseUrl = "https://09.shinigami.asia"
+    override val baseUrl = "https://c.shinigami.asia"
 
     private val apiUrl = "https://api.shngm.io"
 
