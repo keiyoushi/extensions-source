@@ -92,4 +92,4 @@ class MangaLivre :
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
     }
-    }
+}
