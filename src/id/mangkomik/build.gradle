@@ -3,8 +3,8 @@ ext {
     extClass = '.SirenKomik'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sirenkomik.xyz'
-    overrideVersionCode = 9
-    isNsfw = true
+    overrideVersionCode = 10
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
