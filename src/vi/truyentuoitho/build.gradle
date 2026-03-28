@@ -1,0 +1,10 @@
+ext {
+    extName = 'TruyenTuoiTho'
+    extClass = '.TruyenTuoiTho'
+    themePkg = 'madara'
+    baseUrl = 'https://truyentuoitho.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
