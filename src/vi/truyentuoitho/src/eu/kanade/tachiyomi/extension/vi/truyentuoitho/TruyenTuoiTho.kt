@@ -27,8 +27,6 @@ class TruyenTuoiTho :
         .rateLimit(3)
         .build()
 
-    private val chapterDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
-
     override val filterNonMangaItems = false
 
     override val useNewChapterEndpoint = true
