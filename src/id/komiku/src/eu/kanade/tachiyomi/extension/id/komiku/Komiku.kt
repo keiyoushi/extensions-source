@@ -7,12 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -22,7 +22,7 @@ class Komiku : HttpSource() {
 
     override val baseUrl = "https://komiku.org"
 
-    private val baseUrlApi = "https://api.komiku.org"
+    private val apiUrl = "https://api.komiku.org"
 
     override val lang = "id"
 
@@ -31,31 +31,18 @@ class Komiku : HttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
-        GET("$baseUrlApi/manga/?orderby=meta_value_num", headers)
-    } else {
-        GET("$baseUrlApi/manga/page/$page/?orderby=meta_value_num", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(mangaApiUrlBuilder(page).addQueryParameter("orderby", "meta_value_num").build(), headers)
 
     override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = if (page == 1) {
-        GET("$baseUrlApi/manga/?orderby=modified", headers)
-    } else {
-        GET("$baseUrlApi/manga/page/$page/?orderby=modified", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(mangaApiUrlBuilder(page).addQueryParameter("orderby", "modified").build(), headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
 
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrlApi.toHttpUrl().newBuilder().apply {
-            addPathSegment("manga")
-            if (page > 1) {
-                addPathSegments("page/$page")
-            }
-
+        val url = mangaApiUrlBuilder(page).apply {
             if (query.isNotEmpty()) {
                 addQueryParameter("s", query)
             }
@@ -68,6 +55,13 @@ class Komiku : HttpSource() {
         return GET(url, headers)
     }
 
+    private fun mangaApiUrlBuilder(page: Int) = apiUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("manga")
+        if (page > 1) {
+            addPathSegments("page/$page")
+        }
+    }
+
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.code == 404) return MangasPage(emptyList(), false)
         return mangaListParse(response)
@@ -77,7 +71,7 @@ class Komiku : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = Jsoup.parse(response.body.string(), baseUrl)
+        val document = response.asJsoup()
         return SManga.create().apply {
             description = document.select("#Sinopsis > p").text()
 
@@ -104,7 +98,7 @@ class Komiku : HttpSource() {
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = Jsoup.parse(response.body.string(), baseUrl)
+        val document = response.asJsoup()
         return document.select("#Daftar_Chapter tr:has(td.judulseries)").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
@@ -140,7 +134,7 @@ class Komiku : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = Jsoup.parse(response.body.string(), baseUrl)
+        val document = response.asJsoup()
         return document.select("#Baca_Komik img").mapIndexed { i, element ->
             Page(i, "", element.attr("abs:src"))
         }
@@ -148,11 +142,17 @@ class Komiku : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun getFilterList() = getKomikuFilterList()
+    override fun getFilterList() = FilterList(
+        Type(),
+        Order(),
+        Genre1(),
+        Genre2(),
+        Status(),
+    )
 
     // ============================= Utilities ==============================
     private fun mangaListParse(response: Response): MangasPage {
-        val document = Jsoup.parse(response.body.string(), baseUrl)
+        val document = response.asJsoup().apply { setBaseUri(baseUrl) }
         val mangas = document.select("div.bge").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.komiku
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
 interface UriFilter {
@@ -30,14 +29,6 @@ class Order : UriPartFilter("Order", "orderby", orderList)
 class Genre1 : UriPartFilter("Genre 1", "genre", genreList)
 class Genre2 : UriPartFilter("Genre 2", "genre2", genreList)
 class Status : UriPartFilter("Status", "statusmanga", statusList)
-
-fun getKomikuFilterList() = FilterList(
-    Type(),
-    Order(),
-    Genre1(),
-    Genre2(),
-    Status(),
-)
 
 private val typeList = arrayOf(
     Pair("Semua", ""),
