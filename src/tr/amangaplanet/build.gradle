@@ -3,7 +3,7 @@ ext {
     extClass = ".AmangaPlanet"
     baseUrl = "https://www.amangaplanet.com.tr"
     themePkg = "mangathemesia"
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
