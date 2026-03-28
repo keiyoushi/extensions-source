@@ -11,7 +11,7 @@ class UchuujinProjects :
         "Uchuujin Projects",
         "https://uchuujinmangas.com",
         "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+        dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
     ) {
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
