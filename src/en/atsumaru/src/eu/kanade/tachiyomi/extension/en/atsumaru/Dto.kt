@@ -178,7 +178,6 @@ class PageDataDto(
 @Serializable
 internal class SearchRequest(
     val page: Int,
-    val sort: String,
     val filter: SearchFilter,
 )
 
@@ -192,4 +191,5 @@ internal class SearchFilter(
     val minChapters: Int? = null,
     val showAdult: Boolean = false,
     val officialTranslation: Boolean = false,
+    val sortBy: String? = null,
 )
