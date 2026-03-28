@@ -3,8 +3,8 @@ ext {
     extClass = '.MangaKita'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangakita.me'
-    overrideVersionCode = 3
-    isNsfw = true
+    overrideVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
