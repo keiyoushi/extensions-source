@@ -17,7 +17,7 @@ import java.util.Locale
 class Submanhwa : ParsedHttpSource() {
 
     override val name = "Submanhwa"
-    override val baseUrl = "https://www.submanhwa.com"
+    override val baseUrl = "https://submanhwa.com"
     override val lang = "es"
     override val supportsLatest = true
 
@@ -84,27 +84,30 @@ class Submanhwa : ParsedHttpSource() {
         thumbnail_url = document.selectFirst("img")?.absUrl("src")
         description = document.selectFirst("h5:contains(Resumen) + p")?.text()
 
-        val box = document.selectFirst(".widget-container")
+        val box = document.selectFirst(".main-content > .boxed-modern")
 
-        status = when (box?.selectFirst("dt:contains(Estado) + dd span")?.text()?.lowercase()) {
+        status = when (box?.selectFirst(".detail-label:contains(Estado) + .detail-value span")?.text()?.lowercase()) {
             "completed" -> SManga.COMPLETED
             "cancelled" -> SManga.CANCELLED
             "ongoing" -> SManga.ONGOING
             else -> SManga.UNKNOWN
         }
 
-        author = box?.selectFirst("dt:contains(Autor) + dd a")?.text()
-        genre = box?.select("dt:contains(Categor) + dd a")?.joinToString { a -> a!!.text() }
+        author = box?.selectFirst(".detail-label:contains(Autor) + .detail-value a")?.text()
+        artist = box?.selectFirst(".detail-label:contains(Artist) + .detail-value a")?.text()
+        genre = box?.select(".detail-label:contains(Categor) + .detail-value a")?.joinToString { a -> a!!.text() }
     }
 
-    override fun chapterListSelector(): String = ".chapters-grid .chapter-card-item"
+    override fun chapterListSelector(): String = ".chapters-grid [class^=chapter-card]"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val a = element.selectFirst("a")
+        val a = element.selectFirst("a.chapter-link")
         name = a!!.text()
         setUrlWithoutDomain(a.absUrl("href"))
 
-        val date = element.selectFirst("span:has(i.glyphicon-time)")!!.ownText().trim()
+        val date = element.selectFirst("span:has(i.glyphicon-time)")?.text()
+            ?: element.select(".chapter-preview-meta > span").text()
+
         date_upload = dateFormat.tryParse(date)
     }
 
