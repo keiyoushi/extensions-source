@@ -21,6 +21,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.util.concurrent.TimeUnit
 
 class TeamX :
@@ -57,7 +58,7 @@ class TeamX :
 
         val entries = document.select(popularMangaSelector())
             .map(::popularMangaFromElement)
-        val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
+        val hasNextPage = popularMangaNextPageSelector().let { document.selectFirst(it) } != null
 
         fetchFiltersIfNeeded(document)
 
@@ -122,6 +123,35 @@ class TeamX :
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (!query.startsWith("http")) {
+            return super.fetchSearchManga(page, query, filters)
+        }
+
+        val baseHost = baseUrl.toHttpUrl().host
+        val seriesUrl = query.toHttpUrl()
+
+        if (seriesUrl.host != baseHost) throw Exception("Unsupported URL")
+        val segment = seriesUrl.pathSegments.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+            ?: throw Exception("Invalid URL format")
+
+        val manga = SManga.create().apply { url = "/series/$segment" }
+
+        return fetchMangaDetails(manga)
+            .map {
+                MangasPage(
+                    listOf(
+                        it.apply {
+                            url = manga.url
+                            initialized = true
+                        },
+                    ),
+                    false,
+                )
+            }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
         val url = "$baseUrl/ajax/search".toHttpUrl().newBuilder()
