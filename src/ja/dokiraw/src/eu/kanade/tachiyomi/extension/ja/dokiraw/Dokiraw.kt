@@ -69,8 +69,8 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
         description = document.select("div.work-break p").lastOrNull()?.text()
 
         status = when {
-            document.selectFirst("span:contains(連載中)") != null -> SManga.ONGOING
-            document.selectFirst("span:contains(完結)") != null -> SManga.COMPLETED
+            document.selectFirst("div:contains(連載中)") != null -> SManga.ONGOING
+            document.selectFirst("div:contains(完結)") != null -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
