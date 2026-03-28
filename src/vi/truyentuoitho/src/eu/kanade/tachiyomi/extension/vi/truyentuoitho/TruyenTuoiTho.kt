@@ -90,7 +90,7 @@ class TruyenTuoiTho :
     }
 
     @Serializable
-    private data class ChapterImagesPayload(
+    private class ChapterImagesPayload(
         val images: List<String> = emptyList(),
     )
 
