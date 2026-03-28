@@ -95,9 +95,7 @@ class DamCoNuong : HttpSource() {
             }
         }
 
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val hasNextPage =
-            document.selectFirst("nav[aria-label=Pagination] a[href*=\"page=${currentPage + 1}\"]") != null
+        val hasNextPage = document.selectFirst("nav[aria-label=Pagination] a[aria-label=Next]") != null
 
         return MangasPage(mangas, hasNextPage)
     }
