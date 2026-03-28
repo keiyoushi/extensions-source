@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.dokiraw
 
 import eu.kanade.tachiyomi.multisrc.liliana.Liliana
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +15,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
+import kotlin.text.isNotBlank
 
 class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
 
@@ -23,7 +25,27 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
 
     // =============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/hot"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return GET(url, headers)
+    }
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangaElements = document.select(popularMangaSelector())
+
+        val mangas = mangaElements.map { element ->
+            popularMangaFromElement(element)
+        }
+
+        val hasNextPage = mangaElements.isNotEmpty() && mangaElements.size == POPULAR_PER_PAGE
+
+        return MangasPage(mangas, hasNextPage)
+    }
     override fun popularMangaSelector(): String = "div[class*=manga-item_item]"
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val anchor = element.selectFirst("a[href*=/manga/]")!!
@@ -50,16 +72,39 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
                 if (query.isNotBlank()) {
                     addQueryParameter("keyword", query)
                 }
+                filters.filterIsInstance<GenreFilter>().firstOrNull()?.let { filter ->
+                    filter.values[filter.state]
+                        .takeIf { it != "All" }
+                        ?.let { addQueryParameter("genre", it) }
+                }
                 addQueryParameter("page", page.toString())
             }.build()
 
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangaElements = document.select(searchMangaSelector())
+
+        val mangas = mangaElements.map { element ->
+            searchMangaFromElement(element)
+        }
+
+        val hasNextPage = mangaElements.isNotEmpty() && mangaElements.size == RESULTS_PER_PAGE
+
+        return MangasPage(mangas, hasNextPage)
+    }
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaNextPageSelector() = "div[class*=pagination] a:last-of-type"
+
+    // =========================== Filters ============================
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Search by Genre"),
+        GenreFilter(),
+    )
 
     // =========================== Manga Details ============================
 
@@ -143,5 +188,10 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.run", "ja") {
             else -> return 0L
         }
         return now.timeInMillis
+    }
+
+    companion object {
+        private const val RESULTS_PER_PAGE = 20
+        private const val POPULAR_PER_PAGE = 36
     }
 }
