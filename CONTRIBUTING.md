@@ -465,8 +465,8 @@ them may cause you more headache than necessary.
 Extensions can define a URL pattern so that these URLs can be opened in Mihon.
 
 To do this, you need two files:
-- `AndroidManifest.xml` which must be placed in the root directory of your extension (example: `src/fr/scanr/AndroidManifest.xml`)
-- `UrlActivity.kt` (You can change the name—it’s usually [Extension Name]UrlActivity.kt) which should be placed next to your main file. (Example: `src/fr/scanr/src/eu/kanade/tachiyomi/extension/fr/scanr/ScanRUrlActivity.kt`)
+- `AndroidManifest.xml` which must be placed in the root directory of your extension (Example: `src/id/riztranslation/AndroidManifest.xml`)
+- `UrlActivity.kt` which should be placed next to your main file. (Example: `src/id/riztranslation/src/eu/kanade/tachiyomi/extension/id/riztranslation/UrlActivity.kt`)
 
 `AndroidManifest.xml` exemple :
 ```xml
@@ -475,7 +475,7 @@ To do this, you need two files:
 
     <application>
         <activity
-            android:name=".fr.scanr.ScanRUrlActivity"
+            android:name=".id.riztranslation.UrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -486,7 +486,11 @@ To do this, you need two files:
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="teamscanr.fr"
+                    android:host="riztranslation.pages.dev"
+                    android:pathPattern="/..*"
+                    android:scheme="https" />
+                <data
+                    android:host="riztranslation.rf.gd"
                     android:pathPattern="/..*"
                     android:scheme="https" />
             </intent-filter>
@@ -495,11 +499,11 @@ To do this, you need two files:
 </manifest>
 ```
 
-The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the “path” of your `UrlActivity.kt` file. For example, if the extension is ScanR, the `android:name` will be `.fr.scanr.ScanRUrlActivity`, since my activity file is named `ScanRUrlActivity.kt`.
+The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the “path” of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
 
-Next, you have the `<data android:scheme=“https” android:host=“host” android:pathPattern=“/..*” />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://app.netlify.com/teams/crioschan/settings/general). 
+Next, you have the `<data android:scheme=“https” android:host=“host” android:pathPattern=“/..*” />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://developer.android.com/guide/topics/manifest/data-element). 
 
-Now, as for `UrlActivity`, you can just use the example below. Be sure to adjust the `pathSegments.size > 1` so that it matches your URL.
+Now, as for `UrlActivity`, you can just use the example below.
 
 > [!CAUTION]
 > The activity does not support any Kotlin Intrinsics specific methods or calls,
@@ -509,28 +513,26 @@ Now, as for `UrlActivity`, you can just use the example below. Be sure to adjust
 > You can use Kotlin Intrinsics in the extension source class, this limitation only
 > applies to the activity classes.
 
-To explain how it works, it retrieves everything that comes after the host in the URL and counts how many segments (separated by a /) are present in the URL. If the number is correct, it opens the `SEARCH` activity in Mihon with the URL as the query and the current extension as the filter.
+To explain how it works, it will trigger Mihon's `SEARCH` action, passing the URL as a query and specifying that it comes from your extension to narrow down the search. Avoid putting any logic in this file; instead, implement it in your extension's class.
 
 ```kotlin
 class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-
-        if (pathSegments != null && pathSegments.size > 1) {
+        val intentData = intent?.data?.toString()
+        if (intentData != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", intent?.data?.toString())
+                putExtra("query", intentData)
                 putExtra("filter", packageName)
             }
-
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("UrlActivity", e.toString())
+                Log.e("RiztranslationUrl", e.toString())
             }
         } else {
-            Log.e("UrlActivity", "could not parse uri from intent $intent")
+            Log.e("RiztranslationUrl", "could not parse uri from intent $intent")
         }
 
         finish()
