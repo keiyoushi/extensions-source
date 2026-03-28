@@ -73,22 +73,26 @@ class Komiku : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            description = document.select("#Sinopsis > p").text()
+            description = buildString {
+                append(document.select("#Sinopsis > p").text())
 
-            document.select("table.inftable tr:contains(Judul Indonesia) td + td").text().let {
-                if (it.isNotEmpty()) {
-                    description = (if (description.isNullOrEmpty()) "" else "$description\n\n") + "Judul Indonesia: $it"
+                document.selectFirst("table.inftable tr:contains(Judul Indonesia) td + td")?.text()?.let {
+                    if (it.isNotEmpty()) {
+                        if (isNotEmpty()) append("\n\n")
+                        append("Judul Indonesia: $it")
+                    }
                 }
             }
 
-            author = document.select("table.inftable td:contains(Pengarang)+td, table.inftable td:contains(Komikus)+td").text().takeIf { it.isNotEmpty() }
+            author = document.selectFirst("table.inftable td:contains(Pengarang)+td, table.inftable td:contains(Komikus)+td")?.text()
             genre = document.select("ul.genre li.genre a span").joinToString { it.text() }.takeIf { it.isNotEmpty() }
-            status = parseStatus(document.select("table.inftable tr > td:contains(Status) + td").text())
-            thumbnail_url = document.selectFirst("div.ims > img")?.attr("abs:src")?.substringBefore("?")
+            status = parseStatus(document.selectFirst("table.inftable tr > td:contains(Status) + td")?.text())
+            thumbnail_url = document.selectFirst("div.ims > img")?.absUrl("src")?.removeQuery()
         }
     }
 
-    private fun parseStatus(status: String) = when {
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
         status.contains("Ongoing", true) || status.contains("On Going", true) -> SManga.ONGOING
         status.contains("End", true) || status.contains("Completed", true) -> SManga.COMPLETED
         else -> SManga.UNKNOWN
@@ -101,20 +105,21 @@ class Komiku : HttpSource() {
         val document = response.asJsoup()
         return document.select("#Daftar_Chapter tr:has(td.judulseries)").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-                name = element.selectFirst("a")!!.text()
+                val a = element.selectFirst("a")!!
+                setUrlWithoutDomain(a.absUrl("href"))
+                name = a.text()
 
-                val timeStamp = element.select("td.tanggalseries")
-                date_upload = if (timeStamp.text().contains("lalu")) {
-                    parseRelativeDate(timeStamp.text())
+                val timeStamp = element.selectFirst("td.tanggalseries")?.text().orEmpty()
+                date_upload = if (timeStamp.contains("lalu")) {
+                    parseRelativeDate(timeStamp)
                 } else {
-                    dateFormat.tryParse(timeStamp.last()?.text())
+                    dateFormat.tryParse(timeStamp)
                 }
             }
         }
     }
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     // Used Google translate here
     private fun parseRelativeDate(date: String): Long {
@@ -152,15 +157,17 @@ class Komiku : HttpSource() {
 
     // ============================= Utilities ==============================
     private fun mangaListParse(response: Response): MangasPage {
-        val document = response.asJsoup().apply { setBaseUri(baseUrl) }
+        val document = response.asJsoup()
         val mangas = document.select("div.bge").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a:has(h3)")!!.attr("href"))
-                thumbnail_url = element.select("img").attr("abs:src").substringBefore("?")
+                setUrlWithoutDomain(element.selectFirst("a:has(h3)")!!.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")?.removeQuery()
             }
         }
         val hasNextPage = document.selectFirst("span[hx-get]") != null || mangas.size >= 10
         return MangasPage(mangas, hasNextPage)
     }
+
+    private fun String.removeQuery() = if (isEmpty()) this else toHttpUrl().newBuilder().query(null).build().toString()
 }
