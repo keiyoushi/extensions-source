@@ -13,22 +13,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="zonatmo.to"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="http" />
-                <data
-                    android:host="zonatmo.to"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="https" />
-                <data
-                    android:host="www.zonatmo.to"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="http" />
-                <data
-                    android:host="www.zonatmo.to"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+
+                <data android:host="zonatmo.to" />
+                <data android:host="www.zonatmo.to" />
+
+                <data android:pathPattern="/manga/..*" />
             </intent-filter>
         </activity>
     </application>

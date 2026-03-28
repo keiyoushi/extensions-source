@@ -46,7 +46,6 @@ class ZonatmoTo : HttpSource() {
             .addQueryParameter("postType", "any")
             .addQueryParameter("postsPerPage", "50")
             .build()
-            .toString()
 
         return GET(url, apiHeaders)
     }
@@ -177,7 +176,7 @@ class ZonatmoTo : HttpSource() {
             .firstOrNull { it.first() == "manga" }
             ?.last()
             ?.takeIf { it.isNotBlank() }
-            ?: throw Exception("Unable to resolve manga slug")
+            ?: return emptyList()
 
         val firstPageDto = response.parseAs<ChapterListResponseDto>()
         val chapters = firstPageDto.data?.items.orEmpty().toMutableList()
