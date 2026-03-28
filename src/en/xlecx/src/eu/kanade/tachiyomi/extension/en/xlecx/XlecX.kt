@@ -8,14 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -48,7 +47,6 @@ class XlecX : HttpSource() {
         }
         .build()
 
-    private val json: Json by injectLazy()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
 
     // Popular
@@ -119,7 +117,7 @@ class XlecX : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val script = document.selectFirst("script[type=application/ld+json]")?.data() ?: throw Exception("JSON-LD data not found")
-        val dto = json.decodeFromString<JsonLdDto>(script)
+        val dto = script.parseAs<JsonLdDto>()
         val book = dto.graph.firstOrNull() ?: return emptyList()
 
         return listOf(
@@ -156,7 +154,7 @@ class XlecX : HttpSource() {
 
         // JSON-LD, may contain junk pages
         val script = document.selectFirst("script[type=application/ld+json]")?.data() ?: throw Exception("JSON-LD data not found")
-        val dto = json.decodeFromString<JsonLdDto>(script)
+        val dto = script.parseAs<JsonLdDto>()
         val book = dto.graph.firstOrNull() ?: return emptyList()
 
         return book.image.mapIndexed { index, imageUrl ->
