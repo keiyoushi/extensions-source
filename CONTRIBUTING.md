@@ -468,7 +468,7 @@ To do this, you need two files:
 - `AndroidManifest.xml` which must be placed in the root directory of your extension (Example: `src/id/riztranslation/AndroidManifest.xml`)
 - `UrlActivity.kt` which should be placed next to your main file. (Example: `src/id/riztranslation/src/eu/kanade/tachiyomi/extension/id/riztranslation/UrlActivity.kt`)
 
-`AndroidManifest.xml` exemple :
+`AndroidManifest.xml` example :
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -541,7 +541,7 @@ class UrlActivity : Activity() {
 }
 ```
 
-Now all you need to do is adapt the search function in your extension so that, given a URL, it returns a single manga that matches that URL. For example:
+Now all you need to do is adapt the search function (`fetchSearchManga`) in your extension so that, given a URL, it returns a single manga that matches that URL. For example:
 ```kotlin
 if (query.startsWith("https://")) {
     val url = query.toHttpUrlOrNull()
