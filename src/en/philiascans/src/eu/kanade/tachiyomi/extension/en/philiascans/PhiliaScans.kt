@@ -13,7 +13,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -32,16 +31,14 @@ class PhiliaScans :
 
     private var searchNonce: String = ""
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/all-mangas/?paged=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/all-mangas/?paged=$page", headers)
 
     override fun popularMangaSelector() = ".original .unit"
     override val popularMangaUrlSelector = ".info a.c-title"
     override val popularMangaUrlSelectorImg = ".poster img:not(.flag-icon)"
     override fun popularMangaNextPageSelector() = ".pagination a.page-link[rel=next]"
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/recently-updated/?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently-updated/?page=$page", headers)
 
     private fun getSearchNonce(): String {
         if (searchNonce.isNotEmpty()) return searchNonce
@@ -69,7 +66,7 @@ class PhiliaScans :
                     }
                 }
                 .build()
-            
+
             return POST("$baseUrl/wp-admin/admin-ajax.php", headers, form)
         }
 
@@ -98,7 +95,7 @@ class PhiliaScans :
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.encodedPath.contains("admin-ajax.php")) {
             val jsonString = response.body.string()
-            
+
             // Safety check to ensure we actually got JSON back
             if (!jsonString.trim().startsWith("{")) return MangasPage(emptyList(), false)
 
@@ -110,8 +107,8 @@ class PhiliaScans :
                 val doc = Jsoup.parse(html)
                 val a = doc.selectFirst("a") ?: return@mapNotNull null
                 val img = doc.selectFirst("img")
-                val title = doc.selectFirst(".search-result-title")?.text() 
-                    ?: img?.attr("alt") 
+                val title = doc.selectFirst(".search-result-title")?.text()
+                    ?: img?.attr("alt")
                     ?: return@mapNotNull null
 
                 SManga.create().apply {
@@ -123,7 +120,7 @@ class PhiliaScans :
             // Live Search does not return pagination metadata
             return MangasPage(mangas, false)
         }
-        
+
         return popularMangaParse(response)
     }
 
@@ -174,7 +171,7 @@ class PhiliaScans :
         return FilterList(
             Filter.Header("Note: Filters are ignored if you enter a text search."),
             Filter.Separator(),
-            GenreFilter()
+            GenreFilter(),
         )
     }
 
@@ -210,7 +207,7 @@ class PhiliaScans :
             Pair("Slice of Life", "slice-of-life"),
             Pair("Survival", "survival"),
             Pair("Tragedy", "tragedy"),
-            Pair("Villainess", "villainess")
-        )
+            Pair("Villainess", "villainess"),
+        ),
     )
 }
