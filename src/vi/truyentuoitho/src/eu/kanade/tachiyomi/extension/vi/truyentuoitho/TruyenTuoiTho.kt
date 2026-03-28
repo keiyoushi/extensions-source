@@ -31,11 +31,6 @@ class TruyenTuoiTho :
 
     override val useNewChapterEndpoint = true
 
-    override fun parseChapterDate(date: String?): Long {
-        val parsed = chapterDateFormat.tryParse(date?.trim())
-        return if (parsed != 0L) parsed else super.parseChapterDate(date)
-    }
-
     override fun xhrChaptersRequest(mangaUrl: String): Request {
         val normalizedMangaUrl = mangaUrl.removeSuffix("/")
         val chapterHeaders = xhrHeaders.newBuilder()
