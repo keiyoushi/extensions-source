@@ -248,7 +248,7 @@ class Softkomik : HttpSource() {
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        if (!request.url.host.endsWith("softdevices.my.id")) {
+        if (!request.url.host.endsWith("softdevices.my.id") || request.url.toString().startsWith(coverUrl)) {
             return chain.proceed(request)
         }
 
@@ -289,7 +289,7 @@ class Softkomik : HttpSource() {
                 client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
             }
 
-            val response = client.newCall(GET("$baseUrl/api/sessions", apiHeaders)).execute()
+            val response = client.newCall(GET("$baseUrl/api/se", apiHeaders)).execute()
 
             if (!response.isSuccessful) {
                 val code = response.code
