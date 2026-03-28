@@ -53,10 +53,10 @@ jobs:
               },
               {
                 "type": "both",
-                "regex": "remanga\\.org",
+                "regex": "remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io",
                 "ignoreCase": true,
                 "labels": ["invalid"],
-                "message": "ReManga (Russian) will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
+                "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
               },
               {
                 "type": "both",
