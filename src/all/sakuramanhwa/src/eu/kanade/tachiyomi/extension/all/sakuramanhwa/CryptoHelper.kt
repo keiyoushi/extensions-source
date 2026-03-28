@@ -42,28 +42,35 @@ class CryptoHelper(
             return
         }
 
-        val response =
-            client!!.newCall(GET("$baseUrl/v1", Headers.Builder().set("NX", "").build())).execute()
-        val serverTime = response.headers.getDate("Date")?.time
-            ?: throw IOException("Uninitialized server date")
+        val request = GET("$baseUrl/v1", Headers.Builder().set("NX", "").build())
+        try {
+            val response = client!!.newCall(request).execute()
+            try {
+                val serverTime = response.headers.getDate("Date")?.time
+                    ?: throw IOException("Uninitialized server date")
 
-        this.localTimeAtGeneration = System.currentTimeMillis()
-        this.serverTimeAtGeneration = serverTime
-        this.cachedSignedData = null
+                this.localTimeAtGeneration = System.currentTimeMillis()
+                this.serverTimeAtGeneration = serverTime
+                this.cachedSignedData = null
+            } finally {
+                response.close()
+            }
+        } catch (_: Exception) {
+        }
     }
 
     @Synchronized
     fun generateSigned(): String {
-        if (serverTimeAtGeneration == null) {
-            throw Exception("Uninitialized time")
-        }
-
         val currentTime = System.currentTimeMillis()
         if (cachedSignedData != null && currentTime - cachedSignedData!!.cachedSigneTime <= cacheValidityMillis) {
             return cachedSignedData!!.cachedSignedData
         }
 
-        val timestamp = getCurrentServerTime(currentTime).toString()
+        val timestamp = if (serverTimeAtGeneration != null && localTimeAtGeneration != null) {
+            getCurrentServerTime(currentTime).toString()
+        } else {
+            currentTime.toString()
+        }
 
         val dataToHash = mapOf(Pair("timesTamp", timestamp)).toJsonString()
         val hash = hmacSha256(dataToHash, secretKey)
@@ -87,8 +94,8 @@ class CryptoHelper(
     }
 
     private fun getCurrentServerTime(currentLocalTime: Long): Long {
-        val elapsedLocalMillis = currentLocalTime - localTimeAtGeneration!!
-        return serverTimeAtGeneration!! + elapsedLocalMillis
+        val elapsedLocalMillis = currentLocalTime - (localTimeAtGeneration ?: currentLocalTime)
+        return (serverTimeAtGeneration ?: currentLocalTime) + elapsedLocalMillis
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -97,10 +104,14 @@ class CryptoHelper(
             initServerTime()
         }
         if (request.headers["NX"] == null && request.url.toString().startsWith(baseUrl)) {
-            request = request.newBuilder().apply {
-                header("Referer", "$baseUrl/")
-                header("St-soon", generateSigned())
-            }.build()
+            try {
+                val signed = generateSigned()
+                request = request.newBuilder().apply {
+                    header("Referer", "$baseUrl/")
+                    header("St-soon", signed)
+                }.build()
+            } catch (_: Exception) {
+            }
         }
         return chain.proceed(request)
     }
