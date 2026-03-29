@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangalector'
     themePkg = 'madara'
     baseUrl = 'https://mangalector.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
 }
 
