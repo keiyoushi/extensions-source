@@ -167,16 +167,13 @@ class PhiliaScans :
     override val pageListParseSelector = "div#ch-images img"
 
     // Custom Filters
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            Filter.Header("Note: Filters are ignored if you enter a text search."),
-            Filter.Separator(),
-            GenreFilter(),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Filters are ignored if you enter a text search."),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
