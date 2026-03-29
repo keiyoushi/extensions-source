@@ -56,12 +56,12 @@ class TruyenGG :
     }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/top-binh-chon/trang-$page.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/top-binh-chon" + if (page > 1) "/trang-$page.html" else "", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat" + if (page > 1) "/trang-$page.html" else "", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -78,37 +78,36 @@ class TruyenGG :
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = (if (query.isNotBlank()) "$baseUrl/tim-kiem" else "$baseUrl/tim-kiem-nang-cao")
-            .toHttpUrl().newBuilder().apply {
-                addPathSegment("trang-$page.html")
-                if (query.isNotBlank()) {
-                    addQueryParameter("q", query)
-                } else {
-                    (filters.ifEmpty { getFilterList() }).forEach { filter ->
-                        when (filter) {
-                            is CountryFilter -> addQueryParameter("country", filter.values[filter.state].id)
-                            is StatusFilter -> addQueryParameter("status", filter.values[filter.state].id)
-                            is ChapterCountFilter -> addQueryParameter("minchapter", filter.values[filter.state].id)
-                            is SortByFilter -> filter.state?.let {
-                                addQueryParameter("sort", (it.index * 2 + if (it.ascending) 1 else 0).toString())
-                            }
-                            is GenreList -> {
-                                addQueryParameter(
-                                    "category",
-                                    filter.state.filter { it.state == Filter.TriState.STATE_INCLUDE }
-                                        .joinToString(",") { it.id },
-                                )
-                                addQueryParameter(
-                                    "notcategory",
-                                    filter.state.filter { it.state == Filter.TriState.STATE_EXCLUDE }
-                                        .joinToString(",") { it.id },
-                                )
-                            }
-                            else -> {}
+        val endpoint = if (query.isNotBlank()) "tim-kiem" else "tim-kiem-nang-cao"
+        val url = ("$baseUrl/$endpoint" + if (page > 1) "/trang-$page.html" else "").toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
+            } else {
+                (filters.ifEmpty { getFilterList() }).forEach { filter ->
+                    when (filter) {
+                        is CountryFilter -> addQueryParameter("country", filter.values[filter.state].id)
+                        is StatusFilter -> addQueryParameter("status", filter.values[filter.state].id)
+                        is ChapterCountFilter -> addQueryParameter("minchapter", filter.values[filter.state].id)
+                        is SortByFilter -> filter.state?.let {
+                            addQueryParameter("sort", (it.index * 2 + if (it.ascending) 1 else 0).toString())
                         }
+                        is GenreList -> {
+                            addQueryParameter(
+                                "category",
+                                filter.state.filter { it.state == Filter.TriState.STATE_INCLUDE }
+                                    .joinToString(",") { it.id },
+                            )
+                            addQueryParameter(
+                                "notcategory",
+                                filter.state.filter { it.state == Filter.TriState.STATE_EXCLUDE }
+                                    .joinToString(",") { it.id },
+                            )
+                        }
+                        else -> {}
                     }
                 }
-            }.build()
+            }
+        }.build()
 
         return GET(url, headers)
     }
@@ -218,7 +217,7 @@ class TruyenGG :
         Filter.Sort(
             "Sắp xếp",
             arrayOf("Ngày đăng", "Ngày cập nhật", "Lượt xem"),
-            Selection(2, false),
+            Selection(1, false),
         )
 
     private class GenreList(state: List<Genre>) : Filter.Group<Genre>("Thể loại", state)
