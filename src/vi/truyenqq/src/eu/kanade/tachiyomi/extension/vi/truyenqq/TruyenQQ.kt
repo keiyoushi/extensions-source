@@ -55,7 +55,7 @@ class TruyenQQ :
     }
 
     // Trang html chứa popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/truyen-yeu-thich/trang-$page.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/truyen-yeu-thich" + if (page > 1) "/trang-$page" else "", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -72,14 +72,14 @@ class TruyenQQ :
     }
 
     // Trang html chứa Latest (các cập nhật mới nhất)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat" + if (page > 1) "/trang-$page" else "", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Tìm kiếm
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val endpoint = if (query.isNotBlank()) "tim-kiem" else "tim-kiem-nang-cao"
-        val url = "$baseUrl/$endpoint/trang-$page.html".toHttpUrl().newBuilder().apply {
+        val url = ("$baseUrl/$endpoint" + if (page > 1) "/trang-$page" else "").toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("q", query)
             } else {
@@ -114,6 +114,7 @@ class TruyenQQ :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
+    // Details
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
         val info = document.selectFirst(".list-info")!!
@@ -163,6 +164,7 @@ class TruyenQQ :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // Filters
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
         CountryFilter(),
