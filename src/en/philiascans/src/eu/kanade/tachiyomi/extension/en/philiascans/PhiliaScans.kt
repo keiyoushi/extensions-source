@@ -173,38 +173,40 @@ class PhiliaScans :
         GenreFilter(),
     )
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
+        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    private class GenreFilter : UriPartFilter(
-        "Genre",
-        arrayOf(
-            Pair("<Select>", ""),
-            Pair("Action", "action"),
-            Pair("Adventure", "adventure"),
-            Pair("Comedy", "comedy"),
-            Pair("Drama", "drama"),
-            Pair("Fantasy", "fantasy"),
-            Pair("Harem", "harem"),
-            Pair("Historical", "historical"),
-            Pair("Isekai", "isekai"),
-            Pair("Josei", "josie"),
-            Pair("Magic", "magic"),
-            Pair("Martial Arts", "martial-arts"),
-            Pair("Monsters", "monsters"),
-            Pair("Mystery", "mystery"),
-            Pair("Psychological", "psychological"),
-            Pair("Regression", "regression"),
-            Pair("Romance", "romance"),
-            Pair("School Life", "school-life"),
-            Pair("Seinen", "seinen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Shounen", "shounen"),
-            Pair("Slice of Life", "slice-of-life"),
-            Pair("Survival", "survival"),
-            Pair("Tragedy", "tragedy"),
-            Pair("Villainess", "villainess"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Genre",
+            arrayOf(
+                Pair("<Select>", ""),
+                Pair("Action", "action"),
+                Pair("Adventure", "adventure"),
+                Pair("Comedy", "comedy"),
+                Pair("Drama", "drama"),
+                Pair("Fantasy", "fantasy"),
+                Pair("Harem", "harem"),
+                Pair("Historical", "historical"),
+                Pair("Isekai", "isekai"),
+                Pair("Josei", "josie"),
+                Pair("Magic", "magic"),
+                Pair("Martial Arts", "martial-arts"),
+                Pair("Monsters", "monsters"),
+                Pair("Mystery", "mystery"),
+                Pair("Psychological", "psychological"),
+                Pair("Regression", "regression"),
+                Pair("Romance", "romance"),
+                Pair("School Life", "school-life"),
+                Pair("Seinen", "seinen"),
+                Pair("Shoujo", "shoujo"),
+                Pair("Shounen", "shounen"),
+                Pair("Slice of Life", "slice-of-life"),
+                Pair("Survival", "survival"),
+                Pair("Tragedy", "tragedy"),
+                Pair("Villainess", "villainess"),
+            ),
+        )
 }
