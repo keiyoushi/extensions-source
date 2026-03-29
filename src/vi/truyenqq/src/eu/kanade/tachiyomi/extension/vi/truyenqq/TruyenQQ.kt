@@ -218,7 +218,7 @@ class TruyenQQ :
         Filter.Sort(
             "Sắp xếp",
             arrayOf("Ngày đăng", "Ngày cập nhật", "Lượt xem"),
-            Selection(0, false),
+            Selection(2, false),
         )
 
     private class GenreList(state: List<Genre>) : Filter.Group<Genre>("Thể loại", state)
