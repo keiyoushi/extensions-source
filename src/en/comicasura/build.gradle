@@ -1,0 +1,10 @@
+ext {
+    extName = 'Comic Asura'
+    extClass = '.ComicAsura'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://comicasura.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
