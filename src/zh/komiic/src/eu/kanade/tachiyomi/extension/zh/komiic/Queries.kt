@@ -136,7 +136,6 @@ fun pageListQuery(chapterId: String): RequestBody {
     val query = buildQuery(
         """
         query imagesByChapterId(%chapterId: ID!) {
-          reachedImageLimit
           imagesByChapterId(chapterId: %chapterId) {
             kid
           }

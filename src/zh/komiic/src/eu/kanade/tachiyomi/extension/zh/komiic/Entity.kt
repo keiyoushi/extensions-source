@@ -20,7 +20,6 @@ class DataDto(
     private val searchComicsAndAuthors: DataDto?,
     val comicById: MangaDto?,
     val chaptersByComicId: List<ChapterDto>?,
-    val reachedImageLimit: Boolean?,
     val imagesByChapterId: List<PageDto>?,
 ) {
     fun getListing(): List<MangaDto> = comics ?: searchComicsAndAuthors!!.comics!!
