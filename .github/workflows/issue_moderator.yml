@@ -53,7 +53,7 @@ jobs:
               },
               {
                 "type": "both",
-                "regex": "remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io",
+                "regex": "(remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io)",
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
