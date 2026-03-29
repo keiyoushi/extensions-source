@@ -20,7 +20,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: pixta-dev/repository-mirroring-action@674e65a7d483ca28dafaacba0d07351bdcc8bd75 # v1.1.1
-        with:
-          target_repo_url: "git@codeberg.org:keiyoushi/extensions-source.git"
-          ssh_private_key: ${{ secrets.CODEBERG_SSH }}
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.CODEBERG_SSH }}" >> ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Mirror repository
+        run: |
+          git remote add mirror "git@codeberg.org:keiyoushi/extensions-source.git"
+          git push --force --prune mirror "refs/remotes/origin/main:refs/heads/main"
+        env:
+          GIT_SSH_COMMAND: "ssh -v -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -l git"

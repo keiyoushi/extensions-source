@@ -345,10 +345,14 @@ class BlossomManhwa(
 
     private fun getI18nDictionary(language: String? = null): I18nDictionary {
         val currentLang = language ?: preference.getString(APP_LANGUAGE_KEY, "en")!!
-        return runBlocking {
-            withContext(Dispatchers.IO) {
-                i18nHelper.getI18nByLanguage(currentLang)
+        return try {
+            runBlocking {
+                withContext(Dispatchers.IO) {
+                    i18nHelper.getI18nByLanguage(currentLang)
+                }
             }
+        } catch (_: Exception) {
+            I18nHelper.getDefaultI18n()
         }
     }
 }
