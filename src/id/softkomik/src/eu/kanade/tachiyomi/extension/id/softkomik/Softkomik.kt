@@ -213,7 +213,17 @@ class Softkomik : HttpSource() {
     // ============================= Utilities ==============================
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        val originalRequest = chain.request()
+        val userAgent = originalRequest.header("User-Agent")
+        val normalizedUserAgent = normalizeUserAgent(userAgent)
+
+        val request = if (normalizedUserAgent != userAgent) {
+            originalRequest.newBuilder()
+                .header("User-Agent", normalizedUserAgent.orEmpty())
+                .build()
+        } else {
+            originalRequest
+        }
 
         val response = try {
             chain.proceed(request)
@@ -303,6 +313,16 @@ class Softkomik : HttpSource() {
         }
     }
 
+    // Normalizes the User-Agent by removing "Mobile Safari" because it can cause 401 errors.
+    private fun normalizeUserAgent(userAgent: String?): String? {
+        if (userAgent.isNullOrBlank()) return null
+
+        return userAgent
+            .replace(userAgentMobileSafariRegex, "")
+            .trim()
+            .ifEmpty { null }
+    }
+
     override fun getFilterList() = FilterList(
         Filter.Header("Filter tidak bisa digabungkan dengan pencarian teks."),
         Filter.Separator(),
@@ -315,6 +335,7 @@ class Softkomik : HttpSource() {
 
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
+    private val userAgentMobileSafariRegex = Regex("""\s*Mobile Safari/\d+(?:\.\d+)*""", RegexOption.IGNORE_CASE)
     private val cdnUrls = listOf(
         "https://psy1.komik.im",
         "https://image.komik.im/softkomik",
