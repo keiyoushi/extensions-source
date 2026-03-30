@@ -39,11 +39,11 @@ internal class MinChaptersFilter : Filter.Text("Minimum Chapters")
 internal class SortFilter :
     Filter.Sort(
         "Sort By",
-        arrayOf("Title", "Popularity", "Trending", "Date Added", "Release Date"),
+        arrayOf("Title", "Popularity", "Trending", "Date Added", "Release Date", "Top Rated"),
         Selection(0, true),
     ) {
     companion object {
-        val VALUES = arrayOf("title", "", "trending", "createdAt", "released")
+        val VALUES = arrayOf("title", "popularity", "trending", "createdAt", "released", "topRated")
     }
 }
 
