@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
 import android.content.SharedPreferences
+import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
-import okhttp3.Request
 
 @Serializable
 class RemoteMarkersBasic(
@@ -24,8 +24,8 @@ class RemoteMarkers(
     @Serializable
     class Regexes(
         val hunterObfuscation: String,
-        val smlParam: String, // Split from parameters
-        val smeParam: String, // Split from parameters
+        val smlParam: String,
+        val smeParam: String,
         val chapterInfo: String,
     )
 
@@ -37,6 +37,11 @@ class RemoteMarkers(
     )
 }
 
+@Serializable
+class WhatsUp(
+    val systemNotice: String? = null,
+)
+
 class MarkerManager(
     private val client: OkHttpClient,
     private val preferences: SharedPreferences,
@@ -45,41 +50,21 @@ class MarkerManager(
 
     companion object {
         private const val MARKER_URL = "https://github.com/Starmania/scan-manga/releases/latest/download/marker.json"
+        private const val NOTICE_URL = "https://github.com/Starmania/scan-manga/releases/latest/download/message.json"
+
         const val PREF_MARKERS_JSON = "external_markers_json"
-        const val PREF_MARKERS_LAST_UPDATE = "external_markers_last_update"
-        private const val CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
 
         private const val PARSER_VERSION = 1
-
-        val DEFAULT_MARKERS = RemoteMarkers(
-            validVersion = listOf(1),
-            selectors = RemoteMarkers.Selectors(
-                packedScript = "script:containsData(eval\\(function \\()",
-            ),
-            regexes = RemoteMarkers.Regexes(
-                hunterObfuscation = """eval\(function \(\w,\w,\w,\w,\w,\w(?:,[^)]+)?\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""",
-                smlParam = """sml\s*=\s*'([^']+)'""",
-                smeParam = """sme\s*=\s*'([^']+)'""",
-                chapterInfo = """const idc = (\d+)""",
-            ),
-            apiConfig = RemoteMarkers.ApiConfig(
-                pageListUrl = "https://bqj.{topDomain}/lel/{chapterId}.json",
-                requestBody = """{"a":"{sme}","b":"{sml}","c":"{fingerprint}"}""",
-                headers = mapOf("Token" to "yf"),
-            ),
-        )
     }
 
     fun getMarkers(): RemoteMarkers {
-        val lastUpdate = preferences.getString(PREF_MARKERS_LAST_UPDATE, "0")?.toLongOrNull() ?: 0L
         val cachedJson = preferences.getString(PREF_MARKERS_JSON, null)
-        val cacheExpired = (System.currentTimeMillis() - lastUpdate) >= CACHE_TTL_MS
 
         cachedMarkers?.let {
-            if (PARSER_VERSION in it.validVersion && cacheExpired) return it
+            if (PARSER_VERSION in it.validVersion) return it
         }
 
-        if (cachedJson != null && !cacheExpired) {
+        if (cachedJson != null) {
             // Populate the class with the cached JSON
             try {
                 val markers = cachedJson.parseAs<RemoteMarkersBasic>()
@@ -94,30 +79,43 @@ class MarkerManager(
         return fetchWithRetry()
     }
 
-    private fun fetchWithRetry(): RemoteMarkers {
+    fun fetchWithRetry(): RemoteMarkers {
         return (1..3).firstNotNullOfOrNull {
-            runCatching {
-                val request = Request.Builder().url(MARKER_URL).build()
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@runCatching null
+            run {
+                client.newCall(GET(MARKER_URL)).execute().use { response ->
+                    if (!response.isSuccessful) return@run null
 
-                    val bodyString = response.body.string()
-                    val basic = bodyString.parseAs<RemoteMarkersBasic>()
+                    val basic = response.parseAs<RemoteMarkersBasic>()
 
                     if (PARSER_VERSION !in basic.validVersion) {
-                        // No need to retry if the version is not compatible, 10ms won't make a difference
-                        return DEFAULT_MARKERS
+                        return@run null
                     }
 
-                    bodyString.parseAs<RemoteMarkers>().also { markers ->
+                    response.parseAs<RemoteMarkers>().also { markers ->
                         cachedMarkers = markers
                         preferences.edit()
-                            .putString(PREF_MARKERS_JSON, bodyString)
-                            .putString(PREF_MARKERS_LAST_UPDATE, System.currentTimeMillis().toString())
+                            .putString(PREF_MARKERS_JSON, response.body.string())
                             .apply()
                     }
                 }
-            }.getOrNull()
-        } ?: DEFAULT_MARKERS
+            }
+        } ?: error("Update the extension !")
+    }
+
+    fun handleFatalFailure(originalError: Throwable): Nothing {
+        val messageObject = fetchMessage()
+
+        if (messageObject?.systemNotice != null) {
+            error(messageObject.systemNotice.replace("{message}", originalError.message ?: ""))
+        }
+
+        throw originalError
+    }
+
+    private fun fetchMessage(): WhatsUp? = run {
+        client.newCall(GET(NOTICE_URL)).execute().use { response ->
+            if (!response.isSuccessful) return@run null
+            response.parseAs<WhatsUp>()
+        }
     }
 }
