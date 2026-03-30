@@ -192,7 +192,16 @@ class ZonatmoTo : HttpSource() {
             }
         }
 
-        return chapters.map { it.toSChapter(mangaSlug) }.reversed()
+        val deduplicatedChapters = chapters.distinctBy { it.slug }
+        val useSequentialNumbers = deduplicatedChapters.size != chapters.size
+
+        return deduplicatedChapters.mapIndexed { index, item ->
+            item.toSChapter(mangaSlug).apply {
+                if (useSequentialNumbers) {
+                    chapter_number = index + 1f
+                }
+            }
+        }.reversed()
     }
 
     // ========================= Pages =========================
