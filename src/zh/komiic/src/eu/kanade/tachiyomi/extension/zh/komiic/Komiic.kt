@@ -33,6 +33,7 @@ class Komiic :
             val origin = chain.request()
             chain.proceed(origin).also {
                 if (it.code == 402 && origin.url.toString().contains("api/image")) {
+                    it.close()
                     throw IOException("今日圖片讀取次數已達上限，請登录或明天再來！")
                 }
             }
