@@ -19,14 +19,13 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.CacheControl
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class TruyenQQ :
@@ -39,11 +38,11 @@ class TruyenQQ :
 
     private val defaultBaseUrl = "https://truyenqqno.com"
 
+    override val supportsLatest: Boolean = true
+
     private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
-
-    override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
@@ -51,52 +50,71 @@ class TruyenQQ :
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
 
     // Trang html chứa popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/truyen-yeu-thich/trang-$page.html", headers)
-
-    // Selector trả về array các manga (chọn cả ảnh cx được tí nữa parse)
-    private fun mangaSelector(): String = "ul.grid > li"
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/truyen-yeu-thich" + if (page > 1) "/trang-$page" else "", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val manga = document.select(mangaSelector()).map(::mangaFromElement)
+        val manga = document.select("ul.grid > li").map { element ->
+            SManga.create().apply {
+                val anchor = element.selectFirst(".book_info .qtip a")!!
+                setUrlWithoutDomain(anchor.attr("href"))
+                title = anchor.text()
+                thumbnail_url = element.selectFirst(".book_avatar img")?.absUrl("src")
+            }
+        }
         val hasNextPage = document.selectFirst(".page_redirect > a:nth-last-child(2) > p:not(.active)") != null
         return MangasPage(manga, hasNextPage)
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        val anchor = element.selectFirst(".book_info .qtip a")!!
-        setUrlWithoutDomain(anchor.attr("href"))
-        title = anchor.text()
-        thumbnail_url = element.selectFirst(".book_avatar img")?.absUrl("src")
-    }
-
     // Trang html chứa Latest (các cập nhật mới nhất)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat/trang-$page.html", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/truyen-moi-cap-nhat" + if (page > 1) "/trang-$page" else "", headers)
 
-    // Selector trả về array các manga update (giống selector ở trên)
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Tìm kiếm
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotBlank()) {
-            "$baseUrl/tim-kiem/trang-$page.html".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .build()
-                .toString()
-        } else {
-            val builder = "$baseUrl/tim-kiem-nang-cao/trang-$page.html".toHttpUrl().newBuilder()
-            (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<UriFilter>()
-                .forEach { it.addToUri(builder) }
-            builder.build().toString()
-        }
+        val endpoint = if (query.isNotBlank()) "tim-kiem" else "tim-kiem-nang-cao"
+        val url = ("$baseUrl/$endpoint" + if (page > 1) "/trang-$page" else "").toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
+            } else {
+                (filters.ifEmpty { getFilterList() }).forEach { filter ->
+                    when (filter) {
+                        is CountryFilter -> addQueryParameter("country", filter.values[filter.state].id)
+                        is StatusFilter -> addQueryParameter("status", filter.values[filter.state].id)
+                        is ChapterCountFilter -> addQueryParameter("minchapter", filter.values[filter.state].id)
+                        is SortByFilter -> filter.state?.let {
+                            addQueryParameter("sort", (it.index * 2 + if (it.ascending) 1 else 0).toString())
+                        }
+                        is GenreList -> {
+                            addQueryParameter(
+                                "category",
+                                filter.state.filter { it.state == Filter.TriState.STATE_INCLUDE }
+                                    .joinToString(",") { it.id },
+                            )
+                            addQueryParameter(
+                                "notcategory",
+                                filter.state.filter { it.state == Filter.TriState.STATE_EXCLUDE }
+                                    .joinToString(",") { it.id },
+                            )
+                        }
+                        else -> {}
+                    }
+                }
+            }
+        }.build()
+
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
+    // Details
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
         val info = document.selectFirst(".list-info")!!
@@ -123,31 +141,30 @@ class TruyenQQ :
     }
 
     // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> = chapterListSelector()
-        .let(response.asJsoup()::select)
-        .map(::chapterFromElement)
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup()
+        .select("div.works-chapter-list div.works-chapter-item").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+                name = element.select("a").text().trim()
+                date_upload = dateFormat.tryParse(element.select(".time-chap").text())
+            }
+        }
 
-    private fun chapterListSelector(): String = "div.works-chapter-list div.works-chapter-item"
-
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        name = element.select("a").text().trim()
-        date_upload = dateFormat.tryParse(element.select(".time-chap").text())
-    }
-
+    // Pages
     override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter)
         .newBuilder()
         .cacheControl(CacheControl.FORCE_NETWORK)
         .build()
 
-    // Pages
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select(".page-chapter img:not([src*='stress.gif'])")
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup()
+        .select(".page-chapter img:not([src*='stress.gif'])")
         .mapIndexed { idx, it ->
             Page(idx, imageUrl = it.absUrl("src"))
         }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // Filters
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Không dùng chung với tìm kiếm bằng tên"),
         CountryFilter(),
@@ -157,95 +174,54 @@ class TruyenQQ :
         GenreList(getGenreList()),
     )
 
-    interface UriFilter {
-        fun addToUri(builder: HttpUrl.Builder)
+    private class Genre(name: String, val id: String) : Filter.TriState(name) {
+        override fun toString(): String = name
     }
 
-    open class UriPartFilter(
-        name: String,
-        private val query: String,
-        private val vals: Array<Pair<String, String>>,
-    ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray()),
-        UriFilter {
-        override fun addToUri(builder: HttpUrl.Builder) {
-            builder.addQueryParameter(query, vals[state].second)
-        }
-    }
-
-    class CountryFilter :
-        UriPartFilter(
+    private class CountryFilter :
+        Filter.Select<Genre>(
             "Quốc gia",
-            "country",
             arrayOf(
-                "Tất cả" to "0",
-                "Trung Quốc" to "1",
-                "Việt Nam" to "2",
-                "Hàn Quốc" to "3",
-                "Nhật Bản" to "4",
-                "Mỹ" to "5",
+                Genre("Tất cả", "0"),
+                Genre("Trung Quốc", "1"),
+                Genre("Việt Nam", "2"),
+                Genre("Hàn Quốc", "3"),
+                Genre("Nhật Bản", "4"),
+                Genre("Mỹ", "5"),
             ),
         )
 
-    class StatusFilter :
-        UriPartFilter(
+    private class StatusFilter :
+        Filter.Select<Genre>(
             "Tình trạng",
-            "status",
             arrayOf(
-                "Tất cả" to "-1",
-                "Đang tiến hành" to "0",
-                "Hoàn thành" to "2",
+                Genre("Tất cả", "-1"),
+                Genre("Đang tiến hành", "0"),
+                Genre("Hoàn thành", "2"),
             ),
         )
 
-    class ChapterCountFilter :
-        UriPartFilter(
+    private class ChapterCountFilter :
+        Filter.Select<Genre>(
             "Số lượng chương",
-            "minchapter",
             arrayOf(
-                "0" to "0",
-                ">= 100" to "100",
-                ">= 200" to "200",
-                ">= 300" to "300",
-                ">= 400" to "400",
-                ">= 500" to "500",
+                Genre("0", "0"),
+                Genre(">= 100", "100"),
+                Genre(">= 200", "200"),
+                Genre(">= 300", "300"),
+                Genre(">= 400", "400"),
+                Genre(">= 500", "500"),
             ),
         )
 
-    class SortByFilter :
+    private class SortByFilter :
         Filter.Sort(
             "Sắp xếp",
             arrayOf("Ngày đăng", "Ngày cập nhật", "Lượt xem"),
             Selection(2, false),
-        ),
-        UriFilter {
-        override fun addToUri(builder: HttpUrl.Builder) {
-            val index = state?.index ?: 2
-            val ascending = if (state?.ascending == true) 1 else 0
-            builder.addQueryParameter("sort", (index * 2 + ascending).toString())
-        }
-    }
+        )
 
-    class Genre(name: String, val id: String) : Filter.TriState(name)
-
-    class GenreList(state: List<Genre>) :
-        Filter.Group<Genre>("Thể loại", state),
-        UriFilter {
-        override fun addToUri(builder: HttpUrl.Builder) {
-            val genres = mutableListOf<String>()
-            val genresEx = mutableListOf<String>()
-
-            state.forEach {
-                when (it.state) {
-                    TriState.STATE_INCLUDE -> genres.add(it.id)
-                    TriState.STATE_EXCLUDE -> genresEx.add(it.id)
-                    else -> {}
-                }
-            }
-
-            builder.addQueryParameter("category", genres.joinToString(","))
-            builder.addQueryParameter("notcategory", genresEx.joinToString(","))
-        }
-    }
+    private class GenreList(state: List<Genre>) : Filter.Group<Genre>("Thể loại", state)
 
     // console.log([...document.querySelectorAll(".genre-item")].map(e => `Genre("${e.innerText}", "${e.querySelector("span").dataset.id}")`).join(",\n"))
     private fun getGenreList() = listOf(
@@ -296,6 +272,7 @@ class TruyenQQ :
         Genre("Xuyên Không", "88"),
     )
 
+    // Preferences
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != defaultBaseUrl) {
@@ -322,6 +299,7 @@ class TruyenQQ :
             }
         }.let(screen::addPreference)
     }
+
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     companion object {
