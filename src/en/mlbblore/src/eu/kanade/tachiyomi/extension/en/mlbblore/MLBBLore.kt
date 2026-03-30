@@ -7,16 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class MLBBLore : HttpSource() {
 
@@ -26,8 +22,40 @@ class MLBBLore : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "https://api.mobilelegends.com"
+    private val pageSize = 5
 
-    private val json: Json by injectLazy()
+    @Serializable
+    data class ApiListResponse(
+        val data: List<AlbumEntry> = emptyList(),
+    )
+
+    @Serializable
+    data class ApiDetailResponse(
+        val data: AlbumDetail? = null,
+    )
+
+    @Serializable
+    data class AlbumEntry(
+        val id: Int = 0,
+        val type: Int = 0,
+        val title: String = "",
+        @SerialName("hero_name") val heroName: String = "",
+        val thumb: String = "",
+    )
+
+    @Serializable
+    data class AlbumDetail(
+        val id: Int = 0,
+        val title: String = "",
+        @SerialName("hero_name") val heroName: String = "",
+        val thumb: String = "",
+        @SerialName("share_content") val shareContent: String = "",
+        @SerialName("comic_content") val comicContent: List<String> = emptyList(),
+    )
+
+    // Helpers
+
+    private fun String.toAbsoluteUrl() = if (startsWith("//")) "https:$this" else this
 
     private fun formRequest(url: String, params: Map<String, String>): Request {
         val formBody = FormBody.Builder()
@@ -35,13 +63,22 @@ class MLBBLore : HttpSource() {
         return POST(url, body = formBody.build())
     }
 
+    private fun detailRequest(id: String): Request = formRequest(
+        "$apiUrl/lore/album/detail",
+        mapOf(
+            "id" to id,
+            "lang" to "en",
+            "token" to "",
+        ),
+    )
+
     override fun popularMangaRequest(page: Int): Request = formRequest(
         "$apiUrl/lore/album/list",
         mapOf(
             "type" to "3",
             "sort" to "3",
             "page" to page.toString(),
-            "page_size" to "5",
+            "page_size" to "$pageSize",
             "lang" to "en",
             "token" to "",
         ),
@@ -53,100 +90,66 @@ class MLBBLore : HttpSource() {
             "type" to "3",
             "sort" to "1",
             "page" to page.toString(),
-            "page_size" to "5",
+            "page_size" to "$pageSize",
             "lang" to "en",
             "token" to "",
         ),
     )
 
     private fun parseMangaListResponse(response: Response): MangasPage {
-        val root = json.parseToJsonElement(response.body.string()).jsonObject
-        val data = root["data"]?.jsonArray ?: return MangasPage(emptyList(), false)
-
-        val mangas = data.mapNotNull { element ->
-            val obj = element.jsonObject
-
-            // Ensure it's a comic (type 3)
-            if (obj["type"]?.jsonPrimitive?.intOrNull != 3) return@mapNotNull null
-
-            val id = obj["id"]?.jsonPrimitive?.intOrNull?.toString() ?: return@mapNotNull null
-
-            SManga.create().apply {
-                title = obj["title"]?.jsonPrimitive?.content.orEmpty()
-                author = obj["hero_name"]?.jsonPrimitive?.content?.trim()
-                thumbnail_url = obj["thumb"]?.jsonPrimitive?.content?.let {
-                    if (it.startsWith("//")) "https:$it" else it
+        val result = response.parseAs<ApiListResponse>()
+        val mangas = result.data
+            .filter { it.type == 3 }
+            .map { entry ->
+                SManga.create().apply {
+                    url = entry.id.toString()
+                    title = entry.title
+                    author = entry.heroName.trim()
+                    thumbnail_url = entry.thumb.toAbsoluteUrl()
                 }
-                url = id
             }
-        }
-
-        return MangasPage(mangas, data.size >= 20)
+        return MangasPage(mangas, result.data.size >= pageSize)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaListResponse(response)
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaListResponse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request = formRequest(
-        "$apiUrl/lore/album/detail",
-        mapOf(
-            "id" to manga.url,
-            "lang" to "en",
-            "token" to "",
-        ),
-    )
+    // Manga details
+
+    override fun mangaDetailsRequest(manga: SManga): Request = detailRequest(manga.url)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val root = json.parseToJsonElement(response.body.string()).jsonObject
-        val data = root["data"]?.jsonObject ?: return SManga.create()
-
+        val detail = response.parseAs<ApiDetailResponse>().data ?: return SManga.create()
         return SManga.create().apply {
-            title = data["title"]?.jsonPrimitive?.content.orEmpty()
-            author = data["hero_name"]?.jsonPrimitive?.content?.trim()
-            thumbnail_url = data["thumb"]?.jsonPrimitive?.content?.let {
-                if (it.startsWith("//")) "https:$it" else it
-            }
-            description = data["share_content"]?.jsonPrimitive?.content.orEmpty()
+            title = detail.title
+            author = detail.heroName.trim()
+            thumbnail_url = detail.thumb.toAbsoluteUrl()
+            description = detail.shareContent
             status = SManga.COMPLETED
             initialized = true
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request = detailRequest(manga.url)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val root = json.parseToJsonElement(response.body.string()).jsonObject
-        val data = root["data"]?.jsonObject ?: return emptyList()
-        val id = data["id"]?.jsonPrimitive?.intOrNull?.toString() ?: return emptyList()
-
+        val detail = response.parseAs<ApiDetailResponse>().data ?: return emptyList()
         return listOf(
             SChapter.create().apply {
                 name = "Chapter 1"
                 chapter_number = 1f
-                url = id
+                url = detail.id.toString()
             },
         )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = formRequest(
-        "$apiUrl/lore/album/detail",
-        mapOf(
-            "id" to chapter.url,
-            "lang" to "en",
-            "token" to "",
-        ),
-    )
+    override fun pageListRequest(chapter: SChapter): Request = detailRequest(chapter.url)
 
     override fun pageListParse(response: Response): List<Page> {
-        val root = json.parseToJsonElement(response.body.string()).jsonObject
-        val data = root["data"]?.jsonObject ?: return emptyList()
-        val images = data["comic_content"]?.jsonArray ?: return emptyList()
-
-        return images.mapIndexedNotNull { index, element ->
-            val raw = element.jsonPrimitive.contentOrNull ?: return@mapIndexedNotNull null
-            val imageUrl = if (raw.startsWith("//")) "https:$raw" else raw
-            Page(index, imageUrl = imageUrl)
+        val detail = response.parseAs<ApiDetailResponse>().data ?: return emptyList()
+        return detail.comicContent.mapIndexed { index, raw ->
+            Page(index, imageUrl = raw.toAbsoluteUrl())
         }
     }
 
