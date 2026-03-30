@@ -89,9 +89,9 @@ class Atsumaru : HttpSource() {
         val statuses = mutableListOf<String>()
         var year: Int? = null
         var minChapters: Int? = null
-        var sort = "popularity"
         var showAdult = false
         var officialTranslation = false
+        var sortBy = "popularity"
 
         filters.forEach { filter ->
             when (filter) {
@@ -128,7 +128,7 @@ class Atsumaru : HttpSource() {
                 }
 
                 is SortFilter -> {
-                    sort = SortFilter.VALUES[filter.state!!.index]
+                    sortBy = SortFilter.VALUES[filter.state!!.index]
                 }
 
                 is AdultFilter -> {
@@ -149,7 +149,6 @@ class Atsumaru : HttpSource() {
 
         return SearchRequest(
             page = page,
-            sort = sort,
             filter = SearchFilter(
                 search = query.ifEmpty { null },
                 types = types,
@@ -159,6 +158,7 @@ class Atsumaru : HttpSource() {
                 minChapters = minChapters,
                 showAdult = showAdult,
                 officialTranslation = officialTranslation,
+                sortBy = sortBy,
             ),
         )
     }

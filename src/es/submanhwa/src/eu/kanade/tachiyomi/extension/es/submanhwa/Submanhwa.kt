@@ -112,7 +112,12 @@ class Submanhwa : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> = document.select("#all img").mapIndexed { idx, img ->
-        Page(idx, imageUrl = img.absUrl("data-src"))
+        Page(idx, imageUrl = img.imgAttr())
+    }
+
+    private fun Element.imgAttr(): String? = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        else -> this.attr("abs:src")
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

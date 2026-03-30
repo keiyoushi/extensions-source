@@ -1,9 +1,9 @@
 ext {
-    extName = 'Eros Scans'
+    extName = 'Scythe Scans'
     extClass = '.ErosScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://erosxsun.xyz'
-    overrideVersionCode = 5
+    baseUrl = 'https://scythescans.com'
+    overrideVersionCode = 6
     isNsfw = false
 }
 
