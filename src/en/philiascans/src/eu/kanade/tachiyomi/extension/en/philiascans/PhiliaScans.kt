@@ -25,7 +25,7 @@ class PhiliaScans :
         "https://philiascans.org",
         "en",
     ) {
-    override val versionId: Int = 4
+    override val versionId: Int = 3
 
     override val useNewChapterEndpoint = false
 
@@ -44,7 +44,7 @@ class PhiliaScans :
         if (searchNonce.isNotEmpty()) return searchNonce
         try {
             val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-            val script = document.select("script:containsData(liveSearchData)").firstOrNull()?.data()
+            val script = document.selectFirst("script:containsData(liveSearchData)")?.data()
             if (script != null) {
                 searchNonce = script.substringAfter("\"nonce\":\"").substringBefore("\"")
             }
@@ -104,7 +104,7 @@ class PhiliaScans :
 
             val mangas = results.mapNotNull { element ->
                 val html = element.jsonPrimitive.content
-                val doc = Jsoup.parse(html)
+                val doc = Jsoup.parseBodyFragment(html, baseUrl)
                 val a = doc.selectFirst("a") ?: return@mapNotNull null
                 val img = doc.selectFirst("img")
                 val title = doc.selectFirst(".search-result-title")?.text()
