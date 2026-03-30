@@ -192,17 +192,23 @@ class ZonatmoTo : HttpSource() {
             }
         }
 
-        return chapters.map { it.toSChapter(mangaSlug) }.reversed()
+        return chapters
+            .distinctBy { item -> item.id }
+            .sortedByDescending { item -> item.chapterNumber.toFloatOrNull() ?: -1f }
+            .map { item -> item.toSChapter(mangaSlug) }
     }
 
     // ========================= Pages =========================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val slugs = chapter.url.split("/", limit = 2)
-            .takeIf { it.size == 2 }
-            ?: throw Exception("Invalid chapter url")
+        val chapterUrl = baseUrl.toHttpUrl().resolve(chapter.url)!!
 
-        return GET(singleChapterApiUrl(mangaSlug = slugs[0], chapterSlug = slugs[1]), apiHeaders)
+        val pathSegments = chapterUrl.pathSegments
+        val mangaSlug = pathSegments[pathSegments.size - 2]
+        val chapterSlug = pathSegments[pathSegments.size - 1]
+        val id = chapterUrl.queryParameter("id")
+
+        return GET(singleChapterApiUrl(mangaSlug, chapterSlug, id), apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -275,13 +281,19 @@ class ZonatmoTo : HttpSource() {
         .build()
         .toString()
 
-    private fun singleChapterApiUrl(mangaSlug: String, chapterSlug: String): String = apiUrl.newBuilder()
-        .addPathSegment("single")
-        .addPathSegment("manga")
-        .addPathSegment(mangaSlug)
-        .addPathSegment(chapterSlug)
-        .build()
-        .toString()
+    private fun singleChapterApiUrl(mangaSlug: String, chapterSlug: String, id: String? = null): String {
+        val url = apiUrl.newBuilder()
+            .addPathSegment("single")
+            .addPathSegment("manga")
+            .addPathSegment(mangaSlug)
+            .addPathSegment(chapterSlug)
+
+        if (id != null) {
+            url.addQueryParameter("id", id)
+        }
+
+        return url.build().toString()
+    }
 
     private fun cdnImageUrl(jit: String, imageName: String): String = CDN_URL.toHttpUrl().newBuilder()
         .addPathSegment("manga")
@@ -325,8 +337,9 @@ class ZonatmoTo : HttpSource() {
     }
 
     private fun ChapterItemDto.toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        url = "$mangaSlug/$slug"
-        name = title.trim().ifEmpty { "Capitulo $chapterNumber" }
+        url = "$mangaSlug/$slug?id=$id"
+        val cleanTitle = title.trim()
+        name = "#$chapterNumber" + if (cleanTitle.isNotBlank()) " - $cleanTitle" else ""
         chapter_number = chapterNumber.toFloatOrNull() ?: -1f
         date_upload = dateFormat.tryParse(releaseDate)
     }
