@@ -74,9 +74,6 @@ data class MediocreMangaDto(
     val status: MediocreStatusDto? = null,
     @SerialName("total_capitulos") val totalChapters: Int = 0,
     @SerialName("capitulos") val chapters: List<MediocreChapterSimpleDto> = emptyList(),
-    @SerialName("criada_em") val createdAt: String? = null,
-    @SerialName("atualizada_em") val updatedAt: String? = null,
-    @SerialName("capitulo_numero") val homeChapterNumber: Float? = null,
 )
 
 @Serializable
