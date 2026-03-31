@@ -33,7 +33,7 @@ class MediocreToons :
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
     override val supportsLatest = true
-    private val apiUrl = "https://api.mediocretoons.site"
+    private val apiUrl = "https://api.mediocretoons.net"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -160,33 +160,21 @@ class MediocreToons :
 
     // ============================== Popular ================================
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/obras/ranking".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/buscar".toHttpUrl().newBuilder()
+            .addQueryParameter("limite", "24")
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("temCapitulo", "true")
+            .addQueryParameter("formato", POPULAR_FORMATOS)
             .addQueryParameter("ordenarPor", "view_geral")
-            .addQueryParameter("limite", "100")
             .build()
         return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val rankingList = response.parseAs<List<MediocreRankingDto>>()
-
-        val mangas = rankingList.map { rankingDto ->
-            SManga.create().apply {
-                title = rankingDto.name
-                thumbnail_url = rankingDto.image?.let { img ->
-                    when {
-                        img.startsWith("http") -> img
-                        else -> "${MediocreToons.CDN_URL}/obras/${rankingDto.id}/$img"
-                    }
-                }
-                url = "/obra/${rankingDto.id}"
-                description = ""
-                status = SManga.UNKNOWN
-                initialized = false
-            }
-        }
-
-        return MangasPage(mangas, hasNextPage = false)
+        val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
+        val mangas = dto.data.map { it.toSManga() }
+        val hasNext = dto.pagination?.hasNextPage ?: false
+        return MangasPage(mangas, hasNextPage = hasNext)
     }
 
     // ============================= Latest Updates ==========================
@@ -463,7 +451,8 @@ class MediocreToons :
     }
 
     companion object {
-        const val CDN_URL = "https://cdn.mediocretoons.site"
+        const val CDN_URL = "https://api.mediocretoons.net/storage"
+        private const val POPULAR_FORMATOS = "1,3,4,5,8,9,13"
         private const val EMAIL_PREF = "email"
         private const val PASSWORD_PREF = "password"
     }

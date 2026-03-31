@@ -42,16 +42,6 @@ data class MediocreFormatDto(
 )
 
 @Serializable
-data class MediocreRankingDto(
-    @SerialName("id") val id: Int = 0,
-    @SerialName("nome") val name: String = "",
-    @SerialName("imagem") val image: String? = null,
-    @SerialName("views_hoje") val viewsToday: Int = 0,
-    @SerialName("view_semana") val viewsWeek: Int = 0,
-    @SerialName("view_geral") val viewsTotal: Int = 0,
-)
-
-@Serializable
 data class MediocreStatusDto(
     val id: Int = 0,
     @SerialName("nome") val name: String = "",
@@ -84,6 +74,9 @@ data class MediocreMangaDto(
     val status: MediocreStatusDto? = null,
     @SerialName("total_capitulos") val totalChapters: Int = 0,
     @SerialName("capitulos") val chapters: List<MediocreChapterSimpleDto> = emptyList(),
+    @SerialName("criada_em") val createdAt: String? = null,
+    @SerialName("atualizada_em") val updatedAt: String? = null,
+    @SerialName("capitulo_numero") val homeChapterNumber: Float? = null,
 )
 
 @Serializable
