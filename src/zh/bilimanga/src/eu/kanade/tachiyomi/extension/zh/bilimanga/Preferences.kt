@@ -5,9 +5,11 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.SwitchPreferenceCompat
 
 const val PREF_POPULAR_MANGA_DISPLAY = "POPULAR_MANGA_DISPLAY"
 const val PREF_RATE_LIMIT = "RATE_LIMIT"
+const val PREF_NOTICE = "NOTICE"
 
 val RATE_LIMIT_REGEX = Regex("^\\d+/\\d+$")
 
@@ -62,5 +64,11 @@ fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
                 false
             }
         }
+    },
+    SwitchPreferenceCompat(context).apply {
+        key = PREF_NOTICE
+        title = "顯示作品公告"
+        summary = "如果有，則在簡介里顯示該作品的公告通知"
+        setDefaultValue(true)
     },
 )
