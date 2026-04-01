@@ -232,10 +232,16 @@ class Softkomik : HttpSource() {
         }
 
         if (response?.isSuccessful == true) return response
-        response?.close()
 
         val currentHost = cdnUrls.firstOrNull { request.url.toString().startsWith(it) }
-            ?: return throw java.net.UnknownHostException("Unknown CDN host: ${request.url.host}")
+
+        // Only chapter CDN URLs should use retry host fallback.
+        // Non-CDN hosts (e.g. cover URL) should return the original response or throw if it failed, without trying other hosts.
+        if (currentHost == null) {
+            return response ?: throw (java.net.UnknownHostException(request.url.host))
+        }
+
+        response?.close()
 
         val imagePath = request.url.toString().removePrefix(currentHost).removePrefix("/")
         val otherHosts = cdnUrls.filter { it != currentHost }
@@ -299,7 +305,7 @@ class Softkomik : HttpSource() {
                 client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
             }
 
-            val response = client.newCall(GET("$baseUrl/api/se", apiHeaders)).execute()
+            val response = client.newCall(GET("$baseUrl/api/sessions", apiHeaders)).execute()
 
             if (!response.isSuccessful) {
                 val code = response.code
