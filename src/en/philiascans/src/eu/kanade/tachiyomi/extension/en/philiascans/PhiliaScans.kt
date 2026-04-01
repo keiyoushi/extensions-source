@@ -8,10 +8,8 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
@@ -31,43 +29,61 @@ class PhiliaScans :
 
     private var searchNonce: String = ""
 
+    private val nonceRegex = """liveSearchData[^}]*"nonce"\s*:\s*"([^"]+)"""".toRegex()
+
+    override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (searchNonce.isEmpty() && response.header("Content-Type")?.contains("text/html") == true) {
+                // Peek the body so it isn't consumed for the actual parsing downstream
+                val bodyString = response.peekBody(1024 * 1024L).string()
+                nonceRegex.find(bodyString)?.let {
+                    searchNonce = it.groupValues[1]
+                }
+            }
+            response
+        }
+        .build()
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/all-mangas/?paged=$page", headers)
 
     override fun popularMangaSelector() = ".original .unit"
     override val popularMangaUrlSelector = ".info a.c-title"
     override val popularMangaUrlSelectorImg = ".poster img:not(.flag-icon)"
-    override fun popularMangaNextPageSelector() = ".pagination a.page-link[rel=next]"
+
+    // Check for the disabled class to prevent 404 errors on the last page
+    override fun popularMangaNextPageSelector() = ".pagination li:not(.disabled) .page-link[rel=next]"
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently-updated/?page=$page", headers)
 
-    private fun getSearchNonce(): String {
-        if (searchNonce.isNotEmpty()) return searchNonce
-        try {
-            val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-            val script = document.selectFirst("script:containsData(liveSearchData)")?.data()
-            if (script != null) {
-                searchNonce = script.substringAfter("\"nonce\":\"").substringBefore("\"")
-            }
-        } catch (e: Exception) {
-            // Ignore and fallback to trying without nonce
-        }
-        return searchNonce
+    override fun popularMangaParse(response: Response): MangasPage {
+        if (response.code == 404) return MangasPage(emptyList(), false)
+        return super.popularMangaParse(response)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        if (response.code == 404) return MangasPage(emptyList(), false)
+        return super.latestUpdatesParse(response)
     }
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val nonce = getSearchNonce()
+            if (searchNonce.isEmpty()) {
+                // Force interceptor to grab the nonce if it wasn't caught during normal browsing
+                client.newCall(GET(baseUrl, headers)).execute().close()
+            }
+
             val form = FormBody.Builder()
                 .add("action", "live_search")
                 .add("search_query", query)
-                .apply {
-                    if (nonce.isNotEmpty()) {
-                        add("security", nonce)
-                    }
-                }
+                .add("security", searchNonce)
                 .build()
 
-            return POST("$baseUrl/wp-admin/admin-ajax.php", headers, form)
+            val postHeaders = headersBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
+
+            return POST("$baseUrl/wp-admin/admin-ajax.php", postHeaders, form)
         }
 
         var genre = ""
@@ -93,17 +109,14 @@ class PhiliaScans :
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaParse(response: Response): MangasPage {
+        if (response.code == 404) return MangasPage(emptyList(), false)
+
         if (response.request.url.encodedPath.contains("admin-ajax.php")) {
             val jsonString = response.body.string()
 
-            // Safety check to ensure we actually got JSON back
-            if (!jsonString.trim().startsWith("{")) return MangasPage(emptyList(), false)
+            val dto = json.decodeFromString<SearchResponseDto>(jsonString)
 
-            val jsonObject = json.parseToJsonElement(jsonString).jsonObject
-            val results = jsonObject["results"]?.jsonArray ?: return MangasPage(emptyList(), false)
-
-            val mangas = results.mapNotNull { element ->
-                val html = element.jsonPrimitive.content
+            val mangas = dto.results.mapNotNull { html ->
                 val doc = Jsoup.parseBodyFragment(html, baseUrl)
                 val a = doc.selectFirst("a") ?: return@mapNotNull null
                 val img = doc.selectFirst("img")
@@ -117,7 +130,7 @@ class PhiliaScans :
                     thumbnail_url = img?.attr("src")
                 }
             }
-            // Live Search does not return pagination metadata
+            // Live Search does not return pagination metadata, hardcapped at 5 results by server
             return MangasPage(mangas, false)
         }
 
@@ -155,7 +168,7 @@ class PhiliaScans :
         val urlElement = element.selectFirst("a")!!
         setUrlWithoutDomain(urlElement.absUrl("href"))
         name = element.selectFirst("zebi")?.text()?.removeSuffix(":")?.trim()
-            ?: urlElement.ownText().trim().ifEmpty { urlElement.text().trim() }
+            ?: urlElement.ownText().ifEmpty { urlElement.text() }
     }
 
     override fun processThumbnail(url: String?, fromSearch: Boolean): String? = if (fromSearch) {
@@ -168,7 +181,8 @@ class PhiliaScans :
 
     // Custom Filters
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Note: Filters are ignored if you enter a text search."),
+        Filter.Header("Note: Text searches (5 results max) cannot be combined with Genre filters."),
+        Filter.Header("If you type a search, the Genre selection is ignored."),
         Filter.Separator(),
         GenreFilter(),
     )
@@ -209,3 +223,8 @@ class PhiliaScans :
             ),
         )
 }
+
+@Serializable
+data class SearchResponseDto(
+    val results: List<String> = emptyList(),
+)
