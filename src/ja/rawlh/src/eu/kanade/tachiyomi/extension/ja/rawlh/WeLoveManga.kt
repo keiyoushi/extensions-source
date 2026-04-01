@@ -13,13 +13,8 @@ class WeLoveManga : FMReader("WeLoveManga", "https://weloma.art", "ja") {
     override val id = 7595224096258102519
 
     override val chapterUrlSelector = ""
-    override fun pageListParse(document: Document): List<Page> {
-        fun Element.decoded(): String = this.attr("data-src").trimEnd()
 
-        return document.select(pageListImageSelector).mapIndexed { i, img ->
-            Page(i, document.location(), img.decoded())
-        }
-    }
+    override fun pageListParse(document: Document): List<Page> = base64PageListParse(document)
 
     // Referer needs to be chapter URL
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
