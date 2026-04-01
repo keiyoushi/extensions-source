@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 class ValirScans :
     Keyoapp(
         "Valir Scans",
-        "https://valirscans.com",
+        "https://valirscans.org",
         "en",
     ) {
     override val descriptionSelector: String = "div.grid > div.overflow-hidden > p"
