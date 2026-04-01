@@ -4,11 +4,12 @@ import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import kotlinx.serialization.json.Json
 
-class DdtTeam : PizzaReader(
-    "DDT Team",
-    "https://ddt.hastateam.com",
-    "it",
-) {
+class DdtTeam :
+    PizzaReader(
+        "DDT Team",
+        "https://ddt.hastateam.com",
+        "it",
+    ) {
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val url = chain.request().url.newBuilder()
