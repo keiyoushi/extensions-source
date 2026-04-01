@@ -337,7 +337,7 @@ class ZonatmoTo : HttpSource() {
     }
 
     private fun ChapterItemDto.toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        url = "$mangaSlug/$slug?id=$id"
+        url = "$mangaSlug/$slug#$id"
         val cleanTitle = title.trim()
         name = "#$chapterNumber" + if (cleanTitle.isNotBlank()) " - $cleanTitle" else ""
         chapter_number = chapterNumber.toFloatOrNull() ?: -1f
