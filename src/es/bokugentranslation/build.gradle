@@ -1,9 +1,9 @@
 ext {
     extName = 'BokugenTranslation'
     extClass = '.BokugenTranslation'
-    themePkg = 'madara'
+    themePkg = 'mangathemesia'
     baseUrl = 'https://bokugents.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 17
     isNsfw = false
 }
 
