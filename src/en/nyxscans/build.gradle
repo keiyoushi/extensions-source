@@ -2,8 +2,8 @@ ext {
     extName = 'Nyx Scans'
     extClass = '.NyxScans'
     themePkg = 'iken'
-    baseUrl = 'https://nyxscans.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://nyxmanga.org'
+    overrideVersionCode = 2
     isNsfw = false
 }
 

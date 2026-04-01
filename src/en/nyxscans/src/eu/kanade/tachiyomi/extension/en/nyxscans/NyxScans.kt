@@ -6,6 +6,6 @@ class NyxScans :
     Iken(
         "Nyx Scans",
         "en",
-        "https://nyxscans.com",
-        "https://api.nyxscans.com",
+        "https://nyxmanga.org",
+        "https://api.nyxmanga.org",
     )
