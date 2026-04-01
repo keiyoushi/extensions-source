@@ -206,9 +206,8 @@ class ZonatmoTo : HttpSource() {
         val pathSegments = chapterUrl.pathSegments
         val mangaSlug = pathSegments[pathSegments.size - 2]
         val chapterSlug = pathSegments[pathSegments.size - 1]
-        val id = chapterUrl.queryParameter("id")
 
-        return GET(singleChapterApiUrl(mangaSlug, chapterSlug, id), apiHeaders)
+        return GET(singleChapterApiUrl(mangaSlug, chapterSlug), apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -281,16 +280,12 @@ class ZonatmoTo : HttpSource() {
         .build()
         .toString()
 
-    private fun singleChapterApiUrl(mangaSlug: String, chapterSlug: String, id: String? = null): String {
+    private fun singleChapterApiUrl(mangaSlug: String, chapterSlug: String): String {
         val url = apiUrl.newBuilder()
             .addPathSegment("single")
             .addPathSegment("manga")
             .addPathSegment(mangaSlug)
             .addPathSegment(chapterSlug)
-
-        if (id != null) {
-            url.addQueryParameter("id", id)
-        }
 
         return url.build().toString()
     }
