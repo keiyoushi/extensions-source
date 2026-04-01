@@ -118,7 +118,7 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
         val images = document.select("img[id~=page\\d+]")
 
         return images.mapIndexed { index, element ->
-            Page(index, imageUrl = element.attr("src"))
+            Page(index, imageUrl = element.attr("abs:src"))
         }
     }
 }
