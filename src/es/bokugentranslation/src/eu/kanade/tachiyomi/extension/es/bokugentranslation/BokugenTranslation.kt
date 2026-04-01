@@ -1,62 +1,35 @@
 package eu.kanade.tachiyomi.extension.es.bokugentranslation
 
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
-import android.view.View
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
 
 class BokugenTranslation :
-    Madara(
+    MangaThemesia(
         "BokugenTranslation",
         "https://bokugents.com",
         "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+        dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("en")),
     ) {
-    private var loadWebView = true
+
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
-            val url = request.url.toString()
-            if (loadWebView) {
-                val handler = Handler(Looper.getMainLooper())
-                val latch = CountDownLatch(1)
-                var webView: WebView? = null
-                handler.post {
-                    val webview = WebView(Injekt.get<Application>())
-                    webView = webview
-                    webview.settings.domStorageEnabled = true
-                    webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                    webview.settings.useWideViewPort = false
-                    webview.settings.loadWithOverviewMode = false
-
-                    webview.webChromeClient = object : WebChromeClient() {
-                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                            if (newProgress == 100) {
-                                latch.countDown()
-                            }
-                        }
-                    }
-                    webview.loadUrl(url)
-                }
-
-                latch.await()
-                loadWebView = false
-                handler.post { webView?.destroy() }
+            if (request.url.host.endsWith(".wp.com")) {
+                chain.proceed(request.newBuilder().headers(imageHeaders).build())
+            } else {
+                chain.proceed(request)
             }
-            chain.proceed(request)
         }
-        .rateLimit(1, 1)
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .build()
 
-    override val useNewChapterEndpoint = true
+    private val imageHeaders by lazy {
+        headersBuilder()
+            .set("Accept", "image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
+            .build()
+    }
 }
