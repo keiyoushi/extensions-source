@@ -53,10 +53,10 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
+    private val domain = "procomic.pro"
     override val baseUrl = "https://$domain"
     override val supportsLatest = true
-    override val versionId = 5
+    override val versionId = 6
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
