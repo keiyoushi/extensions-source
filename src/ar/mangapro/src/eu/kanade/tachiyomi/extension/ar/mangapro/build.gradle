@@ -1,0 +1,20 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+android {
+    compileSdkVersion 36
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 36
+        versionCode 9
+        versionName "1.4.9"
+    }
+}
+
+dependencies {
+    implementation(project(":lib-cookieinterceptor"))
+    implementation(project(":lib-unscrambler"))
+    // تأكد من استخدام نسخة حديثة من الـ serialization
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
+}
