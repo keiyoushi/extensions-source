@@ -3,7 +3,7 @@ ext {
     extClass = '.ValirScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://valirscans.org'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
