@@ -73,7 +73,7 @@ class HentaiMode : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         require(query.length >= 3) { "Please use at least 3 characters!" }
-        return GET("$baseUrl/buscar?s=$query")
+        return GET("$baseUrl/buscar?s=$query", headersBuilder().set("Referer", baseUrl).build())
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -101,6 +101,7 @@ class HentaiMode : ParsedHttpSource() {
                         append(info)
                         append(": ")
                         append(it)
+                        append("\n")
                     }
                 }
             }
@@ -138,7 +139,7 @@ class HentaiMode : ParsedHttpSource() {
             }
 
         return pagePaths.mapIndexed { index, path ->
-            Page(index, imageUrl = baseUrl + path)
+            Page(index, imageUrl = path)
         }
     }
 
