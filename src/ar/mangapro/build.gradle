@@ -1,7 +1,7 @@
 ext {
 	extName = 'ProChan'
-	extClass = '.ProChan'
-	extVersionCode = 47
+	extClass = '.ProComic'
+	extVersionCode = 48
 	isNsfw = true
 }
 
