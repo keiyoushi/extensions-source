@@ -297,16 +297,21 @@ class Japscan :
         val matchResult = captchaRegex.find(pageContent)
 
         if (matchResult != null) {
-            val context = Injekt.get<Application>()
-            val intent = Intent().apply {
-                component = ComponentName(context, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra("url_key", "$internalBaseUrl${chapter.url}")
-                putExtra("source_key", id)
-                putExtra("title_key", "Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
-            }
+            try {
+                val context = Injekt.get<Application>()
+                val intent = Intent().apply {
+                    component = ComponentName(context, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra("url_key", "$internalBaseUrl${chapter.url}")
+                    putExtra("source_key", id)
+                    putExtra("title_key", "Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
+                }
 
-            context.startActivity(intent)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                // Suwayomi etc.
+                throw Exception("Résolvez le captcha de ce chapitre depuis la WebView et réouvrez le chapitre.")
+            }
             throw Exception("Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
         }
 
