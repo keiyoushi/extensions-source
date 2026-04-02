@@ -13,4 +13,6 @@ class Noromax :
     override val versionId = 2
 
     override val hasProjectPage = true
+
+    override val pageSelector = "div#readerarea img:not(noscript img)"
 }
