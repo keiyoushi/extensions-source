@@ -20,7 +20,7 @@ class UrlActivity : Activity() {
         try {
             startActivity(mainIntent)
         } catch (e: ActivityNotFoundException) {
-            Log.e("ProChan", "Unable to launch activity", e)
+            Log.e("ProComic", "Unable to launch activity", e)
         }
 
         finish()
