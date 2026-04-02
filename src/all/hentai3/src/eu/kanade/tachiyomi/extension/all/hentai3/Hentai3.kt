@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.hentai3
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -21,7 +26,8 @@ import java.util.TimeZone
 open class Hentai3(
     override val lang: String = "all",
     private val searchLang: String = "",
-) : HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "3Hentai"
 
@@ -34,6 +40,21 @@ open class Hentai3(
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
+
+    private val prefs: SharedPreferences by lazy { getPreferences() }
+
+    private var displayFullTitle: Boolean = prefs.getBoolean("full_title", false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "full_title"
+            title = "Display full title"
+            setOnPreferenceChangeListener { _, newValue ->
+                displayFullTitle = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+    }
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&page=$page&"}sort=popular", headers)
@@ -48,7 +69,7 @@ open class Hentai3(
     }
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div")!!.ownText()
+        title = element.selectFirst("div.title")!!.ownText()
         setUrlWithoutDomain(element.absUrl("href"))
         thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
     }
@@ -121,7 +142,8 @@ open class Hentai3(
             val authors = document.select("a[href*=/groups/]").eachText().joinToString()
             val artists = document.select("a[href*=/artists/]").eachText().joinToString()
             initialized = true
-            title = document.select("h1 > span").text()
+
+            title = document.select(if (displayFullTitle) "h1" else "h1 > span").text()
             author = authors.ifEmpty { artists }
             artist = artists.ifEmpty { authors }
             genre = document.select("a[href*=/tags/]").eachText().joinToString {
