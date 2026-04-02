@@ -36,7 +36,7 @@ open class Hentai3(
         .set("origin", baseUrl)
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&page=$page&"}sort=popular", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -54,63 +54,52 @@ open class Hentai3(
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&pages=$page"}", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&page=$page"}", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tags = mutableListOf<String>()
-        var singleTag: Pair<String, String>? = null
         var sort = ""
 
-        if (searchLang.isNotEmpty()) tags.add("language:$searchLang")
-        filters.forEach {
-            when (it) {
-                is SelectFilter -> sort = it.getValue()
+        val tags = buildString {
+            filters.forEach { filter ->
+                when (filter) {
+                    is SelectFilter -> sort = filter.getValue()
 
-                is TextFilter -> {
-                    if (it.state.isNotEmpty()) {
-                        val splitted = it.state.split(",").filter(String::isNotBlank)
-                        if (splitted.size < 2 && it.type != "tags") {
-                            singleTag = it.type to it.state.replace(" ", "-")
-                        } else {
-                            splitted.map { tag ->
-                                val trimmed = tag.trim().lowercase()
-                                tags.add(
-                                    buildString {
-                                        if (trimmed.startsWith('-')) append("-")
-                                        append(it.type, ":'")
-                                        append(trimmed.removePrefix("-"), if (it.specific.isNotEmpty()) " (${it.specific})'" else "'")
-                                    },
-                                )
+                    is TextFilter -> {
+                        filter.state.split(",")
+                            .asSequence()
+                            .map(String::trim)
+                            .filter(String::isNotEmpty)
+                            .forEach { rawTag ->
+                                val tag = rawTag.lowercase()
+
+                                if (tag.startsWith("-")) append("-")
+
+                                append(filter.type)
+                                append(":'")
+                                append(tag.removePrefix("-"))
+
+                                if (filter.specific.isNotEmpty()) {
+                                    append(" (${filter.specific})")
+                                }
+                                append("' ")
                             }
-                        }
                     }
-                }
 
-                else -> {}
+                    else -> {}
+                }
             }
         }
 
+        val language = if (searchLang.isNotEmpty()) "language:$searchLang" else ""
+
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (singleTag != null) {
-                addPathSegment(singleTag!!.first)
-                addPathSegment(singleTag!!.second)
-                if (page > 1) addPathSegment(page.toString())
-            } else {
-                addPathSegment("search")
-                addQueryParameter(
-                    "q",
-                    when {
-                        tags.isNotEmpty() -> tags.joinToString()
-                        query.isNotEmpty() -> query
-                        else -> "page:>0"
-                    },
-                )
-                if (page > 1) addQueryParameter("page", page.toString())
-            }
+            addPathSegment("search")
+            addQueryParameter("q", "$query $language $tags")
+            if (page > 1) addQueryParameter("page", page.toString())
             addQueryParameter("sort", sort)
         }.build()
 
