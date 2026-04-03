@@ -101,6 +101,8 @@ fun generatePagesNoKeys(
 }
 
 /**
+ * Fetches and parses the page list from a Publus content URL.
+ * Automatically detects config pack format.
  * @param contentUrl The content base URL obtained from the source's content API response.
  * @param headers The [Headers] to use for requests.
  * @param client The [OkHttpClient] to use for requests.
