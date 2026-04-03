@@ -1,9 +1,7 @@
 ext {
     extName = 'EZmanga'
     extClass = '.EZmanga'
-    themePkg = 'iken'
-    baseUrl = 'https://ezmanga.org'
-    overrideVersionCode = 42
+    extVersionCode = 60
     isNsfw = false
 }
 
