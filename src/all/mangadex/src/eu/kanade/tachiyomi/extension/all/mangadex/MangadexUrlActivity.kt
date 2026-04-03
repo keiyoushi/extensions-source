@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -20,30 +19,35 @@ class MangadexUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val data = intent.data
-        if (data != null && data.pathSegments.size > 1) {
-            val titleId = data.pathSegments[1]
-            val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH").apply {
-                with(data.pathSegments[0]) {
-                    when {
-                        equals("chapter") -> putExtra("query", MDConstants.PREFIX_CH_SEARCH + titleId)
-                        equals("group") -> putExtra("query", MDConstants.PREFIX_GRP_SEARCH + titleId)
-                        equals("user") -> putExtra("query", MDConstants.PREFIX_USER_SEARCH + titleId)
-                        equals("author") -> putExtra("query", MDConstants.PREFIX_AUTHOR_SEARCH + titleId)
-                        equals("list") -> putExtra("query", MDConstants.PREFIX_LIST_SEARCH + titleId)
-                        else -> putExtra("query", MDConstants.PREFIX_ID_SEARCH + titleId)
-                    }
-                }
-                putExtra("filter", packageName)
+
+        val data = intent?.data
+        if (data != null && data.pathSegments != null && data.pathSegments.size > 1) {
+            val path = data.pathSegments[0]
+            val id = data.pathSegments[1]
+
+            var query = "id:$id"
+            if (path == "chapter") {
+                query = "ch:$id"
+            } else if (path == "group") {
+                query = "grp:$id"
+            } else if (path == "user") {
+                query = "usr:$id"
+            } else if (path == "author") {
+                query = "author:$id"
+            } else if (path == "list") {
+                query = "list:$id"
             }
+
+            val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH")
+            mainIntent.putExtra("query", query)
+            mainIntent.putExtra("filter", packageName)
+            mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
             try {
                 startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("MangadexUrlActivity", e.toString())
+            } catch (e: Exception) {
+                Log.e("MangadexUrlActivity", "Error")
             }
-        } else {
-            Log.e("MangadexUrlActivity", "Could not parse URI from intent $data")
         }
 
         finish()
