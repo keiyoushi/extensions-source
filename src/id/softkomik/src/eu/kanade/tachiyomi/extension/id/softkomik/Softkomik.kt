@@ -24,6 +24,7 @@ class Softkomik : HttpSource() {
     override val supportsLatest = true
 
     private var session: SessionDto? = null
+    private var bearerToken: BearerTokenDto? = null
 
     private val rscHeaders = headersBuilder()
         .add("rsc", "1")
@@ -178,19 +179,28 @@ class Softkomik : HttpSource() {
         val data = response.extractNextJs<ChapterPageDataDto>()
             ?: throw Exception("Could not find chapter data")
 
-        val imageSrc = if (data.imageSrc.isEmpty()) {
+        val imageSrc = data.imageSrc.ifEmpty {
             val slug = response.request.url.pathSegments[0]
             val chapter = response.request.url.pathSegments[2]
-            val url = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id}"
-            client.newCall(GET(url, headers)).execute().use {
+            val urlApi = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id}"
+
+            val token = getBearerTokenFromCookie()
+            val authHeaders = if (token != null) {
+                headersBuilder()
+                    .addAll(headers)
+                    .set("Authorization", token.token)
+                    .build()
+            } else {
+                headers
+            }
+
+            client.newCall(GET(urlApi, authHeaders)).execute().use {
                 it.parseAs<ChapterPageImagesDto>().imageSrc
             }
-        } else {
-            data.imageSrc
         }
 
         if (imageSrc.isEmpty()) {
-            throw Exception("No pages found")
+            throw Exception("Chapter kosong atau memerlukan login di WebView")
         }
 
         val imageBaseUrl = if (data.storageInter2 == true) cdnUrls[2] else cdnUrls[0]
@@ -288,6 +298,26 @@ class Softkomik : HttpSource() {
             response = chain.proceed(retryRequest)
         }
         return response
+    }
+
+    private fun getBearerTokenFromCookie(): BearerTokenDto? {
+        synchronized(this) {
+            val currentToken = bearerToken
+            if (currentToken != null && currentToken.ex > System.currentTimeMillis()) {
+                return currentToken
+            }
+
+            val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+            val cookieToken = cookies.firstOrNull { it.name == "tokkey" }
+            if (cookieToken == null) return null
+
+            val rawValue = cookieToken.value
+            val token = runCatching { URLDecoder.decode(rawValue, Charsets.UTF_8.name()) }
+                .getOrDefault(rawValue)
+            val ex = cookieToken.expiresAt
+            bearerToken = BearerTokenDto(token = token, ex = ex)
+            return bearerToken
+        }
     }
 
     // because softkomik often changes their api session url,
