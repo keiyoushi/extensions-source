@@ -47,9 +47,9 @@ class MoeTruyen : HttpSource() {
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        title = element.selectFirst(".homepage-ranking-item__title")!!.let { titleElement ->
-            titleElement.attr("title").ifEmpty { titleElement.text() }
-        }
+        val titleElement = element.selectFirst(".homepage-ranking-item__title")!!
+        val titleAttr = titleElement.attr("title")
+        title = titleAttr.ifEmpty { titleElement.text() }
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -265,15 +265,23 @@ class MoeTruyen : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        return document.select("img.page-media")
-            .mapIndexedNotNull { index, element ->
-                val imageUrl = element.absUrl("data-src")
-                    .ifEmpty { element.absUrl("src") }
-
-                imageUrl
-                    .takeUnless { it.isBlank() || it.startsWith("data:") }
-                    ?.let { Page(index, imageUrl = it) }
+        val imageUrls = document.select("img.page-media")
+            .asSequence()
+            .filterNot { element ->
+                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
             }
+            .map { element ->
+                element.absUrl("data-src").ifEmpty { element.absUrl("src") }
+            }
+            .filter { imageUrl ->
+                imageUrl.isNotBlank() && !imageUrl.startsWith("data:")
+            }
+            .distinct()
+            .toList()
+
+        return imageUrls.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
