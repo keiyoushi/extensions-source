@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class RiztranslationUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -21,10 +21,10 @@ class RiztranslationUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("RiztranslationUrl", e.toString())
+                Log.e("UrlActivity", e.toString())
             }
         } else {
-            Log.e("RiztranslationUrl", "could not parse uri from intent $intent")
+            Log.e("UrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
