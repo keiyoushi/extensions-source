@@ -16,6 +16,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -50,6 +51,8 @@ class ValirScans :
     private val json: Json by injectLazy()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private val baseHttpUrl by lazy { "$baseUrl/".toHttpUrl() }
 
     override fun headersBuilder() = Headers.Builder()
         .add("Referer", "$baseUrl/")
@@ -101,8 +104,8 @@ class ValirScans :
             author = schema?.author?.name ?: detailData?.author
             artist = detailData?.artist
             status = parseStatus(detailData?.status)
-            thumbnail_url = detailData?.coverImage?.toAbsoluteUrl()
-                ?: schema?.image?.toAbsoluteUrl()
+            thumbnail_url = detailData?.coverImage?.toAbsoluteUrl(response.request.url.toString())
+                ?: schema?.image?.toAbsoluteUrl(response.request.url.toString())
             genre = buildList {
                 detailData?.type
                     ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ENGLISH) else it.toString() }
@@ -209,59 +212,58 @@ class ValirScans :
 
         val encodedUrl = candidate.substringAfter("url=", "").substringBefore("&")
         val decodedUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8)
-        return decodedUrl.toAbsoluteUrl()
+        return decodedUrl.toAbsoluteUrl(ownerDocument()?.location() ?: baseUrl)
     }
 
-    private fun String.toAbsoluteUrl(): String = when {
-        startsWith("http://") || startsWith("https://") -> this
-        startsWith("//") -> "https:$this"
-        startsWith("/") -> baseUrl + this
-        else -> "$baseUrl/$this"
-    }
+    private fun String.toAbsoluteUrl(base: String = baseUrl): String = resolveUrl(this, base.toHttpUrlOrNull() ?: baseHttpUrl)?.toString() ?: this
 
     private fun normalizeSeriesPath(path: String): String {
-        val cleanPath = sanitizePath(path)
+        val resolvedUrl = resolveUrl(path)
+        val segments = resolvedUrl?.pathSegments.orEmpty().filter(String::isNotBlank)
+
         return when {
-            cleanPath.startsWith("/series/comic/") -> cleanPath.substringBefore("/chapter/").substringBefore("?")
-            cleanPath.startsWith("/comic/") -> "/series$cleanPath".substringBefore("/chapter/").substringBefore("?")
-            cleanPath.startsWith("/series/") -> {
-                val slug = cleanPath.removePrefix("/series/").substringBefore("/").substringBefore("?")
-                "/series/comic/$slug"
-            }
-            else -> {
-                val slug = cleanPath.substringAfterLast("/").substringBefore("?")
-                "/series/comic/$slug"
-            }
+            segments.size >= 3 && segments[0] == "series" && segments[1] == "comic" ->
+                "/series/comic/${segments[2]}"
+            segments.size >= 2 && segments[0] == "comic" ->
+                "/series/comic/${segments[1]}"
+            segments.size >= 2 && segments[0] == "series" ->
+                "/series/comic/${segments[1]}"
+            segments.isNotEmpty() ->
+                "/series/comic/${segments.last()}"
+            else ->
+                sanitizeRelativePath(path)
         }.trimEnd('/')
     }
 
     private fun normalizeChapterPath(path: String): String {
-        val cleanPath = sanitizePath(path)
+        val resolvedUrl = resolveUrl(path)
+        val segments = resolvedUrl?.pathSegments.orEmpty().filter(String::isNotBlank)
+
         return when {
-            cleanPath.startsWith("/series/comic/") -> cleanPath
-            cleanPath.startsWith("/comic/") -> "/series$cleanPath"
-            cleanPath.startsWith("/series/") && cleanPath.contains("/chapter/") -> {
-                val slug = cleanPath.removePrefix("/series/").substringBefore("/")
-                val chapter = cleanPath.substringAfter("/chapter/")
-                "/series/comic/$slug/chapter/$chapter"
-            }
-            else -> cleanPath
-        }.substringBefore("?")
+            segments.size >= 5 && segments[0] == "series" && segments[1] == "comic" && segments[3] == "chapter" ->
+                "/series/comic/${segments[2]}/chapter/${segments[4]}"
+            segments.size >= 4 && segments[0] == "comic" && segments[2] == "chapter" ->
+                "/series/comic/${segments[1]}/chapter/${segments[3]}"
+            segments.size >= 4 && segments[0] == "series" && segments[2] == "chapter" ->
+                "/series/comic/${segments[1]}/chapter/${segments[3]}"
+            else ->
+                sanitizeRelativePath(path).substringBefore("?")
+        }
     }
 
-    private fun sanitizePath(path: String): String {
-        path.toHttpUrlOrNull()?.let { url ->
-            return buildString {
-                append(url.encodedPath)
-                url.encodedQuery?.let {
-                    append('?')
-                    append(it)
-                }
-            }
+    private fun resolveUrl(path: String, base: HttpUrl = baseHttpUrl): HttpUrl? {
+        path.toHttpUrlOrNull()?.let { return it }
+
+        if (path.startsWith("//")) {
+            return "${base.scheme}:$path".toHttpUrlOrNull()
         }
 
-        // Stored library URLs can still be relative, so keep a small string fallback.
-        return "/" + path.removePrefix("/").substringBefore("#")
+        return base.resolve(path)
+    }
+
+    private fun sanitizeRelativePath(path: String): String {
+        val cleanPath = path.substringBefore('#')
+        return "/" + cleanPath.removePrefix("/")
     }
 
     private fun extractEscapedJsonValue(html: String, marker: String, openChar: Char): String {
