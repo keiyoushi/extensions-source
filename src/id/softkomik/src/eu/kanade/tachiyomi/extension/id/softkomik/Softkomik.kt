@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -301,7 +300,7 @@ class Softkomik : HttpSource() {
             val decodedValue = runCatching { URLDecoder.decode(rawValue, Charsets.UTF_8.name()) }
                 .getOrDefault(rawValue)
 
-            val cookieSession = runCatching { json.decodeFromString<SessionDto>(decodedValue) }.getOrNull()
+            val cookieSession = runCatching { decodedValue.parseAs<SessionDto>() }.getOrNull()
             if (cookieSession == null) {
                 throw Exception("Buka manga detail di WebView untuk mendapatkan session, lalu refresh.")
             }
@@ -373,7 +372,6 @@ class Softkomik : HttpSource() {
 
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
-    private val json = Json { ignoreUnknownKeys = true }
     private val userAgentMobileSafariRegex = Regex("""\s*Mobile Safari/\d+(?:\.\d+)*""", RegexOption.IGNORE_CASE)
     private val cdnUrls = listOf(
         "https://psy1.komik.im",
