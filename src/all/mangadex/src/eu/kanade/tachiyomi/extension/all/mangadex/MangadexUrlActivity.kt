@@ -25,7 +25,7 @@ class MangadexUrlActivity : Activity() {
             val titleId = data.pathSegments[1]
             val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH").apply {
                 with(data.pathSegments[0]) {
-                    when{
+                    when {
                         equals("chapter") -> putExtra("query", MDConstants.PREFIX_CH_SEARCH + titleId)
                         equals("group") -> putExtra("query", MDConstants.PREFIX_GRP_SEARCH + titleId)
                         equals("user") -> putExtra("query", MDConstants.PREFIX_USER_SEARCH + titleId)
