@@ -2,6 +2,7 @@ ext {
     extName = 'Nikkangecchan'
     extClass = '.Nikkangecchan'
     extVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

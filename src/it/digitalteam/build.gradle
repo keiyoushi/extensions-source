@@ -2,6 +2,7 @@ ext {
     extName = 'DigitalTeam'
     extClass = '.DigitalTeam'
     extVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

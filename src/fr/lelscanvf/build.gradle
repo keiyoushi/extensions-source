@@ -3,6 +3,7 @@ ext {
     extClass = '.LelscanVF'
     themePkg = 'fuzzydoodle'
     overrideVersionCode = 13
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

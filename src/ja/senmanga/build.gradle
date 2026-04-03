@@ -2,6 +2,7 @@ ext {
     extName = 'Sen Manga'
     extClass = '.SenManga'
     extVersionCode = 7
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

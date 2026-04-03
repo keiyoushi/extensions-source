@@ -2,6 +2,7 @@ ext {
     extName = 'Mango'
     extClass = '.Mango'
     extVersionCode = 11
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

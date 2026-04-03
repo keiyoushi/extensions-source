@@ -2,6 +2,7 @@ ext {
     extName = 'ZeurelScan'
     extClass = '.ZeurelScan'
     extVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

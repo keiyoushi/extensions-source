@@ -2,6 +2,7 @@ ext {
     extName = "ManhuaRock"
     extClass = ".ManhuaRock"
     extVersionCode = 16
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

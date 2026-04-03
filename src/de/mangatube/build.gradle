@@ -2,6 +2,7 @@ ext {
     extName = 'Manga Tube'
     extClass = '.MangaTube'
     extVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

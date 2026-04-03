@@ -2,7 +2,7 @@ ext {
     extName = 'Collected Curios'
     extClass = '.Collectedcurios'
     extVersionCode = 2
-	isNsfw = false
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

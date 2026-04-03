@@ -2,6 +2,7 @@ ext {
     extName = 'Loading Artist'
     extClass = '.LoadingArtist'
     extVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

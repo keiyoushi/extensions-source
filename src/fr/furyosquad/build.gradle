@@ -2,6 +2,7 @@ ext {
     extName = 'FuryoSquad'
     extClass = '.FuryoSquad'
     extVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

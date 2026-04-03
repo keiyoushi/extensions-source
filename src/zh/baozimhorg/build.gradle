@@ -3,6 +3,7 @@ ext {
     extClass = '.GoDaManhua'
     themePkg = 'goda'
     overrideVersionCode = 32
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

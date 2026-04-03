@@ -2,6 +2,7 @@ ext {
     extName = 'KomikIndoID'
     extClass = '.KomikIndoID'
     extVersionCode = 18
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

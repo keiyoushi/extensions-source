@@ -2,6 +2,7 @@ ext {
     extName = 'Terra Historicus'
     extClass = '.TerraHistoricus'
     extVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
