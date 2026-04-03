@@ -117,6 +117,7 @@ class QiScans : HttpSource() {
         TODO("Not yet implemented")
     }
 
+
     override fun searchMangaRequest(
         page: Int,
         query: String,
