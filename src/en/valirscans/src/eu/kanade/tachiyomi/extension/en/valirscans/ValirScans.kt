@@ -13,10 +13,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -249,12 +250,18 @@ class ValirScans :
     }
 
     private fun sanitizePath(path: String): String {
-        val withoutDomain = path
-            .removePrefix(baseUrl)
-            .removePrefix("https://valirscans.com")
-            .removePrefix("https://valirscans.org")
+        path.toHttpUrlOrNull()?.let { url ->
+            return buildString {
+                append(url.encodedPath)
+                url.encodedQuery?.let {
+                    append('?')
+                    append(it)
+                }
+            }
+        }
 
-        return "/" + withoutDomain.removePrefix("/").substringBefore("#")
+        // Stored library URLs can still be relative, so keep a small string fallback.
+        return "/" + path.removePrefix("/").substringBefore("#")
     }
 
     private fun extractEscapedJsonValue(html: String, marker: String, openChar: Char): String {
@@ -294,7 +301,7 @@ class ValirScans :
 
     private fun formatChapterNumber(number: Float): String = chapterNumberFormatter.format(number)
 
-    private fun String?.parseDate(): Long = this?.let { dateFormat.parse(it)?.time } ?: 0L
+    private fun String?.parseDate(): Long = dateFormat.tryParse(this)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
