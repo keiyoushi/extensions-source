@@ -10,11 +10,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import java.net.URLDecoder
 
 class Softkomik : HttpSource() {
     override val name = "Softkomik"
@@ -268,14 +270,44 @@ class Softkomik : HttpSource() {
             return chain.proceed(request)
         }
 
-        val session = getSession()
-
+        val sessionResult = getSession()
         val newRequest = request.newBuilder()
-            .addHeader("X-Token", session.token)
-            .addHeader("X-Sign", session.sign)
+            .header("X-Token", sessionResult.token)
+            .header("X-Sign", sessionResult.sign)
             .build()
 
-        return chain.proceed(newRequest)
+        var response = chain.proceed(newRequest)
+        if (response.code == 403) {
+            response.close()
+
+            // retry once with session from cookie, in case the session from api is invalid but cookie has valid session
+            val cookieSession = getSessionFromCookie()
+            val retryRequest = request.newBuilder()
+                .header("X-Token", cookieSession.token)
+                .header("X-Sign", cookieSession.sign)
+                .build()
+            response = chain.proceed(retryRequest)
+        }
+        return response
+    }
+
+    // because softkomik often changes their api session url,
+    // if the request fails, we can try to get session from cookies but the user needs to open manga details in WebView first to get the session cookies.
+    private fun getSessionFromCookie(): SessionDto {
+        synchronized(this) {
+            val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+
+            val rawValue = cookies.firstOrNull { it.name == "x-m" }?.value ?: throw Exception("Buka manga detail di WebView untuk mendapatkan session, lalu refresh.")
+            val decodedValue = runCatching { URLDecoder.decode(rawValue, Charsets.UTF_8.name()) }
+                .getOrDefault(rawValue)
+
+            val cookieSession = runCatching { json.decodeFromString<SessionDto>(decodedValue) }.getOrNull()
+            if (cookieSession == null) {
+                throw Exception("Buka manga detail di WebView untuk mendapatkan session, lalu refresh.")
+            }
+            session = cookieSession
+            return cookieSession
+        }
     }
 
     private fun getSession(): SessionDto {
@@ -341,6 +373,7 @@ class Softkomik : HttpSource() {
 
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
+    private val json = Json { ignoreUnknownKeys = true }
     private val userAgentMobileSafariRegex = Regex("""\s*Mobile Safari/\d+(?:\.\d+)*""", RegexOption.IGNORE_CASE)
     private val cdnUrls = listOf(
         "https://psy1.komik.im",
