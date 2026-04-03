@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.hentai3
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -21,7 +26,8 @@ import java.util.TimeZone
 open class Hentai3(
     override val lang: String = "all",
     private val searchLang: String = "",
-) : HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
     override val name = "3Hentai"
 
@@ -35,8 +41,23 @@ open class Hentai3(
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 
+    private val prefs: SharedPreferences by lazy { getPreferences() }
+
+    private var displayFullTitle: Boolean = prefs.getBoolean("full_title", false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "full_title"
+            title = "Display full title"
+            setOnPreferenceChangeListener { _, newValue ->
+                displayFullTitle = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&page=$page&"}sort=popular", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -48,69 +69,58 @@ open class Hentai3(
     }
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div")!!.ownText()
+        title = element.selectFirst("div.title")!!.ownText()
         setUrlWithoutDomain(element.absUrl("href"))
         thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&pages=$page"}", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&page=$page"}", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tags = mutableListOf<String>()
-        var singleTag: Pair<String, String>? = null
         var sort = ""
 
-        if (searchLang.isNotEmpty()) tags.add("language:$searchLang")
-        filters.forEach {
-            when (it) {
-                is SelectFilter -> sort = it.getValue()
+        val tags = buildString {
+            filters.forEach { filter ->
+                when (filter) {
+                    is SelectFilter -> sort = filter.getValue()
 
-                is TextFilter -> {
-                    if (it.state.isNotEmpty()) {
-                        val splitted = it.state.split(",").filter(String::isNotBlank)
-                        if (splitted.size < 2 && it.type != "tags") {
-                            singleTag = it.type to it.state.replace(" ", "-")
-                        } else {
-                            splitted.map { tag ->
-                                val trimmed = tag.trim().lowercase()
-                                tags.add(
-                                    buildString {
-                                        if (trimmed.startsWith('-')) append("-")
-                                        append(it.type, ":'")
-                                        append(trimmed.removePrefix("-"), if (it.specific.isNotEmpty()) " (${it.specific})'" else "'")
-                                    },
-                                )
+                    is TextFilter -> {
+                        filter.state.split(",")
+                            .asSequence()
+                            .map(String::trim)
+                            .filter(String::isNotEmpty)
+                            .forEach { rawTag ->
+                                val tag = rawTag.lowercase()
+
+                                if (tag.startsWith("-")) append("-")
+
+                                append(filter.type)
+                                append(":'")
+                                append(tag.removePrefix("-"))
+
+                                if (filter.specific.isNotEmpty()) {
+                                    append(" (${filter.specific})")
+                                }
+                                append("' ")
                             }
-                        }
                     }
-                }
 
-                else -> {}
+                    else -> {}
+                }
             }
         }
 
+        val language = if (searchLang.isNotEmpty()) "language:$searchLang" else ""
+
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (singleTag != null) {
-                addPathSegment(singleTag!!.first)
-                addPathSegment(singleTag!!.second)
-                if (page > 1) addPathSegment(page.toString())
-            } else {
-                addPathSegment("search")
-                addQueryParameter(
-                    "q",
-                    when {
-                        tags.isNotEmpty() -> tags.joinToString()
-                        query.isNotEmpty() -> query
-                        else -> "page:>0"
-                    },
-                )
-                if (page > 1) addQueryParameter("page", page.toString())
-            }
+            addPathSegment("search")
+            addQueryParameter("q", "$query $language $tags")
+            if (page > 1) addQueryParameter("page", page.toString())
             addQueryParameter("sort", sort)
         }.build()
 
@@ -132,7 +142,8 @@ open class Hentai3(
             val authors = document.select("a[href*=/groups/]").eachText().joinToString()
             val artists = document.select("a[href*=/artists/]").eachText().joinToString()
             initialized = true
-            title = document.select("h1 > span").text()
+
+            title = document.select(if (displayFullTitle) "h1" else "h1 > span").text()
             author = authors.ifEmpty { artists }
             artist = artists.ifEmpty { authors }
             genre = document.select("a[href*=/tags/]").eachText().joinToString {

@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.japscan
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Handler
@@ -25,8 +27,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -34,7 +34,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -75,8 +74,7 @@ class Japscan :
         .rateLimit(1, 2)
         .build()
 
-    private val keyValueVariableNameRegex = Regex("""\bfor\s*\(\s*var\s+i\s*=\s*0\s*;\s*i\s*<\s*([A-Za-z_$][A-Za-z0-9_$]*)\.length\s*;\s*i\+\+\s*\)\s*s\s*\+=\s*\1\[i\]\s*;""")
-    private val quoteRegex = Regex(""""([^"]*)"""")
+    private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
 
     companion object {
         val dateFormat by lazy {
@@ -287,71 +285,63 @@ class Japscan :
         dateFormat.parse(date)!!.time
     }.getOrDefault(0L)
 
-    @Serializable
-    class KeyValues(
-        val p: String,
-        val v: String,
-        val il: String,
-    )
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
+        val context = Injekt.get<Application>()
+        val isReader = Exception().stackTrace.any { it.className.contains("reader") }
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
         var webView: WebView? = null
-        var captchaTry = 0
-        var request: Response?
-        var pageContent = ""
-        while (captchaTry != 3) {
-            request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
-            pageContent = request.body.string()
-            val stripsArrayRegex = """strips\s*:\s*(\[[^\]]*\])""".toRegex()
-            val elementRegex = """\{\s*"uuid"\s*:\s*"([^"]+)"\s*,\s*"src"\s*:\s*"([^"]*)"\s*\}""".toRegex()
+        var request: Response = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
+        var pageContent = request.body.string()
+        val matchResult = captchaRegex.find(pageContent)
 
-            val stripsMatch = stripsArrayRegex.find(pageContent)
-            val stripsContent = stripsMatch?.groupValues?.get(1) ?: ""
-            if (stripsContent != "") {
-                val items = elementRegex.findAll(stripsContent).map {
-                    val uuid = it.groupValues[1]
-                    val src = it.groupValues[2]
-                    uuid to src
-                }.toList()
-
-                val answer = orderUuidsByImageVerticality(items)
-                val token = Regex("""token\s*:\s*"([0-9a-fA-F]{64})"""").find(pageContent)?.groups?.get(1)?.value ?: ""
-                val multipartBody = MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("token", token)
-                    .addFormDataPart("answer", answer.toJsonString())
-
-                val captchaRequest = client.newCall(POST("$internalBaseUrl/validate-captcha/", body = multipartBody.build(), headers = headers.newBuilder().add("Referer", "$internalBaseUrl${chapter.url}").build())).execute()
-                if (captchaRequest.body.string().contains("\"success\": true")) {
-                    request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
-                    pageContent = request.body.string()
-                    break
+        if (matchResult != null) {
+            try {
+                val intent = Intent().apply {
+                    component = ComponentName(context, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra("url_key", "$internalBaseUrl${chapter.url}")
+                    putExtra("source_key", id)
+                    putExtra("title_key", "Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
                 }
-                captchaTry += 1
-            } else {
-                break
+
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                // Suwayomi etc.
+                throw Exception("Résolvez le captcha de ce chapitre depuis la WebView et réouvrez le chapitre.")
+            }
+            var captchaWait = 0
+            while (captchaWait < 15) {
+                Thread.sleep(5000)
+                request = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
+                pageContent = request.body.string()
+                val isGood = captchaRegex.find(pageContent)
+                if (isGood == null) {
+                    val closeIntent = Intent().apply {
+                        val targetClass = if (isReader) {
+                            "eu.kanade.tachiyomi.ui.reader.ReaderActivity"
+                        } else {
+                            "eu.kanade.tachiyomi.ui.main.MainActivity"
+                        }
+                        component = ComponentName(context, targetClass)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                    context.startActivity(closeIntent)
+                    break
+                } else {
+                    captchaWait++
+                }
+            }
+            if (captchaWait >= 15) {
+                throw Exception("Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
             }
         }
-        if (captchaTry == 3) {
-            throw Exception("Impossible de passer le captcha. Veuillez réessayer.")
-        }
-
-        val keyValueVariableName = keyValueVariableNameRegex.find(pageContent)?.groups?.get(1)?.value
-        val keyArrayLineRegex = Regex("""(?m)^\s*var\s+$keyValueVariableName\s*=\s*\[.*\] *;?\s*$""")
-
-        val keyValues = keyArrayLineRegex.find(pageContent)?.value?.let { headerLine ->
-            val base64 = quoteRegex.findAll(headerLine).map { it.groupValues[1] }.joinToString("")
-            val decoded = kotlin.io.encoding.Base64.decode(base64)
-            String(decoded, Charsets.UTF_8).parseAs<KeyValues>()
-        } ?: throw Exception("Impossible de récupérer les values clés")
 
         handler.post {
-            val innerWv = WebView(Injekt.get<Application>())
+            val innerWv = WebView(context)
 
             webView = innerWv
             innerWv.settings.domStorageEnabled = true
@@ -365,23 +355,25 @@ class Japscan :
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(
-                        """
-                            Object.defineProperty(Object.prototype, '${keyValues.il}', {
-                                set: function(value) {
-                                    window.$interfaceName.passPayload(JSON.stringify(value));
-                                    Object.defineProperty(this, '_imagesLink', {
-                                        value: value,
-                                        writable: true,
-                                        enumerable: false,
-                                        configurable: true
-                                    });
-                                },
-                                get: function() {
-                                    return this._imagesLink;
-                                },
-                                enumerable: false,
-                                configurable: true
-                            });
+                        $$"""
+                            setTimeout(() => {
+                                Object.defineProperty(Object.prototype, `${window.__rc.il}`, {
+                                    set: function(value) {
+                                        window.$$interfaceName.passPayload(JSON.stringify(value), window.__rc.p, window.__rc.v);
+                                        Object.defineProperty(this, '_imagesLink', {
+                                            value: value,
+                                            writable: true,
+                                            enumerable: false,
+                                            configurable: true
+                                        });
+                                    },
+                                    get: function() {
+                                        return this._imagesLink;
+                                    },
+                                    enumerable: false,
+                                    configurable: true
+                                }
+                            )}, 1000)
                         """.trimIndent(),
                     ) {}
                 }
@@ -405,8 +397,17 @@ class Japscan :
             .images
             .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
-                Page(i, imageUrl = "$url&${keyValues.p}=${keyValues.v}")
-            }
+                val response = client.newCall(
+                    Request.Builder().url("$url&${jsInterface.p}=${jsInterface.v}").headers(
+                        headers.newBuilder().add("Referer", internalBaseUrl).build(),
+                    ).build(),
+                ).execute()
+                if (response.code == 200) {
+                    Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
+                } else {
+                    null
+                }
+            }.filterNotNull()
 
         return Observable.just(images)
     }
@@ -447,17 +448,30 @@ class Japscan :
     internal class JsInterface(private val latch: CountDownLatch) {
         var images: List<String> = listOf()
             private set
+        var p: String = ""
+            private set
+        var v: String = ""
+            private set
 
         @JavascriptInterface
         @Suppress("UNUSED")
-        fun passPayload(rawData: String) {
+        fun passPayload(rawData: String, p: String, v: String) {
             try {
                 images = rawData.parseAs<List<String>>()
                     .map { "$it?y=1" }
+                this.p = p
+                this.v = v
                 latch.countDown()
             } catch (_: Exception) {
                 return
             }
         }
+
+        /*
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun log(txt: String) {
+            Log.e("Japscan", txt)
+        }*/
     }
 }

@@ -101,6 +101,9 @@ abstract class NatsuId(
             filters.firstInstanceOrNull<TypeFilter>()?.checked.orEmpty().also {
                 addFormDataPart("type", it.toJsonString())
             }
+            filters.firstInstanceOrNull<StatusFilter>()?.checked.orEmpty().also {
+                addFormDataPart("status", it.toJsonString())
+            }
             val sort = filters.firstInstance<SortFilter>()
             addFormDataPart("order", if (sort.isAscending) "asc" else "desc")
             addFormDataPart("orderby", sort.sort)
@@ -197,7 +200,7 @@ abstract class NatsuId(
                     data.map { it.name to it.slug },
                 ),
                 GenreInclusion(),
-                GenreInclusion(),
+                GenreExclusion(),
             ),
         )
 
