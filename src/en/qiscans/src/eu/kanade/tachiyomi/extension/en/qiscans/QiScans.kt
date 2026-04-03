@@ -30,11 +30,9 @@ class QiScans : HttpSource() {
         add("Sec-Fetch-Site", "same-site")
     }
 
-
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
-
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$baseUrl/series/${manga.url}"
