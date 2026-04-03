@@ -47,7 +47,9 @@ class MoeTruyen : HttpSource() {
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        title = element.selectFirst(".homepage-ranking-item__title")!!.text()
+        title = element.selectFirst(".homepage-ranking-item__title")!!.let { titleElement ->
+            titleElement.attr("title").ifEmpty { titleElement.text() }
+        }
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -66,8 +68,28 @@ class MoeTruyen : HttpSource() {
     private fun latestMangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("a[href^=/manga/]")!!
         setUrlWithoutDomain(linkElement.absUrl("href"))
-        title = element.selectFirst("h3")!!.text()
+        title = getFullListTitle(element)
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
+
+    private fun getFullListTitle(element: Element): String {
+        val titleElement = element.selectFirst("h3")!!
+        val titleAttr = titleElement.attr("title")
+        if (titleAttr.isNotEmpty()) {
+            return titleAttr
+        }
+
+        val titleText = titleElement.text()
+        if (!titleText.endsWith("...")) {
+            return titleText
+        }
+
+        val imageAlt = element.selectFirst("img")?.attr("alt")
+            ?.removePrefix("Bìa ")
+            ?.trim()
+            ?.ifEmpty { null }
+
+        return imageAlt ?: titleText
     }
 
     private fun parseMangaList(document: Document): MangasPage {
