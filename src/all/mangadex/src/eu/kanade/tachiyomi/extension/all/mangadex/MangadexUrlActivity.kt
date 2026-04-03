@@ -51,9 +51,11 @@ class MangadexUrlActivity : Activity() {
 
             try {
                 startActivity(mainIntent)
-            } catch (_: Exception) {
-                Log.e("MangadexUrlActivity", "Error")
+            } catch (e: Exception) {
+                Log.e("MangadexUrlActivity", "Error: " + e.message)
             }
+        } else {
+            Log.e("MangadexUrlActivity", "Unable to parse URI: $data")
         }
 
         finish()
