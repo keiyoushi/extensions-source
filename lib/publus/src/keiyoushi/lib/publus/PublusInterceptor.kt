@@ -35,8 +35,7 @@ class PublusInterceptor : Interceptor {
             return response
         }
 
-        val bitmap = BitmapFactory.decodeStream(response.body.byteStream()) ?: return response
-
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
         val unscrambled = if (params.k1.isEmpty() || params.bw == 0) {
             val patternStr = "${params.file}/${params.no}"
             val pattern = (patternStr.sumOf { it.code } % 4) + 1
