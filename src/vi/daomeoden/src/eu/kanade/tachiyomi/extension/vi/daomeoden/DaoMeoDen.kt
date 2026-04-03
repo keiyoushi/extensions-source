@@ -115,12 +115,8 @@ class DaoMeoDen : HttpSource() {
             apiResponse.parseAs<BookListApiResponse>()
         }
 
-        if (payload.status != 200) {
-            return MangasPage(emptyList(), false)
-        }
-
-        val listHtml = payload.htmlBook ?: return MangasPage(emptyList(), false)
-        val listDocument = Jsoup.parse(listHtml, baseUrl)
+        val listDocument = parsePayloadDocument(payload.status, payload.htmlBook)
+            ?: return MangasPage(emptyList(), false)
 
         val mangas = listDocument.select("div.item-list").map { mangaFromElement(it) }
         val currentPage = extractScriptVariable(document, "pageCurrent")
@@ -255,12 +251,8 @@ class DaoMeoDen : HttpSource() {
             apiResponse.parseAs<ChapterContentApiResponse>()
         }
 
-        if (payload.status != 200) {
-            return emptyList()
-        }
-
-        val chapterHtml = payload.data ?: return emptyList()
-        val chapterDocument = Jsoup.parse(chapterHtml, baseUrl)
+        val chapterDocument = parsePayloadDocument(payload.status, payload.data)
+            ?: return emptyList()
 
         return chapterDocument.select("img").mapIndexedNotNull { index, element ->
             val imageUrl = element.absUrl("data-src")
@@ -294,6 +286,12 @@ class DaoMeoDen : HttpSource() {
         .find(document.html())
         ?.groupValues
         ?.get(1)
+
+    private fun parsePayloadDocument(status: Int, html: String?): Document? {
+        if (status != 200) return null
+        val payloadHtml = html ?: return null
+        return Jsoup.parseBodyFragment(payloadHtml, baseUrl)
+    }
 
     private fun String.normalizeImageUrl(): String = if (startsWith("//")) "https:$this" else this
 
