@@ -199,6 +199,7 @@ class Softkomik : HttpSource() {
             }
         }
 
+        // for manga/manhwa that requires login, the API still returns 200 but with empty image list.
         if (imageSrc.isEmpty()) {
             throw Exception("Chapter kosong atau memerlukan login di WebView")
         }
