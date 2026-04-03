@@ -80,3 +80,8 @@ class Product(
         date_upload = dateFormat.tryParse(startDate)
     }
 }
+
+@Serializable
+class CPhpResponse(
+    val url: String,
+)

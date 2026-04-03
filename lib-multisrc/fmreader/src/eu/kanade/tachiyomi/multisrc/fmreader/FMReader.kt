@@ -331,6 +331,7 @@ abstract class FMReader(
         fun Element.decoded(): String {
             val attr =
                 when {
+                    this.hasAttr("data-img") -> "data-img"
                     this.hasAttr("data-original") -> "data-original"
                     this.hasAttr("data-src") -> "data-src"
                     this.hasAttr("data-srcset") -> "data-srcset"

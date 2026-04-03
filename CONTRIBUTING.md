@@ -223,6 +223,10 @@ src/<lang>/<mysourcename>/
 should be adapted from the site name, and can only contain lowercase ASCII letters and digits.
 Your extension code must be placed in the package `eu.kanade.tachiyomi.extension.<lang>.<mysourcename>`.
 
+> [!TIP]
+> Additional files in the extension package (like `Dto.kt`, `Filters.kt`, `UrlActivity.kt`)
+> should NOT repeat the extension name (e.g. use `Dto.kt` instead of `MySourceNameDto.kt`).
+
 #### AndroidManifest.xml (optional)
 You only need to create this file if you want to add deep linking to your extension.
 See [URL intent filter](#url-intent-filter) for more information.
