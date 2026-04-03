@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -51,8 +52,12 @@ class MangadexUrlActivity : Activity() {
 
             try {
                 startActivity(mainIntent)
+            } catch (e: ActivityNotFoundException) {
+                Log.e("MangadexUrlActivity", "Activity not found: " + e.message)
             } catch (e: Exception) {
-                Log.e("MangadexUrlActivity", "Error: " + e.message)
+                Log.e("MangadexUrlActivity", "Unexpected exception: " + e.message)
+            } catch (e: Throwable) {
+                Log.e("MangadexUrlActivity", "Unexpected throwable: " + e.message)
             }
         } else {
             Log.e("MangadexUrlActivity", "Unable to parse URI: $data")
