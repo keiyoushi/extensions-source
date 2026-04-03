@@ -26,16 +26,22 @@ class MangadexUrlActivity : Activity() {
             val id = data.pathSegments[1]
 
             var query = "id:$id"
-            if (path == "chapter") {
-                query = "ch:$id"
-            } else if (path == "group") {
-                query = "grp:$id"
-            } else if (path == "user") {
-                query = "usr:$id"
-            } else if (path == "author") {
-                query = "author:$id"
-            } else if (path == "list") {
-                query = "list:$id"
+            when (path) {
+                "chapter" -> {
+                    query = "ch:$id"
+                }
+                "group" -> {
+                    query = "grp:$id"
+                }
+                "user" -> {
+                    query = "usr:$id"
+                }
+                "author" -> {
+                    query = "author:$id"
+                }
+                "list" -> {
+                    query = "list:$id"
+                }
             }
 
             val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH")
@@ -45,7 +51,7 @@ class MangadexUrlActivity : Activity() {
 
             try {
                 startActivity(mainIntent)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 Log.e("MangadexUrlActivity", "Error")
             }
         }
