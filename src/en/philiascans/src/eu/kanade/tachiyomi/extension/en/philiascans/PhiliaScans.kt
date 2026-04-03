@@ -2,16 +2,21 @@ package eu.kanade.tachiyomi.extension.en.philiascans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlinx.serialization.Serializable
+import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 
 class PhiliaScans :
     Madara(
@@ -21,66 +26,129 @@ class PhiliaScans :
     ) {
     override val versionId: Int = 3
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("post_type", "wp-manga")
-            .addQueryParameter("s", "")
-            .addQueryParameter("sort", "most_viewed")
-            .addQueryParameter("paged", page.toString())
-            .build()
-        return GET(url, headers)
-    }
+    override val useNewChapterEndpoint = false
+
+    private var searchNonce: String = ""
+
+    private val nonceRegex = """liveSearchData[^}]*"nonce"\s*:\s*"([^"]+)"""".toRegex()
+
+    override val client = super.client.newBuilder()
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (searchNonce.isEmpty() && response.header("Content-Type")?.contains("text/html") == true) {
+                // Peek the body so it isn't consumed for the actual parsing downstream
+                val bodyString = response.peekBody(Long.MAX_VALUE).string()
+                nonceRegex.find(bodyString)?.let {
+                    searchNonce = it.groupValues[1]
+                }
+            }
+            response
+        }
+        .build()
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/all-mangas/?paged=$page", headers)
 
     override fun popularMangaSelector() = ".original .unit"
     override val popularMangaUrlSelector = ".info a.c-title"
     override val popularMangaUrlSelectorImg = ".poster img:not(.flag-icon)"
+
+    // Check for the disabled class to prevent 404 errors on the last page
     override fun popularMangaNextPageSelector() = ".pagination li:not(.disabled) .page-link[rel=next]"
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client.newCall(popularMangaRequest(page))
+        .asObservable()
+        .map { response -> popularMangaParse(response) }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        if (response.code == 404) return MangasPage(emptyList(), false)
+        return super.popularMangaParse(response)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently-updated/?page=$page", headers)
 
-    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
-        url.addQueryParameter("post_type", "wp-manga")
-        url.addQueryParameter("s", query)
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = client.newCall(latestUpdatesRequest(page))
+        .asObservable()
+        .map { response -> latestUpdatesParse(response) }
 
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        if (response.code == 404) return MangasPage(emptyList(), false)
+        return super.latestUpdatesParse(response)
+    }
+
+    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotEmpty()) {
+            if (searchNonce.isEmpty()) {
+                // Force interceptor to grab the nonce if it wasn't caught during normal browsing
+                client.newCall(GET(baseUrl, headers)).execute().close()
+            }
+
+            val form = FormBody.Builder()
+                .add("action", "live_search")
+                .add("search_query", query)
+                .add("security", searchNonce)
+                .build()
+
+            val postHeaders = headersBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
+
+            return POST("$baseUrl/wp-admin/admin-ajax.php", postHeaders, form)
+        }
+
+        var genre = ""
         filters.forEach { filter ->
             when (filter) {
-                is TypeFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, item ->
-                        url.addQueryParameter("type[$index]", item.value)
-                    }
-                }
-
-                is YearFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, item ->
-                        url.addQueryParameter("release[$index]", item.value)
-                    }
-                }
-
-                is OrderByFilter -> {
-                    url.addQueryParameter("sort", filter.toUriPart())
-                }
-
-                is GenreConditionFilter -> {
-                    if (filter.toUriPart().isNotEmpty()) {
-                        url.addQueryParameter("genre_mode", filter.toUriPart())
-                    }
-                }
-
-                is GenreList -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, item ->
-                        url.addQueryParameter("genre[$index]", item.id)
-                    }
-                }
-
+                is GenreFilter -> genre = filter.toUriPart()
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+
+        if (genre.isNotEmpty()) {
+            val url = if (page == 1) {
+                "$baseUrl/manga-genre/$genre/"
+            } else {
+                "$baseUrl/manga-genre/$genre/page/$page/"
+            }
+            return GET(url, headers)
+        }
+
+        return popularMangaRequest(page)
     }
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchRequest(page, query, filters))
+        .asObservable()
+        .map { response -> searchMangaParse(response) }
+
     override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (response.code == 404) return MangasPage(emptyList(), false)
+
+        if (response.request.url.encodedPath.contains("admin-ajax.php")) {
+            val jsonString = response.body.string()
+
+            val dto = json.decodeFromString<SearchResponseDto>(jsonString)
+
+            val mangas = dto.results.mapNotNull { html ->
+                val doc = Jsoup.parseBodyFragment(html, baseUrl)
+                val a = doc.selectFirst("a") ?: return@mapNotNull null
+                val img = doc.selectFirst("img")
+                val title = doc.selectFirst(".search-result-title")?.text()
+                    ?: img?.attr("alt")
+                    ?: return@mapNotNull null
+
+                SManga.create().apply {
+                    setUrlWithoutDomain(a.attr("abs:href"))
+                    this.title = title
+                    thumbnail_url = img?.attr("abs:src")
+                }
+            }
+            // Live Search does not return pagination metadata, hardcapped at 5 results by server
+            return MangasPage(mangas, false)
+        }
+
+        return popularMangaParse(response)
+    }
 
     override val mangaDetailsSelectorTitle = "h1.serie-title"
     override val mangaDetailsSelectorAuthor = ".stat-item:has(.stat-label:contains(Author)) .stat-value"
@@ -107,115 +175,69 @@ class PhiliaScans :
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "li.item:not(:has(a[href='#'])):not(:has(.fa-coins))"
+    override fun chapterListSelector() = "div.list-body-hh li.free-chap"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val urlElement = element.selectFirst("a")!!
         setUrlWithoutDomain(urlElement.absUrl("href"))
-        name = element.selectFirst("zebi")!!.text()
+        name = element.selectFirst("zebi")?.text()?.removeSuffix(":")?.trim()
+            ?: urlElement.ownText().ifEmpty { urlElement.text() }
     }
 
     override fun processThumbnail(url: String?, fromSearch: Boolean): String? = if (fromSearch) {
-        url?.replace(
-            // try to resolve actual cover from thumbnail, usually has -280x400 suffix
-            "-280x400.",
-            ".",
-        )
+        url?.replace("-280x400.", ".")
     } else {
         url
     }
 
     override val pageListParseSelector = "div#ch-images img"
 
-    override fun getFilterList(): FilterList {
-        launchIO { fetchGenres() }
-        val filters = mutableListOf<Filter<*>>(
-            Filter.Header("NOTE: Filters are applied when you search."),
-            Filter.Separator(),
-            TypeFilter(),
-            Filter.Separator(),
-            OrderByFilter(
-                intl["order_by_filter_title"],
-                orderByFilterOptions.toList(),
-                0,
-            ),
-            Filter.Separator(),
-        )
+    // Custom Filters
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Note: Text searches (5 results max) cannot be combined with Genre filters."),
+        Filter.Header("If you type a search, the Genre selection is ignored."),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
-        if (yearsList.isNotEmpty()) {
-            filters.add(YearFilter("Year", yearsList))
-            filters.add(Filter.Separator())
-        }
-
-        if (genresList.isNotEmpty()) {
-            filters += listOf(
-                Filter.Separator(),
-                GenreConditionFilter(
-                    intl["genre_condition_filter_title"],
-                    genreConditionFilterOptions.toList(),
-                ),
-                Filter.Separator(),
-                GenreList(
-                    intl["genre_filter_title"],
-                    genresList,
-                ),
-            )
-        } else if (fetchGenres) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_missing_warning"]),
-            )
-        }
-
-        return FilterList(filters)
+    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+        fun toUriPart() = vals[state].second
     }
 
-    override fun genresRequest(): Request = GET("$baseUrl/?post_type=wp-manga&s=", headers)
-
-    override fun parseGenres(document: Document): List<Genre> {
-        yearsList = document.select("input[name='release[]']").mapNotNull {
-            val value = it.attr("value")
-            val label = it.nextElementSibling()?.text() ?: value
-            Pair(label, value)
-        }
-
-        return document.select("ul.genres li").mapNotNull {
-            val label = it.selectFirst("label")?.text() ?: return@mapNotNull null
-            val value = it.selectFirst("input")?.attr("value") ?: return@mapNotNull null
-            Genre(label, value)
-        }
-    }
-
-    private var yearsList: List<Pair<String, String>> = emptyList()
-
-    private class CheckBoxVal(name: String, val value: String) : Filter.CheckBox(name)
-
-    private class TypeFilter :
-        Filter.Group<CheckBoxVal>(
-            "Type",
-            listOf(
-                Pair("Manga", "manga"),
-                Pair("Manhua", "manhua"),
-                Pair("Manhwa", "manhwa"),
+    private class GenreFilter :
+        UriPartFilter(
+            "Genre",
+            arrayOf(
+                Pair("<Select>", ""),
+                Pair("Action", "action"),
+                Pair("Adventure", "adventure"),
+                Pair("Comedy", "comedy"),
+                Pair("Drama", "drama"),
+                Pair("Fantasy", "fantasy"),
+                Pair("Harem", "harem"),
+                Pair("Historical", "historical"),
+                Pair("Isekai", "isekai"),
+                Pair("Josei", "josie"),
+                Pair("Magic", "magic"),
+                Pair("Martial Arts", "martial-arts"),
+                Pair("Monsters", "monsters"),
+                Pair("Mystery", "mystery"),
+                Pair("Psychological", "psychological"),
+                Pair("Regression", "regression"),
+                Pair("Romance", "romance"),
+                Pair("School Life", "school-life"),
                 Pair("Seinen", "seinen"),
-            ).map { CheckBoxVal(it.first, it.second) },
+                Pair("Shoujo", "shoujo"),
+                Pair("Shounen", "shounen"),
+                Pair("Slice of Life", "slice-of-life"),
+                Pair("Survival", "survival"),
+                Pair("Tragedy", "tragedy"),
+                Pair("Villainess", "villainess"),
+            ),
         )
-
-    private class YearFilter(title: String, years: List<Pair<String, String>>) :
-        Filter.Group<CheckBoxVal>(
-            title,
-            years.map { CheckBoxVal(it.first, it.second) },
-        )
-
-    override val orderByFilterOptions: Map<String, String> = mapOf(
-        intl["order_by_filter_relevance"] to "",
-        intl["order_by_filter_new"] to "recently_added",
-        intl["order_by_filter_az"] to "title_az",
-        intl["order_by_filter_views"] to "most_viewed",
-    )
-
-    override val genreConditionFilterOptions: Map<String, String> = mapOf(
-        intl["genre_condition_filter_or"] to "",
-        intl["genre_condition_filter_and"] to "and",
-    )
 }
+
+@Serializable
+class SearchResponseDto(
+    val results: List<String> = emptyList(),
+)
