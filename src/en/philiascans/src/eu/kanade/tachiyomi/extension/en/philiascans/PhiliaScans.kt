@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.philiascans
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +17,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 
 class PhiliaScans :
     Madara(
@@ -36,7 +38,7 @@ class PhiliaScans :
             val response = chain.proceed(chain.request())
             if (searchNonce.isEmpty() && response.header("Content-Type")?.contains("text/html") == true) {
                 // Peek the body so it isn't consumed for the actual parsing downstream
-                val bodyString = response.peekBody(1024 * 1024L).string()
+                val bodyString = response.peekBody(Long.MAX_VALUE).string()
                 nonceRegex.find(bodyString)?.let {
                     searchNonce = it.groupValues[1]
                 }
@@ -54,12 +56,20 @@ class PhiliaScans :
     // Check for the disabled class to prevent 404 errors on the last page
     override fun popularMangaNextPageSelector() = ".pagination li:not(.disabled) .page-link[rel=next]"
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently-updated/?page=$page", headers)
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client.newCall(popularMangaRequest(page))
+        .asObservable()
+        .map { response -> popularMangaParse(response) }
 
     override fun popularMangaParse(response: Response): MangasPage {
         if (response.code == 404) return MangasPage(emptyList(), false)
         return super.popularMangaParse(response)
     }
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently-updated/?page=$page", headers)
+
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = client.newCall(latestUpdatesRequest(page))
+        .asObservable()
+        .map { response -> latestUpdatesParse(response) }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         if (response.code == 404) return MangasPage(emptyList(), false)
@@ -106,6 +116,10 @@ class PhiliaScans :
         return popularMangaRequest(page)
     }
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchRequest(page, query, filters))
+        .asObservable()
+        .map { response -> searchMangaParse(response) }
+
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -125,9 +139,9 @@ class PhiliaScans :
                     ?: return@mapNotNull null
 
                 SManga.create().apply {
-                    setUrlWithoutDomain(a.attr("href"))
+                    setUrlWithoutDomain(a.attr("abs:href"))
                     this.title = title
-                    thumbnail_url = img?.attr("src")
+                    thumbnail_url = img?.attr("abs:src")
                 }
             }
             // Live Search does not return pagination metadata, hardcapped at 5 results by server
@@ -225,6 +239,6 @@ class PhiliaScans :
 }
 
 @Serializable
-data class SearchResponseDto(
+class SearchResponseDto(
     val results: List<String> = emptyList(),
 )
