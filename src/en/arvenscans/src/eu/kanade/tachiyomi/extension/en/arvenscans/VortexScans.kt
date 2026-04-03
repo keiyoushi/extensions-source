@@ -10,8 +10,8 @@ class VortexScans :
     Iken(
         "Vortex Scans",
         "en",
-        "https://vortexscans.io",
-        "https://api.vortexscans.io",
+        "https://vortexcomics.org",
+        "https://api.vortexcomics.org",
     ) {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
