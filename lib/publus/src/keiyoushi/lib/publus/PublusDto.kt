@@ -1,12 +1,7 @@
-package eu.kanade.tachiyomi.extension.ja.comicnettai
+package keiyoushi.lib.publus
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-@Serializable
-class CPhpResponse(
-    val url: String,
-)
 
 @Serializable
 class ConfigPack(
@@ -20,6 +15,7 @@ class PublusConfiguration(
 
 @Serializable
 class PublusContentEntry(
+    val index: Int,
     val file: String,
 )
 
@@ -40,12 +36,13 @@ class PublusPageLinkInfoWrapper(
 
 @Serializable
 class PublusPageDetails(
-    @SerialName("No") val no: Int,
-    @SerialName("NS") val ns: Long,
-    @SerialName("PS") val ps: Long,
-    @SerialName("RS") val rs: Long,
-    @SerialName("BlockWidth") val blockWidth: Int,
-    @SerialName("BlockHeight") val blockHeight: Int,
+    @SerialName("No") val no: Int = 0,
+    @SerialName("NS") val ns: Long = 0L,
+    @SerialName("PS") val ps: Long = 0L,
+    @SerialName("RS") val rs: Long = 0L,
+    @SerialName("BlockWidth") val blockWidth: Int = 0,
+    @SerialName("BlockHeight") val blockHeight: Int = 0,
+    @SerialName("DummyWidth") val dummyWidth: Int? = null,
     @SerialName("Size") val size: PublusPageSize,
 )
 
