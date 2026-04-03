@@ -35,10 +35,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.publus.Decoder
-import keiyoushi.lib.publus.PublusInterceptor
-import keiyoushi.lib.publus.generatePages
 import keiyoushi.lib.publus.PublusFragment
+import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.PublusPage
+import keiyoushi.lib.publus.generatePages
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineDispatcher
