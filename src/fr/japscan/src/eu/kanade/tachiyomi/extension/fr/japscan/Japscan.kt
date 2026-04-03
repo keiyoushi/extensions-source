@@ -287,6 +287,8 @@ class Japscan :
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
+        val context = Injekt.get<Application>()
+        val isReader = Exception().stackTrace.any { it.className.contains("reader") }
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
@@ -298,7 +300,6 @@ class Japscan :
 
         if (matchResult != null) {
             try {
-                val context = Injekt.get<Application>()
                 val intent = Intent().apply {
                     component = ComponentName(context, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -314,11 +315,21 @@ class Japscan :
             }
             var captchaWait = 0
             while (captchaWait != 15) {
-                Thread.sleep(3000)
+                Thread.sleep(5000)
                 request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
                 pageContent = request.body.string()
                 val isGood = captchaRegex.find(pageContent)
                 if (isGood == null) {
+                    val closeIntent = Intent().apply {
+                        val targetClass = if (isReader) {
+                            "eu.kanade.tachiyomi.ui.reader.ReaderActivity"
+                        } else {
+                            "eu.kanade.tachiyomi.ui.main.MainActivity"
+                        }
+                        component = ComponentName(context, targetClass)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                    context.startActivity(closeIntent)
                     break
                 } else {
                     captchaWait++
@@ -330,7 +341,7 @@ class Japscan :
         }
 
         handler.post {
-            val innerWv = WebView(Injekt.get<Application>())
+            val innerWv = WebView(context)
 
             webView = innerWv
             innerWv.settings.domStorageEnabled = true
