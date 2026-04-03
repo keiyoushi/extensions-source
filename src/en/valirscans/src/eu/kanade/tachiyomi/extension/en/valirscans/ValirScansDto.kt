@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class BookSchema(
+class BookSchema(
     @SerialName("@type") val type: String? = null,
     val name: String = "",
     val author: AuthorSchema? = null,

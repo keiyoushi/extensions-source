@@ -193,7 +193,7 @@ class ValirScans :
 
         return SManga.create().apply {
             this.title = title
-            url = normalizeSeriesPath(detailLink.attr("href"))
+            setUrlWithoutDomain(detailLink.absUrl("href"))
             thumbnail_url = selectFirst("img[src], img[srcset]")?.extractThumbnailUrl()
         }
     }
@@ -282,7 +282,7 @@ class ValirScans :
         error("Could not find JSON end for marker: $marker")
     }
 
-    private fun String.unescapeJson(): String = json.decodeFromString("\"$this\"")
+    private fun String.unescapeJson(): String = "\"$this\"".parseAs<String>()
 
     private fun parseStatus(status: String?): Int = when (status?.uppercase(Locale.ENGLISH)) {
         "ONGOING" -> SManga.ONGOING
