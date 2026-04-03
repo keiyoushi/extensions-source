@@ -27,7 +27,7 @@ class MoeTruyen : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(5)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
