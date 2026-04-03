@@ -54,8 +54,6 @@ class MangadexUrlActivity : Activity() {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
                 Log.e("MangadexUrlActivity", "Activity not found: " + e.message)
-            } catch (e: Exception) {
-                Log.e("MangadexUrlActivity", "Unexpected exception: " + e.message)
             } catch (e: Throwable) {
                 Log.e("MangadexUrlActivity", "Unexpected throwable: " + e.message)
             }
