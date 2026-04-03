@@ -305,7 +305,7 @@ class Softkomik : HttpSource() {
                 client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
             }
 
-            val response = client.newCall(GET("$baseUrl/api/sessions", apiHeaders)).execute()
+            val response = client.newCall(GET("$baseUrl/api/sessions/oqiw918pa", apiHeaders)).execute()
 
             if (!response.isSuccessful) {
                 val code = response.code
