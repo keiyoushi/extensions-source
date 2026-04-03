@@ -294,7 +294,7 @@ class Japscan :
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
         var webView: WebView? = null
-        var request: Response = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
+        var request: Response = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
         var pageContent = request.body.string()
         val matchResult = captchaRegex.find(pageContent)
 
@@ -314,9 +314,9 @@ class Japscan :
                 throw Exception("Résolvez le captcha de ce chapitre depuis la WebView et réouvrez le chapitre.")
             }
             var captchaWait = 0
-            while (captchaWait != 15) {
+            while (captchaWait < 15) {
                 Thread.sleep(5000)
-                request = client.newCall(GET("$internalBaseUrl${chapter.url}")).execute()
+                request = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
                 pageContent = request.body.string()
                 val isGood = captchaRegex.find(pageContent)
                 if (isGood == null) {
@@ -335,7 +335,7 @@ class Japscan :
                     captchaWait++
                 }
             }
-            if (captchaWait == 15) {
+            if (captchaWait >= 15) {
                 throw Exception("Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
             }
         }
