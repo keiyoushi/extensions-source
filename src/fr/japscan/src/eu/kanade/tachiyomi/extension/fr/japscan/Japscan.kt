@@ -397,8 +397,17 @@ class Japscan :
             .images
             .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
-                Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
-            }
+                val response = client.newCall(
+                    Request.Builder().url("$url&${jsInterface.p}=${jsInterface.v}").headers(
+                        headers.newBuilder().add("Referer", internalBaseUrl).build(),
+                    ).build(),
+                ).execute()
+                if (response.code == 200) {
+                    Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
+                } else {
+                    null
+                }
+            }.filterNotNull()
 
         return Observable.just(images)
     }
