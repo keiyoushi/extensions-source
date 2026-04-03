@@ -3,7 +3,7 @@ ext {
     extClass = '.Senkuro'
     themePkg = 'senkuro'
     baseUrl = 'https://senkuro.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
