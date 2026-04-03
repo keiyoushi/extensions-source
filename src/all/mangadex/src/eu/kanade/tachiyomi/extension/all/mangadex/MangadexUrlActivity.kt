@@ -20,13 +20,12 @@ class MangadexUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val titleId = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                with(pathSegments[0]) {
-                    when {
+        val data = intent.data
+        if (data != null && data.pathSegments.size > 1) {
+            val titleId = data.pathSegments[1]
+            val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH").apply {
+                with(data.pathSegments[0]) {
+                    when{
                         equals("chapter") -> putExtra("query", MDConstants.PREFIX_CH_SEARCH + titleId)
                         equals("group") -> putExtra("query", MDConstants.PREFIX_GRP_SEARCH + titleId)
                         equals("user") -> putExtra("query", MDConstants.PREFIX_USER_SEARCH + titleId)
@@ -44,7 +43,7 @@ class MangadexUrlActivity : Activity() {
                 Log.e("MangadexUrlActivity", e.toString())
             }
         } else {
-            Log.e("MangadexUrlActivity", "Could not parse URI from intent $intent")
+            Log.e("MangadexUrlActivity", "Could not parse URI from intent $data")
         }
 
         finish()
