@@ -46,6 +46,7 @@ data class MangaDto(
 data class ChapterDto(
     val name: String,
     val slug: String,
+    @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable
