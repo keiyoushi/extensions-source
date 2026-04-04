@@ -4,14 +4,17 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.graphics.Bitmap
 import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.extension.en.bookwalker.BookWalkerChapterReader.ImageResult.NotReady.get
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +26,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -35,8 +39,6 @@ import java.util.Timer
 import kotlin.concurrent.schedule
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
-import kotlin.math.max
 import kotlin.time.Duration.Companion.seconds
 
 class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalkerPreferences) {
@@ -78,8 +80,9 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
     }
 
     private val webview = evaluateOnUiThread {
-        suspendCoroutine { cont ->
+        suspendCancellableCoroutine { cont ->
             var cancelled = false
+            var loaded = false
             val timer = Timer().schedule(WEBVIEW_STARTUP_TIMEOUT.inWholeMilliseconds) {
                 // Don't destroy the webview here, that's the responsibility of the caller.
                 cancelled = true
@@ -96,35 +99,31 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
                 // The available resolutions vary per series, but in general, the largest resolution
                 // is typically on the order of 2k pixels vertical, with reduced-resolution variants
                 // on each factor of two (1/2, 1/4, etc.) for smaller screens.
-                val size = when (prefs.imageQuality) {
-                    ImageQualityPref.DEVICE -> max(
-                        app.resources.displayMetrics.heightPixels,
-                        app.resources.displayMetrics.widthPixels,
-                    )
-
-                    // "Medium" doesn't necessarily mean we'll use the 1/2x variant, just that we'll
-                    // use the variant that BookWalker thinks is appropriate for a 1000px screen
-                    // (which typically is the 1/2x variant for manga with high native resolutions).
-                    ImageQualityPref.MEDIUM -> 1000
-
-                    // A 2000x2000px WebView consistently captured the largest variant in testing,
-                    // but just in case some series can have a higher max resolution, 3000px is used
-                    // for the "high" image quality option. In theory we could go higher (like 10k)
-                    // and it wouldn't affect the image size, but there start to be performance
-                    // issues when the BookWalker viewer tries to draw onto huge canvases.
-                    ImageQualityPref.HIGH -> 3000
-                }
-                Log.d("bookwalker", "WebView size $size")
-                // Note: The BookWalker viewer is DPI-aware, so even though the innerWidth/Height
-                // values in JavaScript may not match the layout() call, everything works properly.
-                layout(0, 0, size, size)
+//                val size = when (prefs.imageQuality) {
+//                    ImageQualityPref.DEVICE -> max(
+//                        app.resources.displayMetrics.heightPixels,
+//                        app.resources.displayMetrics.widthPixels,
+//                    )
+//
+//                    // "Medium" doesn't necessarily mean we'll use the 1/2x variant, just that we'll
+//                    // use the variant that BookWalker thinks is appropriate for a 1000px screen
+//                    // (which typically is the 1/2x variant for manga with high native resolutions).
+//                    ImageQualityPref.MEDIUM -> 1000
+//
+//                    // A 2000x2000px WebView consistently captured the largest variant in testing,
+//                    // but just in case some series can have a higher max resolution, 3000px is used
+//                    // for the "high" image quality option. In theory we could go higher (like 10k)
+//                    // and it wouldn't affect the image size, but there start to be performance
+//                    // issues when the BookWalker viewer tries to draw onto huge canvases.
+//                    ImageQualityPref.HIGH -> 3000
+//                }
+//                Log.d("bookwalker", "WebView size $size")
+                // We want the layout to be sufficiently vertical that the reader uses a 1-column layout
+                layout(0, 0, 500, 1000)
 
                 @SuppressLint("SetJavaScriptEnabled")
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                // Mobile vs desktop doesn't matter much, but the mobile layout has a longer page
-                // slider which allows for more accuracy when trying to jump to a particular page.
-                settings.userAgentString = USER_AGENT_MOBILE
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
@@ -137,34 +136,35 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
                             return
                         }
 
-                        Log.d("bookwalker", "WebView loaded $url")
-
-                        if (url.contains("member.bookwalker.jp")) {
-                            cont.resumeWithException(Exception("Logged out, check website in WebView"))
+                        if (loaded) {
+                            Log.d("bookwalker", "WebView already loaded $url")
                             return
                         }
+                        loaded = true
+
+                        Log.d("bookwalker", "WebView loaded $url")
 
                         cont.resume(view)
                     }
                 }
 
-//                webChromeClient = object : WebChromeClient() {
-//                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-//                        Log.println(
-//                            when (consoleMessage.messageLevel()!!) {
-//                                ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
-//                                ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
-//                                ConsoleMessage.MessageLevel.LOG -> Log.INFO
-//                                ConsoleMessage.MessageLevel.WARNING -> Log.WARN
-//                                ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
-//                            },
-//                            "bookwalker.console",
-//                            "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
-//                        )
-//
-//                        return super.onConsoleMessage(consoleMessage)
-//                    }
-//                }
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                        Log.println(
+                            when (consoleMessage.messageLevel()!!) {
+                                ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
+                                ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
+                                ConsoleMessage.MessageLevel.LOG -> Log.INFO
+                                ConsoleMessage.MessageLevel.WARNING -> Log.WARN
+                                ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
+                            },
+                            "bookwalker.console",
+                            "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
+                        )
+
+                        return super.onConsoleMessage(consoleMessage)
+                    }
+                }
 
                 this.addJavascriptInterface(jsInterface, INTERFACE_NAME)
 
@@ -185,7 +185,7 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
     }
 
     private suspend fun evaluateJavascript(script: String): String? = usingWebView { webview ->
-        suspendCoroutine { cont ->
+        suspendCancellableCoroutine { cont ->
             webview.evaluateJavascript(script) {
                 cont.resume(it)
             }
@@ -233,17 +233,22 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
         isViewerReady.filter { it }.throwOnDestroyed().first()
     }
 
+    sealed interface ImageData {
+        class Bytes(val bytes: ByteArray) : ImageData
+        class URL(val url: String) : ImageData
+    }
+
     private sealed class ImageResult {
         object NotReady : ImageResult()
-        class Found(val data: Deferred<ByteArray>) : ImageResult()
+        class Found(val data: Deferred<ImageData>) : ImageResult()
         class NotFound(val error: Throwable) : ImageResult()
 
-        suspend fun Flow<ImageResult>.get(): ByteArray {
-            @OptIn(FlowPreview::class)
+        suspend fun Flow<ImageResult>.get(): ImageData {
+            @OptIn(ExperimentalCoroutinesApi::class)
             return flatMapConcat {
                 when (it) {
                     is NotReady -> emptyFlow()
-                    is Found -> flow<ByteArray> { emit(it.data.await()) }
+                    is Found -> flow<ImageData> { emit(it.data.await()) }
                     is NotFound -> throw it.error
                 }
             }.first()
@@ -254,10 +259,17 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
 
     private val navigationMutex = Mutex()
 
+    private var pageCount: Int = 0
+
+    suspend fun getPageCount(): Int {
+        waitForViewer()
+        return pageCount
+    }
+
     /**
      * Retrieves JPEG image data for the requested page (0-indexed)
      */
-    suspend fun getPage(index: Int): ByteArray {
+    suspend fun getPage(index: Int): ImageData {
         val state = synchronized(imagesMap) {
             imagesMap.getOrPut(index) { MutableStateFlow(ImageResult.NotReady) }
         }
@@ -281,14 +293,15 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
             result
         }
 
-        Log.d("bookwalker", "Retrieved data for image $index (${imgData.size} bytes)")
+        Log.d("bookwalker", "Retrieved data for image $index")
         return imgData
     }
 
     private val jsInterface = object {
         @JavascriptInterface
-        fun reportViewerLoaded() {
-            Log.d("bookwalker", "Viewer loaded")
+        fun reportViewerLoaded(pageCount: Int) {
+            Log.d("bookwalker", "Viewer loaded with $pageCount pages")
+            this@BookWalkerChapterReader.pageCount = pageCount
             isViewerReady.value = true
         }
 
@@ -320,9 +333,18 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
 
                     ByteArrayOutputStream().apply {
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, this)
-                    }.toByteArray()
+                    }.toByteArray().let { ImageData.Bytes(it) }
                 },
             )
+        }
+
+        @JavascriptInterface
+        fun reportImageURL(index: Int, url: String) {
+            val state = synchronized(imagesMap) {
+                imagesMap.getOrPut(index) { MutableStateFlow(ImageResult.NotReady) }
+            }
+
+            state.value = ImageResult.Found(CompletableDeferred(ImageData.URL(url)))
         }
 
         @JavascriptInterface

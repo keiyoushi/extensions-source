@@ -1,12 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
 interface BookWalkerPreferences {
-    val showLibraryInPopular: Boolean
-    val shouldValidateLogin: Boolean
-    val imageQuality: ImageQualityPref
+//    val showLibraryInPopular: Boolean
     val filterChapters: FilterChaptersPref
     val attemptToReadPreviews: Boolean
-    val useEarliestThumbnail: Boolean
-    val excludeCategoryFilters: Regex
-    val excludeGenreFilters: Regex
+//    val useEarliestThumbnail: Boolean
 }

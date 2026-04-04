@@ -1,31 +1,42 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
 import android.util.Log
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.FilterDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.FilterInfoDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.LimitOffsetDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchFilterOptionsDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchFilterOptionsRequestDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchFilterOptionsResponseDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchHeaderRequestDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchHeaderResponseDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchPageType
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchPageTypeDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchRequestDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesFormat
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SortDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagFilterDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagInclusionMode
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.math.max
 
 class BookWalkerFilters(private val bookwalker: BookWalker) {
-    var categories: List<FilterInfo>? = null
-        private set
-    var genres: List<FilterInfo>? = null
+    var genreFilters: List<TaggedTriState<String>>? = null
         private set
 
-    // Author filter disabled for now, since the performance/UX in-app is pretty bad
-//    var authors: List<FilterInfo>? = null
+    // There are an enormous amount of tags and while it's not hard to fetch the complete list,
+    // Tachiyomi clients typically do not handle large lists of tags well at the moment.
+    // BookWalker handles it by allowing users to search for tags by name, but that capability
+    // is not supported by the Tachiyomi API.
+    // For now, all of the secondary filters will be disabled, but some with a smaller number of
+    // items like status (currently broken on BW's side) and launch year can be supported later.
+//    var secondaryFilters: List<TriStateFilter>? = null
 //        private set
-    var publishers: List<FilterInfo>? = null
-        private set
 
     private val fetchMutex = Mutex()
     private var hasObtainedFilters = false
@@ -34,7 +45,7 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 fetchIfNecessary()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("bookwalker", e.toString())
             }
         }
@@ -46,110 +57,116 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
         // In theory the list of filters could change while the app is alive, but in practice that
         // seems fairly unlikely, and we can save a lot of unnecessary calls by assuming it won't.
         if (hasObtainedFilters) {
-            return
+            return@withLock
         }
 
-        coroutineScope {
-            listOf(
-                async { if (categories == null) categories = fetchFilters("categories") },
-                async { if (genres == null) genres = fetchFilters("genre") },
-//                async { if (authors == null) authors = fetchFilters("authors") },
-                async { if (publishers == null) publishers = fetchFilters("publishers") },
-            ).awaitAll()
-
-            hasObtainedFilters = true
-        }
-    }
-
-    private suspend fun fetchFilters(entityName: String): List<FilterInfo> {
-        val entityPath = "/$entityName/"
         val response = bookwalker.client.newCall(
-            GET(bookwalker.baseUrl + entityPath, bookwalker.callHeaders),
-        ).await()
-        val document = response.asJsoup()
-        return document.select(".link-list > li > a").map {
-            FilterInfo(
-                it.text(),
-                it.attr("href").removePrefix(entityPath).trimEnd('/'),
-            )
+            POST(
+                bookwalker.endpoint("ContentService/SearchHeader"),
+                bookwalker.headers,
+                SearchHeaderRequestDto().toProtoRequestBody(),
+            ),
+        ).await().parseProtoAs<SearchHeaderResponseDto>()
+
+        genreFilters = getAllFilters(response.genres).map { TaggedTriState(it.name, it.id) }
+
+        hasObtainedFilters = true
+    }
+
+    private suspend fun getAllFilters(initialList: SearchFilterOptionsDto): List<FilterInfoDto> {
+        if (!initialList.hasMore) {
+            return initialList.options
+        } else {
+            val results = mutableListOf<FilterInfoDto>()
+
+            var lastResponse: SearchFilterOptionsResponseDto? = null
+            do {
+                lastResponse = bookwalker.client.newCall(
+                    POST(
+                        bookwalker.endpoint("CollectionService/SearchFilterOptionsV2"),
+                        bookwalker.headers,
+                        SearchFilterOptionsRequestDto(
+                            filterType = initialList.filterType,
+                            limitOffset = LimitOffsetDto(100, lastResponse?.countInfo?.offset ?: 0),
+                            searchDomain = SearchPageTypeDto(SearchPageType.Browse()),
+                        ).toProtoRequestBody(),
+                    ),
+                ).await().parseProtoAs<SearchFilterOptionsResponseDto>()
+                results.addAll(lastResponse.results)
+            } while (lastResponse.countInfo.limit + lastResponse.countInfo.offset <= lastResponse.countInfo.totalCount)
+
+            return results
         }
     }
 }
 
-class FilterInfo(name: String, val id: String) : Filter.CheckBox(name) {
-    override fun toString(): String = name
+interface SearchFilter {
+    fun process(request: SearchRequestDto): SearchRequestDto
 }
 
-interface QueryParamFilter {
-    fun getQueryParams(): List<Pair<String, String>>
-}
-
-class SelectOneFilter(
-    name: String,
-    private val queryParam: String,
-    options: List<FilterInfo>,
-) : Filter.Select<FilterInfo>(
-    name,
-    options.toTypedArray(),
-    max(0, options.indexOfFirst { it.id == "2" }), // Default to manga
-),
-    QueryParamFilter {
-    override fun getQueryParams(): List<Pair<String, String>> = listOf(queryParam to values[state].id)
-}
-
-class SelectMultipleFilter(
-    name: String,
-    private val queryParam: String,
-    options: List<FilterInfo>,
-) : Filter.Group<FilterInfo>(name, options),
-    QueryParamFilter {
-    override fun getQueryParams(): List<Pair<String, String>> = listOf(
-        queryParam to state.filter { it.state }.joinToString(",") { it.id },
+object SortFilter :
+    Filter.Sort(
+        "Sort",
+        arrayOf(
+            "Relevance",
+            "Popular",
+            "Updated Latest",
+            "Alphabetical",
+            "Newest",
+        ),
+        Selection(0, true),
+    ),
+    SearchFilter {
+    override fun process(request: SearchRequestDto): SearchRequestDto = request.copy(
+        sort = when (state?.index) {
+            0 -> SortDto.RELEVANCE
+            1 -> SortDto.POPULAR
+            2 -> SortDto.LAST_UPDATED
+            3 -> SortDto.ALPHABETICAL_ASC
+            4 -> SortDto.NEWEST
+            else -> SortDto.RELEVANCE
+        }.let {
+            if (state?.ascending == false) it.reverse() else it
+        },
     )
 }
 
-class OthersFilter :
-    Filter.Group<FilterInfo>(
-        "Others",
+class TaggedCheckbox<T>(name: String, val id: T, state: Boolean = false) : Filter.CheckBox(name, state)
+class TaggedTriState<T>(name: String, val id: T, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
+
+object FormatFilter :
+    Filter.Group<TaggedCheckbox<SeriesFormat>>(
+        "Format",
         listOf(
-            FilterInfo("On Sale", "qspp"),
-            FilterInfo("Coin Boost", "qcon"),
-            FilterInfo("Pre-Order", "qcos"),
-            FilterInfo("Completed", "qcpl"),
-            FilterInfo("Bonus Item", "qspe"),
-            FilterInfo("Exclude Purchased", "qseq"),
+            TaggedCheckbox("Manga", SeriesFormat.MANGA),
+            TaggedCheckbox("Webtoons", SeriesFormat.WEBTOON),
         ),
     ),
-    QueryParamFilter {
-    override fun getQueryParams(): List<Pair<String, String>> = state.filter { it.state }.map { it.id to "1" }
+    SearchFilter {
+    override fun process(request: SearchRequestDto): SearchRequestDto = request.copy(
+        formats = state.filter { it.state }.map { it.id },
+    )
 }
 
-class ExcludeFilter :
-    Filter.Text("Exclude search terms (comma-separated)"),
-    QueryParamFilter {
-    override fun getQueryParams(): List<Pair<String, String>> = state.split(',')
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .map { "qnot[]" to it.replace(" ", "+") }
-}
-
-class TextFilter(
+class TriStateFilter(
     name: String,
-    private val queryParam: String,
-    defaultValue: String = "",
-) : Filter.Text(name, defaultValue),
-    QueryParamFilter {
-    override fun getQueryParams(): List<Pair<String, String>> = listOf(queryParam to state)
-}
-
-class PriceFilter :
-    Filter.Group<TextFilter>(
-        "Price",
-        listOf(
-            TextFilter("Min Price ($)", "qpri_min"),
-            TextFilter("Max Price ($)", "qpri_max"),
+    val filterType: String,
+    options: List<TaggedTriState<String>>,
+) : Filter.Group<TaggedTriState<String>>(name, options),
+    SearchFilter {
+    override fun process(request: SearchRequestDto): SearchRequestDto = request.copy(
+        filters = request.filters + FilterDto(
+            filterType,
+            state.mapNotNull {
+                TagFilterDto(
+                    it.id,
+                    when (it.state) {
+                        TriState.STATE_INCLUDE -> TagInclusionMode.INCLUDE
+                        TriState.STATE_EXCLUDE -> TagInclusionMode.EXCLUDE
+                        else -> return@mapNotNull null
+                    },
+                )
+            },
         ),
-    ),
-    QueryParamFilter {
-    override fun getQueryParams(): List<Pair<String, String>> = state.filter { it.state.isNotEmpty() }.flatMap { it.getQueryParams() }
+    )
 }
