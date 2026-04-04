@@ -9,7 +9,7 @@ class RawDEX :
         "RawDEX",
         "https://rawdex.net",
         "ko",
-        SimpleDateFormat("dd.MM.yyyy", Locale.US),
+        SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
     ) {
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:has(h5:contains(Status)) + div"
