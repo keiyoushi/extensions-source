@@ -3,7 +3,7 @@ ext {
     extClass = '.NyxScans'
     themePkg = 'iken'
     baseUrl = 'https://nyxmanga.org'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 
