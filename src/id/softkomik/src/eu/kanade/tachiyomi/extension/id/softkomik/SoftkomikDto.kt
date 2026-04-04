@@ -59,7 +59,7 @@ data class SessionDto(
 )
 
 @Serializable
-data class BearerTokenDto(
+class BearerTokenDto(
     val token: String,
     val ex: Long,
 )

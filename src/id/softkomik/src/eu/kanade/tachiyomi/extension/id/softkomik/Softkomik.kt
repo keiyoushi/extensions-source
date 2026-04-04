@@ -151,10 +151,12 @@ class Softkomik : HttpSource() {
     // ======================== Chapters ========================
     override fun chapterListRequest(manga: SManga): Request {
         // isRequiredLogin manga with genre ecchi or mature
-        val isRequiredLogin = manga.genre.orEmpty().lowercase().contains("ecchi") || manga.genre.orEmpty().lowercase().contains("mature")
+        val isRequiredLogin = requiredLoginGenres.any { keyword ->
+            manga.genre.orEmpty().contains(keyword, ignoreCase = true)
+        }
         var url = "$apiUrl/komik/${manga.url}/chapter?limit=9999999"
         if (isRequiredLogin) {
-            url += requiredLoginSuffix
+            url += requiredLoginFragment
         }
         return GET(url, headers)
     }
@@ -162,14 +164,14 @@ class Softkomik : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterListDto>()
         val slug = response.request.url.pathSegments[1]
-        val isRequiredLogin = response.request.url.toString().contains(requiredLoginSuffix)
+        val isRequiredLogin = response.request.url.fragment?.contains(requiredLoginSuffix) == true
         return dto.chapter.map { chapter ->
             val chapterNumStr = chapter.chapter
             val chapterNum = chapterNumStr.substringBefore(".").toFloatOrNull() ?: -1f
             val displayNum = formatChapterDisplay(chapterNumStr)
             var chapterUrl = "/$slug/chapter/$chapterNumStr"
             if (isRequiredLogin) {
-                chapterUrl += requiredLoginSuffix
+                chapterUrl += requiredLoginFragment
             }
             SChapter.create().apply {
                 url = chapterUrl
@@ -198,7 +200,7 @@ class Softkomik : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val isRequiredLogin = response.request.url.toString().contains(requiredLoginSuffix)
+        val isRequiredLogin = response.request.url.fragment?.contains(requiredLoginSuffix) == true
         val data = response.extractNextJs<ChapterPageDataDto>()
             ?: throw Exception("Could not find chapter data")
 
@@ -315,7 +317,7 @@ class Softkomik : HttpSource() {
         if (response.code == 403) {
             response.close()
 
-            // retry once with session from cookie, in case the session from api is invalid but cookie has valid session
+            // retry once with session from WebView, in case the session from api is invalid but WebView has valid session
             // get manga slug from url, e.g. https://v2.softdevices.my.id/komik/one-piece/chapter/123/img/456 -> slug = one-piece
             // only get slug if request contains /komik/{slug}/chapter, to avoid intercepting other API calls that don't require auth (e.g. search)
             val slug = request.url.pathSegments.let { segments ->
@@ -420,6 +422,8 @@ class Softkomik : HttpSource() {
 
                 wv.settings.javaScriptEnabled = true
                 wv.settings.domStorageEnabled = true
+                wv.settings.loadsImagesAutomatically = false
+                wv.settings.blockNetworkImage = true
                 wv.settings.userAgentString = headers["User-Agent"]
 
                 wv.webViewClient = object : WebViewClient() {
@@ -479,7 +483,9 @@ class Softkomik : HttpSource() {
         GenreFilter(),
         MinChapterFilter(),
     )
-    private val requiredLoginSuffix = "#login-required"
+    private val requiredLoginSuffix = "login-required"
+    private val requiredLoginFragment = "#$requiredLoginSuffix"
+    private val requiredLoginGenres = listOf("ecchi", "mature")
     private val apiUrl = "https://v2.softdevices.my.id"
     private val coverUrl = "https://cover.softdevices.my.id/softkomik-cover"
     private val userAgentMobileSafariRegex = Regex("""\s*Mobile Safari/\d+(?:\.\d+)*""", RegexOption.IGNORE_CASE)
