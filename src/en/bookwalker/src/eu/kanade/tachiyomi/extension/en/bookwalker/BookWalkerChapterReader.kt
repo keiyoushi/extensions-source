@@ -372,13 +372,13 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
         )
 
         // Sometimes the webview just fails to load for some reason and we need to retry, so this
-        // timeout should be kept as short as possible. 15 seconds seems like a decent upper bound.
-        private val WEBVIEW_STARTUP_TIMEOUT = 15.seconds
+        // timeout should be kept as short as possible. 10 seconds seems like a decent upper bound.
+        private val WEBVIEW_STARTUP_TIMEOUT = 10.seconds
 
         // Images can take a while to load especially if the viewer is in a poor location and needs
-        // to track to a completely different part of the chapter, but if it's been 15 seconds
+        // to track to a completely different part of the chapter, but if it's been 10 seconds
         // since an image was requested with no response, it usually means something is broken.
         // Note that the image fetch timer only starts after the webview loads.
-        private val IMAGE_FETCH_TIMEOUT = 15.seconds
+        private val IMAGE_FETCH_TIMEOUT = 10.seconds
     }
 }
