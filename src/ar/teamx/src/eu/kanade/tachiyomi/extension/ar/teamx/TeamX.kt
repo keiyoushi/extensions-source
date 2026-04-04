@@ -292,10 +292,11 @@ class TeamX :
         name = buildString {
             append("الفصل $chpNum")
             chpTitle?.takeIf {
-                it.isNotBlank() && it != chpNum && it != "الفصل $chpNum"
-            }?.let {
-                append(" - $it")
-            }
+                it.isNotBlank() &&
+                    it != chpNum &&
+                    it != "الفصل $chpNum" &&
+                    it != "الفصل رقم $chpNum"
+            }?.let { append(" - $it") }
         } + "\u200F"
 
         // data-date is Unix timestamp (seconds)
