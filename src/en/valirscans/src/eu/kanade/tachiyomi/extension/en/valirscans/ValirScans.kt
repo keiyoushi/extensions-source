@@ -99,7 +99,7 @@ class ValirScans :
         }.getOrNull()
 
         return SManga.create().apply {
-            title = schema?.name ?: document.selectFirst("h1")?.text().orEmpty()
+            title = schema?.name ?: document.selectFirst("h1")!!.text()
             description = detailData?.description ?: schema?.description
             author = schema?.author?.name ?: detailData?.author
             artist = detailData?.artist
