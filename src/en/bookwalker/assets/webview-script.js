@@ -11,23 +11,9 @@ const checkLoadedTimer = setInterval(() => {
     }
 }, 10);
 
-// In order for image extraction to work, the viewer needs to be in horizontal mode.
-// That setting is stored in localStorage, so we intercept calls to localStorage.getItem()
-// in order to fake the value we want.
-// There is a potential timing concern here if this JavaScript runs too late, but it
-// seems that the value is read later in the loading process so it should be okay.
-//localStorage.getItem = function(key) {
-//    let result = Storage.prototype.getItem.apply(this, [key]);
-//    if (key === '/NFBR_Settings/NFBR.SettingData') {
-//        try {
-//            const data = JSON.parse(result);
-//            data.viewerPageTransitionAxis = 'horizontal';
-//            result = JSON.stringify(data);
-//        }
-//        catch (e) {}
-//    }
-//    return result;
-//};
+async function waitMilliseconds(ms) {
+    await new Promise(r => setTimeout(r, 100));
+}
 
 function getSpine() {
     return document.querySelector('#thorium-web-container [aria-label=Spine]');
@@ -69,12 +55,12 @@ async function extractImage(pageIndex, retriesRemaining = 3) {
     if (!fullImage) {
         // maybe the iframe hasn't actually loaded yet. Let's try again in a bit.
         if (retriesRemaining > 0) {
-            console.error(pageIndex, 'retrying...')
-            await new Promise(r => setTimeout(r, 100));
+            console.error(pageIndex, 'retrying...');
+            await waitMilliseconds(100);
             return await extractImage(pageIndex, retriesRemaining - 1);
         }
         else {
-            console.error(pageIndex, 'never loaded!')
+            console.error(pageIndex, 'never loaded!');
             return;
         }
     }
@@ -198,8 +184,8 @@ window.__INJECT_JS_UTILITIES = {
 //            ? [rightArrowKeyCode, leftArrowKeyCode]
 //            : [leftArrowKeyCode, rightArrowKeyCode];
 
-        const leftButton = document.querySelector('.thorium_web_reader_paginatedArrow_leftContainer > button[aria-label=Next]')
-        const rightButton = document.querySelector('.thorium_web_reader_paginatedArrow_rightContainer > button[aria-label=Next]')
+        const leftButton = document.querySelector('.thorium_web_reader_paginatedArrow_leftContainer > button')
+        const rightButton = document.querySelector('.thorium_web_reader_paginatedArrow_rightContainer > button')
 
         const [forwardsButton, backwardsButton] = isLTR
             ? [rightButton, leftButton]
@@ -223,7 +209,7 @@ window.__INJECT_JS_UTILITIES = {
 
         async function performUIAction(cb) {
             cb();
-            await new Promise(r => setTimeout(r, 0));
+            await waitMilliseconds(0);
         }
 
         async function adjustPage() {
@@ -235,33 +221,26 @@ window.__INJECT_JS_UTILITIES = {
             const distance = targetPageIndex - getCurrentPageIndex();
             console.log("current", getCurrentPageIndex(), "target", targetPageIndex, "distance", distance)
 
-            const absoluteDistance = Math.abs(distance);
-            if (absoluteDistance > 5) {
-                await performUIAction(() => document.querySelector('button.thorium_web_overflow_hint').click());
-                await performUIAction(() => document.querySelector('.thorium_web_overflow_menuItem[data-key="jumpToPosition"]').click());
-                await performUIAction(() => {
-                    const input = document.querySelector('input.thorium_web_jumpToPosition_input');
-                    console.log("entering", targetPageIndex, "into input");
-                    input.value = targetPageIndex;
-                    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
-                });
-                await performUIAction(() => document.querySelector('.thorium_web_jumpToPosition_button[type="submit"]').click());
+            // If we're close-by, let's wait a little bit to see if it will load on its own.
+            if (Math.abs(distance) <= 4) {
+                console.log("close to target, waiting");
+                await waitMilliseconds(1500);
+                if (alreadyExtracted[targetPageIndex]) {
+                    console.log(targetPageIndex, "loaded while waiting");
+                    return;
+                }
+                console.log(targetPageIndex, "didn't load while waiting");
             }
-            else if (absoluteDistance > 0) {
-//                await performUIAction(() => fireKeyboardEvent(window, 'Escape'));
-                await performUIAction(() => {
-//                    const keyCode = distance > 0 ? forwardsKeyCode : backwardsKeyCode;
-//                    console.log("pressing", keyCode, absoluteDistance, "times")
-//                    for (let i = 0; i < Math.absoluteDistance; i++) {
-//                        fireKeyboardEvent(window, keyCode);
-//                    }
-                    const button = distance > 0 ? forwardsButton : backwardsButton;
-                    console.log("pressing button", absoluteDistance, "times")
-                    for (let i = 0; i < Math.absoluteDistance; i++) {
-                        button.click();
-                    }
-                });
-            }
+
+            await performUIAction(() => document.querySelector('button.thorium_web_overflow_hint').click());
+            await performUIAction(() => document.querySelector('.thorium_web_overflow_menuItem[data-key="jumpToPosition"]').click());
+            await performUIAction(() => {
+                const input = document.querySelector('input.thorium_web_jumpToPosition_input');
+                console.log("entering", targetPageIndex, "into input");
+                input.value = targetPageIndex + 1;
+                input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+            });
+            await performUIAction(() => document.querySelector('.thorium_web_jumpToPosition_button[type="submit"]').click());
 
             console.log("final location", getCurrentPageIndex());
 
