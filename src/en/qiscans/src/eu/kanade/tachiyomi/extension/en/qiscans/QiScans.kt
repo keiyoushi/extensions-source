@@ -1,64 +1,56 @@
 package eu.kanade.tachiyomi.extension.en.qiscans
 
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.multisrc.iken.Iken
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
-import okhttp3.Response
-import org.jsoup.parser.Parser
-import rx.Observable
-import java.util.concurrent.TimeUnit
+import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwa
+import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaSortFilter
+import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaStatusFilter
+import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaTypeFilter
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 
-class QiScans :
-    Iken(
-        "Qi Scans",
-        "en",
-        "https://qimanhwa.com",
-        "https://api.qimanhwa.com",
-    ) {
+class QiScans : EZManhwa("QiScans", "https://qimanhwa.com") {
 
-    override val client = super.client.newBuilder()
-        .rateLimit(3, 1, TimeUnit.SECONDS)
-        .build()
+    override val apiUrl = "https://api.qimanhwa.com/api/v1"
 
-    override fun searchMangaParse(response: Response): MangasPage = super.searchMangaParse(response).apply {
-        mangas.forEach(::normalizeMangaTextFields)
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Origin", baseUrl)
+        .set("Sec-Fetch-Dest", "empty")
+        .set("Sec-Fetch-Mode", "cors")
+        .set("Sec-Fetch-Site", "same-site")
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = super.fetchMangaDetails(manga).map(::normalizeMangaTextFields)
+    override fun getFilterList() = FilterList(
+        EZManhwaSortFilter(),
+        EZManhwaStatusFilter(),
+        EZManhwaTypeFilter(),
+        QiScansGenreFilter(),
+    )
 
-    override fun pageListParse(response: Response): List<Page> = try {
-        super.pageListParse(response)
-    } catch (e: Exception) {
-        if (e.message == "Unlock chapter in webview") {
-            throw Exception("Paid chapter unavailable.")
-        }
-        throw e
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val isSearch = query.isNotBlank()
+        // QiScans uses /series for browse and /series/search for text search
+        val endpoint = if (isSearch) "$apiUrl/series/search" else "$apiUrl/series"
 
-    private fun normalizeMangaTextFields(manga: SManga): SManga {
-        manga.title = decodeHtmlEntities(manga.title)
-        manga.author = manga.author?.let(::decodeHtmlEntities)
-        manga.artist = manga.artist?.let(::decodeHtmlEntities)
-        manga.description = manga.description?.let(::decodeHtmlEntities)
-        manga.genre = manga.genre?.let(::decodeHtmlEntities)
-        return manga
-    }
+        val url = endpoint.toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("perPage", "20")
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_LOCKED_CHAPTER_PREF_KEY
-            title = "Display paid chapters"
-            summaryOn = "Paid chapters will appear."
-            summaryOff = "Only free chapters will be displayed."
-            setDefaultValue(true)
-        }.also(screen::addPreference)
-    }
+            if (isSearch) {
+                addQueryParameter("q", query)
+            } else {
+                // Only apply filters when not doing a text search
+                for (filter in filters) {
+                    when (filter) {
+                        is EZManhwaSortFilter -> addQueryParameter("sort", filter.value)
+                        is EZManhwaStatusFilter -> if (filter.value.isNotBlank()) addQueryParameter("status", filter.value)
+                        is EZManhwaTypeFilter -> if (filter.value.isNotBlank()) addQueryParameter("type", filter.value)
+                        is QiScansGenreFilter -> if (filter.value.isNotBlank()) addQueryParameter("genre", filter.value)
+                        else -> {}
+                    }
+                }
+            }
+        }.build()
 
-    companion object {
-        private fun decodeHtmlEntities(value: String): String = Parser.unescapeEntities(value, false)
+        return GET(url, headers)
     }
 }
