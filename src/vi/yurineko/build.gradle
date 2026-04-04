@@ -1,0 +1,8 @@
+ext {
+    extName = 'YuriNeko'
+    extClass = '.YuriNeko'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
