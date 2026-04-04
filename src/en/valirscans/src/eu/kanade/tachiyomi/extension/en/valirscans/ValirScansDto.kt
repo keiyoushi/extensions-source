@@ -14,12 +14,12 @@ class BookSchema(
 )
 
 @Serializable
-data class AuthorSchema(
+class AuthorSchema(
     val name: String? = null,
 )
 
 @Serializable
-data class SeriesDetailsDto(
+class SeriesDetailsDto(
     val title: String,
     val slug: String,
     val author: String? = null,
@@ -32,12 +32,12 @@ data class SeriesDetailsDto(
 )
 
 @Serializable
-data class GenreDto(
+class GenreDto(
     val name: String,
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val number: Float,
     val title: String = "",
     val isLocked: Boolean = false,
@@ -45,12 +45,12 @@ data class ChapterDto(
 )
 
 @Serializable
-data class ReaderChapterDto(
+class ReaderChapterDto(
     val pages: List<ReaderPageDto> = emptyList(),
 )
 
 @Serializable
-data class ReaderPageDto(
+class ReaderPageDto(
     val pageNumber: Int,
     val imageUrl: String,
 )

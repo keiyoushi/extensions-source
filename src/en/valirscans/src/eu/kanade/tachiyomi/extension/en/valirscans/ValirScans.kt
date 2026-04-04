@@ -139,7 +139,7 @@ class ValirScans :
                         append(chapter.title.ifBlank { "Chapter ${formatChapterNumber(chapter.number)}" })
                     }
                     chapter_number = chapter.number
-                    date_upload = chapter.publishedAt.parseDate()
+                    date_upload = dateFormat.tryParse(chapter.publishedAt)
                 }
             }
             .toList()
@@ -156,9 +156,11 @@ class ValirScans :
             .unescapeJson()
             .parseAs<ReaderChapterDto>()
 
-        return chapter.pages.map { page ->
-            Page(page.pageNumber - 1, imageUrl = page.imageUrl.toAbsoluteUrl())
-        }
+        return chapter.pages
+            .sortedBy { it.pageNumber }
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = page.imageUrl.toAbsoluteUrl())
+            }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -302,8 +304,6 @@ class ValirScans :
     }
 
     private fun formatChapterNumber(number: Float): String = chapterNumberFormatter.format(number)
-
-    private fun String?.parseDate(): Long = dateFormat.tryParse(this)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
