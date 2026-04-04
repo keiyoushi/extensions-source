@@ -7,6 +7,9 @@ class RawDEX :
         "RawDEX",
         "https://rawdex.net",
         "ko",
+
     ) {
+
+    override val chapterUrlSuffix = ""
     override fun searchMangaSelector() = "div.page-item-detail.manga"
 }
