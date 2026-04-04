@@ -3,7 +3,7 @@ ext {
     extClass = '.RawDEX'
     themePkg = 'madara'
     baseUrl = 'https://rawdex.net'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
