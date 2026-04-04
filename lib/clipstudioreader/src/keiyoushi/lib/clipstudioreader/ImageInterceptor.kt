@@ -7,45 +7,35 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import kotlin.math.floor
 
 class ImageInterceptor : Interceptor {
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url
+        val response = chain.proceed(request)
+        val fragment = request.url.fragment
 
-        val scrambleArray = url.queryParameter("scrambleArray")
-        val scrambleGridW = url.queryParameter("scrambleGridW")?.toIntOrNull()
-        val scrambleGridH = url.queryParameter("scrambleGridH")?.toIntOrNull()
-
-        if (scrambleArray.isNullOrEmpty() || scrambleGridW == null || scrambleGridH == null) {
-            return chain.proceed(request)
-        }
-
-        val newUrl = url.newBuilder()
-            .removeAllQueryParameters("scrambleArray")
-            .removeAllQueryParameters("scrambleGridW")
-            .removeAllQueryParameters("scrambleGridH")
-            .build()
-        val newRequest = request.newBuilder().url(newUrl).build()
-
-        val response = chain.proceed(newRequest)
-        if (!response.isSuccessful) {
+        if (fragment.isNullOrEmpty() || !fragment.contains("size=") || !response.isSuccessful) {
             return response
         }
 
-        val scrambleMapping = scrambleArray.split(',').map { it.toInt() }
-        val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
-        val descrambledImg = unscrambleImage(scrambledImg, scrambleMapping, scrambleGridW, scrambleGridH)
+        val (arrayStr, scrambleGridW, scrambleGridH) = fragment.substringAfter("size=").split('/', limit = 3)
+        val scrambleMapping = arrayStr.split(',').map { it.toInt() }
+        val gridW = scrambleGridW.toInt()
+        val gridH = scrambleGridH.toInt()
 
-        val output = ByteArrayOutputStream()
-        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        val body = output.toByteArray().toResponseBody("image/jpeg".toMediaType())
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+        val result = unscrambleImage(bitmap, scrambleMapping, gridW, gridH)
+        bitmap.recycle()
+        val buffer = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        result.recycle()
 
-        return response.newBuilder().body(body).build()
+        return response.newBuilder()
+            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
+            .build()
     }
 
     private fun unscrambleImage(
@@ -54,28 +44,38 @@ class ImageInterceptor : Interceptor {
         gridWidth: Int,
         gridHeight: Int,
     ): Bitmap {
-        val descrambledImg = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(descrambledImg)
+        val width = image.width
+        val height = image.height
 
-        val pieceWidth = 8 * floor(floor(image.width.toFloat() / gridWidth) / 8).toInt()
-        val pieceHeight = 8 * floor(floor(image.height.toFloat() / gridHeight) / 8).toInt()
-
-        if (scrambleMapping.size < gridWidth * gridHeight || image.width < 8 * gridWidth || image.height < 8 * gridHeight) {
+        if (scrambleMapping.size < gridWidth * gridHeight || width < 8 * gridWidth || height < 8 * gridHeight) {
             return image
         }
+
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+
+        val pieceWidth = 8 * floor(floor(width.toFloat() / gridWidth) / 8).toInt()
+        val pieceHeight = 8 * floor(floor(height.toFloat() / gridHeight) / 8).toInt()
+
+        val srcRect = Rect()
+        val dstRect = Rect()
 
         for (scrambleIndex in scrambleMapping.indices) {
             val destX = scrambleIndex % gridWidth * pieceWidth
             val destY = floor(scrambleIndex.toFloat() / gridWidth).toInt() * pieceHeight
-            val destRect = Rect(destX, destY, destX + pieceWidth, destY + pieceHeight)
+            dstRect.set(destX, destY, destX + pieceWidth, destY + pieceHeight)
 
             val sourcePieceIndex = scrambleMapping[scrambleIndex]
             val sourceX = sourcePieceIndex % gridWidth * pieceWidth
             val sourceY = floor(sourcePieceIndex.toFloat() / gridWidth).toInt() * pieceHeight
-            val sourceRect = Rect(sourceX, sourceY, sourceX + pieceWidth, sourceY + pieceHeight)
+            srcRect.set(sourceX, sourceY, sourceX + pieceWidth, sourceY + pieceHeight)
 
-            canvas.drawBitmap(image, sourceRect, destRect, null)
+            canvas.drawBitmap(image, srcRect, dstRect, null)
         }
-        return descrambledImg
+        return result
+    }
+
+    companion object {
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }

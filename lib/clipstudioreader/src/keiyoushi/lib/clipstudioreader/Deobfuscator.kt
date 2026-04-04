@@ -1,41 +1,33 @@
 package keiyoushi.lib.clipstudioreader
 
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 
 class Deobfuscator : Interceptor {
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val keyStr = request.url.queryParameter("obfuscateKey")
+        val response = chain.proceed(request)
+        val fragment = request.url.fragment
 
-        if (keyStr.isNullOrEmpty()) {
-            return chain.proceed(request)
-        }
-
-        val key = keyStr.toInt()
-        val newUrl = request.url.newBuilder().removeAllQueryParameters("obfuscateKey").build()
-        val newRequest = request.newBuilder().url(newUrl).build()
-
-        val response = chain.proceed(newRequest)
-        if (!response.isSuccessful) {
+        if (fragment.isNullOrEmpty() || !fragment.contains("key=") || !response.isSuccessful) {
             return response
         }
 
-        val obfuscatedBytes = response.body.bytes()
-        val deobfuscatedBytes = deobfuscate(obfuscatedBytes, key)
-        val body = deobfuscatedBytes.toResponseBody("image/jpeg".toMediaType())
+        val key = fragment.substringAfter("key=").toInt()
+        val responseBody = response.body
+        val source = responseBody.source()
 
-        return response.newBuilder().body(body).build()
-    }
+        source.request(1024)
+        val limit = minOf(source.buffer.size, 1024L)
+        val buffer = Buffer()
+        repeat(limit.toInt()) { buffer.writeByte(source.readByte().toInt() xor key) }
+        buffer.writeAll(source)
+        val body = buffer.asResponseBody(responseBody.contentType(), responseBody.contentLength())
 
-    private fun deobfuscate(bytes: ByteArray, key: Int): ByteArray {
-        val limit = minOf(bytes.size, 1024)
-        for (i in 0 until limit) {
-            bytes[i] = (bytes[i].toInt() xor key).toByte()
-        }
-        return bytes
+        return response.newBuilder()
+            .body(body)
+            .build()
     }
 }
