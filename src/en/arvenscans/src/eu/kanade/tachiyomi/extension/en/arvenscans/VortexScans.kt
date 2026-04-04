@@ -11,7 +11,7 @@ class VortexScans :
         "Vortex Scans",
         "en",
         "https://vortexcomics.org",
-        "https://api.vortexcomics.org",
+        "https://api.vortexscans.org",
     ) {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
