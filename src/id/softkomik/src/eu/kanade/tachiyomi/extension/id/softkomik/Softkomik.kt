@@ -402,7 +402,7 @@ class Softkomik : HttpSource() {
     }
 
     // because softkomik often changes their api session url,
-    // if the request fails, we can try to get session from WebView by loading the manga detail page, 
+    // if the request fails, we can try to get session from WebView by loading the manga detail page,
     // which will automatically trigger the chapter list API that carries the session token in the header, and we can intercept that request to get the session token.
     @SuppressLint("SetJavaScriptEnabled")
     private fun getSessionViaWebView(slug: String): SessionDto {
