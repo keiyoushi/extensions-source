@@ -5,8 +5,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.serializer
 import java.text.SimpleDateFormat
 
 @Serializable
@@ -28,7 +34,9 @@ data class PagesResponseDto(
     val slug: String,
     val hasNext: Boolean,
     val hasPrevious: Boolean,
-    @SerialName("pageches") val pages: ChapterImagesDto,
+    @SerialName("pageches")
+    @Serializable(FirstobjOrObj::class)
+    val pages: ChapterImagesDto,
 )
 
 @Serializable
@@ -75,6 +83,23 @@ data class ChapterImagesDto(
     @SerialName("urlImg") val rawImages: String,
     val chapterId: Int,
 )
+
+// Get first item only in case of JsonArray
+
+object FirstobjOrObj : KSerializer<ChapterImagesDto> {
+
+    override val descriptor = ChapterImagesDto.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): ChapterImagesDto {
+        val el = (decoder as JsonDecoder).decodeJsonElement()
+        val obj = if (el is JsonArray) el[0] else el
+        return decoder.json.decodeFromJsonElement(ChapterImagesDto.serializer(), el)
+    }
+
+    override fun serialize(encoder: Encoder, value: ChapterImagesDto) {
+        encoder.encodeSerializableValue(serializer(), value)
+    }
+}
 
 fun MangaDto.toSManga() = SManga.create().apply {
     url = slug
