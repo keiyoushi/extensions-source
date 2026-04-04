@@ -2,7 +2,7 @@ ext {
     extName = 'Dilar'
     extClass = '.Dilar'
     themePkg = 'gmanga'
-    overrideVersionCode = 4
+    overrideVersionCode = 3
     isNsfw = true
 }
 
