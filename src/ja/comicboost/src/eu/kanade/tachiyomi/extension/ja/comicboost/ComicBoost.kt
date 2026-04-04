@@ -8,13 +8,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.publus.Publus.Decoder
-import keiyoushi.lib.publus.Publus.PublusInterceptor
-import keiyoushi.lib.publus.Publus.generatePages
-import keiyoushi.lib.publus.PublusPage
+import keiyoushi.lib.publus.PublusInterceptor
+import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -109,6 +107,11 @@ class ComicBoost : HttpSource() {
         return chapters
     }
 
+    @Serializable
+    class CPhpResponse(
+        val url: String,
+    )
+
     override fun pageListParse(response: Response): List<Page> {
         val cid = response.request.url.queryParameter("cid")
         val cUrl = "$baseUrl/pageapi/viewer/c.php".toHttpUrl().newBuilder()
@@ -117,42 +120,13 @@ class ComicBoost : HttpSource() {
 
         val cRequest = GET(cUrl, headers)
         val cResponse = client.newCall(cRequest).execute()
-        val cPhp = try {
+        val contentUrl = try {
             cResponse.parseAs<CPhpResponse>().url
         } catch (_: Exception) {
             throw Exception("This chapter is locked. Log in via WebView and purchase this chapter to read.")
         }
 
-        val configRequest = GET(cPhp + "configuration_pack.json", headers)
-        val configResponse = client.newCall(configRequest).execute()
-        val packData = configResponse.parseAs<ConfigPack>().data
-        val result = Decoder(packData).decode()
-        val rootJson = result.json.parseAs<Map<String, JsonElement>>()
-        val configElement = rootJson["configuration"] ?: throw Exception("Configuration not found in decrypted JSON")
-        val container = configElement.parseAs<PublusConfiguration>()
-
-        val pageContent = container.contents.mapIndexed { index, contentEntry ->
-            val pageJson = rootJson[contentEntry.file]
-                ?: throw Exception("Page config not found for ${contentEntry.file}")
-
-            val pageConfig = pageJson.toString().parseAs<PublusPageConfig>()
-            val details = pageConfig.fileLinkInfo.pageLinkInfoList[0].page
-
-            PublusPage(
-                index = index,
-                filename = contentEntry.file,
-                no = details.no,
-                ns = details.ns,
-                ps = details.ps,
-                rs = details.rs,
-                blockWidth = details.blockWidth,
-                blockHeight = details.blockHeight,
-                width = details.size.width,
-                height = details.size.height,
-            )
-        }
-
-        return generatePages(pageContent, result.keys, cPhp)
+        return fetchPages(contentUrl, headers, client)
     }
 
     override fun imageUrlParse(response: Response): String = response.request.url.toString()

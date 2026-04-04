@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.en.comix.ComixHash.generateHash
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -151,13 +152,15 @@ class Comix :
     override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url.removePrefix("/"), 1)
 
     private fun chapterListRequest(mangaHash: String, page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
-            .addPathSegment(mangaHash)
-            .addPathSegment("chapters")
+        val path = "/manga/$mangaHash/chapters"
+        val time = 1L
+        val hashToken = generateHash(path, 0, time)
+        val url = (apiUrl + (path.removePrefix("/"))).toHttpUrl().newBuilder()
             .addQueryParameter("order[number]", "desc")
             .addQueryParameter("limit", "100")
             .addQueryParameter("page", page.toString())
+            .addQueryParameter("time", time.toString())
+            .addQueryParameter("_", hashToken)
             .build()
 
         return GET(url, headers)

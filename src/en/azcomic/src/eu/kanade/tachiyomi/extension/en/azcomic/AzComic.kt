@@ -134,26 +134,25 @@ class AzComic : HttpSource() {
     }
 
     private fun getSeries(): List<SeriesEntry> = cachedSeries ?: synchronized(this) {
-        cachedSeries ?: buildSeries(fetchComics()).also { cachedSeries = it }
-    }
-
-    private fun prefetchSeriesIfNeeded() {
-        if (cachedSeries != null || isPrefetchingSeries) return
-        val shouldFetch = synchronized(this) {
-            if (cachedSeries != null || isPrefetchingSeries) {
-                false
-            } else {
-                isPrefetchingSeries = true
-                true
-            }
-        }
-        if (!shouldFetch) return
-        Thread {
+        if (cachedSeries == null) {
+            isPrefetchingSeries = true
             try {
                 cachedSeries = buildSeries(fetchComics())
             } finally {
                 isPrefetchingSeries = false
             }
+        }
+        cachedSeries!!
+    }
+
+    private fun prefetchSeriesIfNeeded() {
+        if (cachedSeries != null || isPrefetchingSeries) return
+        synchronized(this) {
+            if (cachedSeries != null || isPrefetchingSeries) return
+            isPrefetchingSeries = true
+        }
+        Thread {
+            getSeries()
         }.start()
     }
 
@@ -252,7 +251,9 @@ class AzComic : HttpSource() {
 
     private fun ComicEntry.updatedAtMillis(): Long {
         val raw = updatedAt ?: return 0L
-        return dateFormat.tryParse(raw)
+        return synchronized(dateFormat) {
+            dateFormat.tryParse(raw)
+        }
     }
 
     private fun String.seriesTitle(): String {

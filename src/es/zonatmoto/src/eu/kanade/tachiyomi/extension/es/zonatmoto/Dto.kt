@@ -76,12 +76,13 @@ class AuthorDto(
 
 @Serializable
 class ChapterItemDto(
+    val id: Int,
     @SerialName("chapter_number")
     val chapterNumber: String,
     val title: String,
     val slug: String,
     @SerialName("release_date")
-    val releaseDate: String,
+    val releaseDate: String? = null,
 )
 
 @Serializable

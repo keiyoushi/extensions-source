@@ -32,6 +32,9 @@ class HentaiMode : ParsedHttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
@@ -57,7 +60,7 @@ class HentaiMode : ParsedHttpSource() {
     // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
         val id = query.removePrefix(PREFIX_SEARCH)
-        client.newCall(GET("$baseUrl/g/$id"))
+        client.newCall(GET("$baseUrl/g/$id", headers))
             .asObservableSuccess()
             .map(::searchMangaByIdParse)
     } else {
@@ -73,7 +76,12 @@ class HentaiMode : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         require(query.length >= 3) { "Please use at least 3 characters!" }
-        return GET("$baseUrl/buscar?s=$query")
+
+        val url = "$baseUrl/buscar".toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("s", query)
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -101,6 +109,7 @@ class HentaiMode : ParsedHttpSource() {
                         append(info)
                         append(": ")
                         append(it)
+                        append("\n")
                     }
                 }
             }
@@ -138,7 +147,7 @@ class HentaiMode : ParsedHttpSource() {
             }
 
         return pagePaths.mapIndexed { index, path ->
-            Page(index, imageUrl = baseUrl + path)
+            Page(index, imageUrl = path)
         }
     }
 

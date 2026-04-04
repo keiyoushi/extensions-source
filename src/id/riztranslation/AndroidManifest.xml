@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".id.riztranslation.RiztranslationUrlActivity"
+            android:name=".id.riztranslation.UrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">

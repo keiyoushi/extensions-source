@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 class Vcomycs : HttpSource() {
     override val name = "Vcomycs"
     override val lang = "vi"
-    override val baseUrl = "https://vivicomi18.info"
+    override val baseUrl = "https://vivicomi19.info"
     override val supportsLatest = true
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->

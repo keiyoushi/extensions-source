@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.Request
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -116,13 +115,10 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val html = document.select("script:containsData(window.chapterImages)").first()!!.data()
-            .substringAfter("window.chapterImages=\"").substringBefore("\"")
-            .replace("\\/", "/")
-            .replace("\\n", "")
-            .replace("\\r", "")
-        return Jsoup.parse(html).select("img.chapter-img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.attr("abs:data-srcset").trim())
+        val images = document.select("img[id~=page\\d+]")
+
+        return images.mapIndexed { index, element ->
+            Page(index, imageUrl = element.attr("abs:src"))
         }
     }
 }
