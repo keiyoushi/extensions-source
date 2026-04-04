@@ -3,6 +3,7 @@ ext {
     extClass = '.ElderManga'
     themePkg = 'uzaymanga'
     overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

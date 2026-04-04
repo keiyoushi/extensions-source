@@ -3,6 +3,7 @@ ext {
     extClass = '.LuraToon'
     baseUrl = 'https://luratoons.net'
     extVersionCode = 58
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

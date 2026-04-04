@@ -2,6 +2,7 @@ ext {
     extName = 'War For Rayuba'
     extClass = '.WarForRayuba'
     extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

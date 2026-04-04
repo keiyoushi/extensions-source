@@ -2,6 +2,7 @@ ext {
     extName = 'LeerCapitulo'
     extClass = '.LeerCapitulo'
     extVersionCode = 14
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
