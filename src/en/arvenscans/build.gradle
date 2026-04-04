@@ -3,7 +3,7 @@ ext {
     extClass = '.VortexScans'
     themePkg = 'iken'
     baseUrl = 'https://vortexcomics.org'
-    overrideVersionCode = 41
+    overrideVersionCode = 42
     isNsfw = false
 }
 
