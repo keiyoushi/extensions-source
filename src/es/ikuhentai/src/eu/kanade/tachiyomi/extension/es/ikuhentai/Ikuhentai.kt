@@ -1,190 +1,144 @@
 package eu.kanade.tachiyomi.extension.es.ikuhentai
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class Ikuhentai : ParsedHttpSource() {
-    override val name = "Ikuhentai"
-    override val baseUrl = "https://ikuhentai.net/"
-    override val lang = "es"
-    override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val name = "Ikuhentai"    override val baseUrl = "https://ikuhentai.net"    override val lang = "es"    override val supportsLatest = true    override val client: OkHttpClient = network.cloudflareClient    private val dateFormat by lazy {        SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+    }    override fun popularMangaRequest(page: Int): Request {
+        val pagePath = if (page > 1) "page/$page/" else ""        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views", headers)
+    }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/page/$page?s&post_type=wp-manga&m_orderby=views", headers)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page?s&post_type=wp-manga&m_orderby=latest", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val pagePath = if (page > 1) "page/$page/" else ""        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest", headers)
+    }
 
-    //    LIST SELECTOR
-    override fun popularMangaSelector() = "div.c-tabs-item__content"
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun popularMangaSelector() = "div.page-listing-item .page-item-detail, div.c-tabs-item__content"    override fun latestUpdatesSelector() = popularMangaSelector()
     override fun searchMangaSelector() = popularMangaSelector()
 
-    //    ELEMENT
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    //    NEXT SELECTOR
-    override fun popularMangaNextPageSelector() = "a.nextpostslink"
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    // WordPress switches pagination structure on subsequent pages and search pages    override fun popularMangaNextPageSelector() = "a.nextpostslink, div.nav-previous > a"    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").attr("data-src")
-        element.select("div.tab-thumb > a").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.attr("title")
+        val img: Element? = element.selectFirst("img")
+        manga.thumbnail_url = img?.let {            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
+        }        val link: Element? = element.selectFirst("div.item-thumb > a, div.tab-thumb > a")
+        if (link != null) {
+            manga.setUrlWithoutDomain(link.attr("href"))
+            manga.title = link.attr("title").ifEmpty { link.text() }.trim()
         }
         return manga
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
-        url.addQueryParameter("post_type", "wp-manga")
-        val pattern = "\\s+".toRegex()
-        val q = query.replace(pattern, "+")
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("s", q)
-        } else {
-            url.addQueryParameter("s", "")
-        }
+        val url = baseUrl.toHttpUrl().newBuilder().apply {            if (page > 1) {
+                addPathSegment("page")
+                addPathSegment(page.toString())
+                addPathSegment("") // for trailing slash            }
+            addQueryParameter("s", query)
+            addQueryParameter("post_type", "wp-manga")
 
-        var orderBy: String
-
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-//                is Status -> url.addQueryParameter("manga_status", arrayOf("", "completed", "ongoing")[filter.state])
-                is GenreList -> {
-                    val genreInclude = mutableListOf<String>()
-                    filter.state.forEach {
-                        if (it.state == 1) {
-                            genreInclude.add(it.id)
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->                when (filter) {
+                    is GenreList -> {
+                        filter.state.filter { it.state == 1 }.forEach {                            addQueryParameter("genre[]", it.id)
+                        }                    }
+                    is StatusList -> {
+                        filter.state.filter { it.state == 1 }.forEach {                            addQueryParameter("status[]", it.id)
+                        }                    }
+                    is SortBy -> {
+                        val orderBy = filter.toUriPart()
+                        if (orderBy.isNotEmpty()) {
+                            addQueryParameter("m_orderby", orderBy)
                         }
                     }
-                    if (genreInclude.isNotEmpty()) {
-                        genreInclude.forEach { genre ->
-                            url.addQueryParameter("genre[]", genre)
+                    is TextField -> {
+                        if (filter.state.isNotEmpty()) {
+                            addQueryParameter(filter.key, filter.state)
                         }
                     }
+                    else -> {}
                 }
-
-                is StatusList -> {
-                    val statuses = mutableListOf<String>()
-                    filter.state.forEach {
-                        if (it.state == 1) {
-                            statuses.add(it.id)
-                        }
-                    }
-                    if (statuses.isNotEmpty()) {
-                        statuses.forEach { status ->
-                            url.addQueryParameter("status[]", status)
-                        }
-                    }
-                }
-
-                is SortBy -> {
-                    orderBy = filter.toUriPart()
-                    url.addQueryParameter("m_orderby", orderBy)
-                }
-
-                is TextField -> url.addQueryParameter(filter.key, filter.state)
-
-                else -> {}
-            }
-        }
-
-        return GET(url.build(), headers)
+            }        }        return GET(url.build(), headers)
     }
 
-    // max 200 results
-
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div.site-content").first()!!
+        val infoElement: Element = document.selectFirst("div.site-content") ?: document
 
         val manga = SManga.create()
-        manga.author = infoElement.select("div.author-content").text()
-        manga.artist = infoElement.select("div.artist-content").text()
+        manga.author = infoElement.select("div.author-content").text().trim()
+        manga.artist = infoElement.select("div.artist-content").text().trim()
 
-        val genres = mutableListOf<String>()
-        infoElement.select("div.genres-content a").forEach { element ->
-            val genre = element.text()
-            genres.add(genre)
-        }
-        manga.genre = genres.joinToString(", ")
-        manga.status = parseStatus(infoElement.select("div.post-status > div:nth-child(2) > div.summary-content").text())
+        val genres = infoElement.select("div.genres-content a").map { it.text() }        manga.genre = genres.joinToString(", ")
 
-        manga.description = document.select("div.description-summary").text()
-        manga.thumbnail_url = document.select("div.summary_image > a > img").attr("data-src")
+        val statusText = infoElement.select("div.post-content_item:has(h5:contains(Estado)) div.summary-content").text()
+        manga.status = parseStatus(statusText)
 
-        return manga
+        manga.description = document.select("div.description-summary").text().trim()
+
+        val img: Element? = document.selectFirst("div.summary_image img")
+        manga.thumbnail_url = img?.let {            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
+        }        return manga
     }
 
     private fun parseStatus(element: String): Int = when {
-        element.lowercase().contains("ongoing") -> SManga.ONGOING
-        element.lowercase().contains("completado") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
+        element.lowercase().contains("ongoing") || element.lowercase().contains("emisión") || element.lowercase().contains("emision") -> SManga.ONGOING        element.lowercase().contains("completado") || element.lowercase().contains("finalizado") -> SManga.COMPLETED        else -> SManga.UNKNOWN    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val url = baseUrl + manga.url        return if (url.endsWith("/")) {
+            POST("${url}ajax/chapters/", headers)
+        } else {
+            POST("$url/ajax/chapters/", headers)
+        }
     }
 
-    override fun chapterListSelector() = "li.wp-manga-chapter"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()!!
-        var url = urlElement.attr("href")
-        url = url.replace("/p/1", "")
-        url += "?style=list"
+    override fun chapterListSelector() = "li.wp-manga-chapter"    override fun chapterFromElement(element: Element): SChapter {
+        val urlElement: Element = element.selectFirst("a")!!
+        var url = urlElement.attr("href").trim()
+        url = url.substringBefore("?style=paged")
+        if (!url.contains("?style=list")) {
+            url += if (url.contains("?")) "&style=list" else "?style=list"        }
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(url)
-        chapter.name = urlElement.text()
+        chapter.name = urlElement.text().trim()
 
-        return chapter
+        val dateElement: Element? = element.selectFirst("span.chapter-release-date i")
+        dateElement?.let {            chapter.date_upload = parseDate(it.text().trim())
+        }        return chapter
     }
 
-    override fun prepareNewChapter(chapter: SChapter, manga: SManga) {
-        val basic = Regex("""Chapter\s([0-9]+)""")
-        when {
-            basic.containsMatchIn(chapter.name) -> {
-                basic.find(chapter.name)?.let {
-                    chapter.chapter_number = it.groups[1]?.value!!.toFloat()
-                }
-            }
-        }
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        var i = 0
-        document.select("div.reading-content * img").forEach { element ->
-            val url = element.attr("data-src")
-            i++
-            if (url.isNotEmpty()) {
-                pages.add(Page(i, "", url))
-            }
-        }
-        return pages
-    }
-
-    override fun imageUrlParse(document: Document) = ""
+    override fun pageListParse(document: Document): List<Page> = document.select("div.reading-content * img").mapIndexed { i, element ->        val url = element.attr("data-lazy-src").ifEmpty { element.attr("src") }.trim()
+        Page(i, "", url)
+    }.filter { it.imageUrl!!.isNotEmpty() }    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
 
     override fun imageRequest(page: Page): Request {
-        val imgHeader = Headers.Builder().apply {
-            add("User-Agent", "Mozilla/5.0 (Linux; U; Android 4.1.1; en-gb; Build/KLP) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Safari/534.30")
-            add("Referer", baseUrl)
+        val imgHeader = headers.newBuilder().apply {            add("Referer", "$baseUrl/")
         }.build()
         return GET(page.imageUrl!!, imgHeader)
     }
 
-    //    private class Status : Filter.TriState("Completed")
+    private fun parseDate(dateStr: String): Long = try {
+        dateFormat.parse(dateStr)?.time ?: 0L    } catch (e: Exception) {
+        0L    }
+
     private class TextField(name: String, val key: String) : Filter.Text(name)
+
     private class SortBy :
         UriPartFilter(
             "Ordenar por",
@@ -205,19 +159,20 @@ class Ikuhentai : ParsedHttpSource() {
     private class StatusList(statuses: List<Status>) : Filter.Group<Status>("Estado", statuses)
 
     override fun getFilterList() = FilterList(
-//            TextField("Judul", "title"),
         TextField("Autor", "author"),
         TextField("Año de publicación", "release"),
         SortBy(),
         StatusList(getStatusList()),
         GenreList(getGenreList()),
     )
+
     private fun getStatusList() = listOf(
         Status("Completado", "end"),
         Status("En emisión", "on-going"),
         Status("Cancelado", "canceled"),
         Status("Pausado", "on-hold"),
     )
+
     private fun getGenreList() = listOf(
         Genre("Ahegao", "ahegao"),
         Genre("Anal", "anal"),
@@ -263,7 +218,7 @@ class Ikuhentai : ParsedHttpSource() {
         Genre("Yaoi", "yaoi"),
         Genre("Yuri", "yuri"),
     )
+
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
+        fun toUriPart() = vals[state].second    }
     }
-}
