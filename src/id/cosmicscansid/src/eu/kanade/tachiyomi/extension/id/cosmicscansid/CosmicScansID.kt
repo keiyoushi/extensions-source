@@ -16,6 +16,7 @@ import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -91,6 +92,12 @@ class CosmicScansID :
 
     // manga details
     override val seriesDescriptionSelector = ".entry-content[itemprop=description] :not(a,p:has(a))"
+
+    override fun Element.imgAttr(): String = sequenceOf("data-lazy-src", "data-src", "data-cfsrc", "src")
+        .map { attr("abs:$it") }
+        .find { it.isNotEmpty() && !it.startsWith("data:") }
+        ?: ""
+
     override fun Elements.imgAttr(): String = this.first()?.imgAttr() ?: ""
 
     // pages
