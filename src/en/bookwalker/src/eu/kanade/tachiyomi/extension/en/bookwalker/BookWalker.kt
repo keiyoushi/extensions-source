@@ -46,6 +46,10 @@ class BookWalker :
 
     override val name = "BookWalker"
 
+    // ID from before the BookWalker migration.
+    // While every series will require migration to itself, preserving the same ID will simplify migration of e.g. downloads.
+    override val id = 2744810059574599668
+
     override val baseUrl = "https://bookwalker.com"
 
     override val lang = "en"
@@ -213,11 +217,7 @@ class BookWalker :
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        // Detect manga from the old extension. This logic can probably be removed at some point,
-        // but it is useful to assist existing users with the migration.
-        if (manga.url.startsWith("/de") || manga.url.endsWith("/")) {
-            throw Exception("This manga is from old BookWalker and needs to be migrated")
-        }
+        checkOldBookWalker(manga)
         return super.fetchMangaDetails(manga)
     }
 
@@ -238,47 +238,50 @@ class BookWalker :
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.concat(
-        listOf(ChapterType.VOLUMES, ChapterType.CHAPTERS).map {
-            val request = POST(
-                endpoint("ContentService/Children"),
-                headers,
-                ChaptersRequestDto(manga.url.toMangaId(), it).toProtoRequestBody(),
-            )
-            client.newCall(request).asObservableSuccess()
-        },
-    ).toList().map { responses ->
-        responses.flatMap { response ->
-            val chapters = response.parseProtoAs<ChaptersResponseDto>().chapters
-            chapters.mapNotNull {
-                SChapter.create().apply {
-                    // Because preview chapters have a smaller number of pages, we want to avoid a scenario
-                    // where a user starts reading a chapter preview, then decides to purchase the chapter,
-                    // and then finds that the app is still only showing them up to the end of the preview.
-                    // By giving owned chapters a different URL, we can hint to the app that they are
-                    // "different" chapters, and it should therefore fetch a new page list.
-                    url = it.getUrl() + "?$CHAPTER_PREVIEW_QUERY_PARAM=${!it.isOwned}"
-                    val suffix =
-                        if (!it.releaseInfo.isReleased) {
-                            if (!filterChapters.includes(FilterChaptersPref.ALL)) {
-                                return@mapNotNull null
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        checkOldBookWalker(manga)
+        return Observable.concat(
+            listOf(ChapterType.VOLUMES, ChapterType.CHAPTERS).map {
+                val request = POST(
+                    endpoint("ContentService/Children"),
+                    headers,
+                    ChaptersRequestDto(manga.url.toMangaId(), it).toProtoRequestBody(),
+                )
+                client.newCall(request).asObservableSuccess()
+            },
+        ).toList().map { responses ->
+            responses.flatMap { response ->
+                val chapters = response.parseProtoAs<ChaptersResponseDto>().chapters
+                chapters.mapNotNull {
+                    SChapter.create().apply {
+                        // Because preview chapters have a smaller number of pages, we want to avoid a scenario
+                        // where a user starts reading a chapter preview, then decides to purchase the chapter,
+                        // and then finds that the app is still only showing them up to the end of the preview.
+                        // By giving owned chapters a different URL, we can hint to the app that they are
+                        // "different" chapters, and it should therefore fetch a new page list.
+                        url = it.getUrl() + "?$CHAPTER_PREVIEW_QUERY_PARAM=${!it.isOwned}"
+                        val suffix =
+                            if (!it.releaseInfo.isReleased) {
+                                if (!filterChapters.includes(FilterChaptersPref.ALL)) {
+                                    return@mapNotNull null
+                                }
+                                " $PREORDER_ICON"
+                            } else if (it.isOwned) {
+                                ""
+                            } else if (it.currentPrice == 0) {
+                                " $FREE_ICON"
+                            } else {
+                                if (!filterChapters.includes(FilterChaptersPref.OBTAINABLE)) {
+                                    return@mapNotNull null
+                                }
+                                " $PURCHASE_ICON"
                             }
-                            " $PREORDER_ICON"
-                        } else if (it.isOwned) {
-                            ""
-                        } else if (it.currentPrice == 0) {
-                            " $FREE_ICON"
-                        } else {
-                            if (!filterChapters.includes(FilterChaptersPref.OBTAINABLE)) {
-                                return@mapNotNull null
-                            }
-                            " $PURCHASE_ICON"
-                        }
-                    name = it.title + suffix
-                    chapter_number = it.chapterNumber.number.toFloatOrNull() ?: -1f
-                    date_upload = it.releaseInfo.releaseDate.value * 1000
-                }
-            }.asReversed()
+                        name = it.title + suffix
+                        chapter_number = it.chapterNumber.number.toFloatOrNull() ?: -1f
+                        date_upload = it.releaseInfo.releaseDate.value * 1000
+                    }
+                }.asReversed()
+            }
         }
     }
 
@@ -325,6 +328,14 @@ class BookWalker :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    fun checkOldBookWalker(manga: SManga) {
+        // Detect manga from the old extension. This logic can probably be removed at some point,
+        // but it is useful to assist existing users with the migration.
+        if (manga.url.startsWith("/de") || manga.url.endsWith("/")) {
+            throw Exception("This manga is from old BookWalker and needs to be migrated")
+        }
+    }
 
     fun endpoint(operation: String) = "$baseUrl/api/kyon/kyon.v1.$operation"
 
