@@ -35,7 +35,7 @@ class ValirScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val versionId = 2
+    override val versionId = 3
 
     override val name = "Valir Scans"
 
@@ -81,9 +81,9 @@ class ValirScans :
 
     override fun getFilterList() = FilterList()
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + normalizeSeriesPath(manga.url)
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + normalizeSeriesPath(manga.url), headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val html = response.use { it.body.string() }
@@ -122,7 +122,7 @@ class ValirScans :
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.use { it.body.string() }
         val document = Jsoup.parse(html, response.request.url.toString())
-        val seriesPath = normalizeSeriesPath(response.request.url.encodedPath)
+        val seriesPath = response.request.url.encodedPath
         val firstPageData = document.extractSeriesPageData() ?: return emptyList()
         val chapters = buildList {
             addAll(firstPageData.chapters)
@@ -156,9 +156,9 @@ class ValirScans :
             .reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + normalizeChapterPath(chapter.url)
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + normalizeChapterPath(chapter.url), rscHeaders)
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.extractNextJs<ChapterPageDto> { element ->
@@ -218,7 +218,7 @@ class ValirScans :
 
         return SManga.create().apply {
             this.title = title
-            setUrlWithoutDomain(detailLink.absUrl("href"))
+            setUrlWithoutDomain(detailLink.absUrl("href").substringBefore("?"))
             thumbnail_url = selectFirst("img[src], img[srcset]")?.extractThumbnailUrl()
         }
     }
@@ -238,41 +238,6 @@ class ValirScans :
 
     private fun String.toAbsoluteUrl(base: String = baseUrl): String = resolveUrl(this, base.toHttpUrlOrNull() ?: baseHttpUrl)?.toString() ?: this
 
-    // Normalize old saved library URLs from the pre-migration route formats.
-    private fun normalizeSeriesPath(path: String): String {
-        val resolvedUrl = resolveUrl(path)
-        val segments = resolvedUrl?.pathSegments.orEmpty().filter(String::isNotBlank)
-
-        return when {
-            segments.size >= 3 && segments[0] == "series" && segments[1] == "comic" ->
-                "/series/comic/${segments[2]}"
-            segments.size >= 2 && segments[0] == "comic" ->
-                "/series/comic/${segments[1]}"
-            segments.size >= 2 && segments[0] == "series" ->
-                "/series/comic/${segments[1]}"
-            segments.isNotEmpty() ->
-                "/series/comic/${segments.last()}"
-            else ->
-                sanitizeRelativePath(path)
-        }.trimEnd('/')
-    }
-
-    private fun normalizeChapterPath(path: String): String {
-        val resolvedUrl = resolveUrl(path)
-        val segments = resolvedUrl?.pathSegments.orEmpty().filter(String::isNotBlank)
-
-        return when {
-            segments.size >= 5 && segments[0] == "series" && segments[1] == "comic" && segments[3] == "chapter" ->
-                "/series/comic/${segments[2]}/chapter/${segments[4]}"
-            segments.size >= 4 && segments[0] == "comic" && segments[2] == "chapter" ->
-                "/series/comic/${segments[1]}/chapter/${segments[3]}"
-            segments.size >= 4 && segments[0] == "series" && segments[2] == "chapter" ->
-                "/series/comic/${segments[1]}/chapter/${segments[3]}"
-            else ->
-                sanitizeRelativePath(path).substringBefore("?")
-        }
-    }
-
     private fun resolveUrl(path: String, base: HttpUrl = baseHttpUrl): HttpUrl? {
         path.toHttpUrlOrNull()?.let { return it }
 
@@ -281,11 +246,6 @@ class ValirScans :
         }
 
         return base.resolve(path)
-    }
-
-    private fun sanitizeRelativePath(path: String): String {
-        val cleanPath = path.substringBefore('#')
-        return "/" + cleanPath.removePrefix("/")
     }
 
     private fun parseStatus(status: String?): Int = when (status?.uppercase(Locale.ENGLISH)) {
