@@ -2,8 +2,8 @@ ext {
     extName = 'Lavinia Fansub'
     extClass = '.LaviniaFansub'
     themePkg = 'madara'
-    baseUrl = 'https://laviniafansub.site'
-    overrideVersionCode = 2
+    baseUrl = 'https://laviniafansub.lol'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
