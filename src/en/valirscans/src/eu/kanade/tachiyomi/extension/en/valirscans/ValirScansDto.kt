@@ -32,6 +32,14 @@ class SeriesDetailsDto(
 )
 
 @Serializable
+class SeriesPageDto(
+    val series: SeriesDetailsDto,
+    val chapters: List<ChapterDto> = emptyList(),
+    val currentPage: Int = 1,
+    val totalPages: Int = 1,
+)
+
+@Serializable
 class GenreDto(
     val name: String,
 )
@@ -47,6 +55,11 @@ class ChapterDto(
 @Serializable
 class ReaderChapterDto(
     val pages: List<ReaderPageDto> = emptyList(),
+)
+
+@Serializable
+class ChapterPageDto(
+    val chapter: ReaderChapterDto,
 )
 
 @Serializable

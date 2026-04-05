@@ -11,11 +11,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import okhttp3.Headers
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -23,7 +23,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.text.DecimalFormat
@@ -48,11 +47,9 @@ class ValirScans :
 
     override val client = network.cloudflareClient
 
-    private val json: Json by injectLazy()
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val baseHttpUrl by lazy { "$baseUrl/".toHttpUrl() }
+    private val baseHttpUrl = "$baseUrl/".toHttpUrl()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -87,16 +84,13 @@ class ValirScans :
     override fun mangaDetailsParse(response: Response): SManga {
         val html = response.use { it.body.string() }
         val document = Jsoup.parse(html, response.request.url.toString())
+        val pageData = document.extractSeriesPageData()
         val schema = document.select("script[type=application/ld+json]")
             .asSequence()
             .map { runCatching { it.data().parseAs<BookSchema>() }.getOrNull() }
             .firstOrNull { it?.type == "Book" }
 
-        val detailData = runCatching {
-            extractEscapedJsonValue(html, ESCAPED_SERIES_MARKER, '{')
-                .unescapeJson()
-                .parseAs<SeriesDetailsDto>()
-        }.getOrNull()
+        val detailData = pageData?.series
 
         return SManga.create().apply {
             title = schema?.name ?: document.selectFirst("h1")!!.text()
@@ -123,10 +117,22 @@ class ValirScans :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.use { it.body.string() }
+        val document = Jsoup.parse(html, response.request.url.toString())
         val seriesPath = normalizeSeriesPath(response.request.url.encodedPath)
-        val chapters = extractEscapedJsonValue(html, ESCAPED_CHAPTERS_MARKER, '[')
-            .unescapeJson()
-            .parseAs<List<ChapterDto>>()
+        val firstPageData = document.extractSeriesPageData() ?: return emptyList()
+        val chapters = buildList {
+            addAll(firstPageData.chapters)
+
+            for (page in (firstPageData.currentPage + 1)..firstPageData.totalPages) {
+                val pageUrl = response.request.url.newBuilder()
+                    .setQueryParameter("page", page.toString())
+                    .build()
+                val pageData = client.newCall(GET(pageUrl, headers)).execute().use { pageResponse ->
+                    pageResponse.asSeriesPageData()
+                } ?: continue
+                addAll(pageData.chapters)
+            }
+        }
 
         return chapters
             .asSequence()
@@ -152,9 +158,10 @@ class ValirScans :
 
     override fun pageListParse(response: Response): List<Page> {
         val html = response.use { it.body.string() }
-        val chapter = extractEscapedJsonValue(html, ESCAPED_CHAPTER_MARKER, '{')
-            .unescapeJson()
-            .parseAs<ReaderChapterDto>()
+        val document = Jsoup.parse(html, response.request.url.toString())
+        val chapter = document.extractNextJs<ChapterPageDto> { element ->
+            element is JsonObject && "chapter" in element
+        }?.chapter ?: error("Could not find chapter data")
 
         return chapter.pages
             .sortedBy { it.pageNumber }
@@ -171,6 +178,16 @@ class ValirScans :
             .build()
 
         return GET(page.imageUrl!!, imageHeaders)
+    }
+
+    private fun Response.asSeriesPageData(): SeriesPageDto? {
+        val html = body.string()
+        val document = Jsoup.parse(html, request.url.toString())
+        return document.extractSeriesPageData()
+    }
+
+    private fun org.jsoup.nodes.Document.extractSeriesPageData(): SeriesPageDto? = extractNextJs<SeriesPageDto> { element ->
+        element is JsonObject && "series" in element && "chapters" in element
     }
 
     private fun Response.parseBrowsePage(): MangasPage {
@@ -212,13 +229,14 @@ class ValirScans :
             return candidate
         }
 
-        val encodedUrl = candidate.substringAfter("url=", "").substringBefore("&")
+        val encodedUrl = candidate.toHttpUrlOrNull()?.queryParameter("url") ?: return candidate
         val decodedUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8)
         return decodedUrl.toAbsoluteUrl(ownerDocument()?.location() ?: baseUrl)
     }
 
     private fun String.toAbsoluteUrl(base: String = baseUrl): String = resolveUrl(this, base.toHttpUrlOrNull() ?: baseHttpUrl)?.toString() ?: this
 
+    // Normalize old saved library URLs from the pre-migration route formats.
     private fun normalizeSeriesPath(path: String): String {
         val resolvedUrl = resolveUrl(path)
         val segments = resolvedUrl?.pathSegments.orEmpty().filter(String::isNotBlank)
@@ -268,33 +286,6 @@ class ValirScans :
         return "/" + cleanPath.removePrefix("/")
     }
 
-    private fun extractEscapedJsonValue(html: String, marker: String, openChar: Char): String {
-        val startIndex = html.indexOf(marker)
-        check(startIndex >= 0) { "Could not find marker: $marker" }
-
-        val valueStart = html.indexOf(openChar, startIndex + marker.length)
-        check(valueStart >= 0) { "Could not find JSON start for marker: $marker" }
-
-        val closeChar = if (openChar == '{') '}' else ']'
-        var depth = 0
-
-        for (index in valueStart until html.length) {
-            when (html[index]) {
-                openChar -> depth++
-                closeChar -> {
-                    depth--
-                    if (depth == 0) {
-                        return html.substring(valueStart, index + 1)
-                    }
-                }
-            }
-        }
-
-        error("Could not find JSON end for marker: $marker")
-    }
-
-    private fun String.unescapeJson(): String = "\"$this\"".parseAs<String>()
-
     private fun parseStatus(status: String?): Int = when (status?.uppercase(Locale.ENGLISH)) {
         "ONGOING" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
@@ -323,10 +314,6 @@ class ValirScans :
 
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
-
-        private const val ESCAPED_SERIES_MARKER = "\\\"series\\\":"
-        private const val ESCAPED_CHAPTERS_MARKER = "\\\"chapters\\\":"
-        private const val ESCAPED_CHAPTER_MARKER = "\\\"chapter\\\":"
 
         private val TOTAL_RESULTS_REGEX =
             """Showing <!-- -->(\d+)<!-- --> of <!-- -->(\d+)<!-- --> results""".toRegex()
