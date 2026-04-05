@@ -2,8 +2,8 @@ ext {
     extName = 'Vortex Scans'
     extClass = '.VortexScans'
     themePkg = 'iken'
-    baseUrl = 'https://vortexcomics.org'
-    overrideVersionCode = 41
+    baseUrl = 'https://vortexscans.org'
+    overrideVersionCode = 42
     isNsfw = false
 }
 
