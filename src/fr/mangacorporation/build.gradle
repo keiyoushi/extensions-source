@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaCorporation'
     themePkg = 'pizzareader'
     baseUrl = 'https://manga-corporation.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
