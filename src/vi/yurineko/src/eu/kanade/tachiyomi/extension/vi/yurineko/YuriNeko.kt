@@ -117,7 +117,7 @@ class YuriNeko : HttpSource() {
 
         return SManga.create().apply {
             title = details.title
-            author = authors.takeIf(String::isNotEmpty) ?: "Đang cập nhật"
+            author = authors.takeIf(String::isNotEmpty)
             artist = artists.takeIf(String::isNotEmpty)
             genre = genres.takeIf(String::isNotEmpty)
             status = parseStatus(details.status)
