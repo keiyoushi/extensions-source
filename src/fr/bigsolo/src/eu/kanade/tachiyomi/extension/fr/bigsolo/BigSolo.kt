@@ -123,7 +123,7 @@ class BigSolo : HttpSource() {
         val multipleChapters = chapters.size > 1
 
         for ((chapterNumber, chapterData) in chapters) {
-            if (chapterData.licencied) continue
+            if (chapterData.licencied || chapterData.source == null) continue
 
             val title = chapterData.title
             val volumeNumber = chapterData.volume
