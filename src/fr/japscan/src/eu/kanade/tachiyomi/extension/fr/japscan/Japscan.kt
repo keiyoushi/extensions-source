@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -15,7 +16,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -27,6 +28,9 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -70,8 +74,10 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    val maxImageRequests = 10
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2)
+        .rateLimitHost(internalBaseUrl.toHttpUrl(), 1, 2)
+        .rateLimitHost("https://c4.japscan.foo/".toHttpUrl(), maxImageRequests, 2)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
@@ -392,22 +398,32 @@ class Japscan :
             throw Exception("Erreur lors de la récupération des pages")
         }
 
-        val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
-        val images = jsInterface
-            .images
-            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
-            .mapIndexed { i, url ->
-                val response = client.newCall(
-                    Request.Builder().url("$url&${jsInterface.p}=${jsInterface.v}").headers(
-                        headers.newBuilder().add("Referer", internalBaseUrl).build(),
-                    ).build(),
-                ).execute()
-                if (response.code == 200) {
-                    Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
-                } else {
-                    null
+        val images = kotlinx.coroutines.runBlocking {
+            val semaphore = Semaphore(maxImageRequests)
+            val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
+            jsInterface.images
+                .filter { it.toHttpUrl().host.endsWith(baseUrlHost) }
+                .mapIndexed { i, url ->
+                    async {
+                        semaphore.withPermit {
+                            val fullUrl = "$url&${jsInterface.p}=${jsInterface.v}"
+                            val request = Request.Builder()
+                                .url(fullUrl)
+                                .headers(headers.newBuilder().add("Referer", internalBaseUrl).build())
+                                .build()
+
+                            client.newCall(request).execute().use { response ->
+                                if (response.code == 200) {
+                                    Page(i, imageUrl = fullUrl)
+                                } else {
+                                    null
+                                }
+                            }
+                        }
+                    }
                 }
-            }.filterNotNull()
+                .mapNotNull { it.await() }
+        }
 
         return Observable.just(images)
     }
