@@ -18,6 +18,8 @@ private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.pars
 @Serializable
 data class ZeistMangaDto(
     val feed: ZeistMangaFeedDto? = null,
+    @SerialName("openSearch\$totalResults") val totalResults: TotalResult? = null,
+
 )
 
 @Serializable
@@ -74,6 +76,11 @@ data class ZeistMangaEntryPublishedDto(
 
 @Serializable
 data class ZeistMangaEntryContentDto(
+    @SerialName("\$t") val t: String,
+)
+
+@Serializable
+data class TotalResult(
     @SerialName("\$t") val t: String,
 )
 
