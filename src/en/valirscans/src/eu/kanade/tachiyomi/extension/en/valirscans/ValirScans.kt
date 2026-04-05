@@ -51,6 +51,10 @@ class ValirScans :
 
     private val baseHttpUrl = "$baseUrl/".toHttpUrl()
 
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
@@ -154,12 +158,10 @@ class ValirScans :
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + normalizeChapterPath(chapter.url)
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + normalizeChapterPath(chapter.url), headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + normalizeChapterPath(chapter.url), rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val html = response.use { it.body.string() }
-        val document = Jsoup.parse(html, response.request.url.toString())
-        val chapter = document.extractNextJs<ChapterPageDto> { element ->
+        val chapter = response.extractNextJs<ChapterPageDto> { element ->
             element is JsonObject && "chapter" in element
         }?.chapter ?: error("Could not find chapter data")
 
