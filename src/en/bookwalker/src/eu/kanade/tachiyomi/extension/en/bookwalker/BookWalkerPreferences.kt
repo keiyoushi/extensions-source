@@ -3,6 +3,5 @@ package eu.kanade.tachiyomi.extension.en.bookwalker
 interface BookWalkerPreferences {
 //    val showLibraryInPopular: Boolean
     val filterChapters: FilterChaptersPref
-    val attemptToReadPreviews: Boolean
-//    val useEarliestThumbnail: Boolean
+    val useLatestThumbnail: Boolean
 }

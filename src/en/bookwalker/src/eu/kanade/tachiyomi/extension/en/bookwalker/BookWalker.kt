@@ -75,11 +75,8 @@ class BookWalker :
             )!!,
         )
 
-    override val attemptToReadPreviews
-        get() = preferences.getBoolean(PREF_ATTEMPT_READ_PREVIEWS, false)
-
-//    override val useEarliestThumbnail: Boolean
-//        get() = preferences.getBoolean(PREF_USE_EARLIEST_THUMBNAIL, false)
+    override val useLatestThumbnail: Boolean
+        get() = preferences.getBoolean(PREF_USE_LATEST_THUMBNAIL, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
 //        SwitchPreferenceCompat(screen.context).apply {
@@ -90,14 +87,13 @@ class BookWalker :
 //            setDefaultValue(false)
 //        }.also(screen::addPreference)
 //
-//        SwitchPreferenceCompat(screen.context).apply {
-//            key = PREF_USE_EARLIEST_THUMBNAIL
-//            title = "Use First Volume Cover For Thumbnail"
-//            summary = "This does not affect browsing, and may not work properly for chapter " +
-//                "releases or for series with a very large number of volumes."
-//
-//            setDefaultValue(false)
-//        }.also(screen::addPreference)
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_LATEST_THUMBNAIL
+            title = "Use Latest Volume Cover For Thumbnail"
+            summary = "This does not affect browsing or series that don't have any volumes."
+
+            setDefaultValue(false)
+        }.also(screen::addPreference)
 
         ListPreference(screen.context).apply {
             key = FilterChaptersPref.PREF_KEY
@@ -117,16 +113,6 @@ class BookWalker :
             )
 
             setDefaultValue(FilterChaptersPref.defaultOption.key)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_ATTEMPT_READ_PREVIEWS
-            title = "Show Previews When Available"
-            summary = "Determines whether attempting to read an un-owned chapter should show the " +
-                "preview. Even when disabled, you will still be able to read free chapters you " +
-                "have not \"purchased\"."
-
-            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 
@@ -161,15 +147,15 @@ class BookWalker :
         val pageInfo = response.parseProtoAs<SearchResponseDto>()
         val results = pageInfo.results.value
         return MangasPage(
-            results.map { it.value.toSManga() },
+            results.map { it.value.toSManga(720) },
             pageInfo.countInfo.totalCount > pageInfo.countInfo.offset + pageInfo.countInfo.limit,
         )
     }
 
-    private fun MangaInfoDto.toSManga() = SManga.create().apply {
+    private fun MangaInfoDto.toSManga(thumbnailResolution: Int) = SManga.create().apply {
         url = getUrl()
         title = this@toSManga.title
-        thumbnail_url = thumbnail?.getImageUrl(720)
+        thumbnail_url = thumbnail?.getImageUrl(thumbnailResolution)
         genre = tags.filter { it.tagKind == TagKind.GENRE }.joinToString { it.name }
     }
 
@@ -218,19 +204,38 @@ class BookWalker :
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         checkOldBookWalker(manga)
-        return super.fetchMangaDetails(manga)
-    }
+        return Observable.zip(
+            client.newCall(
+                POST(
+                    endpoint("ContentService/Details"),
+                    headers,
+                    MangaDetailsRequestDto(manga.url.toMangaId()).toProtoRequestBody(),
+                ),
+            ).asObservableSuccess().map { it.parseProtoAs<MangaDetailsResponseDto>() },
+            if (useLatestThumbnail) {
+                client.newCall(chapterListRequest(manga, ChapterType.VOLUMES)).asObservableSuccess().onErrorReturn { null }
+            } else {
+                Observable.just(null)
+            }.map { it?.parseProtoAs<ChaptersResponseDto>()?.chapters },
+        ) { details, volumeList ->
+            details.info.toSManga(1200).apply {
+                status = details.status
+                description = "${details.tagline}\n\n${details.description}"
+                author = details.metadata.find { it.name == "AUTHOR" }?.contents?.joinToString { it.name }
+                artist = details.metadata.find { it.name == "ARTIST" }?.contents?.joinToString { it.name }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = POST(
-        endpoint("ContentService/Details"),
-        headers,
-        MangaDetailsRequestDto(manga.url.toMangaId()).toProtoRequestBody(),
-    )
+                // volumeList will be null if useLastestThumbnail is false, so no need to check again
+                volumeList?.asReversed()?.firstNotNullOfOrNull { it.thumbnail }?.let {
+                    thumbnail_url = it.getImageUrl(1200)
+                }
+            }
+        }
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val details = response.parseProtoAs<MangaDetailsResponseDto>()
 
-        return details.info.toSManga().apply {
+        return details.info.toSManga(1200).apply {
             status = details.status
             description = "${details.tagline}\n\n${details.description}"
             author = details.metadata.find { it.name == "AUTHOR" }?.contents?.joinToString { it.name }
@@ -238,16 +243,17 @@ class BookWalker :
         }
     }
 
+    private fun chapterListRequest(manga: SManga, chapterType: ChapterType) = POST(
+        endpoint("ContentService/Children"),
+        headers,
+        ChaptersRequestDto(manga.url.toMangaId(), chapterType).toProtoRequestBody(),
+    )
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         checkOldBookWalker(manga)
         return Observable.concat(
             listOf(ChapterType.VOLUMES, ChapterType.CHAPTERS).map {
-                val request = POST(
-                    endpoint("ContentService/Children"),
-                    headers,
-                    ChaptersRequestDto(manga.url.toMangaId(), it).toProtoRequestBody(),
-                )
-                client.newCall(request).asObservableSuccess()
+                client.newCall(chapterListRequest(manga, it)).asObservableSuccess()
             },
         ).toList().map { responses ->
             responses.flatMap { response ->
