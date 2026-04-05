@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.ezmanga
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class EZmangaFilters : Filter.Select<String>("Genre", DISPLAY) {
+class EZmangaGenreFilter : Filter.Select<String>("Genre", DISPLAY) {
     val value get() = VALUES[state]
     companion object {
         private val ENTRIES = arrayOf(
