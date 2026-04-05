@@ -10,7 +10,7 @@ class VortexScans :
     Iken(
         "Vortex Scans",
         "en",
-        "https://vortexcomics.org",
+        "https://vortexscans.org",
         "https://api.vortexscans.org",
     ) {
 
