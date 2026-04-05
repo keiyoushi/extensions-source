@@ -17,29 +17,46 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Ikuhentai : ParsedHttpSource() {
-    override val name = "Ikuhentai"    override val baseUrl = "https://ikuhentai.net"    override val lang = "es"    override val supportsLatest = true    override val client: OkHttpClient = network.cloudflareClient    private val dateFormat by lazy {        SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
-    }    override fun popularMangaRequest(page: Int): Request {
-        val pagePath = if (page > 1) "page/$page/" else ""        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views", headers)
+    override val name = "Ikuhentai"
+    override val baseUrl = "https://ikuhentai.net"
+    override val lang = "es"
+    override val supportsLatest = true
+    override val client: OkHttpClient = network.cloudflareClient
+
+    private val dateFormat by lazy {
+        SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+    }
+
+    override fun popularMangaRequest(page: Int): Request {
+        val pagePath = if (page > 1) "page/$page/" else ""
+        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views", headers)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val pagePath = if (page > 1) "page/$page/" else ""        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest", headers)
+        val pagePath = if (page > 1) "page/$page/" else ""
+        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest", headers)
     }
 
-    override fun popularMangaSelector() = "div.page-listing-item .page-item-detail, div.c-tabs-item__content"    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun popularMangaSelector() = "div.page-listing-item .page-item-detail, div.c-tabs-item__content"
+    override fun latestUpdatesSelector() = popularMangaSelector()
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    // WordPress switches pagination structure on subsequent pages and search pages    override fun popularMangaNextPageSelector() = "a.nextpostslink, div.nav-previous > a"    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    // WordPress switches pagination structure on subsequent pages and search pages
+    override fun popularMangaNextPageSelector() = "a.nextpostslink, div.nav-previous > a"
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         val img: Element? = element.selectFirst("img")
-        manga.thumbnail_url = img?.let {            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
-        }        val link: Element? = element.selectFirst("div.item-thumb > a, div.tab-thumb > a")
+        manga.thumbnail_url = img?.let {
+            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
+        }
+
+        val link: Element? = element.selectFirst("div.item-thumb > a, div.tab-thumb > a")
         if (link != null) {
             manga.setUrlWithoutDomain(link.attr("href"))
             manga.title = link.attr("title").ifEmpty { link.text() }.trim()
@@ -48,20 +65,27 @@ class Ikuhentai : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {            if (page > 1) {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (page > 1) {
                 addPathSegment("page")
                 addPathSegment(page.toString())
-                addPathSegment("") // for trailing slash            }
+                addPathSegment("") // for trailing slash
+            }
             addQueryParameter("s", query)
             addQueryParameter("post_type", "wp-manga")
 
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->                when (filter) {
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                when (filter) {
                     is GenreList -> {
-                        filter.state.filter { it.state == 1 }.forEach {                            addQueryParameter("genre[]", it.id)
-                        }                    }
+                        filter.state.filter { it.state == 1 }.forEach {
+                            addQueryParameter("genre[]", it.id)
+                        }
+                    }
                     is StatusList -> {
-                        filter.state.filter { it.state == 1 }.forEach {                            addQueryParameter("status[]", it.id)
-                        }                    }
+                        filter.state.filter { it.state == 1 }.forEach {
+                            addQueryParameter("status[]", it.id)
+                        }
+                    }
                     is SortBy -> {
                         val orderBy = filter.toUriPart()
                         if (orderBy.isNotEmpty()) {
@@ -75,7 +99,10 @@ class Ikuhentai : ParsedHttpSource() {
                     }
                     else -> {}
                 }
-            }        }        return GET(url.build(), headers)
+            }
+        }
+
+        return GET(url.build(), headers)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -85,7 +112,8 @@ class Ikuhentai : ParsedHttpSource() {
         manga.author = infoElement.select("div.author-content").text().trim()
         manga.artist = infoElement.select("div.artist-content").text().trim()
 
-        val genres = infoElement.select("div.genres-content a").map { it.text() }        manga.genre = genres.joinToString(", ")
+        val genres = infoElement.select("div.genres-content a").map { it.text() }
+        manga.genre = genres.joinToString(", ")
 
         val statusText = infoElement.select("div.post-content_item:has(h5:contains(Estado)) div.summary-content").text()
         manga.status = parseStatus(statusText)
@@ -93,49 +121,68 @@ class Ikuhentai : ParsedHttpSource() {
         manga.description = document.select("div.description-summary").text().trim()
 
         val img: Element? = document.selectFirst("div.summary_image img")
-        manga.thumbnail_url = img?.let {            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
-        }        return manga
+        manga.thumbnail_url = img?.let {
+            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
+        }
+
+        return manga
     }
 
     private fun parseStatus(element: String): Int = when {
-        element.lowercase().contains("ongoing") || element.lowercase().contains("emisión") || element.lowercase().contains("emision") -> SManga.ONGOING        element.lowercase().contains("completado") || element.lowercase().contains("finalizado") -> SManga.COMPLETED        else -> SManga.UNKNOWN    }
+        element.lowercase().contains("ongoing") || element.lowercase().contains("emisión") || element.lowercase().contains("emision") -> SManga.ONGOING
+        element.lowercase().contains("completado") || element.lowercase().contains("finalizado") -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = baseUrl + manga.url        return if (url.endsWith("/")) {
+        val url = baseUrl + manga.url
+        return if (url.endsWith("/")) {
             POST("${url}ajax/chapters/", headers)
         } else {
             POST("$url/ajax/chapters/", headers)
         }
     }
 
-    override fun chapterListSelector() = "li.wp-manga-chapter"    override fun chapterFromElement(element: Element): SChapter {
+    override fun chapterListSelector() = "li.wp-manga-chapter"
+
+    override fun chapterFromElement(element: Element): SChapter {
         val urlElement: Element = element.selectFirst("a")!!
         var url = urlElement.attr("href").trim()
         url = url.substringBefore("?style=paged")
         if (!url.contains("?style=list")) {
-            url += if (url.contains("?")) "&style=list" else "?style=list"        }
+            url += if (url.contains("?")) "&style=list" else "?style=list"
+        }
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(url)
         chapter.name = urlElement.text().trim()
 
         val dateElement: Element? = element.selectFirst("span.chapter-release-date i")
-        dateElement?.let {            chapter.date_upload = parseDate(it.text().trim())
-        }        return chapter
+        dateElement?.let {
+            chapter.date_upload = parseDate(it.text().trim())
+        }
+
+        return chapter
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("div.reading-content * img").mapIndexed { i, element ->        val url = element.attr("data-lazy-src").ifEmpty { element.attr("src") }.trim()
+    override fun pageListParse(document: Document): List<Page> = document.select("div.reading-content * img").mapIndexed { i, element ->
+        val url = element.attr("data-lazy-src").ifEmpty { element.attr("src") }.trim()
         Page(i, "", url)
-    }.filter { it.imageUrl!!.isNotEmpty() }    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    }.filter { it.imageUrl!!.isNotEmpty() }
+
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
 
     override fun imageRequest(page: Page): Request {
-        val imgHeader = headers.newBuilder().apply {            add("Referer", "$baseUrl/")
+        val imgHeader = headers.newBuilder().apply {
+            add("Referer", "$baseUrl/")
         }.build()
         return GET(page.imageUrl!!, imgHeader)
     }
 
     private fun parseDate(dateStr: String): Long = try {
-        dateFormat.parse(dateStr)?.time ?: 0L    } catch (e: Exception) {
-        0L    }
+        dateFormat.parse(dateStr)?.time ?: 0L
+    } catch (e: Exception) {
+        0L
+    }
 
     private class TextField(name: String, val key: String) : Filter.Text(name)
 
@@ -220,5 +267,6 @@ class Ikuhentai : ParsedHttpSource() {
     )
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second    }
+        fun toUriPart() = vals[state].second
     }
+}
