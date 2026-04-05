@@ -1,13 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.ezmanhwa
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,24 +19,14 @@ import okhttp3.Response
 abstract class EZManhwa(
     override val name: String,
     override val baseUrl: String,
+    val apiUrl: String,
     final override val lang: String = "en",
-) : HttpSource() {
-
-    /** Full API base, e.g. "https://vapi.ezmanga.org/api/v1" */
-    abstract val apiUrl: String
-
-    /** Requests per second. Override per-source if needed. */
-    open val rateLimitPermits: Int = 3
+) : HttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = true
 
-    // by lazy defers initialization until first access, ensuring subclass
-    // property overrides (e.g. rateLimitPermits) are set before use.
-    override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimit(rateLimitPermits)
-            .build()
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Accept", "application/json, text/plain, */*")
@@ -62,28 +55,31 @@ abstract class EZManhwa(
 
     // ── Search ───────────────────────────────────────────────────────────────
 
-    // Base implementation sends filters with both browse and search.
-    // Override (e.g. EZmanga) if the source's search endpoint ignores filters.
+    // Base implementation sends filters only during browse.
+    // Override if the source's search endpoint behaviour differs.
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val isSearch = query.isNotBlank()
         val endpoint = if (isSearch) "$apiUrl/series/search" else "$apiUrl/series"
         val url = endpoint.toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", "20")
-            if (isSearch) addQueryParameter("q", query)
-            var sortAdded = false
-            for (filter in filters) {
-                when (filter) {
-                    is EZManhwaSortFilter -> {
-                        addQueryParameter("sort", filter.value)
-                        sortAdded = true
+            if (isSearch) {
+                addQueryParameter("q", query)
+            } else {
+                var sortAdded = false
+                for (filter in filters) {
+                    when (filter) {
+                        is EZManhwaSortFilter -> {
+                            addQueryParameter("sort", filter.value)
+                            sortAdded = true
+                        }
+                        is EZManhwaStatusFilter -> if (filter.value.isNotBlank()) addQueryParameter("status", filter.value)
+                        is EZManhwaTypeFilter -> if (filter.value.isNotBlank()) addQueryParameter("type", filter.value)
+                        else -> {}
                     }
-                    is EZManhwaStatusFilter -> if (filter.value.isNotBlank()) addQueryParameter("status", filter.value)
-                    is EZManhwaTypeFilter -> if (filter.value.isNotBlank()) addQueryParameter("type", filter.value)
-                    else -> {}
                 }
+                if (!sortAdded) addQueryParameter("sort", "latest")
             }
-            if (!sortAdded && !isSearch) addQueryParameter("sort", "latest")
         }.build()
         return GET(url, headers)
     }
@@ -126,12 +122,8 @@ abstract class EZManhwa(
         return chapters
     }
 
-    /**
-     * Controls which chapters appear in the list.
-     * Default: hide locked (requiresPurchase) chapters.
-     * Override to add source-specific logic (e.g. a user preference).
-     */
-    open fun shouldShowChapter(chapter: EZManhwaChapterDto): Boolean = chapter.requiresPurchase != true
+    open fun shouldShowChapter(chapter: EZManhwaChapterDto): Boolean = chapter.requiresPurchase != true ||
+        preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false)
 
     // ── Pages ────────────────────────────────────────────────────────────────
 
@@ -152,4 +144,17 @@ abstract class EZManhwa(
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used")
 
     override fun getFilterList() = FilterList(EZManhwaSortFilter(), EZManhwaStatusFilter(), EZManhwaTypeFilter())
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_LOCKED_CHAPTER_PREF_KEY
+            title = "Show locked chapters"
+            summary = "Show chapters requiring coins. Note: They only load if owned/logged in via webview."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+    }
 }
