@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.tuitruyen
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -180,11 +181,11 @@ class TuiTruyen : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> = rx.Observable.fromCallable {
-        client.newCall(chapterListRequest(manga)).execute().use { response ->
+    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .map { response ->
             chapterListParsePaginated(response)
         }
-    }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
