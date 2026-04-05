@@ -144,7 +144,8 @@ object FormatFilter :
     ),
     SearchFilter {
     override fun process(request: SearchRequestDto): SearchRequestDto = request.copy(
-        formats = state.filter { it.state }.map { it.id },
+        formats = state.filter { it.state }.map { it.id }
+            .takeIf { it.isNotEmpty() } ?: listOf(SeriesFormat.MANGA, SeriesFormat.WEBTOON),
     )
 }
 
