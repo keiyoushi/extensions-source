@@ -12,7 +12,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
 abstract class ClipStudioReader : HttpSource() {
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())
         .build()
@@ -57,12 +57,9 @@ abstract class ClipStudioReader : HttpSource() {
 
             return imageManifestItems.mapIndexed { i, item ->
                 val href = item.attr("href")
-                    ?: throw Exception("Image item found with no href")
-                val imageUrlBuilder = opfUrl.resolve(href)!!.newBuilder()
-                obfuscationKey.let {
-                    imageUrlBuilder.addQueryParameter("obfuscateKey", it.toString())
-                }
-                Page(i, imageUrl = imageUrlBuilder.build().toString())
+                val imageUrl = opfUrl.resolve(href)!!.newBuilder()
+                    .fragment("key=$obfuscationKey")
+                Page(i, imageUrl = imageUrl.build().toString())
             }
         }
 
@@ -103,11 +100,8 @@ abstract class ClipStudioReader : HttpSource() {
                 addQueryParameter("vm", "4")
                 addQueryParameter("file", pageFileName)
                 addQueryParameter("param", authkey)
-                // Custom params
-                addQueryParameter("csr_sw", faceData.scrambleWidth.toString())
-                addQueryParameter("csr_sh", faceData.scrambleHeight.toString())
-            }.build()
-            Page(i, url = pageXmlUrl.toString())
+            }.fragment("${faceData.scrambleWidth}/${faceData.scrambleHeight}")
+            Page(i, url = pageXmlUrl.build().toString())
         }
     }
 
@@ -116,10 +110,8 @@ abstract class ClipStudioReader : HttpSource() {
         val document = response.asJsoup()
 
         val authkey = requestUrl.queryParameter("param")!!
-        val scrambleGridW = requestUrl.queryParameter("csr_sw")!!
-        val scrambleGridH = requestUrl.queryParameter("csr_sh")!!
-        // Reconstruct endpoint without query params
-        val endpointUrl = requestUrl.newBuilder().query(null).build()
+        val (scrambleGridW, scrambleGridH) = requestUrl.fragment!!.split('/')
+        val endpointUrl = requestUrl.newBuilder().query(null).fragment(null).build()
 
         val pageIndex = document.selectFirst("PageNo")?.text()?.toIntOrNull()
             ?: throw Exception("Could not find PageNo")
@@ -145,11 +137,7 @@ abstract class ClipStudioReader : HttpSource() {
         }
 
         if (imagePart.isScrambled && !scrambleArray.isNullOrEmpty()) {
-            imageUrlBuilder.apply {
-                addQueryParameter("scrambleArray", scrambleArray)
-                addQueryParameter("scrambleGridW", scrambleGridW)
-                addQueryParameter("scrambleGridH", scrambleGridH)
-            }
+            imageUrlBuilder.fragment("size=$scrambleArray/$scrambleGridW/$scrambleGridH")
         }
         return imageUrlBuilder.build().toString()
     }
