@@ -286,13 +286,18 @@ class TeamX :
     override fun chapterListSelector() = "div.chapter-card"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val chpNum = element.select("div.chapter-info div.chapter-number").text()
-        val chpTitle = element.select("div.chapter-info div.chapter-title").text()
+        val chpNum = element.attr("data-number")
+        val chpTitle = element.selectFirst("div.chapter-info div.chapter-title")?.text()
 
-        name = when (chpNum.isNullOrBlank()) {
-            true -> chpTitle
-            false -> "$chpNum - $chpTitle"
-        }
+        name = buildString {
+            append("الفصل $chpNum")
+            chpTitle?.takeIf {
+                it.isNotBlank() &&
+                    it != chpNum &&
+                    it != "الفصل $chpNum" &&
+                    it != "الفصل رقم $chpNum"
+            }?.let { append(" - $it") }
+        } + "\u200F"
 
         // data-date is Unix timestamp (seconds)
         date_upload = element.attr("data-date")
