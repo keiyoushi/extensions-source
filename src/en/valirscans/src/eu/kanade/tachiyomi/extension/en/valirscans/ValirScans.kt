@@ -54,7 +54,7 @@ class ValirScans :
 
     private val baseHttpUrl by lazy { "$baseUrl/".toHttpUrl() }
 
-    override fun headersBuilder() = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?sort=views&order=desc&page=$page", headers)
