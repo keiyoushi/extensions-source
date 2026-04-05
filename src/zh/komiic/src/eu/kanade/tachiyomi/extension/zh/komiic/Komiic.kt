@@ -30,9 +30,14 @@ class Komiic :
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             refreshToken(chain)
-            chain.proceed(chain.request())
-        }
-        .build()
+            val origin = chain.request()
+            chain.proceed(origin).also {
+                if (it.code == 402 && origin.url.toString().contains("api/image")) {
+                    it.close()
+                    throw IOException("今日圖片讀取次數已達上限，請登录或明天再來！")
+                }
+            }
+        }.build()
 
     private fun refreshToken(chain: Interceptor.Chain) {
         val url = chain.request().url
@@ -136,10 +141,6 @@ class Komiic :
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parse()
-        val check = preferences.getBoolean(CHECK_API_LIMIT_PREF, true)
-        if (check && data.reachedImageLimit!!) {
-            throw Exception("今日圖片讀取次數已達上限，請登录或明天再來！")
-        }
         val chapterUrl = response.request.tag(String::class.java)!!
         return data.imagesByChapterId!!.mapIndexed { index, image ->
             Page(index, "$chapterUrl/page/${index + 1}", "$baseUrl/api/image/${image.kid}")

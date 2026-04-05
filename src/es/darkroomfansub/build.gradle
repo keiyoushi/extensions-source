@@ -3,7 +3,7 @@ ext {
     extClass = '.DarkRoomFansub'
     themePkg = 'zeistmanga'
     baseUrl = 'https://lector-darkroomfansub.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

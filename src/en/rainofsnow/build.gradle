@@ -1,7 +1,0 @@
-ext {
-    extName = 'Rain Of Snow'
-    extClass = '.RainOfSnow'
-    extVersionCode = 8
-}
-
-apply from: "$rootDir/common.gradle"

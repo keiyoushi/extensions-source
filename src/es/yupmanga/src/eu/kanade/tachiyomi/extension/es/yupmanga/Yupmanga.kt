@@ -34,6 +34,7 @@ class Yupmanga : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("x-requested-with", "XMLHttpRequest")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top", headers)
 
@@ -140,27 +141,32 @@ class Yupmanga : HttpSource() {
     private fun parseChapterList(document: Document): List<SChapter> = document.select("div.comic-card").map { element ->
         SChapter.create().apply {
             name = element.selectFirst("h3")!!.text()
-            setUrlWithoutDomain(element.selectFirst("> a[href]")!!.attr("abs:href"))
+            url = getChapterUrl(element)
         }
     }
 
-    private val totalPagesRegex = """totalPages: (\d*)""".toRegex()
+    private fun getChapterUrl(el: Element): String {
+        val chapterId = el.selectFirst("a[data-chapter]")!!.attr("data-chapter")
+        val totalPages = el.selectFirst("span")!!.text()
+        return "/ajax/get_reader_token.php?chapter=$chapterId#$totalPages"
+    }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterId = response.request.url.queryParameter("chapter")
-        val token = response.request.url.queryParameter("token")
-        if (token.isNullOrEmpty() || chapterId.isNullOrEmpty()) {
+        val httpUrl = response.request.url
+        val chapterId = httpUrl.queryParameter("chapter")!!
+
+        val token = response.parseAs<TokenDto>()
+        if (!token.success || chapterId.isNullOrEmpty()) {
             throw Exception("Información desactualizada. Refresque la lista de capítulos.")
         }
-        val document = response.asJsoup()
-        val script = document.select("script:containsData(totalPages)").joinToString("\n")
-        val totalPages = totalPagesRegex.find(script)?.groupValues?.get(1)?.toInt()!!
+        val totalPages = httpUrl.fragment!!.toInt()
+
         return (1..totalPages).map { pageNumber ->
             val imageUrl = "$baseUrl/image-proxy-v2.php".toHttpUrl().newBuilder()
                 .addQueryParameter("chapter", chapterId)
                 .addQueryParameter("page", pageNumber.toString())
                 .addQueryParameter("context", "reader")
-                .addQueryParameter("token", token)
+                .addQueryParameter("token", token.token)
                 .build()
 
             Page(pageNumber, imageUrl = imageUrl.toString())
@@ -177,4 +183,10 @@ class Yupmanga : HttpSource() {
     ) {
         fun hasNextPage() = currentPage < totalPages
     }
+
+    @Serializable
+    internal class TokenDto(
+        val success: Boolean,
+        val token: String,
+    )
 }
