@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.ezmanhwa
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
@@ -91,11 +92,7 @@ data class EZManhwaChapterDto(
         val chapterTitle = title?.takeIf { it.isNotBlank() } ?: "Chapter $numStr".trim()
         name = prefix + chapterTitle
         chapter_number = number?.toFloat() ?: -1f
-        date_upload = try {
-            createdAt?.let { EZMANHWA_DATE_FORMAT.parse(it)?.time } ?: 0L
-        } catch (e: Exception) {
-            0L
-        }
+        date_upload = EZMANHWA_DATE_FORMAT.tryParse(createdAt)
     }
 }
 
