@@ -323,12 +323,7 @@ class Softkomik : HttpSource() {
             response.close()
 
             // retry once with session from WebView, in case the session from api is invalid but WebView has valid session
-            if (!route.isChapterListRequest || route.slug == null) {
-                // if this route is not chapter-based, return the original request response
-                return chain.proceed(request)
-            }
-
-            val cookieSession = getSessionViaWebView(route, request.url)
+            val cookieSession = getSessionViaWebView(route)
             val retryRequest = request.newBuilder()
                 .header("X-Token", cookieSession.token)
                 .header("X-Sign", cookieSession.sign)
@@ -361,6 +356,7 @@ class Softkomik : HttpSource() {
     private data class SessionRoute(
         val key: String,
         val sessionApiUrl: String,
+        val webViewUrl: String,
         val slug: String?,
         val isChapterListRequest: Boolean,
         val isChapterImageRequest: Boolean,
@@ -383,6 +379,18 @@ class Softkomik : HttpSource() {
         } else {
             "$baseUrl/api/sessions/kajsijas"
         }
+        val webViewUrl = if (isChapterImageRequest) {
+            val chapterSegment = resolveWebViewChapterSegment(url)
+            if (chapterSegment != null) {
+                "$baseUrl/$slug/chapter/$chapterSegment"
+            } else {
+                "$baseUrl/$slug/chapter/001"
+            }
+        } else if (isChapterListRequest) {
+            "$baseUrl/$slug"
+        } else {
+            "$baseUrl/komik/list" // this for manga list with filters.
+        }
 
         return SessionRoute(
             key = sessionKey,
@@ -390,6 +398,7 @@ class Softkomik : HttpSource() {
             slug = slug,
             isChapterListRequest = isChapterListRequest,
             isChapterImageRequest = isChapterImageRequest,
+            webViewUrl = webViewUrl,
         )
     }
 
@@ -444,19 +453,8 @@ class Softkomik : HttpSource() {
     // if the request fails, we can try to get session from WebView by loading the manga detail page,
     // which will automatically trigger the chapter list API that carries the session token in the header, and we can intercept that request to get the session token.
     @SuppressLint("SetJavaScriptEnabled")
-    private fun getSessionViaWebView(route: SessionRoute, url: HttpUrl): SessionDto {
-        val slug = route.slug ?: throw Exception("Gagal mendapatkan session. Coba lagi.")
-
-        // load sesion via WebView if url is for chapter list API or page chapter API
-        // chapter list API url: $baseUrl/{slug}
-        // page chapter API url: $baseUrl/{slug}/chapter/{chapter}
-        var webViewUrl = "$baseUrl/$slug"
-        if (route.isChapterImageRequest) {
-            val chapterSegment = resolveWebViewChapterSegment(url)
-            if (chapterSegment != null) {
-                webViewUrl = "$baseUrl/$slug/chapter/$chapterSegment"
-            }
-        }
+    private fun getSessionViaWebView(route: SessionRoute): SessionDto {
+        val webViewUrl = route.webViewUrl
         synchronized(this) {
             val latch = CountDownLatch(1)
             var capturedToken: String? = null
