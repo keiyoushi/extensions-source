@@ -14,6 +14,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class Manhwa18Net : HttpSource() {
 
@@ -153,6 +156,7 @@ class Manhwa18Net : HttpSource() {
             SChapter.create().apply {
                 name = chapter.name
                 url = "/manga/${manga.slug}/${chapter.slug}"
+                date_upload = parseDate(chapter.createdAt)
             }
         }
     }
@@ -196,5 +200,22 @@ class Manhwa18Net : HttpSource() {
         url.startsWith("http") -> url
         url.startsWith("/") -> baseUrl + url
         else -> "$baseUrl/$url"
+    }
+}
+
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+}
+
+private fun parseDate(dateStr: String?): Long {
+    if (dateStr.isNullOrEmpty()) return 0L
+    return try {
+        // Strip the microseconds (e.g. ".000000Z" -> "Z") to safely parse
+        val cleanDate = dateStr.substringBefore(".") + "Z"
+        dateFormat.parse(cleanDate)?.time ?: 0L
+    } catch (e: Exception) {
+        0L
     }
 }
