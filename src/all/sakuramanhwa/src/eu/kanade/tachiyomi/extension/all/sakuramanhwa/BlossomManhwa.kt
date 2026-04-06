@@ -35,15 +35,16 @@ class BlossomManhwa(
 
     override val supportsLatest = true
 
-    override val baseUrl = "https://api.blossommanhwa.com"
+    override val baseUrl = "https://api.cherrymanhwa.com"
 
-    private val apiImageUrl = "https://api.blossommanhwa.com/v1/images"
-    private val cdnImageUrl = "https://cdn.blossommanhwa.com/v1/images"
+    private val apiImageUrl = "https://api.cherrymanhwa.com/v1/images"
+    private val siteUrl = "https://cherrymanhwa.com"
 
     private val secretKey = "EA^UfBOF9lNdQDS3i2qAnsqxIrTpH%"
     private val encryptKey = "6dFGd4Laa3vE%kLpr5eCtSEaAL%wJm"
+    private val imageKey = "RghVx!Sf!Dw3y6O7KQcF%pg#"
 
-    private val apiCryptoHelper = CryptoHelper(baseUrl, secretKey, encryptKey)
+    private val apiCryptoHelper = CryptoHelper(baseUrl, secretKey, encryptKey, imageKey)
 
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder().addInterceptor(apiCryptoHelper)
@@ -58,7 +59,7 @@ class BlossomManhwa(
 
     private val preference = getPreferences()
 
-    private val i18nHelper: I18nHelper = I18nHelper("https://blossommanhwa.com", client, preference)
+    private val i18nHelper: I18nHelper = I18nHelper(siteUrl, client, preference)
 
     // Chapter
 
@@ -66,18 +67,12 @@ class BlossomManhwa(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<ApiMangaInfo>()
-        val tag = when (data.manga.type) {
-            "manhwa" -> "api"
-            "manga" -> "cdn"
-            else -> throw UnsupportedOperationException()
-        }
-
         val lis = mutableListOf<SChapter>()
         data.chapters.forEach {
             val chapterName = getChapterName(it.number)
             lis.add(
                 SChapter.create().apply {
-                    url = "$tag/v1/manga/${data.manga.slug}/chapter/$chapterName"
+                    url = "/v1/manga/${data.manga.slug}/chapter/$chapterName"
                     name = "${chapterName}${if (it.title != null) " ${it.title}" else ""}"
                     date_upload = dateFormat.tryParse(it.create_at)
                     chapter_number = it.number
@@ -92,17 +87,15 @@ class BlossomManhwa(
 
     // Image
 
-    override fun imageRequest(page: Page): Request {
-        val (tag, realUrl) = getTagUrl(page.imageUrl!!)
-        val prefixUrl = when (tag) {
-            "api" -> apiImageUrl
-            "cdn" -> cdnImageUrl
-            else -> throw UnsupportedOperationException()
-        }
-        return GET("$prefixUrl$realUrl", headers)
-    }
+    override fun imageRequest(page: Page) = GET("$apiImageUrl${page.imageUrl}#DECRYPT", headers)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // webview
+
+    override fun getChapterUrl(chapter: SChapter) = "$siteUrl${chapter.url.substringAfter("/v1")}"
+
+    override fun getMangaUrl(manga: SManga) = "$siteUrl/manga/${manga.url.substringAfterLast("/")}"
 
     // LatestUpdates
 
@@ -145,17 +138,13 @@ class BlossomManhwa(
 
     // Pages
 
-    private fun getTagUrl(tagUrl: String): Pair<String, String> = Pair(tagUrl.substring(0, 3), tagUrl.substring(3))
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val (tag, realUrl) = getTagUrl(chapter.url)
-
-        val response = client.newCall(GET("$baseUrl$realUrl", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${chapter.url}", headers)).execute()
         val data = response.parseAs<ApiChapterInfo>()
 
         val lis = mutableListOf<Page>()
-        data.chapter.images.flatten().forEachIndexed { index, path ->
-            lis.add(Page(index, imageUrl = "$tag/chapter$path"))
+        data.chapter.images.maxBy { it.size }.forEachIndexed { index, path ->
+            lis.add(Page(index, imageUrl = "/chapter$path"))
         }
 
         return Observable.just(lis)
