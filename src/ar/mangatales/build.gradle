@@ -3,6 +3,7 @@ ext {
     extClass = '.MangaTales'
     themePkg = 'gmanga'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

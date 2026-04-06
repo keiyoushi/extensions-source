@@ -2,6 +2,7 @@ ext {
     extName = 'Vinne Veritas - CCC'
     extClass = '.VinnieVeritasFactory'
     extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

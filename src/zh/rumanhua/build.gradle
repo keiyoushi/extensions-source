@@ -4,6 +4,7 @@ ext {
     themePkg = 'mmlook'
     baseUrl = 'https://m.rumanhua2.com'
     overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

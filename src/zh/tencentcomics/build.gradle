@@ -2,6 +2,7 @@ ext {
     extName = 'Tencent Comics (ac.qq.com)'
     extClass = '.TencentComics'
     extVersionCode = 8
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

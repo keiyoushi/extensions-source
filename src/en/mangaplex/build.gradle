@@ -2,6 +2,7 @@ ext {
     extName = 'MangaPlex'
     extClass = '.MangaPlex'
     extVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

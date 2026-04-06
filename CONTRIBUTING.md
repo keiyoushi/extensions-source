@@ -250,7 +250,7 @@ apply from: "$rootDir/common.gradle"
 | `extName`        | The name of the extension. Should be romanized if site name is not in English.                                                                                                         |
 | `extClass`       | Points to the class that implements `Source`. You can use a relative path starting with a dot (the package name is the base path). This is used to find and instantiate the source(s). |
 | `extVersionCode` | The extension version code. This must be a positive integer and incremented with any change to the code.                                                                               |
-| `isNsfw`         | (Optional, defaults to `false`) Flag to indicate that a source contains NSFW content.                                                                                                  |
+| `isNsfw`         | Flag to indicate that a source contains NSFW content. Must be explicitly set to `true` or `false`.                                                                                     |
 
 The extension's version name is generated automatically by concatenating `1.4` and `extVersionCode`.
 With the example used above, the version would be `1.4.1`.

@@ -3,6 +3,7 @@ ext {
     extClass = '.MonochromeCustom'
     themePkg = 'monochrome'
     overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

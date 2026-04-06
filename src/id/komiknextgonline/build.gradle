@@ -2,6 +2,7 @@ ext {
     extName = 'Komik Next G Online'
     extClass = '.KomikNextGOnline'
     extVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

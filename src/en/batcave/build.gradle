@@ -2,6 +2,7 @@ ext {
     extName = 'BatCave'
     extClass = '.BatCave'
     extVersionCode = 5
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

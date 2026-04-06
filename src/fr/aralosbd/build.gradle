@@ -2,6 +2,7 @@ ext {
     extName = 'AralosBD'
     extClass = '.AralosBD'
     extVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

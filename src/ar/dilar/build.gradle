@@ -3,6 +3,7 @@ ext {
     extClass = '.Dilar'
     themePkg = 'gmanga'
     overrideVersionCode = 3
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

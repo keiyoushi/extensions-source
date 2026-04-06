@@ -2,6 +2,7 @@ ext {
     extName = 'LANraragi'
     extClass = '.LANraragiFactory'
     extVersionCode = 20
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

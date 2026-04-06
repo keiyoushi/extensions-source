@@ -2,6 +2,7 @@ ext {
     extName = 'Clone Manga'
     extClass = '.CloneManga'
     extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

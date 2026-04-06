@@ -2,6 +2,7 @@ ext {
     extName = 'Webcomics'
     extClass = '.Webcomics'
     extVersionCode = 9
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
