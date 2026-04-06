@@ -2,7 +2,7 @@ ext {
     extName = 'MangaClash'
     extClass = '.MangaClash'
     themePkg = 'madara'
-    baseUrl = 'https://toonclash.com'
+    baseUrl = 'https://mangaclash.com'
     overrideVersionCode = 4
     isNsfw = true
 }
