@@ -1,0 +1,8 @@
+ext {
+    extName = "Samato's Den: Comics"
+    extClass = '.SamatoDenComicsFactory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
