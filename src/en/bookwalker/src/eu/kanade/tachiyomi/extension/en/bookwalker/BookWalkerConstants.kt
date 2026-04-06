@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
-// Currently not feasible, but a future feature making it possible is anticipated
 // const val PREF_SHOW_LIBRARY_IN_POPULAR = "showLibraryInPopular"
 const val PREF_USE_LATEST_THUMBNAIL = "useLatestThumbnail"
 

@@ -161,14 +161,6 @@ function setupInterceptor() {
     });
 }
 
-// JS UTILITIES
-//const leftArrowKeyCode = 'ArrowLeft';
-//const rightArrowKeyCode = 'ArrowRight';
-//
-//function fireKeyboardEvent(elt, code) {
-//    elt.dispatchEvent(new KeyboardEvent('keydown', { code }));
-//}
-
 window.__INJECT_JS_UTILITIES = {
     async fetchPageData(targetPageIndex) {
         if (alreadyExtracted[targetPageIndex]) {
@@ -178,32 +170,8 @@ window.__INJECT_JS_UTILITIES = {
 
         const lastPageIndex = getLastPageIndex();
 
-        const isLTR = Boolean(document.querySelector('.thorium_web_reader_paginatedArrow_rightContainer > button[aria-label=Next]'));
-
-//        const [forwardsKeyCode, backwardsKeyCode] = isLTR
-//            ? [rightArrowKeyCode, leftArrowKeyCode]
-//            : [leftArrowKeyCode, rightArrowKeyCode];
-
-        const leftButton = document.querySelector('.thorium_web_reader_paginatedArrow_leftContainer > button')
-        const rightButton = document.querySelector('.thorium_web_reader_paginatedArrow_rightContainer > button')
-
-        const [forwardsButton, backwardsButton] = isLTR
-            ? [rightButton, leftButton]
-            : [leftButton, rightButton];
-
         if (getCurrentPageIndex() === targetPageIndex) {
-            // The image may have already loaded, but we need to shuffle around for it to get reported.
-            // Otherwise, we can get stuck waiting for the image to be reported forever and
-            // eventually time out.
             console.log('already at correct page');
-//            if (targetPageIndex === lastPageIndex) {
-//                fireKeyboardEvent(renderer, backwardsKeyCode);
-//                fireKeyboardEvent(renderer, forwardsKeyCode);
-//            }
-//            else {
-//                fireKeyboardEvent(renderer, forwardsKeyCode);
-//                fireKeyboardEvent(renderer, backwardsKeyCode);
-//            }
             return;
         }
 

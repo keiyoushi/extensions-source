@@ -91,34 +91,8 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
 
             Log.d("bookwalker", "Creating Webview...")
             WebView(app).apply {
-                // The aspect ratio needs to be thinner than 3:2 to avoid two pages rendering at
-                // once, which would break the image-fetching logic. 1:1 works fine.
-                // We grab the image before it gets resized to fit the viewport so the image size
-                // doesn't directly correlate with screen size, but the size of the screen still
-                // affects the size of source image that the reader tries to render.
-                // The available resolutions vary per series, but in general, the largest resolution
-                // is typically on the order of 2k pixels vertical, with reduced-resolution variants
-                // on each factor of two (1/2, 1/4, etc.) for smaller screens.
-//                val size = when (prefs.imageQuality) {
-//                    ImageQualityPref.DEVICE -> max(
-//                        app.resources.displayMetrics.heightPixels,
-//                        app.resources.displayMetrics.widthPixels,
-//                    )
-//
-//                    // "Medium" doesn't necessarily mean we'll use the 1/2x variant, just that we'll
-//                    // use the variant that BookWalker thinks is appropriate for a 1000px screen
-//                    // (which typically is the 1/2x variant for manga with high native resolutions).
-//                    ImageQualityPref.MEDIUM -> 1000
-//
-//                    // A 2000x2000px WebView consistently captured the largest variant in testing,
-//                    // but just in case some series can have a higher max resolution, 3000px is used
-//                    // for the "high" image quality option. In theory we could go higher (like 10k)
-//                    // and it wouldn't affect the image size, but there start to be performance
-//                    // issues when the BookWalker viewer tries to draw onto huge canvases.
-//                    ImageQualityPref.HIGH -> 3000
-//                }
-//                Log.d("bookwalker", "WebView size $size")
-                // We want the layout to be sufficiently vertical that the reader uses a 1-column layout
+                // We want the layout to be sufficiently vertical that the reader uses a 1-column layout,
+                // but the specific size does not appear to matter.
                 layout(0, 0, 500, 1000)
 
                 @SuppressLint("SetJavaScriptEnabled")
@@ -167,9 +141,6 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
                 }
 
                 this.addJavascriptInterface(jsInterface, INTERFACE_NAME)
-
-                // Adding the below line makes a console error go away, but it doesn't seem to affect functionality.
-                // webview.addJavascriptInterface(object {}, "Notification")
 
                 loadUrl(readerUrl)
             }
@@ -371,14 +342,15 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
             "__INJECT_JS_UTILITIES" to JS_UTILS_NAME,
         )
 
+        // Note: this is a legacy of the Publus BookWalker reader and does not appear to be an issue
+        // in the new Thorium reader, but the logic doesn't hurt so it's being preserved. There are
+        // also sometimes issues loading chapters in the new BookWalker unrelated to the reader.
         // Sometimes the webview just fails to load for some reason and we need to retry, so this
         // timeout should be kept as short as possible. 10 seconds seems like a decent upper bound.
         private val WEBVIEW_STARTUP_TIMEOUT = 10.seconds
 
-        // Images can take a while to load especially if the viewer is in a poor location and needs
-        // to track to a completely different part of the chapter, but if it's been 10 seconds
-        // since an image was requested with no response, it usually means something is broken.
-        // Note that the image fetch timer only starts after the webview loads.
+        // If it's been 10 seconds since an image was requested with no response, it usually means
+        // something is broken. The image fetch timer only starts after the webview loads.
         private val IMAGE_FETCH_TIMEOUT = 10.seconds
     }
 }
