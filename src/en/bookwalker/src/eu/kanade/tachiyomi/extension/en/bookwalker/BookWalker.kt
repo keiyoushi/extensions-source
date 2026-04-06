@@ -47,7 +47,6 @@ class BookWalker :
     override val name = "BookWalker"
 
     // ID from before the BookWalker migration.
-    // While every series will require migration to itself, preserving the same ID will simplify migration of e.g. downloads.
     override val id = 2744810059574599668
 
     override val baseUrl = "https://bookwalker.com"
@@ -64,6 +63,8 @@ class BookWalker :
 
     private val preferences by getPreferencesLazy()
 
+    // Currently BookWalker does not support listing owned items by series anymore, but if in
+    // the future that capability is added, it would be desirable to add this option back.
 //    override val showLibraryInPopular
 //        get() = preferences.getBoolean(PREF_SHOW_LIBRARY_IN_POPULAR, false)
 
@@ -86,7 +87,7 @@ class BookWalker :
 //
 //            setDefaultValue(false)
 //        }.also(screen::addPreference)
-//
+
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_USE_LATEST_THUMBNAIL
             title = "Use Latest Volume Cover For Thumbnail"
@@ -205,6 +206,7 @@ class BookWalker :
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         checkOldBookWalker(manga)
         return Observable.zip(
+            // Main details
             client.newCall(
                 POST(
                     endpoint("ContentService/Details"),
@@ -212,6 +214,7 @@ class BookWalker :
                     MangaDetailsRequestDto(manga.url.toMangaId()).toProtoRequestBody(),
                 ),
             ).asObservableSuccess().map { it.parseProtoAs<MangaDetailsResponseDto>() },
+            // Volume list for cover images
             if (useLatestThumbnail) {
                 client.newCall(chapterListRequest(manga, ChapterType.VOLUMES)).asObservableSuccess().onErrorReturn { null }
             } else {
@@ -298,6 +301,8 @@ class BookWalker :
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = rxSingle {
         val readerUrl = getChapterUrl(chapter)
+        // Unfortunately, there doesn't appear to be a better way of getting the page count than by opening
+        // the reader and checking there. If a better way is found, this logic should be rewritten to use it.
         val pageCount = readerManager.getReader(readerUrl).contents.getPageCount()
 
         IntRange(0, pageCount - 1).map {
@@ -336,8 +341,7 @@ class BookWalker :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     fun checkOldBookWalker(manga: SManga) {
-        // Detect manga from the old extension. This logic can probably be removed at some point,
-        // but it is useful to assist existing users with the migration.
+        // This logic can probably be removed at some point, but it is useful to assist existing users with the migration.
         if (manga.url.startsWith("/de") || manga.url.endsWith("/")) {
             throw Exception("This manga is from old BookWalker and needs to be migrated")
         }
