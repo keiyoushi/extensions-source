@@ -319,7 +319,7 @@ class Softkomik : HttpSource() {
             .build()
 
         var response = chain.proceed(newRequest)
-        if (response.code == 403 || response.code == 401) {
+        if (response.code != 200) { // they now change the response status code
             response.close()
 
             // retry once with session from WebView, in case the session from api is invalid but WebView has valid session
