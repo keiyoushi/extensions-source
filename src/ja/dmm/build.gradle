@@ -1,0 +1,13 @@
+ext {
+    extName = 'DMM'
+    extClass = '.Dmm'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:publus"))
+    implementation(project(":lib:cookieinterceptor"))
+}
