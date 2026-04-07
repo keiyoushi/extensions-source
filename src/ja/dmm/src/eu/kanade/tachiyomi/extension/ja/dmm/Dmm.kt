@@ -22,37 +22,42 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
-class Dmm :
+abstract class Dmm :
     HttpSource(),
     ConfigurableSource {
-    override val name = "DMM"
-    private val domain = "book.dmm.com"
-    override val baseUrl = "https://$domain"
+    protected abstract val domain: String
+    protected abstract val shopName: String
+
+    override val baseUrl get() = "https://$domain"
     override val lang = "ja"
     override val supportsLatest = true
 
-    private val apiUrl = "$baseUrl/ajax/bff"
+    private val apiUrl get() = "$baseUrl/ajax/bff"
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(PublusInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(domain, listOf("book_safe_mode_level" to "off", "age_check_done" to "1")))
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-            if (request.url.fragment == "locked") {
-                throw IOException("Log in via WebView and purchase this product to read.")
+    override val client by lazy {
+        network.cloudflareClient.newBuilder()
+            .addInterceptor(PublusInterceptor())
+            .addNetworkInterceptor(CookieInterceptor(domain, listOf("book_safe_mode_level" to "off", "age_check_done" to "1")))
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val response = chain.proceed(request)
+                if (request.url.fragment == "locked") {
+                    throw IOException("Log in via WebView and purchase this product to read.")
+                }
+                response
             }
-            response
-        }
-        .build()
+            .build()
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val desktopHeaders = headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
-        .build()
+    private val desktopHeaders by lazy {
+        headersBuilder()
+            .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+            .build()
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/list/".toHttpUrl().newBuilder().apply {
@@ -118,7 +123,7 @@ class Dmm :
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = "$apiUrl/contents_book/".toHttpUrl().newBuilder()
-            .addQueryParameter("shop_name", "general")
+            .addQueryParameter("shop_name", shopName)
             .addQueryParameter("series_id", manga.url)
             .addQueryParameter("format_webp", "1")
             .addQueryParameter("order", "desc")
@@ -133,7 +138,7 @@ class Dmm :
         val contentId = response.parseAs<ChapterResponse>().volumeBooks.first().contentId
         val seriesId = response.request.url.queryParameter("series_id")
         val detailsUrl = "$apiUrl/product_volume/".toHttpUrl().newBuilder()
-            .addQueryParameter("shop_name", "general")
+            .addQueryParameter("shop_name", shopName)
             .addQueryParameter("series_id", seriesId)
             .addQueryParameter("content_id", contentId)
             .addQueryParameter("format_webp", "1")
@@ -146,7 +151,7 @@ class Dmm :
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$apiUrl/contents_book/".toHttpUrl().newBuilder()
-            .addQueryParameter("shop_name", "general")
+            .addQueryParameter("shop_name", shopName)
             .addQueryParameter("series_id", manga.url)
             .addQueryParameter("format_webp", "1")
             .addQueryParameter("order", "desc")

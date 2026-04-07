@@ -1,6 +1,6 @@
 ext {
-    extName = 'DMM'
-    extClass = '.Dmm'
+    extName = 'DMM/FANZA'
+    extClass = '.DmmFactory'
     extVersionCode = 1
     isNsfw = true
 }
