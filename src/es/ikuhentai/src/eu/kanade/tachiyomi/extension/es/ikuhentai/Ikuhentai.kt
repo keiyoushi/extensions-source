@@ -155,7 +155,7 @@ class Ikuhentai : ParsedHttpSource() {
 
         val dateElement: Element? = element.selectFirst("span.chapter-release-date i")
         dateElement?.let {
-            chapter.date_upload = dateFormat.tryParse(it.text().trim())
+            chapter.date_upload = dateFormat.tryParse(it.text())
         }
 
         return chapter
