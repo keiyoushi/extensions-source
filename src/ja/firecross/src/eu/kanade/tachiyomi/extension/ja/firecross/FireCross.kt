@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.extension.ja.firecross
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -23,26 +28,28 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FireCross : ClipStudioReader() {
+class FireCross :
+    ClipStudioReader(),
+    ConfigurableSource {
     override val name = "FireCross"
     override val baseUrl = "https://firecross.jp"
     override val lang = "ja"
     override val supportsLatest = false
 
     private val apiUrl = "$baseUrl/api"
-    private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.JAPAN)
+    private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.ROOT)
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ebook/comics?sort=1&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("ul.seriesList li.seriesList_item").map { element ->
+        val mangas = document.select("ul.seriesList li.seriesList_item").map {
             SManga.create().apply {
-                element.selectFirst("a.seriesList_itemTitle")!!.let { a ->
-                    setUrlWithoutDomain(a.absUrl("href"))
-                    title = a.text()
-                }
-                thumbnail_url = element.selectFirst("img.series-list-img")?.absUrl("src")
+                val list = it.selectFirst("a.seriesList_itemTitle")!!
+                setUrlWithoutDomain(list.absUrl("href"))
+                title = list.text()
+                thumbnail_url = it.selectFirst("img.series-list-img")?.absUrl("src")
             }
         }
         val hasNextPage = document.selectFirst("a.pagination-btn--next") != null
@@ -84,45 +91,61 @@ class FireCross : ClipStudioReader() {
         return SManga.create().apply {
             title = document.selectFirst("h1.ebook-series-title")!!.text()
             author = document.select("ul.ebook-series-author li").joinToString { it.text() }
-            artist = author
             description = document.selectFirst("p.ebook-series-synopsis")?.text()
             genre = document.select("div.book-genre a").joinToString { it.text() }
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div[js-tab-content][js-tab-episode] ul.shop-list li.shop-item--episode, ul.shop-list li.shop-item--episode").mapNotNull { element ->
-            val info = element.selectFirst(".shop-item-info")!!
-            val nameText = info.selectFirst("span.shop-item-info-name")?.text()!!
-            val dateText = info.selectFirst("span.shop-item-info-release")?.text()?.substringAfter("公開：")
-            val form = element.selectFirst("form[data-api=reader]")
-            val rentalButton = element.selectFirst("button.btn-rental--both, button.btn-rental--coin, button[class*='btn-rental'], button[js-modal]")
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
 
-            SChapter.create().apply {
-                name = nameText
-                date_upload = dateFormat.tryParse(dateText)
+        while (true) {
+            val url = (baseUrl + manga.url).toHttpUrl().newBuilder()
+                .addQueryParameter("sort", "latest")
+                .addQueryParameter("page", page.toString())
+                .build()
+            val document = client.newCall(GET(url, headers)).execute().asJsoup()
 
-                when {
-                    form != null -> {
-                        val token = form.selectFirst("input[name=_token]")!!.attr("value")
-                        val ebookId = form.selectFirst("input[name=ebook_id]")!!.attr("value")
-                        url = ChapterId(token, ebookId).toJsonString()
-                    }
+            chapters += document.select("div.shop-item--episode").mapNotNull {
+                val info = it.selectFirst(".shop-item-info")!!
+                val nameText = info.selectFirst("span.shop-item-info-name")?.text()!!
+                val dateText = info.selectFirst("span.shop-item-info-release")?.text()?.substringAfter("公開：")
+                val form = it.selectFirst("form[data-api=reader]")
 
-                    rentalButton != null -> {
-                        name = "🔒 $nameText"
-                        val rentalId = rentalButton.attr("data-id")
-                        url = "rental/$rentalId"
+                SChapter.create().apply {
+                    name = nameText
+                    date_upload = dateFormat.tryParse(dateText)
+
+                    when {
+                        form != null -> {
+                            val token = form.selectFirst("input[name=_token]")!!.attr("value")
+                            val ebookId = form.selectFirst("input[name=ebook_id]")!!.attr("value")
+                            this.url = ChapterId(token, ebookId).toJsonString()
+                        }
+
+                        else -> {
+                            if (hideLocked) return@mapNotNull null
+                            name = "🔒 $nameText"
+                            val rentalId = it.attr("data-id")
+                            this.url = "rental/$rentalId"
+                        }
                     }
                 }
             }
-        }.reversed()
+
+            val hasNextPage = document.selectFirst("li.ebookSeries_paginationLink.active ~ li.ebookSeries_paginationLink") != null
+            if (!hasNextPage) break
+            page++
+        }
+
+        return Observable.just(chapters)
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (!chapter.url.startsWith("{")) {
-            return Observable.error(Exception("This chapter is locked. Log in and purchase this chapter to read."))
+            return Observable.error(Exception("Log in via WebView and purchase this chapter to read."))
         }
 
         val chapterId = chapter.url.parseAs<ChapterId>()
@@ -132,42 +155,41 @@ class FireCross : ClipStudioReader() {
             .add("ebook_id", chapterId.id)
             .build()
 
-        val apiHeaders = headers.newBuilder()
-            .add("Accept", "application/json")
-            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+        val apiHeaders = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
         val apiRequest = POST("$apiUrl/reader", apiHeaders, formBody)
 
-        return client.newCall(apiRequest).asObservable().map { response ->
-            if (!response.isSuccessful) {
-                throw Exception("API call failed with HTTP ${response.code}")
-            }
-            val redirectUrl = response.parseAs<ApiResponse>().redirect
+        return client.newCall(apiRequest).asObservable().map {
+            val redirectUrl = it.parseAs<ApiResponse>().redirect
             val viewerRequest = GET(redirectUrl, headers)
             val viewerResponse = client.newCall(viewerRequest).execute()
             super.pageListParse(viewerResponse)
         }
     }
 
-    private open class CheckBox(name: String, val value: String) : Filter.CheckBox(name)
-    private class Label(name: String, value: String) : CheckBox(name, value)
-    private class LabelFilter(labels: List<Label>) : Filter.Group<Label>("Labels", labels)
-
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Novels only show images, not text."),
-        LabelFilter(
-            listOf(
-                Label("HJ文庫 (Novel)", "1"),
-                Label("HJノベルス (Novel)", "2"),
-                Label("コミックファイア (Manga)", "3"),
-                Label("HJコミックス (Manga)", "4"),
-            ),
-        ),
+        Filter.Header("Note: Search and active filters are applied together"),
+        Filter.Header("Note: Novels only show images, not text!"),
+        LabelFilter(),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+    }
 
     // Unsupported
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 }

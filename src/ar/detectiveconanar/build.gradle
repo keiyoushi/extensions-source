@@ -3,7 +3,7 @@ ext {
     extClass = '.DetectiveConanAr'
     themePkg = 'madara'
     baseUrl = 'https://manga.detectiveconanar.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 

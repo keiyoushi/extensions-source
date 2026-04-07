@@ -2,8 +2,8 @@ ext {
     extName = 'Kiryuu'
     extClass = '.Kiryuu'
     themePkg = 'natsuid'
-    baseUrl = 'https://v1.kiryuu.to'
-    overrideVersionCode = 46
+    baseUrl = 'https://v2.kiryuu.to'
+    overrideVersionCode = 47
     isNsfw = false
 }
 

@@ -34,14 +34,14 @@ class BiliManga :
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context, preferences).forEach(screen::addPreference)
+        preferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
     override val client = super.client.newBuilder().also {
-        val split = preferences.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+        val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
         it.rateLimit(split[0].toInt(), split[1].toLong())
     }.addNetworkInterceptor(MangaInterceptor()).build()
 
@@ -50,9 +50,21 @@ class BiliManga :
     // Customize
 
     private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
+    private fun Element.formatText(c: String) = this.wholeText().replace(NEWLINE_REGEX, c).trim()
+    private fun Elements.mapToChapter(date: Long, volume: String? = null) = mapIndexed { i, element ->
+        val url = element.absUrl("href").takeUnless("javascript:cid(1)"::equals)
+        SChapter.create().apply {
+            name = element.text().toHalfWidthDigits()
+            date_upload = date
+            scanlator = volume
+            setUrlWithoutDomain(url ?: getChapterUrlByContext(i, this@mapToChapter))
+        }
+    }
     private fun String.toHalfWidthDigits(): String = this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
 
     companion object {
+        val URL_REGEX = Regex("https?://(?:www\\.)?([-a-zA-Z0-9@:%._+~#=]{2,256}\\.[a-z]{2,6}\\b)*(/[/\\w.-]*)*[?]*(.+)*", RegexOption.IGNORE_CASE)
+        val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
         val META_REGEX = Regex("連載|完結|收藏|推薦|热度")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
@@ -86,7 +98,7 @@ class BiliManga :
     // Popular Page
 
     override fun popularMangaRequest(page: Int): Request {
-        val suffix = preferences.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
+        val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
         return GET(baseUrl + String.format(suffix, page), headers)
     }
 
@@ -137,11 +149,14 @@ class BiliManga :
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val bkname = doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
+        val notice = doc.selectFirst(".notice")?.takeIf { pref.getBoolean(PREF_NOTICE, true) }
+            ?.let { "> ${it.formatText("\n")}\n\n" }?.replace(URL_REGEX, "<$0>") ?: ""
+        val desc = doc.selectFirst("#bookSummary > content")!!.formatText("\n\n\n")
+        val bkname = doc.selectFirst(".backupname")?.let { "\n\n\n***别名**：${it.text()}* " } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = bkname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
+        description = notice + desc + bkname
         artist = doc.selectFirst(".authorname")?.text()
         author = doc.selectFirst(".illname")?.text() ?: artist
         status = when (meta.firstOrNull()) {
@@ -157,23 +172,16 @@ class BiliManga :
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
 
-    override fun chapterListParse(response: Response) = response.asJsoup().let {
-        val info = it.selectFirst(".chapter-sub-title")!!.text()
+    override fun chapterListParse(response: Response) = response.asJsoup().let { resp ->
+        val info = resp.selectFirst(".chapter-sub-title")!!.text()
+        val title = resp.selectFirst(".book-title")!!.text()
         val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
-        it.select(".catalog-volume").flatMap { v ->
-            val chapterBar = v.selectFirst(".chapter-bar")!!.text().toHalfWidthDigits()
-            val chapters = v.select(".chapter-li-a")
-            chapters.mapIndexed { i, e ->
-                val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
-                SChapter.create().apply {
-                    name = e.text().toHalfWidthDigits()
-                    date_upload = date
-                    scanlator = chapterBar
-                    setUrlWithoutDomain(url ?: getChapterUrlByContext(i, chapters))
-                }
-            }
-        }.reversed()
-    }
+        resp.select(".catalog-volume").takeIf(Elements::isNotEmpty)?.flatMap {
+            val bar = it.selectFirst(".chapter-bar")!!.text().substring(title.length + 1)
+            val volume = if (bar.first().isDigit()) "Vol.$bar" else bar.toHalfWidthDigits()
+            it.select(".chapter-li-a").mapToChapter(date, volume)
+        } ?: resp.select(".chapter-li-a").mapToChapter(date)
+    }.reversed()
 
     // Manga View Page
 
