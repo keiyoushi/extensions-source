@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -53,13 +54,13 @@ class Ikuhentai : ParsedHttpSource() {
         val manga = SManga.create()
         val img: Element? = element.selectFirst("img")
         manga.thumbnail_url = img?.let {
-            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
+            it.absUrl("data-lazy-src").ifEmpty { it.absUrl("src") }
         }
 
         val link: Element? = element.selectFirst("div.item-thumb > a, div.tab-thumb > a")
         if (link != null) {
-            manga.setUrlWithoutDomain(link.attr("href"))
-            manga.title = link.attr("title").ifEmpty { link.text() }.trim()
+            manga.setUrlWithoutDomain(link.absUrl("href"))
+            manga.title = link.attr("title").ifEmpty { link.text() }
         }
         return manga
     }
@@ -109,8 +110,8 @@ class Ikuhentai : ParsedHttpSource() {
         val infoElement: Element = document.selectFirst("div.site-content") ?: document
 
         val manga = SManga.create()
-        manga.author = infoElement.select("div.author-content").text().trim()
-        manga.artist = infoElement.select("div.artist-content").text().trim()
+        manga.author = infoElement.select("div.author-content").text()
+        manga.artist = infoElement.select("div.artist-content").text()
 
         val genres = infoElement.select("div.genres-content a").map { it.text() }
         manga.genre = genres.joinToString(", ")
@@ -122,7 +123,7 @@ class Ikuhentai : ParsedHttpSource() {
 
         val img: Element? = document.selectFirst("div.summary_image img")
         manga.thumbnail_url = img?.let {
-            it.attr("data-lazy-src").ifEmpty { it.attr("src") }.trim()
+            it.absUrl("data-lazy-src").ifEmpty { it.absUrl("src") }
         }
 
         return manga
@@ -135,37 +136,33 @@ class Ikuhentai : ParsedHttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = baseUrl + manga.url
-        return if (url.endsWith("/")) {
-            POST("${url}ajax/chapters/", headers)
-        } else {
-            POST("$url/ajax/chapters/", headers)
-        }
+        val url = (baseUrl + manga.url).removeSuffix("/")
+        return POST("$url/ajax/chapters/", headers)
     }
 
     override fun chapterListSelector() = "li.wp-manga-chapter"
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlElement: Element = element.selectFirst("a")!!
-        var url = urlElement.attr("href").trim()
-        url = url.substringBefore("?style=paged")
-        if (!url.contains("?style=list")) {
-            url += if (url.contains("?")) "&style=list" else "?style=list"
-        }
+        val url = urlElement.absUrl("href").toHttpUrl().newBuilder().apply {
+            removeAllQueryParameters("style")
+            addQueryParameter("style", "list")
+        }.build().toString()
+
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(url)
         chapter.name = urlElement.text().trim()
 
         val dateElement: Element? = element.selectFirst("span.chapter-release-date i")
         dateElement?.let {
-            chapter.date_upload = parseDate(it.text().trim())
+            chapter.date_upload = dateFormat.tryParse(it.text().trim())
         }
 
         return chapter
     }
 
     override fun pageListParse(document: Document): List<Page> = document.select("div.reading-content * img").mapIndexed { i, element ->
-        val url = element.attr("data-lazy-src").ifEmpty { element.attr("src") }.trim()
+        val url = element.absUrl("data-lazy-src").ifEmpty { element.absUrl("src") }
         Page(i, "", url)
     }.filter { it.imageUrl!!.isNotEmpty() }
 
@@ -176,12 +173,6 @@ class Ikuhentai : ParsedHttpSource() {
             add("Referer", "$baseUrl/")
         }.build()
         return GET(page.imageUrl!!, imgHeader)
-    }
-
-    private fun parseDate(dateStr: String): Long = try {
-        dateFormat.parse(dateStr)?.time ?: 0L
-    } catch (e: Exception) {
-        0L
     }
 
     private class TextField(name: String, val key: String) : Filter.Text(name)
