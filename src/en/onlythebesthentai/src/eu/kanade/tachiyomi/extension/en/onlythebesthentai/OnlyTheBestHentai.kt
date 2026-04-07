@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.onlythebesthentai
 
-import android.app.Application
-import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,17 +8,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -34,18 +31,13 @@ class OnlyTheBestHentai : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    // ========================= SharedPreferences Cache =======================
+    private val preferences by lazy { getPreferences() }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0)
-    }
-
+    // Use Z (RFC 822) instead of XXX — Z is available on minSdk 21, XXX requires API 24.
+    // The colon in the site's timezone (+00:00) is stripped before parsing so Z matches.
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ENGLISH)
     }
-
-    // Helper: parse Response body into a Jsoup Document
-    private fun Response.toDocument(): Document = Jsoup.parse(body.string(), request.url.toString())
 
     // ============================= Popular / Latest ===========================
 
@@ -55,15 +47,15 @@ class OnlyTheBestHentai : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         checkForChallenge(response)
-        val doc = response.toDocument()
-        val mangas = doc.select("article.post").map { el: Element -> elementToManga(el) }
+        val doc = response.asJsoup()
+        val mangas = doc.select("article.post").map(::elementToManga)
         return MangasPage(mangas, doc.selectFirst("a.next.page-numbers") != null)
     }
 
     private fun elementToManga(el: Element): SManga = SManga.create().apply {
         val a = el.selectFirst(".blog-entry-title a, .entry-title a")!!
         setUrlWithoutDomain(a.attr("href"))
-        title = a.text().replace(Regex("""\s*\[\d+]\s*$"""), "").trim()
+        title = a.text().replace(TITLE_CLEANUP_REGEX, "").trim()
         thumbnail_url = el.selectFirst(".nv-post-thumbnail-wrap img")?.attr("abs:src")
     }
 
@@ -73,14 +65,13 @@ class OnlyTheBestHentai : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val url = "$baseUrl/".toHttpUrl().newBuilder()
+            val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
                 .apply { if (page > 1) addQueryParameter("paged", page.toString()) }
                 .build()
-            return GET(url.toString(), headers)
+            return GET(url, headers)
         }
 
-        // Only the first active filter applies
         val filterUrl = filters.firstNotNullOfOrNull { filter ->
             when (filter) {
                 is TagFilter ->
@@ -105,71 +96,62 @@ class OnlyTheBestHentai : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.toDocument()
+        val doc = response.asJsoup()
         return SManga.create().apply {
-            title = doc.selectFirst("h1.manga-title")?.text() ?: ""
+            title = doc.selectFirst("h1.manga-title")!!.text()
             thumbnail_url = doc.selectFirst(".manga-box .manga-img img")?.attr("abs:src")
-
-            // Only actual tags go into genre so genre chips navigate to /tag/slug/
             genre = doc.select(
                 ".manga-tags-container:has(.manga-tags-label:containsOwn(Tags)) .tag-button",
-            ).joinToString(", ") { el: Element -> el.text() }
-
+            ).joinToString { el: Element -> el.text() }
             author = doc.select(
                 ".manga-tags-container:has(.manga-tags-label:containsOwn(Artist)) .tag-button",
-            ).joinToString(", ") { el: Element -> el.text() }
-
+            ).joinToString { el: Element -> el.text() }
             description = buildDescription(doc)
             status = SManga.COMPLETED
-            initialized = true
         }
     }
 
-    private fun buildDescription(doc: Document): String {
-        val sb = StringBuilder()
-
+    private fun buildDescription(doc: Document): String = buildString {
         val parodies = doc.select(
             ".manga-tags-container:has(.manga-tags-label:containsOwn(Parody)) .tag-button",
         ).map { el: Element -> el.text() }
-        if (parodies.isNotEmpty()) sb.appendLine("Parody: ${parodies.joinToString(", ")}")
+        if (parodies.isNotEmpty()) appendLine("Parody: ${parodies.joinToString()}")
 
         val characters = doc.select(
             ".manga-tags-container:has(.manga-tags-label:containsOwn(Characters)) .tag-button",
         ).map { el: Element -> el.text() }
-        if (characters.isNotEmpty()) sb.appendLine("Characters: ${characters.joinToString(", ")}")
+        if (characters.isNotEmpty()) appendLine("Characters: ${characters.joinToString()}")
 
-        val pages = doc.select(
-            ".manga-tags-container:has(.manga-tags-label:containsOwn(Pages))",
-        ).firstOrNull()?.text()?.replace(Regex("[^0-9]"), "")
-        if (!pages.isNullOrEmpty()) sb.appendLine("Pages: $pages")
+        val pages = doc.select(".manga-tags-container:has(.manga-tags-label:containsOwn(Pages))")
+            .firstOrNull()?.text()?.replace(Regex("[^0-9]"), "")
+        if (!pages.isNullOrEmpty()) appendLine("Pages: $pages")
 
         val body = doc.selectFirst(".manga-info p")
             ?.text()?.removePrefix("Description:")?.trim()
         if (!body.isNullOrEmpty()) {
-            if (sb.isNotEmpty()) sb.appendLine()
-            sb.append(body)
+            if (isNotEmpty()) appendLine()
+            append(body)
         }
-
-        return sb.toString().trim()
-    }
+    }.trim()
 
     // ============================== Chapters =================================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.toDocument()
+        val doc = response.asJsoup()
 
         val pageCount = doc.select(".manga-tags-container").firstNotNullOfOrNull { container: Element ->
-            val label = container.selectFirst(".manga-tags-label")?.text() ?: return@firstNotNullOfOrNull null
+            val label = container.selectFirst(".manga-tags-label")?.text()
+                ?: return@firstNotNullOfOrNull null
             if (!label.startsWith("Pages")) return@firstNotNullOfOrNull null
             container.text().replace(Regex("[^0-9]"), "").toIntOrNull()
         }
 
-        // Strip timezone suffix (e.g. +00:00) — XXX pattern needs API 24, minSdk is 21
+        // Convert +HH:MM to +HHMM so Z (RFC 822) can parse it on API 21
         val rawDate = doc.selectFirst("meta[property=article:published_time]")
             ?.attr("content")
-            ?.replace(Regex("[+-]\\d{2}:\\d{2}$|Z$"), "")
+            ?.replace(Regex("([+-]\\d{2}):(\\d{2})$"), "$1$2")
             ?: ""
 
         return listOf(
@@ -186,7 +168,7 @@ class OnlyTheBestHentai : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
-    override fun pageListParse(response: Response): List<Page> = response.toDocument()
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup()
         .select(".manga-gallery-wrapper figure.wp-block-image img")
         .mapIndexed { i: Int, img: Element -> Page(i, imageUrl = bestImageUrl(img)) }
 
@@ -223,6 +205,19 @@ class OnlyTheBestHentai : HttpSource() {
         override fun toString() = "$name ($count)"
     }
 
+    /** DTO matching the WP REST API taxonomy response shape. */
+    private data class TaxonomyDto(val name: String, val slug: String, val count: Int) {
+        fun toFilterEntry() = FilterEntry(name, slug, count)
+
+        companion object {
+            fun fromJson(obj: JSONObject) = TaxonomyDto(
+                name = obj.getString("name"),
+                slug = obj.getString("slug"),
+                count = obj.optInt("count", 0),
+            )
+        }
+    }
+
     private var tagList: List<FilterEntry> = emptyList()
     private var parodyList: List<FilterEntry> = emptyList()
     private var characterList: List<FilterEntry> = emptyList()
@@ -244,19 +239,14 @@ class OnlyTheBestHentai : HttpSource() {
             if (page == 1) {
                 totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
             }
-            result += parseTaxonomyJson(response.body.string())
+            val arr = JSONArray(response.body.string())
+            result += (0 until arr.length()).map { i: Int ->
+                TaxonomyDto.fromJson(arr.getJSONObject(i)).toFilterEntry()
+            }
             page++
         } while (page <= totalPages)
 
-        return result.sortedBy { entry: FilterEntry -> entry.name.lowercase() }
-    }
-
-    private fun parseTaxonomyJson(json: String): List<FilterEntry> {
-        val arr = JSONArray(json)
-        return (0 until arr.length()).map { i: Int ->
-            val obj = arr.getJSONObject(i)
-            FilterEntry(obj.getString("name"), obj.getString("slug"), obj.optInt("count", 0))
-        }
+        return result.sortedBy { it.name.lowercase() }
     }
 
     // ----------------------- Cache ------------------------------------------
@@ -289,7 +279,7 @@ class OnlyTheBestHentai : HttpSource() {
                     count = obj.optInt("c", obj.optInt("count", 0)),
                 )
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -339,25 +329,25 @@ class OnlyTheBestHentai : HttpSource() {
     private inner class TagFilter :
         Filter.Select<String>(
             "Tag",
-            (listOf("Any") + tagList.map { e: FilterEntry -> e.toString() }).toTypedArray(),
+            (listOf("Any") + tagList.map { it.toString() }).toTypedArray(),
         )
 
     private inner class ParodyFilter :
         Filter.Select<String>(
             "Parody",
-            (listOf("Any") + parodyList.map { e: FilterEntry -> e.toString() }).toTypedArray(),
+            (listOf("Any") + parodyList.map { it.toString() }).toTypedArray(),
         )
 
     private inner class CharacterFilter :
         Filter.Select<String>(
             "Character",
-            (listOf("Any") + characterList.map { e: FilterEntry -> e.toString() }).toTypedArray(),
+            (listOf("Any") + characterList.map { it.toString() }).toTypedArray(),
         )
 
     private inner class ArtistFilter :
         Filter.Select<String>(
             "Artist",
-            (listOf("Any") + artistList.map { e: FilterEntry -> e.toString() }).toTypedArray(),
+            (listOf("Any") + artistList.map { it.toString() }).toTypedArray(),
         )
 
     override fun getFilterList(): FilterList {
@@ -379,6 +369,7 @@ class OnlyTheBestHentai : HttpSource() {
     }
 
     companion object {
+        private val TITLE_CLEANUP_REGEX = Regex("""\s*\[\d+]\s*$""")
         private const val PREF_TAGS = "filter_tags"
         private const val PREF_PARODIES = "filter_parodies"
         private const val PREF_CHARACTERS = "filter_characters"
