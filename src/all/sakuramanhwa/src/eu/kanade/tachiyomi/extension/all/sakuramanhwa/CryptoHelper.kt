@@ -16,7 +16,7 @@ import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import kotlin.experimental.xor 
+import kotlin.experimental.xor
 
 class CryptoHelper(
     private val baseUrl: String,
