@@ -151,7 +151,7 @@ class Ikuhentai : ParsedHttpSource() {
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(url)
-        chapter.name = urlElement.text().trim()
+        chapter.name = urlElement.text()
 
         val dateElement: Element? = element.selectFirst("span.chapter-release-date i")
         dateElement?.let {
