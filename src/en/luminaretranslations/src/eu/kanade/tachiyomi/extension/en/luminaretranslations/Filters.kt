@@ -19,8 +19,8 @@ class AuthorFilter(authors: List<Filters>) : SlugSelectFilter("Author", authors)
 
 class ArtistFilter(artists: List<Filters>) : SlugSelectFilter("Artist", artists)
 
-abstract class TypeStatusSortFilter(name: String, entries: List<Filters>, withAny: Boolean = false) : Filter.Select<String>(name, (if (withAny) arrayOf("Any") else emptyArray()) + entries.map { it.slug }.toTypedArray()) {
-    private val options = (if (withAny) listOf("") else emptyList()) + entries.map { it.name }
+abstract class TypeStatusSortFilter(name: String, entries: List<Filters>, withAny: Boolean = false) : Filter.Select<String>(name, (if (withAny) arrayOf("Any") else emptyArray()) + entries.map { it.name }.toTypedArray()) {
+    private val options = (if (withAny) listOf("") else emptyList()) + entries.map { it.slug }
     val selected get() = options[state]
 }
 
