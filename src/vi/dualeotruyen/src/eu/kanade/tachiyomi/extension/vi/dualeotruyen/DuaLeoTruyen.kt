@@ -36,7 +36,7 @@ class DuaLeoTruyen :
     private val defaultBaseUrl = "https://dualeotruyensg.com"
     private val preferences: SharedPreferences = getPreferences()
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val baseUrl get() = getPrefBaseUrl()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
@@ -157,7 +157,7 @@ class DuaLeoTruyen :
             }
         }
 
-    private fun parseDate(dateStr: String?): Long = DATE_FORMAT.tryParse(dateStr ?: "")
+    private fun parseDate(dateStr: String?): Long = DATE_FORMAT.tryParse(dateStr)
 
     // ============================== Pages =================================
 
