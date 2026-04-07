@@ -45,6 +45,10 @@ abstract class Dmm :
                 if (request.url.fragment == "locked") {
                     throw IOException("Log in via WebView and purchase this product to read.")
                 }
+                val path = response.request.url.encodedPath
+                if (path.contains("/service/login/password/") || path == "/shelf/") {
+                    throw IOException("Your country is not supported.")
+                }
                 response
             }
             .build()
