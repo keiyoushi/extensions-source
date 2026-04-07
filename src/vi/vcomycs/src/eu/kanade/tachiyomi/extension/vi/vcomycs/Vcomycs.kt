@@ -40,7 +40,7 @@ class Vcomycs :
     private val defaultBaseUrl = "https://vivicomi19.info"
     private val preferences: SharedPreferences = getPreferences()
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val baseUrl get() = getPrefBaseUrl()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
