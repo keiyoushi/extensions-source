@@ -60,34 +60,3 @@ internal class ApiMangaList(
     val prev_page: Int?,
     val max_pages: Int?,
 )
-
-@Serializable
-internal class I18nDictionary(
-    val home: I18nHomeDictionary,
-    val library: I18nLibraryDictionary,
-)
-
-@Serializable
-internal class I18nHomeDictionary(
-    val updates: I18nHomeUpdatesDictionary,
-    val lastUpdatesNormal: String,
-)
-
-@Serializable
-internal class I18nHomeUpdatesDictionary(
-    val buttons: I18nHomeButtonsDictionary,
-)
-
-@Serializable
-internal class I18nHomeButtonsDictionary(
-    val language: Map<String, String>, // all, spanish, english, chinese, raw
-    val genres: Map<String, String>, // all, mature, normal
-)
-
-@Serializable
-internal class I18nLibraryDictionary(
-    val title: String,
-    val search: String,
-    val sort: Map<String, String>, // title, type, rating, date
-    val filter: Map<String, String>, // title, category, language, sortBy
-)

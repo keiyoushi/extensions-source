@@ -13,9 +13,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -58,8 +55,6 @@ class BlossomManhwa(
             }.build().also { apiCryptoHelper.setClient(it) }
 
     private val preference = getPreferences()
-
-    private val i18nHelper: I18nHelper = I18nHelper(siteUrl, client, preference)
 
     // Chapter
 
@@ -126,12 +121,13 @@ class BlossomManhwa(
     private fun mangaDetailsToSManga(details: MangaDetails): SManga = SManga.create().apply {
         url = "/v1/manga/findBySlug/${details.slug}"
         title = getTitle(details.title, details.language)
+        description = details.description ?: ""
         genre = buildList {
             add("lang: ${details.language}")
             add("type: ${details.type}")
-            details.authors?.forEach { add("author: $it") }
-            details.rating?.also { add("rating: $it") }
         }.joinToString()
+        author = details.authors?.joinToString() ?: ""
+        artist = author
         status = if (details.status == "ongoing") SManga.ONGOING else SManga.COMPLETED
         thumbnail_url = "$baseUrl/v1/images/manga${details.img}"
     }
@@ -219,34 +215,28 @@ class BlossomManhwa(
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            var groupState = 0
+        val url = "$baseUrl/v1/manga".toHttpUrl().newBuilder().apply {
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
-                    is GroupFilter -> {
-                        groupState = filter.setUrlPath(this)
-                    }
-
-                    is CategoryFilter -> {
-                        filter.setUrlParam(this, groupState)
-                    }
-
-                    is SortFilter -> {
-                        filter.setUrlParam(this, groupState)
-                    }
-
                     is LanguageCheckBoxFilterGroup -> {
-                        filter.setUrlParam(this, groupState)
+                        filter.setUrlParam(this)
                     }
-
+                    is AuthorFilter -> {
+                        filter.setUrlParam(this)
+                    }
+                    is ArtistFilter -> {
+                        filter.setUrlParam(this)
+                    }
+                    is SortFilter -> {
+                        filter.setUrlParam(this)
+                    }
                     else -> {}
                 }
             }
-
-            if (groupState == GROUP_TYPE_SEARCH && query.isNotBlank()) {
+            if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
-            addQueryParameter("limit", "72")
+            addQueryParameter("limit", "50")
             addQueryParameter("page", page.toString())
         }.build().toString()
 
@@ -263,63 +253,26 @@ class BlossomManhwa(
 
     // Filter
 
-    override fun getFilterList(): FilterList {
-        val i18nDictionary = getI18nDictionary()
-        return FilterList(
-            GroupFilter(i18nDictionary),
-            CategoryFilter(i18nDictionary),
-            SortFilter(i18nDictionary),
-            LanguageCheckBoxFilterGroup(i18nDictionary),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        AuthorFilter(),
+        ArtistFilter(),
+        GenreFilter(),
+        LanguageCheckBoxFilterGroup(),
+        SortFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            title = getI18nDictionary().library.filter["language"]
-            key = APP_LANGUAGE_KEY
-            entries = arrayOf(
-                "🇬🇧English",
-                "🇪🇸Español",
-                "🇨🇳中文",
-                "🇷🇺Русский",
-                "🇹🇷Türkçe",
-                "🇮🇩Bahasa Indonesia",
-                "🇹🇭ไทย",
-                "🇻🇳Tiếng Việt",
-            )
-            entryValues = arrayOf(
-                "en",
-                "es",
-                "zh",
-                "ru",
-                "tr",
-                "id",
-                "th",
-                "vi",
-            )
-            setDefaultValue(entryValues[0])
-            setOnPreferenceChangeListener { _, click ->
-                try {
-                    getI18nDictionary(click as String)
-                    true
-                } catch (_: Exception) {
-                    false
-                }
-            }
-        }.let { screen.addPreference(it) }
-
         // Lock the filter language type from the result.
         // Non-locked content is simply ignored, which makes the experience more comfortable.
         ListPreference(screen.context).apply {
-            val i18nDictionary = getI18nDictionary()
-            title = "👀➡️🔒"
+            title = "Default Search Language: "
             key = APP_FOCUS_LANGUAGE_KEY
             entries = arrayOf(
-                "🔓",
-                "🇬🇧${i18nDictionary.home.updates.buttons.language["english"]!!}🔒",
-                "🇪🇸${i18nDictionary.home.updates.buttons.language["spanish"]!!}🔒",
-                "🇨🇳${i18nDictionary.home.updates.buttons.language["chinese"]!!}🔒",
-                "${i18nDictionary.home.updates.buttons.language["raw"]!!}🔒",
+                "All",
+                "🇬🇧 English",
+                "🇪🇸 Spanish",
+                "🇨🇳 Chinese",
+                "Raw",
             )
             entryValues = arrayOf(
                 "",
@@ -331,21 +284,5 @@ class BlossomManhwa(
             setDefaultValue(entryValues[0])
         }.let { screen.addPreference(it) }
     }
-
-    private fun getI18nDictionary(language: String? = null): I18nDictionary {
-        val currentLang = language ?: preference.getString(APP_LANGUAGE_KEY, "en")!!
-        return try {
-            runBlocking {
-                withContext(Dispatchers.IO) {
-                    i18nHelper.getI18nByLanguage(currentLang)
-                }
-            }
-        } catch (_: Exception) {
-            I18nHelper.getDefaultI18n()
-        }
-    }
 }
-
-internal const val APP_LANGUAGE_KEY = "APP_LANGUAGE_KEY"
-internal const val APP_I18N_KEY = "APP_I18N_KEY"
 internal const val APP_FOCUS_LANGUAGE_KEY = "APP_FOCUS_LANGUAGE_KEY"
