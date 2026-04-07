@@ -201,6 +201,6 @@ abstract class Dmm :
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
         private val THUMBNAIL_REGEX = Regex(".(?=\\.\\w+$)")
-        val TITLE_REGEX = Regex("(?:(?<=\\s|】)(第?\\d+巻|第?\\d+話|\\d+(?=\\s*$))|（[０-９0-9]+）|【第?\\d+[巻話]】|#\\d+).*$")
+        private val TITLE_REGEX = Regex("(?:(?<=\\s|】)(第?\\d+巻|第?\\d+話|\\d+(?=\\s*$))|（[０-９0-9]+）|【第?\\d+[巻話]】|#\\d+).*$")
     }
 }
