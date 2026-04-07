@@ -87,9 +87,7 @@ class ChapterData(
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
 
 @Serializable
 class ViewerResponse(
