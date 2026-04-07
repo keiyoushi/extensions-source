@@ -119,7 +119,7 @@ class Ikuhentai : ParsedHttpSource() {
         val statusText = infoElement.select("div.post-content_item:has(h5:contains(Estado)) div.summary-content").text()
         manga.status = parseStatus(statusText)
 
-        manga.description = document.select("div.description-summary").text().trim()
+        manga.description = document.select("div.description-summary").text()
 
         val img: Element? = document.selectFirst("div.summary_image img")
         manga.thumbnail_url = img?.let {
