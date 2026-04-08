@@ -164,7 +164,7 @@ class Yupmanga : HttpSource() {
             ?.split(",")
             ?.mapNotNull { it.trim().toIntOrNull()?.toChar() }
             ?.joinToString("")
-            ?: return null 
+            ?: return null
 
         return solveChallenge(arr, key)
     }
