@@ -17,7 +17,7 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
         val dataU = element.selectFirst(".js-link")?.attr("data-u") ?: ""
         val decoded = if (dataU.isNotEmpty()) String(Base64.decode(dataU, Base64.DEFAULT)) else ""
         setUrlWithoutDomain(decoded)
-        name = element.selectFirst(".ch-title")?.text() ?: ""
+        name = element.selectFirst(".ch-title")!!.text()
         date_upload = element.selectFirst(".ch-date")?.text().parseChapterDate()
     }
 }
