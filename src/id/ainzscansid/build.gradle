@@ -1,7 +1,7 @@
 ext {
     extName = 'Ainz Scans ID'
     extClass = '.AinzScansID'
-    extVersionCode = 32
+    extVersionCode = 33
     isNsfw = false
 }
 
