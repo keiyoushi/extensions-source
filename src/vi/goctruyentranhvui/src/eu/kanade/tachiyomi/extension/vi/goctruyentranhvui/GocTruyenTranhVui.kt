@@ -41,7 +41,7 @@ class GocTruyenTranhVui :
     ConfigurableSource {
     override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui21.com"
+    override val baseUrl = "https://goctruyentranhvui22.com"
 
     override val name = "Goc Truyen Tranh Vui"
 
