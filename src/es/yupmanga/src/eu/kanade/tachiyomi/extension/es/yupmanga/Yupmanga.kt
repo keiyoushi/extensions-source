@@ -139,24 +139,13 @@ class Yupmanga : HttpSource() {
     }
 
     private fun parseChapterList(document: Document): List<SChapter> = document.select("div.comic-card").map { element ->
+        val totalPages = element.selectFirst("span")!!.text()
+        val chapterId = element.selectFirst("a[data-chapter]")!!.attr("data-chapter")
+
         SChapter.create().apply {
             name = element.selectFirst("h3")!!.text()
-            url = getChapterUrl(element)
+            url = "/ajax/get_reader_token.php?chapter=$chapterId#$totalPages"
         }
-    }
-
-    private fun getChapterUrl(el: Element): String {
-        val totalPages = el.selectFirst("span")!!.text()
-        val chapterId = el.selectFirst("a[data-chapter]")!!.attr("data-chapter")
-        val challenge = client.newCall(GET("$baseUrl/ajax/get_challenge.php?chapter=$chapterId", headers)).execute().parseAs<ChallengeDto>()
-
-        val tokenUrl = StringBuilder("/ajax/get_reader_token.php?chapter=$chapterId").apply {
-            if (challenge.success) {
-                append("&challenge_id=${challenge.challenge_id}")
-                append("&answer=${handleChallenge(challenge.challenge_js)}")
-            }
-        }
-        return "$tokenUrl#$totalPages"
     }
 
     fun handleChallenge(js: String): String? {
@@ -183,6 +172,21 @@ class Yupmanga : HttpSource() {
             result = (result xor arr[i]) + key[i % key.length].code
         }
         return result.toString()
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val chapterId = chapterUrl.queryParameter("chapter")
+        val challenge = client.newCall(GET("$baseUrl/ajax/get_challenge.php?chapter=$chapterId", headers)).execute().parseAs<ChallengeDto>()
+
+        val chapterTokenUrl = chapterUrl.newBuilder().apply {
+            if (challenge.success) {
+                addQueryParameter("challenge_id", challenge.challenge_id)
+                addQueryParameter("answer", handleChallenge(challenge.challenge_js))
+            }
+        }.build()
+
+        return GET(chapterTokenUrl, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
