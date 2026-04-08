@@ -146,9 +146,43 @@ class Yupmanga : HttpSource() {
     }
 
     private fun getChapterUrl(el: Element): String {
-        val chapterId = el.selectFirst("a[data-chapter]")!!.attr("data-chapter")
         val totalPages = el.selectFirst("span")!!.text()
-        return "/ajax/get_reader_token.php?chapter=$chapterId#$totalPages"
+        val chapterId = el.selectFirst("a[data-chapter]")!!.attr("data-chapter")
+        val challenge = client.newCall(GET("$baseUrl/ajax/get_challenge.php?chapter=$chapterId", headers)).execute().parseAs<ChallengeDto>()
+
+        val tokenUrl = StringBuilder("/ajax/get_reader_token.php?chapter=$chapterId").apply {
+            if (challenge.success) {
+                append("&challenge_id=${challenge.challenge_id}")
+                append("&answer=${handleChallenge(challenge.challenge_js)}")
+            }
+        }
+        return "$tokenUrl#$totalPages"
+    }
+
+    fun handleChallenge(js: String): String? {
+        val arr = Regex("""\[(.*?)\]""").find(js)
+            ?.groupValues?.get(1)
+            ?.split(",")
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.toIntArray()
+            ?: return null
+
+        val key = Regex("""fromCharCode\((.*?)\)""").find(js)
+            ?.groupValues?.get(1)
+            ?.split(",")
+            ?.mapNotNull { it.trim().toIntOrNull()?.toChar() }
+            ?.joinToString("")
+            ?: return null
+
+        return solveChallenge(arr, key)
+    }
+
+    fun solveChallenge(arr: IntArray, key: String): String {
+        var result = 0
+        for (i in arr.indices) {
+            result = (result xor arr[i]) + key[i % key.length].code
+        }
+        return result.toString()
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -188,5 +222,12 @@ class Yupmanga : HttpSource() {
     internal class TokenDto(
         val success: Boolean,
         val token: String,
+    )
+
+    @Serializable
+    data class ChallengeDto(
+        val success: Boolean,
+        val challenge_id: String,
+        val challenge_js: String,
     )
 }
