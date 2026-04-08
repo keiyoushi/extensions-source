@@ -24,7 +24,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
@@ -232,7 +231,7 @@ class ValirScans :
         }
 
         val encodedUrl = candidate.toHttpUrlOrNull()?.queryParameter("url") ?: return candidate
-        val decodedUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8)
+        val decodedUrl = URLDecoder.decode(encodedUrl, "UTF-8")
         return decodedUrl.toAbsoluteUrl(ownerDocument()?.location() ?: baseUrl)
     }
 
