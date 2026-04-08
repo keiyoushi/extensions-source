@@ -104,7 +104,7 @@ internal class PageDto(
                 .replace(Regex("""/[swh]\d+[^/]*/""", RegexOption.IGNORE_CASE), "/s0/")
         }
 
-        // Clean up common CMS resizing query parameters 
+        // Clean up common CMS resizing query parameters
         url.toHttpUrlOrNull()?.let { httpUrl ->
             if (httpUrl.queryParameterNames.any { it == "w" || it == "width" || it == "resize" }) {
                 url = httpUrl.newBuilder()
