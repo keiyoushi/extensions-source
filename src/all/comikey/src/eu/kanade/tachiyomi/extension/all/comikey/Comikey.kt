@@ -312,7 +312,7 @@ open class Comikey(
                     val url = request?.url
                         ?: return super.shouldInterceptRequest(view, request)
 
-                    if (url.host != "relay-us.epub.rocks" || url.path?.endsWith("/manifest") != true) {
+                    if (url.host?.matches(Regex("""relay-\w+\.epub\.rocks""")) != true || url.path?.endsWith("/manifest") != true) {
                         return super.shouldInterceptRequest(view, request)
                     }
 
@@ -331,7 +331,7 @@ open class Comikey(
                         response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
                         null,
                         response.code,
-                        response.message,
+                        response.message?.takeIf { it.isNotEmpty() } ?: "OK",
                         response.headers.toMap(),
                         response.body.byteStream(),
                     )
