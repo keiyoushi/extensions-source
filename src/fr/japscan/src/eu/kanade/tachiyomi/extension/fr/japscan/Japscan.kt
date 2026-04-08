@@ -8,9 +8,7 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.view.View
-import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.ListPreference
