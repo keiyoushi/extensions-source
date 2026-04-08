@@ -120,7 +120,7 @@ class CryptoHelper(
             return response.newBuilder()
                 .body(decryptedBytes.toResponseBody(response.body.contentType()))
                 .build()
-        } else if (request.headers["NX"] == null && request.url.toString().startsWith(baseUrl)) {
+        } else if (request.headers["NX"] == null && request.url.host == baseUrl.toHttpUrl().host) {
             try {
                 val signed = generateSigned()
                 request = request.newBuilder().apply {
