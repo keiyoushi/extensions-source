@@ -239,7 +239,7 @@ class NexusScan :
         return readResponse.pages
             .sortedBy { it.pageNumber }
             .mapIndexed { index, page ->
-                Page(index, imageUrl = page.imageUrl)
+                Page(index, imageUrl = "$baseUrl/api/p/${readResponse.pageToken}/${page.pageNumber}")
             }
     }
 
