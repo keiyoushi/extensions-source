@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 class MangaClash :
     Madara(
         "MangaClash",
-        "https://toonclash.com",
+        "https://mangaclash.com",
         "en",
         dateFormat = SimpleDateFormat("MM/dd/yy", Locale.US),
     ) {

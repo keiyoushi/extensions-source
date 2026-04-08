@@ -35,6 +35,12 @@ class Serie(
 )
 
 @Serializable
+class Source(
+    val service: String,
+    val id: String,
+)
+
+@Serializable
 class LastChapter(
     val timestamp: Int,
 )
@@ -47,6 +53,7 @@ class Chapter(
     val teams: List<String>,
     @SerialName("licensed")
     val licencied: Boolean = false,
+    val source: Source? = null,
 )
 
 @Serializable

@@ -94,7 +94,15 @@ class ChapterDto(
             append("Chapter $numberStr")
             title?.let { append(" - $it") }
         }
-        date_upload = dateFormat.tryParse(createdAt)
+
+        // Strip fractional seconds if they exist before parsing
+        val cleanDate = if (createdAt.contains(".")) {
+            createdAt.substringBefore(".") + "Z"
+        } else {
+            createdAt
+        }
+
+        date_upload = dateFormat.tryParse(cleanDate)
     }
 }
 
