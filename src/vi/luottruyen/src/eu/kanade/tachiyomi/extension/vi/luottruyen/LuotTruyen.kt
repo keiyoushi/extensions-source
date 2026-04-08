@@ -37,6 +37,8 @@ class LuotTruyen :
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     private val preferences: SharedPreferences = getPreferences()
 
     init {
@@ -60,7 +62,7 @@ class LuotTruyen :
             }
         }
 
-    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(""";\s*wv\)""".toRegex(), ")")
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
     // ============================== Popular ===============================
 
@@ -203,7 +205,7 @@ class LuotTruyen :
         if (dateStr.isNullOrBlank()) return 0L
 
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
-        val number = Regex("\\d+").find(dateStr)?.value?.toIntOrNull() ?: return 0L
+        val number = RELATIVE_DATE_NUMBER_REGEX.find(dateStr)?.value?.toIntOrNull() ?: return 0L
 
         when {
             dateStr.contains("giây") -> calendar.add(Calendar.SECOND, -number)
@@ -262,6 +264,8 @@ class LuotTruyen :
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     companion object {
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+        private val RELATIVE_DATE_NUMBER_REGEX = Regex("\\d+")
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
