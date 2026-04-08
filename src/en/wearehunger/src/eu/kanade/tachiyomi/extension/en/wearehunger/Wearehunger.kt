@@ -7,4 +7,7 @@ class Wearehunger :
         "Wearehunger",
         "https://www.wearehunger.site",
         "en",
-    )
+    ) {
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useNewChapterEndpoint = true
+}
