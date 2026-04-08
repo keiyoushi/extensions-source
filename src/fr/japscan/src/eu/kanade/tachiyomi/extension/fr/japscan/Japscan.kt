@@ -27,9 +27,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -397,7 +395,7 @@ class Japscan :
                                 const data = atob(document.querySelector(`[data-${window.__rc.ia}]`).dataset[window.__rc.ia]);
                                 Object.defineProperty(Object.prototype, `str`, {
                                     set: function(value) {
-                                        window.$$interfaceName.passPayload(JSON.stringify(JSON.parse(value)[data]), window.__rc.p, window.__rc.v);
+                                        window.$$interfaceName.passPayload(JSON.stringify(JSON.parse(value)[data]), window.__rc.p, window.__rc.v, JSON.parse(value).pi.toString());
                                         Object.defineProperty(this, '_imagesLink', {
                                             value: value,
                                             writable: true,
@@ -430,34 +428,17 @@ class Japscan :
         if (latch.count == 1L) {
             throw Exception("Erreur lors de la récupération des pages")
         }
-
-        val images = kotlinx.coroutines.runBlocking {
-            val semaphore = Semaphore(maxImageRequests)
-            val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
-            jsInterface.images
-                .filter { it.toHttpUrl().host.endsWith(baseUrlHost) }
-                .mapIndexed { i, url ->
-                    async {
-                        semaphore.withPermit {
-                            val fullUrl = "$url&${jsInterface.p}=${jsInterface.v}"
-                            val request = Request.Builder()
-                                .url(fullUrl)
-                                .headers(headers.newBuilder().add("Referer", internalBaseUrl).build())
-                                .build()
-
-                            client.newCall(request).execute().use { response ->
-                                if (response.code == 200) {
-                                    Page(i, imageUrl = fullUrl)
-                                } else {
-                                    null
-                                }
-                            }
-                        }
-                    }
+        val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
+        val images = jsInterface.images
+            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) }
+            .mapIndexed { i, url ->
+                if (i != jsInterface.pi) {
+                    Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
+                } else {
+                    null
                 }
-                .mapNotNull { it.await() }
-        }
-
+            }
+            .filterNotNull()
         return Observable.just(images)
     }
 
@@ -501,15 +482,18 @@ class Japscan :
             private set
         var v: String = ""
             private set
+        var pi: Int = -1
+            private set
 
         @JavascriptInterface
         @Suppress("UNUSED")
-        fun passPayload(rawData: String, p: String, v: String) {
+        fun passPayload(rawData: String, p: String, v: String, pi: String) {
             try {
                 images = rawData.parseAs<List<String>>()
                     .map { "$it?y=1" }
                 this.p = p
                 this.v = v
+                this.pi = pi.toInt()
                 latch.countDown()
             } catch (_: Exception) {
                 return
