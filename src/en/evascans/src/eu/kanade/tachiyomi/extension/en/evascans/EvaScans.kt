@@ -12,7 +12,7 @@ class EvaScans :
         "https://evascans.org",
         "en",
         "/series",
-        SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH),
+        SimpleDateFormat("yyyy/MM/dd", Locale.ROOT),
     ) {
     // Fix search/listing - site uses custom card layout (div elements, not article)
     override fun searchMangaSelector() = "div.manga-card-v, .listupd .bs .bsx"
