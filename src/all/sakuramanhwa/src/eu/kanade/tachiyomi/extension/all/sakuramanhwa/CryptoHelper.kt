@@ -4,6 +4,7 @@ import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.toJsonString
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
