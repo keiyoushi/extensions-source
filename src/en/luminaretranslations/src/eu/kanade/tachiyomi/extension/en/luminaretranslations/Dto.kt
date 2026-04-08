@@ -2,9 +2,12 @@ package eu.kanade.tachiyomi.extension.en.luminaretranslations
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 class EntryResponse(
@@ -19,10 +22,10 @@ class EntryData(
     val type: String?,
     @SerialName("cover_image") private val coverImage: String?,
 ) {
-    fun toSManga(cdnUrl: String) = SManga.create().apply {
+    fun toSManga() = SManga.create().apply {
         url = slug
         title = this@EntryData.title
-        thumbnail_url = "$cdnUrl/$coverImage"
+        thumbnail_url = coverImage
     }
 }
 
@@ -41,24 +44,17 @@ class Details(
     private val title: String,
     private val status: String?,
     @SerialName("cover_image") private val coverImage: String?,
-    private val genres: List<Genre>?,
+    private val genres: List<String>?,
     private val description: String?,
-    @SerialName("alternative_titles") private val alternativeTitles: List<String>?,
-    private val people: List<People>?,
+    private val author: String?,
+    private val artist: String?,
 ) {
-    fun toSManga(cdnUrl: String) = SManga.create().apply {
+    fun toSManga() = SManga.create().apply {
         title = this@Details.title
-        author = people?.filter { it.role == "author" }?.joinToString { it.name }
-        artist = people?.filter { it.role == "artist" }?.joinToString { it.name }
-        description = buildString {
-            this@Details.description?.let { append(it) }
-            if (!alternativeTitles.isNullOrEmpty()) {
-                append("\n\nAlternative Titles: ")
-                append(alternativeTitles.joinToString())
-            }
-        }
-
-        genre = genres?.joinToString { it.name }
+        author = this@Details.author
+        artist = this@Details.artist
+        description = this@Details.description
+        genre = genres?.joinToString()
         status = when (this@Details.status) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -66,20 +62,9 @@ class Details(
             "dropped" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = "$cdnUrl/$coverImage"
+        thumbnail_url = coverImage
     }
 }
-
-@Serializable
-class Genre(
-    val name: String,
-)
-
-@Serializable
-class People(
-    val name: String,
-    val role: String,
-)
 
 @Serializable
 class ChapterResponse(
@@ -88,18 +73,20 @@ class ChapterResponse(
 
 @Serializable
 class ChapterData(
-    private val title: String?,
-    @SerialName("chapter_number") private val chapterNumber: Float,
+    private val title: String,
+    private val number: Float,
     private val slug: String,
+    @SerialName("published_at") private val publishedAt: String?,
 ) {
     fun toSChapter(entrySlug: String) = SChapter.create().apply {
-        val chapterNum = if (chapterNumber % 1f == 0f) chapterNumber.toInt() else chapterNumber
-        val chapterName = if (!title.isNullOrEmpty()) "Chapter $chapterNum - $title" else "Chapter $chapterNum"
         url = "$entrySlug/$slug"
-        name = chapterName
-        chapter_number = chapterNumber
+        name = title
+        chapter_number = number
+        date_upload = dateFormat.tryParse(publishedAt)
     }
 }
+
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
 
 @Serializable
 class ViewerResponse(
@@ -108,13 +95,7 @@ class ViewerResponse(
 
 @Serializable
 class ViewerData(
-    val images: List<Images>,
-)
-
-@Serializable
-class Images(
-    @SerialName("image_path") val imagePath: String,
-    val order: Int,
+    val pages: List<String>,
 )
 
 @Serializable
@@ -130,6 +111,6 @@ class FilterResponse(
 
 @Serializable
 class Filters(
-    @JsonNames("value") val name: String,
-    @JsonNames("label") val slug: String,
+    @JsonNames("label") val name: String,
+    @JsonNames("value") val slug: String,
 )

@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -142,12 +141,12 @@ class NicovideoSeiga : HttpSource() {
             when (response.code) {
                 403 -> {
                     // Check if the user is logged in
-                    // This is the account page. You get 302 if you are not logged in
+                    // Should return 400 if no session ID is found
                     client.newBuilder()
                         .followRedirects(false)
                         .followSslRedirects(false)
                         .build()
-                        .newCall(GET("https://www.nicovideo.jp/my"))
+                        .newCall(GET("https://account.nicovideo.jp/api/public/v2/user.json"))
                         .asObservable()
                         .flatMap { login ->
                             when (login.code) {
@@ -159,7 +158,7 @@ class NicovideoSeiga : HttpSource() {
                                     Observable.error(SecurityException("公式アプリで購入してください"))
                                 }
 
-                                302 -> {
+                                400 -> {
                                     // User needs to login via WebView first before accessing the chapter
                                     // "Please login via WebView first"
                                     Observable.error(SecurityException("まず、WebViewでログインしてください"))
