@@ -63,9 +63,13 @@ open class MiauScan(lang: String) :
     override val seriesStatusSelector = ".lm4-poster-status"
     override val seriesThumbnailSelector = "img.lm4-poster-image"
     override val seriesDescriptionSelector = ".lm4-summary-full"
+    private val altDescriptionSelector = ".lm4-summary-short"
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         title = title.replace(PORTUGUESE_SUFFIX, "")
+        if (description.isNullOrBlank()) {
+            description = document.selectFirst(altDescriptionSelector)?.text().orEmpty()
+        }
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
