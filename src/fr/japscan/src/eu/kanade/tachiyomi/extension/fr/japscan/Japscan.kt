@@ -8,7 +8,9 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.ListPreference
@@ -356,15 +358,48 @@ class Japscan :
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
+            /*innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                    Log.println(
+                        when (consoleMessage.messageLevel()!!) {
+                            ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
+                            ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
+                            ConsoleMessage.MessageLevel.LOG -> Log.INFO
+                            ConsoleMessage.MessageLevel.WARNING -> Log.WARN
+                            ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
+                        },
+                        "Japscan",
+                        "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
+                    )
+
+                    return super.onConsoleMessage(consoleMessage)
+                }
+            }*/
+
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(
                         $$"""
-                            setTimeout(() => {
-                                Object.defineProperty(Object.prototype, `${window.__rc.il}`, {
+                            function waitForRC(callback) {
+                                if (window.__rc) {
+                                    callback();
+                                } else {
+                                    setTimeout(() => waitForRC(callback), 100);
+                                }
+                            }
+                            function waitForDATA(callback) {
+                                if (document.querySelector(`[data-${window.__rc.ia}]`)) {
+                                    callback()
+                                } else {
+                                    setTimeout(() => waitForDATA(callback), 100);
+                                }
+                            }
+                            function create() {
+                                const data = atob(document.querySelector(`[data-${window.__rc.ia}]`).dataset[window.__rc.ia]);
+                                Object.defineProperty(Object.prototype, `str`, {
                                     set: function(value) {
-                                        window.$$interfaceName.passPayload(JSON.stringify(value), window.__rc.p, window.__rc.v);
+                                        window.$$interfaceName.passPayload(JSON.stringify(JSON.parse(value)[data]), window.__rc.p, window.__rc.v);
                                         Object.defineProperty(this, '_imagesLink', {
                                             value: value,
                                             writable: true,
@@ -377,8 +412,9 @@ class Japscan :
                                     },
                                     enumerable: false,
                                     configurable: true
-                                }
-                            )}, 1000)
+                                })
+                            }
+                            waitForRC(() => waitForDATA(create))
                         """.trimIndent(),
                     ) {}
                 }
