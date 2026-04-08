@@ -148,20 +148,23 @@ class Yupmanga : HttpSource() {
         }
     }
 
+    private val arrayRegex = Regex("""\[(.*?)\]""")
+    private val keyRegex = Regex("""fromCharCode\((.*?)\)""")
+
     fun handleChallenge(js: String): String? {
-        val arr = Regex("""\[(.*?)\]""").find(js)
+        val arr = arrayRegex.find(js)
             ?.groupValues?.get(1)
             ?.split(",")
             ?.mapNotNull { it.trim().toIntOrNull() }
             ?.toIntArray()
             ?: return null
 
-        val key = Regex("""fromCharCode\((.*?)\)""").find(js)
+        val key = keyRegex.find(js)
             ?.groupValues?.get(1)
             ?.split(",")
             ?.mapNotNull { it.trim().toIntOrNull()?.toChar() }
             ?.joinToString("")
-            ?: return null
+            ?: return null 
 
         return solveChallenge(arr, key)
     }
@@ -229,7 +232,7 @@ class Yupmanga : HttpSource() {
     )
 
     @Serializable
-    data class ChallengeDto(
+    internal class ChallengeDto(
         val success: Boolean,
         val challenge_id: String,
         val challenge_js: String,
