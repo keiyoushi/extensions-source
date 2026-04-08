@@ -2,7 +2,7 @@ ext {
     extName = 'Valir Scans'
     extClass = '.ValirScans'
     baseUrl = 'https://valirscans.org'
-    extVersionCode = 20
+    extVersionCode = 21
     isNsfw = false
 }
 
