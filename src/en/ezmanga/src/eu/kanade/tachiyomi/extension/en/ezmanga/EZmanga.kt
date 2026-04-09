@@ -14,7 +14,6 @@ import okhttp3.Request
 class EZmanga : EZManhwa("EZmanga", "https://ezmanga.org", "https://vapi.ezmanga.org/api/v1") {
 
     override val versionId = 5
-	
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
