@@ -7,6 +7,10 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.serializer
 import java.text.SimpleDateFormat
 
 @Serializable
@@ -28,7 +32,9 @@ data class PagesResponseDto(
     val slug: String,
     val hasNext: Boolean,
     val hasPrevious: Boolean,
-    @SerialName("pageches") val pages: ChapterImagesDto,
+    @SerialName("pageches")
+    @Serializable(FirstobjOrObj::class)
+    val pages: ChapterImagesDto,
 )
 
 @Serializable
@@ -75,6 +81,12 @@ data class ChapterImagesDto(
     @SerialName("urlImg") val rawImages: String,
     val chapterId: Int,
 )
+
+// Get first item only in case of JsonArray
+
+object FirstobjOrObj : JsonTransformingSerializer<ChapterImagesDto>(ChapterImagesDto.serializer()) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = if (element is JsonArray) element[0] else element
+}
 
 fun MangaDto.toSManga() = SManga.create().apply {
     url = slug
