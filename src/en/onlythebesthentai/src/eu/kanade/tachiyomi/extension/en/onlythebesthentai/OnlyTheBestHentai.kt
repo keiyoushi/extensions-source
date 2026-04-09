@@ -9,13 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -31,14 +32,24 @@ class OnlyTheBestHentai : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    private val preferences by getPreferencesLazy()
 
-    private val preferences by lazy { getPreferences() }
+    private val challengeInterceptor = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+        val peek = response.peekBody(512).string()
+        if (peek.contains("One moment, please") || peek.contains("wsidchk")) {
+            throw Exception(
+                "Bot protection detected. Open this source in WebView to solve the challenge, " +
+                    "then return to Mihon.",
+            )
+        }
+        response
+    }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(challengeInterceptor)
+        .build()
 
-    // Use Z (RFC 822) instead of XXX — Z is available on minSdk 21, XXX requires API 24.
-    // The colon in the site's timezone (+00:00) is stripped before parsing so Z matches.
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ENGLISH)
     }
@@ -50,7 +61,6 @@ class OnlyTheBestHentai : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        checkForChallenge(response)
         val doc = response.asJsoup()
         val mangas = doc.select("article.post").map(::elementToManga)
         return MangasPage(mangas, doc.selectFirst("a.next.page-numbers") != null)
@@ -186,18 +196,6 @@ class OnlyTheBestHentai : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ======================== Challenge Detection ============================
-
-    private fun checkForChallenge(response: Response) {
-        val peek = response.peekBody(512).string()
-        if (peek.contains("One moment, please") || peek.contains("wsidchk")) {
-            throw Exception(
-                "Bot protection detected. Open this source in WebView to solve the challenge, " +
-                    "then return to Mihon.",
-            )
-        }
-    }
-
     // ============================== Filters ==================================
 
     @Serializable
@@ -205,7 +203,6 @@ class OnlyTheBestHentai : HttpSource() {
         override fun toString() = "$name ($count)"
     }
 
-    /** DTO matching the WP REST API taxonomy response shape. */
     @Serializable
     private data class TaxonomyDto(val name: String, val slug: String, val count: Int = 0) {
         fun toFilterEntry() = FilterEntry(name, slug, count)
@@ -232,8 +229,7 @@ class OnlyTheBestHentai : HttpSource() {
             if (page == 1) {
                 totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
             }
-            result += json.decodeFromString<List<TaxonomyDto>>(response.body.string())
-                .map { it.toFilterEntry() }
+            result += response.parseAs<List<TaxonomyDto>>().map { it.toFilterEntry() }
             page++
         } while (page <= totalPages)
 
@@ -241,6 +237,8 @@ class OnlyTheBestHentai : HttpSource() {
     }
 
     // ----------------------- Cache ------------------------------------------
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     private fun isCacheValid(): Boolean = System.currentTimeMillis() - preferences.getLong(PREF_TIMESTAMP, 0L) < TimeUnit.DAYS.toMillis(1)
 
