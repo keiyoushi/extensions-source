@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -238,24 +238,22 @@ class OnlyTheBestHentai : HttpSource() {
 
     // ----------------------- Cache ------------------------------------------
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     private fun isCacheValid(): Boolean = System.currentTimeMillis() - preferences.getLong(PREF_TIMESTAMP, 0L) < TimeUnit.DAYS.toMillis(1)
 
     private fun loadFiltersFromCache(): Boolean {
         if (!isCacheValid()) return false
         val tags = preferences.getString(PREF_TAGS, null)
-            ?.let { runCatching { json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
+            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
             ?.takeIf { it.isNotEmpty() } ?: return false
         tagList = tags
         parodyList = preferences.getString(PREF_PARODIES, null)
-            ?.let { runCatching { json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
+            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
             ?: emptyList()
         characterList = preferences.getString(PREF_CHARACTERS, null)
-            ?.let { runCatching { json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
+            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
             ?: emptyList()
         artistList = preferences.getString(PREF_ARTISTS, null)
-            ?.let { runCatching { json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
+            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
             ?: emptyList()
         return true
     }
@@ -275,10 +273,10 @@ class OnlyTheBestHentai : HttpSource() {
                 characterList = fetchTaxonomy("characters")
                 artistList = fetchTaxonomy("artist")
                 preferences.edit()
-                    .putString(PREF_TAGS, json.encodeToString(tagList))
-                    .putString(PREF_PARODIES, json.encodeToString(parodyList))
-                    .putString(PREF_CHARACTERS, json.encodeToString(characterList))
-                    .putString(PREF_ARTISTS, json.encodeToString(artistList))
+                    .putString(PREF_TAGS, tagList.toJsonString())
+                    .putString(PREF_PARODIES, parodyList.toJsonString())
+                    .putString(PREF_CHARACTERS, characterList.toJsonString())
+                    .putString(PREF_ARTISTS, artistList.toJsonString())
                     .putLong(PREF_TIMESTAMP, System.currentTimeMillis())
                     .apply()
                 filtersLoaded = true
