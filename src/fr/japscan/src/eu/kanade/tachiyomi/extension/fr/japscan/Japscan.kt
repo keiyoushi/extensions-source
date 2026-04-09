@@ -15,7 +15,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -70,8 +70,10 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    val maxImageRequests = 10
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2)
+        .rateLimitHost(internalBaseUrl.toHttpUrl(), 1, 2)
+        .rateLimitHost("https://c4.japscan.foo/".toHttpUrl(), maxImageRequests, 2)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
@@ -351,15 +353,48 @@ class Japscan :
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
+            /*innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                    Log.println(
+                        when (consoleMessage.messageLevel()!!) {
+                            ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
+                            ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
+                            ConsoleMessage.MessageLevel.LOG -> Log.INFO
+                            ConsoleMessage.MessageLevel.WARNING -> Log.WARN
+                            ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
+                        },
+                        "Japscan",
+                        "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
+                    )
+
+                    return super.onConsoleMessage(consoleMessage)
+                }
+            }*/
+
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(
                         $$"""
-                            setTimeout(() => {
-                                Object.defineProperty(Object.prototype, `${window.__rc.il}`, {
+                            function waitForRC(callback) {
+                                if (window.__rc) {
+                                    callback();
+                                } else {
+                                    setTimeout(() => waitForRC(callback), 100);
+                                }
+                            }
+                            function waitForDATA(callback) {
+                                if (document.querySelector(`[data-${window.__rc.ia}]`)) {
+                                    callback()
+                                } else {
+                                    setTimeout(() => waitForDATA(callback), 100);
+                                }
+                            }
+                            function create() {
+                                const data = atob(document.querySelector(`[data-${window.__rc.ia}]`).dataset[window.__rc.ia]);
+                                Object.defineProperty(Object.prototype, `str`, {
                                     set: function(value) {
-                                        window.$$interfaceName.passPayload(JSON.stringify(value), window.__rc.p, window.__rc.v);
+                                        window.$$interfaceName.passPayload(JSON.stringify(JSON.parse(value)[data]), window.__rc.p, window.__rc.v, JSON.parse(value).pi.toString());
                                         Object.defineProperty(this, '_imagesLink', {
                                             value: value,
                                             writable: true,
@@ -372,8 +407,9 @@ class Japscan :
                                     },
                                     enumerable: false,
                                     configurable: true
-                                }
-                            )}, 1000)
+                                })
+                            }
+                            waitForRC(() => waitForDATA(create))
                         """.trimIndent(),
                     ) {}
                 }
@@ -391,24 +427,17 @@ class Japscan :
         if (latch.count == 1L) {
             throw Exception("Erreur lors de la récupération des pages")
         }
-
         val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
-        val images = jsInterface
-            .images
-            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
+        val images = jsInterface.images
+            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) }
             .mapIndexed { i, url ->
-                val response = client.newCall(
-                    Request.Builder().url("$url&${jsInterface.p}=${jsInterface.v}").headers(
-                        headers.newBuilder().add("Referer", internalBaseUrl).build(),
-                    ).build(),
-                ).execute()
-                if (response.code == 200) {
+                if (i != jsInterface.pi) {
                     Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
                 } else {
                     null
                 }
-            }.filterNotNull()
-
+            }
+            .filterNotNull()
         return Observable.just(images)
     }
 
@@ -452,15 +481,18 @@ class Japscan :
             private set
         var v: String = ""
             private set
+        var pi: Int = -1
+            private set
 
         @JavascriptInterface
         @Suppress("UNUSED")
-        fun passPayload(rawData: String, p: String, v: String) {
+        fun passPayload(rawData: String, p: String, v: String, pi: String) {
             try {
                 images = rawData.parseAs<List<String>>()
                     .map { "$it?y=1" }
                 this.p = p
                 this.v = v
+                this.pi = pi.toInt()
                 latch.countDown()
             } catch (_: Exception) {
                 return
