@@ -3,7 +3,7 @@ ext {
     extClass = '.EZmanga'
     themePkg = 'ezmanhwa'
     baseUrl = 'https://ezmanga.org'
-    overrideVersionCode = 59
+    overrideVersionCode = 49
     isNsfw = false
 }
 
