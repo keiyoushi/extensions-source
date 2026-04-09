@@ -3,7 +3,7 @@ ext {
     extClass = '.MonteTai'
     themePkg = 'madara'
     baseUrl = 'https://montetaiscanlator.xyz'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
