@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -219,14 +220,20 @@ class Truyen18 : HttpSource() {
         return FIRST_CHAPTER_CONTENT_REGEX.find(body)?.groupValues?.get(1)
     }
 
-    private fun decodeEscapedContent(content: String): String = content
-        .replace("\\u003c", "<")
-        .replace("\\u003e", ">")
-        .replace("\\u0026", "&")
-        .replace("\\u002F", "/")
-        .replace("\\\"", "\"")
-        .replace("\\/", "/")
-        .replace("\\n", "\n")
+    private fun decodeEscapedContent(content: String): String {
+        return try {
+            "\"$content\"".parseAs<String>()
+        } catch (_: Exception) {
+            content
+                .replace("\\u003c", "<")
+                .replace("\\u003e", ">")
+                .replace("\\u0026", "&")
+                .replace("\\u002F", "/")
+                .replace("\\\"", "\"")
+                .replace("\\/", "/")
+                .replace("\\n", "\n")
+        }
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
