@@ -13,9 +13,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,15 +32,16 @@ class BlossomManhwa(
 
     override val supportsLatest = true
 
-    override val baseUrl = "https://api.blossommanhwa.com"
+    override val baseUrl = "https://api.cherrymanhwa.com"
 
-    private val apiImageUrl = "https://api.blossommanhwa.com/v1/images"
-    private val cdnImageUrl = "https://cdn.blossommanhwa.com/v1/images"
+    private val apiImageUrl = "https://api.cherrymanhwa.com/v1/images"
+    private val siteUrl = "https://cherrymanhwa.com"
 
     private val secretKey = "EA^UfBOF9lNdQDS3i2qAnsqxIrTpH%"
     private val encryptKey = "6dFGd4Laa3vE%kLpr5eCtSEaAL%wJm"
+    private val imageKey = "RghVx!Sf!Dw3y6O7KQcF%pg#"
 
-    private val apiCryptoHelper = CryptoHelper(baseUrl, secretKey, encryptKey)
+    private val apiCryptoHelper = CryptoHelper(baseUrl, secretKey, encryptKey, imageKey)
 
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder().addInterceptor(apiCryptoHelper)
@@ -58,26 +56,18 @@ class BlossomManhwa(
 
     private val preference = getPreferences()
 
-    private val i18nHelper: I18nHelper = I18nHelper("https://blossommanhwa.com", client, preference)
-
     // Chapter
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<ApiMangaInfo>()
-        val tag = when (data.manga.type) {
-            "manhwa" -> "api"
-            "manga" -> "cdn"
-            else -> throw UnsupportedOperationException()
-        }
-
         val lis = mutableListOf<SChapter>()
         data.chapters.forEach {
             val chapterName = getChapterName(it.number)
             lis.add(
                 SChapter.create().apply {
-                    url = "$tag/v1/manga/${data.manga.slug}/chapter/$chapterName"
+                    url = "/v1/manga/${data.manga.slug}/chapter/$chapterName"
                     name = "${chapterName}${if (it.title != null) " ${it.title}" else ""}"
                     date_upload = dateFormat.tryParse(it.create_at)
                     chapter_number = it.number
@@ -92,17 +82,15 @@ class BlossomManhwa(
 
     // Image
 
-    override fun imageRequest(page: Page): Request {
-        val (tag, realUrl) = getTagUrl(page.imageUrl!!)
-        val prefixUrl = when (tag) {
-            "api" -> apiImageUrl
-            "cdn" -> cdnImageUrl
-            else -> throw UnsupportedOperationException()
-        }
-        return GET("$prefixUrl$realUrl", headers)
-    }
+    override fun imageRequest(page: Page) = GET("$apiImageUrl${page.imageUrl}#DECRYPT", headers)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // webview
+
+    override fun getChapterUrl(chapter: SChapter) = "$siteUrl${chapter.url.substringAfter("/v1")}"
+
+    override fun getMangaUrl(manga: SManga) = "$siteUrl/manga/${manga.url.substringAfterLast("/")}"
 
     // LatestUpdates
 
@@ -133,29 +121,26 @@ class BlossomManhwa(
     private fun mangaDetailsToSManga(details: MangaDetails): SManga = SManga.create().apply {
         url = "/v1/manga/findBySlug/${details.slug}"
         title = getTitle(details.title, details.language)
+        description = details.description ?: ""
         genre = buildList {
             add("lang: ${details.language}")
             add("type: ${details.type}")
-            details.authors?.forEach { add("author: $it") }
-            details.rating?.also { add("rating: $it") }
         }.joinToString()
+        author = details.authors?.joinToString() ?: ""
+        artist = author
         status = if (details.status == "ongoing") SManga.ONGOING else SManga.COMPLETED
         thumbnail_url = "$baseUrl/v1/images/manga${details.img}"
     }
 
     // Pages
 
-    private fun getTagUrl(tagUrl: String): Pair<String, String> = Pair(tagUrl.substring(0, 3), tagUrl.substring(3))
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val (tag, realUrl) = getTagUrl(chapter.url)
-
-        val response = client.newCall(GET("$baseUrl$realUrl", headers)).execute()
+        val response = client.newCall(GET("$baseUrl${chapter.url}", headers)).execute()
         val data = response.parseAs<ApiChapterInfo>()
 
         val lis = mutableListOf<Page>()
-        data.chapter.images.flatten().forEachIndexed { index, path ->
-            lis.add(Page(index, imageUrl = "$tag/chapter$path"))
+        data.chapter.images.maxBy { it.size }.forEachIndexed { index, path ->
+            lis.add(Page(index, imageUrl = "/chapter$path"))
         }
 
         return Observable.just(lis)
@@ -230,34 +215,28 @@ class BlossomManhwa(
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            var groupState = 0
+        val url = "$baseUrl/v1/manga".toHttpUrl().newBuilder().apply {
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
-                    is GroupFilter -> {
-                        groupState = filter.setUrlPath(this)
-                    }
-
-                    is CategoryFilter -> {
-                        filter.setUrlParam(this, groupState)
-                    }
-
-                    is SortFilter -> {
-                        filter.setUrlParam(this, groupState)
-                    }
-
                     is LanguageCheckBoxFilterGroup -> {
-                        filter.setUrlParam(this, groupState)
+                        filter.setUrlParam(this)
                     }
-
+                    is AuthorFilter -> {
+                        filter.setUrlParam(this)
+                    }
+                    is ArtistFilter -> {
+                        filter.setUrlParam(this)
+                    }
+                    is SortFilter -> {
+                        filter.setUrlParam(this)
+                    }
                     else -> {}
                 }
             }
-
-            if (groupState == GROUP_TYPE_SEARCH && query.isNotBlank()) {
+            if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
-            addQueryParameter("limit", "72")
+            addQueryParameter("limit", "50")
             addQueryParameter("page", page.toString())
         }.build().toString()
 
@@ -274,63 +253,26 @@ class BlossomManhwa(
 
     // Filter
 
-    override fun getFilterList(): FilterList {
-        val i18nDictionary = getI18nDictionary()
-        return FilterList(
-            GroupFilter(i18nDictionary),
-            CategoryFilter(i18nDictionary),
-            SortFilter(i18nDictionary),
-            LanguageCheckBoxFilterGroup(i18nDictionary),
-        )
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        AuthorFilter(),
+        ArtistFilter(),
+        GenreFilter(),
+        LanguageCheckBoxFilterGroup(),
+        SortFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            title = getI18nDictionary().library.filter["language"]
-            key = APP_LANGUAGE_KEY
-            entries = arrayOf(
-                "🇬🇧English",
-                "🇪🇸Español",
-                "🇨🇳中文",
-                "🇷🇺Русский",
-                "🇹🇷Türkçe",
-                "🇮🇩Bahasa Indonesia",
-                "🇹🇭ไทย",
-                "🇻🇳Tiếng Việt",
-            )
-            entryValues = arrayOf(
-                "en",
-                "es",
-                "zh",
-                "ru",
-                "tr",
-                "id",
-                "th",
-                "vi",
-            )
-            setDefaultValue(entryValues[0])
-            setOnPreferenceChangeListener { _, click ->
-                try {
-                    getI18nDictionary(click as String)
-                    true
-                } catch (_: Exception) {
-                    false
-                }
-            }
-        }.let { screen.addPreference(it) }
-
         // Lock the filter language type from the result.
         // Non-locked content is simply ignored, which makes the experience more comfortable.
         ListPreference(screen.context).apply {
-            val i18nDictionary = getI18nDictionary()
-            title = "👀➡️🔒"
+            title = "Default Search Language: "
             key = APP_FOCUS_LANGUAGE_KEY
             entries = arrayOf(
-                "🔓",
-                "🇬🇧${i18nDictionary.home.updates.buttons.language["english"]!!}🔒",
-                "🇪🇸${i18nDictionary.home.updates.buttons.language["spanish"]!!}🔒",
-                "🇨🇳${i18nDictionary.home.updates.buttons.language["chinese"]!!}🔒",
-                "${i18nDictionary.home.updates.buttons.language["raw"]!!}🔒",
+                "All",
+                "🇬🇧 English",
+                "🇪🇸 Spanish",
+                "🇨🇳 Chinese",
+                "Raw",
             )
             entryValues = arrayOf(
                 "",
@@ -342,21 +284,5 @@ class BlossomManhwa(
             setDefaultValue(entryValues[0])
         }.let { screen.addPreference(it) }
     }
-
-    private fun getI18nDictionary(language: String? = null): I18nDictionary {
-        val currentLang = language ?: preference.getString(APP_LANGUAGE_KEY, "en")!!
-        return try {
-            runBlocking {
-                withContext(Dispatchers.IO) {
-                    i18nHelper.getI18nByLanguage(currentLang)
-                }
-            }
-        } catch (_: Exception) {
-            I18nHelper.getDefaultI18n()
-        }
-    }
 }
-
-internal const val APP_LANGUAGE_KEY = "APP_LANGUAGE_KEY"
-internal const val APP_I18N_KEY = "APP_I18N_KEY"
 internal const val APP_FOCUS_LANGUAGE_KEY = "APP_FOCUS_LANGUAGE_KEY"
