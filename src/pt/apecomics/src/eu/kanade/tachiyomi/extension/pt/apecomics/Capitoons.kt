@@ -8,6 +8,7 @@ class Capitoons :
         baseUrl = "https://capitoons.com",
         lang = "pt-BR",
     ) {
+    override val id: Long = 4475020039832513819
 
     override fun getOrderFilterOptions() = CapitoonsFilters.orderFilterOptions
 
