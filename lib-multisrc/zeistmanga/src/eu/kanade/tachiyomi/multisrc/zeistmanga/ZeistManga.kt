@@ -218,7 +218,10 @@ abstract class ZeistManga(
         var startIndex = 1
         // Get total first
         val result = fetchChapter(url, startIndex, maxResults = 0)
-        val totalResults = result.totalResults?.t?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
+        val totalResults = (
+            result.totalResults?.t
+                ?: result.feed?.totalResults?.t
+            )?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
 
         while (allEntries.size < totalResults) {
             val result = fetchChapter(url, startIndex)
