@@ -1,0 +1,10 @@
+ext {
+    extName = 'GakaMangas'
+    extClass = '.GakaMangas'
+    themePkg = 'madara'
+    baseUrl = 'https://gakamangas.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
