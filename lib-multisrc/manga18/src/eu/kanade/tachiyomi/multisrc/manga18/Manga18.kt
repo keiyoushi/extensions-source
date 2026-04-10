@@ -48,7 +48,7 @@ abstract class Manga18(
     }
 
     override fun popularMangaSelector() = "div.story_item"
-    override fun popularMangaNextPageSelector() = ".pagination a[rel=next]"
+    override fun popularMangaNextPageSelector() = ".pagination > li:last-child:not(.active)"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))

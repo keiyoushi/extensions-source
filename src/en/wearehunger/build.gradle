@@ -3,8 +3,8 @@ ext {
     extClass = '.Wearehunger'
     themePkg = 'madara'
     baseUrl = 'https://www.wearehunger.site'
-    overrideVersionCode = 0
-    isNsfw = false
+    overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

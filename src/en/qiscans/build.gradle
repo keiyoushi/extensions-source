@@ -1,9 +1,9 @@
 ext {
     extName = 'Qi Scans'
     extClass = '.QiScans'
-    themePkg = 'iken'
+    themePkg = 'ezmanhwa'
     baseUrl = 'https://qimanhwa.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 23
     isNsfw = false
 }
 

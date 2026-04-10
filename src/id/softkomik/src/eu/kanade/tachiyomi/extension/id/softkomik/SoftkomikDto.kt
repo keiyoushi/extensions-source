@@ -57,3 +57,9 @@ data class SessionDto(
     val sign: String,
     val token: String,
 )
+
+@Serializable
+class BearerTokenDto(
+    val token: String,
+    val ex: Long,
+)

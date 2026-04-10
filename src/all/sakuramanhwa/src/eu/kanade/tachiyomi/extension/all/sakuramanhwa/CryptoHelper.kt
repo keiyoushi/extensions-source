@@ -4,9 +4,11 @@ import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.toJsonString
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.IOException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -15,11 +17,13 @@ import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.experimental.xor
 
 class CryptoHelper(
     private val baseUrl: String,
     private val secretKey: String,
     private val encryptKey: String,
+    private val imageKey: String,
 ) : Interceptor {
     private var client: OkHttpClient? = null
     fun setClient(c: OkHttpClient) {
@@ -98,12 +102,26 @@ class CryptoHelper(
         return (serverTimeAtGeneration ?: currentLocalTime) + elapsedLocalMillis
     }
 
+    private val cachedKey by lazy { imageKey.encodeToByteArray() }
+
+    fun decryptImage(encrypted: ByteArray): ByteArray = ByteArray(encrypted.size) { i ->
+        encrypted[i] xor cachedKey[i % cachedKey.size]
+    }
+
     override fun intercept(chain: Interceptor.Chain): Response {
         var request = chain.request()
         if (request.headers["NX"] == null && serverTimeAtGeneration == null) {
             initServerTime()
         }
-        if (request.headers["NX"] == null && request.url.toString().startsWith(baseUrl)) {
+        if (request.url.fragment == "DECRYPT") {
+            val response = chain.proceed(request)
+            if (!response.isSuccessful || response.body == null) throw Exception("Failed to decrypt image")
+
+            val decryptedBytes = decryptImage(response.body.bytes())
+            return response.newBuilder()
+                .body(decryptedBytes.toResponseBody(response.body.contentType()))
+                .build()
+        } else if (request.headers["NX"] == null && request.url.host == baseUrl.toHttpUrl().host) {
             try {
                 val signed = generateSigned()
                 request = request.newBuilder().apply {
@@ -147,34 +165,6 @@ class CryptoHelper(
             encrypted.copyInto(resultBytes, SALTED_PREFIX.length + SALT_SIZE)
 
             return Base64.encodeToString(resultBytes, Base64.NO_WRAP)
-        }
-
-        fun decrypt(encrypted: String, key: String): String {
-            val encryptedBytes = Base64.decode(encrypted, Base64.NO_WRAP)
-
-            val salt = ByteArray(SALT_SIZE).also {
-                encryptedBytes.copyInto(
-                    it,
-                    0,
-                    SALTED_PREFIX.length,
-                    SALTED_PREFIX.length + SALT_SIZE,
-                )
-            }
-
-            val (keyBytes, iv) = deriveKeyAndIV(key, salt)
-
-            val secretKeySpec = SecretKeySpec(keyBytes, AES_ALGORITHM)
-            val ivParameterSpec = IvParameterSpec(iv)
-
-            val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
-
-            val ciphertext = ByteArray(encryptedBytes.size - (SALTED_PREFIX.length + SALT_SIZE))
-            encryptedBytes.copyInto(ciphertext, 0, SALTED_PREFIX.length + SALT_SIZE)
-
-            val decrypted = cipher.doFinal(ciphertext)
-
-            return String(decrypted, StandardCharsets.UTF_8)
         }
 
         private fun deriveKeyAndIV(key: String, salt: ByteArray): Pair<ByteArray, ByteArray> {

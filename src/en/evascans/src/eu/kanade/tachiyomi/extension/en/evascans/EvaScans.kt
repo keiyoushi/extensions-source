@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.en.evascans
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class EvaScans :
     MangaThemesia(
@@ -10,6 +12,7 @@ class EvaScans :
         "https://evascans.org",
         "en",
         "/series",
+        SimpleDateFormat("yyyy/MM/dd", Locale.ROOT),
     ) {
     // Fix search/listing - site uses custom card layout (div elements, not article)
     override fun searchMangaSelector() = "div.manga-card-v, .listupd .bs .bsx"

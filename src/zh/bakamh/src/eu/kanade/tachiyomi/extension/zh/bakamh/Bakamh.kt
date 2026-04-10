@@ -4,6 +4,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.zh.bakamh.BakamhPreferences.baseUrl
 import eu.kanade.tachiyomi.extension.zh.bakamh.BakamhPreferences.preferenceMigration
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -16,6 +17,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class Bakamh :
     Madara(
@@ -31,6 +33,7 @@ class Bakamh :
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(UserAgentClientHintsInterceptor())
+        .rateLimit(permits = 2, period = 1, unit = TimeUnit.SECONDS) // Rate limit added to prevent 429 errors during library updates
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

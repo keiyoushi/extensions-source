@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
-
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +13,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,7 +25,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import kotlin.concurrent.thread
+import java.io.IOException
+import java.nio.charset.StandardCharsets
+import java.util.Locale
 
 class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override fun headersBuilder() = super.headersBuilder()
@@ -29,6 +36,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     override val client by lazy {
         super.client.newBuilder()
             .addInterceptor(DDoSGuardInterceptor(super.client))
+            .rateLimit(2)
             .build()
     }
 
@@ -36,14 +44,14 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // Popular
 
-    override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) button.btn-info"
+    override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) a.btn-info"
 
     override fun popularMangaSelector() = "div.col-md-12 > span.thumbnail"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a.pull-left")!!
         setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("h3.media-heading a")?.text()?.trim() ?: ""
+        title = element.selectFirst("h3.media-heading a")!!.text()
         thumbnail_url = link.selectFirst("img.media-object")?.absUrl("src")
     }
 
@@ -53,7 +61,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .addQueryParameter("sort_type", "DESC")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("listType", "pagination")
-            .addQueryParameter("icerik", "1")
             .build()
         return GET(url, headers)
     }
@@ -66,21 +73,20 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .addQueryParameter("sort_type", "DESC")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("listType", "pagination")
-            .addQueryParameter("icerik", "1")
             .build()
         return GET(url, headers)
     }
 
     // Search
 
+    private var captchaUrl: String? = null
+
     private var cachedGenres: List<FMReader.Genre> = emptyList()
 
-    @Volatile private var isLoadingGenres: Boolean = false
-
     override fun getFilterList(): FilterList {
-        loadGenresAsync()
         val baseFilters = mutableListOf<Filter<*>>(
-            Filter.Header("Metin araması ile filtreler birlikte kullanılmaz"),
+            SortFilter(),
+            SortDirectionFilter(),
             PublicationStatusFilter(),
             TranslateStatusFilter(),
             AgeRestrictionFilter(),
@@ -89,8 +95,6 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         )
         if (cachedGenres.isNotEmpty()) {
             baseFilters += FMReader.GenreList(cachedGenres)
-        } else {
-            baseFilters += Filter.Header("Türleri yüklemek için 'Sıfırla' düğmesine basın")
         }
         return FilterList(baseFilters)
     }
@@ -103,18 +107,33 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             return GET(url, headers)
         }
 
-        val listEndpoint = if (page <= 1) "$baseUrl/manga-list.html" else "$baseUrl/$requestPath"
-        val url = listEndpoint.toHttpUrl().newBuilder()
-        if (page > 1) {
-            url.addQueryParameter("listType", "pagination")
-            url.addQueryParameter("page", page.toString())
+        val sortParam = when (filters.firstInstanceOrNull<SortFilter>()?.state ?: 0) {
+            1 -> "views"
+            2 -> "name"
+            else -> "last_update"
         }
+        val sortTypeParam = when (filters.firstInstanceOrNull<SortDirectionFilter>()?.state ?: 0) {
+            1 -> "ASC"
+            else -> "DESC"
+        }
+        val url = "$baseUrl/$requestPath".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", sortParam)
+            .addQueryParameter("sort_type", sortTypeParam)
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("listType", "pagination")
 
+        // PHP keeps the last `tur` in the query string; `tur` is shared with genre + special-type filters.
         val genreFilter = filters.firstInstanceOrNull<FMReader.GenreList>()
-        if (genreFilter != null && genreFilter.state.isNotEmpty()) {
-            val included = genreFilter.state.filter { it.isIncluded() }
-            if (included.isNotEmpty()) {
-                included.forEach { url.addQueryParameter("genre[]", it.id) }
+        val includedGenres = genreFilter?.state?.filter { it.isIncluded() }.orEmpty()
+        val specialTur = filters.firstInstanceOrNull<SpecialTypeFilter>()?.let { f ->
+            arrayOf("", "2")[f.state].takeIf { it.isNotEmpty() }
+        }
+        when {
+            includedGenres.isNotEmpty() -> {
+                includedGenres.forEach { url.addQueryParameter("tur", it.id) }
+            }
+            specialTur != null -> {
+                url.addQueryParameter("tur", specialTur)
             }
         }
 
@@ -131,12 +150,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             if (value.isNotEmpty()) url.addQueryParameter("yas", value)
         }
         filters.firstInstanceOrNull<ContentTypeFilter>()?.let { f ->
-            val value = arrayOf("", "1", "2", "3", "4")[f.state]
+            val value = arrayOf("", "1", "3", "5")[f.state]
             if (value.isNotEmpty()) url.addQueryParameter("icerik", value)
-        }
-        filters.firstInstanceOrNull<SpecialTypeFilter>()?.let { f ->
-            val value = arrayOf("", "2")[f.state]
-            if (value.isNotEmpty()) url.addQueryParameter("tur", value)
         }
 
         return GET(url.build(), headers)
@@ -147,7 +162,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return if (path.contains("/arama.html")) {
             val mangas = response.asJsoup()
                 .select("div.row a[data-toggle]")
-                .filterNot { it.siblingElements().text().contains("Novel") }
+                .filterNot {
+                    it.parent()?.selectFirst("a.anime-r, a.novel-r") != null
+                }
                 .map(::searchMangaFromElement)
             MangasPage(mangas, false)
         } else {
@@ -160,33 +177,59 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         title = element.text()
     }
 
-    // Details
+    /** Detail page appends (YYYY) to the title; strip it to match list browse titles. */
+    private val trailingYearInTitle = Regex("""\s*\((?:19|20)\d{2}\)\s*$""")
+
+    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")?.text()?.trim() ?: ""
+        title = document.selectFirst("h1")!!.text()
+            .replace(trailingYearInTitle, "")
+            .trim()
 
         thumbnail_url = document.selectFirst("img[src*='image.mangatr.site']")?.absUrl("src")
             ?: document.selectFirst("img[title]")?.absUrl("src")
 
-        description = document.selectFirst("div.info-desc, div#tab1 p, div.summary")
+        val descBlock = document.selectFirst("div.info-desc, div#tab1 p, div.summary")?.text()?.trim().orEmpty()
+        val altNames = document.selectFirst("div.info-other")?.text()?.trim().orEmpty()
+        description = buildString {
+            if (descBlock.isNotEmpty()) append(descBlock)
+            if (altNames.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append("Alternative Names: ")
+                append(altNames)
+            }
+        }.ifBlank { null }
+
+        author = document.selectFirst("div.manga-meta-item:contains(Yazar) .manga-meta-value a[href*='author=']")
             ?.text()?.trim()
+            ?: document.selectFirst("div.manga-meta-item:contains(Yazar) .manga-meta-value")?.text()?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
-        author = document.selectFirst("a[href*='?author=']")?.text()?.trim()
-
-        artist = document.select("a[href*='?artist=']")
+        artist = document.select("div.manga-meta-item:contains(Sanatçı) .manga-meta-value a[href*='artist=']")
             .joinToString { it.text().trim() }
             .ifBlank { null }
+            ?: document.selectFirst("div.manga-meta-item:contains(Sanatçı) .manga-meta-value")?.text()?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
-        genre = document.select("a[href*='?tur=']")
-            .joinToString { it.text().trim() }
+        genre = document.select("div.manga-meta-item:contains(Tür) a[href*='?tur='], div.manga-meta-value a[href*='?tur=']")
+            .joinToString { it.text() }
 
-        val durumHref = document.selectFirst("a[href*='?durum=']")?.attr("href") ?: ""
-        status = when {
-            durumHref.contains("durum=2") -> SManga.ONGOING
-            durumHref.contains("durum=1") -> SManga.COMPLETED
-            document.body().text().contains("Devam Ediyor") -> SManga.ONGOING
-            document.body().text().contains("Tamamlandı") -> SManga.COMPLETED
-            document.body().text().contains("Askıda") -> SManga.ON_HIATUS
+        val translateLabel = document.selectFirst(
+            "div.manga-meta-item:contains(Çeviri Durumu) .manga-meta-value a[href*='ceviri=']",
+        )?.text()?.trim().orEmpty()
+        status = parseTranslateStatusBadge(translateLabel)
+    }
+
+    private fun parseTranslateStatusBadge(label: String): Int {
+        if (label.isEmpty()) return SManga.UNKNOWN
+        val t = label.lowercase(Locale.ROOT)
+        return when {
+            t.contains("tamamlan") -> SManga.COMPLETED
+            t.contains("bırak") || t.contains("birak") -> SManga.CANCELLED
+            t.contains("askı") || t.contains("askida") -> SManga.ON_HIATUS
+            t.contains("devam") -> SManga.ONGOING
+            t.contains("olmayan") -> SManga.UNKNOWN
             else -> SManga.UNKNOWN
         }
     }
@@ -195,9 +238,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override fun chapterListSelector() = "div.chapter-item"
 
-    override val chapterUrlSelector = "div.chapter-title a"
-
-    override val chapterTimeSelector = "div.stats"
+    private val chapterLinkSelector = "div.chapter-title a"
+    private val chapterSubSelector = "div.chapter-sub"
+    private val chapterStatsSelector = "div.stats"
 
     private val chapterListHeaders by lazy {
         headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
@@ -233,160 +276,177 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val link = element.selectFirst("div.chapter-title a")!!
+        val link = element.selectFirst(chapterLinkSelector)!!
         setUrlWithoutDomain(link.attr("href"))
-        name = link.text().trim()
-        date_upload = parseRelativeDate(element.selectFirst("div.stats")?.ownText() ?: "")
+        val chapterNum = link.selectFirst("span:last-child")?.text()
+            ?: link.text()
+        val sub = element.selectFirst(chapterSubSelector)?.text()
+        name = when {
+            sub.isNullOrEmpty() -> chapterNum
+            sub.contains("Bölüm") -> sub
+            else -> "$chapterNum: $sub"
+        }
+        date_upload = parseRelativeDate(element.selectFirst(chapterStatsSelector)?.ownText() ?: "")
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.startsWith("/")) baseUrl + chapter.url else "$baseUrl/${chapter.url}"
-        return GET(url, headers)
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
-    override val pageListImageSelector = "div#chapter-images img.chapter-img"
-
-    override fun getImgAttr(element: Element?): String? = null
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     // Pages
-    // Şifreleme: key = k1 + k2, xorDecrypt = atob(chunks.join('')) XOR key
 
     override fun pageListParse(document: Document): List<Page> {
-        val k1 = document.selectFirst("div#chapter-images")?.attr("data-k1") ?: return emptyList()
+        if (document.selectFirst("canvas#sliderCanvas, div.box h2:contains(Güvenlik Doğrulaması)") != null) {
+            captchaUrl = document.location()
+            throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
+        }
 
-        for (script in document.select("script:not([src])")) {
-            val js = script.html()
-            if (!js.contains("imageQueueData")) continue
-
-            // k2 değerini al
-            val k2 = Regex("""\bk2\b\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: continue
-
-            // queue array'ini al — "queue" ile "logo" arasındaki her şey
-            val queueStart = js.indexOf("queue")
-            val logoIndex = js.indexOf("logo", queueStart)
-            if (queueStart < 0 || logoIndex < 0) continue
-            val queueSection = js.substring(queueStart, logoIndex)
-
-            val key = k1 + k2
+        val chapterPages = document.select("div.chapter-page")
+        if (chapterPages.isNotEmpty()) {
             val pages = mutableListOf<Page>()
-            var idx = 0
+            val sortedChapterPages = chapterPages
+                .filter { it.hasAttr("data-parts") && it.hasAttr("data-order") }
+                .sortedBy { it.attr("data-page-index").toIntOrNull() ?: Int.MAX_VALUE }
 
-            // Her [ ... ] bloğunu bul
-            var pos = 0
-            while (pos < queueSection.length) {
-                val open = queueSection.indexOf('[', pos)
-                if (open < 0) break
-                val close = queueSection.indexOf(']', open)
-                if (close < 0) break
-                pos = close + 1
+            for (page in sortedChapterPages) {
+                val partsJson = page.attr("data-parts")
+                val orderAttr = page.attr("data-order")
 
-                val block = queueSection.substring(open + 1, close)
-                // Chunk string'lerini topla
-                val chunks = Regex(""""([^"]+)"""").findAll(block)
-                    .map { it.groupValues[1] }
-                    .toList()
-                if (chunks.isEmpty()) continue
+                val urls: List<String> = try {
+                    Json.Default.parseToJsonElement(partsJson).jsonArray.map { it.jsonPrimitive.content }
+                } catch (e: Exception) {
+                    continue
+                }
 
-                val combined = chunks.joinToString("")
-                if (combined.contains("FAKE")) continue
+                if (urls.isEmpty()) continue
 
-                val url = xorDecrypt(combined, key) ?: continue
-                pages.add(Page(idx++, imageUrl = url))
+                // chapter.js: part index -> vertical canvas order (matches site reader).
+                val mapping = decodePartOrderMapping(orderAttr)
+                if (mapping == null || mapping.isEmpty()) {
+                    pages.add(Page(pages.size, imageUrl = urls.first()))
+                    continue
+                }
+
+                val sortedUrls = mapping
+                    .sortedBy { it.second }
+                    .mapNotNull { (partIdx, _) -> urls.getOrNull(partIdx) }
+                if (sortedUrls.isEmpty()) {
+                    pages.add(Page(pages.size, imageUrl = urls.first()))
+                    continue
+                }
+
+                for (url in sortedUrls) {
+                    pages.add(Page(pages.size, imageUrl = url))
+                }
             }
+            return pages
+        }
 
-            if (pages.isNotEmpty()) return pages
+        val directImages = document.select("img[src*='img_part.php'], img[data-src*='img_part.php']")
+        if (directImages.isNotEmpty()) {
+            return directImages.mapIndexed { index, img ->
+                val src = img.attr("src").ifEmpty { img.attr("data-src") }
+                Page(index, imageUrl = src)
+            }
+        }
+
+        val html = document.html()
+        val imgUrlRegex = Regex("""https?://[^"'\s]*img_part\.php[^"'\s]*""")
+        val seenKeys = mutableSetOf<String>()
+        val imgUrls = imgUrlRegex.findAll(html)
+            .map { it.value.replace("&amp;", "&") }
+            .filterNot { it.contains("logo") }
+            .filter { url ->
+                val keyMatch = Regex("""key=([^&]+)""").find(url)
+                val key = keyMatch?.groupValues?.get(1) ?: return@filter false
+                if (seenKeys.contains(key)) {
+                    false
+                } else {
+                    seenKeys.add(key)
+                    true
+                }
+            }
+            .toList()
+
+        if (imgUrls.isNotEmpty()) {
+            return imgUrls.mapIndexed { idx, url -> Page(idx, imageUrl = url) }
         }
 
         return emptyList()
     }
 
-    @Suppress("SwallowedException")
-    private fun xorDecrypt(base64Str: String, key: String): String? {
-        if (key.isEmpty()) return null
+    /** Decodes `data-order`: Base64, XOR 0x5A, then JSON mapping part index to vertical order. */
+    private fun decodePartOrderMapping(encoded: String): List<Pair<Int, Int>>? {
         return try {
-            val pad = (4 - base64Str.length % 4) % 4
-            val bytes = Base64.decode(base64Str + "=".repeat(pad), Base64.DEFAULT)
-            val result = buildString {
-                bytes.forEachIndexed { i, b ->
-                    append(((b.toInt() and 0xFF) xor key[i % key.length].code).toChar())
+            val raw = Base64.decode(encoded, Base64.DEFAULT)
+            val decoded = raw.map { (it.toInt() and 0xFF) xor 0x5A }
+            val jsonStr = String(decoded.map { it.toByte() }.toByteArray(), StandardCharsets.UTF_8)
+            val element = Json.Default.parseToJsonElement(jsonStr)
+            when (element) {
+                is JsonArray -> {
+                    element.mapIndexedNotNull { idx, el ->
+                        val pos = el.jsonPrimitive.content.toIntOrNull() ?: return@mapIndexedNotNull null
+                        idx to pos
+                    }
                 }
+                is JsonObject -> {
+                    element.mapNotNull { (k, v) ->
+                        val partIdx = k.toIntOrNull() ?: return@mapNotNull null
+                        val pos = v.jsonPrimitive.content.toIntOrNull() ?: return@mapNotNull null
+                        partIdx to pos
+                    }
+                }
+                else -> null
             }
-            if (result.startsWith("http")) result else null
         } catch (e: Exception) {
             null
         }
     }
 
-    // List Parse
+    /** Genres from `select[name=tur]` on the list page (cached after first parse). */
+    private fun cacheGenresFromListPage(document: Document) {
+        if (cachedGenres.isNotEmpty()) return
+        val parsed = document.select("select[name=tur] option[value]").mapNotNull { opt ->
+            val value = opt.attr("value").ifBlank { return@mapNotNull null }
+            FMReader.Genre(opt.text().trim(), value)
+        }
+        if (parsed.isNotEmpty()) {
+            cachedGenres = parsed
+        }
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        cacheGenresFromListPage(document)
 
-        if (cachedGenres.isEmpty()) {
-            val options = document.select("#genreSelect option")
-            if (options.isNotEmpty()) {
-                cachedGenres = options.mapNotNull { opt ->
-                    val value = opt.attr("value").trim()
-                    val text = opt.text().trim()
-                    if (text.isEmpty() || value.isEmpty()) null else FMReader.Genre(text, value)
-                }
-            } else {
-                val container = document.selectFirst("*:matchesOwn(Tür Seçiniz)")?.parent()
-                    ?: document.selectFirst("div:has(:matchesOwn(Tür Seçiniz))")
-                val anchors = container?.select("a")
-                    ?: document.select("a[href*=manga-list], a[href*=genre], a[href*=tur]")
-                val items = anchors.map { it.text().trim() }.filter { it.length > 1 }.distinct()
-                if (items.isNotEmpty()) {
-                    cachedGenres = items.map { name -> FMReader.Genre(name, name.replace(' ', '+')) }
-                }
+        val mangas = document.select(popularMangaSelector())
+            .filterNot {
+                it.selectFirst("a.anime-r, a.novel-r") != null
             }
-        }
+            .map { popularMangaFromElement(it) }
 
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        val hasNextPage = (document.select(popularMangaNextPageSelector()).first()?.text() ?: "").let {
-            if (it.contains(Regex("""\w*\s\d*\s\w*\s\d*"""))) {
-                it.split(" ").let { p -> p[1] != p[3] }
-            } else {
-                it.isNotEmpty()
-            }
-        }
+        // Last page: "›" still points at the same page number (compare to current).
+        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val nextPageFromArrow = document.select(popularMangaNextPageSelector())
+            .firstOrNull { it.text().trim() == "›" }
+            ?.attr("href")
+            ?.let { href -> Regex("""[?&]page=(\d+)""").find(href)?.groupValues?.get(1)?.toIntOrNull() }
+        val hasNextPage = nextPageFromArrow != null && nextPageFromArrow > currentPage
+
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun loadGenresAsync() {
-        if (cachedGenres.isNotEmpty() || isLoadingGenres) return
-        isLoadingGenres = true
-        thread(name = "mangatr-load-genres", start = true) {
-            try {
-                val doc = client.newCall(GET("$baseUrl/manga-list.html", headers)).execute().asJsoup()
-                val options = doc.select("#genreSelect option")
-                if (options.isNotEmpty()) {
-                    cachedGenres = options.mapNotNull { opt ->
-                        val value = opt.attr("value").trim()
-                        val text = opt.text().trim()
-                        if (text.isEmpty() || value.isEmpty()) null else FMReader.Genre(text, value)
-                    }
-                    return@thread
-                }
-                val container = doc.selectFirst("*:matchesOwn(Tür Seçiniz)")?.parent()
-                    ?: doc.selectFirst("div:has(:matchesOwn(Tür Seçiniz))")
-                val anchors = when {
-                    container != null -> container.select("a")
-                    else -> doc.select("a[href*=manga-list], a[href*=genre], a[href*=tur]")
-                }
-                val items = anchors.map { it.text().trim() }.filter { it.length > 1 }.distinct()
-                if (items.isNotEmpty()) {
-                    cachedGenres = items.map { name -> FMReader.Genre(name, name.replace(' ', '+')) }
-                }
-            } catch (e: Throwable) {
-                // ignore
-            } finally {
-                isLoadingGenres = false
-            }
-        }
-    }
+    private class SortFilter :
+        Filter.Select<String>(
+            "Sıralama",
+            arrayOf("Ada göre", "Popülerlik", "Son güncelleme"),
+        )
 
-    // Filters
+    private class SortDirectionFilter :
+        Filter.Select<String>(
+            "Sıralama yönü",
+            arrayOf("Alfabetik sıra", "Tersten başa"),
+        )
 
     private class PublicationStatusFilter :
         Filter.Select<String>(
@@ -397,19 +457,19 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     private class TranslateStatusFilter :
         Filter.Select<String>(
             "Çeviri Durumu",
-            arrayOf("Tümü", "Devam Ediyor", "Tamamlandı", "Bırakılmış", "Yok"),
+            arrayOf("Tümü", "Tamamlanan", "Devam Eden", "Bırakılan", "Olmayan"),
         )
 
     private class AgeRestrictionFilter :
         Filter.Select<String>(
             "Yaş Sınırlaması",
-            arrayOf("Tümü", "16+", "18+"),
+            arrayOf("Tümü", "+16", "+18"),
         )
 
     private class ContentTypeFilter :
         Filter.Select<String>(
             "İçerik Türü",
-            arrayOf("Tümü", "Manga", "Novel", "Webtoon", "Anime"),
+            arrayOf("Tümü", "Manga", "Webtoon", "Çizgi Roman"),
         )
 
     private class SpecialTypeFilter :

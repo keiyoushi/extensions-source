@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 
@@ -94,8 +95,27 @@ internal class ChapterPagesDto(
 internal class PageDto(
     @SerialName("image_url") private val imageUrl: String,
 ) {
-    fun toPage(index: Int): Page = Page(
-        index,
-        imageUrl = if (imageUrl.startsWith("http")) imageUrl else "https://api.ainzscans01.com$imageUrl",
-    )
+    fun toPage(index: Int): Page {
+        var url = if (imageUrl.startsWith("http")) imageUrl else "https://api.ainzscans01.com$imageUrl"
+
+        // Fix for older chapters using Blogger/Googleusercontent compressed images
+        if (url.contains("googleusercontent.com") || url.contains("bp.blogspot.com")) {
+            url = url.replace(Regex("""=[swh]\d+[^/?]*($|\?)""", RegexOption.IGNORE_CASE), "=s0$1")
+                .replace(Regex("""/[swh]\d+[^/]*/""", RegexOption.IGNORE_CASE), "/s0/")
+        }
+
+        // Clean up common CMS resizing query parameters
+        url.toHttpUrlOrNull()?.let { httpUrl ->
+            if (httpUrl.queryParameterNames.any { it == "w" || it == "width" || it == "resize" }) {
+                url = httpUrl.newBuilder()
+                    .removeAllQueryParameters("w")
+                    .removeAllQueryParameters("width")
+                    .removeAllQueryParameters("resize")
+                    .build()
+                    .toString()
+            }
+        }
+
+        return Page(index, imageUrl = url)
+    }
 }

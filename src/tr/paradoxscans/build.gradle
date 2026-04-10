@@ -1,0 +1,10 @@
+ext {
+    extName = 'Paradox Scans'
+    extClass = '.ParadoxScans'
+    themePkg = 'initmanga'
+    baseUrl = 'https://paradoxscans.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

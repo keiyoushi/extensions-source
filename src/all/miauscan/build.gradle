@@ -3,7 +3,7 @@ ext {
     extClass = '.MiauScanFactory'
     themePkg = 'mangathemesia'
     baseUrl = 'https://leemiau.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = true
 }
 

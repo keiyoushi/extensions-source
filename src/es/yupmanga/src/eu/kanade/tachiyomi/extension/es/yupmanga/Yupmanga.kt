@@ -139,16 +139,57 @@ class Yupmanga : HttpSource() {
     }
 
     private fun parseChapterList(document: Document): List<SChapter> = document.select("div.comic-card").map { element ->
+        val totalPages = element.selectFirst("span")!!.text()
+        val chapterId = element.selectFirst("a[data-chapter]")!!.attr("data-chapter")
+
         SChapter.create().apply {
             name = element.selectFirst("h3")!!.text()
-            url = getChapterUrl(element)
+            url = "/ajax/get_reader_token.php?chapter=$chapterId#$totalPages"
         }
     }
 
-    private fun getChapterUrl(el: Element): String {
-        val chapterId = el.selectFirst("a[data-chapter]")!!.attr("data-chapter")
-        val totalPages = el.selectFirst("span")!!.text()
-        return "/ajax/get_reader_token.php?chapter=$chapterId#$totalPages"
+    private val arrayRegex = Regex("""\[(.*?)\]""")
+    private val keyRegex = Regex("""fromCharCode\((.*?)\)""")
+
+    fun handleChallenge(js: String): String? {
+        val arr = arrayRegex.find(js)
+            ?.groupValues?.get(1)
+            ?.split(",")
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.toIntArray()
+            ?: return null
+
+        val key = keyRegex.find(js)
+            ?.groupValues?.get(1)
+            ?.split(",")
+            ?.mapNotNull { it.trim().toIntOrNull()?.toChar() }
+            ?.joinToString("")
+            ?: return null
+
+        return solveChallenge(arr, key)
+    }
+
+    fun solveChallenge(arr: IntArray, key: String): String {
+        var result = 0
+        for (i in arr.indices) {
+            result = (result xor arr[i]) + key[i % key.length].code
+        }
+        return result.toString()
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val chapterId = chapterUrl.queryParameter("chapter")
+        val challenge = client.newCall(GET("$baseUrl/ajax/get_challenge.php?chapter=$chapterId", headers)).execute().parseAs<ChallengeDto>()
+
+        val chapterTokenUrl = chapterUrl.newBuilder().apply {
+            if (challenge.success) {
+                addQueryParameter("challenge_id", challenge.challenge_id)
+                addQueryParameter("answer", handleChallenge(challenge.challenge_js))
+            }
+        }.build()
+
+        return GET(chapterTokenUrl, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -188,5 +229,12 @@ class Yupmanga : HttpSource() {
     internal class TokenDto(
         val success: Boolean,
         val token: String,
+    )
+
+    @Serializable
+    internal class ChallengeDto(
+        val success: Boolean,
+        val challenge_id: String,
+        val challenge_js: String,
     )
 }
