@@ -36,7 +36,6 @@ object ThumbnailSerializer : KSerializer<String?> {
     }
 }
 
-
 @Serializable
 class MangaDto(
     val slug: String,
