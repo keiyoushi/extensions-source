@@ -4,11 +4,27 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.serializer
+
+object ThumbnailSerializer : JsonTransformingSerializer<String?>(serializer<String?>()) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        return when {
+            element is JsonNull -> JsonNull
+            element is JsonPrimitive && !element.isString -> JsonNull
+            else -> element
+        }
+    }
+}
 
 @Serializable
 class MangaDto(
     val slug: String,
     val title: String,
+    @Serializable(ThumbnailSerializer::class)
     val thumbnail: String? = null,
     val status: String? = null,
     val type: String? = null,
@@ -33,6 +49,7 @@ class MangaDto(
 class MangaDetailDto(
     val slug: String,
     val title: String,
+    @Serializable(ThumbnailSerializer::class)
     val thumbnail: String? = null,
     val synopsis: String? = null,
     val alternative: String? = null,
