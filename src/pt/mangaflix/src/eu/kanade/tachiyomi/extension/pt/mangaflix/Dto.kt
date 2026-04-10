@@ -21,7 +21,7 @@ class LatestResponseDto(
 
 @Serializable
 class SearchResponseDto(
-    val data: List<SearchMangaDto> = emptyList(),
+    val data: Data,
 )
 
 @Serializable
@@ -54,6 +54,11 @@ class MangaDto(
     val description: String? = null,
     val poster: PosterDto? = null,
     val genres: List<GenreDto> = emptyList(),
+)
+
+@Serializable
+class Data(
+    val works: List<SearchMangaDto> = emptyList(),
 )
 
 @Serializable
