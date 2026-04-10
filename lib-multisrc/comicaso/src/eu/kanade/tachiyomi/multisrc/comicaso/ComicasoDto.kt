@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.serializer
 
-object ThumbnailSerializer : JsonTransformingSerializer<String?>(serializer<String?>()) {
+object ThumbnailSerializer : JsonTransformingSerializer<String>(serializer<String>()) {
     override fun transformDeserialize(element: JsonElement): JsonElement = when {
         element is JsonNull -> JsonNull
         element is JsonPrimitive && !element.isString -> JsonNull
