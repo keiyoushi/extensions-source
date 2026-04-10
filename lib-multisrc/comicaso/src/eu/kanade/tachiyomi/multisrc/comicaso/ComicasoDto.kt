@@ -13,9 +13,9 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonPrimitive
 
-object ThumbnailSerializer : KSerializer<String?> {
+object SafeStringSerializer : KSerializer<String?> {
     override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("Thumbnail", PrimitiveKind.STRING)
+        PrimitiveSerialDescriptor("SafeString", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: String?) {
         if (value == null) {
@@ -26,11 +26,20 @@ object ThumbnailSerializer : KSerializer<String?> {
     }
 
     override fun deserialize(decoder: Decoder): String? {
-        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeString()
-        val element = jsonDecoder.decodeJsonElement()
-        return if (element is JsonPrimitive && element.isString) {
-            element.content
-        } else {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeString()
+        } catch (_: Exception) {
+            null
+        }
+
+        return try {
+            val element = jsonDecoder.decodeJsonElement()
+            if (element is JsonPrimitive && element.isString) {
+                element.content
+            } else {
+                null
+            }
+        } catch (_: Exception) {
             null
         }
     }
@@ -40,7 +49,7 @@ object ThumbnailSerializer : KSerializer<String?> {
 class MangaDto(
     val slug: String,
     val title: String,
-    @Serializable(ThumbnailSerializer::class)
+    @Serializable(SafeStringSerializer::class)
     val thumbnail: String? = null,
     val status: String? = null,
     val type: String? = null,
@@ -65,7 +74,7 @@ class MangaDto(
 class MangaDetailDto(
     val slug: String,
     val title: String,
-    @Serializable(ThumbnailSerializer::class)
+    @Serializable(SafeStringSerializer::class)
     val thumbnail: String? = null,
     val synopsis: String? = null,
     val alternative: String? = null,
