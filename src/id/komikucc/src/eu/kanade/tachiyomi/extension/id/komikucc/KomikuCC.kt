@@ -83,7 +83,7 @@ class KomikuCC : HttpSource() {
     // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.extractNextJs<MangaDetailsDto>()
+        val data = response.extractNextJs<MangaRscDto>()?.manga
             ?: throw Exception("Failed to parse manga details")
 
         return SManga.create().apply {
@@ -106,14 +106,14 @@ class KomikuCC : HttpSource() {
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.extractNextJs<MangaDetailsDto>()
+        val data = response.extractNextJs<MangaRscDto>()?.manga
             ?: return emptyList()
 
         return data.chapters.map {
             SChapter.create().apply {
                 name = it.title
                 url = "/${it.link}"
-                date_upload = it.created_at?.let { dateStr ->
+                date_upload = it.createdAt?.let { dateStr ->
                     dateFormat.tryParse(dateStr)
                 } ?: 0L
             }

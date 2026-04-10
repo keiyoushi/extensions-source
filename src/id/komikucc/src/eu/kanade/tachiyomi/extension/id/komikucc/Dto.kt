@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.komikucc
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -13,7 +14,8 @@ class MangaListDto(
 class ChapterDto(
     val title: String,
     val link: String,
-    val created_at: String? = null,
+    @SerialName("created_at")
+    val createdAt: String? = null,
 )
 
 @Serializable
@@ -36,4 +38,9 @@ class GenreDto(
 @Serializable
 class PageListDto(
     val images: List<String> = emptyList(),
+)
+
+@Serializable
+class MangaRscDto(
+    val manga: MangaDetailsDto,
 )
