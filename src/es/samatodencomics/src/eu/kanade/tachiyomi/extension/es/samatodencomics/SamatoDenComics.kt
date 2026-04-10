@@ -2,25 +2,21 @@ package eu.kanade.tachiyomi.extension.es.samatodencomics
 
 import android.text.Html
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.Source
-import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.URLEncoder
+import org.jsoup.Jsoup
 import java.time.OffsetDateTime
-
-class SamatoDenComicsFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(SamatoDenComics())
-}
 
 class SamatoDenComics : HttpSource() {
 
@@ -28,7 +24,7 @@ class SamatoDenComics : HttpSource() {
     override val baseUrl = "https://samatoden.blogspot.com"
     override val lang = "es"
     override val supportsLatest = true
-    override val versionId = 1
+    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -58,7 +54,7 @@ class SamatoDenComics : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val entry = parseSingleEntry(response.body.string())
-        val html = entry.optJSONObject("content")?.optString("\$t").orEmpty()
+        val html = entry.content?.text.orEmpty()
         val chapterKey = response.request.url.queryParameter(CHAPTER_KEY_PARAM).orEmpty()
         val pageUrls = parseChapterPageUrls(html, chapterKey)
 
@@ -73,64 +69,61 @@ class SamatoDenComics : HttpSource() {
 
     private fun feedUrl(page: Int, query: String = ""): String {
         val startIndex = ((page - 1) * PAGE_SIZE) + 1
-        val queryPart = if (query.isBlank()) "" else "&q=${query.urlEncode()}"
-        return "$baseUrl/feeds/posts/default/-/comics?alt=json&max-results=$PAGE_SIZE&start-index=$startIndex$queryPart"
+        return "$baseUrl/feeds/posts/default/-/comics"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("alt", "json")
+            .addQueryParameter("max-results", PAGE_SIZE.toString())
+            .addQueryParameter("start-index", startIndex.toString())
+            .apply {
+                if (query.isNotBlank()) addQueryParameter("q", query)
+            }
+            .build()
+            .toString()
     }
 
-    private fun parseFeedPage(json: String): MangasPage {
-        val root = JSONObject(json)
-        val feed = root.optJSONObject("feed") ?: return MangasPage(emptyList(), false)
-        val entries = feed.optJSONArray("entry") ?: JSONArray()
-        val mangaList = buildList(entries.length()) {
-            for (index in 0 until entries.length()) {
-                add(entryToManga(entries.getJSONObject(index)))
-            }
-        }
+    private fun parseFeedPage(payload: String): MangasPage {
+        val feed = json.decodeFromString(BloggerFeedDto.serializer(), payload).feed
+            ?: return MangasPage(emptyList(), false)
 
-        val total = feed.optJSONObject("openSearch\$totalResults")?.optString("\$t")?.toIntOrNull() ?: mangaList.size
-        val start = feed.optJSONObject("openSearch\$startIndex")?.optString("\$t")?.toIntOrNull() ?: 1
-        val perPage = feed.optJSONObject("openSearch\$itemsPerPage")?.optString("\$t")?.toIntOrNull() ?: mangaList.size
+        val mangaList = feed.entries.orEmpty().map(::entryToManga)
+
+        val total = feed.totalResults?.text?.toIntOrNull() ?: mangaList.size
+        val start = feed.startIndex?.text?.toIntOrNull() ?: 1
+        val perPage = feed.itemsPerPage?.text?.toIntOrNull() ?: mangaList.size
         val hasNextPage = (start + perPage - 1) < total
 
         return MangasPage(mangaList, hasNextPage)
     }
 
-    private fun parseSingleEntry(json: String): JSONObject {
-        val root = JSONObject(json)
-        root.optJSONObject("entry")?.let { return it }
-
-        val feed = root.optJSONObject("feed")
-        val entries = feed?.optJSONArray("entry")
-        if (entries != null && entries.length() > 0) {
-            return entries.getJSONObject(0)
-        }
-
-        error("No se encontro ninguna entrada de comic en la respuesta de Blogger")
+    private fun parseSingleEntry(payload: String): BloggerEntryDto {
+        val root = json.decodeFromString(BloggerFeedDto.serializer(), payload)
+        return root.entry ?: root.feed?.entries?.firstOrNull()
+            ?: error("No se encontro ninguna entrada de comic en la respuesta de Blogger")
     }
 
-    private fun entryToManga(entry: JSONObject): SManga {
-        val html = entry.optJSONObject("content")?.optString("\$t").orEmpty()
+    private fun entryToManga(entry: BloggerEntryDto): SManga {
+        val html = entry.content?.text.orEmpty()
         return SManga.create().apply {
             url = normalizePostFeedUrl(linkHref(entry, "self").orEmpty())
-            title = entry.optJSONObject("title")?.optString("\$t").orEmpty()
+            title = entry.title?.text.orEmpty()
             author = extractArtist(html)
             artist = extractArtist(html)
             description = extractArtist(html)
-            genre = extractCategories(entry).joinToString(", ").ifBlank { null }
+            genre = extractCategories(entry).joinToString().ifBlank { null }
             status = if (html.contains("En Progreso", ignoreCase = true) || html.contains("Ongoing", ignoreCase = true)) {
                 SManga.ONGOING
             } else {
                 SManga.COMPLETED
             }
             thumbnail_url = extractThumbnail(entry, html)
-            initialized = true
         }
     }
 
-    private fun entryToChapters(entry: JSONObject): List<SChapter> {
-        val html = entry.optJSONObject("content")?.optString("\$t").orEmpty()
-        val postTitle = entry.optJSONObject("title")?.optString("\$t").orEmpty()
-        val publishedAt = parseDateMillis(entry.optJSONObject("published")?.optString("\$t"))
+    private fun entryToChapters(entry: BloggerEntryDto): List<SChapter> {
+        val html = entry.content?.text.orEmpty()
+        val postTitle = entry.title?.text.orEmpty()
+        val publishedAt = parseDateMillis(entry.published?.text)
         val basePostUrl = normalizePostFeedUrl(linkHref(entry, "self").orEmpty())
 
         val generatedChapterTitles = extractChapterTitles(html)
@@ -139,9 +132,6 @@ class SamatoDenComics : HttpSource() {
             val title = match.groupValues[2].ifBlank {
                 generatedChapterTitles[key] ?: "Episodio $key"
             }
-            val base = match.groupValues[3]
-            val start = match.groupValues[4].toInt()
-            val end = match.groupValues[5].toInt()
 
             createChapter(
                 name = title,
@@ -151,18 +141,11 @@ class SamatoDenComics : HttpSource() {
                 chapterNumber = key.toFloatOrNull() ?: 0f,
             )
         }.toList()
-        if (generatedChapters.isNotEmpty()) {
-            return generatedChapters
-        }
+        if (generatedChapters.isNotEmpty()) return generatedChapters
 
         val arrayChapterTitles = extractChapterTitles(html)
         val arrayChapters = ARRAY_CHAPTER_REGEX.findAll(html).map { match ->
             val key = match.groupValues[1]
-            val base = match.groupValues[2]
-            val start = match.groupValues[3].toInt()
-            val end = match.groupValues[4].toInt()
-            val extension = if (base.endsWith("_")) ".jpg" else inferExtensionFromBase(base)
-
             createChapter(
                 name = arrayChapterTitles[key] ?: "Episodio $key",
                 chapterKey = key,
@@ -171,9 +154,7 @@ class SamatoDenComics : HttpSource() {
                 chapterNumber = key.toFloatOrNull() ?: 0f,
             )
         }.toList()
-        if (arrayChapters.isNotEmpty()) {
-            return arrayChapters
-        }
+        if (arrayChapters.isNotEmpty()) return arrayChapters
 
         val singlePages = parseSinglePageList(html)
         return if (singlePages.isNotEmpty()) {
@@ -204,13 +185,11 @@ class SamatoDenComics : HttpSource() {
 
         val arrayChapter = ARRAY_CHAPTER_REGEX.findAll(html).firstOrNull { it.groupValues[1] == chapterKey }
         if (arrayChapter != null) {
-            val base = arrayChapter.groupValues[2]
-            val extension = if (base.endsWith("_")) ".jpg" else inferExtensionFromBase(base)
             return buildSequencePages(
-                base = base,
+                base = arrayChapter.groupValues[2],
                 start = arrayChapter.groupValues[3].toInt(),
                 end = arrayChapter.groupValues[4].toInt(),
-                extension = extension,
+                extension = inferExtensionFromBase(arrayChapter.groupValues[2]),
             )
         }
 
@@ -248,77 +227,62 @@ class SamatoDenComics : HttpSource() {
         uploadedAt: Long,
         chapterNumber: Float,
     ): SChapter = SChapter.create().apply {
-        url = "$postFeedUrl&$CHAPTER_KEY_PARAM=${chapterKey.urlEncode()}"
+        url = postFeedUrl.toHttpUrl().newBuilder()
+            .addQueryParameter(CHAPTER_KEY_PARAM, chapterKey)
+            .build()
+            .toString()
         this.name = name
         date_upload = uploadedAt
         this.chapter_number = chapterNumber
-        scanlator = null
     }
 
     private fun buildSequencePages(base: String, start: Int, end: Int, extension: String): List<String> = (start..end).map { "$base$it$extension" }
 
-    private fun inferExtensionFromBase(base: String): String = when {
-        base.contains(".webp") -> ".webp"
-        base.contains(".png") -> ".png"
-        else -> ".jpg"
-    }
+    private fun inferExtensionFromBase(base: String): String = base.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.let { ".$it" } ?: ".jpg"
 
     private fun extractChapterTitles(html: String): Map<String, String> = OPTION_TITLE_REGEX.findAll(html).associate { match ->
         match.groupValues[1] to cleanHtml(match.groupValues[2])
     }
 
     private fun extractArtist(html: String): String? {
-        ARTIST_REGEX.find(html)?.let { return cleanHtml(it.groupValues[1]) }
-        ARTISTS_REGEX.find(html)?.let { return cleanHtml(it.groupValues[1]) }
-        return null
+        val doc = Jsoup.parseBodyFragment(html)
+        val artistBlock = doc.selectFirst("#artist-tags") ?: return null
+        artistBlock.select("strong").remove()
+        return artistBlock.text().trim().trimStart(':').trim().ifBlank { null }
     }
 
-    private fun extractThumbnail(entry: JSONObject, html: String): String? {
+    private fun extractThumbnail(entry: BloggerEntryDto, html: String): String? {
         val inlineImage = HIDDEN_IMAGE_REGEX.find(html)?.groupValues?.getOrNull(1)
-        if (!inlineImage.isNullOrBlank()) {
-            return inlineImage
-        }
+        if (!inlineImage.isNullOrBlank()) return inlineImage
 
-        val mediaThumb = entry.optJSONObject("media\$thumbnail")?.optString("url")
-        return mediaThumb?.substringBefore("=s72")
+        return entry.mediaThumbnail?.url?.substringBefore("=s72")
     }
 
-    private fun extractCategories(entry: JSONObject): List<String> {
-        val categories = entry.optJSONArray("category") ?: return emptyList()
-        return buildList(categories.length()) {
-            for (index in 0 until categories.length()) {
-                categories.optJSONObject(index)?.optString("term")?.takeIf { it.isNotBlank() }?.let(::add)
-            }
-        }
-    }
+    private fun extractCategories(entry: BloggerEntryDto): List<String> = entry.categories.orEmpty().mapNotNull { it.term?.takeIf(String::isNotBlank) }
 
-    private fun linkHref(entry: JSONObject, rel: String): String? {
-        val links = entry.optJSONArray("link") ?: return null
-        for (index in 0 until links.length()) {
-            val link = links.optJSONObject(index) ?: continue
-            if (link.optString("rel") == rel) {
-                return link.optString("href")
-            }
-        }
-        return null
-    }
+    private fun linkHref(entry: BloggerEntryDto, rel: String): String? = entry.links.orEmpty().firstOrNull { it.rel == rel }?.href
 
-    private fun normalizePostFeedUrl(url: String): String = if (url.contains("alt=json")) url else "$url${if (url.contains("?")) "&" else "?"}alt=json"
+    private fun normalizePostFeedUrl(url: String): String {
+        val parsed = url.toHttpUrlOrNull() ?: return url
+        if (parsed.queryParameter("alt") == "json") return parsed.toString()
+        return parsed.newBuilder()
+            .addQueryParameter("alt", "json")
+            .build()
+            .toString()
+    }
 
     private fun parseDateMillis(value: String?): Long = value?.takeIf { it.isNotBlank() }?.let { OffsetDateTime.parse(it).toInstant().toEpochMilli() } ?: 0L
 
     private fun cleanHtml(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY).toString().trim()
 
-    private fun String.urlEncode(): String = URLEncoder.encode(this, Charsets.UTF_8.name())
-
     companion object {
+        private val json = Json { ignoreUnknownKeys = true }
+
         private const val PAGE_SIZE = 30
         private const val CHAPTER_KEY_PARAM = "samatoChapter"
         private const val SINGLE_CHAPTER_KEY = "single"
 
         private val HIDDEN_IMAGE_REGEX = Regex("""<img[^>]+src="([^"]+)"""", setOf(RegexOption.IGNORE_CASE))
-        private val ARTIST_REGEX = Regex("""<strong>\s*Artista:\s*</strong>\s*([^<]+)""", setOf(RegexOption.IGNORE_CASE))
-        private val ARTISTS_REGEX = Regex("""<strong>\s*Artists:\s*</strong>\s*([^<]+)""", setOf(RegexOption.IGNORE_CASE))
         private val OPTION_TITLE_REGEX = Regex("""<option\s+value="(\d+)">([^<]+)</option>""", setOf(RegexOption.IGNORE_CASE))
         private val GENERATED_CHAPTER_REGEX = Regex(
             """(\d+)\s*:\s*\{\s*title:\s*"([^"]+)"\s*,\s*pages:\s*generatePages\("([^"]+)",\s*(\d+),\s*(\d+)\)""",

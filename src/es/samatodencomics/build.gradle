@@ -1,6 +1,6 @@
 ext {
     extName = "Samato's Den: Comics"
-    extClass = '.SamatoDenComicsFactory'
+    extClass = '.SamatoDenComics'
     extVersionCode = 1
     isNsfw = true
 }
