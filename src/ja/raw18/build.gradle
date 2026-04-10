@@ -2,8 +2,8 @@ ext {
     extName = 'Raw18'
     extClass = '.Raw18'
     themePkg = 'wpcomics'
-    baseUrl = 'https://raw18.rest'
-    overrideVersionCode = 2
+    baseUrl = 'https://raw18.tel'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
