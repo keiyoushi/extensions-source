@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.yupmanga
 
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -148,35 +149,6 @@ class Yupmanga : HttpSource() {
         }
     }
 
-    private val arrayRegex = Regex("""\[(.*?)\]""")
-    private val keyRegex = Regex("""fromCharCode\((.*?)\)""")
-
-    fun handleChallenge(js: String): String? {
-        val arr = arrayRegex.find(js)
-            ?.groupValues?.get(1)
-            ?.split(",")
-            ?.mapNotNull { it.trim().toIntOrNull() }
-            ?.toIntArray()
-            ?: return null
-
-        val key = keyRegex.find(js)
-            ?.groupValues?.get(1)
-            ?.split(",")
-            ?.mapNotNull { it.trim().toIntOrNull()?.toChar() }
-            ?.joinToString("")
-            ?: return null
-
-        return solveChallenge(arr, key)
-    }
-
-    fun solveChallenge(arr: IntArray, key: String): String {
-        var result = 0
-        for (i in arr.indices) {
-            result = (result xor arr[i]) + key[i % key.length].code
-        }
-        return result.toString()
-    }
-
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
         val chapterId = chapterUrl.queryParameter("chapter")
@@ -184,8 +156,14 @@ class Yupmanga : HttpSource() {
 
         val chapterTokenUrl = chapterUrl.newBuilder().apply {
             if (challenge.success) {
-                addQueryParameter("challenge_id", challenge.challenge_id)
-                addQueryParameter("answer", handleChallenge(challenge.challenge_js))
+                val answer = QuickJs.create().use {
+                    it.evaluate("(function(){ ${challenge.challenge_js} })()")?.toString()
+                }
+
+                if (answer != null) {
+                    addQueryParameter("challenge_id", challenge.challenge_id)
+                    addQueryParameter("answer", answer)
+                }
             }
         }.build()
 
