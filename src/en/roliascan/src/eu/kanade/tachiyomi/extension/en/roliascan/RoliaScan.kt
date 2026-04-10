@@ -1,292 +1,196 @@
 package eu.kanade.tachiyomi.extension.en.roliascan
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.multisrc.mangataro.BrowseManga
+import eu.kanade.tachiyomi.multisrc.mangataro.MangaTaro
+import eu.kanade.tachiyomi.multisrc.mangataro.SearchWithFilters
+import eu.kanade.tachiyomi.multisrc.mangataro.SortFilter
+import eu.kanade.tachiyomi.multisrc.mangataro.StatusFilter
+import eu.kanade.tachiyomi.multisrc.mangataro.TagFilter
+import eu.kanade.tachiyomi.multisrc.mangataro.TagFilterMatch
+import eu.kanade.tachiyomi.multisrc.mangataro.TypeFilter
+import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.Locale.getDefault
 
-// Theme: AnimaCEWP
-class RoliaScan : ParsedHttpSource() {
+class RoliaScan : MangaTaro("Rolia Scan", "https://roliascans.org", "en") {
 
-    override val name = "Rolia Scan"
-
-    override val baseUrl = "https://roliascan.com"
-
-    override val lang = "en"
-
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    // ======================== Popular ======================================
-
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/wp-content/themes/animacewp/most_viewed_series.json", headers)
-
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<PopularWrapper>()
-            .mangas.map(MangaDto::toSManga)
-            .filter { it.title.isNotEmpty() }
-
-        return MangasPage(mangas, hasNextPage = false)
+    // ========================== Search =========================
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            return super.fetchSearchManga(page, query, filters)
+        }
+        return fetchMultiplePages(page) { searchMangaRequest(it, query, filters) }
     }
 
-    // ======================== Latest =======================================
+    // ========================== Latest =========================
+    // RoliaScan's API returns chapter-level entries with
+    // blank URLs mixed in with actual manga entries.
+    // Aggregate results from multiple API pages so
+    // the user always gets a full page of results.
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
 
-    private val latestFilter = FilterList(
-        SelectionList("", listOf(Option("", "update_oldest", query = "_sort_posts"))),
+    // ========================= Filters =========================
+    override fun getFilterList() = FilterList(
+        SearchWithFilters(),
+        Filter.Header("If unchecked, all filters will be ignored with search query"),
+        Filter.Header("But will give more relevant results"),
+        Filter.Separator(),
+        SortFilter(),
+        TypeFilter(),
+        StatusFilter(),
+        YearFilter(),
+        TagFilter(roliaTags),
+        TagFilterMatch(),
     )
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilter)
+    // ========================= Helpers =========================
+    private fun fetchMultiplePages(
+        page: Int,
+        requestFactory: (apiPage: Int) -> okhttp3.Request,
+    ): Observable<MangasPage> {
+        val startApiPage = (page - 1) * API_PAGES_PER_PAGE + 1
+        val endApiPage = startApiPage + API_PAGES_PER_PAGE - 1
 
-    override fun latestUpdatesSelector() = searchMangaSelector()
+        return Observable.fromCallable {
+            val allMangas = mutableListOf<SManga>()
+            val seenIds = mutableSetOf<String>()
+            var lastRawSize = 0
 
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+            for (apiPage in startApiPage..endApiPage) {
+                val request = requestFactory(apiPage)
+                val response = client.newCall(request).execute()
+                val data = response.parseAs<List<BrowseManga>>()
+                lastRawSize = data.size
 
-    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
-
-    // ======================== Search =======================================
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
-
-        if (query.isNotBlank()) {
-            url.addQueryParameter("_post_type_search_box", query)
-        }
-
-        filters.forEach { filter ->
-            when (filter) {
-                is SelectionList -> {
-                    val selected = filter.selected()
-                    if (selected.value.isBlank()) {
-                        return@forEach
+                data.filter { it.type != "Novel" && it.url.isNotBlank() }
+                    .forEach {
+                        if (seenIds.add(it.id)) {
+                            allMangas.add(browseMangaToSManga(it))
+                        }
                     }
-                    url.addQueryParameter(selected.query, selected.value)
-                }
 
-                else -> {}
+                if (data.size < 24) break
             }
-        }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(PREFIX_SEARCH)) {
-            val slug = query.substringAfter(PREFIX_SEARCH)
-            return fetchMangaDetails(SManga.create().apply { url = "/manga/$slug" })
-                .map { manga -> MangasPage(listOf(manga), false) }
-        }
-        return super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun searchMangaSelector() = "div.post"
-
-    override fun searchMangaNextPageSelector() = null
-
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        element.selectFirst("h6 a")!!.let {
-            title = it.text()
-            setUrlWithoutDomain(it.absUrl("href"))
-        }
-    }
-
-    // ======================== Details ======================================
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document
-            .selectFirst("div.post-type-single-column img.wp-post-image")
-            ?.absUrl("src")
-        description = document
-            .select("div.card-body:has(h5:contains(Synopsis)) p")
-            .filter { p -> p.text().isNotBlank() }
-            .joinToString("\n") { it.text() }
-
-        genre = document.select("a[href*=genres]")
-            .joinToString { it.text() }
-
-        artist = document.selectFirst("tr:has(th:contains(Artist)) > td")?.text()
-
-        document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
-            status = when {
-                it.contains("publishing", true) -> SManga.ONGOING
-                it.contains("ongoing", true) -> SManga.ONGOING
-                it.contains("hiatus", true) -> SManga.ON_HIATUS
-                it.contains("completed", true) -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-        }
-        setUrlWithoutDomain(document.location())
-    }
-
-    // ======================== Chapters =====================================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapters = mutableListOf<SChapter>()
-
-        var page = 1
-
-        do {
-            val document = client.newCall(chapterListRequest(page++, manga)).execute().asJsoup()
-            chapters += document
-                .select(chapterListSelector())
-                .map(::chapterFromElement)
-        } while (document.selectFirst(chapterListNextPageSelector) != null)
-
-        return Observable.just(chapters)
-    }
-
-    private fun chapterListRequest(page: Int, manga: SManga): Request {
-        val url = super.chapterListRequest(manga).url.newBuilder()
-            .addEncodedPathSegments("chapterlist/")
-            .addQueryParameter("chap_page", page.toString())
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun chapterListSelector() = ".chapter-list-row:has(.chapter-cell)"
-
-    private val chapterListNextPageSelector = "a[class=page-link]:contains(Next)"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        with(element.selectFirst("a.seenchapter")!!) {
-            name = text()
-            setUrlWithoutDomain(absUrl("href"))
-        }
-        element.selectFirst(".chapter-date")?.text()?.let {
-            date_upload = DATE_FORMAT.tryParse(it)
-        }
-    }
-
-    // ======================== Pages ========================================
-
-    override fun pageListParse(document: Document): List<Page> = document.select(".manga-child-the-content img").mapIndexed { index, element ->
-        Page(index, imageUrl = element.absUrl("src"))
-    }
-
-    override fun imageUrlParse(document: Document) = ""
-
-    // ======================== Filters ======================================
-
-    private var optionList = emptyList<Pair<String, List<Option>>>()
-
-    private val scope = CoroutineScope(Dispatchers.IO)
-
-    override fun getFilterList(): FilterList {
-        if (optionList.isEmpty()) {
-            scope.launch { getFilters() }
-        }
-
-        val filters = mutableListOf<Filter<*>>()
-
-        filters += if (optionList.isNotEmpty()) {
-            optionList.flatMap {
-                listOf(
-                    SelectionList(it.first, it.second),
-                )
-            }
-        } else {
-            listOf(
-                Filter.Separator(),
-                Filter.Header("Press 'Reset' to attempt to show the genres, sort and years filters"),
+            MangasPage(
+                mangas = allMangas,
+                hasNextPage = lastRawSize == 24,
             )
         }
-        return FilterList(filters)
-    }
-
-    private fun getFilters() {
-        try {
-            parseFilters(client.newCall(searchMangaRequest(0, "", FilterList())).execute())
-        } catch (_: Exception) { }
-    }
-
-    private fun parseFilters(response: Response) {
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-
-        val script = document.selectFirst("script:containsData(FWP_JSON)")?.data()
-            ?: return
-
-        val queries = listOf(
-            "Type" to "mtype",
-            "Genres" to "genres",
-            "Status" to "status",
-            "Sort" to "sort_posts",
-            "Year" to "movies_series_year",
-            "Publisher" to "movies_series_year",
-        )
-
-        optionList = queries.map {
-            it.first to getOptionList(buildRegex(it.second), script)
-        }.filter { it.second.isNotEmpty() }
-    }
-
-    private fun getOptionList(pattern: Regex, content: String, cssQuery: String = "option"): List<Option> {
-        val query = pattern.find(content)?.groups?.get(1)?.value ?: return emptyList()
-        return content.getDocumentFragmentFilter(pattern)
-            ?.select(cssQuery)
-            ?.map { element ->
-                Option(
-                    name = element.text().replace(SUFFIX_REGEX, "")
-                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
-                    value = element.attr("value"),
-                    query = "_$query",
-                )
-            } ?: emptyList()
-    }
-
-    private fun String.getDocumentFragmentFilter(pattern: Regex): Document? = pattern.find(this)?.groups?.get(2)?.value?.let {
-        val fragment = json.decodeFromString<String>(it)
-        Jsoup.parseBodyFragment(fragment)
-    }
-
-    private fun buildRegex(field: String) = """"($field)":("<[^,]+)""".toRegex()
-
-    private data class Option(val name: String = "", val value: String = "", val query: String = "")
-
-    private open class SelectionList(displayName: String, private val vals: List<Option>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.name }.toTypedArray(), state) {
-        fun selected() = vals[state]
     }
 
     companion object {
-        private val SUFFIX_REGEX = """\(\d+\)""".toRegex()
-        private val DATE_FORMAT = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
-        const val PREFIX_SEARCH = "id:"
+        private const val API_PAGES_PER_PAGE = 5
     }
 }
+
+private val roliaTags = listOf(
+    "Action" to 5,
+    "Adaptation" to 49,
+    "Adapted to Manhua" to 717,
+    "Adult Cast" to 119,
+    "Adventure" to 19,
+    "Aliens" to 803,
+    "Animals" to 240,
+    "Award Winning" to 8,
+    "Childcare" to 1146,
+    "Combat Sports" to 358,
+    "Comedy" to 61,
+    "Cooking" to 266,
+    "Crime" to 248,
+    "Crossdressing" to 724,
+    "Delinquents" to 228,
+    "Demons" to 162,
+    "Detective" to 150,
+    "Drama" to 26,
+    "Ecchi" to 117,
+    "Erotica" to 202,
+    "Fantasy" to 17,
+    "Full Color" to 40,
+    "Gag Humor" to 1068,
+    "Game" to 1130,
+    "Gender Bender" to 1190,
+    "Ghosts" to 215,
+    "Gore" to 187,
+    "Gourmet" to 89,
+    "Harem" to 47,
+    "Historical" to 66,
+    "Horror" to 67,
+    "Isekai" to 55,
+    "Josei" to 1062,
+    "Light Novel" to 98,
+    "Long Strip" to 41,
+    "Love Status Quo" to 541,
+    "Mafia" to 356,
+    "Magic" to 45,
+    "Magical Sex Shift" to 551,
+    "Manga" to 97,
+    "Manhua" to 35,
+    "Manhwa" to 18,
+    "Martial Arts" to 56,
+    "Mature" to 404,
+    "Mecha" to 396,
+    "Medical" to 244,
+    "Military" to 131,
+    "Monster Girls" to 231,
+    "Monsters" to 46,
+    "Music" to 694,
+    "Mystery" to 34,
+    "Mythology" to 110,
+    "Ninja" to 163,
+    "Office Workers" to 505,
+    "Official Colored" to 866,
+    "Organized Crime" to 134,
+    "Otaku Culture" to 570,
+    "Parody" to 605,
+    "Philosophical" to 912,
+    "Post-Apocalyptic" to 241,
+    "Psychological" to 149,
+    "Regression" to 1131,
+    "Reincarnation" to 29,
+    "Revenge" to 964,
+    "Reverse Harem" to 1085,
+    "Romance" to 2,
+    "Romantic Subtext" to 486,
+    "School" to 14,
+    "School Life" to 27,
+    "Sci-Fi" to 33,
+    "Seinen" to 105,
+    "Self-Published" to 577,
+    "Sexual Violence" to 536,
+    "Shoujo" to 1071,
+    "Shounen" to 11,
+    "Showbiz" to 429,
+    "Slice of Life" to 93,
+    "Smut" to 742,
+    "Space" to 206,
+    "Sports" to 9,
+    "Streaming" to 1132,
+    "Suggestive" to 1116,
+    "Super Power" to 6,
+    "Superhero" to 865,
+    "Supernatural" to 65,
+    "Survival" to 236,
+    "Suspense" to 287,
+    "Team Sports" to 10,
+    "Thriller" to 184,
+    "Time Travel" to 37,
+    "Tragedy" to 316,
+    "Transmigiration" to 1133,
+    "Urban Fantasy" to 120,
+    "Vampire" to 209,
+    "Video Game" to 277,
+    "Video Games" to 616,
+    "Villainess" to 355,
+    "Virtual Reality" to 617,
+    "Web Comic" to 48,
+    "Webtoon" to 350,
+    "Workplace" to 138,
+    "Wuxia" to 68,
+    "Xianxia" to 718,
+    "Zombies" to 1115,
+)

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.mangataro
+package eu.kanade.tachiyomi.multisrc.mangataro
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -59,10 +59,10 @@ class YearFilter :
         },
     )
 
-class TagFilter :
+class TagFilter(options: List<Pair<String, Int>> = mangaTaroTags) :
     CheckBoxGroup<Int>(
         name = "Tags",
-        options = tags,
+        options = options,
     )
 
 class TagFilterMatch :
@@ -81,11 +81,12 @@ class SortFilter(
     values = sort.map { it.first }.toTypedArray(),
     state = state,
 ) {
-    private val sortDirection get() = if (state?.ascending == true) {
-        "asc"
-    } else {
-        "desc"
-    }
+    private val sortDirection
+        get() = if (state?.ascending == true) {
+            "asc"
+        } else {
+            "desc"
+        }
     val selected get() = "${sort[state?.index ?: 0].second}_$sortDirection"
 
     companion object {
@@ -100,7 +101,7 @@ class SortFilter(
     }
 }
 
-private val tags = listOf(
+val mangaTaroTags = listOf(
     "4-Koma" to 2094,
     "Abandoned Children" to 1050,
     "Ability Steal" to 2386,

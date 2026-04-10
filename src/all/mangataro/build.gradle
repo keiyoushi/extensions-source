@@ -1,7 +1,9 @@
 ext {
     extName = 'MangaTaro'
     extClass = '.MangaTaroFactory'
-    extVersionCode = 10
+    themePkg = 'mangataro'
+    overrideVersionCode = 10
+    baseUrl = 'https://mangataro.org'
     isNsfw = false
 }
 

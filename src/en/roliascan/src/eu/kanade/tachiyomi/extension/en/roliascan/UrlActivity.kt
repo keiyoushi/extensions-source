@@ -7,18 +7,16 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class RoliaScanUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val item = pathSegments[1]
+        if (intent?.data != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${RoliaScan.PREFIX_SEARCH}$item")
+                putExtra("query", intent.data.toString())
                 putExtra("filter", packageName)
             }
 
