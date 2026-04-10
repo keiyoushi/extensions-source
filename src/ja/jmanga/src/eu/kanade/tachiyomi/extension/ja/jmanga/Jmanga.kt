@@ -13,10 +13,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
 class Jmanga :
-    MangaReader("Jmanga", "https://jmanga.codes", "ja"),
+    MangaReader("Jmanga", "https://jmanga.rest", "ja"),
     ConfigurableSource {
 
-    private val defaultBaseUrl = "https://jmanga.codes"
+    private val defaultBaseUrl = "https://jmanga.rest"
 
     private var cachedBaseUrl: String = ""
     private val SharedPreferences.prefBaseUrl: String get() {
@@ -59,6 +59,7 @@ class Jmanga :
                 addQueryParameter("q", query)
             } else {
                 addPathSegment("filter")
+                addPathSegment("")
                 val filterList = filters.ifEmpty { getFilterList() }
                 filterList.filterIsInstance<MangaReader.UriFilter>().forEach {
                     it.addToUri(this)

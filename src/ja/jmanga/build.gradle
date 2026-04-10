@@ -1,9 +1,9 @@
 ext {
     extName = 'Jmanga'
     extClass = '.Jmanga'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
     themePkg = "mangareader"
-    baseUrl = "https://jmanga.codes"
+    baseUrl = "https://jmanga.rest"
 }
 apply from: "$rootDir/common.gradle"
