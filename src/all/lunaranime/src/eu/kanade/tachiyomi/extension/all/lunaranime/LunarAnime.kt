@@ -9,8 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.lib.cryptoaes.CryptoAES
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,6 +45,8 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    private val crypto = LunarDecryptor(client, API_URL)
 
     // ============================== Popular ===============================
 
@@ -184,31 +184,14 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used.")
 
     // =============================== Pages ================================
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val pageUrl = baseUrl + chapter.url.substringBefore("?")
-        val pageRequest = GET(pageUrl, headers)
-        val secretKey = client.newCall(pageRequest).execute()
-            .extractNextJs<SecretKeyDto>()?.secretKey
-            ?: return@fromCallable emptyList()
+        val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
+        val language = chapterUrl.queryParameter("lang") ?: "en"
+        val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
-        val url = (API_URL + "/api" + chapter.url).toHttpUrl()
-        val request = GET(url.toString(), headers)
-        val result = client.newCall(request).execute().parseAs<LunarPageListResponse>()
-
-        val images = result.data?.let { data ->
-            val sessionData = data.sessionData
-            if (!sessionData.isNullOrBlank()) {
-                val key = secretKey.sha256()
-                val iv = ByteArray(16) { 0 }
-                val decrypted = CryptoAES.decrypt(sessionData, key, iv)
-                decrypted.parseAs<LunarPageListDecrypted>().data.images
-            } else {
-                data.images
-            }
-        } ?: emptyList()
-
-        images.mapIndexed { index, imageUrl ->
+        // I see decryption is always required now
+        val decryptedImages = crypto.decryptChapterImages(chapterUrl.toString(), slug, chapterNumber, language)
+        decryptedImages.mapIndexed { index, imageUrl ->
             Page(index, chapter.url, imageUrl)
         }
     }
