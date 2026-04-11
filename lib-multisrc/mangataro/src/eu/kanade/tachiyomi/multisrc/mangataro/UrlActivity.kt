@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.roliascan
+package eu.kanade.tachiyomi.multisrc.mangataro
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -8,12 +8,11 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class UrlActivity : Activity() {
-
-    private val tag = javaClass.simpleName
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent?.data != null) {
+        val pathSegments = intent?.data?.pathSegments
+
+        if (pathSegments != null && pathSegments.size >= 1) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", intent.data.toString())
@@ -23,10 +22,8 @@ class UrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e(tag, e.toString())
+                Log.e("MangaTaro", "Unable to launch activity", e)
             }
-        } else {
-            Log.e(tag, "could not parse uri from intent $intent")
         }
 
         finish()

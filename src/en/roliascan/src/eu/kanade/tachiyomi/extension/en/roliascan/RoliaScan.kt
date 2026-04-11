@@ -31,8 +31,7 @@ class RoliaScan : MangaTaro("Rolia Scan", "https://roliascan.com", "en") {
     // blank URLs mixed in with actual manga entries.
     // Aggregate results from multiple API pages so
     // the user always gets a full page of results.
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
 
     // ========================= Filters =========================
     override fun getFilterList() = FilterList(
