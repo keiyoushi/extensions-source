@@ -65,7 +65,8 @@ class ReadResponse(
 
 @Serializable
 class PageDto(
-    val pageNumber: Int,
+    val pageNumber: Int? = null,
+    val imageUrl: String? = null,
 )
 
 @Serializable

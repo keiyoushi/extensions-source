@@ -2,13 +2,54 @@ package eu.kanade.tachiyomi.multisrc.comicaso
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+
+object SafeStringSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("SafeString", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeString(value)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return try {
+            decoder.decodeString()
+        } catch (_: Exception) {
+            null
+        }
+
+        return try {
+            val element = jsonDecoder.decodeJsonElement()
+            if (element is JsonPrimitive && element.isString) {
+                element.content
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
 
 @Serializable
 class MangaDto(
     val slug: String,
     val title: String,
+    @Serializable(SafeStringSerializer::class)
     val thumbnail: String? = null,
     val status: String? = null,
     val type: String? = null,
@@ -33,6 +74,7 @@ class MangaDto(
 class MangaDetailDto(
     val slug: String,
     val title: String,
+    @Serializable(SafeStringSerializer::class)
     val thumbnail: String? = null,
     val synopsis: String? = null,
     val alternative: String? = null,
