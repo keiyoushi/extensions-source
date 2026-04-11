@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.fablescans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class FableScans :
     MangaThemesia(
