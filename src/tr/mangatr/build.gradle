@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaTR'
     themePkg = 'fmreader'
     baseUrl = 'https://manga-tr.com'
-    overrideVersionCode = 8
+    overrideVersionCode = 9
     isNsfw = true
 }
 
