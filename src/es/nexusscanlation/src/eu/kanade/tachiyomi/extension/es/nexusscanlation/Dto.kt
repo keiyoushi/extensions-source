@@ -44,6 +44,7 @@ class SeriesDto(
 @Serializable
 class NameDto(
     val nombre: String = "",
+    val rol: String? = null,
 )
 
 @Serializable

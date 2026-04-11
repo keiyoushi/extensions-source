@@ -31,7 +31,6 @@ class Nexusscanlation : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String {
-        if ('/' !in chapter.url) return baseUrl
         val (seriesSlug, chapterSlug) = chapter.url.split('/', limit = 2)
         return "$baseUrl/series/$seriesSlug/chapter/$chapterSlug"
     }
@@ -97,20 +96,18 @@ class Nexusscanlation : HttpSource() {
         val seriesSlug = payload.serie.slug
 
         return payload.capitulos.orEmpty()
-            .asSequence()
-            .mapNotNull { chapterToModel(seriesSlug, it) }
+            .map { chapterToModel(seriesSlug, it) }
             .toList()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val pieces = chapter.url.split('/', limit = 2)
-        require(pieces.size == 2) { "Invalid chapter url" }
+        val (seriesSlug, chapterSlug) = chapter.url.split('/', limit = 2)
 
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addPathSegment("series")
-            .addPathSegment(pieces[0])
+            .addPathSegment(seriesSlug)
             .addPathSegment("capitulos")
-            .addPathSegment(pieces[1])
+            .addPathSegment(chapterSlug)
             .build()
 
         return GET(url, headers)
@@ -119,8 +116,6 @@ class Nexusscanlation : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<ChapterPagesPayloadDto>()
         return payload.data?.paginas.orEmpty()
-            .asSequence()
-            .filter { it.url.isNotBlank() }
             .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
             .toList()
     }
@@ -134,9 +129,7 @@ class Nexusscanlation : HttpSource() {
         }
     }
 
-    private fun chapterToModel(seriesSlug: String, chapter: ChapterEntryDto): SChapter? {
-        if (chapter.slug.isBlank()) return null
-
+    private fun chapterToModel(seriesSlug: String, chapter: ChapterEntryDto): SChapter {
         val chapterNumber = chapter.numero.toString().removeSuffix(".0")
 
         return SChapter.create().apply {
@@ -163,10 +156,23 @@ class Nexusscanlation : HttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        author = series.autores
-            ?.mapNotNull { it.nombre.takeIf { name -> name.isNotBlank() } }
-            ?.joinToString()
-        artist = author
+        val credits = series.autores.orEmpty().mapNotNull { credit ->
+            credit.nombre.takeIf { it.isNotBlank() }?.trim()?.let { it to credit.rol?.lowercase(Locale.ROOT) }
+        }
+
+        author = credits
+            .filter { (_, role) -> role != "artista" }
+            .map { (name) -> name }
+            .distinct()
+            .joinToString()
+            .ifBlank { null }
+
+        artist = credits
+            .filter { (_, role) -> role == "artista" }
+            .map { (name) -> name }
+            .distinct()
+            .joinToString()
+            .ifBlank { author }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
