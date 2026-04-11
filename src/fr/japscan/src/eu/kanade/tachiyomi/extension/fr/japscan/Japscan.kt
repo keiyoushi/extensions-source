@@ -15,7 +15,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -70,10 +70,8 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    val maxImageRequests = 10
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(internalBaseUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost("https://c4.japscan.foo/".toHttpUrl(), maxImageRequests, 2)
+        .rateLimit(1, 2)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
@@ -236,7 +234,7 @@ class Japscan :
 
     override fun chapterFromElement(element: Element): SChapter {
         // Only search for a tag with any attribute containing manga/manhua/manhwa
-        val urlPairs = element.getElementsByTag("span")
+        val urlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
             .mapNotNull { el ->
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
@@ -394,13 +392,9 @@ class Japscan :
                                 const utf8 = decodeURIComponent(
                                   Array.from(bin, c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
                                 );
+                                if(!utf8.includes(location.pathname.replaceAll("/", "\\/"))) return null;
                                 const parsed = JSON.parse(utf8);
-                                if (parsed && typeof parsed === 'object') {
-                                  const keys = Object.keys(parsed);
-                                  const required = ['id','number','amount','user_token','uri','mangaSlug'];
-                                  const hasAll = required.every(k => keys.includes(k));
-                                  if (hasAll) return parsed;
-                                }
+                                return parsed
                               } catch (e) {
                                 return null;
                               }
@@ -447,8 +441,32 @@ class Japscan :
                             }
 
                             function create(parsed) {
-                                let result = findFirstArray(parsed)
-                                window.$$interfaceName.passPayload(JSON.stringify(result), window.__rc.p, window.__rc.v, parsed.pi.toString());
+                                let arr = findFirstArray(parsed)
+                                const arrLen = arr.length;
+                                const chapterMatch = location.pathname.match(/\/(\d+)(?:\/|$)/);
+                                const chapterNum = chapterMatch ? Number(chapterMatch[1]) : null;
+                                let candidate = null;
+                                (function visit(obj) {
+                                    if (candidate) return;
+                                        if (obj && typeof obj === 'object') {
+                                            for (const k in obj) {
+                                                if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+                                                const v = obj[k];
+                                                if (typeof v === 'number' && Number.isFinite(v) && Math.floor(v) === v) {
+                                                const n = v;
+                                                if (n > 0 && n <= arrLen && n !== chapterNum) { candidate = n; return; }
+                                            }
+                                            if (typeof v === 'string' && /^[0-9]+$/.test(v)) {
+                                                const n = Number(v);
+                                                if (n > 0 && n <= arrLen && n !== chapterNum) { candidate = n; return; }
+                                            }
+                                            if (typeof v === 'object') visit(v);
+                                            if (candidate) return;
+                                        }
+                                    }
+                                })(parsed);
+                                const finalNum = candidate || chapterNum || 0;
+                                window.$$interfaceName.passPayload(JSON.stringify(arr), window.__rc.p, window.__rc.v, finalNum.toString());
                             }
                         """.trimIndent(),
                     ) {}
