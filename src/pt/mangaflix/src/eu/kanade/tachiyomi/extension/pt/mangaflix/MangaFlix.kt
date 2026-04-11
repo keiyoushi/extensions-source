@@ -112,7 +112,7 @@ class MangaFlix : HttpSource() {
         }
 
         val result = response.parseAs<SearchResponseDto>()
-        val mangas = result.data.map { item ->
+        val mangas = result.data.works.map { item ->
             SManga.create().apply {
                 title = item.name
                 thumbnail_url = item.poster?.default_url

@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaBlaze'
+    extClass = '.MangaBlaze'
+    themePkg = 'madara'
+    baseUrl = 'https://mangablaze.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
