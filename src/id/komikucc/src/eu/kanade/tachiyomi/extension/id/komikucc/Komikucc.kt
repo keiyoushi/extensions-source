@@ -211,7 +211,7 @@ class Komikucc : HttpSource() {
             description = document.select("p.line-clamp-4").joinToString("\n") { it.ownText().trim() }
             status = when (document.selectFirst(".bg-gray-100.text-gray-800")?.ownText()?.trim()) {
                 "Ongoing" -> SManga.ONGOING
-                "Selesai" -> SManga.COMPLETED
+                "Selesai", "Completed" -> SManga.COMPLETED
                 "Hiatus" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }

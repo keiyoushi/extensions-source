@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 
 class SortFilter(
     state: String? = sortValues[0].second,
-) : Filter.Select<String?>(
+) : Filter.Select<String>(
     name = "Sort",
     values = sortValues.map { it.first }.toTypedArray(),
     state = sortValues.indexOfFirst { it.second == state }.takeIf { it != -1 } ?: 0,
@@ -28,7 +28,7 @@ private val sortValues = listOf(
 )
 
 class StatusFilter :
-    Filter.Select<String?>(
+    Filter.Select<String>(
         name = "Status",
         values = statusValues.map { it.first }.toTypedArray(),
     ) {
@@ -43,7 +43,7 @@ private val statusValues = listOf(
 )
 
 class TypeFilter :
-    Filter.Select<String?>(
+    Filter.Select<String>(
         name = "Type",
         values = typeValues.map { it.first }.toTypedArray(),
     ) {
