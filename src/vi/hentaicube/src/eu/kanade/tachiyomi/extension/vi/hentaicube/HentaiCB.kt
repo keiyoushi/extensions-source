@@ -27,7 +27,7 @@ import java.util.Locale
 class HentaiCB :
     Madara(
         "CBHentai",
-        "https://2tencb.lat",
+        "https://2tencb.net",
         "vi",
         SimpleDateFormat("dd/MM/yyyy", Locale("vi")),
     ),
