@@ -6,137 +6,110 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
-import org.json.JSONObject
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Nexusscanlation : ParsedHttpSource() {
+class Nexusscanlation : HttpSource() {
 
-    override val id = 3189427615021467091L
     override val name = "NexusScanlation"
     override val baseUrl = "https://nexusscanlation.com"
     override val lang = "es"
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     override fun headersBuilder() = super.headersBuilder()
-        .add(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        )
 
     private fun apiHeaders() = headersBuilder()
         .add("Accept", "application/json")
         .add("Referer", baseUrl)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/catalog?page=$page", apiHeaders())
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val root = JSONObject(response.body?.string().orEmpty())
-        val data = root.optJSONArray("data") ?: JSONArray()
-        val mangas = parseCatalogArray(data)
-        val hasNext = root.optJSONObject("meta")?.optBoolean("has_next", false) ?: false
-        return MangasPage(mangas, hasNext)
+    override fun getChapterUrl(chapter: SChapter): String {
+        val pieces = chapter.url.split('/', limit = 2)
+        if (pieces.size != 2) return baseUrl
+
+        val seriesSlug = pieces[0]
+        val chapterSlug = pieces[1]
+        return "$baseUrl/series/$seriesSlug/chapter/$chapterSlug"
     }
 
-    override fun popularMangaSelector() = "_unused_"
+    override fun popularMangaRequest(page: Int): Request {
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("catalog")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, apiHeaders())
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Not used")
+    override fun popularMangaParse(response: Response): MangasPage {
+        val root = response.parseAs<CatalogResponseDto>()
+        return MangasPage(root.data.mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
+    }
 
-    override fun popularMangaNextPageSelector() = "_unused_"
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/catalog?page=$page", apiHeaders())
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val encoded = URLEncoder.encode(query, "UTF-8")
-            return GET("$apiBaseUrl/catalog/search?q=$encoded&page=$page", apiHeaders())
+        val urlBuilder = apiBaseUrl.toHttpUrl().newBuilder()
+
+        if (query.isBlank()) {
+            urlBuilder.addPathSegment("catalog")
+        } else {
+            urlBuilder
+                .addPathSegment("catalog")
+                .addPathSegment("search")
+                .addQueryParameter("q", query)
         }
 
-        return GET("$apiBaseUrl/catalog?page=$page", apiHeaders())
+        urlBuilder.addQueryParameter("page", page.toString())
+        return GET(urlBuilder.build(), apiHeaders())
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("series")
+            .addPathSegment(manga.url)
+            .build()
+        return GET(url, apiHeaders())
+    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
-    override fun mangaDetailsParse(document: Document): SManga {
-        val slug = extractSeriesSlug(document)
-        if (slug.isNotBlank()) {
-            val apiResponse = client.newCall(GET("$apiBaseUrl/series/$slug", apiHeaders())).execute()
-            apiResponse.use { res ->
-                val root = JSONObject(res.body?.string().orEmpty())
-                val serie = root.optJSONObject("serie")
-                if (serie != null) {
-                    return seriesToManga(serie)
-                }
-            }
-        }
-
-        val manga = SManga.create()
-        manga.title = document.selectFirst("h1")?.text().orEmpty()
-        manga.thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-        manga.description = document.selectFirst("meta[name=description]")?.attr("content")
-        return manga
+    override fun mangaDetailsParse(response: Response): SManga {
+        val root = response.parseAs<SeriesPayloadDto>()
+        return seriesToManga(root.serie)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.trim('/').substringAfterLast('/')
-        return GET("$apiBaseUrl/series/$slug", apiHeaders())
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("series")
+            .addPathSegment(manga.url)
+            .build()
+        return GET(url, apiHeaders())
     }
 
-    override fun chapterListSelector() = "_unused_"
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
-
     override fun chapterListParse(response: Response): List<SChapter> {
-        val root = JSONObject(response.body?.string().orEmpty())
-        val serie = root.optJSONObject("serie") ?: JSONObject()
-        val seriesSlug = serie.optString("slug")
-        val chapters = root.optJSONArray("capitulos") ?: JSONArray()
+        val payload = response.parseAs<SeriesPayloadDto>()
+        val seriesSlug = payload.serie.slug
 
-        val parsed = mutableListOf<SChapter>()
-        for (i in 0 until chapters.length()) {
-            val item = chapters.optJSONObject(i) ?: continue
-            val capSlug = item.optString("slug")
-            if (capSlug.isBlank()) continue
-
-            val number = item.optDouble("numero", Double.NaN)
-            val numberLabel = when {
-                number.isNaN() -> capSlug
-                number % 1.0 == 0.0 -> number.toInt().toString()
-                else -> number.toString()
-            }
-
-            val chapter = SChapter.create()
-            chapter.setUrlWithoutDomain("/series/$seriesSlug/chapter/$capSlug")
-            chapter.name = "Capítulo $numberLabel"
-            chapter.chapter_number = if (number.isNaN()) -1f else number.toFloat()
-            chapter.date_upload = parseIsoDate(item.optString("published_at"))
-            parsed.add(chapter)
-        }
-
-        return parsed.sortedWith(compareByDescending<SChapter> { chapterSortKey(it) }.thenByDescending { it.name.orEmpty() })
+        return payload.capitulos
+            .asSequence()
+            .mapNotNull { chapterToModel(seriesSlug, it) }
+            .sortedWith(compareByDescending<SChapter> { chapterSortKey(it) }.thenByDescending { it.name.orEmpty() })
+            .toList()
     }
 
     private fun chapterSortKey(chapter: SChapter): Float {
@@ -144,95 +117,63 @@ class Nexusscanlation : ParsedHttpSource() {
         return if (number < 0f) Float.MIN_VALUE else number
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val pieces = chapter.url.split('/', limit = 2)
+        require(pieces.size == 2) { "Invalid chapter url" }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val chapterUrl = document.selectFirst("link[rel=canonical]")?.attr("href").orEmpty()
-        val match = Regex("""/series/([^/]+)/chapter/([^/?#]+)""").find(chapterUrl)
-        val seriesSlug = match?.groupValues?.getOrNull(1).orEmpty()
-        val chapterSlug = match?.groupValues?.getOrNull(2).orEmpty()
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("series")
+            .addPathSegment(pieces[0])
+            .addPathSegment("capitulos")
+            .addPathSegment(pieces[1])
+            .build()
 
-        if (seriesSlug.isNotBlank() && chapterSlug.isNotBlank()) {
-            val apiResponse = client.newCall(GET("$apiBaseUrl/series/$seriesSlug/capitulos/$chapterSlug", apiHeaders())).execute()
-            apiResponse.use { res ->
-                val root = JSONObject(res.body?.string().orEmpty())
-                val data = root.optJSONObject("data") ?: JSONObject()
-                val pages = data.optJSONArray("paginas") ?: JSONArray()
-
-                val parsed = mutableListOf<Pair<Int, String>>()
-                for (i in 0 until pages.length()) {
-                    val page = pages.optJSONObject(i) ?: continue
-                    val order = page.optInt("orden", i + 1)
-                    val imageUrl = page.optString("url")
-                    if (imageUrl.isNotBlank()) {
-                        parsed.add(order to imageUrl)
-                    }
-                }
-
-                if (parsed.isNotEmpty()) {
-                    return parsed
-                        .sortedBy { it.first }
-                        .mapIndexed { index, pair -> Page(index, "", pair.second) }
-                }
-            }
-        }
-
-        return document.select("img[src]")
-            .mapNotNull { img -> img.absUrl("src").takeIf { it.contains("cdn.nexusscanlation.com") } }
-            .distinct()
-            .mapIndexed { index, imageUrl -> Page(index, "", imageUrl) }
+        return GET(url, apiHeaders())
     }
 
-    private fun parseCatalogArray(array: JSONArray): List<SManga> {
-        val mangas = mutableListOf<SManga>()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val slug = item.optString("slug")
-            if (slug.isBlank()) continue
-
-            val title = item.optString("titulo")
-            if (title.isBlank()) continue
-
-            val manga = SManga.create()
-            manga.setUrlWithoutDomain("/series/$slug")
-            manga.title = title
-            manga.thumbnail_url = item.optString("portada_url").ifBlank { null }
-            mangas.add(manga)
-        }
-        return mangas
+    override fun pageListParse(response: Response): List<Page> {
+        val payload = response.parseAs<ChapterPagesPayloadDto>()
+        return payload.data.paginas
+            .asSequence()
+            .filter { it.url.isNotBlank() }
+            .sortedBy { it.orden }
+            .mapIndexed { index, page -> Page(index, "", page.url) }
+            .toList()
     }
 
-    private fun extractSeriesSlug(document: Document): String {
-        val canonical = document.selectFirst("link[rel=canonical]")?.attr("href").orEmpty()
-        Regex("""/series/([^/?#]+)""").find(canonical)?.let {
-            return it.groupValues[1]
+    private fun catalogToManga(item: CatalogEntryDto): SManga? {
+        if (item.slug.isBlank() || item.titulo.isBlank()) return null
+        return SManga.create().apply {
+            url = item.slug
+            title = item.titulo
+            thumbnail_url = item.portadaUrl
         }
-
-        val chapterLink = document.selectFirst("a[href*='/series/'][href*='/chapter/']")?.attr("href").orEmpty()
-        Regex("""/series/([^/]+)/chapter/""").find(chapterLink)?.let {
-            return it.groupValues[1]
-        }
-
-        return ""
     }
 
-    private fun seriesToManga(serie: JSONObject): SManga {
-        val manga = SManga.create()
-        manga.title = serie.optString("titulo")
-        manga.thumbnail_url = serie.optString("portada_url").ifBlank { null }
-        manga.description = serie.optString("descripcion").ifBlank { null }
+    private fun chapterToModel(seriesSlug: String, chapter: ChapterEntryDto): SChapter? {
+        if (chapter.slug.isBlank()) return null
 
-        val genres = serie.optJSONArray("generos") ?: JSONArray()
-        val genreNames = mutableListOf<String>()
-        for (i in 0 until genres.length()) {
-            val genre = genres.optJSONObject(i) ?: continue
-            val name = genre.optString("nombre")
-            if (name.isNotBlank()) genreNames.add(name)
+        val chapterLabel = when {
+            chapter.numero == null -> chapter.slug
+            chapter.numero % 1f == 0f -> chapter.numero.toInt().toString()
+            else -> chapter.numero.toString()
         }
-        manga.genre = genreNames.joinToString().ifBlank { null }
 
-        val status = serie.optString("estado").lowercase(Locale.ROOT)
-        manga.status = when (status) {
+        return SChapter.create().apply {
+            url = "$seriesSlug/${chapter.slug}"
+            name = "Capitulo $chapterLabel"
+            chapter_number = chapter.numero ?: -1f
+            date_upload = parseIsoDate(chapter.publishedAt)
+        }
+    }
+
+    private fun seriesToManga(series: SeriesDto): SManga = SManga.create().apply {
+        title = series.titulo
+        thumbnail_url = series.portadaUrl
+        description = series.descripcion
+        genre = series.generos.map { it.nombre }.filter { it.isNotBlank() }.joinToString().ifBlank { null }
+
+        status = when (series.estado.lowercase(Locale.ROOT)) {
             "en_emision" -> SManga.ONGOING
             "finalizado" -> SManga.COMPLETED
             "pausado" -> SManga.ON_HIATUS
@@ -240,33 +181,22 @@ class Nexusscanlation : ParsedHttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        val authors = serie.optJSONArray("autores") ?: JSONArray()
-        if (authors.length() > 0) {
-            val names = mutableListOf<String>()
-            for (i in 0 until authors.length()) {
-                val authorObj = authors.optJSONObject(i)
-                val authorName = authorObj?.optString("nombre") ?: authors.optString(i)
-                if (!authorName.isNullOrBlank()) names.add(authorName)
-            }
-            if (names.isNotEmpty()) {
-                manga.author = names.joinToString()
-                manga.artist = names.joinToString()
-            }
+        val authorNames = series.autores.map { it.nombre }.filter { it.isNotBlank() }
+        if (authorNames.isNotEmpty()) {
+            val joined = authorNames.joinToString()
+            author = joined
+            artist = joined
         }
-
-        return manga
     }
 
-    private fun parseIsoDate(value: String): Long {
-        if (value.isBlank()) return 0L
-        val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-        format.timeZone = TimeZone.getTimeZone("UTC")
+    private fun parseIsoDate(value: String?): Long {
+        if (value.isNullOrBlank()) return 0L
         return try {
-            format.parse(value)?.time ?: 0L
+            dateFormat.parse(value)?.time ?: 0L
         } catch (_: Exception) {
             0L
         }
     }
 
-    override fun imageUrlParse(document: Document): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
