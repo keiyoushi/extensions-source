@@ -15,7 +15,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -70,10 +70,8 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    val maxImageRequests = 10
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(internalBaseUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost("https://c4.japscan.foo/".toHttpUrl(), maxImageRequests, 2)
+        .rateLimit(1, 2)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
