@@ -10,5 +10,4 @@ class FableScans :
         "https://fablescans.com",
         "en",
         mangaUrlDirectory = "/comic",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.ROOT),
     )
