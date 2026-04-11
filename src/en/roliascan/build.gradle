@@ -3,7 +3,7 @@ ext {
     extClass = '.RoliaScan'
     themePkg = 'mangataro'
     overrideVersionCode = 7
-    baseUrl = 'https://roliascans.org'
+    baseUrl = 'https://roliascan.com'
     isNsfw = false
 }
 

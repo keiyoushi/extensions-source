@@ -16,7 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
 import rx.Observable
 
-class RoliaScan : MangaTaro("Rolia Scan", "https://roliascans.org", "en") {
+class RoliaScan : MangaTaro("Rolia Scan", "https://roliascan.com", "en") {
 
     // ========================== Search =========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -31,7 +31,8 @@ class RoliaScan : MangaTaro("Rolia Scan", "https://roliascans.org", "en") {
     // blank URLs mixed in with actual manga entries.
     // Aggregate results from multiple API pages so
     // the user always gets a full page of results.
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
+        fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
 
     // ========================= Filters =========================
     override fun getFilterList() = FilterList(

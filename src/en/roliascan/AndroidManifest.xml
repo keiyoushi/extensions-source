@@ -12,7 +12,7 @@
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
 
-        <data android:host="roliascans.org" />
+        <data android:host="roliascan.com" />
         <data android:scheme="https" />
         <data android:pathPattern="/manga/..*" />
         <data android:pathPattern="/read/..*" />
