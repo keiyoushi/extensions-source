@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -127,14 +128,37 @@ class ManhuaRock :
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val a = element.selectFirst("a")!!
-
         setUrlWithoutDomain(a.attr("abs:href"))
         name = a.text()
         date_upload = dateFormat.tryParse(element.select("span.chapter-time").attr("data-last-update"))
     }
 
+    // old: /truyen-tranh/slug/chap-0.html
+    // new: /truyen/slug/chapter-0/<ChapterId>
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (!chapter.url.endsWith(".html")) {
+            return baseUrl + chapter.url.replace("truyen-tranh", "truyen").removeSuffix("/")
+                .substringBeforeLast("/")
+        }
+        return baseUrl + chapter.url
+    }
+
+    private fun getChapterId(url: String): String {
+        val lastSegment = url.toHttpUrl().pathSegments.last()
+        return if (lastSegment.all { it.isDigit() }) {
+            lastSegment
+        } else {
+            val response = client.newCall(GET(url, headers)).execute()
+            val doc = response.asJsoup()
+            val scriptContent = doc.selectFirst("script:containsData(chapter_id)")!!.data()
+            scriptContent.substringAfter("chapter_id = ")
+                .substringBefore(",")
+                .trim()
+        }
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.split('/').last()
+        val chapterId = getChapterId(baseUrl + chapter.url)
 
         return GET("$baseUrl/ajax/image/list/chap/$chapterId?mode=vertical&quality=high")
     }
