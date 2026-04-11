@@ -236,11 +236,21 @@ class NexusScan :
 
     override fun pageListParse(response: Response): List<Page> {
         val readResponse = response.parseAs<ReadResponse>()
-        return readResponse.pages
-            .sortedBy { it.pageNumber }
-            .mapIndexed { index, page ->
-                Page(index, imageUrl = "$baseUrl/api/p/${readResponse.pageToken}/${page.pageNumber}")
+        val pages = readResponse.pages
+        if (pages.first().imageUrl != null) {
+            return pages.mapIndexed { index, page ->
+                Page(
+                    index,
+                    imageUrl = page.imageUrl!!,
+                )
             }
+        }
+        return pages.mapIndexed { index, _ ->
+            Page(
+                index,
+                imageUrl = "$baseUrl/api/p/${readResponse.pageToken}/$index",
+            )
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
