@@ -21,7 +21,7 @@ class Manga(
     val slug: String,
     private val postTitle: String,
     val postContent: String? = null,
-    val isNovel: Boolean,
+    val isNovel: Boolean = false,
     private val featuredImage: String? = null,
     private val alternativeTitles: String? = null,
     private val author: String? = null,
