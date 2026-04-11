@@ -44,12 +44,10 @@ class CManga :
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+    private val preferences: SharedPreferences = getPreferences {
+        getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
+                edit()
                     .putString(BASE_URL_PREF, defaultBaseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
                     .apply()
