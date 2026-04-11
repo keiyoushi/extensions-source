@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class CatalogResponseDto(
-    val data: List<CatalogEntryDto> = emptyList(),
+    val data: List<CatalogEntryDto>? = null,
     val meta: CatalogMetaDto? = null,
 )
 
@@ -26,7 +26,7 @@ class CatalogEntryDto(
 @Serializable
 class SeriesPayloadDto(
     val serie: SeriesDto,
-    val capitulos: List<ChapterEntryDto> = emptyList(),
+    val capitulos: List<ChapterEntryDto>? = null,
 )
 
 @Serializable
@@ -37,8 +37,8 @@ class SeriesDto(
     val portadaUrl: String? = null,
     val descripcion: String? = null,
     val estado: String = "",
-    val generos: List<NameDto> = emptyList(),
-    val autores: List<NameDto> = emptyList(),
+    val generos: List<NameDto>? = null,
+    val autores: List<NameDto>? = null,
 )
 
 @Serializable
@@ -56,12 +56,12 @@ class ChapterEntryDto(
 
 @Serializable
 class ChapterPagesPayloadDto(
-    val data: ChapterPagesDto,
+    val data: ChapterPagesDto? = null,
 )
 
 @Serializable
 class ChapterPagesDto(
-    val paginas: List<PageEntryDto> = emptyList(),
+    val paginas: List<PageEntryDto>? = null,
 )
 
 @Serializable

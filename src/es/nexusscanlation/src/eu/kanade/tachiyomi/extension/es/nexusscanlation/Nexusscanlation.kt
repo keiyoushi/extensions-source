@@ -55,7 +55,7 @@ class Nexusscanlation : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val root = response.parseAs<CatalogResponseDto>()
-        return MangasPage(root.data.mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
+        return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
@@ -105,7 +105,7 @@ class Nexusscanlation : HttpSource() {
         val payload = response.parseAs<SeriesPayloadDto>()
         val seriesSlug = payload.serie.slug
 
-        return payload.capitulos
+        return payload.capitulos.orEmpty()
             .asSequence()
             .mapNotNull { chapterToModel(seriesSlug, it) }
             .sortedWith(compareByDescending<SChapter> { chapterSortKey(it) }.thenByDescending { it.name.orEmpty() })
@@ -133,7 +133,7 @@ class Nexusscanlation : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<ChapterPagesPayloadDto>()
-        return payload.data.paginas
+        return payload.data?.paginas.orEmpty()
             .asSequence()
             .filter { it.url.isNotBlank() }
             .sortedBy { it.orden }
@@ -171,7 +171,7 @@ class Nexusscanlation : HttpSource() {
         title = series.titulo
         thumbnail_url = series.portadaUrl
         description = series.descripcion
-        genre = series.generos.map { it.nombre }.filter { it.isNotBlank() }.joinToString().ifBlank { null }
+        genre = series.generos.orEmpty().map { it.nombre }.filter { it.isNotBlank() }.joinToString().ifBlank { null }
 
         status = when (series.estado.lowercase(Locale.ROOT)) {
             "en_emision" -> SManga.ONGOING
@@ -181,7 +181,7 @@ class Nexusscanlation : HttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        val authorNames = series.autores.map { it.nombre }.filter { it.isNotBlank() }
+        val authorNames = series.autores.orEmpty().map { it.nombre }.filter { it.isNotBlank() }
         if (authorNames.isNotEmpty()) {
             val joined = authorNames.joinToString()
             author = joined
