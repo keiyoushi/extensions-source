@@ -17,8 +17,8 @@ class CatalogMetaDto(
 
 @Serializable
 class CatalogEntryDto(
-    val slug: String = "",
-    val titulo: String = "",
+    val slug: String,
+    val titulo: String,
     @SerialName("portada_url")
     val portadaUrl: String? = null,
 )
@@ -31,8 +31,8 @@ class SeriesPayloadDto(
 
 @Serializable
 class SeriesDto(
-    val slug: String = "",
-    val titulo: String = "",
+    val slug: String,
+    val titulo: String,
     @SerialName("portada_url")
     val portadaUrl: String? = null,
     val descripcion: String? = null,
@@ -48,8 +48,8 @@ class NameDto(
 
 @Serializable
 class ChapterEntryDto(
-    val slug: String = "",
-    val numero: Float? = null,
+    val slug: String,
+    val numero: Float,
     @SerialName("published_at")
     val publishedAt: String? = null,
 )

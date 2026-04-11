@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
 class Nexusscanlation : HttpSource() {
 
@@ -23,25 +23,16 @@ class Nexusscanlation : HttpSource() {
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
     override fun headersBuilder() = super.headersBuilder()
-
-    private fun apiHeaders() = headersBuilder()
-        .add("Accept", "application/json")
         .add("Referer", baseUrl)
-        .build()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val pieces = chapter.url.split('/', limit = 2)
-        if (pieces.size != 2) return baseUrl
-
-        val seriesSlug = pieces[0]
-        val chapterSlug = pieces[1]
+        if ('/' !in chapter.url) return baseUrl
+        val (seriesSlug, chapterSlug) = chapter.url.split('/', limit = 2)
         return "$baseUrl/series/$seriesSlug/chapter/$chapterSlug"
     }
 
@@ -50,7 +41,7 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment("catalog")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, apiHeaders())
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -75,7 +66,7 @@ class Nexusscanlation : HttpSource() {
         }
 
         urlBuilder.addQueryParameter("page", page.toString())
-        return GET(urlBuilder.build(), apiHeaders())
+        return GET(urlBuilder.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -85,7 +76,7 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment("series")
             .addPathSegment(manga.url)
             .build()
-        return GET(url, apiHeaders())
+        return GET(url, headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -98,7 +89,7 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment("series")
             .addPathSegment(manga.url)
             .build()
-        return GET(url, apiHeaders())
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -108,13 +99,7 @@ class Nexusscanlation : HttpSource() {
         return payload.capitulos.orEmpty()
             .asSequence()
             .mapNotNull { chapterToModel(seriesSlug, it) }
-            .sortedWith(compareByDescending<SChapter> { chapterSortKey(it) }.thenByDescending { it.name.orEmpty() })
             .toList()
-    }
-
-    private fun chapterSortKey(chapter: SChapter): Float {
-        val number = chapter.chapter_number
-        return if (number < 0f) Float.MIN_VALUE else number
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -128,7 +113,7 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment(pieces[1])
             .build()
 
-        return GET(url, apiHeaders())
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -136,8 +121,7 @@ class Nexusscanlation : HttpSource() {
         return payload.data?.paginas.orEmpty()
             .asSequence()
             .filter { it.url.isNotBlank() }
-            .sortedBy { it.orden }
-            .mapIndexed { index, page -> Page(index, "", page.url) }
+            .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
             .toList()
     }
 
@@ -153,17 +137,13 @@ class Nexusscanlation : HttpSource() {
     private fun chapterToModel(seriesSlug: String, chapter: ChapterEntryDto): SChapter? {
         if (chapter.slug.isBlank()) return null
 
-        val chapterLabel = when {
-            chapter.numero == null -> chapter.slug
-            chapter.numero % 1f == 0f -> chapter.numero.toInt().toString()
-            else -> chapter.numero.toString()
-        }
+        val chapterNumber = chapter.numero.toString().removeSuffix(".0")
 
         return SChapter.create().apply {
             url = "$seriesSlug/${chapter.slug}"
-            name = "Capitulo $chapterLabel"
-            chapter_number = chapter.numero ?: -1f
-            date_upload = parseIsoDate(chapter.publishedAt)
+            name = "Capitulo $chapterNumber"
+            chapter_number = chapter.numero
+            date_upload = dateFormat.tryParse(chapter.publishedAt)
         }
     }
 
@@ -171,7 +151,9 @@ class Nexusscanlation : HttpSource() {
         title = series.titulo
         thumbnail_url = series.portadaUrl
         description = series.descripcion
-        genre = series.generos.orEmpty().map { it.nombre }.filter { it.isNotBlank() }.joinToString().ifBlank { null }
+        genre = series.generos
+            ?.mapNotNull { it.nombre.takeIf { name -> name.isNotBlank() } }
+            ?.joinToString()
 
         status = when (series.estado.lowercase(Locale.ROOT)) {
             "en_emision" -> SManga.ONGOING
@@ -181,21 +163,10 @@ class Nexusscanlation : HttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        val authorNames = series.autores.orEmpty().map { it.nombre }.filter { it.isNotBlank() }
-        if (authorNames.isNotEmpty()) {
-            val joined = authorNames.joinToString()
-            author = joined
-            artist = joined
-        }
-    }
-
-    private fun parseIsoDate(value: String?): Long {
-        if (value.isNullOrBlank()) return 0L
-        return try {
-            dateFormat.parse(value)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        author = series.autores
+            ?.mapNotNull { it.nombre.takeIf { name -> name.isNotBlank() } }
+            ?.joinToString()
+        artist = author
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
