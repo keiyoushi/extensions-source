@@ -2,21 +2,70 @@ package eu.kanade.tachiyomi.extension.id.astralscans
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.MultipartBody
+import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id") {
 
     override val hasProjectPage = true
 
+    override fun chapterListRequest(manga: SManga): Request {
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("astral_action", "fetch_chapters")
+            .build()
+
+        return POST(
+            url = baseUrl + manga.url,
+            headers = headersBuilder().add("X-Astral-Guard", "supernova").build(),
+            body = body,
+        )
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val responseString = response.body.string()
+
+        try {
+            val json = Json.parseToJsonElement(responseString).jsonObject
+            if (json["success"]?.jsonPrimitive?.boolean == true) {
+                val data = json["data"]?.jsonArray
+                if (data != null) {
+                    val chapters = data.map { element ->
+                        val obj = element.jsonObject
+                        SChapter.create().apply {
+                            val chapterUrl = obj["u"]?.jsonPrimitive?.content ?: ""
+                            setUrlWithoutDomain(chapterUrl)
+
+                            val chapNum = obj["n"]?.jsonPrimitive?.content ?: ""
+                            val title = obj["t"]?.jsonPrimitive?.content ?: ""
+                            name = "Chapter $chapNum" + if (title.isNotBlank()) " - $title" else ""
+
+                            val dateStr = obj["d"]?.jsonPrimitive?.content
+                            date_upload = dateStr.parseChapterDate()
+                        }
+                    }
+
+                    if (chapters.isNotEmpty()) {
+                        return chapters
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Not a JSON response, fallback to HTML parsing
+        }
+
+        val document = Jsoup.parse(responseString, response.request.url.toString())
 
         // 1. New Anti-Scraper Logic (<div id="astral-vault" data-content="...">)
         val vault = document.selectFirst("div#astral-vault")
