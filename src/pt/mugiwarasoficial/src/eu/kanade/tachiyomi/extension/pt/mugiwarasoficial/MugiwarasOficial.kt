@@ -26,8 +26,6 @@ class MugiwarasOficial :
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Estado) + .summary-content"
-
     override fun pageListParse(document: Document): List<Page> {
         val redirectUrl = document.selectFirst("div.page-break a")!!.absUrl("href")
         val pageUrl = redirectUrl.toHttpUrl().queryParameter("t")!!.toHttpUrl().toUrl()
