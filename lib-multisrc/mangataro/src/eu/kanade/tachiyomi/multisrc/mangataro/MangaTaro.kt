@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.mangataro
+package eu.kanade.tachiyomi.multisrc.mangataro
 
 import android.content.SharedPreferences
 import android.util.Log
@@ -24,6 +24,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -41,13 +42,11 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-open class MangaTaro(
+abstract class MangaTaro(
+    override val name: String,
+    override val baseUrl: String,
     override val lang: String,
 ) : HttpSource() {
-
-    override val name = "MangaTaro"
-
-    override val baseUrl = "https://mangataro.org"
 
     override val supportsLatest = true
 
@@ -56,14 +55,17 @@ open class MangaTaro(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    // ========================= Popular =========================
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.popular)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
+    // ========================== Latest =========================
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
+    // ========================== Search =========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
         deeplinkHandler(query)
     } else if (
@@ -79,7 +81,7 @@ open class MangaTaro(
         val body = SearchQueryPayload(
             query = query.trim(),
             limit = 25,
-        ).toJsonString().toRequestBody("application/json".toMediaType())
+        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
         return client.newCall(POST("$baseUrl/auth/search", headers, body))
             .asObservableSuccess()
@@ -122,41 +124,16 @@ open class MangaTaro(
                 ?.selected.let(::listOfNotNull),
             sort = filters.firstInstance<SortFilter>().selected,
             genreMatchMode = filters.firstInstance<TagFilterMatch>().selected,
-        ).toJsonString().toRequestBody("application/json".toMediaType())
+        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
         return POST("$baseUrl/wp-json/manga/v1/load", headers, body)
     }
 
-    override fun getFilterList() = FilterList(
-        SearchWithFilters(),
-        Filter.Header("If unchecked, all filters will be ignored with search query"),
-        Filter.Header("But will give more relevant results"),
-        Filter.Separator(),
-        SortFilter(),
-        TypeFilter(),
-        StatusFilter(),
-        YearFilter(),
-        TagFilter(),
-        TagFilterMatch(),
-    )
-
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<List<BrowseManga>>()
 
-        val mangas = data.filter { it.type != "Novel" }
-            .map {
-                SManga.create().apply {
-                    url = MangaUrl(id = it.id, slug = it.url.toSlug()).toJsonString()
-                    title = it.title.unescapeHtml()
-                    thumbnail_url = it.cover
-                    description = it.description.unescapeHtml()
-                    status = when (it.status) {
-                        "Ongoing" -> SManga.ONGOING
-                        "Completed" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-                }
-            }
+        val mangas = data.filter { it.type != "Novel" && it.url.isNotBlank() }
+            .map(::browseMangaToSManga)
 
         return MangasPage(
             mangas = mangas,
@@ -164,8 +141,27 @@ open class MangaTaro(
         )
     }
 
-    private fun deeplinkHandler(url: String): Observable<MangasPage> {
-        val slug = url.toSlug()
+    protected fun browseMangaToSManga(manga: BrowseManga) = SManga.create().apply {
+        url = MangaUrl(id = manga.id, slug = manga.url.toSlug()).toJsonString()
+        title = manga.title.unescapeHtml()
+        thumbnail_url = manga.cover
+        description = manga.description.unescapeHtml()
+        status = when (manga.status) {
+            "Ongoing" -> SManga.ONGOING
+            "Completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    private fun deeplinkHandler(query: String): Observable<MangasPage> {
+        val url = query.toHttpUrlOrNull()
+            ?: return Observable.just(MangasPage(emptyList(), false))
+
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return Observable.just(MangasPage(emptyList(), false))
+        }
+
+        val slug = query.toSlug()
 
         return client.newCall(GET("$baseUrl/manga/$slug", headers))
             .asObservableSuccess()
@@ -173,13 +169,17 @@ open class MangaTaro(
                 val document = it.asJsoup()
 
                 val id = document.body().dataset()["manga-id"]!!
-                val status = when (document.selectFirst(".manga-page-wrapper span.capitalize")?.text()?.lowercase()) {
+                val statusElement = document.select(".capitalize").firstOrNull {
+                    val text = it.text().lowercase()
+                    text == "ongoing" || text == "completed"
+                }
+                val status = when (statusElement?.text()?.lowercase()) {
                     "ongoing" -> SManga.ONGOING
                     "completed" -> SManga.COMPLETED
                     else -> SManga.UNKNOWN
                 }
 
-                if (document.selectFirst(".manga-page-wrapper span:contains(Novel)") != null) {
+                if (document.select(".capitalize").any { it.text().contains("Novel") }) {
                     throw Exception("Novels are not supported")
                 }
 
@@ -193,6 +193,21 @@ open class MangaTaro(
             .map { MangasPage(listOf(it), false) }
     }
 
+    // ========================= Filters =========================
+    override fun getFilterList() = FilterList(
+        SearchWithFilters(),
+        Filter.Header("If unchecked, all filters will be ignored with search query"),
+        Filter.Header("But will give more relevant results"),
+        Filter.Separator(),
+        SortFilter(),
+        TypeFilter(),
+        StatusFilter(),
+        YearFilter(),
+        TagFilter(),
+        TagFilterMatch(),
+    )
+
+    // ========================= Details =========================
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.parseAs<MangaUrl>().id
 
@@ -236,6 +251,7 @@ open class MangaTaro(
         return "$baseUrl/manga/$slug"
     }
 
+    // ======================== Chapters =========================
     override fun chapterListRequest(manga: SManga): Request {
         val timestamp = System.currentTimeMillis() / 1000
         val token = md5(
@@ -267,8 +283,6 @@ open class MangaTaro(
         val placeholders = listOf(null, "", "N/A", "—")
         var hasScanlator = false
 
-        // currently there is only English chapters on the site, at least from a quick look.
-        // if they ever have multiple languages, we would need to make this a source factory
         val chapters = data.chapters.filter {
             it.language.equals(lang, ignoreCase = true)
         }.map {
@@ -300,6 +314,7 @@ open class MangaTaro(
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
+    // ========================== Pages ==========================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = getChapterUrl(chapter).toHttpUrl()
             .pathSegments.last()
@@ -320,14 +335,13 @@ open class MangaTaro(
         }
     }
 
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // ========================= Helpers =========================
     fun md5(input: String): String {
         val md = MessageDigest.getInstance("MD5")
         val digest = md.digest(input.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
-    }
-
-    private val isoDateFormatter = SimpleDateFormat("yyyyMMddHH", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
     }
 
     private fun String.toSlug() = toHttpUrl().let { url ->
@@ -358,11 +372,9 @@ open class MangaTaro(
         return calendar.timeInMillis
     }
 
-    private val relativeDateRegex = Regex("""(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago""")
-
     private fun countViews(postId: String) {
         val payload = """{"post_id":"$postId"}"""
-            .toRequestBody("application/json".toMediaType())
+            .toRequestBody(JSON_MEDIA_TYPE)
         val url = "$baseUrl/wp-json/pviews/v1/increment/"
         val request = POST(url, headers, payload)
 
@@ -372,6 +384,7 @@ open class MangaTaro(
                     override fun onResponse(call: okhttp3.Call, response: Response) {
                         response.closeQuietly()
                     }
+
                     override fun onFailure(call: okhttp3.Call, e: IOException) {
                         Log.e(name, "Failed to count views", e)
                     }
@@ -379,12 +392,24 @@ open class MangaTaro(
             )
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    companion object {
+        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
+        private val isoDateFormatter = SimpleDateFormat("yyyyMMddHH", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        private val relativeDateRegex = Regex("""(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago""")
+    }
 }
 
 // Map groups by language
-class MangaTaroGroup(lang: String, val groups: List<Long>) :
-    MangaTaro(lang),
+abstract class MangaTaroGroup(
+    name: String,
+    baseUrl: String,
+    lang: String,
+    val groups: List<Long>,
+) : MangaTaro(name, baseUrl, lang),
     ConfigurableSource {
 
     override val supportsLatest: Boolean = false
