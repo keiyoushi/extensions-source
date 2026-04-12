@@ -18,7 +18,42 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        // Find the script containing the anti-scraper Base64 JSON payload
+        // 1. New Anti-Scraper Logic (<div id="astral-vault" data-content="...">)
+        val vault = document.selectFirst("div#astral-vault")
+        if (vault != null) {
+            val encoded = vault.attr("data-content")
+            if (encoded.isNotEmpty()) {
+                try {
+                    val decoded = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
+                    val chapters = decoded.split("^^^").mapNotNull { chap ->
+                        if (chap.isBlank()) return@mapNotNull null
+                        val p = chap.split("%%%")
+                        if (p.size < 4) return@mapNotNull null
+
+                        SChapter.create().apply {
+                            val uBase64 = rot13(p[0])
+                            val url = String(Base64.decode(uBase64, Base64.DEFAULT), Charsets.UTF_8)
+                            setUrlWithoutDomain(url)
+
+                            val chapNum = String(Base64.decode(p[1], Base64.DEFAULT), Charsets.UTF_8)
+                            val title = String(Base64.decode(p[2], Base64.DEFAULT), Charsets.UTF_8)
+                            name = "Chapter $chapNum" + if (title.isNotBlank()) " - $title" else ""
+
+                            val dateStr = String(Base64.decode(p[3], Base64.DEFAULT), Charsets.UTF_8)
+                            date_upload = dateStr.parseChapterDate()
+                        }
+                    }
+
+                    if (chapters.isNotEmpty()) {
+                        return chapters
+                    }
+                } catch (e: Exception) {
+                    // Fallback to other methods if this fails
+                }
+            }
+        }
+
+        // 2. Older fallback for rawPayload script method
         val script = document.select("script").find { it.data().contains("rawPayload") }?.data()
 
         if (script != null) {
@@ -57,7 +92,7 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
             }
         }
 
-        // Old DOM fallback
+        // 3. Oldest DOM fallback
         return document.select(chapterListSelector()).map { chapterFromElement(it) }
     }
 
@@ -70,4 +105,13 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
         name = element.selectFirst(".ch-title")?.text() ?: ""
         date_upload = element.selectFirst(".ch-date")?.text().parseChapterDate()
     }
+
+    private fun rot13(text: String): String = text.map {
+        if (it.isLetter()) {
+            val base = if (it.isUpperCase()) 'A' else 'a'
+            ((it.code - base.code + 13) % 26 + base.code).toChar()
+        } else {
+            it
+        }
+    }.joinToString("")
 }
