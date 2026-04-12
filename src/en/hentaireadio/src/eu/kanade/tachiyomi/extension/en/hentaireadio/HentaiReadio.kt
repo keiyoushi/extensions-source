@@ -97,7 +97,7 @@ class HentaiReadio : HttpSource() {
         if (!statusAdded) url.addQueryParameter("f[status]", "all")
         if (!sortAdded) url.addQueryParameter("f[sortby]", "lastest-chap")
 
-        return GET(url.build().toString(), headers)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
