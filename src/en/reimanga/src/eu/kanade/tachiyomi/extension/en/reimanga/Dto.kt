@@ -84,13 +84,13 @@ class MangaPage(
                     append(rating)
                     append("\n\n")
                 }
-                this@MangaDetails.description?.also {
+                this@MangaDetails.description?.takeIf { it.isNotBlank() }?.also {
                     append(it.trim())
                     append("\n\n")
                 }
-                altTitle?.also {
+                altTitle?.takeIf { it.isNotBlank() }?.also {
                     append("Alternative Titles:\n")
-                    it.split(",").forEach { title ->
+                    it.split(",", ";").forEach { title ->
                         append("- ")
                         append(title.trim())
                         append("\n")

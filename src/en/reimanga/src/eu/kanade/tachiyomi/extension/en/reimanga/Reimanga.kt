@@ -246,11 +246,13 @@ class Reimanga :
         return data.chapters.map { chapter ->
             SChapter.create().apply {
                 url = "${data.manga.slug}-${data.manga.id}/${chapter.id}"
-                name = chapter.name
+                name = chapter.name.replace(spaceRegex, " ").trim()
                 date_upload = dateFormat.tryParse(chapter.uploadDate ?: chapter.updatedAt ?: chapter.createdAt)
             }
         }
     }
+
+    private val spaceRegex = Regex("""\s+""")
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
