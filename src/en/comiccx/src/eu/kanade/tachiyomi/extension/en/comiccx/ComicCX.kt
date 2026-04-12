@@ -8,11 +8,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.dataimage.DataImageInterceptor
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,8 +29,6 @@ class ComicCX : HttpSource() {
 
     private val apiUrl = "$baseUrl/api"
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(DataImageInterceptor())
         .build()
@@ -48,7 +45,7 @@ class ComicCX : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = json.decodeFromString<MangaListResponse>(response.body.string())
+        val data = response.parseAs<MangaListResponse>()
         val mangas = data.manga.map { it.toSManga() }
         val hasNextPage = (data.pagination?.page ?: 1) < (data.pagination?.pages ?: 1)
         return MangasPage(mangas, hasNextPage)
@@ -87,7 +84,7 @@ class ComicCX : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = json.decodeFromString<MangaItem>(response.body.string())
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>()
         .toSManga()
         .apply { initialized = true }
 
@@ -99,7 +96,7 @@ class ComicCX : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaSlug = response.request.url.pathSegments[2]
-        return json.decodeFromString<List<ChapterItem>>(response.body.string())
+        return response.parseAs<List<ChapterItem>>()
             .sortedByDescending { it.chapterNumber }
             .map { it.toSChapter(mangaSlug) }
     }
@@ -129,7 +126,7 @@ class ComicCX : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterId = response.request.url.queryParameter("chapter_id")?.toIntOrNull()
-        val chapters = json.decodeFromString<List<ChapterItem>>(response.body.string())
+        val chapters = response.parseAs<List<ChapterItem>>()
 
         val chapter = chapters.find { it.id == chapterId }
             ?: throw Exception("Chapter not found")
