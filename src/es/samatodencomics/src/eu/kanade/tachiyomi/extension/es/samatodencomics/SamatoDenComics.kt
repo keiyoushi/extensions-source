@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -23,7 +23,7 @@ class SamatoDenComics : HttpSource() {
     override val name = "Samato's Den: Comics"
     override val baseUrl = "https://samatoden.blogspot.com"
     override val lang = "es"
-    override val supportsLatest = true
+    override val supportsLatest = false
     override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -32,28 +32,28 @@ class SamatoDenComics : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET(feedUrl(page), headers)
 
-    override fun popularMangaParse(response: Response): MangasPage = parseFeedPage(response.body.string())
+    override fun popularMangaParse(response: Response): MangasPage = parseFeedPage(response)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(feedUrl(page), headers)
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseFeedPage(response.body.string())
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(feedUrl(page, query.trim()), headers)
 
-    override fun searchMangaParse(response: Response): MangasPage = parseFeedPage(response.body.string())
+    override fun searchMangaParse(response: Response): MangasPage = parseFeedPage(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(normalizePostFeedUrl(manga.url), headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = entryToManga(parseSingleEntry(response.body.string()))
+    override fun mangaDetailsParse(response: Response): SManga = entryToManga(parseSingleEntry(response))
 
     override fun chapterListRequest(manga: SManga): Request = GET(normalizePostFeedUrl(manga.url), headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> = entryToChapters(parseSingleEntry(response.body.string()))
+    override fun chapterListParse(response: Response): List<SChapter> = entryToChapters(parseSingleEntry(response))
 
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val entry = parseSingleEntry(response.body.string())
+        val entry = parseSingleEntry(response)
         val html = entry.content?.text.orEmpty()
         val chapterKey = response.request.url.queryParameter(CHAPTER_KEY_PARAM).orEmpty()
         val pageUrls = parseChapterPageUrls(html, chapterKey)
@@ -82,8 +82,8 @@ class SamatoDenComics : HttpSource() {
             .toString()
     }
 
-    private fun parseFeedPage(payload: String): MangasPage {
-        val feed = json.decodeFromString(BloggerFeedDto.serializer(), payload).feed
+    private fun parseFeedPage(response: Response): MangasPage {
+        val feed = response.parseAs<BloggerFeedDto>().feed
             ?: return MangasPage(emptyList(), false)
 
         val mangaList = feed.entries.orEmpty().map(::entryToManga)
@@ -96,8 +96,8 @@ class SamatoDenComics : HttpSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    private fun parseSingleEntry(payload: String): BloggerEntryDto {
-        val root = json.decodeFromString(BloggerFeedDto.serializer(), payload)
+    private fun parseSingleEntry(response: Response): BloggerEntryDto {
+        val root = response.parseAs<BloggerFeedDto>()
         return root.entry ?: root.feed?.entries?.firstOrNull()
             ?: error("No se encontro ninguna entrada de comic en la respuesta de Blogger")
     }
@@ -276,8 +276,6 @@ class SamatoDenComics : HttpSource() {
     private fun cleanHtml(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY).toString().trim()
 
     companion object {
-        private val json = Json { ignoreUnknownKeys = true }
-
         private const val PAGE_SIZE = 30
         private const val CHAPTER_KEY_PARAM = "samatoChapter"
         private const val SINGLE_CHAPTER_KEY = "single"
