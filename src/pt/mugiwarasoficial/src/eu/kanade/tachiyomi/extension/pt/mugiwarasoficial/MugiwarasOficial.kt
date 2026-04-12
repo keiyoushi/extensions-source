@@ -24,7 +24,7 @@ class MugiwarasOficial :
 
     override val useNewChapterEndpoint = true
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Estado) + .summary-content"
 
