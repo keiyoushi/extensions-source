@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 import java.util.Calendar
 
-class ComixFilters {
+class Filters {
     interface UriFilter {
         fun addToUri(builder: HttpUrl.Builder)
     }
@@ -239,7 +239,7 @@ class ComixFilters {
         }
     }
 
-    private data class Sortable(val title: String, val value: String) {
+    private class Sortable(val title: String, val value: String) {
         override fun toString(): String = title
     }
 

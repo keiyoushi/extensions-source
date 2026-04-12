@@ -18,7 +18,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 @Serializable
-data class Term(
+class Term(
     @SerialName("term_id")
     private val termId: Int,
     private val type: String,
