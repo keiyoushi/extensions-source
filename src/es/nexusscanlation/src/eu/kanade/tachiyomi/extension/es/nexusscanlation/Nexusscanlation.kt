@@ -23,7 +23,7 @@ class Nexusscanlation : HttpSource() {
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
@@ -39,6 +39,7 @@ class Nexusscanlation : HttpSource() {
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addPathSegment("catalog")
             .addQueryParameter("page", page.toString())
+            .addQueryParameter("orden", "popular")
             .build()
         return GET(url, headers)
     }
@@ -48,7 +49,14 @@ class Nexusscanlation : HttpSource() {
         return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("catalog")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("orden", "nuevo")
+            .build()
+        return GET(url, headers)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -172,7 +180,7 @@ class Nexusscanlation : HttpSource() {
             .map { (name) -> name }
             .distinct()
             .joinToString()
-            .ifBlank { author }
+            .ifBlank { null }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
