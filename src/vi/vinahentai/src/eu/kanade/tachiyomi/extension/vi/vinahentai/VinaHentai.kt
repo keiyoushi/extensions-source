@@ -19,7 +19,7 @@ import java.util.Calendar
 class VinaHentai : HttpSource() {
     override val name = "VinaHentai"
     override val lang = "vi"
-    override val baseUrl = "https://vinahentai.icu"
+    override val baseUrl = "https://vinahentai.me"
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
