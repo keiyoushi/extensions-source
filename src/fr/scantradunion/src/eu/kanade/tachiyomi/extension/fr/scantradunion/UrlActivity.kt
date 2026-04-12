@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.mangataro
+package eu.kanade.tachiyomi.extension.fr.scantradunion
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -20,7 +20,7 @@ class UrlActivity : Activity() {
         try {
             startActivity(mainIntent)
         } catch (e: ActivityNotFoundException) {
-            Log.e("MangaTaro", "Unable to launch activity", e)
+            Log.e("ScantradUnion", "Unable to launch activity", e)
         }
 
         finish()
