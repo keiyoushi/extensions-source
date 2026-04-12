@@ -10,17 +10,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -47,14 +43,64 @@ class ManhwaZone : HttpSource() {
     // Site renders 24 items per page
     private val pageSize = 24
 
+    // ── Serializable data classes ─────────────────────────────────────────────
+
+    @Serializable
+    data class LivewireResponse(
+        val components: List<LivewireComponent> = emptyList(),
+    )
+
+    @Serializable
+    data class LivewireComponent(
+        val snapshot: String? = null,
+    )
+
+    @Serializable
+    data class LivewireSnapshot(
+        val data: SnapshotData = SnapshotData(),
+    )
+
+    @Serializable
+    data class SnapshotData(
+        // chapters[0] is the actual chapter list; each entry is a tuple whose first element is ChapterDto
+        val chapters: JsonArray = JsonArray(emptyList()),
+    )
+
+    @Serializable
+    data class ChapterDto(
+        @SerialName("web_url") val webUrl: String? = null,
+        val name: String? = null,
+        val published: String? = null,
+    )
+
+    @Serializable
+    data class LdJsonData(
+        val author: List<LdAuthor>? = null,
+    )
+
+    @Serializable
+    data class LdAuthor(
+        val name: String? = null,
+    )
+
+    @Serializable
+    data class RsConf(
+        val p: String? = null,
+        val expire: String? = null,
+        val signature: String? = null,
+        val tt: Int? = null,
+    )
+
+    // ── Browse ────────────────────────────────────────────────────────────────
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?sortBy=popularity&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("article.group").map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".min-w-0 > a.font-semibold")?.text() ?: ""
-                setUrlWithoutDomain(element.selectFirst("a")?.attr("href") ?: "")
+                title = element.selectFirst(".min-w-0 > a.font-semibold")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: ""
             }
         }
@@ -100,11 +146,13 @@ class ManhwaZone : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
+    // ── Manga details ─────────────────────────────────────────────────────────
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         val manga = SManga.create()
 
-        manga.title = document.selectFirst("h1.page-title")?.text() ?: ""
+        manga.title = document.selectFirst("h1.page-title")!!.text()
         manga.description = document.selectFirst("p.page-subtitle")?.text() ?: ""
         manga.thumbnail_url = document.selectFirst("img.aspect-\\[7\\/10\\], figure.relative img")?.attr("abs:src") ?: ""
         manga.genre = document.select("a.badge-genre").joinToString(", ") { it.text() }
@@ -121,14 +169,12 @@ class ManhwaZone : HttpSource() {
         val jsonLd = document.selectFirst("script[type=application/ld+json]")?.data()
         if (jsonLd != null) {
             try {
-                val ldJson = json.parseToJsonElement(jsonLd).jsonObject
-                val authorName = ldJson["author"]?.jsonArray
-                    ?.firstOrNull()?.jsonObject
-                    ?.get("name")?.jsonPrimitive?.contentOrNull
+                val ldData = json.decodeFromString<LdJsonData>(jsonLd)
+                val authorName = ldData.author?.firstOrNull()?.name
                 if (authorName != null && authorName.lowercase() != "unknown") {
                     manga.author = authorName
                 }
-            } catch (_: IllegalArgumentException) {
+            } catch (_: Exception) {
                 // Malformed ld+json, skip author
             }
         }
@@ -136,6 +182,8 @@ class ManhwaZone : HttpSource() {
         manga.initialized = true
         return manga
     }
+
+    // ── Chapter list ──────────────────────────────────────────────────────────
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -145,28 +193,17 @@ class ManhwaZone : HttpSource() {
         val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content") ?: ""
         val snapshot = wireDiv.attr("wire:snapshot")
 
-        val payload = buildJsonObject {
-            put("_token", csrfToken)
-            put(
-                "components",
-                buildJsonArray {
-                    addJsonObject {
-                        put("snapshot", snapshot)
-                        put("updates", buildJsonObject {})
-                        put(
-                            "calls",
-                            buildJsonArray {
-                                addJsonObject {
-                                    put("path", "")
-                                    put("method", "bootLoad")
-                                    put("params", buildJsonArray {})
-                                }
-                            },
-                        )
-                    }
-                },
-            )
-        }
+        // Build Livewire update payload manually (structure required by the wire protocol)
+        val payloadJson = """
+            {
+              "_token": "$csrfToken",
+              "components": [{
+                "snapshot": ${json.encodeToString(kotlinx.serialization.json.JsonPrimitive.serializer(), kotlinx.serialization.json.JsonPrimitive(snapshot))},
+                "updates": {},
+                "calls": [{"path": "", "method": "bootLoad", "params": []}]
+              }]
+            }
+        """.trimIndent()
 
         val postHeaders = headersBuilder()
             .add("Accept", "application/json")
@@ -176,42 +213,31 @@ class ManhwaZone : HttpSource() {
         val postRequest = POST(
             "$baseUrl/livewire/update",
             postHeaders,
-            payload.toString().toRequestBody("application/json".toMediaType()),
+            payloadJson.toRequestBody("application/json".toMediaType()),
         )
 
         val postResponse = client.newCall(postRequest).execute()
         if (!postResponse.isSuccessful) return emptyList()
 
-        val responseJson = json.parseToJsonElement(postResponse.body.string()).jsonObject
-        val components = responseJson["components"]?.jsonArray ?: return emptyList()
-        if (components.isEmpty()) return emptyList()
+        val livewireResp = postResponse.parseAs<LivewireResponse>()
+        val snapshotStr = livewireResp.components.firstOrNull()?.snapshot ?: return emptyList()
+        val snapshotData = json.decodeFromString<LivewireSnapshot>(snapshotStr)
 
-        val returnedSnapshotStr = components[0].jsonObject["snapshot"]?.jsonPrimitive?.content ?: return emptyList()
-        val returnedSnapshot = json.parseToJsonElement(returnedSnapshotStr).jsonObject
+        // chapters[0] contains the actual chapter list; each entry is a tuple [ChapterDto, ...]
+        val actualChapters = snapshotData.data.chapters.getOrNull(0)?.jsonArray ?: return emptyList()
 
-        val chaptersArray = returnedSnapshot["data"]?.jsonObject?.get("chapters")?.jsonArray ?: return emptyList()
-        val actualChapters = chaptersArray.getOrNull(0)?.jsonArray ?: return emptyList()
-
-        val chapters = mutableListOf<SChapter>()
-        for (item in actualChapters) {
-            val chapterTuple = item.jsonArray
-            val chapterObj = chapterTuple[0].jsonObject
-
-            val webUrl = chapterObj["web_url"]?.jsonPrimitive?.contentOrNull ?: continue
-            val name = chapterObj["name"]?.jsonPrimitive?.contentOrNull ?: "Chapter"
-            val dateStr = chapterObj["published"]?.jsonPrimitive?.contentOrNull
-
-            chapters.add(
-                SChapter.create().apply {
-                    setUrlWithoutDomain(webUrl)
-                    this.name = name
-                    date_upload = dateFormat.tryParse(dateStr)
-                },
-            )
-        }
-
-        return chapters.sortedByDescending { it.date_upload }
+        return actualChapters.mapNotNull { item ->
+            val chapterDto = json.decodeFromString<ChapterDto>(item.jsonArray[0].toString())
+            val webUrl = chapterDto.webUrl ?: return@mapNotNull null
+            SChapter.create().apply {
+                setUrlWithoutDomain(webUrl)
+                name = chapterDto.name ?: "Chapter"
+                date_upload = dateFormat.tryParse(chapterDto.published)
+            }
+        }.sortedByDescending { it.date_upload }
     }
+
+    // ── Page list ─────────────────────────────────────────────────────────────
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -225,24 +251,17 @@ class ManhwaZone : HttpSource() {
                 ).find(rsConfScript)?.groupValues?.get(1)
 
                 if (jsonStr != null) {
-                    val jsonObj = json.parseToJsonElement(jsonStr).jsonObject
-                    val p = jsonObj["p"]?.jsonPrimitive?.contentOrNull
-                    val expire = jsonObj["expire"]?.jsonPrimitive?.contentOrNull
-                    val signature = jsonObj["signature"]?.jsonPrimitive?.contentOrNull
-                    val tt = jsonObj["tt"]?.jsonPrimitive?.intOrNull
-
-                    if (p != null && expire != null && signature != null && tt != null) {
-                        return (1..tt).map { i ->
+                    val rsConf = json.decodeFromString<RsConf>(jsonStr)
+                    if (rsConf.p != null && rsConf.expire != null && rsConf.signature != null && rsConf.tt != null) {
+                        return (1..rsConf.tt).map { i ->
                             val pageStr = String.format(Locale.ENGLISH, "%03d", i)
-                            val imageUrl = "https://img.mangalaxy.net/_img/$p/$pageStr.webp?e=$expire&s=$signature"
+                            val imageUrl = "https://img.mangalaxy.net/_img/${rsConf.p}/$pageStr.webp?e=${rsConf.expire}&s=${rsConf.signature}"
                             Page(i - 1, "", imageUrl)
                         }
                     }
                 }
-            } catch (_: IllegalArgumentException) {
-                // Malformed JSON in __RS_CONF__, fall through to data-src fallback
-            } catch (_: NoSuchElementException) {
-                // Missing expected key in __RS_CONF__, fall through to data-src fallback
+            } catch (_: Exception) {
+                // Malformed __RS_CONF__, fall through to data-src fallback
             }
         }
 
@@ -254,7 +273,7 @@ class ManhwaZone : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Filters
+    // ── Filters ───────────────────────────────────────────────────────────────
 
     override fun getFilterList() = FilterList(
         SortFilter(),
