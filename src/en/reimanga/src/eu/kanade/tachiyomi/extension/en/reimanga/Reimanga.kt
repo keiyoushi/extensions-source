@@ -24,6 +24,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
@@ -51,6 +52,7 @@ class Reimanga :
         .addNetworkInterceptor(
             CookieInterceptor(DOMAIN, "showAdultContent" to "true"),
         )
+        .protocols(listOf(Protocol.HTTP_1_1))
         .build()
 
     private val preferences by getPreferencesLazy()
