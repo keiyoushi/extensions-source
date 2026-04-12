@@ -88,6 +88,25 @@ class Reimanga :
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host == DOMAIN && url.pathSegments[0] == "manga") {
+                val slug = url.pathSegments[1]
+                val tmpManga = SManga.create().apply {
+                    this@apply.url = slug
+                }
+
+                return fetchMangaDetails(tmpManga)
+                    .map { MangasPage(listOf(it), false) }
+            } else {
+                throw Exception("Unsupported Url")
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/api/manga".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
