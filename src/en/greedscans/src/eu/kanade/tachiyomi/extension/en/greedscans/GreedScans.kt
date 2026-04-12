@@ -15,7 +15,7 @@ class GreedScans :
     ),
     ConfigurableSource {
 
-    override val id: Long = 288706940180085416L 
+    override val id: Long = 288706940180085416L
 
     private val preferences: SharedPreferences = getPreferences()
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
