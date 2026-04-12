@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -30,8 +29,8 @@ class MugiwarasOficial :
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Estado) + .summary-content"
 
     override fun pageListParse(document: Document): List<Page> {
-        val redirect = document.selectFirst("div.page-break a")!!.absUrl("href")
-        val pageUrl = redirect.toHttpUrl().queryParameter("t")!!.toHttpUrl().toUrl()
+        val redirectUrl = document.selectFirst("div.page-break a")!!.absUrl("href")
+        val pageUrl = redirectUrl.toHttpUrl().queryParameter("t")!!.toHttpUrl().toUrl()
 
         val url = "$baseUrl/campanha.php".toHttpUrl().newBuilder()
             .addQueryParameter("auth", pageUrl.toString())
