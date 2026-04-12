@@ -256,6 +256,22 @@ class Reimanga :
         return data.manga.toSManga()
     }
 
+    @Suppress("unused")
+    @JvmName("relatedMangaListRequest")
+    fun relatedMangaListRequest(manga: SManga): Request {
+        val mangaId = manga.url.substringAfterLast("-")
+
+        return GET("$baseUrl/api/manga/$mangaId/similar", headers)
+    }
+
+    @Suppress("unused")
+    @JvmName("relatedMangaListParse")
+    fun relatedMangaListParse(response: Response): List<SManga> {
+        val data = response.parseAs<List<Manga>>()
+
+        return data.map { it.toSManga() }
+    }
+
     override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
