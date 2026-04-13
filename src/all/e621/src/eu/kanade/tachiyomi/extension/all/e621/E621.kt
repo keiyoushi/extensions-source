@@ -217,8 +217,9 @@ class E621 :
         // Check if this is a single post chapter (split chapters mode)
         if (url.pathSegments.getOrNull(0) == "posts") {
             val postId = url.pathSegments.last().toIntOrNull() ?: return emptyList()
-            val post = batchFetchPosts(listOf(postId)).firstOrNull() ?: return emptyList()
-            val imageUrl = extractImageUrl(post) ?: return emptyList()
+            val post = batchFetchPosts(listOf(postId)).firstOrNull()
+            val imageUrl = post?.let { extractImageUrl(it) }
+                ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
             return listOf(Page(0, imageUrl = imageUrl))
         }
 
@@ -242,8 +243,10 @@ class E621 :
             extractImageUrl(post)?.let { id to it }
         }.toMap()
 
-        return postIds.mapIndexedNotNull { index, postId ->
-            imageMap[postId]?.let { Page(index, imageUrl = it) }
+        return postIds.mapIndexed { index, postId ->
+            val imageUrl = imageMap[postId]
+                ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
+            Page(index, imageUrl = imageUrl)
         }
     }
 
@@ -308,7 +311,7 @@ class E621 :
 
     // Helpers
 
-    private fun extractThumbnailUrl(post: JsonObject): String {
+    private fun extractThumbnailUrl(post: JsonObject): String? {
         // Preview (smallest, fastest to load)
         post["preview"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
             if (it != "null" && it.isNotEmpty()) return it
@@ -324,10 +327,10 @@ class E621 :
             if (it != "null" && it.isNotEmpty()) return it
         }
 
-        return ""
+        return null
     }
 
-    private fun extractImageUrl(post: JsonObject): String {
+    private fun extractImageUrl(post: JsonObject): String? {
         // Full Resolution (best quality for reading)
         post["file"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
             if (it != "null" && it.isNotEmpty()) return it
@@ -343,13 +346,13 @@ class E621 :
             if (it != "null" && it.isNotEmpty()) return it
         }
 
-        return ""
+        return null
     }
 
     private fun batchFetchPosts(postIds: List<Int>): List<JsonObject> {
         if (postIds.isEmpty()) return emptyList()
 
-        return postIds.chunked(100).flatMap { chunk ->
+        return postIds.chunked(40).flatMap { chunk ->
             runCatching {
                 val tagQuery = chunk.joinToString(" ") { "~id:$it" }
                 val url = "$baseUrl/posts.json".toHttpUrl().newBuilder()
@@ -371,13 +374,7 @@ class E621 :
 
         return batchFetchPosts(postIds).mapNotNull { post ->
             val id = post["id"]?.jsonPrimitive?.int ?: return@mapNotNull null
-            val thumbnailUrl = extractThumbnailUrl(post)
-
-            if (thumbnailUrl.isNotEmpty()) {
-                id to thumbnailUrl
-            } else {
-                null
-            }
+            extractThumbnailUrl(post)?.let { id to it }
         }.toMap()
     }
 
