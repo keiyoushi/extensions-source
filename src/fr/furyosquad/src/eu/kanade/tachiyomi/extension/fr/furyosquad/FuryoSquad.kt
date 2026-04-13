@@ -8,24 +8,24 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class FuryoSquad : ParsedHttpSource() {
+class FuryoSquad : HttpSource() {
 
     override val name = "FuryoSquad"
 
-    override val baseUrl = "https://www.furyosociety.com/"
+    override val baseUrl = "https://www.furyosociety.com"
 
     override val lang = "fr"
 
@@ -37,216 +37,209 @@ class FuryoSquad : ParsedHttpSource() {
         .rateLimit(1)
         .build()
 
-    // Popular
+    override fun headersBuilder() = super.headersBuilder()
+
+    // ========================= Popular =========================
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas", headers)
 
-    override fun popularMangaSelector() = "div#fs-tous div.fs-card-body"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        with(element) {
-            manga.url = select("div.fs-card-img-container a").attr("href")
-            manga.title = select("span.fs-comic-title a").text()
-
-            manga.thumbnail_url = select("div.fs-card-img-container img").attr("abs:src")
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div#fs-tous div.fs-card-body").mapNotNull { element ->
+            val titleElement = element.selectFirst("span.fs-comic-title a") ?: return@mapNotNull null
+            SManga.create().apply {
+                val rawUrl = element.selectFirst("div.fs-card-img-container a")?.attr("href") ?: return@mapNotNull null
+                url = rawUrl.toHttpUrlOrNull()?.encodedPath ?: rawUrl
+                title = titleElement.text()
+                thumbnail_url = element.selectFirst("div.fs-card-img-container img")?.attr("abs:src")
+            }
         }
-
-        return manga
+        return MangasPage(mangas, false)
     }
 
-    override fun popularMangaNextPageSelector() = "Not needed"
-
-    // Latest
+    // ========================= Latest =========================
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = mutableListOf<SManga>()
+        val mangas = document.select("table.table-striped tr").mapNotNull { element ->
+            val titleElement = element.selectFirst("span.fs-comic-title a") ?: return@mapNotNull null
+            SManga.create().apply {
+                val rawUrl = titleElement.attr("href")
+                url = rawUrl.toHttpUrlOrNull()?.encodedPath ?: rawUrl
+                title = titleElement.text()
+                thumbnail_url = element.selectFirst("img.fs-chap-img")?.attr("abs:src")
+            }
+        }.distinctBy { it.url }
 
-        document.select(latestUpdatesSelector()).map { mangas.add(latestUpdatesFromElement(it)) }
-
-        return MangasPage(mangas.distinctBy { it.url }, false)
+        return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesSelector() = "table.table-striped tr"
+    // ========================= Search =========================
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        with(element) {
-            manga.url = select("span.fs-comic-title a").attr("href")
-            manga.title = select("span.fs-comic-title a").text()
-
-            manga.thumbnail_url = select("img.fs-chap-img").attr("abs:src")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val path = query.removePrefix(PREFIX_ID_SEARCH)
+            val mangaPath = if (path.startsWith("/")) path else "/$path"
+            return fetchMangaByPath(mangaPath)
         }
 
-        return manga
+        if (query.startsWith("http")) {
+            val url = query.toHttpUrlOrNull()
+            if (url != null && url.host.contains("furyosociety.com")) {
+                if (url.pathSegments.contains("series")) {
+                    return fetchMangaByPath(url.encodedPath)
+                }
+                if (url.pathSegments.contains("read")) {
+                    val readIndex = url.pathSegments.indexOf("read")
+                    if (readIndex != -1 && readIndex + 1 < url.pathSegments.size) {
+                        val mangaSlug = url.pathSegments[readIndex + 1]
+                        return fetchMangaByPath("/series/$mangaSlug/")
+                    }
+                }
+            }
+        }
+
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                val mangasPage = popularMangaParse(response)
+                val filteredMangas = mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }
+                MangasPage(filteredMangas, false)
+            }
     }
 
-    override fun latestUpdatesNextPageSelector() = "not needed"
-
-    // Search
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
+    private fun fetchMangaByPath(path: String): Observable<MangasPage> = client.newCall(GET("$baseUrl$path", headers))
         .asObservableSuccess()
         .map { response ->
-            searchMangaParse(response, query)
+            val manga = mangaDetailsParse(response).apply {
+                url = path
+            }
+            MangasPage(listOf(manga), false)
         }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage = MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    // ========================= Details =========================
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    // Details
-
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-
-        document.select("div.comic-info").let {
-            it.select("p.fs-comic-label").forEach { el ->
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1.fs-comic-title")?.text() ?: ""
+            val info = document.selectFirst("div.comic-info") ?: return@apply
+            info.select("p.fs-comic-label").forEach { el ->
                 when (el.text().lowercase(Locale.ROOT)) {
-                    "scénario" -> manga.author = el.nextElementSibling()!!.text()
-                    "dessins" -> manga.artist = el.nextElementSibling()!!.text()
-                    "genre" -> manga.genre = el.nextElementSibling()!!.text()
+                    "scénario" -> author = el.nextElementSibling()?.text()
+                    "dessins" -> artist = el.nextElementSibling()?.text()
+                    "genre" -> genre = el.nextElementSibling()?.text()
                 }
             }
-            manga.description = it.select("div.fs-comic-description").text()
-            manga.thumbnail_url = it.select("img.comic-cover").attr("abs:src")
+            description = info.selectFirst("div.fs-comic-description")?.text()
+            thumbnail_url = info.selectFirst("img.comic-cover")?.attr("abs:src")
         }
-
-        return manga
     }
 
-    // Chapters
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun chapterListSelector() = "div.fs-chapter-list div.element"
+    // ========================= Chapters =========================
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-
-        chapter.url = element.select("div.title a").attr("href")
-        chapter.name = element.select("div.title a").attr("title")
-        chapter.date_upload = parseChapterDate(element.select("div.meta_r").text())
-
-        return chapter
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div.fs-chapter-list div.element").map { element ->
+            SChapter.create().apply {
+                val titleElement = element.selectFirst("div.title a")!!
+                val rawUrl = titleElement.attr("href")
+                url = rawUrl.toHttpUrlOrNull()?.encodedPath ?: rawUrl
+                name = titleElement.attr("title")
+                date_upload = parseChapterDate(element.selectFirst("div.meta_r")?.text() ?: "")
+            }
+        }
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+
+    // ========================= Pages =========================
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.fs-read img[id]").mapIndexed { i, img ->
+            Page(i, "", img.attr("abs:src"))
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun getFilterList() = FilterList()
+
+    // ========================= Utilities =========================
 
     private fun parseChapterDate(date: String): Long {
         val lcDate = date.lowercase(Locale.ROOT)
         if (lcDate.startsWith("il y a")) {
-            parseRelativeDate(lcDate).let { return it }
+            return parseRelativeDate(lcDate)
         }
 
-        // Handle 'day before yesterday', yesterday' and 'today', using midnight
-        var relativeDate: Calendar? = null
-        // Result parsed but no year, copy current year over
-        when {
+        return when {
             lcDate.startsWith("avant-hier") -> {
-                relativeDate = Calendar.getInstance()
-                relativeDate.add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
-                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-                relativeDate.set(Calendar.MINUTE, 0)
-                relativeDate.set(Calendar.SECOND, 0)
-                relativeDate.set(Calendar.MILLISECOND, 0)
+                Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_MONTH, -2)
+                    setMidnight()
+                }.timeInMillis
             }
 
             lcDate.startsWith("hier") -> {
-                relativeDate = Calendar.getInstance()
-                relativeDate.add(Calendar.DAY_OF_MONTH, -1) // yesterday
-                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-                relativeDate.set(Calendar.MINUTE, 0)
-                relativeDate.set(Calendar.SECOND, 0)
-                relativeDate.set(Calendar.MILLISECOND, 0)
+                Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_MONTH, -1)
+                    setMidnight()
+                }.timeInMillis
             }
 
             lcDate.startsWith("aujourd'hui") -> {
-                relativeDate = Calendar.getInstance()
-                relativeDate.set(Calendar.HOUR_OF_DAY, 0) // today
-                relativeDate.set(Calendar.MINUTE, 0)
-                relativeDate.set(Calendar.SECOND, 0)
-                relativeDate.set(Calendar.MILLISECOND, 0)
+                Calendar.getInstance().apply {
+                    setMidnight()
+                }.timeInMillis
+            }
+
+            else -> {
+                val dateText = DATE_EXTRACT_REGEX.find(date)?.groupValues?.get(1) ?: date
+                DATE_FORMAT.tryParse(dateText)
             }
         }
-
-        return relativeDate?.timeInMillis ?: 0L
     }
 
     private fun parseRelativeDate(date: String): Long {
-        val value = date.split(" ")[3].toIntOrNull()
+        val match = RELATIVE_DATE_REGEX.find(date) ?: return 0L
+        val value = match.groupValues[1].toIntOrNull() ?: return 0L
+        val unit = match.groupValues[2]
 
-        return if (value != null) {
-            when (date.split(" ")[4]) {
-                "minute", "minutes" -> Calendar.getInstance().apply {
-                    add(Calendar.MINUTE, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                "heure", "heures" -> Calendar.getInstance().apply {
-                    add(Calendar.HOUR_OF_DAY, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                "jour", "jours" -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                "semaine", "semaines" -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value * 7)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                "mois" -> Calendar.getInstance().apply {
-                    add(Calendar.MONTH, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                "an", "ans", "année", "années" -> Calendar.getInstance().apply {
-                    add(Calendar.YEAR, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                else -> {
-                    return 0L
-                }
+        return Calendar.getInstance().apply {
+            when (unit) {
+                "minute", "minutes" -> add(Calendar.MINUTE, -value)
+                "heure", "heures" -> add(Calendar.HOUR_OF_DAY, -value)
+                "jour", "jours" -> add(Calendar.DATE, -value)
+                "semaine", "semaines" -> add(Calendar.DATE, -value * 7)
+                "mois" -> add(Calendar.MONTH, -value)
+                "an", "ans", "année", "années" -> add(Calendar.YEAR, -value)
             }
-        } else {
-            try {
-                SimpleDateFormat("dd MMM yyyy", Locale.FRENCH).parse(date.substringAfter("le "))?.time ?: 0
-            } catch (_: Exception) {
-                0L
-            }
-        }
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 
-    // Pages
-
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-
-        document.select("div.fs-read img[id]").forEachIndexed { i, img ->
-            pages.add(Page(i, "", img.attr("abs:src")))
-        }
-
-        return pages
+    private fun Calendar.setMidnight() {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList()
+    companion object {
+        const val PREFIX_ID_SEARCH = "id:"
+        private val DATE_FORMAT = SimpleDateFormat("dd MMM yyyy", Locale.FRENCH)
+        private val RELATIVE_DATE_REGEX = Regex("""il y a (\d+) (\w+)""")
+        private val DATE_EXTRACT_REGEX = Regex("""le (.*)""")
+    }
 }

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.roliascan
+package eu.kanade.tachiyomi.extension.fr.furyosquad
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,28 +7,24 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class RoliaScanUrlActivity : Activity() {
-
-    private val tag = javaClass.simpleName
-
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val item = pathSegments[1]
+
+        val intentData = intent?.data?.toString()
+        if (intentData != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${RoliaScan.PREFIX_SEARCH}$item")
+                putExtra("query", intentData)
                 putExtra("filter", packageName)
             }
-
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e(tag, e.toString())
+                Log.e("FuryoSquad", e.toString())
             }
         } else {
-            Log.e(tag, "could not parse uri from intent $intent")
+            Log.e("FuryoSquad", "could not parse uri from intent $intent")
         }
 
         finish()

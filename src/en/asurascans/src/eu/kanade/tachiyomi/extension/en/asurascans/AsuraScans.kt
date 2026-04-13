@@ -192,12 +192,16 @@ class AsuraScans :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        var pages = document.extractAstroProp<PageListDto>("pages").pages
+        var pages = try {
+            document.extractAstroProp<PageListDto>("pages").pages
+        } catch (_: Exception) {
+            emptyList()
+        }
 
         if (pages.isEmpty()) {
             val accessToken = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
                 .find { it.name == "access_token" }?.value
-                ?: throw Exception("Premium Chapter")
+                ?: throw Exception("This chapter is locked. Wait for free unlock, or unlock it using tokens or a subscription in WebView.")
             val pageToken = document.selectFirst("script:containsData(pageToken)")
                 ?.data()?.let { pageTokenRegex.find(it)?.groupValues?.get(1) }
                 ?: "asura-reader-2026"
@@ -210,8 +214,16 @@ class AsuraScans :
                 .set("X-Page-Token", pageToken)
                 .build()
 
-            pages = client.newCall(GET(url, headers)).execute()
-                .parseAs<PremiumPageListDto>().data.chapter.pages
+            pages = try {
+                client.newCall(GET(url, headers)).execute()
+                    .parseAs<PremiumPageListDto>().data.chapter.pages
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        if (pages.isEmpty()) {
+            throw Exception("This chapter is locked. Wait for free unlock, or unlock it using tokens or a subscription in WebView.")
         }
 
         return pages.mapIndexed { index, pageDto ->
@@ -310,6 +322,7 @@ class AsuraScans :
             size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
             else -> JsonArray(map { it.unwrapAstro() })
         }
+
         is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
         else -> this
     }

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.mangataro
+package eu.kanade.tachiyomi.multisrc.mangataro
 
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.toJsonString
