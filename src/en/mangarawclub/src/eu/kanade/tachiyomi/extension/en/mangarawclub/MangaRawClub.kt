@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -39,10 +40,12 @@ class MangaRawClub :
         .build()
     private val preferences = getPreferences()
     private fun nsfw() = preferences.getBoolean(PREF_HIDE_NSFW, false)
+    private fun defaultAltSearch() = preferences.getBoolean(PREF_DEFAULT_ALT_SEARCH, false)
 
     companion object {
         private const val ALT_NAME = "Alternative Name:"
         private const val PREF_HIDE_NSFW = "pref_hide_nsfw"
+        private const val PREF_DEFAULT_ALT_SEARCH = "pref_default_alt_search"
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMMMM dd, yyyy, h:mm a", Locale.ENGLISH) }
         private val DATE_FORMATTER_2 by lazy { SimpleDateFormat("MMMMM dd, yyyy, h a", Locale.ENGLISH) }
     }
@@ -54,8 +57,16 @@ class MangaRawClub :
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
 
     // Search
-    override fun getFilterList(): FilterList = getFilters()
+    override fun getFilterList(): FilterList = getFilters(defaultAltSearch())
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (filters.any { it is AlternativeSearchFilter && it.state }) {
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
+                addQueryParameter("search", query.trim())
+                addQueryParameter("results", page.toString())
+            }.build()
+            return GET(url, headers)
+        }
+
         val url = "$baseUrl/browse-comics/data/".toHttpUrl().newBuilder().apply {
             val tagsIncl: MutableList<String> = mutableListOf()
             val genreIncl: MutableList<String> = mutableListOf()
@@ -141,6 +152,21 @@ class MangaRawClub :
     override fun latestUpdatesSelector() = searchMangaSelector()
 
     override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.pathSegments.contains("search")) {
+            val document = response.asJsoup()
+            val mangas = document.select(".novel-item").map { element ->
+                SManga.create().apply {
+                    title = element.selectFirst(".novel-title")!!.text()
+                    thumbnail_url = element.selectFirst(".novel-cover img")!!.let {
+                        it.absUrl("data-src").takeIf { it.isNotEmpty() } ?: it.absUrl("src")
+                    }
+                    setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+                }
+            }
+            val hasNextPage = document.selectFirst("nav.paging a:contains(Next)") != null
+            return MangasPage(mangas, hasNextPage)
+        }
+
         val data = response.parseAs<Data>()
 
         with(data) {
@@ -238,6 +264,13 @@ class MangaRawClub :
             key = PREF_HIDE_NSFW
             title = "Hide NSFW"
             summary = "Hides NSFW entries"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_DEFAULT_ALT_SEARCH
+            title = "Enable alternative search by default"
+            summary = "The alternative search filter will be enabled by default for every search."
             setDefaultValue(false)
         }.also(screen::addPreference)
     }

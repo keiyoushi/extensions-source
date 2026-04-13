@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.mangarawclub
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList = FilterList(
+fun getFilters(defaultAltSearch: Boolean): FilterList = FilterList(
     SortFilter("Sort by", getSortsList),
     StatusFilter("Status", getStatusList),
     TypeFilter("Types", getTypeList),
@@ -19,7 +19,12 @@ fun getFilters(): FilterList = FilterList(
     RatingFilter("Minimum Rating"),
     Filter.Separator(),
     ExtraFilter("Extras"),
+    Filter.Separator(),
+    Filter.Header("This will ignore all other filters. Use if normal search fails."),
+    AlternativeSearchFilter("Alternative search", defaultAltSearch),
 )
+
+internal class AlternativeSearchFilter(name: String, state: Boolean) : Filter.CheckBox(name, state)
 
 internal open class ExtraFilter(name: String) :
     Filter.Group<CheckBoxFilter>(
