@@ -83,7 +83,7 @@ class XXXYaoi :
     }
 
     override fun getFilterList(): FilterList {
-        super.getFilterList()
+        launchIO { fetchGenres() }
 
         val filters: MutableList<Filter<out Any>> = mutableListOf(
             StatusFilter(
