@@ -12,11 +12,22 @@ class XXXYaoi :
         "XXX Yaoi",
         "https://3xyaoi.com",
         "pt-BR",
-        SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     ) {
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .set("Upgrade-Insecure-Requests", "1")
+        .set("Sec-GPC", "1")
+        .set("Sec-Fetch-User", "?1")
+        .set("Sec-Fetch-Site", "none")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Dest", "document")
+        .set("Priority", "u=0, i")
+        .set("Pragma", "no-cache")
+
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
 
     override val useNewChapterEndpoint = true
