@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.e621
 
 import android.content.SharedPreferences
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -57,12 +58,24 @@ class E621 :
 
     // Popular
     override fun popularMangaRequest(page: Int): Request { // e621 doesn't have a "popular" page, so we'll just sort by post count
-        return GET("$baseUrl/pools.json?limit=24&page=$page&search[order]=post_count", headers)
+        val url = "$baseUrl/pools.json?limit=24&page=$page&search[order]=post_count".toHttpUrl().newBuilder()
+        val category = preferences.categoryPref
+        if (category.isNotEmpty()) {
+            url.addQueryParameter("search[category]", category)
+        }
+        return GET(url.build(), headers)
     }
     override fun popularMangaParse(response: Response): MangasPage = parsePoolList(response)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/pools.json?limit=24&page=$page&search[order]=created_at", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl/pools.json?limit=24&page=$page&search[order]=created_at".toHttpUrl().newBuilder()
+        val category = preferences.categoryPref
+        if (category.isNotEmpty()) {
+            url.addQueryParameter("search[category]", category)
+        }
+        return GET(url.build(), headers)
+    }
     override fun latestUpdatesParse(response: Response): MangasPage = parsePoolList(response)
 
     // Search
@@ -258,9 +271,15 @@ class E621 :
         Filter.Header("Search by pool name"),
         DescriptionFilter(),
         OrderFilter(),
-        CategoryFilter(),
+        CategoryFilter(getDefaultCategoryIndex()),
         ActiveOnlyFilter(),
     )
+
+    private fun getDefaultCategoryIndex(): Int = when (preferences.categoryPref) {
+        "series" -> 1
+        "collection" -> 2
+        else -> 0 // "" (both) maps to "Any"
+    }
 
     private class OrderFilter :
         UriPartFilter(
@@ -273,7 +292,7 @@ class E621 :
             ),
         )
 
-    private class CategoryFilter :
+    private class CategoryFilter(defaultIndex: Int = 0) :
         UriPartFilter(
             "Category",
             arrayOf(
@@ -281,19 +300,29 @@ class E621 :
                 Pair("Series", "series"),
                 Pair("Collection", "collection"),
             ),
+            defaultIndex,
         )
 
     private class ActiveOnlyFilter : Filter.CheckBox("Active pools only", false)
 
     private class DescriptionFilter : Filter.Text("Description contains")
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, defaultIndex: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultIndex) {
         fun toUriPart() = vals[state].second
     }
 
     // Preferences
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = CATEGORY_PREF
+            title = "Pool category filter for Popular and Latest"
+            entries = arrayOf("Series only", "Collections only", "Both")
+            entryValues = arrayOf("series", "collection", "")
+            setDefaultValue("series")
+            summary = "%s"
+        }.also(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = SPLIT_CHAPTERS_PREF
             title = "Split posts into individual chapters"
@@ -302,10 +331,14 @@ class E621 :
         }.also(screen::addPreference)
     }
 
+    private val SharedPreferences.categoryPref: String
+        get() = getString(CATEGORY_PREF, "series")!!
+
     private val SharedPreferences.splitChaptersPref: Boolean
         get() = getBoolean(SPLIT_CHAPTERS_PREF, false)
 
     companion object {
+        private const val CATEGORY_PREF = "category_filter"
         private const val SPLIT_CHAPTERS_PREF = "split_chapters"
     }
 
