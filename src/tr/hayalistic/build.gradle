@@ -3,7 +3,7 @@ ext {
     extClass = '.Hayalistic'
     themePkg = 'madara'
     baseUrl = 'https://hayalistic.net'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
