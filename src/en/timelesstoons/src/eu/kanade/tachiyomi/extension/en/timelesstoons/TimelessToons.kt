@@ -22,24 +22,19 @@ class TimelessToons :
     ) {
     private val json: Json by injectLazy()
 
-    // Selects the 'Trending' section correctly
     override fun popularMangaSelector() = "div:has(> h2:contains(Trending)) + div .group"
 
-    // Specifically targets the latest items on /latest/ to prevent returning empty
     override fun latestUpdatesSelector() = "div.grid > div.group.latest-poster"
 
-    // Correctly targets genre links on the detail page
     override val genreSelector = "div.grid:has(>h1) a[href*=\"genre=\"]"
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = super.mangaDetailsParse(document)
 
-        
         document.getImageUrl("div[style*=photoURL]")?.let {
             manga.thumbnail_url = it
         }
 
-        // Clean up any trailing commas from raw tags (e.g. "Horror," -> "Horror")
         manga.genre = manga.genre
             ?.split(", ")
             ?.mapNotNull { it.trim(',', ' ').takeIf(String::isNotBlank) }
@@ -48,13 +43,12 @@ class TimelessToons :
         return manga
     }
 
-    // Prevents redundant and failing requests since genres are loaded via JS on the website
     override fun fetchGenres() {}
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("series")
-            addPathSegment("") // Adds trailing slash for /series/
+            addPathSegment("")
             if (query.isNotBlank()) {
                 addQueryParameter("q", query)
             }
@@ -83,7 +77,6 @@ class TimelessToons :
         return GET(url, headers)
     }
 
-    // The site returns all series without filtering them server-side, so we filter in Kotlin (matching their JS)
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val url = response.request.url
