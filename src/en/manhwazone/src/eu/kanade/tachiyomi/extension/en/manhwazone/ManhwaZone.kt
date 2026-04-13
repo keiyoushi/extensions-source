@@ -53,7 +53,6 @@ class ManhwaZone : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Intercept Deep Links
         if (query.startsWith("https://") && query.contains(baseUrl.toHttpUrl().host)) {
             return GET(query, headers)
         }
@@ -235,7 +234,7 @@ class ManhwaZone : HttpSource() {
                     val signature = jsonObj["signature"]?.jsonPrimitive?.contentOrNull
                     val tt = jsonObj["tt"]?.jsonPrimitive?.intOrNull
 
-                    if (p != null && expire != null && signature != null && tt != null) {
+                    if (p != null && expire != null && signature != null && tt != null && tt > 0) {
                         return (1..tt).map { i ->
                             val pageStr = String.format("%03d", i)
                             val imageUrl = "https://img.mangalaxy.net/_img/$p/$pageStr.webp?e=$expire&s=$signature"
@@ -244,11 +243,11 @@ class ManhwaZone : HttpSource() {
                     }
                 }
             } catch (e: Exception) {
-                // Fallback to data-src fetching below if conversion fails
+                // Fallback to data-src fetching below if conversion fails or if tt is 0
             }
         }
 
-        // Fallback approach if __RS_CONF__ parsing fails
+        // Fallback approach if __RS_CONF__ parsing fails or tt == 0
         return document.select("img.lazy-image[data-src]").mapIndexed { i, element ->
             Page(i, "", element.attr("abs:data-src"))
         }
