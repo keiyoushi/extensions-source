@@ -20,8 +20,8 @@ fun getFilters(defaultAltSearch: Boolean): FilterList = FilterList(
     Filter.Separator(),
     ExtraFilter("Extras"),
     Filter.Separator(),
-    Filter.Header("This will ignore all other filters. Use if normal search fails."),
-    AlternativeSearchFilter("Alternative search", defaultAltSearch),
+    Filter.Header("This will ignore all other filters"),
+    AlternativeSearchFilter("Alternative search (Bigger Database)", defaultAltSearch),
 )
 
 internal class AlternativeSearchFilter(name: String, state: Boolean) : Filter.CheckBox(name, state)
