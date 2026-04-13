@@ -1,4 +1,3 @@
-// src/eu/kanade/tachiyomi/extension/en/timelesstoons/TimelessToons.kt
 package eu.kanade.tachiyomi.extension.en.timelesstoons
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
@@ -35,7 +34,7 @@ class TimelessToons :
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = super.mangaDetailsParse(document)
 
-        // Keyoapp looks for div[class*=photoURL], but TimelessToons uses a style attribute instead
+        
         document.getImageUrl("div[style*=photoURL]")?.let {
             manga.thumbnail_url = it
         }
