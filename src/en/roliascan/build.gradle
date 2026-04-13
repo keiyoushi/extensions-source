@@ -1,7 +1,9 @@
 ext {
     extName = 'Rolia Scan'
     extClass = '.RoliaScan'
-    extVersionCode = 7
+    themePkg = 'mangataro'
+    overrideVersionCode = 7
+    baseUrl = 'https://roliascan.com'
     isNsfw = false
 }
 

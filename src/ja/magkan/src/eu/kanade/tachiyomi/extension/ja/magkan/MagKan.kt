@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.magkan
 
 import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.Request
 import okhttp3.Response
@@ -14,7 +15,7 @@ class MagKan :
     ) {
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/manga/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 

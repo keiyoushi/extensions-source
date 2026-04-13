@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.mangabang
 
 import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.network.GET
+import okhttp3.Request
 
 class MangaBang :
     ComiciViewerAlt(
@@ -9,6 +11,8 @@ class MangaBang :
         "ja",
         "https://comics.manga-bang.com/api",
     ) {
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/manga/$page", headers)
+
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(
         Pair("ランキング", "/ranking/manga"),
         Pair("更新順", "/series/list/up"),

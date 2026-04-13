@@ -201,16 +201,39 @@ abstract class ZeistManga(
 
     protected open val chapterCategory: String = "Chapter"
 
+    private fun fetchChapter(url: String, startIndex: Int, maxResults: Int = MAX_CHAPTER_RESULTS): ZeistMangaDto {
+        val paginationUrl = url.toHttpUrl().newBuilder()
+            .setQueryParameter("start-index", startIndex.toString())
+            .setQueryParameter("max-results", maxResults.toString()).build().toString()
+
+        val res = client.newCall(GET(paginationUrl, headers)).execute()
+        return json.decodeFromString<ZeistMangaDto>(res.body.string())
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
+        val allEntries = mutableListOf<ZeistMangaEntryDto>()
         val url = getChapterFeedUrl(document)
-        val res = client.newCall(GET(url, headers)).execute()
 
-        val result = json.decodeFromString<ZeistMangaDto>(res.body.string())
-        return result.feed?.entry?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
-            ?.map { it.toSChapter(baseUrl) }
-            ?: throw Exception("Failed to parse from chapter API")
+        var startIndex = 1
+        // Get total first
+        val result = fetchChapter(url, startIndex, maxResults = 0)
+        val totalResults = (
+            result.totalResults?.t
+                ?: result.feed?.totalResults?.t
+            )?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
+
+        while (allEntries.size < totalResults) {
+            val result = fetchChapter(url, startIndex)
+            val entries = result.feed?.entry ?: throw Exception("Failed to parse from chapter API")
+            if (entries.isEmpty()) break
+
+            allEntries.addAll(entries)
+            startIndex += entries.size
+        }
+        return allEntries
+            .filter { it.category.orEmpty().any { cat -> cat.term == chapterCategory } }
+            .map { it.toSChapter(baseUrl) }
     }
 
     protected open val useNewChapterFeed = false
@@ -234,7 +257,6 @@ abstract class ZeistManga(
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
-            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
             .build().toString()
     }
 
@@ -248,7 +270,7 @@ abstract class ZeistManga(
             ?.groupValues?.get(1)
             ?: throw Exception("Failed to find chapter feed")
 
-        return "$baseUrl$feed?alt=json&start-index=1&max-results=$MAX_CHAPTER_RESULTS"
+        return "$baseUrl$feed?alt=json"
     }
 
     private val newChapterFeedRegex = """label\s*=\s*'([^']+)'""".toRegex()
@@ -439,6 +461,6 @@ abstract class ZeistManga(
 
     companion object {
         private const val MAX_MANGA_RESULTS = 20
-        const val MAX_CHAPTER_RESULTS = 999999
+        const val MAX_CHAPTER_RESULTS = 150
     }
 }

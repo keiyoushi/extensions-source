@@ -1,7 +1,7 @@
 ext {
     extName = 'Nexus Scan'
     extClass = '.NexusScan'
-    extVersionCode = 59
+    extVersionCode = 60
     isNsfw = true
 }
 

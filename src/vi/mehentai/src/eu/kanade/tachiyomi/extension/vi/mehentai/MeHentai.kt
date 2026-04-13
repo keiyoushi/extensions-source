@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 class MeHentai :
     ManhwaZ(
         "MeHentai",
-        "https://mehentai.store",
+        "https://mehentai.space",
         "vi",
         mangaDetailsAuthorHeading = "Tác giả",
         mangaDetailsStatusHeading = "Trạng thái",

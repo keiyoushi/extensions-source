@@ -44,15 +44,15 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // Popular
 
-    override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) a.btn-info"
+    override fun popularMangaNextPageSelector() = "div.pagination-wrap a.pagination-link"
 
-    override fun popularMangaSelector() = "div.col-md-12 > span.thumbnail"
+    override fun popularMangaSelector() = "div.lp-results div.media-card"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.pull-left")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("h3.media-heading a")!!.text()
-        thumbnail_url = link.selectFirst("img.media-object")?.absUrl("src")
+        val titleLink = element.selectFirst("a.media-card__title")!!
+        setUrlWithoutDomain(titleLink.absUrl("href"))
+        title = titleLink.text().trim()
+        thumbnail_url = element.selectFirst("img.media-card__cover")?.absUrl("src")
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -187,11 +187,11 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .replace(trailingYearInTitle, "")
             .trim()
 
-        thumbnail_url = document.selectFirst("img[src*='image.mangatr.site']")?.absUrl("src")
+        thumbnail_url = document.selectFirst("img[src*='image.mangatr.site'], img.poster-card__image")?.absUrl("src")
             ?: document.selectFirst("img[title]")?.absUrl("src")
 
-        val descBlock = document.selectFirst("div.info-desc, div#tab1 p, div.summary")?.text()?.trim().orEmpty()
-        val altNames = document.selectFirst("div.info-other")?.text()?.trim().orEmpty()
+        val descBlock = document.selectFirst("div.detail-copy")?.text()?.trim().orEmpty()
+        val altNames = document.selectFirst("div.detail-hero__sub")?.text()?.trim().orEmpty()
         description = buildString {
             if (descBlock.isNotEmpty()) append(descBlock)
             if (altNames.isNotEmpty()) {
@@ -201,24 +201,31 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             }
         }.ifBlank { null }
 
-        author = document.selectFirst("div.manga-meta-item:contains(Yazar) .manga-meta-value a[href*='author=']")
-            ?.text()?.trim()
-            ?: document.selectFirst("div.manga-meta-item:contains(Yazar) .manga-meta-value")?.text()?.trim()
-                ?.takeIf { it.isNotEmpty() }
-
-        artist = document.select("div.manga-meta-item:contains(Sanatçı) .manga-meta-value a[href*='artist=']")
+        author = document.detailMetaLinks("Yazar", "author")
             .joinToString { it.text().trim() }
-            .ifBlank { null }
-            ?: document.selectFirst("div.manga-meta-item:contains(Sanatçı) .manga-meta-value")?.text()?.trim()
-                ?.takeIf { it.isNotEmpty() }
+            .takeUnless { it.isBlank() }
 
-        genre = document.select("div.manga-meta-item:contains(Tür) a[href*='?tur='], div.manga-meta-value a[href*='?tur=']")
-            .joinToString { it.text() }
+        artist = document.detailMetaLinks("Sanatçı", "artist")
+            .joinToString { it.text().trim() }
+            .takeUnless { it.isBlank() }
 
-        val translateLabel = document.selectFirst(
-            "div.manga-meta-item:contains(Çeviri Durumu) .manga-meta-value a[href*='ceviri=']",
-        )?.text()?.trim().orEmpty()
+        genre = document.detailMetaLinks("Tür", "tur=").joinToString { it.text() }
+
+        val translateLabel = document.detailMetaLink("Çeviri", "ceviri").orEmpty()
         status = parseTranslateStatusBadge(translateLabel)
+    }
+
+    private fun Document.detailMetaLinks(labelSubstring: String, hrefSubstring: String): List<Element> {
+        val row = selectFirst("span.detail-meta-row__label:contains($labelSubstring)")?.closest(".detail-meta-row")
+            ?: return emptyList()
+        return row.select(".detail-meta-row__value a[href*='$hrefSubstring']")
+    }
+
+    private fun Document.detailMetaLink(labelSubstring: String, hrefSubstring: String): String? {
+        val row = selectFirst("span.detail-meta-row__label:contains($labelSubstring)")?.closest(".detail-meta-row")
+            ?: return null
+        return row.selectFirst(".detail-meta-row__value a[href*='$hrefSubstring']")?.text()?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     private fun parseTranslateStatusBadge(label: String): Int {
@@ -234,13 +241,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         }
     }
 
-    // Chapters
+    // Chapters — API HTML: `cek/fetch_pages_manga.php` returns `article.chapter-card` (not `div.chapter-item`).
 
-    override fun chapterListSelector() = "div.chapter-item"
-
-    private val chapterLinkSelector = "div.chapter-title a"
-    private val chapterSubSelector = "div.chapter-sub"
-    private val chapterStatsSelector = "div.stats"
+    override fun chapterListSelector() = "article.chapter-card"
 
     private val chapterListHeaders by lazy {
         headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
@@ -276,17 +279,19 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val link = element.selectFirst(chapterLinkSelector)!!
+        val link = element.selectFirst("a.chapter-card__title")!!
         setUrlWithoutDomain(link.attr("href"))
-        val chapterNum = link.selectFirst("span:last-child")?.text()
-            ?: link.text()
-        val sub = element.selectFirst(chapterSubSelector)?.text()
+        val chapterNum = link.selectFirst("span:last-child")?.text()?.trim()
+            ?: link.text().trim()
+        val sub = element.selectFirst("p.chapter-card__subtitle")?.text()?.trim()
         name = when {
             sub.isNullOrEmpty() -> chapterNum
             sub.contains("Bölüm") -> sub
             else -> "$chapterNum: $sub"
         }
-        date_upload = parseRelativeDate(element.selectFirst(chapterStatsSelector)?.ownText() ?: "")
+        date_upload = parseRelativeDate(
+            element.selectFirst("div.chapter-card__meta span")?.text()?.trim() ?: "",
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
@@ -420,8 +425,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         cacheGenresFromListPage(document)
 
         val mangas = document.select(popularMangaSelector())
-            .filterNot {
-                it.selectFirst("a.anime-r, a.novel-r") != null
+            .filterNot { card ->
+                val badge = card.selectFirst(".media-card__badge")?.text()?.lowercase(Locale.ROOT).orEmpty()
+                badge.contains("novel") || badge.contains("anime")
             }
             .map { popularMangaFromElement(it) }
 
