@@ -231,8 +231,11 @@ class E621 :
         if (url.pathSegments.getOrNull(0) == "posts") {
             val postId = url.pathSegments.last().toIntOrNull() ?: return emptyList()
             val post = batchFetchPosts(listOf(postId)).firstOrNull()
-            val imageUrl = post?.let { extractImageUrl(it) }
-                ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
+            val imageUrl = when {
+                post == null -> return emptyList() // Post not found in API response
+                isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
+                else -> extractImageUrl(post) ?: return emptyList() // Post exists but has no images
+            }
             return listOf(Page(0, imageUrl = imageUrl))
         }
 
@@ -251,14 +254,16 @@ class E621 :
             ?.map { it.jsonPrimitive.int }
             ?: return emptyList()
 
-        val imageMap = batchFetchPosts(postIds).mapNotNull { post ->
-            val id = post["id"]?.jsonPrimitive?.int ?: return@mapNotNull null
-            extractImageUrl(post)?.let { id to it }
-        }.toMap()
+        val posts = batchFetchPosts(postIds)
+        val postMap = posts.associateBy { it["id"]?.jsonPrimitive?.int }
 
-        return postIds.mapIndexed { index, postId ->
-            val imageUrl = imageMap[postId]
-                ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
+        return postIds.mapIndexedNotNull { index, postId ->
+            val post = postMap[postId]
+            val imageUrl = when {
+                post == null -> return@mapIndexedNotNull null // Skip posts not returned by API
+                isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
+                else -> extractImageUrl(post) ?: return@mapIndexedNotNull null // Skip posts with no images
+            }
             Page(index, imageUrl = imageUrl)
         }
     }
@@ -343,6 +348,8 @@ class E621 :
     }
 
     // Helpers
+
+    private fun isPostDeleted(post: JsonObject): Boolean = post["flags"]?.jsonObject?.get("deleted")?.jsonPrimitive?.boolean == true
 
     private fun extractThumbnailUrl(post: JsonObject): String? {
         // Preview (smallest, fastest to load)
