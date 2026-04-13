@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.e621
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -26,7 +31,9 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class E621 : HttpSource() {
+class E621 :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name: String = "e621"
     override val baseUrl: String = "https://e621.net"
@@ -35,6 +42,7 @@ class E621 : HttpSource() {
 
     override val client = network.cloudflareClient
     private val json: Json by injectLazy()
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     // e621 needs a custom User-Agent header
     override fun headersBuilder() = Headers.Builder().apply { add("User-Agent", "Keiyoushi-E621/1.0.0") }
@@ -175,16 +183,27 @@ class E621 : HttpSource() {
             .asObservableSuccess()
             .map { response ->
                 val pool = json.parseToJsonElement(response.body.string()).jsonObject
-                val postCount = pool["post_count"]?.jsonPrimitive?.int ?: 0
+                val postIds = pool["post_ids"]?.jsonArray?.map { it.jsonPrimitive.int } ?: emptyList()
                 val updatedAt = pool["updated_at"]?.jsonPrimitive?.content
 
-                listOf(
-                    SChapter.create().apply {
-                        name = "Pool ($postCount pages)"
-                        url = "/pools/$poolId"
-                        date_upload = updatedAt?.let { parseDate(it) } ?: 0L
-                    },
-                )
+                if (preferences.splitChaptersPref && postIds.isNotEmpty()) {
+                    postIds.mapIndexed { index, postId ->
+                        SChapter.create().apply {
+                            name = "Post ${index + 1}"
+                            url = "/posts/$postId"
+                            chapter_number = (index + 1).toFloat()
+                            date_upload = if (index == 0) updatedAt?.let { parseDate(it) } ?: 0L else 0L
+                        }
+                    }.reversed()
+                } else {
+                    listOf(
+                        SChapter.create().apply {
+                            name = "Pool (${postIds.size} pages)"
+                            url = "/pools/$poolId"
+                            date_upload = updatedAt?.let { parseDate(it) } ?: 0L
+                        },
+                    )
+                }
             }
     }
 
@@ -193,7 +212,18 @@ class E621 : HttpSource() {
     // Pages
 
     override fun pageListParse(response: Response): List<Page> {
-        val poolId = response.request.url.pathSegments.last()
+        val url = response.request.url
+
+        // Check if this is a single post chapter (split chapters mode)
+        if (url.pathSegments.getOrNull(0) == "posts") {
+            val postId = url.pathSegments.last().toIntOrNull() ?: return emptyList()
+            val post = batchFetchPosts(listOf(postId)).firstOrNull() ?: return emptyList()
+            val imageUrl = extractImageUrl(post) ?: return emptyList()
+            return listOf(Page(0, imageUrl = imageUrl))
+        }
+
+        // Otherwise, it's a pool with all pages
+        val poolId = url.pathSegments.last()
         val poolResponse = client.newCall(
             GET("$baseUrl/pools.json?search[id]=$poolId&limit=1", headers),
         ).execute()
@@ -256,6 +286,24 @@ class E621 : HttpSource() {
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
+    }
+
+    // Preferences
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SPLIT_CHAPTERS_PREF
+            title = "Split posts into individual chapters"
+            summary = "Each post in a pool will be shown as a separate chapter instead of one merged chapter"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    private val SharedPreferences.splitChaptersPref: Boolean
+        get() = getBoolean(SPLIT_CHAPTERS_PREF, false)
+
+    companion object {
+        private const val SPLIT_CHAPTERS_PREF = "split_chapters"
     }
 
     // Helpers
