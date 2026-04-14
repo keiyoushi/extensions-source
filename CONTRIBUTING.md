@@ -607,6 +607,13 @@ empty, so the app will skip the `fetchImageUrl` step and call directly `fetchIma
 
 ### Advanced Extension features
 
+#### Extension logic and app features
+
+- **Mandatory SManga fields:** A manga's `title` and `url` are **mandatory**. Do not provide generic fallbacks like `"Untitled"` or `"Unknown"` if the site fails to provide a title, as this breaks downloads and library management. If the title is missing, it is better to drop the entry entirely or throw an exception.
+- **When to bump `versionId`:** The `versionId` property dictates how the app tracks the source. **Only override and bump `versionId` if the source's URL structure fundamentally changes** (e.g., old manga URLs no longer work and do not redirect). Bumping this forces all users to re-migrate their bookmarks. 
+- **Self-hosted sources:** If you are adding a source for a self-hosted server (e.g., StashApp, Komga, Suwayomi), make your class implement the `UnmeteredSource` interface. This tells the app not to apply standard rate-limiting to the user's own local server.
+- **Preference listeners:** When implementing `ConfigurableSource`, you do not need to manually save values inside `setOnPreferenceChangeListener`. The Android preference framework saves the value to `SharedPreferences` automatically.
+
 #### URL intent filter
 
 Extensions can define a URL pattern so that these URLs can be opened in Mihon.
