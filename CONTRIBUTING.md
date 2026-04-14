@@ -214,9 +214,12 @@ src/<lang>/<mysourcename>/
                 └── extension
                     └── <lang>
                         └── <mysourcename>
-                            └── <MySourceName>.kt
+                            ├── <MySourceName>.kt
+                            ├── <Dto>.kt (optional)
+                            ├── <Filters.kt (optional)
+                            └── <UrlActivity>.kt (optional)
 
-14 directories, 7(+1) files
+14 directories, 7(+4) files
 ```
 
 `<lang>` should be an ISO 639-1 compliant language code (two letters or `all`). `<mysourcename>`
@@ -226,6 +229,7 @@ Your extension code must be placed in the package `eu.kanade.tachiyomi.extension
 > [!TIP]
 > Additional files in the extension package (like `Dto.kt`, `Filters.kt`, `UrlActivity.kt`)
 > should NOT repeat the extension name (e.g. use `Dto.kt` instead of `MySourceNameDto.kt`).
+> Note: While older extensions might use the repeated name pattern, avoiding it is a newly enforced convention to maintain consistency across the repository.
 
 #### AndroidManifest.xml (optional)
 You only need to create this file if you want to add deep linking to your extension.
