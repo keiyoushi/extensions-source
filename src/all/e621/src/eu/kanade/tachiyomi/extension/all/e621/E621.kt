@@ -128,47 +128,30 @@ class E621 :
     }
 
     // Details
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+    override fun mangaDetailsRequest(manga: SManga): Request {
         val poolId = manga.url
-
-        return client.newCall(GET("$baseUrl/pools/$poolId.json", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val pool = response.parseAs<Pool>()
-                manga.apply {
-                    title = pool.name.replace("_", " ")
-                    description = pool.description
-
-                    val authors = if (pool.postIds.isNotEmpty()) {
-                        val postsResponse = client.newCall(
-                            GET("$baseUrl/posts.json?tags=pool:$poolId&limit=50", headers), // Limit to 50 to reduce time
-                        ).execute()
-
-                        val postsData = postsResponse.parseAs<PostsResponse>()
-
-                        postsData.posts.flatMap { post ->
-                            post.tags.artist
-                        }
-                            .filterNot { it in artistFilter }
-                            .distinct()
-                    } else {
-                        emptyList()
-                    }
-                    author = authors.joinToString(", ")
-                    artist = authors.joinToString(", ")
-
-                    status = when (pool.isActive) {
-                        true -> SManga.ONGOING
-                        false -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-
-                    genre = pool.category
-                }
-            }
+        return GET("$baseUrl/pools/$poolId.json", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException("Not used")
+    override fun mangaDetailsParse(response: Response): SManga {
+        val pool = response.parseAs<Pool>()
+
+        return SManga.create().apply {
+            url = pool.id.toString()
+            title = pool.name.replace("_", " ")
+            description = pool.description
+
+            status = when (pool.isActive) {
+                true -> SManga.ONGOING
+                false -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+
+            genre = pool.category
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/pools/${manga.url}"
 
     // Chapters
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
