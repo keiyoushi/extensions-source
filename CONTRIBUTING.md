@@ -628,6 +628,7 @@ empty, so the app will skip the `fetchImageUrl` step and call directly `fetchIma
 
 ### Misc notes
 
+- **Store minimal unique URLs:** Consider storing only unique path segments (e.g., the ID) in the `SManga.url` or `SChapter.url` properties and building the full URL by overriding request methods (`mangaDetailsRequest`, `chapterListRequest`, `getMangaUrl`, etc.). For example, instead of `url = "/manga/some-id"`, use `url = "some-id"`. This prevents users from being forced to migrate their library if the site's base URL or routing path changes.
 - **Do not store state in the source class:** Extensions are instantiated once per session. Storing request state (like `lastQuery`, `page`, or auth tokens that need rapid refreshing) in class-level variables can cause concurrency bugs. Pass state locally through the fetch methods instead.
 - **Use `HttpUrl` for URL building:** Rely on `okhttp3.HttpUrl.Builder` to build URLs and encode query parameters safely instead of string concatenation. Use `HttpUrl.pathSegments` instead of `String.split("/")` when parsing URLs.
 - **Do not override default methods needlessly:** Do not override methods like `mangaDetailsRequest`, `chapterListRequest`, `pageListRequest`, or `getMangaUrl` if you are only returning the default behavior (e.g., `GET(baseUrl + manga.url, headers)`).
@@ -636,7 +637,7 @@ empty, so the app will skip the `fetchImageUrl` step and call directly `fetchIma
 - **Use named parameters for `Page`:** When instantiating `Page` objects, use the named parameter for the image URL: `Page(index, imageUrl = url)` instead of passing an empty string as the second argument (`Page(index, "", url)`).
 - **Throw `UnsupportedOperationException`:** If a source uses an API and doesn't need to parse HTML for images, override `imageUrlParse(response: Response)` and throw `UnsupportedOperationException()` instead of returning an empty string. Also use this pattern for unused inherited methods.
 - **Cache Regex instances:** Define `Regex` instances at the class level or in a `companion object` so they aren't recompiled on every method call.
-- **Do not hardcode `User-Agent`:** Unless absolutely necessary to bypass Cloudflare/protection, do not hardcode a specific `User-Agent`. Calling `super.headersBuilder()` already provides the app's default User-Agent.
+- **Do not hardcode `User-Agent`:** Unless absolutely necessary (e.g., to bypass Cloudflare/protection, or to retrieve a specific mobile layout/different selectors), do not hardcode a specific `User-Agent`. Calling `super.headersBuilder()` already provides the app's default User-Agent.
 - **Use `buildString { }`:** When building descriptions or dynamic strings, use Kotlin's `buildString { ... }` instead of manually instantiating a `StringBuilder()`.
 - **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Use `"application/json".toMediaType()`.
 - **Use `getUrlWithoutDomain` carefully:** It can be useful when parsing target source URLs, but note a current issue with spaces—replace them with URL-encoded characters (e.g., `%20`).
