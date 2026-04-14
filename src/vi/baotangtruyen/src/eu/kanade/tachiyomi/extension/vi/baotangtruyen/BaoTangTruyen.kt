@@ -337,12 +337,12 @@ class BaoTangTruyen : HttpSource() {
     private var cachedToken: String? = null
 
     @get:SuppressLint("SetJavaScriptEnabled")
+    @get:Synchronized
     private val token: String?
         get() {
             cachedToken?.also { return it }
             val handler = Handler(Looper.getMainLooper())
             val latch = CountDownLatch(1)
-            if (cachedToken != null) return cachedToken
 
             handler.post {
                 val webView = WebView(Injekt.get<Application>())
