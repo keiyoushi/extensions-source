@@ -9,17 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -43,6 +40,12 @@ class ManhwaZone : HttpSource() {
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
     }
+
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(body.string())
+    }
+
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?sortBy=popularity&page=$page", headers)
 
@@ -180,15 +183,15 @@ class ManhwaZone : HttpSource() {
         val postRequest = POST(
             "$baseUrl/livewire/update",
             postHeaders,
-            payload.toString().toRequestBody("application/json".toMediaType()),
+            payload.toJsonString().toRequestBody("application/json".toMediaType()),
         )
 
         val postResponse = client.newCall(postRequest).execute()
         if (!postResponse.isSuccessful) return emptyList()
 
-        val updateDto = json.decodeFromString<LivewireUpdateDto>(postResponse.body.string())
+        val updateDto = postResponse.parseAs<LivewireUpdateDto>()
         val snapshotStr = updateDto.components.firstOrNull()?.snapshot ?: return emptyList()
-        val snapshotDto = json.decodeFromString<SnapshotDto>(snapshotStr)
+        val snapshotDto = snapshotStr.parseAs<SnapshotDto>()
 
         val chaptersArray = snapshotDto.data?.chapters?.jsonArray ?: return emptyList()
         val actualChapters = chaptersArray.getOrNull(0)?.jsonArray ?: return emptyList()
@@ -199,7 +202,7 @@ class ManhwaZone : HttpSource() {
             val chapterElement = chapterTuple.getOrNull(0) ?: continue
             val chapterDto = json.decodeFromJsonElement<ChapterDto>(chapterElement)
 
-            val webUrl = chapterDto.web_url ?: continue
+            val webUrl = chapterDto.webUrl ?: continue
             val name = chapterDto.name ?: "Chapter"
             val dateStr = chapterDto.published
 
@@ -216,7 +219,7 @@ class ManhwaZone : HttpSource() {
 
     private fun parseDate(dateStr: String?): Long = try {
         dateStr?.let { dateFormat.parse(it)?.time } ?: 0L
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         0L
     }
 
@@ -228,21 +231,17 @@ class ManhwaZone : HttpSource() {
             try {
                 val jsonStr = Regex("""__RS_CONF__\s*=\s*(\{.*?\})\s*;""").find(rsConfScript)?.groupValues?.get(1)
                 if (jsonStr != null) {
-                    val jsonObj = json.parseToJsonElement(jsonStr).jsonObject
-                    val p = jsonObj["p"]?.jsonPrimitive?.contentOrNull
-                    val expire = jsonObj["expire"]?.jsonPrimitive?.contentOrNull
-                    val signature = jsonObj["signature"]?.jsonPrimitive?.contentOrNull
-                    val tt = jsonObj["tt"]?.jsonPrimitive?.intOrNull
+                    val rsConf = jsonStr.parseAs<RsConfDto>()
 
-                    if (p != null && expire != null && signature != null && tt != null && tt > 0) {
-                        return (1..tt).map { i ->
-                            val pageStr = String.format("%03d", i)
-                            val imageUrl = "https://img.mangalaxy.net/_img/$p/$pageStr.webp?e=$expire&s=$signature"
+                    if (rsConf.p != null && rsConf.expire != null && rsConf.signature != null && rsConf.tt != null && rsConf.tt > 0) {
+                        return (1..rsConf.tt).map { i ->
+                            val pageStr = String.format(Locale.ROOT, "%03d", i)
+                            val imageUrl = "https://img.mangalaxy.net/_img/${rsConf.p}/$pageStr.webp?e=${rsConf.expire}&s=${rsConf.signature}"
                             Page(i - 1, "", imageUrl)
                         }
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Fallback to data-src fetching below if conversion fails or if tt is 0
             }
         }
