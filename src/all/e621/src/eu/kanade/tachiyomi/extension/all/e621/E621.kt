@@ -44,7 +44,8 @@ class E621 :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // e621 needs a custom User-Agent header
-    override fun headersBuilder() = Headers.Builder().apply { add("User-Agent", "Keiyoushi-E621/1.0.0") }
+    override fun headersBuilder() = Headers.Builder()
+        .add("User-Agent", "E621/1.4.${BuildConfig.VERSION_CODE} Keiyoushi (https://github.com/keiyoushi/extensions-source)")
 
     private val artistFilter = setOf(
         "conditional_dnp",
