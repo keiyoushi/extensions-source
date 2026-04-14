@@ -492,6 +492,7 @@ either `SourceFactory` or extend one of the `Source` implementations: `HttpSourc
   * **Write:** Write the processed bitmap into an Okio `Buffer` via `output.outputStream()` and convert it using `asResponseBody(mediaType)`.
   * **Decryption:** Use Okio's `cipherSource` extension for stream-based decryption rather than decrypting a full byte array in memory.
   * Note: `readByteArray()` should generally be avoided here because it forces full in-memory buffering of the image. Streaming directly keeps memory usage lower and more stable.
+  * Always wrap network responses in `response.use { ... }` to ensure the response body is properly closed and to prevent memory leaks.
   * If applicable, call `bitmap.recycle()` after you're done with it to free native memory early.
 
 ### OkHttp and Network
