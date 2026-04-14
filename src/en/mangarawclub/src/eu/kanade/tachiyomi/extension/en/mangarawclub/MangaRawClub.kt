@@ -40,12 +40,10 @@ class MangaRawClub :
         .build()
     private val preferences = getPreferences()
     private fun nsfw() = preferences.getBoolean(PREF_HIDE_NSFW, false)
-    private fun defaultAltSearch() = preferences.getBoolean(PREF_DEFAULT_ALT_SEARCH, false)
 
     companion object {
         private const val ALT_NAME = "Alternative Name:"
         private const val PREF_HIDE_NSFW = "pref_hide_nsfw"
-        private const val PREF_DEFAULT_ALT_SEARCH = "pref_default_alt_search"
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMMMM dd, yyyy, h:mm a", Locale.ENGLISH) }
         private val DATE_FORMATTER_2 by lazy { SimpleDateFormat("MMMMM dd, yyyy, h a", Locale.ENGLISH) }
     }
@@ -57,9 +55,9 @@ class MangaRawClub :
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
 
     // Search
-    override fun getFilterList(): FilterList = getFilters(defaultAltSearch())
+    override fun getFilterList(): FilterList = getFilters()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (filters.any { it is AlternativeSearchFilter && it.state }) {
+        if (query.isNotBlank() && filters.all { it.isDefault() }) {
             val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
                 addQueryParameter("search", query.trim())
                 addQueryParameter("results", page.toString())
@@ -264,13 +262,6 @@ class MangaRawClub :
             key = PREF_HIDE_NSFW
             title = "Hide NSFW"
             summary = "Hides NSFW entries"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_DEFAULT_ALT_SEARCH
-            title = "Enable alternative search by default"
-            summary = "The alternative search filter will be enabled by default for every search."
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
