@@ -486,11 +486,13 @@ either `SourceFactory` or extend one of the `Source` implementations: `HttpSourc
   }
 ```
 
-* **Memory-efficient Image Interceptors:** If you write an interceptor to descramble or stitch images, do not load the entire image into a `ByteArray`. Use streams to avoid `OutOfMemory` errors on lower-end devices:
+* **Memory-efficient Image Interceptors:** When implementing interceptors for descrambling, stitching, or decrypting images, avoid loading the entire image into a `ByteArray`, as this can cause `OutOfMemoryError` on low-end devices. Prefer stream-based processing instead:
 
-  * **Read:** Use `response.body.byteStream()` with `BitmapFactory.decodeStream()`.
-  * **Write:** Use Okio's `Buffer` (`val output = Buffer()`) and `output.outputStream()` to compress the new `Bitmap`, then return `output.readByteArray().toResponseBody(mediaType)`.
-
+  * **Read:** Use `response.body.byteStream()` with `BitmapFactory.decodeStream()` to decode images directly from the stream.
+  * **Write:** Write the processed bitmap into an Okio `Buffer` via `output.outputStream()` and convert it using `asResponseBody(mediaType)`.
+  * **Decryption:** Use Okio's `cipherSource` extension for stream-based decryption rather than decrypting a full byte array in memory.
+  * Note: `readByteArray()` should generally be avoided here because it forces full in-memory buffering of the image. Streaming directly keeps memory usage lower and more stable.
+  * If applicable, call `bitmap.recycle()` after you're done with it to free native memory early.
 
 ### OkHttp and Network
 
