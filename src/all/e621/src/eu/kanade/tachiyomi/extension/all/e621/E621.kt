@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
@@ -28,7 +28,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -42,7 +41,6 @@ class E621 :
     override val supportsLatest: Boolean = true
 
     override val client = network.cloudflareClient
-    private val json: Json by injectLazy()
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // e621 needs a custom User-Agent header
@@ -113,7 +111,7 @@ class E621 :
     override fun searchMangaParse(response: Response): MangasPage = parsePoolList(response)
 
     private fun parsePoolList(response: Response): MangasPage {
-        val jsonArray = json.parseToJsonElement(response.body.string()).jsonArray
+        val jsonArray = response.parseAs<JsonArray>()
 
         val thumbnailMap = batchFetchPostSamples(
             jsonArray.mapNotNull { pool ->
@@ -148,7 +146,7 @@ class E621 :
         return client.newCall(GET("$baseUrl/pools/$poolId.json", headers))
             .asObservableSuccess()
             .map { response ->
-                val pool = json.parseToJsonElement(response.body.string()).jsonObject
+                val pool = response.parseAs<JsonObject>()
                 manga.apply {
                     title = pool["name"]?.jsonPrimitive?.content?.replace("_", " ") ?: ""
                     description = pool["description"]?.jsonPrimitive?.content ?: ""
@@ -159,8 +157,7 @@ class E621 :
                             GET("$baseUrl/posts.json?tags=pool:$poolId&limit=50", headers), // Limit to 50 to reduce time
                         ).execute()
 
-                        val posts = json.parseToJsonElement(postsResponse.body.string())
-                            .jsonObject["posts"]?.jsonArray ?: JsonArray(emptyList())
+                        val posts = postsResponse.parseAs<JsonObject>()["posts"]?.jsonArray ?: JsonArray(emptyList())
 
                         posts.flatMap { post ->
                             post.jsonObject["tags"]?.jsonObject?.get("artist")?.jsonArray
@@ -195,7 +192,7 @@ class E621 :
         return client.newCall(GET("$baseUrl/pools/$poolId.json", headers))
             .asObservableSuccess()
             .map { response ->
-                val pool = json.parseToJsonElement(response.body.string()).jsonObject
+                val pool = response.parseAs<JsonObject>()
                 val postIds = pool["post_ids"]?.jsonArray?.map { it.jsonPrimitive.int } ?: emptyList()
                 val updatedAt = pool["updated_at"]?.jsonPrimitive?.content
 
@@ -232,9 +229,9 @@ class E621 :
             val postId = url.pathSegments.last().toIntOrNull() ?: return emptyList()
             val post = batchFetchPosts(listOf(postId)).firstOrNull()
             val imageUrl = when {
-                post == null -> return emptyList() // Post not found in API response
+                post == null -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted" // Not returned by API
                 isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
-                else -> extractImageUrl(post) ?: return emptyList() // Post exists but has no images
+                else -> extractImageUrl(post) ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
             }
             return listOf(Page(0, imageUrl = imageUrl))
         }
@@ -245,8 +242,7 @@ class E621 :
             GET("$baseUrl/pools.json?search[id]=$poolId&limit=1", headers),
         ).execute()
 
-        val postIds = json.parseToJsonElement(poolResponse.body.string())
-            .jsonArray
+        val postIds = poolResponse.parseAs<JsonArray>()
             .firstOrNull()
             ?.jsonObject
             ?.get("post_ids")
@@ -257,12 +253,12 @@ class E621 :
         val posts = batchFetchPosts(postIds)
         val postMap = posts.associateBy { it["id"]?.jsonPrimitive?.int }
 
-        return postIds.mapIndexedNotNull { index, postId ->
+        return postIds.mapIndexed { index, postId ->
             val post = postMap[postId]
             val imageUrl = when {
-                post == null -> return@mapIndexedNotNull null // Skip posts not returned by API
+                post == null -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted" // Not returned by API
                 isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
-                else -> extractImageUrl(post) ?: return@mapIndexedNotNull null // Skip posts with no images
+                else -> extractImageUrl(post) ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
             }
             Page(index, imageUrl = imageUrl)
         }
@@ -400,9 +396,8 @@ class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
-                val data = json.parseToJsonElement(
-                    client.newCall(GET(url, headers)).execute().body.string(),
-                ).jsonObject
+                val data = client.newCall(GET(url, headers)).execute()
+                    .parseAs<JsonObject>()
 
                 data["posts"]?.jsonArray.orEmpty().map { it.jsonObject }
             }.getOrDefault(emptyList())
