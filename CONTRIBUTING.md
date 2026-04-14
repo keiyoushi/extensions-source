@@ -1,10 +1,10 @@
 # Contributing
 
-This guide have some instructions and tips on how to create a new Tachiyomi extension. Please **read
+This guide has some instructions and tips on how to create a new Tachiyomi extension. Please **read
 it carefully** if you're a new contributor or don't have any experience on the required languages
 and knowledges.
 
-This guide is not definitive and it's being updated over time. If you find any issue on it, feel
+This guide is not definitive and it's being updated over time. If you find any issues in it, feel
 free to report it through a [Meta Issue](https://github.com/keiyoushi/extensions-source/issues/new?assignees=&labels=Meta+request&template=06_request_meta.yml)
 or fixing it directly by submitting a Pull Request.
 
@@ -39,7 +39,7 @@ or fixing it directly by submitting a Pull Request.
 ## Prerequisites
 
 Before you start, please note that the ability to use following technologies is **required** and
-that existing contributors will not actively teach them to you.
+that existing contributors will not actively teach these to you.
 
 - Basic [Android development](https://developer.android.com/)
 - [Kotlin](https://kotlinlang.org/)
@@ -146,7 +146,7 @@ small, just do a normal full clone instead.**
     # all blobs (files) in the new commits are still fetched regardless of
     # sparse rules, which makes the local repo accumulate unused files.
     # Use `git sync-main` to avoid this. Be careful if you have changes
-    # on main branch, which is not a good practice.
+    # on main branch, which is bad practice.
     git config alias.sync-main '!git switch main && git fetch upstream && git reset --keep FETCH_HEAD'
     ```
 5. Later, if you change the sparse checkout filter, run `git sparse-checkout reapply`.
@@ -216,7 +216,7 @@ src/<lang>/<mysourcename>/
                         └── <mysourcename>
                             └── <MySourceName>.kt
 
-13 directories, 9 files
+14 directories, 7(+1) files
 ```
 
 `<lang>` should be an ISO 639-1 compliant language code (two letters or `all`). `<mysourcename>`
@@ -357,7 +357,7 @@ is similar to what happens with `fetchPopularManga`.
 
 ##### Filters
 
-The search flow have support to filters that can be added to a `FilterList` inside the `getFilterList`
+The search flow has support for filters that can be added to a `FilterList` inside the `getFilterList`
 method. When the user changes the filters' state, they will be passed to the `searchRequest`, and they
 can be iterated to create the request (by getting the `filter.state` value, where the type varies
 depending on the `Filter` used). You can check the filter types available [here](https://github.com/mihonapp/mihon/blob/main/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
@@ -430,7 +430,7 @@ will be cached.
       Make sure you make the `SimpleDateFormat` a class constant or variable so it doesn't get
     recreated for every chapter. If you need to parse or format dates in manga description, create
     another instance since `SimpleDateFormat` is not thread-safe.
-    - If the parsing have any problem, make sure to return `0L` so the app will use the default date
+    - If the parsing has any problems, make sure to return `0L` so the app will use the default date
     instead.
     - The app will overwrite dates of existing old chapters **UNLESS** `0L` is returned.
     - If the source only provides the manga's updated date, assign it to the latest chapter only.
@@ -570,7 +570,7 @@ You can find a complete example of how URLs work in the [Riztranslation extensio
 
 #### Update strategy
 
-There is some cases where titles in a source will always only have the same chapter list
+There are some cases where titles in a source will always only have the same chapter list
 (i.e. immutable), and don't need to be included in a global update of the app because of that, saving
 a lot of requests and preventing causing unnecessary damage to the source servers. To change the
 update strategy of a `SManga`, use the `update_strategy` field. You can find below a description of
@@ -586,8 +586,8 @@ If not set, it defaults to `ALWAYS_UPDATE`.
 
 #### Renaming existing sources
 
-There is some cases where existing sources changes their name on the website. To correctly reflect
-these changes in the extension, you need to explicity set the `id` to the same old value, otherwise
+There are some cases where existing sources changes their name on the website. To correctly reflect
+these changes in the extension, you need to explicitly set the `id` to the same old value, otherwise
 it will get changed by the new `name` value and users will be forced to migrate back to the source.
 
 To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/keiyoushi/extensions/blob/repo/index.json)
@@ -605,7 +605,7 @@ extension name and class name in the individual Gradle file.
 > The package name **needs** to be the same (even if it has the old name), otherwise users will not
 > receive the extension update when it gets published in the repository.
 
-The `id` also needs to be explicity set to the old value if you're changing the `lang` attribute.
+The `id` also needs to be explicitly set to the old value if you're changing the `lang` attribute.
 
 > [!NOTE]
 > If the source has also changed their theme you can instead just change
@@ -822,7 +822,7 @@ show up in the [`Logcat`](https://developer.android.com/studio/debug/am-logcat) 
 
 ### Inspecting network calls
 
-One of the easiest way to inspect network issues (such as HTTP errors 404, 429, no chapter found etc.)
+One of the easiest ways to inspect network issues (such as HTTP errors 404, 429, no chapter found etc.)
 is to use the [`Logcat`](https://developer.android.com/studio/debug/am-logcat) panel of Android Studio
 and filtering by the `OkHttpClient` tag.
 
