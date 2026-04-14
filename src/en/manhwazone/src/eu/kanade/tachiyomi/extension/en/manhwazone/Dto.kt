@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.manhwazone
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -27,5 +28,13 @@ class SnapshotDataDto(
 class ChapterDto(
     val name: String? = null,
     val published: String? = null,
-    val web_url: String? = null,
+    @SerialName("web_url") val webUrl: String? = null,
+)
+
+@Serializable
+class RsConfDto(
+    val p: String? = null,
+    val expire: String? = null,
+    val signature: String? = null,
+    val tt: Int? = null,
 )
