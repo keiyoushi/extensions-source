@@ -7,12 +7,11 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 
 class TimelessToons :
     Keyoapp(
@@ -20,7 +19,6 @@ class TimelessToons :
         "https://timelesstoons.org",
         "en",
     ) {
-    private val json: Json by injectLazy()
 
     override fun popularMangaSelector() = "div:has(> h2:contains(Trending)) + div .group"
 
@@ -94,7 +92,7 @@ class TimelessToons :
                 val genreMatch = genres == null || run {
                     val tagsAttr = entry.attr("tags").replace("___", "'")
                     val entryGenres = runCatching {
-                        json.decodeFromString<List<String>>(tagsAttr)
+                        tagsAttr.parseAs<List<String>>()
                     }.getOrDefault(emptyList())
                     genres.all { genre -> entryGenres.any { it.equals(genre, ignoreCase = true) } }
                 }
