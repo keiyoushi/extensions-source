@@ -568,15 +568,20 @@ empty, so the app will skip the `fetchImageUrl` step and call directly `fetchIma
 
 ### Misc notes
 
-- Sometimes you may find no use for some inherited methods. If so just override them and throw
-exceptions: `throw UnsupportedOperationException()`
-- You probably will find `getUrlWithoutDomain` useful when parsing the target source URLs. Keep in
-mind there's a current issue with spaces in the URL though, so if you use it, replace all spaces with
-URL encoded characters (like `%20`).
-- If possible try to stick to the general workflow from `HttpSource`/`ParsedHttpSource`; breaking
-them may cause you more headache than necessary.
-- By implementing `ConfigurableSource` you can add settings to your source, which is backed by
-[`SharedPreferences`](https://developer.android.com/reference/android/content/SharedPreferences).
+- **Do not store state in the source class:** Extensions are instantiated once per session. Storing request state (like `lastQuery`, `page`, or auth tokens that need rapid refreshing) in class-level variables can cause concurrency bugs. Pass state locally through the fetch methods instead.
+- **Use `HttpUrl` for URL building:** Rely on `okhttp3.HttpUrl.Builder` to build URLs and encode query parameters safely instead of string concatenation. Use `HttpUrl.pathSegments` instead of `String.split("/")` when parsing URLs.
+- **Do not override default methods needlessly:** Do not override methods like `mangaDetailsRequest`, `chapterListRequest`, `pageListRequest`, or `getMangaUrl` if you are only returning the default behavior (e.g., `GET(baseUrl + manga.url, headers)`).
+- **Use `asJsoup()`:** Instead of manually reading the response body and parsing it with Jsoup (`Jsoup.parse(response.body.string())`), use the app's built-in extension function: `response.asJsoup()` (requires `eu.kanade.tachiyomi.util.asJsoup`).
+- **Jsoup `.text()` is already trimmed:** Calling `element.text().trim()` is redundant because Jsoup automatically normalizes and trims whitespace. Just use `element.text()`.
+- **Use named parameters for `Page`:** When instantiating `Page` objects, use the named parameter for the image URL: `Page(index, imageUrl = url)` instead of passing an empty string as the second argument (`Page(index, "", url)`).
+- **Throw `UnsupportedOperationException`:** If a source uses an API and doesn't need to parse HTML for images, override `imageUrlParse(response: Response)` and throw `UnsupportedOperationException()` instead of returning an empty string. Also use this pattern for unused inherited methods.
+- **Cache Regex instances:** Define `Regex` instances at the class level or in a `companion object` so they aren't recompiled on every method call.
+- **Do not hardcode `User-Agent`:** Unless absolutely necessary to bypass Cloudflare/protection, do not hardcode a specific `User-Agent`. Calling `super.headersBuilder()` already provides the app's default User-Agent.
+- **Use `buildString { }`:** When building descriptions or dynamic strings, use Kotlin's `buildString { ... }` instead of manually instantiating a `StringBuilder()`.
+- **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Use `"application/json".toMediaType()`.
+- **Use `getUrlWithoutDomain` carefully:** It can be useful when parsing target source URLs, but note a current issue with spaces—replace them with URL-encoded characters (e.g., `%20`).
+- **Follow `HttpSource` workflow:** Stick to the general workflow from this base class when possible; deviating may introduce unnecessary complexity.
+- **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
 
 ### Advanced Extension features
 
