@@ -1,0 +1,8 @@
+ext {
+    extName = 'NexusScanlation'
+    extClass = '.Nexusscanlation'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
