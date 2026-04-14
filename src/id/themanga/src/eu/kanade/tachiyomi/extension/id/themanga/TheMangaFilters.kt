@@ -22,6 +22,18 @@ abstract class SelectFilter(
     }
 }
 
+class SortFilter :
+    SelectFilter(
+        "Sort By",
+        "sort",
+        arrayOf(
+            "Latest" to "latest_update",
+            "Popular" to "popular",
+            "Rating" to "rating",
+            "Title" to "title",
+        ),
+    )
+
 class StatusFilter :
     SelectFilter(
         "Status",

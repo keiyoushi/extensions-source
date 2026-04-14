@@ -26,20 +26,25 @@ class TheManga : HttpSource() {
     override val name = "TheManga"
     override val baseUrl = "https://themanga.my.id"
     override val lang = "id"
-    override val supportsLatest = false
+    override val supportsLatest = true
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 
     // =============================== Popular ================================
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/?q=&sort=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
+    // =============================== Latest =================================
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?q=&sort=latest_update&page=$page", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+
     // =============================== Search =================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/explore".toHttpUrl().newBuilder().apply {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
             addQueryParameter("page", page.toString())
 
@@ -52,15 +57,15 @@ class TheManga : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select("a.manga-card").map { element ->
+        val mangas = document.select("a.card").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
                 title = element.selectFirst(".card-title")!!.text()
-                thumbnail_url = element.selectFirst(".cover img")?.absUrl("src")
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
 
-        val hasNextPage = document.selectFirst("a[rel=next]") != null
+        val hasNextPage = document.selectFirst(".explore-pagination__btn[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -136,13 +141,10 @@ class TheManga : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
     // ============================== Filters ===============================
     override fun getFilterList(): FilterList = FilterList(
         StatusFilter(),
+        SortFilter(),
         GenreFilter(),
         Filter.Separator(),
         OtherFilterGroup(),
@@ -152,13 +154,13 @@ class TheManga : HttpSource() {
     private fun Document.meta(label: String): String? = selectFirst(".meta-item-label:matchesOwn(^$label$) + .meta-item-value")?.text()
 
     @Serializable
-    data class PageDto(
+    class PageDto(
         val number: Int,
         val url: String,
     )
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT)
         private val PAGES_REGEX = Regex("""pages\s*=\s*(\[[\s\S]*?])""")
         private val OLD_URL_REGEX = Regex("""/manga/([^/]+)/chapter-(\d+(?:-\d+)?)""")
     }
