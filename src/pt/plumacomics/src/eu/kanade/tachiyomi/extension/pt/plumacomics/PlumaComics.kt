@@ -9,11 +9,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
+import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 
 class PlumaComics : HttpSource() {
 
@@ -27,6 +29,7 @@ class PlumaComics : HttpSource() {
 
     override val client = super.client.newBuilder()
         .rateLimit(3, 1)
+        .addInterceptor(ImageDecryptInterceptor())
         .build()
 
     override val versionId = 5
@@ -109,24 +112,21 @@ class PlumaComics : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("#chapter-pages img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
+        val chapter = document.extractNextJs<ChapterDto>() ?: throw IOException("Capítulo não encontrado")
+
+        return List(document.select("#chapter-pages canvas").size) { index ->
+            Page(index, imageUrl = "$baseUrl/api/read/${chapter.chapterId}/${index + 1}?v=2#${chapter.toJsonString()}")
         }
     }
 
+    override fun imageRequest(page: Page): Request {
+        val url = page.imageUrl!!.toHttpUrl()
+        val dto = url.fragment!!.parseAs<ChapterDto>()
+        val imageHeaders = headers.newBuilder()
+            .set("X-Pluma-Token", dto.chapterToken)
+            .build()
+        return GET(url, imageHeaders)
+    }
+
     override fun imageUrlParse(response: Response): String = ""
-
-    // Utils
-
-    @Serializable
-    private class SearchDto(
-        val results: List<MangaDto>,
-    )
-
-    @Serializable
-    private class MangaDto(
-        val title: String,
-        val slug: String,
-        val coverPath: String,
-    )
 }

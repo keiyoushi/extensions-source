@@ -3,7 +3,7 @@ ext {
     extClass = '.XXXYaoi'
     themePkg = 'madara'
     baseUrl = 'https://3xyaoi.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
