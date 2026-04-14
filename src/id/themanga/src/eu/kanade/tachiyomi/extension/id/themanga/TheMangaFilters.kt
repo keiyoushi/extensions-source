@@ -24,13 +24,13 @@ abstract class SelectFilter(
 
 class SortFilter :
     SelectFilter(
-        "Sort By",
+        "Sort",
         "sort",
         arrayOf(
+            "Default" to "title",
             "Latest" to "latest_update",
             "Popular" to "popular",
             "Rating" to "rating",
-            "Title" to "title",
         ),
     )
 
