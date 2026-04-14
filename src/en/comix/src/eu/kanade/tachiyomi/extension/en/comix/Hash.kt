@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.comix
 import android.util.Base64
 import java.net.URLEncoder
 
-object ComixHash {
+object Hash {
     // [RC4 key, mutKey, prefKey] × 5 rounds
     private val KEYS = arrayOf(
         "13YDu67uDgFczo3DnuTIURqas4lfMEPADY6Jaeqky+w=", // 0  RC4 key  round 1
