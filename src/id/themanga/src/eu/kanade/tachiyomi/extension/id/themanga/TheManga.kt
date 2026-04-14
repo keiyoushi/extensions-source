@@ -10,9 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -61,7 +59,7 @@ class TheManga : HttpSource() {
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
                 title = element.selectFirst(".card-title")!!.text()
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                thumbnail_url = element.selectFirst(".card-cover img")?.absUrl("src")
             }
         }
 
@@ -114,37 +112,36 @@ class TheManga : HttpSource() {
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
         if (!chapter.url.contains("/chapter/")) {
-            OLD_URL_REGEX.find(chapter.url)?.let {
-                val mangaSlug = it.groupValues[1]
-                val number = it.groupValues[2].replace("-", ".")
-                val dotIndex = number.indexOf(".")
-                val formatted = if (dotIndex >= 0) {
-                    number.padEnd(dotIndex + 3, '0')
-                } else {
-                    "$number.00"
-                }
-                return GET("$baseUrl/manga/$mangaSlug/chapter/$formatted", headers)
+            val segments = chapter.url.toHttpUrl().pathSegments
+            val mangaSlug = segments[1]
+            val number = segments[2].removePrefix("chapter-").replace("-", ".")
+            val dotIndex = number.indexOf('.')
+            val formatted = if (dotIndex >= 0) {
+                number.padEnd(dotIndex + 3, '0')
+            } else {
+                "$number.00"
             }
+
+            return GET("$baseUrl/manga/$mangaSlug/chapter/$formatted", headers)
         }
+
         return super.pageListRequest(chapter)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val images = response.asJsoup().select("img.page-img")
 
-        val script = document.select("script").firstNotNullOfOrNull { PAGES_REGEX.find(it.data())?.groupValues?.get(1) }
-            ?: throw Exception("Script yang berisi data halaman tidak ditemukan")
-
-        return script.parseAs<List<PageDto>>()
-            .map { Page(it.number - 1, "", it.url) }
+        return images.mapIndexed { idx, image ->
+            Page(idx, imageUrl = image.attr("abs:src"))
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters ===============================
     override fun getFilterList(): FilterList = FilterList(
-        StatusFilter(),
         SortFilter(),
+        StatusFilter(),
         GenreFilter(),
         Filter.Separator(),
         OtherFilterGroup(),
@@ -153,15 +150,7 @@ class TheManga : HttpSource() {
     // ============================== Utils ===============================
     private fun Document.meta(label: String): String? = selectFirst(".meta-item-label:matchesOwn(^$label$) + .meta-item-value")?.text()
 
-    @Serializable
-    class PageDto(
-        val number: Int,
-        val url: String,
-    )
-
     companion object {
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT)
-        private val PAGES_REGEX = Regex("""pages\s*=\s*(\[[\s\S]*?])""")
-        private val OLD_URL_REGEX = Regex("""/manga/([^/]+)/chapter-(\d+(?:-\d+)?)""")
     }
 }
