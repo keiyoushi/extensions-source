@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -16,13 +17,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -112,26 +108,17 @@ class E621 :
     override fun searchMangaParse(response: Response): MangasPage = parsePoolList(response)
 
     private fun parsePoolList(response: Response): MangasPage {
-        val jsonArray = response.parseAs<JsonArray>()
+        val pools = response.parseAs<List<Pool>>()
 
         val thumbnailMap = batchFetchPostSamples(
-            jsonArray.mapNotNull { pool ->
-                pool.jsonObject["post_ids"]
-                    ?.jsonArray
-                    ?.firstOrNull()
-                    ?.jsonPrimitive
-                    ?.int
-            },
+            pools.mapNotNull { it.postIds.firstOrNull() },
         ).takeIf { it.isNotEmpty() } ?: emptyMap()
 
-        val poolList = jsonArray.map { poolElement ->
-            val pool = poolElement.jsonObject
-            val posts = pool["post_ids"]?.jsonArray ?: JsonArray(emptyList())
-
+        val poolList = pools.map { pool ->
             SManga.create().apply {
-                url = "/pools/${pool["id"]?.jsonPrimitive?.int}"
-                title = pool["name"]?.jsonPrimitive?.content?.replace("_", " ") ?: "Unknown Pool"
-                thumbnail_url = posts.firstOrNull()?.jsonPrimitive?.int
+                url = pool.id.toString()
+                title = pool.name.replace("_", " ")
+                thumbnail_url = pool.postIds.firstOrNull()
                     ?.let { thumbnailMap[it] }
                     ?: ""
             }
@@ -142,28 +129,25 @@ class E621 :
 
     // Details
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val poolId = manga.url.split("/").last()
+        val poolId = manga.url
 
         return client.newCall(GET("$baseUrl/pools/$poolId.json", headers))
             .asObservableSuccess()
             .map { response ->
-                val pool = response.parseAs<JsonObject>()
+                val pool = response.parseAs<Pool>()
                 manga.apply {
-                    title = pool["name"]?.jsonPrimitive?.content?.replace("_", " ") ?: ""
-                    description = pool["description"]?.jsonPrimitive?.content ?: ""
+                    title = pool.name.replace("_", " ")
+                    description = pool.description
 
-                    val postIds = pool["post_ids"]?.jsonArray?.map { it.jsonPrimitive.int } ?: emptyList()
-                    val authors = if (postIds.isNotEmpty()) {
+                    val authors = if (pool.postIds.isNotEmpty()) {
                         val postsResponse = client.newCall(
                             GET("$baseUrl/posts.json?tags=pool:$poolId&limit=50", headers), // Limit to 50 to reduce time
                         ).execute()
 
-                        val posts = postsResponse.parseAs<JsonObject>()["posts"]?.jsonArray ?: JsonArray(emptyList())
+                        val postsData = postsResponse.parseAs<PostsResponse>()
 
-                        posts.flatMap { post ->
-                            post.jsonObject["tags"]?.jsonObject?.get("artist")?.jsonArray
-                                ?.mapNotNull { it.jsonPrimitive.content }
-                                ?: emptyList()
+                        postsData.posts.flatMap { post ->
+                            post.tags.artist
                         }
                             .filterNot { it in artistFilter }
                             .distinct()
@@ -173,13 +157,13 @@ class E621 :
                     author = authors.joinToString(", ")
                     artist = authors.joinToString(", ")
 
-                    status = when (pool["is_active"]?.jsonPrimitive?.boolean) {
+                    status = when (pool.isActive) {
                         true -> SManga.ONGOING
                         false -> SManga.COMPLETED
                         else -> SManga.UNKNOWN
                     }
 
-                    genre = pool["category"]?.jsonPrimitive?.content
+                    genre = pool.category
                 }
             }
     }
@@ -188,14 +172,14 @@ class E621 :
 
     // Chapters
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val poolId = manga.url.split("/").last()
+        val poolId = manga.url
 
         return client.newCall(GET("$baseUrl/pools/$poolId.json", headers))
             .asObservableSuccess()
             .map { response ->
-                val pool = response.parseAs<JsonObject>()
-                val postIds = pool["post_ids"]?.jsonArray?.map { it.jsonPrimitive.int } ?: emptyList()
-                val updatedAt = pool["updated_at"]?.jsonPrimitive?.content
+                val pool = response.parseAs<Pool>()
+                val postIds = pool.postIds
+                val updatedAt = pool.updatedAt
 
                 if (preferences.splitChaptersPref && postIds.isNotEmpty()) {
                     postIds.mapIndexed { index, postId ->
@@ -203,7 +187,7 @@ class E621 :
                             name = "Post ${index + 1}"
                             url = "/posts/$postId"
                             chapter_number = (index + 1).toFloat()
-                            date_upload = if (index == 0) updatedAt?.let { parseDate(it) } ?: 0L else 0L
+                            date_upload = if (index == 0) parseDate(updatedAt) else 0L
                         }
                     }.reversed()
                 } else {
@@ -211,7 +195,7 @@ class E621 :
                         SChapter.create().apply {
                             name = "Pool (${postIds.size} pages)"
                             url = "/pools/$poolId"
-                            date_upload = updatedAt?.let { parseDate(it) } ?: 0L
+                            date_upload = parseDate(updatedAt)
                         },
                     )
                 }
@@ -243,16 +227,13 @@ class E621 :
             GET("$baseUrl/pools.json?search[id]=$poolId&limit=1", headers),
         ).execute()
 
-        val postIds = poolResponse.parseAs<JsonArray>()
+        val postIds = poolResponse.parseAs<List<Pool>>()
             .firstOrNull()
-            ?.jsonObject
-            ?.get("post_ids")
-            ?.jsonArray
-            ?.map { it.jsonPrimitive.int }
+            ?.postIds
             ?: return emptyList()
 
         val posts = batchFetchPosts(postIds)
-        val postMap = posts.associateBy { it["id"]?.jsonPrimitive?.int }
+        val postMap = posts.associateBy { it.id }
 
         return postIds.mapIndexed { index, postId ->
             val post = postMap[postId]
@@ -346,47 +327,47 @@ class E621 :
 
     // Helpers
 
-    private fun isPostDeleted(post: JsonObject): Boolean = post["flags"]?.jsonObject?.get("deleted")?.jsonPrimitive?.boolean == true
+    private fun isPostDeleted(post: Post): Boolean = post.flags.deleted
 
-    private fun extractThumbnailUrl(post: JsonObject): String? {
+    private fun extractThumbnailUrl(post: Post): String? {
         // Preview (smallest, fastest to load)
-        post["preview"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
+        post.preview.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
 
         // Sample
-        post["sample"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
+        post.sample.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
 
         // Full Resolution
-        post["file"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
+        post.file.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
 
         return null
     }
 
-    private fun extractImageUrl(post: JsonObject): String? {
+    private fun extractImageUrl(post: Post): String? {
         // Full Resolution (best quality for reading)
-        post["file"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
+        post.file.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
 
         // Sample
-        post["sample"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
+        post.sample.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
 
         // Preview
-        post["preview"]?.jsonObject?.get("url")?.jsonPrimitive?.content?.let {
+        post.preview.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
 
         return null
     }
 
-    private fun batchFetchPosts(postIds: List<Int>): List<JsonObject> {
+    private fun batchFetchPosts(postIds: List<Int>): List<Post> {
         if (postIds.isEmpty()) return emptyList()
 
         return postIds.chunked(40).flatMap { chunk ->
@@ -398,9 +379,9 @@ class E621 :
                     .build()
 
                 val data = client.newCall(GET(url, headers)).execute()
-                    .parseAs<JsonObject>()
+                    .parseAs<PostsResponse>()
 
-                data["posts"]?.jsonArray.orEmpty().map { it.jsonObject }
+                data.posts
             }.getOrDefault(emptyList())
         }
     }
@@ -409,8 +390,7 @@ class E621 :
         if (postIds.isEmpty()) return emptyMap()
 
         return batchFetchPosts(postIds).mapNotNull { post ->
-            val id = post["id"]?.jsonPrimitive?.int ?: return@mapNotNull null
-            extractThumbnailUrl(post)?.let { id to it }
+            extractThumbnailUrl(post)?.let { post.id to it }
         }.toMap()
     }
 
@@ -420,4 +400,47 @@ class E621 :
     } catch (e: Exception) {
         0L
     }
+
+    // JSON
+
+    @Serializable
+    data class Pool(
+        val id: Int,
+        val name: String,
+        val description: String = "",
+        @SerialName("post_ids") val postIds: List<Int> = emptyList(),
+        @SerialName("is_active") val isActive: Boolean? = null,
+        val category: String? = null,
+        @SerialName("updated_at") val updatedAt: String = "",
+    )
+
+    @Serializable
+    data class PostsResponse(
+        val posts: List<Post> = emptyList(),
+    )
+
+    @Serializable
+    data class Post(
+        val id: Int,
+        val flags: Flags = Flags(),
+        val preview: ImageData = ImageData(),
+        val sample: ImageData = ImageData(),
+        val file: ImageData = ImageData(),
+        val tags: Tags = Tags(),
+    )
+
+    @Serializable
+    data class Flags(
+        val deleted: Boolean = false,
+    )
+
+    @Serializable
+    data class ImageData(
+        val url: String? = null,
+    )
+
+    @Serializable
+    data class Tags(
+        val artist: List<String> = emptyList(),
+    )
 }
