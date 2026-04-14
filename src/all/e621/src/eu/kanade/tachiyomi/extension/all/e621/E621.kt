@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,7 +22,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -154,38 +152,35 @@ class E621 :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/pools/${manga.url}"
 
     // Chapters
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    override fun chapterListRequest(manga: SManga): Request {
         val poolId = manga.url
-
-        return client.newCall(GET("$baseUrl/pools/$poolId.json", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val pool = response.parseAs<Pool>()
-                val postIds = pool.postIds
-                val updatedAt = pool.updatedAt
-
-                if (preferences.splitChaptersPref && postIds.isNotEmpty()) {
-                    postIds.mapIndexed { index, postId ->
-                        SChapter.create().apply {
-                            name = "Post ${index + 1}"
-                            url = "/posts/$postId"
-                            chapter_number = (index + 1).toFloat()
-                            date_upload = if (index == 0) parseDate(updatedAt) else 0L
-                        }
-                    }.reversed()
-                } else {
-                    listOf(
-                        SChapter.create().apply {
-                            name = "Pool (${postIds.size} pages)"
-                            url = "/pools/$poolId"
-                            date_upload = parseDate(updatedAt)
-                        },
-                    )
-                }
-            }
+        return GET("$baseUrl/pools/$poolId.json", headers)
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val pool = response.parseAs<Pool>()
+        val postIds = pool.postIds
+        val updatedAt = pool.updatedAt
+
+        return if (preferences.splitChaptersPref && postIds.isNotEmpty()) {
+            postIds.mapIndexed { index, postId ->
+                SChapter.create().apply {
+                    name = "Post ${index + 1}"
+                    url = "/posts/$postId"
+                    chapter_number = (index + 1).toFloat()
+                    date_upload = if (index == 0) parseDate(updatedAt) else 0L
+                }
+            }.reversed()
+        } else {
+            listOf(
+                SChapter.create().apply {
+                    name = "Pool (${postIds.size} pages)"
+                    url = "/pools/${pool.id}"
+                    date_upload = parseDate(updatedAt)
+                },
+            )
+        }
+    }
 
     // Pages
 
