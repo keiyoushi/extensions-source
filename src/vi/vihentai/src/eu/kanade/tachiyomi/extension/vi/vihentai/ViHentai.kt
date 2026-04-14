@@ -105,10 +105,7 @@ class ViHentai : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("span.grow.text-lg")?.text()
-                ?: document.selectFirst("meta[property=og:title]")?.attr("content")
-                    ?.substringBefore(" - Việt Hentai")
-                ?: ""
+            title = document.selectFirst("span.grow.text-lg")!!.text()
             author = document.selectFirst("a[href*=/tac-gia/], a[href*=/nhom-dich/]")?.text()
             genre = document.select("div.mt-2.flex.flex-wrap.gap-1 a[href*=/the-loai/]").joinToString { it.text() }
             thumbnail_url = document.selectFirst("div.cover-frame div.cover, div.cover-frame")?.extractBackgroundImage()
