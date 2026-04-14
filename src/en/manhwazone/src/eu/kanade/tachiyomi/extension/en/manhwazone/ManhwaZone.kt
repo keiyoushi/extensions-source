@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -46,6 +47,8 @@ class ManhwaZone : HttpSource() {
     }
 
     private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
+
+    private inline fun <reified T> JsonElement.parseAs(): T = json.decodeFromJsonElement(this)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?sortBy=popularity&page=$page", headers)
 
@@ -200,7 +203,7 @@ class ManhwaZone : HttpSource() {
         for (item in actualChapters) {
             val chapterTuple = item.jsonArray
             val chapterElement = chapterTuple.getOrNull(0) ?: continue
-            val chapterDto = json.decodeFromJsonElement<ChapterDto>(chapterElement)
+            val chapterDto = chapterElement.parseAs<ChapterDto>()
 
             val webUrl = chapterDto.webUrl ?: continue
             val name = chapterDto.name ?: "Chapter"
