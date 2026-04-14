@@ -287,6 +287,122 @@ dependencies {
     implementation(project(':lib-i18n'))
 }
 ```
+#### keiyoushi.utils (core utilities)
+
+The `core/utils` module provides a set of shared extension functions that are available to all extensions
+without any extra Gradle dependency. You should use these helpers instead of rolling your own equivalents —
+reviewers will ask you to switch if you don't. The utilities live in the `keiyoushi.utils` package and are
+imported individually.
+
+**JSON parsing — `parseAs`**
+
+Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, and `JsonElement`
+receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`).
+
+```kotlin
+import keiyoushi.utils.parseAs
+
+// From a Response (consumes the body):
+val dto = response.parseAs<MyDto>()
+
+// From a String:
+val dto = jsonString.parseAs<MyDto>()
+
+// With a transform applied before parsing:
+val dto = response.parseAs<MyDto> { it.substringAfter("callback(").dropLast(1) }
+```
+
+**Do not** create a local `private val json: Json by injectLazy()` — the global instance is already
+available via `jsonInstance` and the `parseAs` helpers use it automatically. Repeated in several PRs
+(e.g. [#13619](https://github.com/keiyoushi/extensions-source/pull/13619),
+[#13813](https://github.com/keiyoushi/extensions-source/pull/13813),
+[#13968](https://github.com/keiyoushi/extensions-source/pull/13968)).
+
+**JSON serialization — `toJsonString`**
+
+Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string.
+
+```kotlin
+import keiyoushi.utils.toJsonString
+
+val body = myRequestDto.toJsonString().toRequestBody("application/json".toMediaType())
+```
+
+**Date parsing — `tryParse`**
+
+Use `keiyoushi.utils.tryParse` on a `SimpleDateFormat` instance to safely parse a date string.
+It returns `0L` on failure or when the input is `null`, which is exactly what the app expects.
+
+```kotlin
+import keiyoushi.utils.tryParse
+
+// Declare dateFormat at class/file level — creating SimpleDateFormat is expensive:
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
+
+chapter.date_upload = dateFormat.tryParse(dateStr)
+```
+
+**Do not** write manual try/catch blocks or null-guards around `SimpleDateFormat.parse()` —
+`tryParse` handles both. Also always declare your `SimpleDateFormat` as a class-level or
+file-level `val` so it is not reconstructed for every chapter (seen in
+[#13619](https://github.com/keiyoushi/extensions-source/pull/13619),
+[#13813](https://github.com/keiyoushi/extensions-source/pull/13813),
+[#13936](https://github.com/keiyoushi/extensions-source/pull/13936)).
+
+**Filter helpers — `firstInstance` / `firstInstanceOrNull`**
+
+Use these instead of `filterIsInstance<T>().first()` / `filterIsInstance<T>().firstOrNull()`.
+
+```kotlin
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+
+val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+```
+
+Seen requested in [#13813](https://github.com/keiyoushi/extensions-source/pull/13813) and
+[#14246](https://github.com/keiyoushi/extensions-source/pull/14246).
+
+**SharedPreferences — `getPreferences` / `getPreferencesLazy`**
+
+Use these instead of accessing `Injekt` manually.
+
+```kotlin
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
+
+// Eager:
+private val preferences = getPreferences()
+
+// Lazy (recommended for most cases):
+private val preferences by getPreferencesLazy()
+```
+
+Seen requested in [#14600](https://github.com/keiyoushi/extensions-source/pull/14600) and
+[#14446](https://github.com/keiyoushi/extensions-source/pull/14446).
+
+**Next.js data extraction — `extractNextJs` / `extractNextJsRsc`**
+
+If the site is built with Next.js, use `keiyoushi.utils.extractNextJs` on a `Document` or `Response`,
+or `keiyoushi.utils.extractNextJsRsc` on a raw RSC response string to pull typed data out of the
+hydration payload without fragile HTML scraping.
+
+```kotlin
+import keiyoushi.utils.extractNextJs
+
+val data = response.extractNextJs<MyDto>()
+// Or with an explicit predicate:
+val data = document.extractNextJs<MyDto> { element ->
+    element is JsonObject && "slug" in element
+}
+```
+
+For client-side navigation responses (`text/x-component` content type), pass the `rsc: 1`
+request header and use `extractNextJsRsc` on the response body string.
+See [#14266](https://github.com/keiyoushi/extensions-source/pull/14266) and
+[#14446](https://github.com/keiyoushi/extensions-source/pull/14446) for real-world usage.
 
 #### Additional dependencies
 
@@ -324,7 +440,7 @@ either `SourceFactory` or extend one of the `Source` implementations: `HttpSourc
 | `name`    | Name displayed in the "Sources" tab in the app.                                                                                                                 |
 | `baseUrl` | Base URL of the source without any trailing slashes.                                                                                                            |
 | `lang`    | An ISO 639-1 compliant language code (two letters in lower case in most cases, but can also include the country/dialect part by using a simple dash character). |
-| `id`      | Identifier of your source, automatically set in `HttpSource`. It should only be manually overriden if you need to copy an existing autogenerated ID.            |
+| `id`      | Identifier of your source, automatically set in `HttpSource`. It should only be manually overridden if you need to copy an existing autogenerated ID.            |
 
 ### Extension call flow
 
@@ -445,7 +561,7 @@ will be cached.
 - While a chapter is open in the reader or is being downloaded, `fetchImageUrl` will be called to get
 URLs for each page of the manga if the `Page.imageUrl` is empty.
 - If the source provides all the `Page.imageUrl`'s directly, you can fill them and let the `Page.url`
-empty, so the app will skip the `fetchImageUrl` source and call directly `fetchImage`.
+empty, so the app will skip the `fetchImageUrl` step and call directly `fetchImage`.
 - The `Page.url` and `Page.imageUrl` attributes **should be set as an absolute URL**.
 - Chapter pages numbers start from `0`.
 - The list of `Page`s should be returned already sorted, the `index` field is ignored.
@@ -680,10 +796,10 @@ multisrc
                 └── ThemeSourceGenerator.kt
 ```
 
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<themepkg>/<Theme>.kt` defines the the theme's
+- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<themepkg>/<Theme>.kt` defines the theme's
 default implementation.
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/<Theme>Generator.kt` defines the the
-theme's generator class, this is similar to a `SourceFactory` class.
+- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/<Theme>Generator.kt` defines the theme's
+generator class, this is similar to a `SourceFactory` class.
 - `multisrc/overrides/<themepkg>/default/res` is the theme's default icons, if a source doesn't have
 overrides for `res`, then default icons will be used.
 - `multisrc/overrides/<themepkg>/default/additional.gradle` defines additional gradle code, this will
@@ -720,7 +836,7 @@ There are three steps in running and testing a theme source:
     - **Method 1:** Android Studio might prompt to sync the gradle. Click on `Sync Now`.
     - **Method 2:** Manually re-sync by opening `File` -> `Sync Project with Gradle Files` or by
     pressing `Alt+f` then `g`.
-3. Build and test the generated Extention like normal `src` sources.
+3. Build and test the generated Extension like normal `src` sources.
     - It's recommended to make changes here to skip going through step 1 and 2 multiple times, and
     when you are done, copying the changes back to `multisrc`.
 
@@ -761,7 +877,7 @@ with open(f"{package}/src/{source}.kt", "w") as f:
     should be increased by one.
     - When a theme's default implementation changes, `baseVersionCode` should be increased, the
     initial value should be `1`.
-    - For example, for a new theme with a new source, extention version code will be `0 + 0 + 1 = 1`.
+    - For example, for a new theme with a new source, extension version code will be `0 + 0 + 1 = 1`.
 - `IntelijConfigurationGeneratorMainKt` should be run on creating or removing a multisrc theme.
     - On removing a theme, you can manually remove the corresponding configuration in the `.run`
     folder instead.
@@ -935,7 +1051,7 @@ $ ./gradlew src:<lang>:<source>:assembleDebug
 
 When you feel confident about your changes, submit a new Pull Request so your code can be reviewed
 and merged if it's approved. We encourage following a [GitHub Standard Fork & Pull Request Workflow](https://gist.github.com/Chaser324/ce0505fbed06b947d962)
-and following the good practices of the workflow, such as not commiting directly to `main`: always
+and following the good practices of the workflow, such as not committing directly to `main`: always
 create a new branch for your changes.
 
 If you are more comfortable about using Git GUI-based tools, you can refer to [this guide](https://learntodroid.com/how-to-use-git-and-github-in-android-studio/)
