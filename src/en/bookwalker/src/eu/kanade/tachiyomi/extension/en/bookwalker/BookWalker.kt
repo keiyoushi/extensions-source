@@ -370,7 +370,7 @@ class BookWalker :
 
         const val PAGE_SIZE = 60
 
-        private const val PURCHASE_ICON = "\uD83E\uDE99" // coin emoji
+        private const val PURCHASE_ICON = "\uD83D\uDCB5" // dollar bill emoji
         private const val PREORDER_ICON = "\uD83D\uDD51" // two-o-clock emoji
         private const val FREE_ICON = "\uD83C\uDF81" // wrapped present emoji
 
