@@ -31,7 +31,6 @@ class Astratoons : HttpSource() {
         .rateLimit(2)
         .build()
     override val versionId: Int = 2
-    
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
