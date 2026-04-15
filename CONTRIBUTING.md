@@ -21,19 +21,35 @@ or fixing it directly by submitting a Pull Request.
    4. [Extension call flow](#extension-call-flow)
    5. [Misc notes](#misc-notes)
    6. [Advanced extension features](#advanced-extension-features)
-4. [Multi-source themes](#multi-source-themes)
+4. [lib tools](#lib-tools)
+   1. [Adding a lib dependency](#adding-a-lib-dependency)
+   2. [cookieinterceptor](#cookieinterceptor)
+   3. [cryptoaes](#cryptoaes)
+   4. [dataimage](#dataimage)
+   5. [i18n](#i18n)
+   6. [lzstring](#lzstring)
+   7. [randomua](#randomua)
+   8. [seedrandom](#seedrandom)
+   9. [speedbinb](#speedbinb)
+   10. [synchrony](#synchrony)
+   11. [textinterceptor](#textinterceptor)
+   12. [unpacker](#unpacker)
+   13. [zipinterceptor](#zipinterceptor)
+   14. [clipstudioreader](#clipstudioreader)
+   15. [publus](#publus)
+5. [Multi-source themes](#multi-source-themes)
    1. [The directory structure](#the-directory-structure)
    2. [Development workflow](#development-workflow)
    3. [Scaffolding overrides](#scaffolding-overrides)
    4. [Additional Notes](#additional-notes)
-5. [Running](#running)
-6. [Debugging](#debugging)
+6. [Running](#running)
+7. [Debugging](#debugging)
    1. [Android Debugger](#android-debugger)
    2. [Logs](#logs)
    3. [Inspecting network calls](#inspecting-network-calls)
    4. [Using external network inspecting tools](#using-external-network-inspecting-tools)
-7. [Building](#building)
-8. [Submitting the changes](#submitting-the-changes)
+8. [Building](#building)
+9. [Submitting the changes](#submitting-the-changes)
    1. [Pull Request checklist](#pull-request-checklist)
 
 ## Prerequisites
@@ -800,6 +816,449 @@ The `id` also needs to be explicitly set to the old value if you're changing the
 > If the source has also changed their theme you can instead just change
 > the `name` field in the source class and in the Gradle file. By doing so
 > a new `id` will be generated and users will be forced to migrate.
+
+## lib tools
+
+The `lib/` directory contains a set of reusable modules that solve common extension problems such as
+cookie management, image descrambling, JavaScript deobfuscation, and more. Before writing your own
+implementation of something, check whether an existing lib already covers your use case.
+
+### Adding a lib dependency
+
+Each lib is a separate Gradle module. To use one, add it to the `dependencies` block of your
+extension's `build.gradle`:
+
+```groovy
+dependencies {
+    implementation(project(':lib-<name>'))
+}
+```
+
+For example, to use `cookieinterceptor`:
+
+```groovy
+dependencies {
+    implementation(project(':lib-cookieinterceptor'))
+}
+```
+
+Some libs depend on other libs internally (e.g. `speedbinb` pulls in `textinterceptor`). Gradle
+resolves transitive dependencies automatically, so you only need to declare the top-level lib you
+are using.
+
+
+
+### cookieinterceptor
+
+**Module:** `:lib-cookieinterceptor`  
+**Package:** `keiyoushi.lib.cookieinterceptor`
+
+Injects one or more key/value cookies into every outgoing request that targets a given domain, and
+keeps the Android `CookieManager` in sync. Useful when a site requires a session cookie or consent
+flag to be present before serving content.
+
+```kotlin
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+
+// Single cookie
+override val client = network.cloudflareClient.newBuilder()
+    .addInterceptor(CookieInterceptor("example.com", "consent" to "1"))
+    .build()
+
+// Multiple cookies
+override val client = network.cloudflareClient.newBuilder()
+    .addInterceptor(
+        CookieInterceptor(
+            domain = "example.com",
+            cookies = listOf("age_gate" to "1", "lang" to "en"),
+        )
+    )
+    .build()
+```
+
+The interceptor only modifies requests whose host ends with the specified domain, so other requests
+pass through unchanged.
+
+
+
+### cryptoaes
+
+**Module:** `:lib-cryptoaes`  
+**Package:** `keiyoushi.lib.cryptoaes`
+
+Provides two utilities:
+
+**`CryptoAES`** — Decrypts AES-CBC ciphertext using the same key-derivation logic as the
+[CryptoJS](https://github.com/brix/crypto-js) JavaScript library. Use this when a source encrypts
+its chapter URLs or image keys with `CryptoJS.AES.encrypt`.
+
+```kotlin
+import keiyoushi.lib.cryptoaes.CryptoAES
+
+// Decrypt with a passphrase (mirrors CryptoJS.AES.decrypt(cipherText, password))
+val plainText = CryptoAES.decrypt(cipherText, password)
+
+// Decrypt with explicit raw key and IV byte arrays
+val plainText = CryptoAES.decrypt(cipherText, keyBytes, ivBytes)
+```
+
+**`Deobfuscator`** — Evaluates numeric expressions encoded in
+[JSFuck](https://en.wikipedia.org/wiki/JSFuck) style to extract the password hidden inside
+obfuscated JavaScript. Currently supports numeric characters and the decimal point only.
+
+```kotlin
+import keiyoushi.lib.cryptoaes.Deobfuscator
+
+val password = Deobfuscator.deobfuscateJsPassword(obfuscatedScript)
+val plainText = CryptoAES.decrypt(cipherText, password)
+```
+
+
+
+### dataimage
+
+**Module:** `:lib-dataimage`  
+**Package:** `keiyoushi.lib.dataimage`
+
+Handles pages whose image is embedded as a `data:image/...;base64,...` URI instead of a regular
+URL. OkHttp cannot make a network request to a data URI, so this lib converts the data URI into a
+fake `https://127.0.0.1/?...` URL and an interceptor converts it back into a real HTTP response
+containing the image bytes.
+
+```kotlin
+import keiyoushi.lib.dataimage.DataImageInterceptor
+import keiyoushi.lib.dataimage.dataImageAsUrl
+import keiyoushi.lib.dataimage.dataImageAsUrlOrNull
+
+// 1. Register the interceptor on your client
+override val client = network.cloudflareClient.newBuilder()
+    .addInterceptor(DataImageInterceptor())
+    .build()
+
+// 2a. The attribute might be a data URI or a regular URL
+Page(index, imageUrl = element.dataImageAsUrl("src"))
+
+// 2b. The real image URL is on a different attribute; data URI is on "data-src"
+val imageUrl = element.dataImageAsUrlOrNull("data-src") ?: element.attr("abs:src")
+Page(index, imageUrl = imageUrl)
+```
+
+
+
+### i18n
+
+**Module:** `:lib-i18n`  
+**Package:** `keiyoushi.lib.i18n`
+
+Loads `.properties` message files from the extension's `assets/i18n/` folder to provide
+translated filter labels, status strings, and other UI text. Use this for sources that support
+multiple languages and need locale-specific display strings.
+
+**File naming convention:** `assets/i18n/messages_<iso_639_1>.properties`, using snake_case and
+lowercase (e.g. `messages_pt_br.properties`).
+
+```kotlin
+import keiyoushi.lib.i18n.Intl
+
+private val intl by lazy {
+    Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "pt-BR", "es"),
+        classLoader = this::class.java.classLoader!!,
+    )
+}
+
+// Retrieve a translated string by key
+val label = intl["filter.status.ongoing"]
+
+// Format a translated string with arguments
+val message = intl.format("chapter.count", chapterCount)
+```
+
+Use the JetBrains [Resource Bundle Editor plugin](https://plugins.jetbrains.com/plugin/17035-resource-bundle-editor) to edit `.properties` files. Configure Android Studio to save them as UTF-8 (see the [JetBrains documentation](https://www.jetbrains.com/help/idea/properties-files.html#1cbc434e)).
+
+
+
+### lzstring
+
+**Module:** `:lib-lzstring`  
+**Package:** `keiyoushi.lib.lzstring`
+
+A Kotlin reimplementation of the [lz-string](https://github.com/pieroxy/lz-string) compression
+library. Use this when a source compresses its chapter data or page URLs with `LZString` on the
+JavaScript side.
+
+```kotlin
+import keiyoushi.lib.lzstring.LZString
+
+val decompressed = LZString.decompressFromBase64(compressedString)
+val decompressedUtf16 = LZString.decompressFromUTF16(compressedString)
+```
+
+
+
+### randomua
+
+**Module:** `:lib-randomua`  
+**Package:** `keiyoushi.lib.randomua`
+
+Fetches a random real-world `User-Agent` string from a maintained list and lets users choose
+between desktop, mobile, or a fully custom value via a settings preference. Useful when a source
+blocks requests from the app's default user agent.
+
+```kotlin
+import keiyoushi.lib.randomua.UserAgentType
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
+
+// In headersBuilder(), apply the selected user agent
+override fun headersBuilder() = super.headersBuilder()
+    .setRandomUserAgent(
+        userAgentType = UserAgentType.DESKTOP,   // omit to use the user's preference
+        filterInclude = listOf("Chrome"),         // optional: only include UA strings containing "Chrome"
+        filterExclude = listOf("Mobile"),         // optional: exclude UA strings containing "Mobile"
+    )
+
+// In setupPreferenceScreen(), expose the setting to users
+override fun setupPreferenceScreen(screen: PreferenceScreen) {
+    screen.addRandomUAPreference()
+}
+```
+
+If you always want a fixed type without a user-facing setting, pass `userAgentType` explicitly and
+skip `addRandomUAPreference()`.
+
+
+
+### seedrandom
+
+**Module:** `:lib-seedrandom`  
+**Package:** `keiyoushi.lib.seedrandom`
+
+A Kotlin port of [seedrandom](https://github.com/davidbau/seedrandom), a seeded pseudo-random
+number generator (PRNG) based on ARC4. Use this when a source uses `seedrandom` in JavaScript to
+deterministically shuffle image tiles or generate keys.
+
+```kotlin
+import keiyoushi.lib.seedrandom.SeedRandom
+
+val rng = SeedRandom("my-seed-string")
+
+// Generate a double in [0, 1)
+val value = rng.nextDouble()
+
+// Shuffle a list the same way the site's JavaScript does
+val shuffled = rng.shuffle(pages.toMutableList())
+```
+
+
+
+### speedbinb
+
+**Module:** `:lib-speedbinb` (depends on `:lib-textinterceptor`)  
+**Package:** `keiyoushi.lib.speedbinb`
+
+Implements the SpeedBinb manga viewer protocol used by several Japanese publishers. The lib
+handles authentication, metadata fetching, and image descrambling for both `ptimg` (metadata-driven
+translation map) and `ptbinb`/`ptbinba` (key-based tile shuffling) formats.
+
+Extend `SpeedBinbReader` and provide the `baseUrl` and authentication details. The lib overrides
+`pageListParse` and handles image descrambling through a registered OkHttp interceptor.
+
+```kotlin
+import keiyoushi.lib.speedbinb.SpeedBinbReader
+
+class MySource : SpeedBinbReader() {
+    override val baseUrl = "https://example.com"
+    // implement the required authentication or token-fetching logic
+}
+```
+
+Refer to existing extensions that use this lib (e.g. those targeting sites powered by the
+SpeedBinb platform) for complete working examples.
+
+
+
+### synchrony
+
+**Module:** `:lib-synchrony`  
+**Package:** `keiyoushi.lib.synchrony`
+
+Runs the [Synchrony](https://github.com/nicolo-ribaudo/tc39-proposal-async-context) JavaScript
+deobfuscator inside a [QuickJS](https://github.com/cashapp/quickjs-java) sandbox to clean up
+heavily obfuscated JavaScript that would be impractical to reverse manually. Use this when a source
+wraps its data inside multi-layered JavaScript obfuscation.
+
+```kotlin
+import keiyoushi.lib.synchrony.Deobfuscator
+
+val cleanScript = Deobfuscator.deobfuscateScript(obfuscatedJsSource)
+    ?: throw Exception("Failed to deobfuscate script")
+
+// parse cleanScript with Regex or SubstringExtractor
+```
+
+Because QuickJS executes the full Synchrony bundle, this call is relatively expensive. Avoid
+calling it on every page request; cache the result where possible.
+
+
+
+### textinterceptor
+
+**Module:** `:lib-textinterceptor`  
+**Package:** `keiyoushi.lib.textinterceptor`
+
+Renders a plain-text or HTML string as a PNG image so it can be displayed as a "page" in the
+reader. This is intended for novel-style sources where a chapter is a block of text rather than
+image files.
+
+```kotlin
+import keiyoushi.lib.textinterceptor.TextInterceptor
+import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+
+// 1. Register the interceptor
+override val client = network.cloudflareClient.newBuilder()
+    .addInterceptor(TextInterceptor())
+    .build()
+
+// 2. Create a fake URL from the chapter's title and body text
+override fun pageListParse(response: Response): List<Page> {
+    val document = response.asJsoup()
+    val title = document.selectFirst("h1")?.text().orEmpty()
+    val body  = document.selectFirst(".chapter-content")?.html().orEmpty()
+
+    return listOf(
+        Page(0, imageUrl = TextInterceptorHelper.createUrl(title, body))
+    )
+}
+```
+
+Both `title` and `body` accept HTML; the interceptor strips tags before rendering. Pass an empty
+string for either parameter to omit it.
+
+
+
+### unpacker
+
+**Module:** `:lib-unpacker`  
+**Package:** `keiyoushi.lib.unpacker`
+
+Provides two utilities for extracting data from inline JavaScript:
+
+**`Unpacker`** — Decodes JavaScript packed with [Dean Edwards' packer](http://dean.edwards.name/packer/).
+
+```kotlin
+import keiyoushi.lib.unpacker.Unpacker
+
+// Unpack the entire script
+val unpacked = Unpacker.unpack(scriptContent)
+
+// Unpack and extract only the value between two delimiters
+val images = Unpacker.unpack(scriptContent, left = "\"images\":[", right = "]")
+```
+
+**`SubstringExtractor`** — A stateful helper for extracting multiple substrings from a string in a
+single sequential pass, without constructing multiple intermediate strings.
+
+```kotlin
+import keiyoushi.lib.unpacker.SubstringExtractor
+
+val extractor = SubstringExtractor(scriptContent)
+extractor.skipOver("var data = ")
+val key    = extractor.substringBetween("\"key\":\"", "\"")
+val images = extractor.substringBetween("\"images\":[", "]")
+```
+
+
+
+### zipinterceptor
+
+**Module:** `:lib-zipinterceptor`  
+**Package:** `keiyoushi.lib.zipinterceptor`
+
+Intercepts responses that are ZIP archives containing image files (and sometimes SVG wrappers with
+base64-encoded images), extracts and decodes each entry, stitches them together vertically into a
+single JPEG, and returns that as the HTTP response. Handles AVIF and base64-embedded image formats
+inside the ZIP.
+
+Extend `ZipInterceptor` and register it on your client:
+
+```kotlin
+import keiyoushi.lib.zipinterceptor.ZipInterceptor
+
+override val client = network.cloudflareClient.newBuilder()
+    .addInterceptor(ZipInterceptor()::zipImageInterceptor)
+    .build()
+```
+
+A request is treated as a ZIP image only when its URL path ends in `.zip` **and** its URL fragment
+is exactly `page`. Set the fragment when building your page URL:
+
+```kotlin
+Page(index, url = "$imageUrl#page")
+```
+
+Override `requestIsZipImage` or `zipGetByteStream` in a subclass if you need custom matching logic
+or decryption before the ZIP is read.
+
+
+
+### clipstudioreader
+
+**Module:** `:lib-clipstudioreader`  
+**Package:** `keiyoushi.lib.clipstudioreader`
+
+Implements the Clip Studio Reader viewer protocol, which serves manga in two formats: a
+parameter/CGI-based XML format with scrambled image tiles, and an EPUB-based format with
+obfuscated images. The lib handles both paths transparently, including token fetching,
+deobfuscation, and image unscrambling via built-in OkHttp interceptors.
+
+Extend `ClipStudioReader` and provide your `baseUrl`:
+
+```kotlin
+import keiyoushi.lib.clipstudioreader.ClipStudioReader
+
+class MySource : ClipStudioReader() {
+    override val baseUrl = "https://example.com"
+    override val lang = "ja"
+    override val name = "My Source"
+}
+```
+
+The lib registers a `Deobfuscator` interceptor (XOR-based EPUB image decryption) and an
+`ImageInterceptor` (tile unscrambling for the CGI path) automatically. You do not need to
+implement `pageListParse` or `imageUrlParse` unless the target site deviates from the standard
+Clip Studio Reader layout.
+
+
+
+### publus
+
+**Module:** `:lib-publus`  
+**Package:** `keiyoushi.lib.publus`
+
+Implements the Publus digital manga reader protocol. The lib handles the multi-step API flow
+required to obtain page lists and descramble tile-based images served by Publus-powered storefronts.
+
+Extend `Publus` and supply the content base URL for a given chapter:
+
+```kotlin
+import keiyoushi.lib.publus.Publus
+
+class MySource : HttpSource(), Publus {
+    override val baseUrl = "https://example.com"
+
+    override fun pageListParse(response: Response): List<Page> {
+        val contentUrl = /* extract the viewer URL from the chapter page */
+        return getPublusPages(contentUrl, headers)
+    }
+}
+```
+
+The lib registers a `PublusInterceptor` that intercepts tile image requests and reassembles them
+into the correct reading order. Refer to existing extensions that target Publus-based readers for
+complete integration examples.
 
 ## Multi-source themes
 The `lib-multisrc` directory houses source code that is useful in situations where multiple source
