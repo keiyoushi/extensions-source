@@ -1,6 +1,6 @@
 # Contributing
 
-This guide has some instructions and tips on how to create a new Tachiyomi extension. Please **read
+This guide has some instructions and tips on how to create a new Keiyoushi extension. Please **read
 it carefully** if you're a new contributor or don't have any experience on the required languages
 and knowledges.
 
