@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -157,9 +156,15 @@ class MangaMoins : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("link[rel=preload][as=image]").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("href"))
+        val body = response.body.string()
+        val matchResult = READER_REGEX.find(body)
+        val objet = matchResult?.groups?.get(1)?.value?.parseAs<ReaderData>()
+        if (objet != null) {
+            return objet.pages.mapIndexed { index, element ->
+                Page(index, imageUrl = "${baseUrl}$element")
+            }
+        } else {
+            throw Exception("Impossible de récupérer les pages.")
         }
     }
 
@@ -168,5 +173,6 @@ class MangaMoins : HttpSource() {
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
         private const val LATEST_PAGE_LIMIT = 20
+        private val READER_REGEX = Regex("""window\.readerData\s*=\s*(\{.*?\});""")
     }
 }

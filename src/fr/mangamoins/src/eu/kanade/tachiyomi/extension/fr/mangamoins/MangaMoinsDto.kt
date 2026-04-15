@@ -67,3 +67,8 @@ class ChapterItem(
     val title: String,
     val time: Long,
 )
+
+@Serializable
+class ReaderData(
+    val pages: List<String>,
+)
