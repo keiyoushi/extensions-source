@@ -314,11 +314,7 @@ val dto = jsonString.parseAs<MyDto>()
 val dto = response.parseAs<MyDto> { it.substringAfter("callback(").dropLast(1) }
 ```
 
-**Do not** create a local `private val json: Json by injectLazy()` — the global instance is already
-available via `jsonInstance` and the `parseAs` helpers use it automatically. Repeated in several PRs
-(e.g. [#13619](https://github.com/keiyoushi/extensions-source/pull/13619),
-[#13813](https://github.com/keiyoushi/extensions-source/pull/13813),
-[#13968](https://github.com/keiyoushi/extensions-source/pull/13968)).
+**Do not** create a local `private val json: Json by injectLazy()` unless you specifically need a custom JSON configuration (e.g., `isLenient = true` or custom serializers). For standard parsing, the global instance is already available via `jsonInstance` and the `parseAs` helpers use it automatically.
 
 **JSON serialization — `toJsonString`**
 
