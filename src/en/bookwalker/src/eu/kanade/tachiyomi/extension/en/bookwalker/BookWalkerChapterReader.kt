@@ -91,9 +91,13 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
 
             Log.d("bookwalker", "Creating Webview...")
             WebView(app).apply {
-                // We want the layout to be sufficiently vertical that the reader uses a 1-column layout,
-                // but the specific size does not appear to matter.
-                layout(0, 0, 500, 1000)
+                // We want the layout to be sufficiently horizontal that the reader uses a two-column layout, but the
+                // specific size does not appear to matter.
+                // The reason it has to use the two-column layout is because of a bug in the reader that causes it to
+                // skip to the next volume once you get half-way through the current one in the one-column layout.
+                // The two-column layout does seem to have more bugs around pages not loading than one-column, but the
+                // occasional load error is better than being unable to read the second half of every volume.
+                layout(0, 0, 1000, 50)
 
                 @SuppressLint("SetJavaScriptEnabled")
                 settings.javaScriptEnabled = true
