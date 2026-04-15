@@ -24,7 +24,8 @@ function getPageCount() {
 }
 
 function getCurrentPageIndex() {
-    return +document.getElementById('current-progression').innerText.split(' of ')[0] - 1;
+    // \u2013 is the en-dash.
+    return +document.getElementById('current-progression').innerText.split(/(?:\u2013\d+|) of /)[0] - 1;
 }
 
 function getLastPageIndex() {
@@ -33,68 +34,72 @@ function getLastPageIndex() {
 
 const alreadyExtracted = [];
 
-async function extractImage(pageIndex, retriesRemaining = 3) {
+async function extractImage(pageIndex) {
     if (alreadyExtracted[pageIndex]) {
         console.log('already extracted', pageIndex);
         return;
     }
     alreadyExtracted[pageIndex] = true;
 
-    const iframe = getSpine().children[pageIndex].querySelector('iframe.readium-navigator-iframe.loaded');
-    if (!iframe) {
-        console.error(pageIndex, 'was not loaded!');
-        return;
-    }
-
-    // A page is comprised of a watermarked image that forms the bulk of the content,
-    // plus a separate smaller image rendered that covers over the watermark.
-    // The second image is always in the top-left, which makes it simple to compose them.
-    const images = iframe.contentDocument.querySelectorAll('img');
-    const fullImage = images[0];
-
-    if (!fullImage) {
-        // maybe the iframe hasn't actually loaded yet. Let's try again in a bit.
-        if (retriesRemaining > 0) {
-            console.error(pageIndex, 'retrying...');
-            await waitMilliseconds(100);
-            return await extractImage(pageIndex, retriesRemaining - 1);
-        }
-        else {
-            console.error(pageIndex, 'never loaded!');
+    async function tryExtract(retriesRemaining = 3) {
+        const iframe = getSpine().children[pageIndex].querySelector('iframe.readium-navigator-iframe.loaded');
+        if (!iframe) {
+            console.error(pageIndex, 'was not loaded!');
             return;
         }
+
+        // A page is comprised of a watermarked image that forms the bulk of the content,
+        // plus a separate smaller image rendered that covers over the watermark.
+        // The second image is always in the top-left, which makes it simple to compose them.
+        const images = iframe.contentDocument.querySelectorAll('img');
+        const fullImage = images[0];
+
+        if (!fullImage) {
+            // maybe the iframe hasn't actually loaded yet. Let's try again in a bit.
+            if (retriesRemaining > 0) {
+                console.error(pageIndex, 'retrying...');
+                await waitMilliseconds(100);
+                return await tryExtract(retriesRemaining - 1);
+            }
+            else {
+                console.error(pageIndex, 'never loaded!');
+                return;
+            }
+        }
+
+        const topImage = images[1];
+
+        if (fullImage.src.startsWith('https://')) {
+            // This is a public URL which should be directly accessible rather than a blob.
+            // Because of browser cross-origin security, we actually can't follow the normal path in
+            // this case and need to send the URL up to the extension directly.
+            console.log("sending image URL for", pageIndex);
+            webviewInterface.reportImageURL(pageIndex, fullImage.src);
+            return;
+        }
+
+        const width = fullImage.width;
+        const height = fullImage.height;
+        const canvas = new OffscreenCanvas(width, height);
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(fullImage, 0, 0);
+        ctx.drawImage(topImage, 0, 0);
+
+        // imageData should be a Uint8ClampedArray containing RGBA row-major bitmap image data.
+        // We don't create the final JPEGs right here with Canvas.toBlob/OffscreenCanvas.convertToBlob
+        // because in testing, that was _extremely_ slow to run in the Webview, taking upwards of
+        // 15 seconds per image. Doing that conversion on the JVM side is near-instantaneous.
+        const imageData = ctx.getImageData(0, 0, width, height).data;
+
+        // The WebView interface only allows communicating with strings,
+        // so we need to convert our ArrayBuffer to a string for transport.
+        const textData = new TextDecoder("windows-1252").decode(imageData);
+        console.log("sending encoded data for", pageIndex);
+        webviewInterface.reportImage(pageIndex, textData, width, height);
     }
 
-    const topImage = images[1];
-
-    if (fullImage.src.startsWith('https://')) {
-        // This is a public URL which should be directly accessible rather than a blob.
-        // Because of browser cross-origin security, we actually can't follow the normal path in
-        // this case and need to send the URL up to the extension directly.
-        console.log("sending image URL for", pageIndex);
-        webviewInterface.reportImageURL(pageIndex, fullImage.src);
-        return;
-    }
-
-    const width = fullImage.width;
-    const height = fullImage.height;
-    const canvas = new OffscreenCanvas(width, height);
-
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(fullImage, 0, 0);
-    ctx.drawImage(topImage, 0, 0);
-
-    // imageData should be a Uint8ClampedArray containing RGBA row-major bitmap image data.
-    // We don't create the final JPEGs right here with Canvas.toBlob/OffscreenCanvas.convertToBlob
-    // because in testing, that was _extremely_ slow to run in the Webview, taking upwards of
-    // 15 seconds per image. Doing that conversion on the JVM side is near-instantaneous.
-    const imageData = ctx.getImageData(0, 0, width, height).data;
-
-    // The WebView interface only allows communicating with strings,
-    // so we need to convert our ArrayBuffer to a string for transport.
-    const textData = new TextDecoder("windows-1252").decode(imageData);
-    console.log("sending encoded data for", pageIndex);
-    webviewInterface.reportImage(pageIndex, textData, width, height);
+    return await tryExtract();
 }
 
 function isIframeLoaded(iframe) {
@@ -151,6 +156,7 @@ function setupInterceptorForPage(idx, container = null) {
         onIframeFound(idx, iframe);
     }
     else {
+        console.log(idx, 'watching for iframe creation');
         createIframeObserver(idx).observe(container, { childList: true });
     }
 }
@@ -165,7 +171,7 @@ window.__INJECT_JS_UTILITIES = {
     async fetchPageData(targetPageIndex) {
         if (alreadyExtracted[targetPageIndex]) {
             alreadyExtracted[targetPageIndex] = false;
-            setupInterceptor(targetPageIndex);
+            setupInterceptorForPage(targetPageIndex);
         }
 
         const lastPageIndex = getLastPageIndex();
@@ -197,7 +203,9 @@ window.__INJECT_JS_UTILITIES = {
                     console.log(targetPageIndex, "loaded while waiting");
                     return;
                 }
-                console.log(targetPageIndex, "didn't load while waiting");
+                console.error(targetPageIndex, "didn't load while waiting");
+                // Nothing much we can do in this case
+                return;
             }
 
             await performUIAction(() => document.querySelector('button.thorium_web_overflow_hint').click());
