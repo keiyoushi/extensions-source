@@ -216,7 +216,7 @@ src/<lang>/<mysourcename>/
                         └── <mysourcename>
                             ├── <MySourceName>.kt
                             ├── <Dto>.kt (optional)
-                            ├── <Filters.kt (optional)
+                            ├── <Filters>.kt (optional)
                             └── <UrlActivity>.kt (optional)
 
 14 directories, 7(+4) files
