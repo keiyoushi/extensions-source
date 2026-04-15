@@ -28,8 +28,8 @@ class SortFilter :
         "sort",
         arrayOf(
             "Default" to "title",
-            "Latest" to "latest_update",
-            "Popular" to "popular",
+            "Latest Update" to "latest_update",
+            "Popularity" to "popular",
             "Rating" to "rating",
         ),
     )
