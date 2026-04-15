@@ -23,7 +23,7 @@ class MangaMoins : HttpSource() {
 
     override val lang = "fr"
 
-    override val supportsLatest = true
+    override val supportsLatest = false // 04/15/25 : Server Error
 
     private val apiUrl = "$baseUrl/api/v1"
 
