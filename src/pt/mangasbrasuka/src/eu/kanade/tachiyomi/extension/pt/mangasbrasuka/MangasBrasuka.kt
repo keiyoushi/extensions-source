@@ -15,7 +15,7 @@ class MangasBrasuka :
         "Mangas Brasuka",
         "https://mangasbrasuka.com.br",
         "pt-BR",
-        SimpleDateFormat("MM dd, yyyy", Locale("pt", "BR")),
+        SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
     ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
