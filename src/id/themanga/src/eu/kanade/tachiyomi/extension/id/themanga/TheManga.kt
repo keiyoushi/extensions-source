@@ -112,6 +112,7 @@ class TheManga : HttpSource() {
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
         if (!chapter.url.contains("/chapter/")) {
+            // Support old Madara URLs
             val segments = chapter.url.toHttpUrl().pathSegments
             val mangaSlug = segments[1]
             val number = segments[2].removePrefix("chapter-").replace("-", ".")
@@ -129,10 +130,10 @@ class TheManga : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val images = response.asJsoup().select("img.page-img")
+        val document = response.asJsoup()
 
-        return images.mapIndexed { idx, image ->
-            Page(idx, imageUrl = image.attr("abs:src"))
+        return document.select("img.page-img").mapIndexed { idx, image ->
+            Page(idx, imageUrl = image.absUrl("src"))
         }
     }
 
