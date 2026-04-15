@@ -435,6 +435,9 @@ request header and use `extractNextJsRsc` on the response body string.
 See [#14266](https://github.com/keiyoushi/extensions-source/pull/14266) and
 [#14446](https://github.com/keiyoushi/extensions-source/pull/14446) for real-world usage.
 
+**Extracting URLs — `setUrlWithoutDomain` + `absUrl`**
+When extracting URLs from HTML, prefer `element.absUrl("href")` or `element.attr("abs:href")` over manually concatenating `baseUrl` + `path`. Combined with `setUrlWithoutDomain()`, this safely handles both absolute and relative links.
+
 #### Additional dependencies
 
 If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle`
