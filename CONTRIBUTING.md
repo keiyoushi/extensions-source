@@ -219,7 +219,6 @@ src/<lang>/<mysourcename>/
                             ├── <Filters>.kt (optional)
                             └── <UrlActivity>.kt (optional)
 
-14 directories, 7(+4) files
 ```
 
 `<lang>` should be an ISO 639-1 compliant language code (two letters or `all`). `<mysourcename>`
