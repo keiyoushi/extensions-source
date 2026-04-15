@@ -294,9 +294,8 @@ dependencies {
 #### keiyoushi.utils (core utilities)
 
 The `core/utils` module provides a set of shared extension functions that are available to all extensions
-without any extra Gradle dependency. You should use these helpers instead of rolling your own equivalents —
-reviewers will ask you to switch if you don't. The utilities live in the `keiyoushi.utils` package and are
-imported individually.
+without any extra Gradle dependency. Prefer using these helpers instead of implementing your own equivalents, as they provide standardized and maintained solutions.
+The utilities live in the `keiyoushi.utils` package and are imported individually.
 
 **JSON parsing — `parseAs`**
 
