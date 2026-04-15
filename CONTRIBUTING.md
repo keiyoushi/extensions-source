@@ -721,7 +721,7 @@ class UrlActivity : Activity() {
             }
             try {
                 startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
+            } catch (e: Throwable) {
                 Log.e("RiztranslationUrl", e.toString())
             }
         } else {
