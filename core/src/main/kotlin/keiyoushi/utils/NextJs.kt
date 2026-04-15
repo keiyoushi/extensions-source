@@ -1,7 +1,6 @@
 package keiyoushi.utils
 
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.nextJsSerializer.DateSerializer
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -16,7 +15,6 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.util.Date
 import kotlin.reflect.typeOf
 
 private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
@@ -25,7 +23,6 @@ private val nextJsJsonInstance by lazy {
     Json(jsonInstance) {
         serializersModule = SerializersModule {
             include(jsonInstance.serializersModule)
-            contextual(Date::class, DateSerializer)
         }
     }
 }
