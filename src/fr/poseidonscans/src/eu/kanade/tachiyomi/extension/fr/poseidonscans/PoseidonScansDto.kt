@@ -1,10 +1,7 @@
-@file:UseContextualSerialization(Date::class)
-
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
+import keiyoushi.utils.nextJsSerializer.NextJSDate
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.UseContextualSerialization
-import java.util.Date
 
 @Serializable
 class LatestApiManga(
@@ -49,9 +46,9 @@ class CategoryData(val name: String)
 class ChapterData(
     val number: Float,
     val title: String? = null,
-    val createdAt: Date,
+    val createdAt: NextJSDate,
     val isPremium: Boolean? = false,
-    val premiumUntil: Date? = null,
+    val premiumUntil: NextJSDate? = null,
     val isVolume: Boolean? = false,
 )
 
