@@ -9,14 +9,12 @@ import java.util.Locale
 class GhostHentai :
     Madara(
         "Ghost Hentai",
-        "https://ghosthentai.com",
+        "https://ghostoon.com",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
-
-    override val mangaSubString = "seri"
 
     override val fetchGenres = false
     override var genresList = listOf(
