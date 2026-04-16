@@ -19,7 +19,7 @@ class MangaHen : HttpSource() {
 
     override val name = "MangaHen"
 
-    override val baseUrl = "https://manga-hen.com"
+    override val baseUrl = "https://gensura.net"
 
     private val advSearchURL = "$baseUrl/advanced-search"
 
