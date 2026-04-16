@@ -21,6 +21,22 @@ fun getFilters(): FilterList = FilterList(
     ExtraFilter("Extras"),
 )
 
+internal fun Filter<*>.isDefault() = when (this) {
+    is SortFilter -> state == 1
+    is Filter.Select<*> -> state == 0
+    is Filter.Text -> state.isBlank()
+    is Filter.CheckBox -> state == false
+    is Filter.TriState -> state == 0
+    is Filter.Group<*> -> state.all {
+        when (it) {
+            is Filter.CheckBox -> it.state == false
+            is Filter.TriState -> it.state == 0
+            else -> true
+        }
+    }
+    else -> true
+}
+
 internal open class ExtraFilter(name: String) :
     Filter.Group<CheckBoxFilter>(
         name,
