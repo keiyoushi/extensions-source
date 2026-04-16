@@ -9,14 +9,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,7 +23,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -36,19 +33,9 @@ class ManhwaZone : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
     }
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(body.string())
-    }
-
-    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
-
-    private inline fun <reified T> JsonElement.parseAs(): T = json.decodeFromJsonElement(this)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?sortBy=popularity&page=$page", headers)
 
@@ -107,9 +94,9 @@ class ManhwaZone : HttpSource() {
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("article.group").map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".min-w-0 > a.font-semibold")?.text() ?: ""
-                setUrlWithoutDomain(element.selectFirst("a")?.attr("href") ?: "")
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src") ?: ""
+                title = element.selectFirst(".min-w-0 > a.font-semibold")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
         val hasNextPage = document.selectFirst("a[rel=next], nav a:contains(›)") != null || mangas.size >= 24
@@ -121,9 +108,9 @@ class ManhwaZone : HttpSource() {
     private fun parseMangaDetails(document: Document): SManga {
         val manga = SManga.create()
 
-        manga.title = document.selectFirst("h1.page-title")?.text() ?: ""
-        manga.description = document.selectFirst("p.page-subtitle")?.text() ?: ""
-        manga.thumbnail_url = document.selectFirst("img.aspect-\\[7\\/10\\], figure.relative img")?.attr("abs:src") ?: ""
+        manga.title = document.selectFirst("h1.page-title")!!.text()
+        manga.description = document.selectFirst("p.page-subtitle")?.text()
+        manga.thumbnail_url = document.selectFirst("img.aspect-\\[7\\/10\\], figure.relative img")?.attr("abs:src")
         manga.genre = document.select("a.badge-genre").joinToString(", ") { it.text() }
 
         val statusText = document.selectFirst("span.badge-sm, span:contains(On Going), span:contains(Completed)")?.text()?.trim()
@@ -213,17 +200,11 @@ class ManhwaZone : HttpSource() {
                 SChapter.create().apply {
                     url = webUrl
                     this.name = name
-                    date_upload = parseDate(dateStr)
+                    date_upload = dateFormat.tryParse(dateStr)
                 },
             )
         }
         return chapters
-    }
-
-    private fun parseDate(dateStr: String?): Long = try {
-        dateStr?.let { dateFormat.parse(it)?.time } ?: 0L
-    } catch (_: Exception) {
-        0L
     }
 
     override fun pageListParse(response: Response): List<Page> {
