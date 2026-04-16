@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-private fun thumbnailUrl(baseUrl: String, folder: String) = "$baseUrl/files/scans/$folder/thumbnail.webp"
+private fun thumbnailUrl(baseUrl: String, folder: String) = "$baseUrl/$folder/cover.webp"
 
 @Serializable
 class MangaListResponse(
@@ -23,7 +23,7 @@ class MangaListItem(
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = this@MangaListItem.title
         url = this@MangaListItem.title
-        thumbnail_url = thumbnailUrl(baseUrl, coverFolder)
+        thumbnail_url = thumbnailUrl(baseUrl, coverFolder.replace("../", ""))
     }
 }
 
@@ -66,4 +66,9 @@ class ChapterItem(
     val num: String,
     val title: String,
     val time: Long,
+)
+
+@Serializable
+class ReaderData(
+    val pages: List<String>,
 )
