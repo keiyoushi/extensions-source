@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 class YuriVerso :
     Madara(
         "Yuri Verso",
-        "https://yuri.live",
+        "https://yurionair.top",
         "pt-BR",
         SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
     ) {
