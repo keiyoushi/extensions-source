@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -27,8 +28,9 @@ class EbookJapan :
     ConfigurableSource {
     override val name = "eBookJapan"
     override val lang = "ja"
-    override val baseUrl = "https://ebookjapan.yahoo.co.jp"
-    override val supportsLatest = false
+    private val domain = "ebookjapan.yahoo.co.jp"
+    override val baseUrl = "https://$domain"
+    override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/proxy/apis"
     private val cdnUrl = "https://cache2-ebookjapan.akamaized.net/contents/thumb/l"
@@ -39,6 +41,7 @@ class EbookJapan :
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
+        .addNetworkInterceptor(CookieInterceptor(domain, "ebaf" to "1"))
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -67,6 +70,24 @@ class EbookJapan :
         val start = response.request.url.queryParameter("start")!!.toInt()
         val total = result.rankingPublications.totalResults
         val hasNextPage = start + perPage < total
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val start = (page - 1) * perPage
+        val url = "$apiUrl/recent/details".toHttpUrl().newBuilder()
+            .addQueryParameter("useTitle", "0")
+            .addQueryParameter("start", start.toString())
+            .addQueryParameter("results", perPage.toString())
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAs<Publications>()
+        val mangas = result.items.map { it.toSManga(cdnUrl) }
+        val start = response.request.url.queryParameter("start")!!.toInt()
+        val hasNextPage = start + perPage < result.totalResults
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -159,8 +180,7 @@ class EbookJapan :
     }
 
     // Unsupported
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {

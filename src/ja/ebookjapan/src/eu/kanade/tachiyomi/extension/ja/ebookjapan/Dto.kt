@@ -11,35 +11,35 @@ import java.util.TimeZone
 
 @Serializable
 class RankingResponse(
-    val rankingPublications: RankingPublications,
+    val rankingPublications: Publications,
 )
 
 @Serializable
-class RankingPublications(
+class Publications(
     val totalResults: Int,
-    val items: List<RankingItems>,
+    val items: List<Items>,
 )
 
 @Serializable
-class RankingItems(
-    private val title: RankingTitles,
-    private val goods: RankingGoods?,
+class Items(
+    private val title: Titles,
+    private val goods: TitleGoods?,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = this@RankingItems.title.titleId
-        title = this@RankingItems.title.name
+        url = this@Items.title.titleId
+        title = this@Items.title.name
         thumbnail_url = "$cdnUrl/${goods?.imageFileName}"
     }
 }
 
 @Serializable
-class RankingTitles(
+class Titles(
     val titleId: String,
     val name: String,
 )
 
 @Serializable
-class RankingGoods(
+class TitleGoods(
     val imageFileName: String?,
 )
 
