@@ -16,12 +16,10 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import java.util.TimeZone
 
 class EbookJapan :
     HttpSource(),
@@ -34,8 +32,14 @@ class EbookJapan :
     private val apiUrl = "$baseUrl/proxy/apis"
     private val cdnUrl = "https://cache2-ebookjapan.akamaized.net/contents/thumb/l"
     private val viewerUrl = "$baseUrl/br_api"
+    private val viewerCdnUrl = "https://prod-contents-br-page.akamaized.net"
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val perPage = 50
+    private val decoder = Decoder()
+
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(ImageInterceptor())
+        .build()
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -100,25 +104,56 @@ class EbookJapan :
         return "$baseUrl/viewer/story/$bookCd/?ssid=$serialStoryId"
     }
 
-    // Viewer
-    // low res images (older browser): https://ebookjapan.yahoo.co.jp/br_api/open_light {"type":"story","code":"B00163893575","ssid":"123665","light":true}
-    // https://ebookjapan.yahoo.co.jp/br_api/light_image/c43293a1f1284f84b715facdd3bfa4b5/1
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "$baseUrl/${chapter.url}".toHttpUrl()
         val serialStoryId = url.fragment!!
         val bookCd = url.pathSegments.first()
-        val body = ViewerBody("story", bookCd, serialStoryId, false).toJsonString().toRequestBody("application/json".toMediaType())
+        val body = ViewerBody("story", bookCd, serialStoryId, false).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
         return POST("$viewerUrl/open_book", headers, body)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val sessionId = response.parseAs<ViewerOpenBook>().sessionId
+        val originalRequest = response.request
+        var currentResponse = response
+
+        repeat(MAX_RETRIES) { attempt ->
+            try {
+                return buildPages(currentResponse)
+            } catch (_: Throwable) {
+                if (attempt < MAX_RETRIES - 1) {
+                    Thread.sleep(RETRY_DELAY_MS)
+                    currentResponse = client.newCall(originalRequest).execute()
+                }
+            }
+        }
+        throw Exception("Too bad, try again.")
+    }
+
+    private fun buildPages(response: Response): List<Page> {
+        val openBook = response.parseAs<ViewerOpenBook>()
+
         val drmUrl = "$viewerUrl/get_drm".toHttpUrl().newBuilder()
-            .addQueryParameter("session_id", sessionId)
+            .addQueryParameter("session_id", openBook.sessionId)
             .build()
-        val drmRequest = GET(drmUrl, headers)
-        val drmResponse = client.newCall(drmRequest).execute()
-        val drmResult = drmResponse.parseAs<ViewerDrmResponse>()
+
+        val drmResult = client.newCall(GET(drmUrl, headers)).execute().parseAs<ViewerDrmResponse>()
+
+        decoder.decryptSession(
+            sessionId = openBook.sessionId,
+            code = drmResult.code,
+            openPayload = openBook.payload,
+            drmPayload = drmResult.payload,
+            fileId = drmResult.fileId,
+        )
+
+        return (0 until decoder.pageCount()).map { index ->
+            val url = "$viewerCdnUrl/pages/${decoder.getPageName(index)}".toHttpUrl().newBuilder()
+                .fragment("data=${decoder.encodeScrambleFragment(index)}")
+                .build()
+                .toString()
+
+            Page(index, imageUrl = url)
+        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -136,5 +171,8 @@ class EbookJapan :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val MAX_RETRIES = 10
+        private const val RETRY_DELAY_MS = 1500L
+        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }

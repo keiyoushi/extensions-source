@@ -3,12 +3,11 @@ package eu.kanade.tachiyomi.extension.ja.ebookjapan
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-
 
 @Serializable
 class RankingResponse(
@@ -94,7 +93,6 @@ class SerialStory(
     val serialStoryId: String,
 )
 
-
 @Serializable
 class ChapterResponse(
     val stories: List<ChapterStories>,
@@ -143,11 +141,12 @@ class ViewerBody(
 @Serializable
 class ViewerOpenBook(
     @SerialName("session_id") val sessionId: String,
+    val payload: String,
 )
 
 @Serializable
 class ViewerDrmResponse(
+    val code: String,
     @SerialName("file_id") val fileId: String,
-    val path: String,
     val payload: String,
 )
