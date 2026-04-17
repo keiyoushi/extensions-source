@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.teamshadowi
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,8 +10,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -32,6 +29,9 @@ class TeamShadowi : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    // Reusable headers for fetching raw JSON React Server Component payloads
+    private val rscHeaders by lazy { headers.newBuilder().add("Rsc", "1").build() }
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
@@ -104,10 +104,7 @@ class TeamShadowi : HttpSource() {
     }
 
     // =============================== Details ==============================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        // Appending 'Rsc: 1' fetches the raw JSON React Server Component payload
-        return GET(baseUrl + manga.url, headers.newBuilder().add("Rsc", "1").build())
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.extractNextJs<PublicDataSeries>()?.series
@@ -122,7 +119,7 @@ class TeamShadowi : HttpSource() {
                 "completed" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            genre = (data.genres.orEmpty() + data.tags.orEmpty()).distinct().joinToString(", ")
+            genre = (data.genres.orEmpty() + data.tags.orEmpty()).distinct().joinToString()
         }
     }
 
@@ -131,7 +128,7 @@ class TeamShadowi : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.extractNextJs<PublicDataSeries>()?.chapters
-            ?: throw Exception("Failed to extract chapter data")
+            ?: return emptyList()
 
         val slug = response.request.url.pathSegments.last()
 
@@ -148,14 +145,11 @@ class TeamShadowi : HttpSource() {
     }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request {
-        // Using Rsc header to grab embedded JSON pages for the chapter instead of HTML
-        return GET(baseUrl + chapter.url, headers.newBuilder().add("Rsc", "1").build())
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.extractNextJs<PublicDataChapter>()?.pages
-            ?: throw Exception("Failed to extract pages data")
+            ?: return emptyList()
 
         return data.mapIndexed { i, url ->
             Page(i, imageUrl = url)
@@ -168,100 +162,5 @@ class TeamShadowi : HttpSource() {
     override fun getFilterList() = FilterList(
         SortFilter(),
         GenreFilter(),
-    )
-
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
-
-    class SortFilter :
-        UriPartFilter(
-            "Sort By",
-            arrayOf(
-                Pair("Rating", "rating"),
-                Pair("Latest", "created"),
-                Pair("Views", "views"),
-                Pair("Title", "title"),
-            ),
-        )
-
-    class GenreFilter :
-        UriPartFilter(
-            "Genre",
-            arrayOf(
-                Pair("All", "all"),
-                Pair("Action", "action"),
-                Pair("Adventure", "adventure"),
-                Pair("Comedy", "comedy"),
-                Pair("Drama", "drama"),
-                Pair("Ecchi", "ecchi"),
-                Pair("Fantasy", "fantasy"),
-                Pair("Isekai", "isekai"),
-                Pair("Romance", "romance"),
-            ),
-        )
-
-    // ============================== Models ================================
-    @Serializable
-    data class SeriesResponse(
-        val data: List<Series>,
-        val hasMore: Boolean = false,
-    )
-
-    @Serializable
-    data class SearchResponse(
-        val series: List<Series> = emptyList(),
-    )
-
-    @Serializable
-    data class Series(
-        val title: String,
-        val slug: String,
-        @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
-        val status: String? = null,
-        val description: String? = null,
-        val genres: List<String>? = emptyList(),
-    ) {
-        fun toSManga() = SManga.create().apply {
-            title = this@Series.title
-            url = "/series/${this@Series.slug}"
-            thumbnail_url = this@Series.thumbnailUrl
-            status = when (this@Series.status?.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            description = this@Series.description
-            genre = this@Series.genres?.joinToString(", ")
-        }
-    }
-
-    @Serializable
-    data class PublicDataSeries(
-        val series: SeriesDetails,
-        val chapters: List<ChapterData> = emptyList(),
-    )
-
-    @Serializable
-    data class SeriesDetails(
-        val title: String,
-        val description: String? = null,
-        @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
-        val status: String? = null,
-        val genres: List<String>? = emptyList(),
-        val tags: List<String>? = emptyList(),
-    )
-
-    @Serializable
-    data class ChapterData(
-        val id: String,
-        val number: Float,
-        val title: String? = null,
-        @SerialName("created_at") val createdAt: String? = null,
-    )
-
-    @Serializable
-    data class PublicDataChapter(
-        val pages: List<String> = emptyList(),
     )
 }
