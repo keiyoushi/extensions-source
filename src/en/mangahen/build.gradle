@@ -1,6 +1,6 @@
 ext {
-    extName = 'MangaHen'
-    extClass = '.MangaHen'
+    extName = 'Gensura'
+    extClass = '.Gensura'
     extVersionCode = 3
     isNsfw = true
 }

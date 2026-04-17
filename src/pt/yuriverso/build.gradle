@@ -1,6 +1,6 @@
 ext {
-    extName = 'Yuri Verso'
-    extClass = '.YuriVerso'
+    extName = 'Yuri on Air'
+    extClass = '.YuriOnAir'
     themePkg = 'madara'
     baseUrl = 'https://yurionair.top'
     overrideVersionCode = 4

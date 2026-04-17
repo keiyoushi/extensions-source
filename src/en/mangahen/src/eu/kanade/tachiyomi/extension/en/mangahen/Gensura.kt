@@ -15,9 +15,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class MangaHen : HttpSource() {
+class Gensura : HttpSource() {
 
-    override val name = "MangaHen"
+    override val name = "Gensura"
 
     override val baseUrl = "https://gensura.net"
 
@@ -26,6 +26,9 @@ class MangaHen : HttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
+
+    // MangaHen -> Gensura
+    override val id = 6602595408477221375
 
     override val client = network.cloudflareClient
 
