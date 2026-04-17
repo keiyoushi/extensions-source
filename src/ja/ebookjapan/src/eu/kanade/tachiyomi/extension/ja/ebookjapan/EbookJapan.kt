@@ -93,11 +93,22 @@ class EbookJapan :
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        TODO()
+        val start = (page - 1) * perPage
+        val url = "$apiUrl/search/titles".toHttpUrl().newBuilder()
+            .addQueryParameter("keyword", query)
+            .addQueryParameter("start", start.toString())
+            .addQueryParameter("results", perPage.toString())
+            .addQueryParameter("sort", "weeklyPurchasedRanking")
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        TODO()
+        val result = response.parseAs<SearchResponse>()
+        val mangas = result.items.map { it.toSManga(cdnUrl) }
+        val start = response.request.url.queryParameter("start")!!.toInt()
+        val hasNextPage = start + perPage < result.totalResults
+        return MangasPage(mangas, hasNextPage)
     }
 
     // Details
@@ -138,16 +149,11 @@ class EbookJapan :
         val serialStoryId = url.fragment!!
         val bookCd = url.pathSegments.first()
         val body = ViewerBody("story", bookCd, serialStoryId, false).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
-        val postUrl = "$viewerUrl/open_book".toHttpUrl().newBuilder()
-            .fragment(bookCd)
-            .build()
-        return POST(postUrl.toString(), headers, body)
+        return POST("$viewerUrl/open_book", headers, body)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val openBook = response.parseAs<ViewerOpenBook>()
-        val bookCd = response.request.url.fragment!!
-
         val drmUrl = "$viewerUrl/get_drm".toHttpUrl().newBuilder()
             .addQueryParameter("session_id", openBook.sessionId)
             .build()
@@ -155,7 +161,7 @@ class EbookJapan :
         val drmResult = client.newCall(GET(drmUrl, headers)).execute().parseAs<ViewerDrmResponse>()
         val book = Decoder().decryptSession(
             sessionId = openBook.sessionId,
-            code = bookCd,
+            code = drmResult.code,
             openPayload = openBook.payload,
             drmPayload = drmResult.payload,
             fileId = drmResult.fileId,
@@ -180,7 +186,6 @@ class EbookJapan :
     }
 
     // Unsupported
-
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {

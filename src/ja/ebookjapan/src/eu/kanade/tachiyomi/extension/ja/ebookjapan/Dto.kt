@@ -33,9 +33,27 @@ class Items(
 }
 
 @Serializable
+class SearchResponse(
+    val totalResults: Int,
+    val items: List<Titles>,
+)
+
+@Serializable
 class Titles(
     val titleId: String,
     val name: String,
+    private val lastPublication: LastPublication?,
+) {
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
+        url = titleId
+        title = name
+        thumbnail_url = "$cdnUrl/${lastPublication?.goods?.imageFileName}"
+    }
+}
+
+@Serializable
+class LastPublication(
+    val goods: TitleGoods?,
 )
 
 @Serializable
@@ -133,7 +151,9 @@ class Goods(
     val saleStartDatetime: String?,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("Asia/Tokyo") }
+private val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
+}
 
 @Suppress("unused")
 @Serializable
@@ -153,5 +173,6 @@ class ViewerOpenBook(
 @Serializable
 class ViewerDrmResponse(
     @SerialName("file_id") val fileId: String,
+    val code: String,
     val payload: String,
 )
