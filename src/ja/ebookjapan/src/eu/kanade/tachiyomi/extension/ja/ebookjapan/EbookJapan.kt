@@ -20,6 +20,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import java.io.IOException
 
 class EbookJapan :
     HttpSource(),
@@ -35,10 +36,17 @@ class EbookJapan :
     private val viewerCdnUrl = "https://prod-contents-br-page.akamaized.net"
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val perPage = 50
-    private val decoder = Decoder()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code == 400 && request.url.pathSegments[1] == "open_book") {
+                throw IOException("Log in via WebView and purchase this product to read.")
+            }
+            response
+        }
         .build()
 
     // Popular
@@ -76,7 +84,7 @@ class EbookJapan :
 
     override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/books/titleV2/sync?titleId=${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailResponse>().title.toSManga(cdnUrl)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailResponse>().serialStory.toSManga(cdnUrl)
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
@@ -109,50 +117,36 @@ class EbookJapan :
         val serialStoryId = url.fragment!!
         val bookCd = url.pathSegments.first()
         val body = ViewerBody("story", bookCd, serialStoryId, false).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$viewerUrl/open_book", headers, body)
+        val postUrl = "$viewerUrl/open_book".toHttpUrl().newBuilder()
+            .fragment(bookCd)
+            .build()
+        return POST(postUrl.toString(), headers, body)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val originalRequest = response.request
-        var currentResponse = response
-
-        repeat(MAX_RETRIES) { attempt ->
-            try {
-                return buildPages(currentResponse)
-            } catch (_: Throwable) {
-                if (attempt < MAX_RETRIES - 1) {
-                    Thread.sleep(RETRY_DELAY_MS)
-                    currentResponse = client.newCall(originalRequest).execute()
-                }
-            }
-        }
-        throw Exception("Too bad, try again.")
-    }
-
-    private fun buildPages(response: Response): List<Page> {
         val openBook = response.parseAs<ViewerOpenBook>()
+        val bookCd = response.request.url.fragment!!
 
         val drmUrl = "$viewerUrl/get_drm".toHttpUrl().newBuilder()
             .addQueryParameter("session_id", openBook.sessionId)
             .build()
 
         val drmResult = client.newCall(GET(drmUrl, headers)).execute().parseAs<ViewerDrmResponse>()
-
-        decoder.decryptSession(
+        val book = Decoder().decryptSession(
             sessionId = openBook.sessionId,
-            code = drmResult.code,
+            code = bookCd,
             openPayload = openBook.payload,
             drmPayload = drmResult.payload,
             fileId = drmResult.fileId,
         )
 
-        return (0 until decoder.pageCount()).map { index ->
-            val url = "$viewerCdnUrl/pages/${decoder.getPageName(index)}".toHttpUrl().newBuilder()
-                .fragment("data=${decoder.encodeScrambleFragment(index)}")
+        return (0 until book.pageCount()).map {
+            val url = "$viewerCdnUrl/pages/${book.getPageName(it)}".toHttpUrl().newBuilder()
+                .fragment("data=${book.encodeScrambleFragment(it)}")
                 .build()
                 .toString()
 
-            Page(index, imageUrl = url)
+            Page(it, imageUrl = url)
         }
     }
 
@@ -171,8 +165,6 @@ class EbookJapan :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
-        private const val MAX_RETRIES = 10
-        private const val RETRY_DELAY_MS = 1500L
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
