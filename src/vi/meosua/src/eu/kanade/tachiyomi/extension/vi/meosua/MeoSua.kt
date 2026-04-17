@@ -77,7 +77,7 @@ class MeoSua : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val mangas = response.asJsoup()
-            .select(MANGA_CARD_SELECTOR)
+            .select("article.uk-panel.uk-margin-small-bottom:has(h3 a[href*=\"/truyen/\"])")
             .map(::mangaFromElement)
             .distinctBy { it.url }
 
@@ -85,10 +85,10 @@ class MeoSua : HttpSource() {
     }
 
     private fun parseMangaList(document: org.jsoup.nodes.Document): MangasPage {
-        val mangas = document.select(MANGA_CARD_SELECTOR)
+        val mangas = document.select("article.uk-panel.uk-margin-small-bottom:has(h3 a[href*=\"/truyen/\"])")
             .map(::mangaFromElement)
             .distinctBy { it.url }
-        val hasNextPage = document.selectFirst(PAGINATION_NEXT_SELECTOR) != null
+        val hasNextPage = document.selectFirst(".uk-pagination [uk-pagination-next]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -109,9 +109,11 @@ class MeoSua : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst(DETAIL_TITLE_SELECTOR)!!.text()
+            title = document.selectFirst(
+                "h2#category-title, section#single-block h2, #single-block h2.uk-margin-remove-top, h2.uk-margin-remove-top",
+            )!!.text()
             thumbnail_url = document.selectFirst(".single-thumb img")?.absUrl("src")
-            status = document.selectFirst(DETAIL_STATUS_ICON_SELECTOR)
+            status = document.selectFirst(".tab-story [uk-icon=\"icon: file-edit\"]")
                 ?.parent()
                 ?.text()
                 ?.let(::parseStatus)
@@ -119,10 +121,10 @@ class MeoSua : HttpSource() {
             genre = document.select(".tab-story a[href*=\"/the-loai/\"]")
                 .joinToString { it.text() }
                 .ifEmpty { null }
-            description = document.selectFirst(DETAIL_DESCRIPTION_SELECTOR)
+            description = document.selectFirst(".tab-story .hide-long-text p")
                 ?.text()
                 ?.ifEmpty {
-                    document.selectFirst(DETAIL_DESCRIPTION_FALLBACK_SELECTOR)
+                    document.selectFirst(".tab-story h3:contains(Tóm tắt) + p")
                         ?.text()
                 }
         }
@@ -132,9 +134,11 @@ class MeoSua : HttpSource() {
         val initialDocument = response.asJsoup()
         val allChapters = mutableListOf<SChapter>()
 
-        allChapters += initialDocument.select(CHAPTER_ITEM_SELECTOR).mapNotNull(::chapterFromElement)
+        allChapters += initialDocument
+            .select("#chapter-list-tab .chapter-item, .tab-story .chapter-list .chapter-item")
+            .mapNotNull(::chapterFromElement)
 
-        val maxPage = initialDocument.select(CHAPTER_PAGINATION_SELECTOR)
+        val maxPage = initialDocument.select("#chapter-list-tab .uk-pagination a[href*=\"?trang=\"]")
             .mapNotNull {
                 CHAPTER_PAGE_REGEX.find(it.absUrl("href"))
                     ?.groupValues
@@ -151,7 +155,9 @@ class MeoSua : HttpSource() {
 
             client.newCall(GET(pageUrl, headers)).execute().use { pageResponse ->
                 val pageDocument = pageResponse.asJsoup()
-                allChapters += pageDocument.select(CHAPTER_ITEM_SELECTOR).mapNotNull(::chapterFromElement)
+                allChapters += pageDocument
+                    .select("#chapter-list-tab .chapter-item, .tab-story .chapter-list .chapter-item")
+                    .mapNotNull(::chapterFromElement)
             }
         }
 
@@ -170,8 +176,8 @@ class MeoSua : HttpSource() {
             ?.replace(MULTI_SPACE_REGEX, " ")
             ?: chapterNameRaw
 
-        val isLocked = element.selectFirst(CHAPTER_LOCK_SELECTOR) != null
-        val chapterDate = element.selectFirst(CHAPTER_DATE_SELECTOR)?.text()
+        val isLocked = element.selectFirst("[uk-icon=\"icon: lock\"], .uk-text-danger[uk-icon]") != null
+        val chapterDate = element.selectFirst(".uk-article-meta [uk-icon=\"icon: calendar\"] + span")?.text()
 
         return SChapter.create().apply {
             setUrlWithoutDomain(chapterUrl)
@@ -191,7 +197,7 @@ class MeoSua : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        if (document.selectFirst(LOCKED_CHAPTER_SELECTOR) != null) {
+        if (document.selectFirst("#view-chapter .lock-card, #view-chapter #unlock-chapter, #view-chapter #xu-lock") != null) {
             throw Exception(LOCKED_CHAPTER_MESSAGE)
         }
 
@@ -219,19 +225,6 @@ class MeoSua : HttpSource() {
     companion object {
         private const val LOCKED_CHAPTER_MESSAGE =
             "Vui lòng đăng nhập vào tài khoản phù hợp bằng webview để xem chương này"
-
-        private const val MANGA_CARD_SELECTOR = "article.uk-panel.uk-margin-small-bottom:has(h3 a[href*=\"/truyen/\"])"
-        private const val DETAIL_TITLE_SELECTOR =
-            "h2#category-title, section#single-block h2, #single-block h2.uk-margin-remove-top, h2.uk-margin-remove-top"
-        private const val DETAIL_STATUS_ICON_SELECTOR = ".tab-story [uk-icon=\"icon: file-edit\"]"
-        private const val DETAIL_DESCRIPTION_SELECTOR = ".tab-story .hide-long-text p"
-        private const val DETAIL_DESCRIPTION_FALLBACK_SELECTOR = ".tab-story h3:contains(Tóm tắt) + p"
-        private const val PAGINATION_NEXT_SELECTOR = ".uk-pagination [uk-pagination-next]"
-        private const val CHAPTER_ITEM_SELECTOR = "#chapter-list-tab .chapter-item, .tab-story .chapter-list .chapter-item"
-        private const val CHAPTER_PAGINATION_SELECTOR = "#chapter-list-tab .uk-pagination a[href*=\"?trang=\"]"
-        private const val CHAPTER_LOCK_SELECTOR = "[uk-icon=\"icon: lock\"], .uk-text-danger[uk-icon]"
-        private const val CHAPTER_DATE_SELECTOR = ".uk-article-meta [uk-icon=\"icon: calendar\"] + span"
-        private const val LOCKED_CHAPTER_SELECTOR = "#view-chapter .lock-card, #view-chapter #unlock-chapter, #view-chapter #xu-lock"
 
         private val CHAPTER_NAME_REGEX = Regex("chap\\s*\\d+(?:\\.\\d+)?", RegexOption.IGNORE_CASE)
         private val CHAPTER_WORD_REGEX = Regex("chap", RegexOption.IGNORE_CASE)
