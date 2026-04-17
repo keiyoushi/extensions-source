@@ -31,6 +31,10 @@ class MangaDto(
     private val genres: List<GenreDto>? = emptyList(),
     val chapters: List<ChapterDto>? = emptyList(),
 ) {
+    companion object {
+        private val PARAGRAPH_REGEX = Regex("</?p\\s*/?>")
+    }
+
     fun toSManga() = SManga.create().apply {
         url = slug
         title = this@MangaDto.title
@@ -38,7 +42,7 @@ class MangaDto(
         author = this@MangaDto.author
         description = buildString {
             sinopsis?.let {
-                append(it.replace("</?p\\s*/?>".toRegex(), "").trim())
+                append(it.replace(PARAGRAPH_REGEX, "").trim())
             }
             if (!alternativeName.isNullOrBlank()) {
                 if (isNotEmpty()) append("\n\n")
