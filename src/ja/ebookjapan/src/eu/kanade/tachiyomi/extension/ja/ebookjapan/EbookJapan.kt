@@ -169,7 +169,7 @@ class EbookJapan :
 
         return (0 until book.pageCount()).map {
             val url = "$viewerCdnUrl/pages/${book.getPageName(it)}".toHttpUrl().newBuilder()
-                .fragment("data=${book.encodeScrambleFragment(it)}")
+                .fragment("data=${book.encodeFragment(it)}")
                 .build()
                 .toString()
 

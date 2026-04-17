@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.ja.ebookjapan
 
 import android.util.Base64
-import java.io.ByteArrayOutputStream
+import okio.Buffer
+import okio.InflaterSource
+import okio.buffer
+import okio.source
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.util.zip.Inflater
 import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
@@ -33,7 +37,7 @@ class Decoder {
             return "${fileId.take(2)}/$fileId/$prefix/$hash.webp"
         }
 
-        fun encodeScrambleFragment(pageIndex: Int): String? {
+        fun encodeFragment(pageIndex: Int): String? {
             if (gridDim == 0 || tables.isEmpty()) return null
             val (w, h) = pageSize(pageIndex)
             if (w == 0 || h == 0) return null
@@ -79,9 +83,22 @@ class Decoder {
             }
         }
 
-        val stage1 = gcmDecrypt(derived.copyOfRange(0, 32), derived.copyOfRange(32, 48), openRaw)
+        val key1 = ByteArray(32)
+        val iv1 = ByteArray(16)
+
+        System.arraycopy(derived, 0, key1, 0, 32)
+        System.arraycopy(derived, 32, iv1, 0, 16)
+
+        val stage1 = gcmDecrypt(key1, iv1, openRaw)
         if (stage1.size < 48) throw Exception("Output too short (${stage1.size} bytes)")
-        val stage2 = gcmDecrypt(stage1.copyOfRange(0, 32), stage1.copyOfRange(32, 48), drmRaw)
+
+        val key2 = ByteArray(32)
+        val iv2 = ByteArray(16)
+
+        System.arraycopy(stage1, 0, key2, 0, 32)
+        System.arraycopy(stage1, 32, iv2, 0, 16)
+
+        val stage2 = gcmDecrypt(key2, iv2, drmRaw)
         val binary = zlibDecompress(stage2)
         return parseBinary(binary, fileId)
     }
@@ -151,23 +168,24 @@ class Decoder {
                 GCMParameterSpec(128, iv),
             )
         }
-        return cipher.doFinal(data)
+
+        val inputBuffer = Buffer().write(data)
+        val cipherSource = CipherInputStream(
+            inputBuffer.inputStream(),
+            cipher,
+        ).source()
+
+        return cipherSource.buffer().readByteArray()
     }
 
     private fun zlibDecompress(data: ByteArray): ByteArray {
-        val inf = Inflater()
+        val inflater = Inflater()
         return try {
-            inf.setInput(data)
-            val out = ByteArrayOutputStream(data.size * 2)
-            val buf = ByteArray(4096)
-            while (!inf.finished()) {
-                val n = inf.inflate(buf)
-                if (n == 0 && inf.needsInput()) break
-                out.write(buf, 0, n)
-            }
-            out.toByteArray()
+            val buffer = Buffer().write(data)
+            val inflated = InflaterSource(buffer, inflater).buffer()
+            inflated.readByteArray()
         } finally {
-            inf.end()
+            inflater.end()
         }
     }
 
