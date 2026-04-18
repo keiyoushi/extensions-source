@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.scanreader
 
 import android.util.Base64
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -205,26 +204,17 @@ class ScanReader : HttpSource() {
         // Return empty list explicitly if WordPress rejected the request
         if (html.trim() == "0" || html.trim() == "-1") return emptyList()
 
-        Log.d("ScanReader", "AJAX response (first 2000 chars): ${html.take(2000)}")
-
         val document = Jsoup.parse(html)
 
-        // Select every link pointing to a chapter URL. This is resilient to whatever
-        // wrapper element the server injects around chapters.
         return document.select("a[href*='/chapitre/']").mapNotNull { link ->
             val href = link.attr("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             SChapter.create().apply {
                 setUrlWithoutDomain(href)
-                // Look for a dedicated name element inside the link first,
-                // then fall back to direct text only (ownText excludes child elements,
-                // preventing dates/uploader text from leaking into the name)
-                name = link.selectFirst(".chapter-number, .chapter-title, [class*='chapter-num']")
-                    ?.text()?.trim()
-                    ?: link.ownText().trim().ifEmpty {
-                        link.children().firstOrNull()?.ownText()?.trim() ?: ""
-                    }
+                // Name is in <h4> inside the link
+                name = link.selectFirst("h4")?.text()?.trim() ?: ""
+                // Date is in the <div> immediately after <h4>; ownText() skips the <i> icon
                 date_upload = parseChapterDate(
-                    link.selectFirst("[class*='date'], time, [class*='time']")?.text(),
+                    link.selectFirst("h4 + div")?.ownText()?.trim(),
                 )
             }
         }
