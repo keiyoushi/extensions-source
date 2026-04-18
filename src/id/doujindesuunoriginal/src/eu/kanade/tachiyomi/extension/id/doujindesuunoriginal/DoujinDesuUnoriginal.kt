@@ -16,10 +16,12 @@ import okhttp3.Response
 import rx.Observable
 import java.lang.UnsupportedOperationException
 
+private const val DOMAIN = "v2.doujindesu.fun"
+
 class DoujinDesuUnoriginal : HttpSource() {
     override val name = "DoujinDesu (Unoriginal)"
     override val lang = "id"
-    override val baseUrl = "https://v2.doujindesu.fun"
+    override val baseUrl = "https://$DOMAIN"
     override val supportsLatest = true
 
     override val client = network.client
@@ -28,7 +30,7 @@ class DoujinDesuUnoriginal : HttpSource() {
         .set("Referer", "$baseUrl/")
 
     private val rscHeaders = headersBuilder()
-        .set("RSC", "1")
+        .set("Rsc", "1")
         .build()
 
     // ============================== Popular ===============================
@@ -48,7 +50,7 @@ class DoujinDesuUnoriginal : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.isNotBlank() && query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host == "v2.doujindesu.fun" && url.pathSegments[0] == "manga") {
+            if (url.host == DOMAIN && url.pathSegments[0] == "manga") {
                 val slug = url.pathSegments[1]
                 val tmpManga = SManga.create().apply { this.url = slug }
                 return fetchMangaDetails(tmpManga).map { MangasPage(listOf(it), false) }
