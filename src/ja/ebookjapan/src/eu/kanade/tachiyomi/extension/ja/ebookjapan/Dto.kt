@@ -63,23 +63,23 @@ class TitleGoods(
 
 @Serializable
 class DetailResponse(
-    val serialStory: DetailTitles,
+    val title: DetailTitles,
+    val serialStory: SerialStory?,
 )
 
 @Serializable
 class DetailTitles(
-    val serialStoryId: String,
     private val summary: String?,
-    private val storyAuthor: String?,
-    private val title: Title,
-    private val automaticCoverImageName: String?,
+    private val titleAuthor: TitleAuthor?,
+    private val name: String,
+    private val lastPublication: LastPublication?,
     private val publisher: Publisher?,
     private val editorTags: List<EditorTag>?,
-    private val storiesSummary: StoriesSummary?,
+    private val isComplete: Boolean?,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        title = this@DetailTitles.title.name
-        author = storyAuthor
+        title = name
+        author = titleAuthor?.name
         description = buildString {
             summary?.let { append(it) }
             if (publisher != null) {
@@ -87,19 +87,19 @@ class DetailTitles(
             }
         }
         genre = editorTags?.joinToString { it.name }
-        status = if (storiesSummary?.isCompleteSerialStory == true) SManga.COMPLETED else SManga.ONGOING
-        thumbnail_url = "$cdnUrl/$automaticCoverImageName"
+        status = if (isComplete == true) SManga.COMPLETED else SManga.ONGOING
+        thumbnail_url = "$cdnUrl/${lastPublication?.goods?.imageFileName}"
     }
 }
 
 @Serializable
-class Title(
-    val name: String,
+class SerialStory(
+    val serialStoryId: String?,
 )
 
 @Serializable
-class StoriesSummary(
-    val isCompleteSerialStory: Boolean?,
+class TitleAuthor(
+    val name: String?,
 )
 
 @Serializable
@@ -141,14 +141,40 @@ class ChapterStories(
 }
 
 @Serializable
-class SerialStory(
-    val serialStoryId: String,
-)
-
-@Serializable
 class Goods(
     val bookCd: String,
     val saleStartDatetime: String?,
+)
+
+@Serializable
+class VolumesResponse(
+    val publications: List<Publication>,
+)
+
+@Serializable
+class Publication(
+    private val name: String,
+    private val volumeSortNo: Int? = null,
+    private val saleDate: String? = null,
+    private val goods: PublicationGoods,
+    private val isPurchased: Boolean? = null,
+) {
+    val isLocked: Boolean
+        get() = goods.isFree == false && isPurchased == false
+
+    fun toSChapter() = SChapter.create().apply {
+        val lock = if (isLocked) "🔒 " else ""
+        url = goods.bookCd
+        name = lock + this@Publication.name
+        date_upload = dateFormat.tryParse(saleDate)
+        chapter_number = volumeSortNo?.toFloat() ?: -1f
+    }
+}
+
+@Serializable
+class PublicationGoods(
+    val bookCd: String,
+    val isFree: Boolean? = null,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.ROOT).apply {
@@ -160,7 +186,15 @@ private val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.ROOT).apply
 class ViewerBody(
     private val type: String,
     private val code: String,
-    private val ssid: String,
+    private val ssid: String?,
+    private val light: Boolean,
+)
+
+@Suppress("unused")
+@Serializable
+class ViewerVolumeBody(
+    private val type: String,
+    private val code: String,
     private val light: Boolean,
 )
 

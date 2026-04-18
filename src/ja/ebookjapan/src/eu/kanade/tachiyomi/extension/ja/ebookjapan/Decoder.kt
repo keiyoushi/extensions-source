@@ -104,13 +104,21 @@ class Decoder {
     }
 
     // used by WASM func 161
-    // u8 direction, u16 pageCount
-    // pageCount x 11-byte page records: u16 pageNum, u16 w, u16 h, u8 view, u8 position, 3 bytes jumps
-    // u16 chapterCount
-    // chapterCount x { name, u16 pageIndex }
-    // null-terminated ASCII prefix
-    // u8 margin, u8 gridDim, u8 numTables, numTables x gridDim^2 permutation bytes
-    // trailing byte (version/checksum, unused)
+    //  u8 direction flags
+    //  u16 pageCount
+    //  pageCount x variable-length page records:
+    //      u16 pageNumber
+    //      u16 width
+    //      u16 height
+    //      4 bytes of metadata (view, position, padding)
+    //      u8 jumpsCount
+    //      jumpsCount x 10-byte jump entry { u16 left, u16 right, u16 top, u16 bottom, u16 page }
+    //  u16 chapterCount
+    //  chapterCount x { null-terminated UTF-8 name, u16 pageIndex }
+    //  null-terminated ASCII prefix
+    //  u8 margin, u8 gridDim, u8 numTables
+    //  numTables x gridDim^2 permutation bytes
+    //  u8 trailing byte (unused)
     private fun parseBinary(data: ByteArray, fileId: String): DecodedBook {
         val buf = ByteBuffer.wrap(data)
         buf.get() // direction flags byte
@@ -124,7 +132,9 @@ class Decoder {
             val pn = buf.short.toInt() and 0xFFFF
             val w = buf.short.toInt() and 0xFFFF
             val h = buf.short.toInt() and 0xFFFF
-            buf.position(buf.position() + 5) // view + position + 3 bytes jumps
+            buf.position(buf.position() + 4) // view, position, padding
+            val jumpsCount = buf.get().toInt() and 0xFF
+            buf.position(buf.position() + jumpsCount * 10) // 10 bytes per jump entry
             PageRecord(pn, w, h)
         }
 

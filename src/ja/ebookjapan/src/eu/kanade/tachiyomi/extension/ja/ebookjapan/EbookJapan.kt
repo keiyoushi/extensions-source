@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,6 +22,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import rx.Observable
 import java.io.IOException
 
 class EbookJapan :
@@ -45,7 +47,7 @@ class EbookJapan :
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
-            if (response.code == 400 && request.url.pathSegments[1] == "open_book") {
+            if ((response.code == 400 || response.code == 404) && request.url.pathSegments[1] == "open_book") {
                 throw IOException("Log in via WebView and purchase this product to read.")
             }
             response
@@ -116,39 +118,64 @@ class EbookJapan :
 
     override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/books/titleV2/sync?titleId=${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailResponse>().serialStory.toSManga(cdnUrl)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailResponse>().title.toSManga(cdnUrl)
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val serialStoryId = response.parseAs<DetailResponse>().serialStory.serialStoryId
-        val requestUrl = "$apiUrl/books/titleV2/storyList".toHttpUrl().newBuilder()
-            .addQueryParameter("serialStoryId", serialStoryId)
-            .addQueryParameter("start", "0")
-            .addQueryParameter("results", "9999")
-            .addQueryParameter("sort", "asc")
-            .addQueryParameter("isSortAsc", "0")
+        val chaptersResponse = client.newCall(mangaDetailsRequest(manga)).asObservableSuccess()
+            .flatMap { response ->
+                val serialStory = response.parseAs<DetailResponse>().serialStory
+                    ?: return@flatMap Observable.just(emptyList())
+                val requestUrl = "$apiUrl/books/titleV2/storyList".toHttpUrl().newBuilder()
+                    .addQueryParameter("serialStoryId", serialStory.serialStoryId)
+                    .addQueryParameter("start", "0")
+                    .addQueryParameter("results", "9999")
+                    .addQueryParameter("sort", "asc")
+                    .addQueryParameter("isSortAsc", "0")
+                    .build()
+                client.newCall(GET(requestUrl, headers)).asObservableSuccess()
+                    .map { it.parseAs<ChapterResponse>().stories }
+            }
+            .map { stories ->
+                stories.filter { !hideLocked || !it.isLocked }.map { it.toSChapter() }
+            }
+
+        val volumeUrl = "$apiUrl/books/titleV2/publicationList".toHttpUrl().newBuilder()
+            .addQueryParameter("titleId", manga.url)
             .build()
-        val request = GET(requestUrl, headers)
-        val chapterResponse = client.newCall(request).execute()
-        val result = chapterResponse.parseAs<ChapterResponse>()
-        return result.stories.filter { !hideLocked || !it.isLocked }.map { it.toSChapter() }
+
+        val volumesResponse = client.newCall(GET(volumeUrl, headers)).asObservableSuccess()
+            .map { response ->
+                response.parseAs<VolumesResponse>().publications
+                    .filter { !hideLocked || !it.isLocked }
+                    .reversed()
+                    .map { it.toSChapter() }
+            }
+
+        return Observable.zip(chaptersResponse, volumesResponse) { chapters, volumes -> chapters + volumes }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val url = "$baseUrl/${chapter.url}".toHttpUrl()
-        val serialStoryId = url.fragment
         val bookCd = url.pathSegments.first()
-        return "$baseUrl/viewer/story/$bookCd/?ssid=$serialStoryId"
+        val serialStoryId = url.fragment
+        return if (serialStoryId != null) {
+            "$baseUrl/viewer/story/$bookCd/?ssid=$serialStoryId"
+        } else {
+            "$baseUrl/viewer/free/$bookCd/"
+        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "$baseUrl/${chapter.url}".toHttpUrl()
-        val serialStoryId = url.fragment!!
         val bookCd = url.pathSegments.first()
-        val body = ViewerBody("story", bookCd, serialStoryId, false).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+        val serialStoryId = url.fragment
+        val body = if (serialStoryId != null) {
+            ViewerBody("story", bookCd, serialStoryId, false).toJsonString()
+        } else {
+            ViewerVolumeBody("free", bookCd, false).toJsonString()
+        }.toRequestBody(JSON_MEDIA_TYPE)
         return POST("$viewerUrl/open_book", headers, body)
     }
 
@@ -186,6 +213,8 @@ class EbookJapan :
     }
 
     // Unsupported
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
