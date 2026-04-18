@@ -6,17 +6,18 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GhostHentai :
+class GhosToon :
     Madara(
-        "Ghost Hentai",
-        "https://ghosthentai.com",
+        "GhosToon",
+        "https://ghostoon.com",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
-    override val mangaSubString = "seri"
+    // Ghost Hentai -> GhosToon
+    override val id = 8123244641427878412
 
     override val fetchGenres = false
     override var genresList = listOf(
