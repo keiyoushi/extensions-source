@@ -12,9 +12,9 @@ import java.util.Locale
 class MangaList(
     val mangas: List<Manga>,
     @SerialName("current_page")
-    val currentPage: Int = 1,
+    val currentPage: Int,
     @SerialName("last_page")
-    val lastPage: Int = 1,
+    val lastPage: Int,
 ) {
     @Serializable
     class Manga(
@@ -29,7 +29,7 @@ class MangaList(
         }
     }
 
-    fun hasNextPage() = currentPage < lastPage || mangas.size >= 20
+    fun hasNextPage() = currentPage < lastPage
 }
 
 @Serializable
@@ -69,16 +69,6 @@ class MangaDetails(
 }
 
 @Serializable
-class FilterData(
-    val name: String,
-)
-
-@Serializable
-class GenreList(
-    val genres: List<FilterData>,
-)
-
-@Serializable
 class ChaptersList(
     val chapters: List<Chapter>,
 ) {
@@ -86,8 +76,7 @@ class ChaptersList(
     class Chapter(
         val slug: String,
         val title: String,
-        @SerialName("createdAt")
-        private val createdAt: String? = null,
+        val createdAt: String? = null,
     ) {
         fun toSChapter(mangaSlug: String) = SChapter.create().apply {
             url = "/read/$mangaSlug/$slug"

@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesuunoriginal
 
-import android.app.Application
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,13 +9,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.lang.UnsupportedOperationException
 
 class DoujinDesuUnoriginal : HttpSource() {
@@ -86,7 +81,6 @@ class DoujinDesuUnoriginal : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.extractNextJs<MangaList>()
-        fetchGenres()
 
         val mangas = data?.mangas.orEmpty().map { it.toSManga() }
         val hasNextPage = data?.hasNextPage() ?: false
@@ -141,51 +135,10 @@ class DoujinDesuUnoriginal : HttpSource() {
 
     // ============================== Filters ===============================
 
-    private val genreCacheFile by lazy {
-        Injekt.get<Application>().cacheDir
-            .resolve("source_$id")
-            .also { it.mkdirs() }
-            .resolve("genres.json")
-    }
-
-    private val filterLock = Any()
-
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            SortFilter(),
-            TypeFilter(),
-            StatusFilter(),
-        )
-
-        if (genreCacheFile.exists()) {
-            val genres = synchronized(filterLock) {
-                genreCacheFile.readText().parseAs<List<FilterData>>()
-            }
-            filters.add(GenreFilter(genres))
-        } else {
-            filters.add(Filter.Separator())
-            filters.add(Filter.Header("Press 'reset' to load filters"))
-        }
-
-        return FilterList(filters)
-    }
-
-    private fun fetchGenres() {
-        if (genreCacheFile.exists()) return
-
-        Thread {
-            try {
-                val response = client.newCall(GET("$baseUrl/api/genres", headers)).execute()
-                val body = response.body.string()
-                val genres = runCatching { body.parseAs<GenreList>().genres }
-                    .getOrElse { body.parseAs<List<FilterData>>() }
-
-                if (genres.isNotEmpty()) {
-                    synchronized(filterLock) {
-                        genreCacheFile.writeText(genres.toJsonString())
-                    }
-                }
-            } catch (_: Exception) {}
-        }.start()
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        TypeFilter(),
+        StatusFilter(),
+        GenreFilter(),
+    )
 }
