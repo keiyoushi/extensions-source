@@ -469,7 +469,11 @@ abstract class GalleryAdults(
         .let { unfiltered ->
             val results = unfiltered.filter { mangaLang.isBlank() || it.lang == mangaLang }
             // return at least 1 title if all mangas in current page is of other languages
-            if (results.isEmpty() && hasNextPage) listOf(unfiltered[0]) else results
+            if (results.isEmpty() && hasNextPage) {
+                unfiltered.firstOrNull()?.let(::listOf) ?: emptyList()
+            } else {
+                results
+            }
         }
         .map {
             SManga.create().apply {
