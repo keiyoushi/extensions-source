@@ -5,6 +5,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -15,23 +18,22 @@ class MangaList(
     val currentPage: Int = 1,
     @SerialName("last_page")
     val lastPage: Int = 1,
-    val totalItems: Int = 0,
 ) {
     @Serializable
     class Manga(
         val slug: String,
         val title: String,
         val thumb: String? = null,
-        val img: String? = null,
+        val genres: JsonElement? = null,
     ) {
         fun toSManga() = SManga.create().apply {
             url = slug
             title = this@Manga.title
-            thumbnail_url = thumb ?: img
+            thumbnail_url = thumb
         }
     }
 
-    fun hasNextPage() = currentPage < lastPage || mangas.size >= 20
+    fun hasNextPage() = currentPage < lastPage
 }
 
 @Serializable
@@ -45,7 +47,7 @@ class MangaDetails(
         val thumb: String? = null,
         val author: String? = null,
         val status: String? = null,
-        val genres: List<String> = emptyList(),
+        val genres: JsonElement? = null,
         val synopsis: String? = null,
         val alternativeTitle: String? = null,
     ) {
@@ -58,7 +60,11 @@ class MangaDetails(
                 synopsis?.takeIf { it.isNotBlank() }?.let { append(it, "\n\n") }
                 alternativeTitle?.takeIf { it.isNotBlank() }?.let { append("Judul Alternatif: ", it) }
             }
-            genre = genres.joinToString()
+            genre = try {
+                genres?.jsonArray?.joinToString { it.jsonPrimitive.content }
+            } catch (_: Exception) {
+                null
+            }
             status = when (this@Manga.status?.lowercase()) {
                 "publishing", "ongoing" -> SManga.ONGOING
                 "finished", "completed" -> SManga.COMPLETED
@@ -75,12 +81,12 @@ class FilterData(
 
 @Serializable
 class GenreList(
-    val genres: List<FilterData> = emptyList(),
+    val genres: List<FilterData>,
 )
 
 @Serializable
 class ChaptersList(
-    val chapters: List<Chapter> = emptyList(),
+    val chapters: List<Chapter>,
 ) {
     @Serializable
     class Chapter(
