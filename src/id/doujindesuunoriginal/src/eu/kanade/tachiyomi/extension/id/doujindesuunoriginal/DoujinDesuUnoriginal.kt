@@ -32,7 +32,7 @@ class DoujinDesuUnoriginal : HttpSource() {
         .set("Referer", "$baseUrl/")
 
     private val rscHeaders = headersBuilder()
-        .set("rsc", "1")
+        .set("RSC", "1")
         .build()
 
     // ============================== Popular ===============================
@@ -176,10 +176,14 @@ class DoujinDesuUnoriginal : HttpSource() {
         Thread {
             try {
                 val response = client.newCall(GET("$baseUrl/api/genres", headers)).execute()
-                val genres = response.parseAs<GenreList>().genres.toJsonString()
+                val body = response.body.string()
+                val genres = runCatching { body.parseAs<GenreList>().genres }
+                    .getOrElse { body.parseAs<List<FilterData>>() }
 
-                synchronized(filterLock) {
-                    genreCacheFile.writeText(genres)
+                if (genres.isNotEmpty()) {
+                    synchronized(filterLock) {
+                        genreCacheFile.writeText(genres.toJsonString())
+                    }
                 }
             } catch (_: Exception) {}
         }.start()
