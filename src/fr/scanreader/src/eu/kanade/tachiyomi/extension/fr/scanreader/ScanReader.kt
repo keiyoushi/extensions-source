@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.FormBody
+import okhttp3.MultipartBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -130,8 +130,7 @@ class ScanReader : HttpSource() {
                         status = when {
                             statusText.contains("cours", ignoreCase = true) -> SManga.ONGOING
                             statusText.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-                            statusText.contains("Abandonné", ignoreCase = true) -> SManga.CANCELLED
-                            statusText.contains("Pause", ignoreCase = true) -> SManga.ON_HIATUS
+                            statusText.contains("Hiatus", ignoreCase = true) -> SManga.ON_HIATUS
                             else -> SManga.UNKNOWN
                         }
                     }
@@ -161,17 +160,24 @@ class ScanReader : HttpSource() {
 
             if (mangaId.isBlank() || nonce.isBlank()) return@fromCallable emptyList<SChapter>()
 
-            // Step 2 — POST to admin-ajax.php with the nonce
+            // Step 2 — POST to admin-ajax.php with the nonce.
+            // Uses multipart/form-data to exactly match the browser's FormData object.
+            // X-Requested-With is added because WordPress AJAX handlers commonly check it.
+            // Referer is set to the manga page so the server sees a believable origin.
+            val ajaxHeaders = headersBuilder()
+                .set("Referer", baseUrl + manga.url)
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
+
+            val ajaxBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("action", "load_protected_chapters_html")
+                .addFormDataPart("manga_id", mangaId)
+                .addFormDataPart("nonce", nonce)
+                .build()
+
             val ajaxResponse = client.newCall(
-                POST(
-                    "$baseUrl/wp-admin/admin-ajax.php",
-                    headers,
-                    FormBody.Builder()
-                        .add("action", "load_protected_chapters_html")
-                        .add("manga_id", mangaId)
-                        .add("nonce", nonce)
-                        .build(),
-                ),
+                POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, ajaxBody),
             ).execute()
 
             chapterListParse(ajaxResponse)
@@ -195,19 +201,24 @@ class ScanReader : HttpSource() {
             bodyStr
         }
 
+        // Return empty list explicitly if WordPress rejected the request
+        if (html.trim() == "0" || html.trim() == "-1") return emptyList()
+
         val document = Jsoup.parse(html)
 
-        return document.select("[data-chapter-id]").mapNotNull { element ->
-            val link = element.selectFirst("a[href*='/chapitre/']")
-                ?: return@mapNotNull null
-
+        // Select every link pointing to a chapter URL. This is resilient to whatever
+        // wrapper element the server injects around chapters.
+        return document.select("a[href*='/chapitre/']").mapNotNull { link ->
+            val href = link.attr("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             SChapter.create().apply {
-                setUrlWithoutDomain(link.attr("href"))
-                name = element.selectFirst(".chapter-number")?.text()?.trim()
-                    ?: link.text().trim()
+                setUrlWithoutDomain(href)
+                // Walk up to the parent container to find a number/date sibling
+                val container = link.parent() ?: link
+                name = container.selectFirst(".chapter-number, .chapter-title, [class*='number']")
+                    ?.text()?.trim()
+                    ?: link.ownText().trim().ifEmpty { link.text().trim() }
                 date_upload = parseChapterDate(
-                    // Try common date selectors; adapt if the actual class differs
-                    element.selectFirst("[class*='date'], time, .chapter-date")?.text(),
+                    container.selectFirst("[class*='date'], time, [class*='time']")?.text(),
                 )
             }
         }
