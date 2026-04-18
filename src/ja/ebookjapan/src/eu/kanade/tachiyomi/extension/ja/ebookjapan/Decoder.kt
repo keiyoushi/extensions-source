@@ -31,8 +31,8 @@ class Decoder {
 
         // WASM func 181
         fun getPageName(pageIndex: Int): String {
-            val page = pages.getOrNull(pageIndex) ?: return ""
-            val input = "nf:$fileId/${page.pageNumber - 1}_ebj"
+            if (pageIndex !in pages.indices) return ""
+            val input = "nf:$fileId/${pageIndex}_ebj"
             val hash = sha256(input.toByteArray()).joinToString("") { "%02x".format(it) }
             return "${fileId.take(2)}/$fileId/$prefix/$hash.webp"
         }
