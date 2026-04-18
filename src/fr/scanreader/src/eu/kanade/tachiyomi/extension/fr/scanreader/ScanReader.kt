@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.scanreader
 
 import android.util.Base64
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -212,18 +213,19 @@ class ScanReader : HttpSource() {
             val href = link.attr("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             SChapter.create().apply {
                 setUrlWithoutDomain(href)
-                // Walk up to the parent container to find a number/date sibling
-                val container = link.parent() ?: link
-                name = container.selectFirst(".chapter-number, .chapter-title, [class*='number']")
+                // Look for a dedicated name element inside the link first,
+                // then fall back to direct text only (ownText excludes child elements,
+                // preventing dates/uploader text from leaking into the name)
+                name = link.selectFirst(".chapter-number, .chapter-title, [class*='chapter-num']")
                     ?.text()?.trim()
-                    ?: link.ownText().trim().ifEmpty { link.text().trim() }
+                    ?: link.ownText().trim().ifEmpty {
+                        link.children().firstOrNull()?.ownText()?.trim() ?: ""
+                    }
                 date_upload = parseChapterDate(
-                    container.selectFirst("[class*='date'], time, [class*='time']")?.text(),
+                    link.selectFirst("[class*='date'], time, [class*='time']")?.text(),
                 )
             }
         }
-            // CONTRIBUTING.md requires descending source order (newest first)
-            .reversed()
     }
 
     // ====================== Page List ======================
