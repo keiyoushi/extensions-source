@@ -13,7 +13,7 @@
 
                 <data android:host="reimanga.com" />
                 <data android:scheme="https" />
-                <data android:pathPattern="/..*" />
+                <data android:pathPattern="/manga/..*" />
             </intent-filter>
         </activity>
     </application>

@@ -34,6 +34,7 @@ import uy.kohesive.injekt.api.get
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.emptySet
@@ -256,17 +257,13 @@ class Reimanga :
         return data.manga.toSManga()
     }
 
-    @Suppress("unused")
-    @JvmName("relatedMangaListRequest")
-    fun relatedMangaListRequest(manga: SManga): Request {
+    override fun relatedMangaListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("-")
 
         return GET("$baseUrl/api/manga/$mangaId/similar", headers)
     }
 
-    @Suppress("unused")
-    @JvmName("relatedMangaListParse")
-    fun relatedMangaListParse(response: Response): List<SManga> {
+    override fun relatedMangaListParse(response: Response): List<SManga> {
         val data = response.parseAs<List<Manga>>()
 
         return data.map { it.toSManga() }
@@ -289,7 +286,9 @@ class Reimanga :
 
     private val spaceRegex = Regex("""\s+""")
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), rscHeaders)
 
@@ -325,7 +324,7 @@ class Reimanga :
                         "None"
                     } else {
                         val entryMap = pref.entryValues.zip(pref.entries).toMap()
-                        selected.joinToString(", ") { entryMap[it] ?: it }
+                        selected.joinToString { entryMap[it] ?: it }
                     }
                 }
 
