@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Moderate issues
-        uses: keiyoushi/issue-moderator-action@9597245ba176cf43ed82edccc40a7479d0d8d050
+        uses: keiyoushi/issue-moderator-action@ad49a28cf962db967f92d9cf974f797597460012
         with:
           repo-token: ${{ github.token }}
           member-token: ${{ secrets.MEMBER_TOKEN }}
@@ -42,6 +42,9 @@ jobs:
             ["Source request", "Domain changed"]
           existing-check-repo-url: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
 
+          url-search-sections: |
+            ["Source link", "Source new URL"]
+
           auto-close-rules: |
             [
               {
@@ -56,14 +59,14 @@ jobs:
                 "regex": "(remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io)",
                 "ignoreCase": true,
                 "labels": ["invalid"],
-                "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
+                "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca).\nThis was also mentioned in #14260, which is pinned on the Issues page. Search the existing requests first & don't acknowledge that you searched when you clearly didn't."
               },
               {
                 "type": "both",
                 "regex": "(kumanga\\.com)",
                 "ignoreCase": true,
                 "labels": ["invalid"],
-                "message": "{match} will not be added back as it is too difficult to maintain."
+                "message": "{match} will not be added back as it is too difficult to maintain.\nThis was also mentioned in #14260, which is pinned on the Issues page. Search the existing requests first & don't acknowledge that you searched when you clearly didn't."
               },
               {
                 "type": "both",

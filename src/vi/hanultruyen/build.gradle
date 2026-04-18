@@ -1,0 +1,10 @@
+ext {
+    extName = 'HanulTruyen'
+    extClass = '.HanulTruyen'
+    themePkg = 'madara'
+    baseUrl = 'https://hanultruyen.info'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

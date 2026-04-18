@@ -8,7 +8,7 @@ import java.util.Locale
 class SummerToon :
     Madara(
         "SummerToon",
-        "https://summertoons.com",
+        "https://summertoons.net",
         "tr",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
     ) {

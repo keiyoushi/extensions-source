@@ -118,7 +118,7 @@ class PremiumPageListDto(
 
 @Serializable
 class PageListDto(
-    val pages: List<PageDto>,
+    val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
