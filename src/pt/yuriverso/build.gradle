@@ -1,9 +1,9 @@
 ext {
-    extName = 'Yuri Verso'
-    extClass = '.YuriVerso'
+    extName = 'Yuri on Air'
+    extClass = '.YuriOnAir'
     themePkg = 'madara'
-    baseUrl = 'https://yuri.live'
-    overrideVersionCode = 3
+    baseUrl = 'https://yurionair.top'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
