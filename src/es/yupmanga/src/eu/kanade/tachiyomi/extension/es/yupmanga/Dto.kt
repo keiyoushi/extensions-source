@@ -6,8 +6,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 class ChapterListDto(
     val html: String = "",
-    @SerialName("currentPage") private val currentPage: Int = 1,
-    @SerialName("totalPages") private val totalPages: Int = 1,
+    private val currentPage: Int = 1,
+    private val totalPages: Int = 1,
 ) {
     fun hasNextPage() = currentPage < totalPages
 }
