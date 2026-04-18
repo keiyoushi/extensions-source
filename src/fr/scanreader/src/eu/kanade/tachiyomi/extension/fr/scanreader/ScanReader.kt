@@ -205,6 +205,8 @@ class ScanReader : HttpSource() {
         // Return empty list explicitly if WordPress rejected the request
         if (html.trim() == "0" || html.trim() == "-1") return emptyList()
 
+        Log.d("ScanReader", "AJAX response (first 2000 chars): ${html.take(2000)}")
+
         val document = Jsoup.parse(html)
 
         // Select every link pointing to a chapter URL. This is resilient to whatever
