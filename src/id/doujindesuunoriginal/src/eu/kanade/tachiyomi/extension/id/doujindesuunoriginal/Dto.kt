@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.id.doujindesuunoriginal
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -11,10 +10,7 @@ import java.util.Locale
 @Serializable
 class MangaList(
     val mangas: List<Manga>,
-    @SerialName("current_page")
-    private val currentPage: Int? = null,
-    @SerialName("last_page")
-    private val lastPage: Int? = null,
+    val totalItems: Int? = null,
 ) {
     @Serializable
     class Manga(
@@ -29,7 +25,7 @@ class MangaList(
         }
     }
 
-    fun hasNextPage() = (currentPage ?: 0) < (lastPage ?: 0)
+    fun hasNextPage(page: Int): Boolean = totalItems != null && page * 24 < totalItems
 }
 
 @Serializable
@@ -76,7 +72,7 @@ class ChaptersList(
     class Chapter(
         val slug: String,
         val title: String,
-        val createdAt: String? = null,
+        private val createdAt: String? = null,
     ) {
         fun toSChapter(mangaSlug: String) = SChapter.create().apply {
             url = "/read/$mangaSlug/$slug"
