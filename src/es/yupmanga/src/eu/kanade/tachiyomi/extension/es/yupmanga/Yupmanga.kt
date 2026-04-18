@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -30,8 +30,25 @@ class Yupmanga : HttpSource() {
 
     override val supportsLatest = true
 
+    // Cached CSRF token, populated by the token interceptor during normal browsing flow.
+    private var csrfToken: String = ""
+
+    // Peeks at every HTML response to extract the _token input value without consuming the body.
+    private val tokenInterceptor = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+        if (response.header("Content-Type").orEmpty().contains("text/html")) {
+            Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
+                .selectFirst("input[name=_token]")
+                ?.attr("value")
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { csrfToken = it }
+        }
+        response
+    }
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
+        .addInterceptor(tokenInterceptor)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -66,14 +83,18 @@ class Yupmanga : HttpSource() {
     }
 
     private fun parseSeriesList(document: Document): MangasPage {
-        val mangas = document.selectFirst("div.grid:has(> div.comic-card)")?.select("div.comic-card")?.map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("h3")!!.text()
-                val rawUrl = element.selectFirst("> a[href]")!!.attr("abs:href")
-                url = rawUrl.toHttpUrl().queryParameter("id")!!
-                thumbnail_url = element.selectFirst("img.object-cover")?.attr("abs:src")
-            }
-        } ?: emptyList()
+        val mangas = document.selectFirst("div.grid:has(div.comic-card)")
+            ?.select("div.comic-card")
+            ?.mapNotNull { element ->
+                val href = element.selectFirst("a[href]")?.attr("abs:href") ?: return@mapNotNull null
+                val id = href.toHttpUrlOrNull()?.queryParameter("id") ?: return@mapNotNull null
+
+                SManga.create().apply {
+                    title = element.selectFirst("h3")?.text() ?: ""
+                    url = id
+                    thumbnail_url = element.selectFirst("img.object-cover")?.attr("abs:src")
+                }
+            } ?: emptyList()
         val hasNextPage = document.selectFirst("div.flex > a:contains(Siguiente)") != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -141,112 +162,107 @@ class Yupmanga : HttpSource() {
     }
 
     private fun parseChapterList(document: Document, mangaId: String): List<SChapter> = document.select("div.comic-card").map { element ->
-        val totalPages = element.selectFirst("span")!!.text()
         val chapterId = element.selectFirst("a[data-chapter]")!!.attr("data-chapter")
 
         SChapter.create().apply {
             name = element.selectFirst("h3")!!.text()
-            url = "/ajax/get_reader_token.php?chapter=$chapterId&s=$mangaId#$totalPages"
+            url = "$chapterId#$mangaId"
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
-        val chapterId = chapterUrl.queryParameter("chapter")!!
-        val seriesId = chapterUrl.queryParameter("s")
-
-        val tokenReqUrl = if (seriesId != null) {
-            "$baseUrl/series.php?id=$seriesId"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaId = if (chapter.url.startsWith("/ajax/")) {
+            "$baseUrl${chapter.url}".toHttpUrlOrNull()?.queryParameter("s") ?: ""
         } else {
-            "$baseUrl/"
+            chapter.url.substringAfter("#")
+        }
+        return "$baseUrl/series.php?id=$mangaId"
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId: String
+        val mangaId: String
+
+        // Handling backward compatibility for old SChapter.url format
+        if (chapter.url.startsWith("/ajax/")) {
+            val url = "$baseUrl${chapter.url}".toHttpUrl()
+            chapterId = url.queryParameter("chapter") ?: throw Exception("ID de capítulo inválido")
+            mangaId = url.queryParameter("s") ?: ""
+        } else {
+            chapterId = chapter.url.substringBefore("#")
+            mangaId = chapter.url.substringAfter("#")
         }
 
-        val csrfToken = client.newCall(GET(tokenReqUrl, headers)).execute().use {
-            it.asJsoup().selectFirst("meta[name=csrf-token]")?.attr("content")
-        } ?: ""
-
+        // The CSRF token is captured passively by tokenInterceptor during normal browsing —
+        // no extra GET request needed here.
         val challengeUrl = "$baseUrl/ajax/get_challenge.php".toHttpUrl().newBuilder()
             .addQueryParameter("chapter", chapterId)
             .apply {
-                if (seriesId != null) {
-                    addQueryParameter("s", seriesId)
-                }
+                if (mangaId.isNotEmpty()) addQueryParameter("s", mangaId)
             }
             .build()
 
         val challenge = client.newCall(GET(challengeUrl, headers)).execute().parseAs<ChallengeDto>()
+        if (!challenge.success || challenge.challengeJs == null || challenge.challengeId == null) {
+            throw Exception("Error fetching challenge")
+        }
 
-        val chapterTokenUrl = chapterUrl.newBuilder().apply {
-            removeAllQueryParameters("s")
-            if (challenge.success && challenge.challengeJs != null && challenge.challengeId != null) {
-                val answer = QuickJs.create().use {
-                    it.evaluate(
-                        """
-                        var document = {
-                            querySelector: function(sel) {
-                                return { content: "$csrfToken" };
-                            }
-                        };
-                        (function(){ ${challenge.challengeJs} })()
-                        """.trimIndent(),
-                    )?.toString()
-                }
+        // Broad mocking to avoid "cannot read property 'length' of undefined" in QuickJs evaluation.
+        val answer = QuickJs.create().use {
+            it.evaluate(
+                """
+                var mockElem = {
+                    value: "$csrfToken",
+                    getAttribute: function(attr) { return "$csrfToken"; },
+                    dataset: { token: "$csrfToken" },
+                    textContent: "$csrfToken",
+                    innerText: "$csrfToken",
+                    innerHTML: "$csrfToken",
+                    id: "csrf_token",
+                    name: "_token",
+                    className: "_token"
+                };
+                var document = {
+                    querySelector: function(sel) { return mockElem; },
+                    getElementById: function(id) { return mockElem; },
+                    getElementsByName: function(name) { return [mockElem]; },
+                    getElementsByTagName: function(tag) { return [mockElem]; },
+                    getElementsByClassName: function(cls) { return [mockElem]; },
+                    cookie: ""
+                };
+                (function(){ ${challenge.challengeJs} })();
+                """.trimIndent(),
+            )?.toString()
+        } ?: throw Exception("Failed to solve challenge")
 
-                if (answer != null) {
-                    addQueryParameter("challenge_id", challenge.challengeId)
-                    addQueryParameter("answer", answer)
-                }
-            }
-        }.build()
+        val chapterTokenUrl = "$baseUrl/ajax/get_reader_token.php".toHttpUrl().newBuilder()
+            .addQueryParameter("chapter", chapterId)
+            .addQueryParameter("challenge_id", challenge.challengeId)
+            .addQueryParameter("answer", answer)
+            .build()
 
-        return GET(chapterTokenUrl, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val httpUrl = response.request.url
-        val urlChapterId = httpUrl.queryParameter("chapter")!!
-
-        val tokenDto = response.parseAs<TokenDto>()
+        val tokenDto = client.newCall(GET(chapterTokenUrl, headers)).execute().parseAs<TokenDto>()
         if (!tokenDto.success || tokenDto.token.isNullOrEmpty()) {
             throw Exception("Información desactualizada. Refresque la lista de capítulos.")
         }
-        val chapterId = tokenDto.chapterId ?: urlChapterId
-        val totalPages = httpUrl.fragment!!.toInt()
 
-        return (1..totalPages).map { pageNumber ->
-            val imageUrl = "$baseUrl/image-proxy-v2.php".toHttpUrl().newBuilder()
-                .addQueryParameter("chapter", chapterId)
-                .addQueryParameter("page", pageNumber.toString())
-                .addQueryParameter("context", "reader")
-                .addQueryParameter("token", tokenDto.token)
-                .build()
+        val realChapterId = tokenDto.chapterId ?: chapterId
+        val readerUrl = "$baseUrl/reader_v2.php".toHttpUrl().newBuilder()
+            .addQueryParameter("chapter", realChapterId)
+            .addQueryParameter("token", tokenDto.token)
+            .addQueryParameter("page", "1")
+            .build()
 
-            Page(pageNumber, imageUrl = imageUrl.toString())
+        return GET(readerUrl, headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        return document.select("div#readerContent img.page-image").mapIndexed { index, img ->
+            Page(index, imageUrl = img.attr("abs:src"))
         }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    @Serializable
-    internal class ChapterListDto(
-        val html: String,
-        private val currentPage: Int,
-        private val totalPages: Int,
-    ) {
-        fun hasNextPage() = currentPage < totalPages
-    }
-
-    @Serializable
-    internal class TokenDto(
-        val success: Boolean,
-        val token: String? = null,
-        @SerialName("chapter_id") val chapterId: String? = null,
-    )
-
-    @Serializable
-    internal class ChallengeDto(
-        val success: Boolean,
-        @SerialName("challenge_id") val challengeId: String? = null,
-        @SerialName("challenge_js") val challengeJs: String? = null,
-    )
 }
