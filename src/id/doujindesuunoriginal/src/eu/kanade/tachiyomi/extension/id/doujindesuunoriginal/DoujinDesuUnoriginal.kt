@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.doujindesuunoriginal
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -137,6 +138,8 @@ class DoujinDesuUnoriginal : HttpSource() {
     // ============================== Filters ===============================
 
     override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Filter dapat digunakan bersamaan dengan pencarian teks"),
+        Filter.Separator(),
         SortFilter(),
         TypeFilter(),
         StatusFilter(),
