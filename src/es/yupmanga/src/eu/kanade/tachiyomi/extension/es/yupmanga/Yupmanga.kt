@@ -89,8 +89,9 @@ class Yupmanga : HttpSource() {
                 val href = element.selectFirst("a[href]")?.attr("abs:href") ?: return@mapNotNull null
                 val id = href.toHttpUrlOrNull()?.queryParameter("id") ?: return@mapNotNull null
 
+                val title = element.selectFirst("h3")?.text()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 SManga.create().apply {
-                    title = element.selectFirst("h3")?.text() ?: ""
+                    this.title = title
                     url = id
                     thumbnail_url = element.selectFirst("img.object-cover")?.attr("abs:src")
                 }
