@@ -12,9 +12,9 @@ import java.util.Locale
 class MangaList(
     val mangas: List<Manga>,
     @SerialName("current_page")
-    val currentPage: Int,
+    val currentPage: Int? = null,
     @SerialName("last_page")
-    val lastPage: Int,
+    val lastPage: Int? = null,
 ) {
     @Serializable
     class Manga(
@@ -29,7 +29,7 @@ class MangaList(
         }
     }
 
-    fun hasNextPage() = currentPage < lastPage
+    fun hasNextPage() = (currentPage ?: 0) < (lastPage ?: 0) || mangas.size >= 20
 }
 
 @Serializable
