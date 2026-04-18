@@ -76,7 +76,11 @@ class ChaptersList(
     ) {
         fun toSChapter(mangaSlug: String) = SChapter.create().apply {
             url = "/read/$mangaSlug/$slug"
-            name = if (title.any { it.isLetter() }) title else "Chapter $title"
+            name = if (title.startsWith("Chapter", ignoreCase = true) || (title.any { it.isLetter() } && !title.first().isDigit())) {
+                title
+            } else {
+                "Chapter $title"
+            }
             date_upload = dateFormat.tryParse(createdAt?.replace("Z", "+00:00"))
         }
     }
