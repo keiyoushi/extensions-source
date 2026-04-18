@@ -2,8 +2,8 @@ ext {
     extName = 'Komikindo'
     extClass = '.Komikindo'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komikindo.club'
-    overrideVersionCode = 4
+    baseUrl = 'https://komikindo.bid'
+    overrideVersionCode = 5
     isNsfw = true
 }
 

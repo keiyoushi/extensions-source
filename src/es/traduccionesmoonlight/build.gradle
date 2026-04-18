@@ -2,7 +2,7 @@ ext {
     extName = 'Traducciones Moonlight'
     extClass = '.TraduccionesMoonlight'
     baseUrl = 'https://traduccionesmoonlight.com'
-    extVersionCode = 45
+    extVersionCode = 46
     isNsfw = true
 }
 

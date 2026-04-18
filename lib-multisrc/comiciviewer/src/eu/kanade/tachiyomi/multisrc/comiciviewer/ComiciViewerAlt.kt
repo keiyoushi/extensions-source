@@ -20,6 +20,8 @@ import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.util.Calendar
+import java.util.TimeZone
 
 abstract class ComiciViewerAlt(
     override val name: String,
@@ -29,6 +31,7 @@ abstract class ComiciViewerAlt(
 ) : HttpSource(),
     ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
+    protected open val timeZone: TimeZone = TimeZone.getTimeZone("Asia/Tokyo")
 
     override val supportsLatest = true
 
@@ -43,7 +46,12 @@ abstract class ComiciViewerAlt(
 
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/manga", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val day = Calendar.getInstance(timeZone)
+            .get(Calendar.DAY_OF_WEEK)
+            .let { if (it == Calendar.SUNDAY) 7 else it - 1 }
+        return GET("$baseUrl/category/manga/day/$day/$page", headers)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()

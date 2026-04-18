@@ -132,6 +132,12 @@ class DateDto(
     val sub: String? = null,
 )
 
+// page list - encrypted response wrapper
+@Serializable
+class EncryptedOrPageListData(
+    val tobeparsed: String? = null,
+)
+
 // page list
 @Serializable
 class PageListData(

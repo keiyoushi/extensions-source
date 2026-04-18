@@ -37,7 +37,7 @@ class MangaSwat :
 
     private val preferences by getPreferencesLazy()
 
-    private val apiBaseUrl = "https://appswat.com/v2/api/v2"
+    private val apiBaseUrl = "https://meshmanga.com/v2/api/v2"
 
     override val versionId = 2
 
@@ -224,7 +224,7 @@ class MangaSwat :
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val DEFAULT_BASE_URL = "https://appswat.com"
+        private const val DEFAULT_BASE_URL = "https://meshmanga.com"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

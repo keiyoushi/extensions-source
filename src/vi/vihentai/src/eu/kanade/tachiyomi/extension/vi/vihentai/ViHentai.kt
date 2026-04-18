@@ -108,22 +108,24 @@ class ViHentai : HttpSource() {
             title = document.selectFirst("span.grow.text-lg")!!.text()
             author = document.selectFirst("a[href*=/tac-gia/]")?.text()
             genre = document.select("div.mt-2.flex.flex-wrap.gap-1 a[href*=/the-loai/]").joinToString { it.text() }
-            thumbnail_url = document.selectFirst("div.cover-frame div.cover")?.extractBackgroundImage()
-            val plot = document.selectFirst("div.mg-plot")
-            if (plot != null) {
-                description = plot.select("p")
-                    .drop(1)
-                    .joinToString("\n") { it.text() }
-                    .trim()
-            }
+            thumbnail_url = document.selectFirst("div.cover-frame div.cover, div.cover-frame")?.extractBackgroundImage()
+            description = document.selectFirst("div.mg-plot")?.select("p")
+                ?.drop(1)
+                ?.joinToString("\n") { it.text() }
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: document.selectFirst("meta[property=og:description]")?.attr("content")
+                    ?.substringBefore(" - Việt Hentai")
 
-            status = document.selectFirst("a[href*='filter[status]'] span")?.text()?.let { statusText ->
-                when {
-                    statusText.contains("Đã hoàn thành") -> SManga.COMPLETED
-                    statusText.contains("Đang tiến hành") -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-            } ?: SManga.UNKNOWN
+            status = document.selectFirst("a[href*='filter[status]'] span, a[href*='filter%5Bstatus%5D'] span")
+                ?.text()
+                ?.let { statusText ->
+                    when {
+                        statusText.contains("Đã hoàn thành") -> SManga.COMPLETED
+                        statusText.contains("Đang tiến hành") -> SManga.ONGOING
+                        else -> SManga.UNKNOWN
+                    }
+                } ?: SManga.UNKNOWN
         }
     }
 
@@ -132,15 +134,22 @@ class ViHentai : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        return document.select("ul a[href*=/truyen/]").map { element ->
+        return document.select("ul li:has(a[href*=/truyen/])").mapNotNull { row ->
+            val chapterElement = row.selectFirst(
+                "a[href*=/truyen/]:has(span.text-ellipsis), a[href*=/truyen/]:has(span.truncate)",
+            ) ?: return@mapNotNull null
+            val chapterName = chapterElement.selectFirst("span.text-ellipsis, span.truncate")
+                ?.text()
+                ?.trim()
+                .orEmpty()
+            if (chapterName.isEmpty()) return@mapNotNull null
+
             SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                name = element.selectFirst("span.text-ellipsis")!!.text()
-                date_upload = element.selectFirst("span.timeago[datetime]")
-                    ?.attr("datetime")
-                    .let { dateFormat.tryParse(it) }
+                setUrlWithoutDomain(chapterElement.absUrl("href"))
+                name = chapterName
+                date_upload = dateFormat.tryParse(row.selectFirst("span.timeago[datetime]")?.attr("datetime"))
             }
-        }
+        }.distinctBy { it.url }
     }
 
     // =============================== Pages ================================

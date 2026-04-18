@@ -15,7 +15,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -70,10 +70,8 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    val maxImageRequests = 10
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(internalBaseUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost("https://c4.japscan.foo/".toHttpUrl(), maxImageRequests, 2)
+        .rateLimit(1, 2)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
@@ -236,7 +234,7 @@ class Japscan :
 
     override fun chapterFromElement(element: Element): SChapter {
         // Only search for a tag with any attribute containing manga/manhua/manhwa
-        val urlPairs = element.getElementsByTag("a")
+        val urlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
             .mapNotNull { el ->
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
@@ -383,33 +381,93 @@ class Japscan :
                                     setTimeout(() => waitForRC(callback), 100);
                                 }
                             }
-                            function waitForDATA(callback) {
-                                if (document.querySelector(`[data-${window.__rc.ia}]`)) {
-                                    callback()
-                                } else {
-                                    setTimeout(() => waitForDATA(callback), 100);
+
+                            const originalReplace = String.prototype.replace;
+
+                            function tryDecodeBase64ToJsonKeysOnly(str) {
+                              const s = String(str).trim();
+                              if (!/^[A-Za-z0-9+/]+={0,2}$/.test(s) || s.length % 4 === 1) return null;
+                              try {
+                                const bin = atob(s);
+                                const utf8 = decodeURIComponent(
+                                  Array.from(bin, c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+                                );
+                                if(!utf8.includes(location.pathname.replaceAll("/", "\\/"))) return null;
+                                const parsed = JSON.parse(utf8);
+                                return parsed
+                              } catch (e) {
+                                return null;
+                              }
+                              return null;
+                            }
+
+                            String.prototype.replace = function(searchValue, replaceValue) {
+                              const receiver = this;
+
+                              const effectiveReplace = (typeof replaceValue === 'function')
+                                ? function(...args) { return replaceValue.apply(this, args); }
+                                : replaceValue;
+
+                              const rawResult = originalReplace.call(receiver, searchValue, effectiveReplace);
+
+                              if (typeof rawResult === 'string') {
+                                const parsed = tryDecodeBase64ToJsonKeysOnly(rawResult);
+                                if (parsed) {
+                                  waitForRC(() => create(parsed))
                                 }
+                              }
+
+                              return rawResult;
+                            };
+
+                            function findFirstArray(obj) {
+                              let found = null;
+                              (function visit(value) {
+                                if (found) return;
+                                if (value && typeof value === 'object') {
+                                  if (Array.isArray(value)) {
+                                    found = value;
+                                    return;
+                                  }
+                                  for (const k in value) {
+                                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                                      visit(value[k]);
+                                      if (found) return;
+                                    }
+                                  }
+                                }
+                              })(obj);
+                              return found;
                             }
-                            function create() {
-                                const data = atob(document.querySelector(`[data-${window.__rc.ia}]`).dataset[window.__rc.ia]);
-                                Object.defineProperty(Object.prototype, `str`, {
-                                    set: function(value) {
-                                        window.$$interfaceName.passPayload(JSON.stringify(JSON.parse(value)[data]), window.__rc.p, window.__rc.v, JSON.parse(value).pi.toString());
-                                        Object.defineProperty(this, '_imagesLink', {
-                                            value: value,
-                                            writable: true,
-                                            enumerable: false,
-                                            configurable: true
-                                        });
-                                    },
-                                    get: function() {
-                                        return this._imagesLink;
-                                    },
-                                    enumerable: false,
-                                    configurable: true
-                                })
+
+                            function create(parsed) {
+                                let arr = findFirstArray(parsed)
+                                const arrLen = arr.length;
+                                const chapterMatch = location.pathname.match(/\/(\d+)(?:\/|$)/);
+                                const chapterNum = chapterMatch ? Number(chapterMatch[1]) : null;
+                                let candidate = null;
+                                (function visit(obj) {
+                                    if (candidate) return;
+                                        if (obj && typeof obj === 'object') {
+                                            for (const k in obj) {
+                                                if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+                                                const v = obj[k];
+                                                if (typeof v === 'number' && Number.isFinite(v) && Math.floor(v) === v) {
+                                                const n = v;
+                                                if (n > 0 && n <= arrLen && n !== chapterNum) { candidate = n; return; }
+                                            }
+                                            if (typeof v === 'string' && /^[0-9]+$/.test(v)) {
+                                                const n = Number(v);
+                                                if (n > 0 && n <= arrLen && n !== chapterNum) { candidate = n; return; }
+                                            }
+                                            if (typeof v === 'object') visit(v);
+                                            if (candidate) return;
+                                        }
+                                    }
+                                })(parsed);
+                                const finalNum = candidate || chapterNum || 0;
+                                window.$$interfaceName.passPayload(JSON.stringify(arr), window.__rc.p, window.__rc.v, finalNum.toString());
                             }
-                            waitForRC(() => waitForDATA(create))
                         """.trimIndent(),
                     ) {}
                 }

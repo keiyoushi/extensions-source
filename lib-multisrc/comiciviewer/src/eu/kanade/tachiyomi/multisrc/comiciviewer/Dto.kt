@@ -87,9 +87,11 @@ class SeriesSummary(
         title = name
         author = this@SeriesSummary.author?.joinToString { it.name }
         artist = author
-        description = this@SeriesSummary.description?.parseAs<List<DescriptionNode>>()
-            ?.joinToString("\n") { node -> node.children.joinToString { it.text } }
-            ?.ifEmpty { this@SeriesSummary.description }
+        description = this@SeriesSummary.description
+            ?.takeIf { it.isNotBlank() }
+            ?.parseAs<List<DescriptionNode>>()
+            ?.joinToString("\n") { node -> node.children.joinToString("") { it.resolveText().orEmpty() } }
+            ?: this@SeriesSummary.description
         genre = tag?.joinToString { it.name }
         thumbnail_url = images?.joinToString { it.url }
         status = if (isCompleted) SManga.COMPLETED else SManga.ONGOING
@@ -125,8 +127,19 @@ class DescriptionNode(
 
 @Serializable
 class DescriptionChild(
-    val text: String,
-)
+    val text: String?,
+    val url: String?,
+    val children: List<DescriptionChild>?,
+) {
+    fun resolveText(): String? = when {
+        text != null -> text
+        children != null -> {
+            val inner = children.joinToString("") { it.resolveText().orEmpty() }
+            if (url != null) "[$inner]($url)" else inner
+        }
+        else -> null
+    }
+}
 
 @Serializable
 class AccessApiResponse(

@@ -221,8 +221,8 @@ class AllManga :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ApiPageListResponse>()
-        val pages = result.data.pageList?.edges?.get(0) ?: return emptyList()
+        val pageListData = response.parsePageList()
+        val pages = pageListData.pageList?.edges?.get(0) ?: return emptyList()
 
         val imageDomain = pages.serverUrl?.let { server ->
             if (server.matches(urlRegex)) {

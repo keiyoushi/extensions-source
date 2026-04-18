@@ -28,7 +28,7 @@ class NewTruyenTranh :
     ConfigurableSource {
     override val name = "NewTruyenTranh"
     override val lang = "vi"
-    private val defaultBaseUrl = "https://newtruyentranh9.com"
+    private val defaultBaseUrl = "https://newtruyentranh10.com"
     override val baseUrl by lazy { getPrefBaseUrl() }
     override val supportsLatest = true
 
@@ -241,11 +241,9 @@ class NewTruyenTranh :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // =============================== Related ================================
-    // dirty hack to disable suggested mangas on Komikku due to heavy rate limit
-    // https://github.com/komikku-app/komikku/blob/4323fd5841b390213aa4c4af77e07ad42eb423fc/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/CatalogueSource.kt#L176-L184
-    @Suppress("Unused")
-    @JvmName("getDisableRelatedMangasBySearch")
-    fun disableRelatedMangasBySearch() = true
+    // disable suggested mangas on Komikku due to heavy rate limit
+    override val disableRelatedMangasBySearch = true
+    override val supportsRelatedMangas = false
 
     // ============================== Preferences ===========================
 

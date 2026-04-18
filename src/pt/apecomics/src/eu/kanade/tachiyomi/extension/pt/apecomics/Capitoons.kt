@@ -1,21 +1,22 @@
 package eu.kanade.tachiyomi.extension.pt.apecomics
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.mangawork.MangaWork
 
 class Capitoons :
-    MangaThemesia(
-        "Capitoons",
-        "https://capitoons.com",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    MangaWork(
+        name = "Capitoons",
+        baseUrl = "https://capitoons.com",
+        lang = "pt-BR",
     ) {
     override val id: Long = 4475020039832513819
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(2, 1)
-        .build()
+    override fun getOrderFilterOptions() = CapitoonsFilters.orderFilterOptions
+
+    override fun getStatusFilterOptions() = CapitoonsFilters.statusFilterOptions
+
+    override fun getTypeFilterOptions() = CapitoonsFilters.typeFilterOptions
+
+    override fun getGenreFilterOptions() = CapitoonsFilters.genreFilterOptions
+
+    override fun getYearFilterOptions() = CapitoonsFilters.yearFilterOptions
 }
