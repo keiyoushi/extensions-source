@@ -12,9 +12,9 @@ import java.util.Locale
 class MangaList(
     val mangas: List<Manga>,
     @SerialName("current_page")
-    val currentPage: Int? = null,
+    private val currentPage: Int? = null,
     @SerialName("last_page")
-    val lastPage: Int? = null,
+    private val lastPage: Int? = null,
 ) {
     @Serializable
     class Manga(
@@ -29,7 +29,7 @@ class MangaList(
         }
     }
 
-    fun hasNextPage() = (currentPage ?: 0) < (lastPage ?: 0) || mangas.size >= 20
+    fun hasNextPage() = (currentPage ?: 0) < (lastPage ?: 0)
 }
 
 @Serializable
@@ -54,7 +54,7 @@ class MangaDetails(
             thumbnail_url = thumb
             author = this@Manga.author?.takeIf { it.isNotBlank() && it != "Unknown" }
             description = buildString {
-                rating?.let { append("Rating: ", it, "\n\n") }
+                rating?.let { append("Rating: ", it, "/10\n\n") }
                 synopsis?.takeIf { it.isNotBlank() }?.let { append(it, "\n\n") }
                 alternativeTitle?.takeIf { it.isNotBlank() }?.let { append("Judul Alternatif: ", it) }
             }
@@ -80,7 +80,7 @@ class ChaptersList(
     ) {
         fun toSChapter(mangaSlug: String) = SChapter.create().apply {
             url = "/read/$mangaSlug/$slug"
-            name = title
+            name = if (title.any { it.isLetter() }) title else "Chapter $title"
             date_upload = dateFormat.tryParse(createdAt?.replace("Z", "+00:00"))
         }
     }
