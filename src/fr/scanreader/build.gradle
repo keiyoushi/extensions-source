@@ -1,0 +1,7 @@
+ext {
+    extName = 'Scan Reader'
+    extClass = '.ScanReader'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
