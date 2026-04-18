@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.extension.all.manhuarm.translator.google.GoogleTransl
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
@@ -31,8 +32,10 @@ import kotlinx.serialization.encodeToString
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
@@ -300,14 +303,21 @@ class Manhuarm(
         val jsonHeaders = Headers.Builder()
             .add("Referer", chapterUrl.toString())
             .add("Accept", "*/*")
+            .add("Content-Type", "application/json")
             .add("X-Requested-With", "XMLHttpRequest")
             .add("Cache-Control", "no-cache")
             .build()
 
-        val ocrUrl = ocrUrlInterceptor.getUrl(chapterUrl.toString()) ?: return pages
+        val ocrRequest = ocrUrlInterceptor.getOcrRequest(chapterUrl.toString()) ?: return pages
 
         val dialog = try {
-            val response = client.newCall(GET(ocrUrl, jsonHeaders)).execute()
+            val response = client.newCall(
+                POST(
+                    ocrRequest.url,
+                    jsonHeaders,
+                    ocrRequest.body.toRequestBody("application/json; charset=utf-8".toMediaType()),
+                ),
+            ).execute()
 
             // If server returns error (403, etc), skip translations
             if (!response.isSuccessful) {
