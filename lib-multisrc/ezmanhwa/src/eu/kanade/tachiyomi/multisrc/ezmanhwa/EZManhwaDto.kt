@@ -89,8 +89,35 @@ data class EZManhwaChapterDto(
         val numStr = number?.let {
             if (it % 1.0 == 0.0) it.toInt().toString() else it.toString()
         } ?: ""
-        val chapterTitle = title?.takeIf { it.isNotBlank() } ?: "Chapter $numStr".trim()
-        name = prefix + chapterTitle
+
+        val parsedTitle = title?.trim()?.takeIf { it.isNotBlank() }
+
+        val chapterName = buildString {
+            if (numStr.isNotBlank()) {
+                if (parsedTitle == null) {
+                    append("Chapter $numStr")
+                } else if (parsedTitle == numStr) {
+                    append("Chapter $numStr")
+                } else if (
+                    parsedTitle.contains(numStr) &&
+                    parsedTitle.matches(Regex("^(?i)(chapter|ch\\.?|episode|ep\\.?)\\s*.*"))
+                ) {
+                    append(parsedTitle)
+                } else {
+                    append("Chapter $numStr")
+                    if (parsedTitle.startsWith("-") || parsedTitle.startsWith(":")) {
+                        append(" ")
+                    } else {
+                        append(" - ")
+                    }
+                    append(parsedTitle)
+                }
+            } else {
+                append(parsedTitle ?: "Chapter")
+            }
+        }
+
+        name = prefix + chapterName
         chapter_number = number?.toFloat() ?: -1f
         date_upload = EZMANHWA_DATE_FORMAT.tryParse(createdAt)
     }
