@@ -16,9 +16,13 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TuManhwasClub : HttpSource() {
+class ManhwasMe : HttpSource() {
 
     override val name = "ManhwasMe"
+
+    // Preserves the original TuManhwas.Club source ID so existing users
+    // don't lose their library when the class/name changed.
+    override val id = 8004442288770923365L
 
     override val baseUrl = "https://manhwas.me"
 
