@@ -108,7 +108,7 @@ class YuriNeko : HttpSource() {
 
     // ============================== Details ===============================
     override fun mangaDetailsParse(response: Response): SManga {
-        val mangaId = response.request.url.mangaId()
+        val mangaId = resolveMangaId(response)
         val details = client.newCall(GET("$apiUrl/mangas/$mangaId", headers)).execute().use { detailResponse ->
             detailResponse.parseAs<MangaDetailsDto>()
         }
@@ -144,7 +144,7 @@ class YuriNeko : HttpSource() {
 
     // ============================== Chapters ==============================
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.mangaId()
+        val mangaId = resolveMangaId(response)
 
         return fetchAllChapters(mangaId).map { chapter ->
             SChapter.create().apply {
@@ -155,14 +155,39 @@ class YuriNeko : HttpSource() {
         }
     }
 
-    private fun fetchAllChapters(mangaId: String): List<ChapterDto> {
-        val chapters = client.newCall(GET("$webApiUrl/mangas/$mangaId", headers)).execute().use { response ->
-            response.parseAs<MangaDetailsDto>().chapters
+    private fun fetchAllChapters(mangaId: String): List<ChapterDto> = fetchChaptersFromChapterApi(mangaId)
+
+    private fun fetchChaptersFromChapterApi(mangaId: String): List<ChapterDto> {
+        val chapters = linkedMapOf<String, ChapterDto>()
+        var currentPage = 1
+        var totalPages = 1
+
+        while (currentPage <= totalPages) {
+            val url = "$webApiUrl/chapters/$mangaId".toHttpUrl().newBuilder()
+                .addQueryParameter("page", currentPage.toString())
+                .addQueryParameter("limit", CHAPTER_LIST_LIMIT.toString())
+                .addQueryParameter("sort", "desc")
+                .build()
+            val payload = client.newCall(GET(url, headers)).execute().use { response ->
+                response.parseAs<ChapterListDto>()
+            }
+
+            payload.data.forEach { chapter ->
+                chapters.putIfAbsent(chapter.id, chapter)
+            }
+
+            if (payload.data.isEmpty()) break
+            totalPages = payload.pageCount.coerceAtLeast(1)
+            currentPage++
         }
 
-        return chapters.sortedByDescending { chapter ->
-            parseChapterDate(chapter.publishedAt ?: chapter.createdAt)
-        }
+        return chapters.values.sortedByDescending(::chapterSortValue)
+    }
+
+    private fun chapterSortValue(chapter: ChapterDto): Double {
+        chapter.order?.let { return it }
+        return CHAPTER_NUMBER_REGEX.find(chapter.chapterNumber)?.value?.toDoubleOrNull()
+            ?: Double.NEGATIVE_INFINITY
     }
 
     private fun chapterName(chapter: ChapterDto): String {
@@ -282,14 +307,22 @@ class YuriNeko : HttpSource() {
         return decoded.substringBefore('|')
     }
 
-    private fun HttpUrl.mangaId(): String {
+    private fun resolveMangaId(response: Response): String = response.request.url.mangaIdOrNull()
+        ?: extractMangaIdFromDocument(response.asJsoup())
+        ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${response.request.url}")
+
+    private fun extractMangaIdFromDocument(document: Document): String? = document.select("a[href*=/manga/]")
+        .asSequence()
+        .mapNotNull { MANGA_PATH_ID_REGEX.find(it.attr("href"))?.groupValues?.getOrNull(1) }
+        .firstOrNull()
+
+    private fun HttpUrl.mangaIdOrNull(): String? {
         val mangaIndex = pathSegments.indexOf("manga")
         val mangaId = if (mangaIndex != -1) pathSegments.getOrNull(mangaIndex + 1) else null
 
         return mangaId
             ?.takeIf(UUID_REGEX::matches)
             ?: pathSegments.firstOrNull(UUID_REGEX::matches)
-            ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: $this")
     }
 
     // =============================== Related ================================
@@ -302,8 +335,12 @@ class YuriNeko : HttpSource() {
         private const val POPULAR_LIMIT = 10
         private const val LATEST_LIMIT = 16
         private const val SEARCH_LIMIT = 20
+        private const val CHAPTER_LIST_LIMIT = 50
 
-        private val UUID_REGEX = Regex("""[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
+        private const val UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        private val UUID_REGEX = Regex(UUID_PATTERN, RegexOption.IGNORE_CASE)
+        private val MANGA_PATH_ID_REGEX = Regex("/manga/($UUID_PATTERN)", RegexOption.IGNORE_CASE)
+        private val CHAPTER_NUMBER_REGEX = Regex("""\d+(?:\.\d+)?""")
         private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\\\s]+|/?chapters/[^"'\\\s]+)""")
         private val CHAPTER_IMAGE_PATH_REGEX = Regex("""(?:^|/)chapters/""")
     }
