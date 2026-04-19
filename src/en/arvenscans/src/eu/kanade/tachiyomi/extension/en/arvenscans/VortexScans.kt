@@ -138,15 +138,14 @@ class VortexScans :
         return "$baseUrl/$SERIES_PATH_SEGMENT/${slugs.first}/${slugs.second}"
     }
 
-    override fun chapterListRequest(manga: SManga): Request = seriesPageRequest(extractMangaSlug(manga.url))
+    override fun chapterListRequest(manga: SManga): Request = chaptersRequest(resolvePostId(manga))
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
-        val mangaSlug = document.extractSeriesSlug()
-            ?: response.request.url.pathSegments.getOrNull(1)
-            ?: throw Exception("Unable to resolve series slug")
+        val payload = response.parseAs<ChaptersResponseDto>()
 
-        return document.parseChapterList(mangaSlug, dateFormat, showLockedChapters)
+        return payload.post.chapters
+            .filter { showLockedChapters || (it.isAccessible != false && it.isLocked != true) }
+            .map { it.toSChapterModel(dateFormat) }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -220,6 +219,25 @@ class VortexScans :
     private fun chapterPageRequest(mangaSlug: String, chapterSlug: String): Request {
         val url = "$baseUrl/$SERIES_PATH_SEGMENT/$mangaSlug/$chapterSlug"
         return GET(url, headers)
+    }
+
+    private fun chaptersRequest(postId: Int): Request {
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            encodedPath(API_CHAPTERS_PATH)
+            addQueryParameter("postId", postId.toString())
+            addQueryParameter("take", CHAPTERS_PER_PAGE.toString())
+            addQueryParameter("skip", "0")
+        }.build()
+
+        return GET(url, apiHeaders)
+    }
+
+    private fun resolvePostId(manga: SManga): Int {
+        manga.url.substringAfter('#', "").toIntOrNull()?.let { return it }
+
+        val slug = extractMangaSlug(manga.url)
+        val summary = findPostBySlug(slug)
+        return summary?.id ?: throw Exception("Unable to resolve series id")
     }
 
     private fun findPostBySlug(slug: String): PostSummaryDto? {

@@ -20,6 +20,38 @@ fun PostSummaryDto.toSMangaSummary(): SManga {
     }
 }
 
+fun ChapterDto.toSChapterModel(dateFormat: SimpleDateFormat): SChapter {
+    val mangaSlug = mangaPost?.slug?.takeIf { it.isNotBlank() }
+        ?: throw Exception("Chapter missing manga slug")
+
+    val rawNumber = number.toString().trim('"').trim()
+    val fallbackNumber = slug.substringAfter("chapter-", "")
+    val chapterNumberText = if (rawNumber.isNotEmpty()) rawNumber else fallbackNumber
+    val chapterTitle = title?.trim().orEmpty()
+
+    return SChapter.create().apply {
+        url = "$mangaSlug/$slug#$id"
+        name = buildString {
+            if (isAccessible == false || isLocked == true) {
+                append("🔒 ")
+            }
+
+            append("Chapter")
+            if (chapterNumberText.isNotEmpty()) {
+                append(' ')
+                append(chapterNumberText)
+            }
+
+            if (chapterTitle.isNotEmpty()) {
+                append(" - ")
+                append(chapterTitle)
+            }
+        }
+        chapterNumberText.toFloatOrNull()?.let { chapter_number = it }
+        date_upload = dateFormat.tryParse(createdAt)
+    }
+}
+
 fun Document.toSMangaDetailsModel(): SManga {
     val props = findSeriesProps() ?: throw Exception("Could not find series details")
 
@@ -54,19 +86,6 @@ fun Document.toSMangaDetailsModel(): SManga {
     }
 }
 
-fun Document.parseChapterList(
-    mangaSlug: String,
-    dateFormat: SimpleDateFormat,
-    showLocked: Boolean,
-): List<SChapter> {
-    val props = findSeriesProps() ?: return emptyList()
-    val chaptersBlock = extractChaptersBlock(props) ?: return emptyList()
-
-    return parseChapterEntries(chaptersBlock)
-        .filter { showLocked || (it.isAccessible != false && it.isLocked != true) }
-        .map { it.toSChapterModel(mangaSlug, dateFormat) }
-}
-
 fun Document.parsePageImages(): List<String> = select("img[src]")
     .asSequence()
     .map { it.absUrl("src").ifEmpty { it.attr("src") } }
@@ -76,11 +95,6 @@ fun Document.parsePageImages(): List<String> = select("img[src]")
     }
     .distinct()
     .toList()
-
-fun Document.extractSeriesSlug(): String? {
-    val props = findSeriesProps() ?: return null
-    return extractJsonStringField(props, "slug")?.trim()?.takeUnless { it.isEmpty() }
-}
 
 private fun Document.findSeriesProps(): String? = select("astro-island[props]")
     .map { it.attr("props") }
@@ -96,18 +110,6 @@ private fun extractJsonStringField(json: String, field: String): String? {
 private fun extractJsonIntField(json: String, field: String): Int? {
     val regex = Regex("\"${Regex.escape(field)}\":\\[0,(-?\\d+)\\]")
     return regex.find(json)?.groupValues?.get(1)?.toIntOrNull()
-}
-
-private fun extractChaptersBlock(json: String): String? {
-    val marker = "\"chapters\":[1,"
-    val markerIdx = json.indexOf(marker)
-    if (markerIdx < 0) return null
-
-    val innerArrayStart = json.indexOf('[', markerIdx + marker.length)
-    if (innerArrayStart < 0) return null
-
-    val innerArrayEnd = findMatchingBracket(json, innerArrayStart) ?: return null
-    return json.substring(innerArrayStart + 1, innerArrayEnd)
 }
 
 private fun findMatchingBracket(text: String, openIdx: Int): Int? {
@@ -138,93 +140,6 @@ private fun findMatchingBracket(text: String, openIdx: Int): Int? {
         i++
     }
     return null
-}
-
-private data class ChapterEntry(
-    val id: Int,
-    val slug: String,
-    val number: String,
-    val title: String?,
-    val createdAt: String?,
-    val isLocked: Boolean?,
-    val isAccessible: Boolean?,
-)
-
-private fun parseChapterEntries(chaptersBlock: String): List<ChapterEntry> {
-    val entries = mutableListOf<ChapterEntry>()
-    var i = 0
-
-    while (i < chaptersBlock.length) {
-        val startToken = "[0,{"
-        val tokenIdx = chaptersBlock.indexOf(startToken, i)
-        if (tokenIdx < 0) break
-
-        val objectStart = tokenIdx + startToken.length - 1
-        val objectEnd = findMatchingBracket(chaptersBlock, objectStart) ?: break
-        val chapterJson = chaptersBlock.substring(objectStart, objectEnd + 1)
-
-        val id = extractJsonIntField(chapterJson, "id")
-        val slug = extractJsonStringField(chapterJson, "slug")
-
-        if (id != null && !slug.isNullOrBlank()) {
-            val rawNumber = Regex("\"number\":\\[0,([^\\]]+)\\]").find(chapterJson)?.groupValues?.get(1)
-                ?.trim()
-                ?.trim('"')
-                .orEmpty()
-
-            entries += ChapterEntry(
-                id = id,
-                slug = slug,
-                number = rawNumber,
-                title = extractJsonStringField(chapterJson, "title"),
-                createdAt = extractJsonStringField(chapterJson, "createdAt"),
-                isLocked = extractJsonBoolField(chapterJson, "isLocked"),
-                isAccessible = extractJsonBoolField(chapterJson, "isAccessible"),
-            )
-        }
-
-        i = objectEnd + 1
-    }
-
-    return entries.distinctBy { it.id }
-}
-
-private fun extractJsonBoolField(json: String, field: String): Boolean? {
-    val regex = Regex("\"${Regex.escape(field)}\":\\[0,(true|false|null)\\]")
-    val match = regex.find(json) ?: return null
-    return when (match.groupValues[1]) {
-        "true" -> true
-        "false" -> false
-        else -> null
-    }
-}
-
-private fun ChapterEntry.toSChapterModel(mangaSlug: String, dateFormat: SimpleDateFormat): SChapter {
-    val fallbackNumber = slug.substringAfter("chapter-", "")
-    val chapterNumberText = number.ifEmpty { fallbackNumber }
-    val chapterTitle = title?.trim().orEmpty()
-
-    return SChapter.create().apply {
-        url = "$mangaSlug/$slug#$id"
-        name = buildString {
-            if (isAccessible == false || isLocked == true) {
-                append("🔒 ")
-            }
-
-            append("Chapter")
-            if (chapterNumberText.isNotEmpty()) {
-                append(' ')
-                append(chapterNumberText)
-            }
-
-            if (chapterTitle.isNotEmpty()) {
-                append(" - ")
-                append(chapterTitle)
-            }
-        }
-        chapterNumberText.toFloatOrNull()?.let { chapter_number = it }
-        createdAt?.let { date_upload = dateFormat.tryParse(it) }
-    }
 }
 
 private fun decodeJsonString(escaped: String): String {

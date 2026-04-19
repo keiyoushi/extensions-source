@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.arvenscans
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 class SearchResponseDto(
@@ -21,4 +22,31 @@ class PostSummaryDto(
 @Serializable
 class GenreDto(
     val name: String,
+)
+
+@Serializable
+class ChaptersResponseDto(
+    val post: ChaptersPostDto,
+)
+
+@Serializable
+class ChaptersPostDto(
+    val chapters: List<ChapterDto> = emptyList(),
+)
+
+@Serializable
+class ChapterDto(
+    val id: Int,
+    val slug: String,
+    val number: JsonPrimitive,
+    val title: String? = null,
+    val createdAt: String,
+    val isLocked: Boolean? = null,
+    val isAccessible: Boolean? = null,
+    val mangaPost: ChapterMangaPostDto? = null,
+)
+
+@Serializable
+class ChapterMangaPostDto(
+    val slug: String,
 )
