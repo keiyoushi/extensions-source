@@ -67,8 +67,7 @@ class ScanReader : HttpSource() {
 
     // ====================== Search ======================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/?s=${query.trim()}&post_type=manga", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/?s=${query.trim()}&post_type=manga", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -76,8 +75,11 @@ class ScanReader : HttpSource() {
             document.select("div.manga-latest-card")
         }
         val mangas = cards.map { element ->
-            if (element.hasClass("manga-latest-card")) mangaFromLatestCard(element)
-            else mangaFromCard(element)
+            if (element.hasClass("manga-latest-card")) {
+                mangaFromLatestCard(element)
+            } else {
+                mangaFromCard(element)
+            }
         }
         return MangasPage(mangas, false)
     }
@@ -86,14 +88,13 @@ class ScanReader : HttpSource() {
 
     // ====================== Manga Details ======================
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(baseUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1.manga-title")!!.text()
-            thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
+            thumbnail_url = document.selectFirst("meta[property='og:image']")?.absUrl("content")
             description = document.selectFirst("div.manga-content div[style*='background: #333'] p")?.text()
 
             document.select("div.manga-info-grid > div").forEach { row ->
@@ -110,6 +111,7 @@ class ScanReader : HttpSource() {
                             statusText.contains("cours", ignoreCase = true) -> SManga.ONGOING
                             statusText.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
                             statusText.contains("Hiatus", ignoreCase = true) -> SManga.ON_HIATUS
+                            statusText.contains("Licencié", ignoreCase = true) -> SManga.LICENSED
                             else -> SManga.UNKNOWN
                         }
                     }
@@ -170,7 +172,7 @@ class ScanReader : HttpSource() {
         // sibling of <a> rather than a descendant. We anchor on <h4> and walk up to find the link.
         return document.select("h4").mapNotNull { h4 ->
             val href = h4.parents()
-                .firstNotNullOfOrNull { it.selectFirst("a[href*='/chapitre/']")?.attr("href") }
+                .firstNotNullOfOrNull { it.selectFirst("a[href*='/chapitre/']")?.absUrl("href") }
                 ?.takeIf { it.isNotEmpty() }
                 ?: return@mapNotNull null
 
@@ -186,8 +188,7 @@ class ScanReader : HttpSource() {
     // Images are obfuscated as a JS array of base64-encoded reversed URLs.
     // Decode: Base64.decode(entry).reversed() = real image URL
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val body = response.body.string()
@@ -205,8 +206,7 @@ class ScanReader : HttpSource() {
             .toList()
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ====================== Helpers ======================
 
@@ -219,19 +219,19 @@ class ScanReader : HttpSource() {
 
     private fun extractLazySrc(img: Element?): String? {
         img ?: return null
-        img.attr("data-lazy-src").takeIf { it.isNotEmpty() }?.let { return it }
+        img.absUrl("data-lazy-src").takeIf { it.isNotEmpty() }?.let { return it }
         img.attr("data-lazy-srcset").takeIf { it.isNotEmpty() }?.let { srcset ->
             return srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
         }
-        return img.attr("src").takeIf { it.isNotEmpty() && !it.startsWith("data:") }
+        return img.absUrl("src").takeIf { it.isNotEmpty() }
     }
 
     private fun mangaFromCard(element: Element): SManga {
         val link = element.selectFirst("a")!!
         return SManga.create().apply {
-            setUrlWithoutDomain(link.attr("href"))
+            setUrlWithoutDomain(link.absUrl("href"))
             title = element.selectFirst("h3")!!.text()
-            thumbnail_url = extractCoverFromOnClick(link.attr("onclick"))
+            thumbnail_url = extractCoverFromOnClick(link.absUrl("onclick"))
                 ?: extractLazySrc(element.selectFirst("img"))
         }
     }
@@ -239,11 +239,10 @@ class ScanReader : HttpSource() {
     private fun mangaFromLatestCard(element: Element): SManga {
         val link = element.selectFirst("a[href*='/mangas/']")!!
         return SManga.create().apply {
-            setUrlWithoutDomain(link.attr("href"))
+            setUrlWithoutDomain(link.absUrl("href"))
             title = element.selectFirst("h3")!!.text()
-            thumbnail_url = extractCoverFromOnClick(link.attr("onclick"))
+            thumbnail_url = extractCoverFromOnClick(link.absUrl("onclick"))
                 ?: extractLazySrc(element.selectFirst("img"))
         }
     }
-
 }
