@@ -68,8 +68,7 @@ abstract class ScanReader(
 
     // ====================== Search ======================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/?s=${query.trim()}&post_type=manga", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/?s=${query.trim()}&post_type=manga", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -178,10 +177,16 @@ abstract class ScanReader(
                 ?.takeIf { it.isNotEmpty() }
                 ?: return@mapNotNull null
 
+            val scanlator = h4.parents().firstNotNullOfOrNull { ancestor ->
+                ancestor.selectFirst("a[title*=Team]")?.text()
+                    ?: ancestor.selectFirst("div:containsOwn(Solo)")?.previousElementSibling()?.text()
+            }
+
             SChapter.create().apply {
                 setUrlWithoutDomain(href)
                 name = h4.text()
                 date_upload = dateFormat.tryParse(h4.nextElementSibling()?.ownText()?.trim())
+                this.scanlator = scanlator
             }
         }
     }
@@ -190,8 +195,7 @@ abstract class ScanReader(
     // Images are obfuscated as a JS array of base64-encoded reversed URLs.
     // Decode: Base64.decode(entry).reversed() = real image URL
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val body = response.body.string()
@@ -209,8 +213,7 @@ abstract class ScanReader(
             .toList()
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ====================== Helpers ======================
 
