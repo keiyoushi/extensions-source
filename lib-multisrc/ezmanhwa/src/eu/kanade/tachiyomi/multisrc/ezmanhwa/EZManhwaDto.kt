@@ -16,6 +16,8 @@ internal val EZMANHWA_DATE_FORMAT by lazy {
     }
 }
 
+internal val CHAPTER_PREFIX_REGEX = Regex("^(?i)(chapter|ch\\.?|episode|ep\\.?)\\s*.*")
+
 @Serializable
 data class EZManhwaSeriesListDto(
     val data: List<EZManhwaSeriesDto>,
@@ -92,28 +94,14 @@ data class EZManhwaChapterDto(
 
         val parsedTitle = title?.trim()?.takeIf { it.isNotBlank() }
 
-        val chapterName = buildString {
-            if (numStr.isNotBlank()) {
-                if (parsedTitle == null) {
-                    append("Chapter $numStr")
-                } else if (parsedTitle == numStr) {
-                    append("Chapter $numStr")
-                } else if (
-                    parsedTitle.contains(numStr) &&
-                    parsedTitle.matches(Regex("^(?i)(chapter|ch\\.?|episode|ep\\.?)\\s*.*"))
-                ) {
-                    append(parsedTitle)
-                } else {
-                    append("Chapter $numStr")
-                    if (parsedTitle.startsWith("-") || parsedTitle.startsWith(":")) {
-                        append(" ")
-                    } else {
-                        append(" - ")
-                    }
-                    append(parsedTitle)
-                }
-            } else {
-                append(parsedTitle ?: "Chapter")
+        val chapterName = if (numStr.isBlank()) {
+            parsedTitle ?: "Chapter"
+        } else {
+            when {
+                parsedTitle == null || parsedTitle == numStr -> "Chapter $numStr"
+                isChapterTitle(parsedTitle, numStr) -> parsedTitle
+                parsedTitle.startsWith("-") || parsedTitle.startsWith(":") -> "Chapter $numStr $parsedTitle"
+                else -> "Chapter $numStr - $parsedTitle"
             }
         }
 
@@ -121,6 +109,8 @@ data class EZManhwaChapterDto(
         chapter_number = number?.toFloat() ?: -1f
         date_upload = EZMANHWA_DATE_FORMAT.tryParse(createdAt)
     }
+
+    private fun isChapterTitle(title: String, numStr: String): Boolean = title.contains(numStr) && CHAPTER_PREFIX_REGEX.matches(title)
 }
 
 @Serializable
