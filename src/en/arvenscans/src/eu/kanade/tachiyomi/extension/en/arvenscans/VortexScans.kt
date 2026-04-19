@@ -16,6 +16,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -121,11 +122,11 @@ class VortexScans :
         return "$baseUrl/$SERIES_PATH_SEGMENT/$slug"
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = postRequest(resolvePostId(manga))
+    override fun mangaDetailsRequest(manga: SManga): Request = seriesPageRequest(extractMangaSlug(manga.url))
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val payload = response.parseAs<PostResponseDto>()
-        return payload.post.toSMangaDetailsModel()
+        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        return document.toSMangaDetailsModel()
     }
 
     // ========================= Chapters =========================
@@ -137,17 +138,15 @@ class VortexScans :
         return "$baseUrl/$SERIES_PATH_SEGMENT/${slugs.first}/${slugs.second}"
     }
 
-    override fun chapterListRequest(manga: SManga): Request = postRequest(resolvePostId(manga))
+    override fun chapterListRequest(manga: SManga): Request = seriesPageRequest(extractMangaSlug(manga.url))
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val payload = response.parseAs<PostResponseDto>()
-        val mangaSlug = payload.post.slug
+        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val mangaSlug = document.extractSeriesSlug()
+            ?: response.request.url.pathSegments.getOrNull(1)
+            ?: throw Exception("Unable to resolve series slug")
 
-        return payload.post.chapters
-            .filter { chapter ->
-                showLockedChapters || (chapter.isAccessible != false && chapter.isLocked != true)
-            }
-            .map { it.toSChapterModel(mangaSlug, dateFormat) }
+        return document.parseChapterList(mangaSlug, dateFormat, showLockedChapters)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -162,27 +161,29 @@ class VortexScans :
 
     // ========================= Pages =========================
 
-    override fun pageListRequest(chapter: SChapter): Request = chapterRequest(resolveChapterId(chapter))
+    override fun pageListRequest(chapter: SChapter): Request {
+        val slugs = extractChapterSlugs(chapter.url)
+            ?: throw Exception("Invalid chapter url")
+
+        return chapterPageRequest(slugs.first, slugs.second)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
-        val payload = response.parseAs<ChapterResponseDto>()
-        val chapter = payload.chapter
+        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val images = document.parsePageImages()
 
-        if (chapter.isAccessible == false || chapter.isLocked == true) {
+        if (images.isEmpty()) {
             throw Exception(LOCKED_CHAPTER_MESSAGE)
         }
 
-        val images = chapter.images.sortedBy { it.order ?: Int.MAX_VALUE }
-        if (images.isEmpty()) {
-            throw Exception("No pages found")
-        }
-
-        return images.mapIndexed { index, image ->
-            Page(index = index, imageUrl = image.url)
+        return images.mapIndexed { index, url ->
+            Page(index = index, imageUrl = url)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // ========================= Helpers =========================
 
     private fun queryRequest(
         page: Int,
@@ -211,56 +212,14 @@ class VortexScans :
         return GET(url, apiHeaders)
     }
 
-    private fun postRequest(postId: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            encodedPath(API_POST_PATH)
-            addQueryParameter("postId", postId.toString())
-        }.build()
-
-        return GET(url, apiHeaders)
+    private fun seriesPageRequest(mangaSlug: String): Request {
+        val url = "$baseUrl/$SERIES_PATH_SEGMENT/$mangaSlug"
+        return GET(url, headers)
     }
 
-    private fun chapterRequest(chapterId: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            encodedPath(API_CHAPTER_PATH)
-            addQueryParameter("chapterId", chapterId.toString())
-        }.build()
-
-        return GET(url, apiHeaders)
-    }
-
-    private fun resolvePostId(manga: SManga): Int {
-        manga.url.substringAfter('#', "").toIntOrNull()?.let { return it }
-
-        val slug = extractMangaSlug(manga.url)
-        val summary = findPostBySlug(slug)
-        return summary?.id ?: throw Exception("Unable to resolve series id")
-    }
-
-    private fun resolveChapterId(chapter: SChapter): Int {
-        chapter.url.substringAfter('#', "").toIntOrNull()?.let { return it }
-
-        val slugs = extractChapterSlugs(chapter.url)
-            ?: throw Exception("Unable to resolve chapter id")
-
-        val summary = findPostBySlug(slugs.first)
-            ?: throw Exception("Unable to resolve series id")
-
-        return try {
-            client.newCall(postRequest(summary.id)).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw Exception("Unable to resolve chapter id")
-                }
-
-                val payload = response.parseAs<PostResponseDto>()
-                val chapterDto = payload.post.chapters.firstOrNull { it.slug == slugs.second }
-                    ?: throw Exception("Unable to resolve chapter id")
-
-                chapterDto.id
-            }
-        } catch (_: Exception) {
-            throw Exception("Unable to resolve chapter id")
-        }
+    private fun chapterPageRequest(mangaSlug: String, chapterSlug: String): Request {
+        val url = "$baseUrl/$SERIES_PATH_SEGMENT/$mangaSlug/$chapterSlug"
+        return GET(url, headers)
     }
 
     private fun findPostBySlug(slug: String): PostSummaryDto? {

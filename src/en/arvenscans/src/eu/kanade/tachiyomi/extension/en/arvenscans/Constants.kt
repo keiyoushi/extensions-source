@@ -7,8 +7,6 @@ const val PER_PAGE = 18
 const val SERIES_PATH_SEGMENT = "series"
 
 const val API_QUERY_PATH = "/api/query"
-const val API_POST_PATH = "/api/post"
-const val API_CHAPTER_PATH = "/api/chapter"
 
 const val STATUS_FILTER_KEY = "seriesStatus"
 val STATUS_OPTIONS: Options = listOf(
