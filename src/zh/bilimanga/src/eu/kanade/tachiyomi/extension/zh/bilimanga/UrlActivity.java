@@ -10,21 +10,24 @@ import android.util.Log;
  * so I use Java implementation to ensure the best compatibility.
  */
 public class UrlActivity extends Activity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        try {
-            String path = getIntent() != null && getIntent().getData() != null ? getIntent().getData().getPath() : null;
-            if (path != null && path.matches("/detail/(\\d+)\\.html")) {
-                Intent mainIntent = new Intent("eu.kanade.tachiyomi.SEARCH");
-                mainIntent.putExtra("query", path);
-                mainIntent.putExtra("filter", getPackageName());
-                startActivity(mainIntent);
-            }
-        } catch (Exception e) {
-            Log.v("BiliManga", "UrlActivity: " + e.getMessage());
-        }
-        finish();
-        System.exit(0);
+  @Override
+  protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    try {
+      String path =
+          getIntent() != null && getIntent().getData() != null
+              ? getIntent().getData().getPath()
+              : null;
+      if (path != null && path.matches("/detail/(\\d+)\\.html")) {
+        Intent mainIntent = new Intent("eu.kanade.tachiyomi.SEARCH");
+        mainIntent.putExtra("query", path);
+        mainIntent.putExtra("filter", getPackageName());
+        startActivity(mainIntent);
+      }
+    } catch (Exception e) {
+      Log.v("BiliManga", "UrlActivity: " + e.getMessage());
     }
+    finish();
+    System.exit(0);
+  }
 }
