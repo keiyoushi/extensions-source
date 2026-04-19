@@ -30,7 +30,7 @@ class BiliManga :
 
     override val lang = "zh"
 
-    override val name = "Bilimanga.net"
+    override val name = "嗶哩漫畫"
 
     override val supportsLatest = true
 
@@ -126,6 +126,7 @@ class BiliManga :
 
     // https://www.bilimanga.net/filter/lastupdate_1_0_0_0_0_0_0_1_0.html
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.startsWith("/detail")) return GET(baseUrl + query, headers)
         val url = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
             url.addPathSegment("search").addPathSegment("${query}_$page.html")
