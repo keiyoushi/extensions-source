@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.anzmanga
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -68,7 +70,7 @@ class AnzManga : HttpSource() {
 
     // =============================== Search ===============================
     override fun getFilterList() = FilterList(
-        eu.kanade.tachiyomi.source.model.Filter.Header("La búsqueda de texto ignora los filtros."),
+        Filter.Header("La búsqueda de texto ignora los filtros."),
         CategoryFilter(),
         SortFilter(),
     )
@@ -87,15 +89,13 @@ class AnzManga : HttpSource() {
         var sortBy = "views"
         var asc = "false"
 
-        filters.forEach { filter ->
-            when (filter) {
-                is CategoryFilter -> url.addQueryParameter("cat", filter.toUriPart())
-                is SortFilter -> {
-                    sortBy = filter.toUriPart()
-                    asc = filter.isAscending().toString()
-                }
-                else -> {}
-            }
+        filters.firstInstanceOrNull<CategoryFilter>()?.let {
+            url.addQueryParameter("cat", it.toUriPart())
+        }
+
+        filters.firstInstanceOrNull<SortFilter>()?.let {
+            sortBy = it.toUriPart()
+            asc = it.isAscending().toString()
         }
 
         url.addQueryParameter("alpha", "")
@@ -111,13 +111,7 @@ class AnzManga : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.pathSegments.last() == "search") {
             val dto = response.parseAs<SearchResponseDto>()
-            val mangas = dto.suggestions.map {
-                SManga.create().apply {
-                    title = it.value
-                    url = "/manga/${it.data}"
-                    thumbnail_url = "$baseUrl/uploads/manga/${it.data}/cover/cover_250x350.jpg"
-                }
-            }
+            val mangas = dto.suggestions.map { it.toSManga(baseUrl) }
             // Auto-complete API does not provide pagination info
             return MangasPage(mangas, false)
         }
