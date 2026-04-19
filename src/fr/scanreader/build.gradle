@@ -1,7 +1,9 @@
 ext {
     extName = 'Scan Reader'
     extClass = '.ScanReader'
-    extVersionCode = 1
+    themePkg = 'scanreader'
+    baseUrl = 'https://scanreader.net'
+    overrideVersionCode = 0
     isNsfw = false
 }
 
