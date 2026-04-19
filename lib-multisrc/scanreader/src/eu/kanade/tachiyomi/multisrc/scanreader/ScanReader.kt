@@ -140,7 +140,7 @@ abstract class ScanReader(
             if (mangaId.isBlank() || nonce.isBlank()) return@fromCallable emptyList()
 
             val ajaxHeaders = headersBuilder()
-                .set("Referer", baseUrl + manga.url)
+                .set("Referer", (baseUrl + manga.url).toHttpUrl().toString())
                 .add("X-Requested-With", "XMLHttpRequest")
                 .build()
 
