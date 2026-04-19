@@ -27,6 +27,7 @@ class MangaDetailsDto(
     val tags: List<TagDto> = emptyList(),
     val linkedAuthors: List<LinkedPersonDto> = emptyList(),
     val linkedArtists: List<LinkedPersonDto> = emptyList(),
+    val chapters: List<ChapterDto> = emptyList(),
 )
 
 @Serializable
@@ -38,14 +39,6 @@ class TagDto(
 @Serializable
 class LinkedPersonDto(
     val name: String,
-)
-
-@Serializable
-class ChapterListDto(
-    val data: List<ChapterDto>,
-    val total: Int = 0,
-    val page: Int = 1,
-    val totalPages: Int = 1,
 )
 
 @Serializable

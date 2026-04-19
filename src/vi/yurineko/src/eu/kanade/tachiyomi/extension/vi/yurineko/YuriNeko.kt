@@ -20,6 +20,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.Instant
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 class YuriNeko : HttpSource() {
@@ -29,6 +30,7 @@ class YuriNeko : HttpSource() {
     override val supportsLatest = true
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
     private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"
+    private val webApiUrl = "$baseUrl/api/v1"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
@@ -154,27 +156,13 @@ class YuriNeko : HttpSource() {
     }
 
     private fun fetchAllChapters(mangaId: String): List<ChapterDto> {
-        val chapters = mutableListOf<ChapterDto>()
-        var page = 1
-        var totalPages = 1
-
-        while (page <= totalPages) {
-            val url = "$apiUrl/chapters/$mangaId".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", CHAPTER_LIMIT.toString())
-                .addQueryParameter("sort", "desc")
-                .build()
-
-            val payload = client.newCall(GET(url, headers)).execute().use { chapterResponse ->
-                chapterResponse.parseAs<ChapterListDto>()
-            }
-
-            chapters += payload.data
-            totalPages = payload.totalPages.coerceAtLeast(1)
-            page += 1
+        val chapters = client.newCall(GET("$webApiUrl/mangas/$mangaId", headers)).execute().use { response ->
+            response.parseAs<MangaDetailsDto>().chapters
         }
 
-        return chapters
+        return chapters.sortedByDescending { chapter ->
+            parseChapterDate(chapter.publishedAt ?: chapter.createdAt)
+        }
     }
 
     private fun chapterName(chapter: ChapterDto): String {
@@ -214,8 +202,8 @@ class YuriNeko : HttpSource() {
     private fun parsePageUrlsFromChapterData(document: Document): List<String> {
         val scriptText = document.select("script").joinToString("\n") { it.data() }
 
-        return CHAPTER_IMAGE_REGEX.findAll(scriptText)
-            .map { it.groupValues[1] }
+        return CHAPTER_PAGE_URL_REGEX.findAll(scriptText)
+            .map { it.value }
             .mapNotNull(::normalizeChapterImageUrl)
             .distinct()
             .toList()
@@ -262,15 +250,36 @@ class YuriNeko : HttpSource() {
 
     private fun normalizeChapterImageUrl(value: String?): String? {
         val raw = value?.takeIf(String::isNotBlank) ?: return null
+        val unescaped = raw
+            .trimEnd('\\')
+            .replace("\\u0026", "&")
+            .replace("\\/", "/")
+        val resolved = decodeApiImageUrl(unescaped) ?: unescaped
+
         return when {
-            raw.startsWith("http://") || raw.startsWith("https://") -> {
-                raw.takeIf { CHAPTER_IMAGE_PATH_REGEX.containsMatchIn(it) }
+            resolved.startsWith("http://") || resolved.startsWith("https://") -> {
+                resolved.takeIf { CHAPTER_IMAGE_PATH_REGEX.containsMatchIn(it) }
             }
-            raw.startsWith("/chapters/") || raw.startsWith("chapters/") -> {
-                cdnImageUrl(raw)
+            resolved.startsWith("/chapters/") || resolved.startsWith("chapters/") -> {
+                cdnImageUrl(resolved)
             }
             else -> null
         }
+    }
+
+    private fun decodeApiImageUrl(rawValue: String): String? {
+        val value = rawValue.takeIf { it.contains("/api/img") } ?: return null
+        val url = value.toHttpUrlOrNull()
+            ?: "$baseUrl${value.takeIf { it.startsWith("/") } ?: "/$value"}".toHttpUrlOrNull()
+            ?: return null
+        val encoded = url.queryParameter("d")?.takeIf(String::isNotBlank) ?: return null
+        val decoded = runCatching {
+            val normalized = encoded.replace('-', '+').replace('_', '/')
+            val padded = normalized.padEnd((normalized.length + 3) / 4 * 4, '=')
+            String(Base64.getDecoder().decode(padded))
+        }.getOrNull() ?: return null
+
+        return decoded.substringBefore('|')
     }
 
     private fun HttpUrl.mangaId(): String {
@@ -293,10 +302,9 @@ class YuriNeko : HttpSource() {
         private const val POPULAR_LIMIT = 10
         private const val LATEST_LIMIT = 16
         private const val SEARCH_LIMIT = 20
-        private const val CHAPTER_LIMIT = 100
 
         private val UUID_REGEX = Regex("""[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
-        private val CHAPTER_IMAGE_REGEX = Regex("""\"url\":\"(chapters/[^\"]+)\"""")
+        private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\\\s]+|/?chapters/[^"'\\\s]+)""")
         private val CHAPTER_IMAGE_PATH_REGEX = Regex("""(?:^|/)chapters/""")
     }
 }
