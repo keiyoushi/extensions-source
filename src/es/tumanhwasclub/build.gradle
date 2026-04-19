@@ -1,6 +1,6 @@
 ext {
     extName = 'ManhwasMe'
-    extClass = '.TuManhwasClub'
+    extClass = '.ManhwasMe'
     extVersionCode = 3
     isNsfw = true
 }
