@@ -209,7 +209,7 @@ abstract class Madara(
                         title = it.ownText()
                     } ?: return@mapNotNull null
                     manga.selectFirst(".widget-thumbnail img")?.let {
-                        thumbnail_url = imageFromElement(it)
+                        thumbnail_url = processThumbnail(imageFromElement(it), true)
                     }
                 }
             }
