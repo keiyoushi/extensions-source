@@ -10,9 +10,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
 import okhttp3.Request
@@ -20,9 +20,11 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+@Serializable
+private data class AjaxResponse(val data: String? = null)
 
 class ScanReader : HttpSource() {
 
@@ -31,7 +33,7 @@ class ScanReader : HttpSource() {
     override val lang = "fr"
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    private val dateFormat by lazy { SimpleDateFormat("dd/MM/yyyy", Locale.FRENCH) }
 
     // ====================== Headers ======================
 
@@ -99,9 +101,9 @@ class ScanReader : HttpSource() {
                 val valueEl = row.selectFirst("div:last-child") ?: return@forEach
                 when {
                     label.contains("Auteur", ignoreCase = true) ->
-                        author = valueEl.text().trim()
+                        author = valueEl.text()
                     label.contains("Genres", ignoreCase = true) ->
-                        genre = valueEl.select("span").joinToString(", ") { it.text().trim() }
+                        genre = valueEl.select("span").joinToString(", ") { it.text() }
                     label.contains("Statut", ignoreCase = true) -> {
                         val statusText = valueEl.text()
                         status = when {
@@ -131,7 +133,7 @@ class ScanReader : HttpSource() {
             val mangaId = container.attr("data-manga-id")
             val nonce = container.attr("data-nonce")
 
-            if (mangaId.isBlank() || nonce.isBlank()) return@fromCallable emptyList<SChapter>()
+            if (mangaId.isBlank() || nonce.isBlank()) return@fromCallable emptyList()
 
             val ajaxHeaders = headersBuilder()
                 .set("Referer", baseUrl + manga.url)
@@ -157,11 +159,8 @@ class ScanReader : HttpSource() {
         val bodyStr = response.body.string()
 
         // admin-ajax.php may return raw HTML or a JSON envelope: {"success":true,"data":"<html>"}
-        val html = try {
-            json.parseToJsonElement(bodyStr).jsonObject["data"]?.jsonPrimitive?.content ?: bodyStr
-        } catch (_: Exception) {
-            bodyStr
-        }
+        val html = runCatching { bodyStr.parseAs<AjaxResponse>().data }
+            .getOrNull() ?: bodyStr
 
         if (html.trim() == "0" || html.trim() == "-1") return emptyList()
 
@@ -177,8 +176,8 @@ class ScanReader : HttpSource() {
 
             SChapter.create().apply {
                 setUrlWithoutDomain(href)
-                name = h4.text().trim()
-                date_upload = parseChapterDate(h4.nextElementSibling()?.ownText()?.trim())
+                name = h4.text()
+                date_upload = dateFormat.tryParse(h4.nextElementSibling()?.ownText()?.trim())
             }
         }
     }
@@ -231,7 +230,7 @@ class ScanReader : HttpSource() {
         val link = element.selectFirst("a")!!
         return SManga.create().apply {
             setUrlWithoutDomain(link.attr("href"))
-            title = element.selectFirst("h3")!!.text().trim()
+            title = element.selectFirst("h3")!!.text()
             thumbnail_url = extractCoverFromOnClick(link.attr("onclick"))
                 ?: extractLazySrc(element.selectFirst("img"))
         }
@@ -241,20 +240,10 @@ class ScanReader : HttpSource() {
         val link = element.selectFirst("a[href*='/mangas/']")!!
         return SManga.create().apply {
             setUrlWithoutDomain(link.attr("href"))
-            title = element.selectFirst("h3")!!.text().trim()
+            title = element.selectFirst("h3")!!.text()
             thumbnail_url = extractCoverFromOnClick(link.attr("onclick"))
                 ?: extractLazySrc(element.selectFirst("img"))
         }
     }
 
-    private val dateFormat by lazy { SimpleDateFormat("dd/MM/yyyy", Locale.FRENCH) }
-
-    private fun parseChapterDate(dateStr: String?): Long {
-        if (dateStr.isNullOrBlank()) return 0L
-        return try {
-            dateFormat.parse(dateStr.trim())?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
-    }
 }
