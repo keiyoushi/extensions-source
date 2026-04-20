@@ -33,6 +33,13 @@ class ManhwasMe : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    // Overrides to fix legacy TuManhwas URLs that used /manhwa/ instead of /manga/
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url.replace("/manhwa/", "/manga/"), headers)
+
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url.replace("/manhwa/", "/manga/"), headers)
+
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url.replace("/manhwa/", "/manga/"), headers)
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?sort=-views&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
