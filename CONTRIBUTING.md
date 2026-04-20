@@ -61,8 +61,7 @@ that existing contributors will not actively teach these to you.
 Some alternative steps can be followed to skip unrelated sources, which will make it faster to pull,
 navigate and build. This will also reduce disk usage and network traffic.
 
-**These steps are only needed when the repo is huge and contains a lot of sources. If the repo is
-small, just do a normal full clone instead.**
+**Due to the large size of this repository, it is highly recommended to do a partial clone to save network traffic and disk space.**
 
 <details><summary>Steps</summary>
 
