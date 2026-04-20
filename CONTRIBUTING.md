@@ -552,8 +552,6 @@ either `SourceFactory` or extend one of the `Source` implementations: `HttpSourc
 
 ### OkHttp and Network
 
-* **Extracting tokens via Interceptors:** If you need to grab a CSRF token or nonce from a website's HTML to use in an API request, do not make a separate `GET` request just to find it. Instead, capture it in an `Interceptor` during the normal browsing flow using `response.peekBody(Long.MAX_VALUE).string()`. Peeking ensures the body isn't consumed and can still be parsed downstream.
-
 * **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually.
 
 * **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings.
