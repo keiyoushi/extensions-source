@@ -301,7 +301,7 @@ For example:
 
 ```groovy
 dependencies {
-    implementation(project(':lib-dataimage'))
+    implementation(project(':lib:dataimage'))
 }
 ```
 
