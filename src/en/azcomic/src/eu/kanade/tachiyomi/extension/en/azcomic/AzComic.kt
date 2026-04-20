@@ -16,6 +16,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -41,9 +42,9 @@ class AzComic : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         val series = getSeries().sortedByDescending { it.updatedAt }
-        return Observable.just(series.toMangasPage(page))
+        series.toMangasPage(page)
     }
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -56,7 +57,7 @@ class AzComic : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
         val series = applyFilters(getSeries(), query, filters)
         val hasFilters = query.isNotBlank() || filters.hasActiveFilters()
         val sorted = if (hasFilters) {
@@ -65,7 +66,7 @@ class AzComic : HttpSource() {
             series.sortedByDescending { it.updatedAt }
         }
 
-        return Observable.just(sorted.toMangasPage(page))
+        sorted.toMangasPage(page)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
@@ -86,18 +87,18 @@ class AzComic : HttpSource() {
         )
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.fromCallable {
         val slug = manga.url.substringAfterLast('/')
         val details = getSeries().firstOrNull { it.slug == slug }?.toSManga() ?: manga
-        return Observable.just(details.apply { initialized = true })
+        details.apply { initialized = true }
     }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val slug = manga.url.substringAfterLast('/')
         val chapters = getSeries().firstOrNull { it.slug == slug }?.chapters.orEmpty()
-        return Observable.just(chapters.map { it.toSChapter() })
+        chapters.map { it.toSChapter() }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
@@ -128,7 +129,11 @@ class AzComic : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.substringAfterLast('/')
-        val series = getSeries().firstOrNull { it.slug == slug }
+        val series = try {
+            getSeries().firstOrNull { it.slug == slug }
+        } catch (_: Exception) {
+            null
+        }
         val target = series?.latestUrl ?: manga.url
         return baseUrl + target
     }
@@ -152,13 +157,24 @@ class AzComic : HttpSource() {
             isPrefetchingSeries = true
         }
         Thread {
-            getSeries()
+            try {
+                getSeries()
+            } catch (_: Exception) {
+                // Ignore prefetch errors; app will try again gracefully on fetch routes.
+            }
         }.start()
     }
 
     private fun fetchComics(): List<ComicEntry> {
         val request = GET("$baseUrl/get_comic.php", headers)
-        val payload = client.newCall(request).execute().parseAs<List<ComicEntry>>()
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            response.close()
+            throw IOException("Failed to fetch comics: HTTP ${response.code}")
+        }
+
+        val payload = response.parseAs<List<ComicEntry>>()
         return payload.filter { it.title.isNotBlank() && it.cover.isNotBlank() && it.url.isNotBlank() }
     }
 
