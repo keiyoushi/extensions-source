@@ -278,20 +278,15 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 
 | Module | Description |
 |---|---|
-| [`lib-clipstudioreader`](https://github.com/keiyoushi/extensions-source/tree/main/lib/clipstudioreader) | Clip Studio Reader viewer protocol (XML/CGI and EPUB paths) |
 | [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain |
 | [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes) | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation |
-| [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage) | Handles `data:image/...;base64,...` URIs as page image sources |
-| [`lib-i18n`](https://github.com/keiyoushi/extensions-source/tree/main/lib/i18n) | Loads `.properties` message files for source localization |
-| [`lib-lzstring`](https://github.com/keiyoushi/extensions-source/tree/main/lib/lzstring) | Decompresses strings encoded with the lz-string JavaScript library |
-| [`lib-publus`](https://github.com/keiyoushi/extensions-source/tree/main/lib/publus) | Publus digital manga reader protocol |
 | [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua) | Fetches and rotates real-world User-Agent strings |
-| [`lib-seedrandom`](https://github.com/keiyoushi/extensions-source/tree/main/lib/seedrandom) | Seeded PRNG matching JavaScript's `seedrandom` library |
-| [`lib-speedbinb`](https://github.com/keiyoushi/extensions-source/tree/main/lib/speedbinb) | SpeedBinb manga viewer protocol and image descrambling |
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony) | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox) |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor) | Renders plain text or HTML as a PNG image page |
 | [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker) | Unpacks Dean Edwards–packed JavaScript; substring extraction helpers |
-| [`lib-zipinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/zipinterceptor) | Extracts and stitches images delivered as ZIP archives |
+
+> [!NOTE]
+> The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their specific READMEs.
 
 ### Adding a lib dependency
 
