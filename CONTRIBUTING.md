@@ -293,7 +293,7 @@ Declare the module in your extension's `build.gradle`:
 
 ```groovy
 dependencies {
-    implementation(project(':lib-<name>'))
+    implementation(project(':lib:<name>'))
 }
 ```
 
