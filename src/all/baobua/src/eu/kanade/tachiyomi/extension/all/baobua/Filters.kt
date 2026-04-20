@@ -3,12 +3,12 @@ package eu.kanade.tachiyomi.extension.all.baobua
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-data class SourceCategory(private val name: String, var cat: String) {
-    override fun toString() = this.name
+class SourceCategory(val name: String, val cat: String) {
+    override fun toString() = name
 
     fun buildUrl(baseUrl: String, page: Int): String = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment("category")
-        .addPathSegment(this.cat)
+        .addPathSegment(cat)
         .addQueryParameter("page", page.toString())
         .build()
         .toString()
@@ -23,7 +23,6 @@ class SourceCategorySelector(
         get() = if (state > 0) values[state] else null
 
     companion object {
-
         fun create(): SourceCategorySelector {
             val options = listOf(
                 SourceCategory("", ""),
