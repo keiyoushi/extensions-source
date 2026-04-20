@@ -21,19 +21,19 @@ or fixing it directly by submitting a Pull Request.
    4. [Extension call flow](#extension-call-flow)
    5. [Misc notes](#misc-notes)
    6. [Advanced extension features](#advanced-extension-features)
-5. [Multi-source themes](#multi-source-themes)
+4. [Multi-source themes](#multi-source-themes)
    1. [The directory structure](#the-directory-structure)
    2. [Development workflow](#development-workflow)
    3. [Scaffolding overrides](#scaffolding-overrides)
    4. [Additional Notes](#additional-notes)
-6. [Running](#running)
-7. [Debugging](#debugging)
+5. [Running](#running)
+6. [Debugging](#debugging)
    1. [Android Debugger](#android-debugger)
    2. [Logs](#logs)
    3. [Inspecting network calls](#inspecting-network-calls)
    4. [Using external network inspecting tools](#using-external-network-inspecting-tools)
-8. [Building](#building)
-9. [Submitting the changes](#submitting-the-changes)
+7. [Building](#building)
+8. [Submitting the changes](#submitting-the-changes)
    1. [Pull Request checklist](#pull-request-checklist)
 
 ## Prerequisites
@@ -744,9 +744,9 @@ To do this, you need two files:
 </manifest>
 ```
 
-The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the “path” of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
+The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the "path" of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
 
-Next, you have the `<data android:scheme=“https” android:host=“host” android:pathPattern=“/..*” />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://developer.android.com/guide/topics/manifest/data-element). 
+Next, you have the `<data android:scheme="https" android:host="host" android:pathPattern="/..*" />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://developer.android.com/guide/topics/manifest/data-element).
 
 Now, as for `UrlActivity`, you can just use the example below.
 
