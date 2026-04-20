@@ -854,11 +854,29 @@ The `id` also needs to be explicitly set to the old value if you're changing the
 > a new `id` will be generated and users will be forced to migrate.
 
 ## Multi-source themes
+
 The `lib-multisrc` directory houses source code that is useful in situations where multiple source
 sites use the same site generator tool (usually a CMS) for bootstrapping their website and this makes
 them similar enough to prompt code reuse through inheritance/composition; which from now on we will
 use the general **theme** term to refer to.
 
+We no longer use code generation scripts for multisrc. Instead, themes are distributed as shared
+Gradle libraries within the `lib-multisrc` folder.
+
+To create a source based on a theme, you apply the theme library via the `themePkg` property in
+your extension's `build.gradle` and inherit from the theme's base class in your Kotlin source.
+For example:
+
+```groovy
+ext {
+    extName = 'My Multisrc Extension'
+    extClass = '.MyMultisrcExtension'
+    extVersionCode = 1
+    themePkg = 'madara'
+}
+
+apply from: "$rootDir/common.gradle"
+```
 This section needs to be rewritten. Come to the `#programming` channel in our Discord server for help.
 
 <details>
