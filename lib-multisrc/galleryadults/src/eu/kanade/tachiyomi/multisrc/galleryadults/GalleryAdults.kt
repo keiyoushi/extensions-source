@@ -27,6 +27,7 @@ import kotlinx.serialization.json.jsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -44,6 +45,8 @@ abstract class GalleryAdults(
     protected val simpleDateFormat: SimpleDateFormat? = null,
 ) : ParsedHttpSource(),
     ConfigurableSource {
+
+    override val client: OkHttpClient = network.cloudflareClient
 
     protected open val xhrHeaders = headers.newBuilder()
         .add("X-Requested-With", "XMLHttpRequest")
