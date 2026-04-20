@@ -2,7 +2,7 @@ ext {
     extName = 'InsanosScan'
     extClass = '.InsanosScan'
     extVersionCode = 31
-    containsNsfw = false
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
