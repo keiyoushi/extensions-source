@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
-import android.net.Uri
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,18 +8,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.encodeToByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import java.io.ByteArrayOutputStream
-import java.util.zip.Inflater
 
 class JNovel : HttpSource() {
     override val name = "J-Novel"
@@ -30,9 +19,7 @@ class JNovel : HttpSource() {
     override val supportsLatest = false
 
     private val viewerUrl = "https://labs.j-novel.club/embed/v2"
-
-    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
-    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody = ProtoBuf.encodeToByteArray(this).toRequestBody("application/protobuf".toMediaType())
+    private val decoder = Decoder()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -48,19 +35,17 @@ class JNovel : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val seriesElements = document.select("div.fkd1bc")
-
-        val mangas = seriesElements.mapNotNull {
+        val mangas = document.select("div.TitleListEntry-module__CVV_2G__entry").mapNotNull {
+            val link = it.selectFirst("a[href^=/series/]") ?: return@mapNotNull null
             SManga.create().apply {
                 title = it.selectFirst("h2")!!.text()
-                url = it.selectFirst("a[href^='/series/']")!!.attr("href")
+                setUrlWithoutDomain(link.absUrl("href"))
                 thumbnail_url = it.selectFirst("img")?.absUrl("src")
             }
         }
 
         val nextButton = document.selectFirst("div.button:has(div.text:contains(Next))")
         val hasNextPage = nextButton != null && !nextButton.classNames().contains("disabled")
-
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -100,39 +85,49 @@ class JNovel : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-        val volumeElements = document.select("div.f1vdb00x")
-        volumeElements.forEach {
-            val volName = it.selectFirst("h2 a")?.text() ?: "Volume"
-            val partLinks = it.select("div.f12k8ro3 a")
+        val chapters = document.select("a[class*=TitleVolumeProgress-module__][class*=__part][href^=/read/]").mapNotNull {
+            val href = it.absUrl("href")
+            if (href.isBlank()) return@mapNotNull null
 
-            partLinks.forEach { link ->
-                val url = link.attr("href")
-                val partName = link.text()
-                val title = "$volName $partName"
+            val chapterName = it.text()
+                .replace(Regex("\\s+"), " ")
+                .trim()
 
-                chapters.add(
-                    SChapter.create().apply {
-                        name = title
-                        this.url = url
-                    },
-                )
+            SChapter.create().apply {
+                setUrlWithoutDomain(href)
+                name = chapterName
             }
         }
-        return chapters.reversed().distinctBy { it.url }
+            .distinctBy { it.url }
+            .reversed()
+        return chapters
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val embedUrl = document.selectFirst("iframe[src^='$viewerUrl']")!!.absUrl("src")
-        val embedUrlRequest = GET(embedUrl, headers)
-        val embedUrlResponse = client.newCall(embedUrlRequest).execute()
-        val embedDocument = embedUrlResponse.asJsoup()
+        val embedDocument = client.newCall(GET(embedUrl, headers)).execute().asJsoup()
         val manifestUrlStr = embedDocument.body().absUrl("data-e4p-manifest")
-        val manifestRequest = GET(manifestUrlStr, headers)
-        val manifestResponse = client.newCall(manifestRequest).execute()
-        val ticket = manifestResponse.parseAsProto<E4PQSTicket>()
-        TODO()
+        val manifestUrl = manifestUrlStr.toHttpUrl()
+        val manifestResponse = client.newCall(GET(manifestUrlStr, headers)).execute()
+        val ticketBytes = manifestResponse.use { it.body.bytes() }
+        val pub = decoder.decodeManifest(ticketBytes)
+        val manifestQueryNames = manifestUrl.queryParameterNames
+
+        return pub.spine.mapIndexedNotNull { index, link ->
+            val h2048 = link.variants.firstOrNull {
+                it.link.contains("h2048") && it.image != null
+            } ?: return@mapIndexedNotNull null
+
+            val resolved = manifestUrl.resolve(h2048.link) ?: return@mapIndexedNotNull null
+            val withAuth = resolved.newBuilder().apply {
+                manifestQueryNames.forEach { name ->
+                    manifestUrl.queryParameter(name)?.let { setQueryParameter(name, it) }
+                }
+            }.build()
+
+            Page(index, imageUrl = withAuth.toString())
+        }
     }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
