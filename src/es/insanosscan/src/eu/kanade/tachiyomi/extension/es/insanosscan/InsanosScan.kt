@@ -14,9 +14,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
@@ -36,6 +39,7 @@ class InsanosScan :
     override val baseUrl = "https://insanoslibrary.com"
     override val lang = "es"
     override val supportsLatest = true
+    override val versionId = 2
 
     override val client = network.cloudflareClient
 
@@ -70,7 +74,7 @@ class InsanosScan :
             ?.removePrefix("data:text/javascript;base64,")
             ?: return@lazy ""
         val js = String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
-        Regex(""""nonce"\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: ""
+        NONCE_REGEX.find(js)?.groupValues?.get(1) ?: ""
     }
 
     // ========================= Popular =========================
@@ -82,9 +86,9 @@ class InsanosScan :
         val mangas = document.select("article.catalog-card").map { element ->
             SManga.create().apply {
                 val link = element.selectFirst("a.catalog-card__link")!!
-                setUrlWithoutDomain(link.attr("href"))
+                setUrlWithoutDomain(link.absUrl("href"))
                 title = element.selectFirst("h2.catalog-card__title")!!.text()
-                thumbnail_url = element.selectFirst("img.catalog-card__cover")?.attr("src")
+                thumbnail_url = element.selectFirst("img.catalog-card__cover")?.absUrl("src")
             }
         }
         val hasNextPage = document.selectFirst("div.catalog-pagination a.page-numbers.next") != null
@@ -109,9 +113,10 @@ class InsanosScan :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val root = json.parseToJsonElement(response.body.string()).jsonObject
-        val data = root["data"]?.jsonObject?.entries ?: return MangasPage(emptyList(), false)
-        val mangas = data.map { (_, element) ->
+        val root = response.parseAs<JsonObject>()
+        val data = root["data"]?.jsonArray ?: return MangasPage(emptyList(), false)
+
+        val mangas = data.map { element ->
             val obj = element.jsonObject
             SManga.create().apply {
                 setUrlWithoutDomain(obj["url"]!!.jsonPrimitive.content)
@@ -119,6 +124,7 @@ class InsanosScan :
                 thumbnail_url = obj["cover"]?.jsonPrimitive?.content?.ifEmpty { null }
             }
         }
+
         return MangasPage(mangas, false)
     }
 
@@ -130,17 +136,17 @@ class InsanosScan :
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1.series-main-title")!!.text()
-            thumbnail_url = document.selectFirst("img.series-cover-img")?.attr("src")
+            thumbnail_url = document.selectFirst("img.series-cover-img")?.absUrl("src")
             description = document.selectFirst("div.synopsis-content")?.text()
             status = when (
-                document.selectFirst("span.data-badge--status")?.text()?.trim()?.lowercase()
+                document.selectFirst("span.data-badge--status")?.text()?.lowercase()
             ) {
                 "en emisión" -> SManga.ONGOING
                 "finalizado" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
             genre = document.select("td.genres-cell a.genre-pill")
-                .joinToString { it.text().trim() }
+                .joinToString { it.text() }
         }
     }
 
@@ -161,7 +167,7 @@ class InsanosScan :
             if (!showPaidChapters && href in lockedPaths) return@mapNotNull null
 
             SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.absUrl("href"))
                 name = buildString {
                     append(
                         element.selectFirst("span.chapter-row__num")?.text()
@@ -183,8 +189,7 @@ class InsanosScan :
             script.data().contains("var locked")
         }?.data() ?: return emptySet()
 
-        val raw = Regex("""var locked\s*=\s*(\{[^;]+\});""")
-            .find(scriptBody)?.groupValues?.get(1) ?: return emptySet()
+        val raw = LOCKED_REGEX.find(scriptBody)?.groupValues?.get(1) ?: return emptySet()
 
         return runCatching {
             json.parseToJsonElement(raw).jsonObject
@@ -203,11 +208,11 @@ class InsanosScan :
         val document = response.asJsoup()
         return document.select("div.reader-pages ~ div img, div.reader-pages + div img")
             .mapIndexed { index, img ->
-                Page(index, "", img.attr("src").ifEmpty { img.attr("data-src") })
+                Page(index, "", img.absUrl("src").ifEmpty { img.absUrl("data-src") })
             }
             .ifEmpty {
                 document.select("body.reader-body img[src*='adar_manga']")
-                    .mapIndexed { index, img -> Page(index, "", img.attr("src")) }
+                    .mapIndexed { index, img -> Page(index, "", img.absUrl("src")) }
             }
     }
 
@@ -215,5 +220,8 @@ class InsanosScan :
 
     companion object {
         private const val PREF_SHOW_PAID = "show_paid_chapters"
+
+        private val NONCE_REGEX = Regex(""""nonce"\s*:\s*"([^"]+)"""")
+        private val LOCKED_REGEX = Regex("""var locked\s*=\s*(\{[^;]+\});""")
     }
 }
