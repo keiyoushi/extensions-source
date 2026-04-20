@@ -59,13 +59,13 @@ class Seikowo : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/".toHttpUrl().newBuilder()
-            .addQueryParameter("tachiyomi_page", page.toString())
+            .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val requestedPage = response.request.url.queryParameter("tachiyomi_page")?.toIntOrNull() ?: 1
+        val requestedPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
         if (requestedPage > 1) {
             response.close()
             return MangasPage(emptyList(), false)
@@ -144,12 +144,12 @@ class Seikowo : HttpSource() {
         val url = feedUrlBuilder()
             .addQueryParameter("max-results", "1")
             .addQueryParameter("start-index", "1")
-            .addQueryParameter("tachiyomi_page", page.toString())
-            .addQueryParameter("tachiyomi_query", query)
-            .addQueryParameter("tachiyomi_sort", sort)
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("keyword", query)
+            .addQueryParameter("sort", sort)
             .apply {
-                status?.let { addQueryParameter("tachiyomi_status", it) }
-                genre?.let { addQueryParameter("tachiyomi_genre", it) }
+                status?.let { addQueryParameter("status", it) }
+                genre?.let { addQueryParameter("genre", it) }
             }
             .build()
 
@@ -158,11 +158,11 @@ class Seikowo : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val requestUrl = response.request.url
-        val page = requestUrl.queryParameter("tachiyomi_page")?.toIntOrNull() ?: 1
-        val query = requestUrl.queryParameter("tachiyomi_query").orEmpty()
-        val status = requestUrl.queryParameter("tachiyomi_status")
-        val sort = requestUrl.queryParameter("tachiyomi_sort") ?: "updated"
-        val genre = requestUrl.queryParameter("tachiyomi_genre")
+        val page = requestUrl.queryParameter("page")?.toIntOrNull() ?: 1
+        val query = requestUrl.queryParameter("keyword").orEmpty()
+        val status = requestUrl.queryParameter("status")
+        val sort = requestUrl.queryParameter("sort") ?: "updated"
+        val genre = requestUrl.queryParameter("genre")
 
         response.close()
 
