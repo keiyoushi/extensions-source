@@ -2,8 +2,8 @@ ext {
     extName = 'Ikiru'
     extClass = '.Ikiru'
     themePkg = 'natsuid'
-    baseUrl = 'https://02.ikiru.wtf'
-    overrideVersionCode = 44
+    baseUrl = 'https://03.ikiru.wtf'
+    overrideVersionCode = 45
     isNsfw = false
 }
 
