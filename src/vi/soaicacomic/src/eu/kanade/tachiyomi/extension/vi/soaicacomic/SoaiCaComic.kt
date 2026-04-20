@@ -108,7 +108,7 @@ class SoaiCaComic : HttpSource() {
         val filterPath = selectedFilterPath(filters)
         if (filterPath != null) {
             val url = "$baseUrl/$filterPath/".toHttpUrl().newBuilder()
-                .addQueryParameter("tachiyomi-page", page.toString())
+                .addQueryParameter("page", page.toString())
                 .build()
             return GET(url, headers)
         }
@@ -123,7 +123,7 @@ class SoaiCaComic : HttpSource() {
         }
 
         val document = response.asJsoup()
-        val archivePage = response.request.url.queryParameter("tachiyomi-page")
+        val archivePage = response.request.url.queryParameter("page")
             ?.toIntOrNull()
 
         if (archivePage != null) {
