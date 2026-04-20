@@ -27,8 +27,17 @@ class KamiComic : HttpSource() {
         .rateLimit(3)
         .build()
 
+    // Strip "wv" from User-Agent so Google login works in this source.
+    // Google deny login when User-Agent contains the WebView token.
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .apply {
+            build()["user-agent"]?.let { userAgent ->
+                set("user-agent", removeWebViewToken(userAgent))
+            }
+        }
+
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
     // ============================== Popular ===============================
 
@@ -185,11 +194,15 @@ class KamiComic : HttpSource() {
     }
 
     private fun parseChapters(document: Document): List<SChapter> = document.select(".chapter-list a.uk-link-toggle").map { element ->
+        val rawName = element.selectFirst("h3")?.text()?.trim()
+            ?: element.text().trim()
+        val chapterName = CHAPTER_NAME_REGEX.find(rawName)?.value ?: rawName
+        val isLocked = element.selectFirst("[uk-icon=\"icon: lock\"], .uk-text-danger[uk-icon]") != null ||
+            element.parent()?.selectFirst("[uk-icon=\"icon: lock\"], .uk-text-danger[uk-icon]") != null
+
         SChapter.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
-            val rawName = element.selectFirst("h3")?.text()?.trim()
-                ?: element.text().trim()
-            name = CHAPTER_NAME_REGEX.find(rawName)?.value ?: rawName
+            name = if (isLocked) "🔒 $chapterName" else chapterName
             date_upload = element.selectFirst("time")?.text()
                 .parseRelativeDate()
         }
@@ -220,6 +233,10 @@ class KamiComic : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
+        if (document.selectFirst("#chapter-content .lock-card, #chapter-content #unlock-chapter, #chapter-content #xu-lock") != null) {
+            throw Exception(LOCKED_CHAPTER_MESSAGE)
+        }
+
         return document.select("#chapter-content img").mapIndexed { i, element ->
             val imageUrl = element.attr("data-original-src")
                 .ifEmpty { element.attr("src") }
@@ -230,6 +247,11 @@ class KamiComic : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
+        private const val LOCKED_CHAPTER_MESSAGE =
+            "Vui lòng đăng nhập vào tài khoản phù hợp bằng webview để xem chương này"
+
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+
         private val MARK_REGEX = Regex("""<mark>(.*?)</mark>""")
         private val NUMBER_REGEX = Regex("""\d+""")
         private val PAGE_NUMBER_REGEX = Regex("""/page/(\d+)/""")
