@@ -126,7 +126,7 @@ class BiliManga :
 
     // https://www.bilimanga.net/filter/lastupdate_1_0_0_0_0_0_0_1_0.html
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith("/detail")) return GET(baseUrl + query, headers)
+        if (MANGA_ID_REGEX.matches(query.substringAfter(baseUrl))) return GET(query, headers)
         val url = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
             url.addPathSegment("search").addPathSegment("${query}_$page.html")
