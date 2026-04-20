@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJsRsc
+import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -22,23 +23,28 @@ class ManhuaRush : HttpSource() {
     override val lang = "en"
     override val supportsLatest = false
 
+    private val rscHeaders: Headers by lazy {
+        headersBuilder().add("RSC", "1").build()
+    }
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/collections/all?p=all", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select("a.card-link").map { element ->
+            val img = element.selectFirst("img")!!
             SManga.create().apply {
                 url = element.attr("href").substringBefore("?")
-                title = element.selectFirst("img")?.attr("alt") ?: ""
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = img.attr("alt")
+                thumbnail_url = img.attr("abs:src")
             }
         }
 
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headersBuilder().add("RSC", "1").build())
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.body.string().extractNextJsRsc<MangaDetailsDto>()
@@ -56,11 +62,11 @@ class ManhuaRush : HttpSource() {
         return dto.chapters.map { it.toSChapter(dto.mangadexId) }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headersBuilder().add("RSC", "1").build())
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.body.string().extractNextJsRsc<ReaderDto>()
-            ?: throw Exception("Failed to extract pages")
+            ?: return emptyList()
 
         return dto.toPages()
     }
