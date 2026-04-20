@@ -293,12 +293,13 @@ class Seikowo : HttpSource() {
             .sortedByDescending { it.number }
             .map { item ->
                 val chapterNumberText = formatChapterNumber(item.number)
+                val chapterTitle = item.title?.let(::decodeHtmlEntities)
                 SChapter.create().apply {
-                    name = if (item.title.isNullOrBlank()) {
+                    name = if (chapterTitle.isNullOrBlank()) {
                         "Chương $chapterNumberText"
                     } else {
-                        "Chương $chapterNumberText - ${decodeHtmlEntities(item.title)}"
-                    }
+                        "Chương $chapterNumberText - $chapterTitle"
+                    }.removeSuffix(" - None")
                     chapter_number = item.number.toFloat()
                     date_upload = parseDate(item.updatedAt)
                     url = chapterReaderUrl(sourcePath, seriesId, chapterNumberText)
@@ -326,10 +327,14 @@ class Seikowo : HttpSource() {
         val chapters = fetchWorkerPosts(seriesId)
             .flatMap { post -> parseDecryptedChapters(post.content) }
 
-        val targetChapter = chapters.firstOrNull { chapter ->
-            val number = chapter.number ?: chapter.chapterNum
-            number != null && isChapterNumberMatch(number, chapterNumber)
-        } ?: throw Exception("Cannot find chapter data")
+        val targetChapter = chapters
+            .asSequence()
+            .filter { chapter ->
+                val number = chapter.number ?: chapter.chapterNum
+                number != null && isChapterNumberMatch(number, chapterNumber)
+            }
+            .maxByOrNull { chapter -> chapter.images?.size ?: 0 }
+            ?: throw Exception("Cannot find chapter data")
 
         val imageUrls = targetChapter.images
             .orEmpty()
@@ -597,7 +602,7 @@ class Seikowo : HttpSource() {
         )
 
         private val securePayloadRegex = Regex(
-            """<script[^>]+id=["']post-metadata-secure["'][^>]*>([\s\S]*?)</script>""",
+            """<[^>]+id=["'](?:post-metadata-secure|seikowo-data-node)["'][^>]*>([\s\S]*?)</(?:script|div)>""",
             RegexOption.IGNORE_CASE,
         )
 
