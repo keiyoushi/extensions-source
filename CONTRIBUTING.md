@@ -182,10 +182,10 @@ the full locale string instead.
 
 ### Loading a subset of Gradle modules
 
-By default, all individual and generated multisrc extensions are loaded for local development.
-This may be inconvenient if you only need to work on one extension at a time.
+By default, all individual and multisrc extensions are loaded for local development.
+This may be inconvenient and can drastically slow down your system when working on a single extension.
 
-To adjust which modules are loaded, make adjustments to the `settings.gradle.kts` file as needed.
+To adjust which modules are loaded, make adjustments to the `settings.gradle.kts` file as needed. You can specify the single extension you want to work on in the load individual extension function. This helps avoid loading unnecessary modules, making the build process more efficient and preventing your CPU from being overworked.
 
 #### Extension file structure
 
