@@ -1,27 +1,67 @@
 package eu.kanade.tachiyomi.extension.es.insanosscan
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class InsanosScan : ParsedHttpSource() {
+class InsanosScan :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "InsanosScan"
     override val baseUrl = "https://insanoslibrary.com"
     override val lang = "es"
     override val supportsLatest = true
+
+    override val client = network.cloudflareClient
+
+    private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("es"))
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    // ========================= Preferences =========================
+
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private val showPaidChapters: Boolean
+        get() = preferences.getBoolean(PREF_SHOW_PAID, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = PREF_SHOW_PAID
+            title = "Mostrar capítulos de pago"
+            summary = "Incluye capítulos que requieren monedas para leer"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    // ========================= Nonce =========================
 
     private val nonce: String by lazy {
         val doc = client.newCall(GET(baseUrl, headers)).execute().use { it.asJsoup() }
@@ -33,24 +73,31 @@ class InsanosScan : ParsedHttpSource() {
         Regex(""""nonce"\s*:\s*"([^"]+)"""").find(js)?.groupValues?.get(1) ?: ""
     }
 
+    // ========================= Popular =========================
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/?orderby=views&page=$page", headers)
 
-    override fun popularMangaSelector() = "article.catalog-card"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.catalog-card__link")!!
-        setUrlWithoutDomain(link.attr("href"))
-        title = element.selectFirst("h2.catalog-card__title")!!.text()
-        thumbnail_url = element.selectFirst("img.catalog-card__cover")?.attr("src")
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("article.catalog-card").map { element ->
+            SManga.create().apply {
+                val link = element.selectFirst("a.catalog-card__link")!!
+                setUrlWithoutDomain(link.attr("href"))
+                title = element.selectFirst("h2.catalog-card__title")!!.text()
+                thumbnail_url = element.selectFirst("img.catalog-card__cover")?.attr("src")
+            }
+        }
+        val hasNextPage = document.selectFirst("div.catalog-pagination a.page-numbers.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun popularMangaNextPageSelector() = "div.catalog-pagination a.page-numbers.next"
+    // ========================= Latest =========================
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/?orderby=date&page=$page", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    // ========================= Search =========================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val body = FormBody.Builder()
@@ -62,66 +109,111 @@ class InsanosScan : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val root = JSONObject(response.body.string())
-        val data = root.optJSONArray("data") ?: return MangasPage(emptyList(), false)
-        val mangas = (0 until data.length()).map { i ->
-            val obj = data.getJSONObject(i)
+        val root = json.parseToJsonElement(response.body.string()).jsonObject
+        val data = root["data"]?.jsonObject?.entries ?: return MangasPage(emptyList(), false)
+        val mangas = data.map { (_, element) ->
+            val obj = element.jsonObject
             SManga.create().apply {
-                setUrlWithoutDomain(obj.getString("url"))
-                title = obj.getString("title")
-                thumbnail_url = obj.optString("cover").ifEmpty { null }
+                setUrlWithoutDomain(obj["url"]!!.jsonPrimitive.content)
+                title = obj["title"]!!.jsonPrimitive.content
+                thumbnail_url = obj["cover"]?.jsonPrimitive?.content?.ifEmpty { null }
             }
         }
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    // ========================= Details =========================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1.series-main-title")!!.text()
-        thumbnail_url = document.selectFirst("img.series-cover-img")?.attr("src")
-        description = document.selectFirst("div.synopsis-content")?.text()
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
-        status = when (
-            document.selectFirst("span.data-badge--status")?.text()?.trim()?.lowercase()
-        ) {
-            "en emisión" -> SManga.ONGOING
-            "finalizado" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1.series-main-title")!!.text()
+            thumbnail_url = document.selectFirst("img.series-cover-img")?.attr("src")
+            description = document.selectFirst("div.synopsis-content")?.text()
+            status = when (
+                document.selectFirst("span.data-badge--status")?.text()?.trim()?.lowercase()
+            ) {
+                "en emisión" -> SManga.ONGOING
+                "finalizado" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+            genre = document.select("td.genres-cell a.genre-pill")
+                .joinToString { it.text().trim() }
         }
-
-        genre = document.select("td.genres-cell a.genre-pill")
-            .joinToString { it.text().trim() }
     }
 
-    override fun chapterListSelector() = "div.chapters-list a.chapter-row"
+    // ========================= Chapters =========================
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.selectFirst("span.chapter-row__num")?.text()
-            ?: element.selectFirst("span.chapter-row__title")?.text()
-            ?: "Capítulo"
-        date_upload = parseDate(element.selectFirst("span.chapter-row__date")?.text())
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val lockedPaths = parsedLockedPaths(document)
+
+        return document.select("div.chapters-list a.chapter-row").mapNotNull { element ->
+            val href = element.attr("href")
+                .removePrefix(baseUrl)
+                .trimEnd('/')
+                .plus("/")
+
+            if (!showPaidChapters && href in lockedPaths) return@mapNotNull null
+
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("href"))
+                name = buildString {
+                    append(
+                        element.selectFirst("span.chapter-row__num")?.text()
+                            ?: element.selectFirst("span.chapter-row__title")?.text()
+                            ?: "Capítulo",
+                    )
+                    // Append a coin indicator so users know it's paid
+                    if (href in lockedPaths) append(" 🔒")
+                }
+                date_upload = dateFormat.tryParse(
+                    element.selectFirst("span.chapter-row__date")?.text(),
+                )
+            }
+        }
     }
 
-    private fun parseDate(raw: String?): Long {
-        if (raw.isNullOrBlank()) return 0L
+    private fun parsedLockedPaths(document: Document): Set<String> {
+        val scriptBody = document.select("script:not([src])").firstOrNull { script ->
+            script.data().contains("var locked")
+        }?.data() ?: return emptySet()
+
+        val raw = Regex("""var locked\s*=\s*(\{[^;]+\});""")
+            .find(scriptBody)?.groupValues?.get(1) ?: return emptySet()
+
         return runCatching {
-            val sdf = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale("es"))
-            sdf.parse(raw.trim())?.time ?: 0L
-        }.getOrDefault(0L)
+            json.parseToJsonElement(raw).jsonObject
+                .entries
+                .filter { (_, v) -> v.jsonPrimitive.int > 0 }
+                .map { (k, _) -> k }
+                .toSet()
+        }.getOrDefault(emptySet())
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("div.reader-pages ~ div img, div.reader-pages + div img")
-        .mapIndexed { index, img ->
-            Page(index, "", img.attr("src").ifEmpty { img.attr("data-src") })
-        }
-        .ifEmpty {
-            document.select("body.reader-body img[src*='adar_manga']")
-                .mapIndexed { index, img -> Page(index, "", img.attr("src")) }
-        }
+    // ========================= Pages =========================
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.reader-pages ~ div img, div.reader-pages + div img")
+            .mapIndexed { index, img ->
+                Page(index, "", img.attr("src").ifEmpty { img.attr("data-src") })
+            }
+            .ifEmpty {
+                document.select("body.reader-body img[src*='adar_manga']")
+                    .mapIndexed { index, img -> Page(index, "", img.attr("src")) }
+            }
+    }
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        private const val PREF_SHOW_PAID = "show_paid_chapters"
+    }
 }
