@@ -452,14 +452,14 @@ class Koharu(
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        return clearanceClient.newCall(POST("$apiBooksUrl/detail/${manga.url}", lazyHeaders))
-            .awaitSuccess()
-            .use { response ->
-                val data = response.parseAs<MangaData>()
-                data.similar.map(::getManga)
-            }
-    }
+    override fun relatedMangaListRequest(manga: SManga) = POST("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
+
+    override suspend fun fetchRelatedMangaList(manga: SManga) = clearanceClient.newCall(relatedMangaListRequest(manga))
+        .awaitSuccess()
+        .use { response ->
+            val data = response.parseAs<MangaData>()
+            data.similar.map(::getManga)
+        }
 
     // Settings
 
