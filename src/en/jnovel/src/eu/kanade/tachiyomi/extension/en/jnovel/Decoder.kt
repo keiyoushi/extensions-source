@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
 import android.util.Base64
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
+import keiyoushi.utils.decodeProto
 import okio.Buffer
 import okio.InflaterSource
 import okio.buffer
@@ -12,11 +11,7 @@ import java.util.Arrays.fill
 import java.util.zip.Inflater
 
 class Decoder {
-    private inline fun <reified T> ByteArray.decodeProto(): T = ProtoBuf.decodeFromByteArray<T>(this)
-
-    fun decodeManifest(ticketBytes: ByteArray): ProtoPub {
-        val ticket = ticketBytes.decodeProto<E4PQSTicket>()
-
+    fun decodeManifest(ticket: E4PQSTicket): ProtoPub {
         val wrapper = when (ticket.type) {
             TicketType.TDRM_V1 -> unwrapTdrmV1(ticket)
             TicketType.PLAIN_UNSPECIFIED -> ticket.child

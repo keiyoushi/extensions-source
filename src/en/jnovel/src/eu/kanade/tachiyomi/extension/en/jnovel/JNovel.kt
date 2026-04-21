@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAsProto
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -102,7 +103,7 @@ class JNovel :
         val manifestUrlStr = embedDocument.body().absUrl("data-e4p-manifest")
         val manifestUrl = manifestUrlStr.toHttpUrl()
         val manifestResponse = client.newCall(GET(manifestUrlStr, headers)).execute()
-        val ticketBytes = manifestResponse.use { it.body.bytes() }
+        val ticketBytes = manifestResponse.parseAsProto<E4PQSTicket>()
         val pub = decoder.decodeManifest(ticketBytes)
         val manifestQueryNames = manifestUrl.queryParameterNames
 
