@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.seikowo
 
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -66,13 +67,12 @@ class FeedEntryResponseDto(
 @Serializable
 class SeriesMetadataDto(
     @SerialName("series_id")
-    val seriesId: String? = null,
-    val title: String? = null,
+    val seriesId: String,
+    val title: String,
     val author: String? = null,
     val artist: String? = null,
     val status: String? = null,
     val description: String? = null,
-    @SerialName("coverImage")
     val coverImage: String? = null,
     val tags: List<String>? = null,
     val chapters: List<SeriesChapterDto>? = null,
@@ -82,14 +82,10 @@ class SeriesMetadataDto(
 class SeriesChapterDto(
     val id: String? = null,
     val number: Double? = null,
-    @SerialName("chapterNum")
     val chapterNum: Double? = null,
     val title: String? = null,
-    @SerialName("chapterTitle")
     val chapterTitle: String? = null,
-    @SerialName("createdAt")
     val createdAt: String? = null,
-    @SerialName("updatedAt")
     val updatedAt: String? = null,
 )
 
@@ -97,11 +93,8 @@ class SeriesChapterDto(
 class WorkerListRequestDto(
     val action: String,
     val labels: List<String>,
-    @SerialName("maxResults")
     val maxResults: Int,
-    @SerialName("fetchFields")
     val fetchFields: String,
-    @SerialName("blogId")
     val blogId: String,
 )
 
@@ -109,9 +102,7 @@ class WorkerListRequestDto(
 class WorkerGetRequestDto(
     val action: String,
     val id: String,
-    @SerialName("fetchFields")
     val fetchFields: String,
-    @SerialName("blogId")
     val blogId: String,
 )
 
@@ -130,7 +121,6 @@ class WorkerPostDto(
 class NodeChapterDto(
     val id: String? = null,
     val number: Double? = null,
-    @SerialName("chapterNum")
     val chapterNum: Double? = null,
     val images: List<NodeImageDto>? = null,
 )
@@ -138,7 +128,6 @@ class NodeChapterDto(
 @Serializable
 class NodeImageDto(
     val id: String? = null,
-    @SerialName("dataUrl")
     val dataUrl: String? = null,
 )
 
@@ -146,3 +135,26 @@ class NodeImageDto(
 class NodeChapterContainerDto(
     val chapters: List<NodeChapterDto>? = null,
 )
+
+class ChapterItem(
+    val number: Double,
+    val title: String?,
+    val updatedAt: String?,
+)
+
+class CatalogueEntry(
+    val title: String,
+    val url: String,
+    val thumbnailUrl: String?,
+    val updatedAt: Long,
+    val publishedAt: Long,
+    val commentsCount: Int,
+    val statusTerm: String?,
+    val genres: Set<String>,
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        url = this@CatalogueEntry.url
+        title = this@CatalogueEntry.title
+        thumbnail_url = this@CatalogueEntry.thumbnailUrl
+    }
+}

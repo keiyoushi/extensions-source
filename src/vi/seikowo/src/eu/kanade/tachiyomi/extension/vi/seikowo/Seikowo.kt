@@ -209,12 +209,13 @@ class Seikowo : HttpSource() {
             return cachedCatalogueEntries
         }
 
+        val feedBatchSize = 20
         val entries = mutableListOf<CatalogueEntry>()
         var startIndex = 1
 
         while (true) {
             val url = feedUrlBuilder()
-                .addQueryParameter("max-results", "500")
+                .addQueryParameter("max-results", feedBatchSize.toString())
                 .addQueryParameter("start-index", startIndex.toString())
                 .build()
 
@@ -223,9 +224,9 @@ class Seikowo : HttpSource() {
 
             entries += batch.mapNotNull(::toCatalogueEntry)
 
-            if (batch.size < 500) break
+            if (batch.size < feedBatchSize) break
 
-            startIndex += 500
+            startIndex += feedBatchSize
             if (startIndex > 5_001) break
         }
 
@@ -247,7 +248,7 @@ class Seikowo : HttpSource() {
         val metadata = parseMetadata(entry.content?.value)
             ?: throw Exception("Cannot find metadata")
 
-        val title = metadata.title ?: throw Exception("Missing manga title")
+        val title = metadata.title
 
         return SManga.create().apply {
             this.title = decodeHtmlEntities(title)
@@ -270,7 +271,7 @@ class Seikowo : HttpSource() {
         val metadata = parseMetadata(entry.content?.value)
             ?: throw Exception("Cannot find metadata")
 
-        val seriesId = metadata.seriesId ?: throw Exception("Cannot find series ID")
+        val seriesId = metadata.seriesId
         val sourcePath = response.request.url.encodedPath
 
         return metadata.chapters
@@ -422,7 +423,7 @@ class Seikowo : HttpSource() {
 
     private fun toCatalogueEntry(entry: FeedEntryDto): CatalogueEntry? {
         val metadata = parseMetadata(entry.content?.value) ?: return null
-        val title = metadata.title ?: entry.title?.value ?: return null
+        val title = metadata.title
 
         val absoluteUrl = entry.link
             .orEmpty()
@@ -557,29 +558,6 @@ class Seikowo : HttpSource() {
         }
 
         return "${url.removeSuffix("/")}/s3200-rw/"
-    }
-
-    private class ChapterItem(
-        val number: Double,
-        val title: String?,
-        val updatedAt: String?,
-    )
-
-    private class CatalogueEntry(
-        val title: String,
-        val url: String,
-        val thumbnailUrl: String?,
-        val updatedAt: Long,
-        val publishedAt: Long,
-        val commentsCount: Int,
-        val statusTerm: String?,
-        val genres: Set<String>,
-    ) {
-        fun toSManga(): SManga = SManga.create().apply {
-            url = this@CatalogueEntry.url
-            title = this@CatalogueEntry.title
-            thumbnail_url = this@CatalogueEntry.thumbnailUrl
-        }
     }
 
     companion object {
