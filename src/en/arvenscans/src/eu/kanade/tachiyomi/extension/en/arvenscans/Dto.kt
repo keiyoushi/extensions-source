@@ -25,6 +25,27 @@ class GenreDto(
 )
 
 @Serializable
+class PostResponseDto(
+    val post: PostDto,
+)
+
+@Serializable
+class PostDto(
+    val id: Int? = null,
+    val slug: String? = null,
+    val postTitle: String,
+    val postContent: String? = null,
+    val alternativeTitles: String? = null,
+    val author: String? = null,
+    val studio: String? = null,
+    val artist: String? = null,
+    val featuredImage: String? = null,
+    val seriesType: String? = null,
+    val seriesStatus: String? = null,
+    val genres: List<GenreDto> = emptyList(),
+)
+
+@Serializable
 class ChaptersResponseDto(
     val post: ChaptersPostDto,
 )

@@ -10,13 +10,18 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -124,10 +129,7 @@ class VortexScans :
 
     override fun mangaDetailsRequest(manga: SManga): Request = seriesPageRequest(extractMangaSlug(manga.url))
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
-        return document.toSMangaDetailsModel()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.extractAstroProp<PostResponseDto>("postTitle").post.toSMangaDetailsModel()
 
     // ========================= Chapters =========================
 
@@ -168,8 +170,15 @@ class VortexScans :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
-        val images = document.parsePageImages()
+        val images = response.asJsoup().select("img[src]")
+            .asSequence()
+            .map { it.absUrl("src").ifEmpty { it.attr("src") } }
+            .filter { url ->
+                url.contains("/upload/series/", ignoreCase = true) &&
+                    url.contains("/page-", ignoreCase = true)
+            }
+            .distinct()
+            .toList()
 
         if (images.isEmpty()) {
             throw Exception(LOCKED_CHAPTER_MESSAGE)
@@ -260,5 +269,22 @@ class VortexScans :
         }
 
         return null
+    }
+
+    private inline fun <reified T> Document.extractAstroProp(key: String): T {
+        val prop = selectFirst("[props*=$key]")?.attr("props")
+            ?: throw Exception("Unable to find prop with $key")
+        return prop.parseAs<JsonElement>().unwrapAstro().parseAs()
+    }
+
+    private inline fun <reified T> Response.extractAstroProp(key: String): T = asJsoup().extractAstroProp(key)
+
+    private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
+        is JsonArray -> when {
+            size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+            else -> JsonArray(map { it.unwrapAstro() })
+        }
+        is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
+        else -> this
     }
 }
