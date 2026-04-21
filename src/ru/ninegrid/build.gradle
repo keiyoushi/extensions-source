@@ -1,0 +1,8 @@
+ext {
+    extName = 'NineGrid'
+    extClass = '.NineGrid'
+    extVersionCode = 1
+    isConfigurable = true
+}
+
+apply from: "$rootDir/common.gradle"
