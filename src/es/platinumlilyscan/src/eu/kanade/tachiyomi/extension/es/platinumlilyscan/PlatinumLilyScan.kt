@@ -19,30 +19,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-/**
- * Platinum Lily Scan — https://platinumlilyscan.com
- *
- * Spanish yuri/GL scanlation built with Next.js App Router + RSC.
- *
- * ─── KEY FINDINGS (confirmed by Python diagnostic) ──────────────────────────
- *
- * 1. CATALOG / DETAILS / CHAPTER LIST — rendered server-side in the HTML.
- *    Standard OkHttp GET + JSoup parse works perfectly.
- *
- * 2. PAGE LIST — the chapter reader is a 'use client' React component.
- *    A plain HTML GET returns only UI images (logos). Chapter images are NOT
- *    in the HTML. The client-side JS fetches from an internal REST API:
- *
- *      GET /api/series/{slug}
- *
- *    This returns a JSON object for the full series, which includes ALL chapters
- *    with their page image URLs. The image URL pattern is:
- *      /uploads/chapters/{slug}/{chapter-number}/{page}.webp
- *
- *    We pass the chapter number as a query param (?chapter=N) so we can read
- *    it back in pageListParse without needing extra state.
- * ────────────────────────────────────────────────────────────────────────────
- */
 class PlatinumLilyScan : HttpSource() {
 
     override val name = "Platinum Lily Scan"
@@ -54,8 +30,7 @@ class PlatinumLilyScan : HttpSource() {
     override val supportsLatest = true
 
     // ---------------------------------------------------------------------------
-    // Date parsing
-    // Dates look like "21 abr" or "29 mar" (day + Spanish month abbr, no year).
+    // Date parsing — dates look like "21 abr" (no year), so we append current year
     // ---------------------------------------------------------------------------
 
     private val dateFormat by lazy {
@@ -71,7 +46,7 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     // ---------------------------------------------------------------------------
-    // Popular Manga — /browse
+    // Popular Manga
     // ---------------------------------------------------------------------------
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/browse?page=$page", headers)
@@ -101,7 +76,7 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     // ---------------------------------------------------------------------------
-    // Latest Updates — home page
+    // Latest Updates
     // ---------------------------------------------------------------------------
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
@@ -119,7 +94,7 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     // ---------------------------------------------------------------------------
-    // Search — /browse?q={query}&genre={genre}&status={status}&type={type}
+    // Search
     // ---------------------------------------------------------------------------
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -202,7 +177,7 @@ class PlatinumLilyScan : HttpSource() {
     )
 
     // ---------------------------------------------------------------------------
-    // Manga Details — SSR HTML works fine; use og: meta tags (more reliable than h1)
+    // Manga Details
     // ---------------------------------------------------------------------------
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
@@ -211,8 +186,7 @@ class PlatinumLilyScan : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            // og:title is more reliable than h1 on Next.js pages.
-            // On series pages it returns the manga name; h1 can return the site name.
+            // og:title is more reliable than h1 on Next.js pages
             title = document.selectFirst("meta[property='og:title']")?.attr("content")
                 ?.removeSuffix(" | Platinum Lily Scan")?.trim()
                 ?: document.selectFirst("h1")?.text()?.trim()
@@ -244,7 +218,7 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     // ---------------------------------------------------------------------------
-    // Chapter List — SSR HTML: chapters are <a href="/series/{slug}/chapter/{num}">
+    // Chapter List
     // ---------------------------------------------------------------------------
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
@@ -268,29 +242,17 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     // ---------------------------------------------------------------------------
-    // Page List — REST API approach
-    //
-    // Confirmed via Python diagnostic:
-    //   GET /api/series/{slug}  →  JSON with ALL chapters + image URLs
-    //
-    // Image URL format:  /uploads/chapters/{slug}/{chapter-number}/{page}.webp
-    //
-    // Strategy:
-    //   1. Build request for /api/series/{slug}
-    //   2. Encode chapter number in a query param so pageListParse can read it
-    //   3. In pageListParse, regex-filter only the images for that chapter
+    // Page List — the reader is client-side; pages come from GET /api/series/{slug}
+    // We encode the chapter number as a query param to recover it in pageListParse.
     // ---------------------------------------------------------------------------
 
     override fun pageListRequest(chapter: SChapter): Request {
-        // chapter.url format: /series/{slug}/chapter/{num}  (e.g. /series/stardust-telepath/chapter/4)
         val slug = chapter.url
             .substringAfter("/series/")
             .substringBefore("/chapter/")
 
         val chNum = chapter.url.substringAfterLast("/chapter/")
 
-        // Pass chapter number as query param — the server ignores unknown params
-        // and returns the full series JSON; we read it back in pageListParse.
         val apiUrl = "$baseUrl/api/series/$slug".toHttpUrl().newBuilder()
             .addQueryParameter("chapter", chNum)
             .build()
@@ -299,25 +261,21 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        // Recover chapter number and slug from the request URL
         val chNum = response.request.url.queryParameter("chapter") ?: return emptyList()
         val slug = response.request.url.encodedPath.substringAfterLast("/")
 
         val body = response.body.string()
 
-        // Filter images that belong exclusively to the requested chapter.
-        // Pattern: /uploads/chapters/{slug}/{chNum}/{page}.webp
-        // Regex.escape handles chapter numbers like "12.1" or "46.5".
+        // Regex.escape handles decimal chapter numbers like "12.1"
         val pattern = Regex(
             """/uploads/chapters/${Regex.escape(slug)}/${Regex.escape(chNum)}/[^"'\s\\]+\.(?:webp|jpg|jpeg|png|gif)""",
         )
 
-        val pages = pattern.findAll(body)
+        return pattern.findAll(body)
             .map { "$baseUrl${it.value}" }
             .distinct()
             .toList()
-
-        return pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
