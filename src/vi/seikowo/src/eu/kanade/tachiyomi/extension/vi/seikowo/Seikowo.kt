@@ -42,11 +42,11 @@ class Seikowo : HttpSource() {
 
     private val baseHttpUrl = baseUrl.toHttpUrl()
 
-    private val isoDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT).apply {
+    private val isoDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
     }
 
-    private val isoDateMillisFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT).apply {
+    private val isoDateMillisFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
     }
 
@@ -502,9 +502,16 @@ class Seikowo : HttpSource() {
     }
 
     private fun parseDate(date: String?): Long {
-        val withMillis = isoDateMillisFormat.tryParse(date)
+        val normalizedDate = normalizeDateForZFormat(date)
+        val withMillis = isoDateMillisFormat.tryParse(normalizedDate)
         if (withMillis != 0L) return withMillis
-        return isoDateFormat.tryParse(date)
+        return isoDateFormat.tryParse(normalizedDate)
+    }
+
+    private fun normalizeDateForZFormat(date: String?): String? {
+        if (date == null) return null
+        if (date.endsWith("Z")) return "${date.removeSuffix("Z")}+0000"
+        return timezoneColonRegex.replace(date, "$1$2")
     }
 
     private fun toRelativeUrl(url: String): String? {
@@ -600,5 +607,6 @@ class Seikowo : HttpSource() {
             """/s\d+(?:-[a-z0-9]+)?/""",
             RegexOption.IGNORE_CASE,
         )
+        private val timezoneColonRegex = Regex("""([+-]\d{2}):(\d{2})$""")
     }
 }
