@@ -46,7 +46,7 @@ inline fun <reified T> Response.parseAsProto(transform: (ByteArray) -> ByteArray
  *
  * The body is automatically closed after reading.
  */
-inline fun <reified T> ResponseBody.parseAsProto(): T = use { protoInstance.decodeFromByteArray(it.bytes()) }
+inline fun <reified T> ResponseBody.parseAsProto(): T = protoInstance.decodeFromByteArray(bytes())
 
 /**
  * Encodes the object into a Protobuf [RequestBody] with the [PROTOBUF_MEDIA_TYPE] content type.
