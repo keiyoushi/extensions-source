@@ -129,7 +129,7 @@ class VortexScans :
 
     override fun mangaDetailsRequest(manga: SManga): Request = seriesPageRequest(extractMangaSlug(manga.url))
 
-    override fun mangaDetailsParse(response: Response): SManga = response.extractAstroProp<PostResponseDto>("postTitle").post.toSMangaDetailsModel()
+    override fun mangaDetailsParse(response: Response): SManga = response.extractAstroProp<PostResponseDto>("postContent").post.toSMangaDetailsModel()
 
     // ========================= Chapters =========================
 
@@ -175,7 +175,7 @@ class VortexScans :
             .map { it.absUrl("src").ifEmpty { it.attr("src") } }
             .filter { url ->
                 url.contains("/upload/series/", ignoreCase = true) &&
-                    url.contains("/page-", ignoreCase = true)
+                    !url.contains("/upload/series/featured/", ignoreCase = true)
             }
             .distinct()
             .toList()
