@@ -190,8 +190,7 @@ class PlatinumLilyScan : HttpSource() {
             ),
         )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
@@ -206,8 +205,7 @@ class PlatinumLilyScan : HttpSource() {
     // Manga Details — SSR HTML works fine; use og: meta tags (more reliable than h1)
     // ---------------------------------------------------------------------------
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(baseUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -249,8 +247,7 @@ class PlatinumLilyScan : HttpSource() {
     // Chapter List — SSR HTML: chapters are <a href="/series/{slug}/chapter/{num}">
     // ---------------------------------------------------------------------------
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET(baseUrl + manga.url, headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -323,13 +320,11 @@ class PlatinumLilyScan : HttpSource() {
         return pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
-    private fun Response.asJsoup(): Document =
-        Jsoup.parse(body.string(), request.url.toString())
+    private fun Response.asJsoup(): Document = Jsoup.parse(body.string(), request.url.toString())
 }
