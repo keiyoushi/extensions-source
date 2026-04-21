@@ -473,7 +473,7 @@ class Decoder {
             return out
         }
 
-        // Raw 64-bit Blowfish decrypt of one block (two 32-bit halves)
+        // 64-bit Blowfish decrypt of one block (two 32-bit halves)
         private fun blowfishDecryptBlock(
             xlIn: Int,
             xrIn: Int,

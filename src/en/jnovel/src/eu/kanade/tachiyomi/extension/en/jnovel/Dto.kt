@@ -1,90 +1,114 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.protobuf.ProtoNumber
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
-// in e4p_client.js
 @Serializable
-class E4PQSTicket(
-    @ProtoNumber(1) val type: Int,
-    @ProtoNumber(2) val contentId: String,
-    @ProtoNumber(3) val consumer: String,
-    @ProtoNumber(4) val expires: Timestamp = Timestamp(),
-    @ProtoNumber(5) val child: E4PQSWrapper = E4PQSWrapper(),
+class SeriesResponse(
+    val seriesList: SeriesList,
 )
 
 @Serializable
-class Timestamp(
-    @ProtoNumber(1) val seconds: Long = 0L,
-)
-
-@Serializable
-class E4PQSWrapper(
-    @ProtoNumber(1) val type: Int = 0,
-    @ProtoNumber(2) val iv: ByteArray = EMPTY,
-    @ProtoNumber(3) val checksum: ByteArray = EMPTY,
-    @ProtoNumber(4) val data: ByteArray = EMPTY,
-    @ProtoNumber(5) val dataType: Int = 0,
-    @ProtoNumber(6) val dictChecksum: Int = 0,
+class SeriesList(
+    val series: List<SeriesItem>,
+    private val nextPageToken: String,
 ) {
-    companion object {
-        private val EMPTY = ByteArray(0)
+    fun hasNextPage() = nextPageToken.isNotEmpty()
+}
+
+@Serializable
+class SeriesItem(
+    private val slug: String,
+    private val title: String,
+    private val cover: Cover?,
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        url = slug
+        title = this@SeriesItem.title
+        thumbnail_url = cover?.coverUrl?.toHttpUrl()?.newBuilder()?.setPathSegment(2, "1200")?.build()?.toString()
     }
 }
 
-object TicketType {
-    const val PLAIN_UNSPECIFIED = 0
-    const val OPAQUE = 1
-    const val TDRM_V1 = 2
-}
-
-object WrapperType {
-    const val PLAIN_UNSPECIFIED = 0
-    const val OPAQUE = 1
-    const val CDRM_V1 = 2
-}
-
-object DataType {
-    const val UNSPECIFIED = 0
-    const val WEBPUB = 1
-    const val PROTOPUB = 2
-    const val PROTOPUB_ZSTD = 3
-    const val PROTOTICKET = 4
-    const val PROTOPUB_ZLIB = 5
-    const val HTML = 101
-}
-
 @Serializable
-class ProtoPub(
-    @ProtoNumber(2) val spine: List<Link> = emptyList(),
+class Cover(
+    val coverUrl: String?,
 )
 
 @Serializable
-class Link(
-    @ProtoNumber(1) val variants: List<Variant> = emptyList(),
+class SeriesDetailsResponse(
+    val series: SeriesDetails,
+    val volumes: List<Volume>,
 )
 
 @Serializable
-class Variant(
-    @ProtoNumber(1) val link: String = "",
-    @ProtoNumber(2) val image: ImageProps?,
-)
-
-@Serializable
-class ImageProps(
-    @ProtoNumber(1) val width: Int = 0,
-    @ProtoNumber(2) val height: Int = 0,
-    @ProtoNumber(3) val drm: EDRM?,
-)
-
-@Serializable
-class EDRM(
-    @ProtoNumber(1) val version: Int = 0,
-    @ProtoNumber(2) val kid: String = "",
-    @ProtoNumber(3) val iv: ByteArray = EMPTY,
-    @ProtoNumber(4) val challenge: ByteArray = EMPTY,
+class SeriesDetails(
+    val title: String,
+    private val description: String?,
+    private val tags: List<String>?,
+    private val status: Int?,
+    private val banner: Banner?,
 ) {
-    companion object {
-        private val EMPTY = ByteArray(0)
+    fun toSManga(creators: List<Creator>?): SManga = SManga.create().apply {
+        title = this@SeriesDetails.title
+        description = this@SeriesDetails.description
+        genre = tags?.joinToString()
+        status = when (this@SeriesDetails.status) {
+            0 -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
+
+        author = creators?.filter { it.role == 1 }?.mapNotNull { it.name }?.takeIf { it.isNotEmpty() }?.joinToString()
+        artist = creators?.filter { it.role == 4 }?.mapNotNull { it.name }?.takeIf { it.isNotEmpty() }?.joinToString()
+        thumbnail_url = banner?.originalUrl
     }
 }
+
+@Serializable
+class Volume(
+    val parts: List<Part> = emptyList(),
+    val volume: VolumeInfo?,
+)
+
+@Serializable
+class VolumeInfo(
+    val creators: List<Creator>?,
+)
+
+@Serializable
+class Creator(
+    val name: String?,
+    val role: Int?,
+)
+
+@Serializable
+class Banner(
+    val originalUrl: String?,
+)
+
+@Serializable
+class Part(
+    private val slug: String,
+    private val title: String,
+    private val launch: Time?,
+    private val number: Int?,
+    private val preview: Boolean?,
+) {
+    val isLocked: Boolean
+        get() = preview == false
+
+    fun toSChapter(mangaTitle: String): SChapter = SChapter.create().apply {
+        val lock = if (isLocked) "🔒 " else ""
+        val chapterName = title.removePrefix(mangaTitle).trim().ifEmpty { title }
+        url = slug
+        name = lock + chapterName
+        date_upload = launch?.seconds?.toLong()?.times(1000L) ?: 0L
+        chapter_number = number?.toFloat() ?: -1f
+    }
+}
+
+@Serializable
+class Time(
+    val seconds: String?,
+)

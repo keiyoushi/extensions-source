@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,21 +11,39 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 
-class JNovel : HttpSource() {
+class JNovel :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "J-Novel"
-    override val baseUrl = "https://j-novel.club"
+    private val domain = "j-novel.club"
+    override val baseUrl = "https://$domain"
     override val lang = "en"
     override val supportsLatest = false
 
-    private val viewerUrl = "https://labs.j-novel.club/embed/v2"
+    private val viewerUrl = "https://labs.$domain/embed/v2"
+    private val preferences by getPreferencesLazy()
     private val decoder = Decoder()
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code == 402 && response.request.url.toString().startsWith(viewerUrl)) {
+                throw IOException("Log in via WebView and purchase this chapter to read.")
+            }
+            response
+        }
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
@@ -30,23 +51,13 @@ class JNovel : HttpSource() {
             .addQueryParameter("type", "manga")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        return GET(url, rscHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.TitleListEntry-module__CVV_2G__entry").mapNotNull {
-            val link = it.selectFirst("a[href^=/series/]") ?: return@mapNotNull null
-            SManga.create().apply {
-                title = it.selectFirst("h2")!!.text()
-                setUrlWithoutDomain(link.absUrl("href"))
-                thumbnail_url = it.selectFirst("img")?.absUrl("src")
-            }
-        }
-
-        val nextButton = document.selectFirst("div.button:has(div.text:contains(Next))")
-        val hasNextPage = nextButton != null && !nextButton.classNames().contains("disabled")
-        return MangasPage(mangas, hasNextPage)
+        val result = response.extractNextJs<SeriesResponse>()
+        val mangas = result?.seriesList?.series.orEmpty().map { it.toSManga() }
+        return MangasPage(mangas, result?.seriesList?.hasNextPage() ?: false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -57,55 +68,36 @@ class JNovel : HttpSource() {
             url.addQueryParameter("search", query)
         }
 
-        return GET(url.build(), headers)
+        return GET(url.build(), rscHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("meta[property='og:title']")!!.attr("content")
-            description = document.selectFirst("meta[name='description']")?.attr("content")
-            thumbnail_url = document.selectFirst("meta[property='og:image']")?.absUrl("content")
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", rscHeaders)
 
-            val authors = document.select("meta[property='book:author']")
-                .mapNotNull {
-                    it.attr("content")
-                        .substringAfter("search=")
-                        .substringAfter(":")
-                        .replace("\"", "")
-                        .trim()
-                        .takeIf { name -> name.isNotEmpty() }
-                }
-            author = authors.distinct().joinToString()
-            genre = document.select("meta[property='book:tag']").joinToString { it.attr("content") }
-        }
+    override fun mangaDetailsParse(response: Response): SManga {
+        val result = response.extractNextJs<SeriesDetailsResponse>()
+        val creators = result?.volumes?.firstOrNull()?.volume?.creators.orEmpty()
+        return requireNotNull(result?.series).toSManga(creators)
     }
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = document.select("a[class*=TitleVolumeProgress-module__][class*=__part][href^=/read/]").mapNotNull {
-            val href = it.absUrl("href")
-            if (href.isBlank()) return@mapNotNull null
-
-            val chapterName = it.text()
-                .replace(Regex("\\s+"), " ")
-                .trim()
-
-            SChapter.create().apply {
-                setUrlWithoutDomain(href)
-                name = chapterName
-            }
-        }
-            .distinctBy { it.url }
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val result = response.extractNextJs<SeriesDetailsResponse>()
+        return result?.volumes.orEmpty()
+            .flatMap { it.parts }
+            .filter { !hideLocked || !it.isLocked }
+            .map { it.toSChapter(result?.series?.title!!) }
             .reversed()
-        return chapters
     }
+
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/read/${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val embedUrl = document.selectFirst("iframe[src^='$viewerUrl']")!!.absUrl("src")
+        val embedUrl = document.selectFirst("iframe[src^='$viewerUrl']")?.absUrl("src") ?: throw Exception("Log in via WebView and purchase this chapter to read.")
         val embedDocument = client.newCall(GET(embedUrl, headers)).execute().asJsoup()
         val manifestUrlStr = embedDocument.body().absUrl("data-e4p-manifest")
         val manifestUrl = manifestUrlStr.toHttpUrl()
@@ -130,7 +122,19 @@ class JNovel : HttpSource() {
         }
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+    }
 }
