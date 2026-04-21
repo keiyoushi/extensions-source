@@ -17,20 +17,20 @@ private val dateFormat by lazy {
 
 @Serializable
 class SeriesDto(
-    @SerialName("title") private val title: String,
-    @SerialName("slug") val slug: String,
-    @SerialName("description") private val description: String? = null,
-    @SerialName("coverUrl") private val coverUrl: String? = null,
-    @SerialName("author") private val author: String? = null,
-    @SerialName("artist") private val artist: String? = null,
-    @SerialName("genres") private val genres: List<SeriesGenreDto>? = emptyList(),
-    @SerialName("chapters") val chapters: List<ChapterDto>? = emptyList(),
+    private val title: String,
+    val slug: String,
+    private val description: String? = null,
+    private val coverUrl: String? = null,
+    private val author: String? = null,
+    private val artist: String? = null,
+    private val genres: List<SeriesGenreDto>? = emptyList(),
+    val chapters: List<ChapterDto>? = emptyList(),
     @SerialName("_count") private val count: CountDto? = null,
-    @SerialName("updatedAt") private val updatedAt: String? = null,
-    @SerialName("type") private val type: String? = null,
-    @SerialName("status") private val status: String? = null,
-    @SerialName("contentRating") private val contentRating: String? = null,
-    @SerialName("altTitles") private val altTitles: String? = null,
+    private val updatedAt: String? = null,
+    private val type: String? = null,
+    private val status: String? = null,
+    private val contentRating: String? = null,
+    private val altTitles: String? = null,
 ) {
     val bookmarkCount: Int get() = count?.bookmarks ?: 0
 
@@ -72,26 +72,26 @@ class SeriesDto(
 
 @Serializable
 class SeriesGenreDto(
-    @SerialName("genre") val genre: GenreDto? = null,
+    val genre: GenreDto? = null,
 )
 
 @Serializable
 class GenreDto(
-    @SerialName("name") val name: String,
+    val name: String,
 )
 
 @Serializable
 class CountDto(
-    @SerialName("bookmarks") val bookmarks: Int = 0,
+    val bookmarks: Int = 0,
 )
 
 @Serializable
 class ChapterDto(
-    @SerialName("id") val id: String = "",
-    @SerialName("number") private val number: Float = -1f,
-    @SerialName("title") private val title: String? = null,
-    @SerialName("publishedAt") private val publishedAt: String? = null,
-    @SerialName("pages") val pages: List<PageDto>? = emptyList(),
+    val id: String = "",
+    private val number: Float = -1f,
+    private val title: String? = null,
+    private val publishedAt: String? = null,
+    val pages: List<PageDto>? = emptyList(),
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         this.url = "/api/series/$seriesSlug#$id"
@@ -110,5 +110,5 @@ class ChapterDto(
 
 @Serializable
 class PageDto(
-    @SerialName("imageUrl") val imageUrl: String,
+    val imageUrl: String,
 )
