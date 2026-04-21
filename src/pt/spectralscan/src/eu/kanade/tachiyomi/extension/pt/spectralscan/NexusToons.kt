@@ -20,18 +20,18 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.random.Random
 
-class NexusScan :
+class NexusToons :
     HttpSource(),
     ConfigurableSource {
 
-    // SpectralScan (pt-BR) -> Nexus Scan (pt-BR)
+    // SpectralScan (pt-BR) -> Nexus Toons (pt-BR)
     override val id = 5304928452449566995L
 
     override val lang = "pt-BR"
 
-    override val name = "Nexus Scan"
+    override val name = "Nexus Toons"
 
-    override val baseUrl = "https://nexustoons.com"
+    override val baseUrl = "https://nx-toons.xyz"
 
     override val supportsLatest = true
 
