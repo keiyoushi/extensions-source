@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.ninegrid
 
-import android.app.Application
-import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -12,18 +10,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class NineGrid :
     HttpSource(),
@@ -33,12 +28,7 @@ class NineGrid :
     override val lang = "ru"
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
-    private val preferences: SharedPreferences by lazy {
-        val app: Application by injectLazy()
-        app.getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences = getPreferences()
 
     override val baseUrl: String
         get() = preferences.getString(PREF_BASE_URL, DEFAULT_BASE_URL)!!.trimEnd('/')
@@ -49,10 +39,6 @@ class NineGrid :
     private val apiBase: String
         get() = "$baseUrl/api/external/v1"
 
-    // ============================================
-    // Headers
-    // ============================================
-
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
         add("Accept", "application/json")
         if (apiKey.isNotBlank()) {
@@ -60,9 +46,7 @@ class NineGrid :
         }
     }
 
-    // ============================================
-    // Popular (sorted by translated issue count)
-    // ============================================
+    // Popular
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiBase/series".toHttpUrl().newBuilder()
@@ -74,18 +58,12 @@ class NineGrid :
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val body = response.parseJson()
-        val content = body["content"]!!.jsonArray
-        val totalPages = body["totalPages"]!!.jsonPrimitive.int
-        val page = body["page"]!!.jsonPrimitive.int
-
-        val mangas = content.map { it.jsonObject.toSManga(baseUrl) }
-        return MangasPage(mangas, page + 1 < totalPages)
+        val data = response.parseAs<SeriesListResponse>()
+        val mangas = data.content.map { it.toSManga(baseUrl) }
+        return MangasPage(mangas, data.page + 1 < data.totalPages)
     }
 
-    // ============================================
-    // Latest (sorted by recently updated)
-    // ============================================
+    // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiBase/series".toHttpUrl().newBuilder()
@@ -98,11 +76,13 @@ class NineGrid :
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // ============================================
     // Search
-    // ============================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$apiBase/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", (page - 1).toString())
             .addQueryParameter("size", "20")
@@ -129,107 +109,63 @@ class NineGrid :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // ============================================
     // Manga Details
-    // ============================================
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBase/series/${manga.url.substringAfterLast("/")}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val obj = response.parseJson()
-        return SManga.create().apply {
-            title = obj["name"]!!.jsonPrimitive.content
-            thumbnail_url = "$baseUrl/api/external/v1/series/${obj["id"]!!.jsonPrimitive.int}/thumbnail"
-            description = obj["description"]?.jsonPrimitive?.contentOrNull
-            author = obj["publisherName"]?.jsonPrimitive?.contentOrNull
-            genre = obj["genres"]?.jsonArray?.joinToString(", ") { it.jsonPrimitive.content }
-            status = when (obj["status"]?.jsonPrimitive?.contentOrNull) {
-                "Continuing" -> SManga.ONGOING
-                "Ended" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            initialized = true
-        }
+        val s = response.parseAs<SeriesDto>()
+        return s.toSManga(baseUrl).apply { initialized = true }
     }
 
-    // ============================================
-    // Chapter List (issues with translations)
-    // ============================================
+    // Chapter List
 
     override fun chapterListRequest(manga: SManga): Request = GET("$apiBase/series/${manga.url.substringAfterLast("/")}/issues", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val body = response.parseJson()
-        val issues = body["issues"]!!.jsonArray
+        val data = response.parseAs<IssuesResponse>()
         val chapters = mutableListOf<SChapter>()
 
-        for (issue in issues) {
-            val obj = issue.jsonObject
-            val issueNumber = obj["number"]!!.jsonPrimitive.content
-            val issueName = obj["name"]?.jsonPrimitive?.contentOrNull
-            val translations = obj["translations"]!!.jsonArray
-
-            for (translation in translations) {
-                val t = translation.jsonObject
-                val translationId = t["id"]!!.jsonPrimitive.content
-                val teamNames = t["teamNames"]!!.jsonArray
-                    .map { it.jsonPrimitive.content }
-                val teamLabel = if (teamNames.isNotEmpty()) teamNames.joinToString(", ") else "Unknown"
+        for (issue in data.issues) {
+            for (t in issue.translations) {
+                val teamLabel = t.teamNames.takeIf { it.isNotEmpty() }
+                    ?.joinToString()
 
                 chapters.add(
                     SChapter.create().apply {
-                        url = "/translations/$translationId/pages"
+                        url = "/translations/${t.id}/pages"
                         name = buildString {
-                            append("#$issueNumber")
-                            if (!issueName.isNullOrBlank()) append(" — $issueName")
-                            if (translations.size > 1) append(" [$teamLabel]")
-                        }
-                        chapter_number = try {
-                            issueNumber.replace(Regex("^annual\\s*", RegexOption.IGNORE_CASE), "1000.").toFloat()
-                        } catch (_: Exception) {
-                            -1f
-                        }
-                        date_upload = try {
-                            t["createdAt"]!!.jsonPrimitive.content.let {
-                                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time ?: 0L
+                            append("#${issue.number}")
+                            if (!issue.name.isNullOrBlank()) append(" — ${issue.name}")
+                            if (issue.translations.size > 1 && teamLabel != null) {
+                                append(" [$teamLabel]")
                             }
-                        } catch (_: Exception) {
-                            0L
                         }
+                        chapter_number = issue.number
+                            .replace(ANNUAL_REGEX, "1000.")
+                            .toFloatOrNull() ?: -1f
+                        date_upload = DATE_FORMAT.tryParse(t.createdAt)
                         scanlator = teamLabel
                     },
                 )
             }
         }
 
-        // Mihon shows chapters in reverse order (newest first), but we sorted oldest first
-        // So reverse to show newest first
         return chapters.reversed()
     }
 
-    // ============================================
     // Page List
-    // ============================================
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiBase${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val body = response.parseJson()
-        val pages = body["pages"]!!.jsonArray
-        return pages.map { page ->
-            val obj = page.jsonObject
-            Page(
-                index = obj["index"]!!.jsonPrimitive.int,
-                imageUrl = obj["url"]!!.jsonPrimitive.content,
-            )
-        }
+        val data = response.parseAs<PagesResponse>()
+        return data.pages.map { Page(it.index, imageUrl = it.url) }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================================
     // Filters
-    // ============================================
 
     override fun getFilterList(): FilterList = FilterList(
         SortFilter(),
@@ -238,9 +174,7 @@ class NineGrid :
         GenreFilter(getGenreList()),
     )
 
-    // ============================================
-    // Preferences (ConfigurableSource)
-    // ============================================
+    // Preferences
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -253,30 +187,9 @@ class NineGrid :
         EditTextPreference(screen.context).apply {
             key = PREF_API_KEY
             title = "API-ключ"
-            summary = "Для трекинга прогресса (Настройки → API-ключи)"
+            summary = "Для трекинга прогресса"
             setDefaultValue("")
         }.let(screen::addPreference)
-    }
-
-    // ============================================
-    // Helpers
-    // ============================================
-
-    private fun Response.parseJson(): JsonObject = json.parseToJsonElement(body.string()).jsonObject
-
-    private fun JsonObject.toSManga(baseUrl: String): SManga = SManga.create().apply {
-        val id = this@toSManga["id"]!!.jsonPrimitive.int
-        url = "/series/$id"
-        title = this@toSManga["name"]!!.jsonPrimitive.content
-        thumbnail_url = "$baseUrl/api/external/v1/series/$id/thumbnail"
-        description = this@toSManga["description"]?.jsonPrimitive?.contentOrNull
-        author = this@toSManga["publisherName"]?.jsonPrimitive?.contentOrNull
-        genre = this@toSManga["genres"]?.jsonArray?.joinToString(", ") { it.jsonPrimitive.content }
-        status = when (this@toSManga["status"]?.jsonPrimitive?.contentOrNull) {
-            "Continuing" -> SManga.ONGOING
-            "Ended" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
     }
 
     companion object {
@@ -284,5 +197,22 @@ class NineGrid :
         private const val PREF_BASE_URL = "pref_base_url"
         private const val PREF_API_KEY = "pref_api_key"
         const val SEARCH_PREFIX = "id:"
+
+        private val ANNUAL_REGEX = Regex("^annual\\s*", RegexOption.IGNORE_CASE)
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+    }
+}
+
+private fun SeriesDto.toSManga(baseUrl: String): SManga = SManga.create().apply {
+    url = "/series/$id"
+    title = name
+    thumbnail_url = "$baseUrl/api/external/v1/series/$id/thumbnail"
+    description = this@toSManga.description
+    author = publisherName
+    genre = genres.joinToString()
+    status = when (this@toSManga.status) {
+        "Continuing" -> SManga.ONGOING
+        "Ended" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 }
