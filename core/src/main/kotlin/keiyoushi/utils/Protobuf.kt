@@ -4,6 +4,7 @@ import android.util.Base64
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -58,11 +59,12 @@ inline fun <reified T> Response.parseAsProto(proto: ProtoBuf = protoInstance, tr
 inline fun <reified T> ResponseBody.parseAsProto(proto: ProtoBuf = protoInstance): T = bytes().decodeProto(proto)
 
 /**
- * Encodes the object into a Protobuf [RequestBody] with the [PROTOBUF_MEDIA_TYPE] content type.
+ * Encodes the object into a Protobuf [RequestBody] with the given [mediaType].
  *
  * @param proto The [ProtoBuf] instance to use for serialization.
+ * @param mediaType The [MediaType] to use for the request body. Defaults to [PROTOBUF_MEDIA_TYPE] (`application/protobuf`).
  */
-inline fun <reified T : Any> T.toRequestBodyProto(proto: ProtoBuf = protoInstance): RequestBody = encodeProto(proto).toRequestBody(PROTOBUF_MEDIA_TYPE)
+inline fun <reified T : Any> T.toRequestBodyProto(proto: ProtoBuf = protoInstance, mediaType: MediaType = PROTOBUF_MEDIA_TYPE): RequestBody = encodeProto(proto).toRequestBody(mediaType)
 
 /**
  * Decodes a Base64-encoded string into an object of type [T] using Protobuf deserialization.
