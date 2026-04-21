@@ -123,12 +123,25 @@ class InkStory :
 
     override fun popularMangaParse(response: Response): MangasPage = booksParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request = booksRequest(
-        page = page,
-        sort = LATEST_SORT,
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        "$apiBaseUrl/v2/chapter-update-feed?page=${(page - 1).coerceAtLeast(0)}&size=$PAGE_SIZE",
+        headers,
     )
 
-    override fun latestUpdatesParse(response: Response): MangasPage = booksParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val updates = response.parseAs<List<ChapterUpdateFeedDto>>()
+
+        val mangas = updates.map { update ->
+            val book = update.book
+            SManga.create().apply {
+                url = mangaUrl(book.slug, book.id)
+                title = resolveTitle(book.name, book.slug)
+                thumbnail_url = book.poster
+            }
+        }
+
+        return MangasPage(mangas, updates.size >= PAGE_SIZE)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val parsedFilters = InkStorySearchFilters.from(if (filters.isEmpty()) getFilterList() else filters)
@@ -645,6 +658,14 @@ class InkStory :
     )
 
     @Serializable
+    data class ChapterUpdateFeedDto(
+        val book: BookDto,
+        val chapters: List<ChapterDto> = emptyList(),
+        val chaptersAdded: Int = 0,
+        val updatedAt: String? = null,
+    )
+
+    @Serializable
     data class NameDto(
         val en: String? = null,
         val ru: String? = null,
@@ -696,7 +717,6 @@ class InkStory :
         private const val PAGE_SIZE = 30
 
         private const val POPULAR_SORT = "viewsCount,desc"
-        private const val LATEST_SORT = "updatedAt,desc"
 
         private const val IMAGE_NAME_LENGTH = 36
         private const val IMAGE_MODE_INDEX = 14

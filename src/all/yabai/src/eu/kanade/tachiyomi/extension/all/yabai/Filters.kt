@@ -4,11 +4,14 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getFilters(): FilterList = FilterList(
-    SelectFilter("Category", categories.keys.toList()),
-    SelectFilter("Language", languages.keys.toList()),
+    CategoryFilter(),
+    LanguageFilter(),
 )
 
-internal open class SelectFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.map { it }.toTypedArray(), state)
+internal open class SelectFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.toTypedArray(), state)
+
+internal class CategoryFilter : SelectFilter("Category", categories.keys.toList())
+internal class LanguageFilter : SelectFilter("Language", languages.keys.toList())
 
 val categories = mapOf(
     "All" to "",

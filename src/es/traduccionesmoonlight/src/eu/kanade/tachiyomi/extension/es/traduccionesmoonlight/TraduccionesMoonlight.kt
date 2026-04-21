@@ -11,11 +11,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -39,7 +37,7 @@ class TraduccionesMoonlight : HttpSource() {
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
-    override fun headersBuilder() = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val rscHeaders = headersBuilder()
@@ -143,14 +141,20 @@ class TraduccionesMoonlight : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast('/')
+        return GET("$baseUrl/api/showProject/$slug", headers)
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<SeriesDto>()!!.toSMangaDetails()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val series = response.parseAs<ResponseDto<SeriesDto>>()!!.response
+        return series.toSMangaDetails()
+    }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val series = response.extractNextJs<SeriesDto>()!!
+        val series = response.parseAs<ResponseDto<SeriesDto>>()!!.response
         return series.chapters.map { it.toSChapter(seriesPath, series.slug) }
     }
 

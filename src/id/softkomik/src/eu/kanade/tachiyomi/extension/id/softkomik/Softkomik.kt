@@ -422,17 +422,22 @@ class Softkomik : HttpSource() {
                 client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
             }
 
-            val response = client.newCall(GET(route.sessionApiUrl, apiHeaders)).execute()
+            val response = runCatching {
+                client.newCall(GET(route.sessionApiUrl, apiHeaders)).execute()
+            }.getOrNull()
 
-            if (!response.isSuccessful) {
-                val code = response.code
-                response.close()
-                throw Exception("Gagal mendapatkan akses token dari Softkomik (HTTP $code).")
+            if (response?.isSuccessful == true) {
+                val newSession = response.use { it.parseAs<SessionDto>() }
+                sessionsByUrlKey[route.key] = newSession
+                return newSession
             }
+            response?.close()
 
-            val newSession = response.use { it.parseAs<SessionDto>() }
-            sessionsByUrlKey[route.key] = newSession
-            return newSession
+            // Softkomik frequently renames their session API endpoint. When the direct
+            // call fails (commonly with HTTP 404), fall back to capturing the session
+            // headers that the site's own JavaScript sends from a live WebView — that
+            // path survives URL changes without an extension update.
+            return getSessionViaWebView(route)
         }
     }
 

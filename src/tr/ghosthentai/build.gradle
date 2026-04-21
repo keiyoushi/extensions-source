@@ -1,9 +1,9 @@
 ext {
-    extName = 'Ghost Hentai'
-    extClass = '.GhostHentai'
+    extName = 'GhosToon'
+    extClass = '.GhosToon'
     themePkg = 'madara'
-    baseUrl = 'https://ghosthentai.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://ghostoon.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

@@ -3,7 +3,7 @@ ext {
     extClass = '.AstralScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://astralscans.top'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 

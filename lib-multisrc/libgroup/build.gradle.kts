@@ -2,4 +2,4 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 38
+baseVersionCode = 39

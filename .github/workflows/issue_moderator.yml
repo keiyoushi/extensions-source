@@ -59,14 +59,14 @@ jobs:
                 "regex": "(remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io)",
                 "ignoreCase": true,
                 "labels": ["invalid"],
-                "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
+                "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca).\nThis was also mentioned in #14260, which is pinned on the Issues page. Search the existing requests first & don't acknowledge that you searched when you clearly didn't."
               },
               {
                 "type": "both",
                 "regex": "(kumanga\\.com)",
                 "ignoreCase": true,
                 "labels": ["invalid"],
-                "message": "{match} will not be added back as it is too difficult to maintain."
+                "message": "{match} will not be added back as it is too difficult to maintain.\nThis was also mentioned in #14260, which is pinned on the Issues page. Search the existing requests first & don't acknowledge that you searched when you clearly didn't."
               },
               {
                 "type": "both",

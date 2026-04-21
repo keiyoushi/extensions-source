@@ -3,8 +3,7 @@ package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import okhttp3.Headers
@@ -18,9 +17,13 @@ class OcrUrlInterceptor(private val headers: Headers) {
 
     private val handler = Handler(Looper.getMainLooper())
 
-    fun getUrl(url: String): String? {
+    data class OcrRequest(val url: String, val body: String)
+
+    private val bridgeName = ('a'..'z').shuffled().take(10).joinToString("")
+
+    fun getOcrRequest(url: String): OcrRequest? {
         val latch = CountDownLatch(1)
-        var ocrUrl: String? = null
+        var ocrRequest: OcrRequest? = null
         var webView: WebView? = null
 
         handler.post {
@@ -35,16 +38,37 @@ class OcrUrlInterceptor(private val headers: Headers) {
                 userAgentString = headers["User-Agent"]
             }
 
-            webview.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                    val requestUrl = request?.url?.toString()
-                        ?: return super.shouldInterceptRequest(view, request)
-                    if (ocrUrl == null && requestUrl.contains("fetch-ocr.php")) {
-                        ocrUrl = requestUrl
-                        latch.countDown()
-                        view?.post { view.stopLoading() }
+            webview.addJavascriptInterface(
+                object {
+                    @JavascriptInterface
+                    fun onFetch(url: String, body: String) {
+                        if (ocrRequest == null && url.contains("fetch-ocr.php")) {
+                            ocrRequest = OcrRequest(url, body)
+                            latch.countDown()
+                        }
                     }
-                    return super.shouldInterceptRequest(view, request)
+                },
+                bridgeName,
+            )
+
+            webview.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    view?.evaluateJavascript(
+                        """
+                        (function() {
+                            const oldFetch = window.fetch;
+                            window.fetch = function() {
+                                const url = arguments[0];
+                                const options = arguments[1];
+                                if (url.includes('fetch-ocr.php') && options && options.body) {
+                                    $bridgeName.onFetch(url, options.body);
+                                }
+                                return oldFetch.apply(this, arguments);
+                            };
+                        })();
+                        """.trimIndent(),
+                        null,
+                    )
                 }
             }
 
@@ -64,6 +88,6 @@ class OcrUrlInterceptor(private val headers: Headers) {
 
         if (!completed) return null
 
-        return ocrUrl
+        return ocrRequest
     }
 }
