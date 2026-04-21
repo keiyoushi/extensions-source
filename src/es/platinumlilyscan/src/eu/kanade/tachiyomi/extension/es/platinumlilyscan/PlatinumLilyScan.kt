@@ -74,8 +74,7 @@ class PlatinumLilyScan : HttpSource() {
     // Popular Manga — /browse
     // ---------------------------------------------------------------------------
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/browse?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/browse?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -148,45 +147,48 @@ class PlatinumLilyScan : HttpSource() {
     // Filters
     // ---------------------------------------------------------------------------
 
-    private class GenreFilter : UriPartFilter(
-        "Género",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("Yuri", "Yuri"),
-            Pair("Romance", "Romance"),
-            Pair("Comedia", "Comedia"),
-            Pair("Escolar", "Escolar"),
-            Pair("Ciencia Ficción", "Ciencia Ficción"),
-            Pair("Acción", "Acción"),
-            Pair("Fantasía", "Fantasía"),
-            Pair("Drama", "Drama"),
-            Pair("Vida cotidiana", "Vida cotidiana"),
-            Pair("+18", "+18"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Género",
+            arrayOf(
+                Pair("Todos", ""),
+                Pair("Yuri", "Yuri"),
+                Pair("Romance", "Romance"),
+                Pair("Comedia", "Comedia"),
+                Pair("Escolar", "Escolar"),
+                Pair("Ciencia Ficción", "Ciencia Ficción"),
+                Pair("Acción", "Acción"),
+                Pair("Fantasía", "Fantasía"),
+                Pair("Drama", "Drama"),
+                Pair("Vida cotidiana", "Vida cotidiana"),
+                Pair("+18", "+18"),
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "Estado",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("Publicándose", "Publicándose"),
-            Pair("Finalizado", "Finalizado"),
-            Pair("Hiatus", "Hiatus"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "Estado",
+            arrayOf(
+                Pair("Todos", ""),
+                Pair("Publicándose", "Publicándose"),
+                Pair("Finalizado", "Finalizado"),
+                Pair("Hiatus", "Hiatus"),
+            ),
+        )
 
-    private class TypeFilter : UriPartFilter(
-        "Tipo",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("Manga", "Manga"),
-            Pair("Manhwa", "Manhwa"),
-            Pair("Manhua", "Manhua"),
-            Pair("Novela", "Novela"),
-            Pair("Doujinshi", "Doujinshi"),
-            Pair("One-Shot", "One-Shot"),
-        ),
-    )
+    private class TypeFilter :
+        UriPartFilter(
+            "Tipo",
+            arrayOf(
+                Pair("Todos", ""),
+                Pair("Manga", "Manga"),
+                Pair("Manhwa", "Manhwa"),
+                Pair("Manhua", "Manhua"),
+                Pair("Novela", "Novela"),
+                Pair("Doujinshi", "Doujinshi"),
+                Pair("One-Shot", "One-Shot"),
+            ),
+        )
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
@@ -301,8 +303,8 @@ class PlatinumLilyScan : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         // Recover chapter number and slug from the request URL
-        val chNum  = response.request.url.queryParameter("chapter") ?: return emptyList()
-        val slug   = response.request.url.encodedPath.substringAfterLast("/")
+        val chNum = response.request.url.queryParameter("chapter") ?: return emptyList()
+        val slug = response.request.url.encodedPath.substringAfterLast("/")
 
         val body = response.body.string()
 
