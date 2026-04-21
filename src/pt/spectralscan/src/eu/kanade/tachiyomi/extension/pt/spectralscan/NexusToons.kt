@@ -38,7 +38,7 @@ class NexusToons :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
+        .rateLimit(3, 1)
         .addInterceptor(NexusDecrypt.createInterceptor())
         .build()
 
