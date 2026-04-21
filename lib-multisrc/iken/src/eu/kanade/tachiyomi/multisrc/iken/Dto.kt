@@ -47,7 +47,7 @@ class Manga(
             append(Jsoup.parse(desc.replace("\n", "<br>")).text())
         }
         alternativeTitles?.takeUnless { it.isEmpty() }?.let { altName ->
-            append("\n\n")
+            append("\n\n\n")
             append("Alternative Names: ")
             append(altName)
         }
@@ -127,15 +127,23 @@ class MangaPostDto(
 )
 
 @Serializable
+class PageResponse(
+    val chapter: Page,
+)
+
+@Serializable
 class PageParseDto(
     val url: String,
     val order: Int? = null,
 )
 
 @Serializable
-class Images(
-    val images: List<PageParseDto>,
+class Page(
     val id: Int? = null,
+    val images: List<PageParseDto>,
+    val isPermanentlyLocked: Boolean = false,
+    val isLockedByCoins: Boolean = false,
+    val isShortLinkLocked: Boolean = false,
 )
 
 @Serializable
