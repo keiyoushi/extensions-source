@@ -7,9 +7,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 
-private val chapterNameRegex = Regex("""(?i)(?:chapter|ch|episode|ep|第)\.?\s*(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
+private val chapterNameRegex = Regex("""(?i)(?:chapter|ch|episode|ep|第).?\s*(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
 private val splitChapterRegex = Regex("""(\d+(?:\.\d+)?)\s*[(（](\d+)[)）]""")
 private val fallbackChapterRegex = Regex("""^(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
+private val partSuffixRegex = Regex("""\s*[(（]\d+[)）]""")
 
 // Popular
 @Serializable
@@ -96,8 +97,8 @@ class Episode(
     fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
         url = "/title/$titleId/episode/$episodeId"
         val lock = if (isLocked) "🔒 " else ""
-
         var parsedName = episodeName
+
         val match = chapterNameRegex.find(episodeName)
             ?: splitChapterRegex.find(episodeName)
             ?: fallbackChapterRegex.find(episodeName)
@@ -107,12 +108,10 @@ class Episode(
             val part = match.groupValues[2]
 
             if (part.isNotEmpty()) {
-                // Modify the display name visually so "CHAPTER 55(3)" becomes "CHAPTER 55.3"
-                val replacement = match.value.replaceFirst(Regex("""\s*[(（]$part[)）]"""), ".$part")
+                val replacement = match.value.replaceFirst(partSuffixRegex, ".$part")
                 parsedName = parsedName.replaceRange(match.range, replacement)
-
                 if (main.contains(".")) {
-                    "$main$part".toFloatOrNull() ?: index.toFloat()
+                    main.toFloatOrNull() ?: index.toFloat()
                 } else {
                     "$main.$part".toFloatOrNull() ?: index.toFloat()
                 }
