@@ -696,6 +696,7 @@ empty, so the app will skip the `fetchImageUrl` step and call directly `fetchIma
 - **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Use `"application/json".toMediaType()`.
 - **Use `getUrlWithoutDomain` carefully:** It can be useful when parsing target source URLs, but note a current issue with spaces—replace them with URL-encoded characters (e.g., `%20`).
 - **Follow `HttpSource` workflow:** Stick to the general workflow from this base class when possible; deviating may introduce unnecessary complexity.
+- **Do not override default `HttpSource` methods:** Avoid overriding methods like `mangaDetailsRequest` or `chapterListRequest` if they only replicate the default behavior (`GET(baseUrl + manga.url, headers`). Only override them if the source requires a different URL structure or custom headers for those specific requests.
 - **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
 
 ### Advanced Extension features
