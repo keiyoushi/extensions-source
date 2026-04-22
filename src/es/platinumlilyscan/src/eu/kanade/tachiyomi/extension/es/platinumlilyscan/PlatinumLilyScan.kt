@@ -101,8 +101,6 @@ class PlatinumLilyScan : HttpSource() {
     )
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga(baseUrl)
 
     override fun getMangaUrl(manga: SManga): String {
@@ -111,8 +109,6 @@ class PlatinumLilyScan : HttpSource() {
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val series = response.parseAs<SeriesDto>()
 
