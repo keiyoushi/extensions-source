@@ -41,6 +41,7 @@ class HentaiLoop : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
+    private val datePublishedRegex = """"datePublished"\s*:\s*"([^"]+)"""".toRegex()
 
     private fun buildSearchPayload(query: String, sort: String, offset: Int): FormBody {
         val reqJson = buildJsonObject {
@@ -173,8 +174,7 @@ class HentaiLoop : HttpSource() {
             // Attempt to extract proper upload date provided by Yoast SEO JSON-LD block
             val jsonLd = doc.select("script[type=application/ld+json].yoast-schema-graph").html()
             if (jsonLd.isNotBlank()) {
-                val dateRegex = """"datePublished"\s*:\s*"([^"]+)"""".toRegex()
-                val dateString = dateRegex.find(jsonLd)?.groupValues?.get(1)
+                val dateString = datePublishedRegex.find(jsonLd)?.groupValues?.get(1)
                 if (dateString != null) {
                     date_upload = dateFormat.tryParse(dateString)
                 }
@@ -184,7 +184,7 @@ class HentaiLoop : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = baseUrl + chapter.url + "read/"
+        val url = baseUrl + chapter.url.removeSuffix("/") + "/read/"
         return GET(url, headers)
     }
 
