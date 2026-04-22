@@ -101,32 +101,37 @@ class PlatinumLilyScan : HttpSource() {
     )
 
     // =========================== Manga Details ============================
+    // manga.url is now just the slug, so we rebuild the API path here
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/series/${manga.url}", headers)
+
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga(baseUrl)
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.substringAfterLast("/")
-        return "$baseUrl/series/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
     // ============================== Chapters ==============================
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/series/${manga.url}", headers)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val series = response.parseAs<SeriesDto>()
 
+        // API already returns chapters in order; let the app sort if needed
         return series.chapters?.filter { it.id.isNotEmpty() }?.map {
             it.toSChapter(series.slug)
-        }?.sortedByDescending { it.chapter_number } ?: emptyList()
+        } ?: emptyList()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val slug = chapter.url.substringBefore("#").substringAfterLast("/")
+        // chapter.url is "seriesSlug#chapterId"
+        val slug = chapter.url.substringBefore("#")
         return "$baseUrl/series/$slug"
     }
 
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
-        val seriesUrl = chapter.url.substringBefore("#")
+        // chapter.url is "seriesSlug#chapterId"
+        val seriesSlug = chapter.url.substringBefore("#")
         val chapterId = chapter.url.substringAfter("#")
-        return GET(baseUrl + seriesUrl, headers).newBuilder()
+        return GET("$baseUrl/api/series/$seriesSlug", headers).newBuilder()
             .tag(String::class.java, chapterId)
             .build()
     }
