@@ -38,7 +38,7 @@ class SeriesDto(
 
     fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@SeriesDto.title
-        this.url = "/api/series/$slug"
+        this.url = slug // store only the slug
         this.thumbnail_url = this@SeriesDto.coverUrl?.let { baseUrl + it }
         this.description = this@SeriesDto.description
         this.author = this@SeriesDto.author
@@ -94,7 +94,7 @@ class ChapterDto(
     val pages: List<PageDto>? = emptyList(),
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
-        this.url = "/api/series/$seriesSlug#$id"
+        this.url = "$seriesSlug#$id" // store only slug#chapterId
         this.chapter_number = this@ChapterDto.number
         this.date_upload = dateFormat.tryParse(this@ChapterDto.publishedAt)
         this.name = buildString {
