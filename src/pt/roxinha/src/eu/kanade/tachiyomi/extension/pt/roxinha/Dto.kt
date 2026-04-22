@@ -33,7 +33,7 @@ class MangaDto(
     private val chapters: List<ChapterDto>? = null,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = "/manga/$id"
+        url = "$id"
         this.title = this@MangaDto.title
         thumbnail_url = cover?.let { baseUrl + it }
         this.author = this@MangaDto.author
@@ -48,7 +48,7 @@ class MangaDto(
 
     fun toSChapters(): List<SChapter> = chapters?.map {
         SChapter.create().apply {
-            url = "/manga/chapter/${it.id}"
+            url = "${it.id}"
             name = it.title?.takeIf { t -> t.isNotBlank() }
                 ?: "Capítulo ${it.chapterNumber?.toString()?.removeSuffix(".0") ?: ""}".trim()
             chapter_number = it.chapterNumber ?: -1f
