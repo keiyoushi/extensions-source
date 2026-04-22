@@ -59,7 +59,11 @@ class NineGrid :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SeriesListResponse>()
-        val mangas = data.content.map { it.toSManga(baseUrl) }
+        val mangas = data.content.map {
+            it.toSManga().apply {
+                thumbnail_url = "$apiBase/series/$id/thumbnail"
+            }
+        }
         return MangasPage(mangas, data.page + 1 < data.totalPages)
     }
 
@@ -111,16 +115,19 @@ class NineGrid :
 
     // Manga Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBase/series/${manga.url.substringAfterLast("/")}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBase/series/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val s = response.parseAs<SeriesDto>()
-        return s.toSManga(baseUrl).apply { initialized = true }
+        return s.toSManga().apply {
+            thumbnail_url = "$apiBase/series/${s.id}/thumbnail"
+            initialized = true
+        }
     }
 
     // Chapter List
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiBase/series/${manga.url.substringAfterLast("/")}/issues", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiBase/series/${manga.url}/issues", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<IssuesResponse>()
@@ -199,20 +206,6 @@ class NineGrid :
         const val SEARCH_PREFIX = "id:"
 
         private val ANNUAL_REGEX = Regex("^annual\\s*", RegexOption.IGNORE_CASE)
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-    }
-}
-
-private fun SeriesDto.toSManga(baseUrl: String): SManga = SManga.create().apply {
-    url = "/series/$id"
-    title = name
-    thumbnail_url = "$baseUrl/api/external/v1/series/$id/thumbnail"
-    description = this@toSManga.description
-    author = publisherName
-    genre = genres.joinToString()
-    status = when (this@toSManga.status) {
-        "Continuing" -> SManga.ONGOING
-        "Ended" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
     }
 }

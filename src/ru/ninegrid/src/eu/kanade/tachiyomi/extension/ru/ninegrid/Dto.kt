@@ -1,31 +1,45 @@
 package eu.kanade.tachiyomi.extension.ru.ninegrid
 
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SeriesListResponse(
+class SeriesListResponse(
     val content: List<SeriesDto>,
     val page: Int,
     val totalPages: Int,
 )
 
 @Serializable
-data class SeriesDto(
+class SeriesDto(
     val id: Int,
     val name: String,
     val description: String? = null,
     val publisherName: String? = null,
     val genres: List<String> = emptyList(),
     val status: String? = null,
-)
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        url = id.toString()
+        title = name
+        description = this@SeriesDto.description
+        author = publisherName
+        genre = genres.joinToString()
+        status = when (this@SeriesDto.status) {
+            "Continuing" -> SManga.ONGOING
+            "Ended" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
+}
 
 @Serializable
-data class IssuesResponse(
+class IssuesResponse(
     val issues: List<IssueDto>,
 )
 
 @Serializable
-data class IssueDto(
+class IssueDto(
     val id: Int,
     val number: String,
     val name: String? = null,
@@ -33,7 +47,7 @@ data class IssueDto(
 )
 
 @Serializable
-data class TranslationDto(
+class TranslationDto(
     val id: String,
     val teamNames: List<String> = emptyList(),
     val pageCount: Int = 0,
@@ -41,12 +55,12 @@ data class TranslationDto(
 )
 
 @Serializable
-data class PagesResponse(
+class PagesResponse(
     val pages: List<PageDto>,
 )
 
 @Serializable
-data class PageDto(
+class PageDto(
     val index: Int,
     val url: String,
 )
