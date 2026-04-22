@@ -84,9 +84,9 @@ class Roxinha : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(apiUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<MangaDto>()
@@ -100,9 +100,9 @@ class Roxinha : HttpSource() {
         return dto.toSChapters()
     }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/chapter/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(apiUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/manga/chapter/${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterDetailsDto>()
