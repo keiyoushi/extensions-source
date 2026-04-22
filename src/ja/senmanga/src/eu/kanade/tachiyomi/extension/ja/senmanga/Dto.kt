@@ -36,11 +36,13 @@ class SeriesDto(
 
     private fun parseStatus(statusString: String?): Int {
         if (statusString == null) return SManga.UNKNOWN
+
+        val status = statusString.lowercase()
         return when {
-            statusString.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
-            statusString.contains("Complete", ignoreCase = true) -> SManga.COMPLETED
-            statusString.contains("Hiatus", ignoreCase = true) -> SManga.ON_HIATUS
-            statusString.contains("Dropped", ignoreCase = true) -> SManga.CANCELLED
+            status.contains("ongoing") -> SManga.ONGOING
+            status.contains("complete") -> SManga.COMPLETED
+            status.contains("hiatus") -> SManga.ON_HIATUS
+            status.contains("dropped") -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
