@@ -24,6 +24,7 @@ class Submanhwa : ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("dd MMM. yyyy", Locale.ENGLISH)
 
     override fun headersBuilder() = super.headersBuilder()
+        .add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET(
