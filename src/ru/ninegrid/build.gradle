@@ -2,7 +2,7 @@ ext {
     extName = 'NineGrid'
     extClass = '.NineGrid'
     extVersionCode = 1
-    isConfigurable = true
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
