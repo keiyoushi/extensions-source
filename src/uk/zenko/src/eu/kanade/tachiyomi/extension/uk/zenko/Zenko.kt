@@ -79,7 +79,7 @@ class Zenko : HttpSource() {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val mangaDto = response.parseAs<MangaDetailsResponse>()
         setUrlWithoutDomain("/titles/${mangaDto.id}")
-        title = mangaDto.name ?: mangaDto.engName.toString()
+        title = (mangaDto.name ?: mangaDto.engName).toString()
         thumbnail_url = buildImageUrl(mangaDto.coverImg)
         description = "${mangaDto.name}\r\n\r\n${mangaDto.engName}, ${mangaDto.originalName}\r\n\r\n${mangaDto.description}"
         genre = mangaDto.genres!!.joinToString { it.name }
@@ -153,7 +153,7 @@ class Zenko : HttpSource() {
 
     private fun makeSManga(mangaDto: MangaDetailsResponse) = SManga.create().apply {
         setUrlWithoutDomain("/titles/${mangaDto.id}")
-        title = mangaDto.name ?: mangaDto.engName.toString()
+        title = (mangaDto.name ?: mangaDto.engName).toString()
         thumbnail_url = buildImageUrl(mangaDto.coverImg)
         status = mangaDto.status.toStatus()
     }
