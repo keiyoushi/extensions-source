@@ -43,6 +43,23 @@ abstract class ScanReader(
 
     // ====================== Popular ======================
 
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        if (page > 1) {
+            return Observable.fromCallable {
+                val response = client.newCall(
+                    GET("$baseUrl/bibliotheque/page/${page - 1}/?sort=views", headers),
+                ).execute()
+                val document = response.asJsoup()
+                val mangas = document.select("div.manga-card")
+                    .map { mangaFromCard(it) }
+                    .filterNot { it.title.contains("(Novel)") }
+                val hasNextPage = document.selectFirst("a.pagination-next") != null
+                MangasPage(mangas, hasNextPage)
+            }
+        }
+        return super.fetchPopularManga(page)
+    }
+
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -53,19 +70,20 @@ abstract class ScanReader(
             .select("div.popular-section div.manga-card")
             .map { mangaFromCard(it) }
             .filterNot { it.title.contains("(Novel)") }
-        return MangasPage(mangas, false)
+        return MangasPage(mangas, true)
     }
 
     // ====================== Latest ======================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/dernieres-sorties/page/$page/", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.asJsoup()
-            .select("div.recent-section div.manga-latest-card")
-            .map { mangaFromLatestCard(it) }
+        val document = response.asJsoup()
+        val mangas = document.select("div.manga-cover")
+            .mapNotNull { mangaFromLatestCard(it) }
             .filterNot { it.title.contains("(Novel)") }
-        return MangasPage(mangas, false)
+        val hasNextPage = document.selectFirst("a.pagination-next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     // ====================== Search ======================
@@ -74,11 +92,9 @@ abstract class ScanReader(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val cards = document.select("div.manga-card").ifEmpty {
-            document.select("div.manga-latest-card")
-        }
+        val cards = document.select("div.manga-card")
         val mangas = cards
-            .map { if (it.hasClass("manga-latest-card")) mangaFromLatestCard(it) else mangaFromCard(it) }
+            .map { mangaFromCard(it) }
             .filterNot { it.title.contains("(Novel)") }
         return MangasPage(mangas, false)
     }
@@ -241,13 +257,13 @@ abstract class ScanReader(
         }
     }
 
-    private fun mangaFromLatestCard(element: Element): SManga {
-        val link = element.selectFirst("a[href*='/mangas/']")!!
+    private fun mangaFromLatestCard(cover: Element): SManga? {
+        val url = cover.selectFirst("a")?.absUrl("href")?.takeIf { it.isNotEmpty() } ?: return null
+        val title = cover.nextElementSibling()?.selectFirst("h3.manga-title-display")?.text() ?: return null
         return SManga.create().apply {
-            setUrlWithoutDomain(link.attr("href"))
-            title = element.selectFirst("h3")!!.text()
-            thumbnail_url = extractCoverFromOnClick(link.attr("onclick"))
-                ?: extractLazySrc(element.selectFirst("img"))
+            setUrlWithoutDomain(url)
+            this.title = title
+            thumbnail_url = extractLazySrc(cover.selectFirst("img"))
         }
     }
 }
