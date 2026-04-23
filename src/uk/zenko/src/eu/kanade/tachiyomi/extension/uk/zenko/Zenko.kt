@@ -81,7 +81,7 @@ class Zenko : HttpSource() {
         setUrlWithoutDomain("/titles/${mangaDto.id}")
         title = (mangaDto.name ?: mangaDto.engName).toString()
         thumbnail_url = buildImageUrl(mangaDto.coverImg)
-        description = "${mangaDto.name}\r\n\r\n${mangaDto.engName}, ${mangaDto.originalName}\r\n\r\n${mangaDto.description}"
+        description = "${mangaDto.name}\n\n${mangaDto.engName}, ${mangaDto.originalName}\n\n${mangaDto.description}"
         genre = mangaDto.genres!!.joinToString { it.name }
         author = mangaDto.author!!.username
         status = mangaDto.status.toStatus()
