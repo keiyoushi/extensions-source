@@ -37,7 +37,7 @@ inline fun <reified T : Any> T.encodeProto(proto: ProtoBuf = protoInstance): Byt
  *
  * @param proto The [ProtoBuf] instance to use for deserialization.
  */
-inline fun <reified T> Response.parseAsProto(proto: ProtoBuf = protoInstance): T = use { it.body.bytes().decodeProto(proto) }
+inline fun <reified T> Response.parseAsProto(proto: ProtoBuf = protoInstance): T = use { it.body.byteStream().readBytes().decodeProto(proto) }
 
 /**
  * Parses the response body into an object of type [T] using Protobuf deserialization.
@@ -47,7 +47,7 @@ inline fun <reified T> Response.parseAsProto(proto: ProtoBuf = protoInstance): T
  * @param proto The [ProtoBuf] instance to use for deserialization.
  * @param transform A function to transform the raw [ByteArray] before it is decoded.
  */
-inline fun <reified T> Response.parseAsProto(proto: ProtoBuf = protoInstance, transform: (ByteArray) -> ByteArray): T = use { transform(it.body.bytes()).decodeProto(proto) }
+inline fun <reified T> Response.parseAsProto(proto: ProtoBuf = protoInstance, transform: (ByteArray) -> ByteArray): T = use { transform(it.body.byteStream().readBytes()).decodeProto(proto) }
 
 /**
  * Parses this [ResponseBody] into an object of type [T] using Protobuf deserialization.
