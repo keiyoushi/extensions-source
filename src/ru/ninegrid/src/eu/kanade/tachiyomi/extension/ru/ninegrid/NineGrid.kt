@@ -28,7 +28,16 @@ class NineGrid :
     override val lang = "ru"
     override val supportsLatest = true
 
-    private val preferences = getPreferences()
+    private val preferences = getPreferences {
+        getString(PREF_DEFAULT_BASE_URL, null).let { defaultBaseUrl ->
+            if (defaultBaseUrl != DEFAULT_BASE_URL) {
+                edit()
+                    .putString(PREF_BASE_URL, DEFAULT_BASE_URL)
+                    .putString(PREF_DEFAULT_BASE_URL, DEFAULT_BASE_URL)
+                    .apply()
+            }
+        }
+    }
 
     override val baseUrl: String
         get() = preferences.getString(PREF_BASE_URL, DEFAULT_BASE_URL)!!.trimEnd('/')
@@ -202,6 +211,7 @@ class NineGrid :
     companion object {
         private const val DEFAULT_BASE_URL = "https://9grid.cc"
         private const val PREF_BASE_URL = "pref_base_url"
+        private const val PREF_DEFAULT_BASE_URL = "pref_default_base_url"
         private const val PREF_API_KEY = "pref_api_key"
         const val SEARCH_PREFIX = "id:"
 
