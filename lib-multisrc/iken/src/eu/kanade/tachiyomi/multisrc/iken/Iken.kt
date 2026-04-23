@@ -357,6 +357,8 @@ abstract class Iken(
     // some extensions need to sort image urls by filename, override this to true if so
     protected open val sortPagesByFilename = false
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url.substringBeforeLast("#")}"
+
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.substringAfterLast("#")
         return GET("$apiUrl/api/chapter?chapterId=$id", headers)
