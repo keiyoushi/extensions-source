@@ -11,6 +11,18 @@ class MangaListDto(
 )
 
 @Serializable
+class ChapterListDto(
+    val data: List<ChapterDto> = emptyList(),
+    val total: Int = 0,
+    val page: Int = 1,
+    val totalPages: Int? = null,
+    val lastPage: Int? = null,
+) {
+    val pageCount: Int
+        get() = totalPages ?: lastPage ?: 1
+}
+
+@Serializable
 class MangaDto(
     val id: String,
     val title: String,
@@ -27,6 +39,7 @@ class MangaDetailsDto(
     val tags: List<TagDto> = emptyList(),
     val linkedAuthors: List<LinkedPersonDto> = emptyList(),
     val linkedArtists: List<LinkedPersonDto> = emptyList(),
+    val chapters: List<ChapterDto> = emptyList(),
 )
 
 @Serializable
@@ -41,19 +54,12 @@ class LinkedPersonDto(
 )
 
 @Serializable
-class ChapterListDto(
-    val data: List<ChapterDto>,
-    val total: Int = 0,
-    val page: Int = 1,
-    val totalPages: Int = 1,
-)
-
-@Serializable
 class ChapterDto(
     val id: String,
     val title: String? = null,
     val name: String? = null,
     val chapterNumber: String,
+    val order: Double? = null,
     val publishedAt: String? = null,
     val createdAt: String? = null,
 )

@@ -16,6 +16,8 @@ internal val EZMANHWA_DATE_FORMAT by lazy {
     }
 }
 
+internal val CHAPTER_PREFIX_REGEX = Regex("^(?i)(chapter|ch\\.?|episode|ep\\.?)\\s*.*")
+
 @Serializable
 data class EZManhwaSeriesListDto(
     val data: List<EZManhwaSeriesDto>,
@@ -89,11 +91,26 @@ data class EZManhwaChapterDto(
         val numStr = number?.let {
             if (it % 1.0 == 0.0) it.toInt().toString() else it.toString()
         } ?: ""
-        val chapterTitle = title?.takeIf { it.isNotBlank() } ?: "Chapter $numStr".trim()
-        name = prefix + chapterTitle
+
+        val parsedTitle = title?.trim()?.takeIf { it.isNotBlank() }
+
+        val chapterName = if (numStr.isBlank()) {
+            parsedTitle ?: "Chapter"
+        } else {
+            when {
+                parsedTitle == null || parsedTitle == numStr -> "Chapter $numStr"
+                isChapterTitle(parsedTitle, numStr) -> parsedTitle
+                parsedTitle.startsWith("-") || parsedTitle.startsWith(":") -> "Chapter $numStr $parsedTitle"
+                else -> "Chapter $numStr - $parsedTitle"
+            }
+        }
+
+        name = prefix + chapterName
         chapter_number = number?.toFloat() ?: -1f
         date_upload = EZMANHWA_DATE_FORMAT.tryParse(createdAt)
     }
+
+    private fun isChapterTitle(title: String, numStr: String): Boolean = title.contains(numStr) && CHAPTER_PREFIX_REGEX.matches(title)
 }
 
 @Serializable

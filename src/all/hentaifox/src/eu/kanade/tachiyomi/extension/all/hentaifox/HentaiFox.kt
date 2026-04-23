@@ -149,7 +149,7 @@ class HentaiFox(
         val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
 
         sortOrderFilter?.let {
-            val selectedCategory = sortOrderFilter.values.get(sortOrderFilter.state)
+            val selectedCategory = sortOrderFilter.values[sortOrderFilter.state]
             if (sidebarCategoriesFilterStateMap.containsKey(selectedCategory)) {
                 return sidebarRequest(
                     sidebarCategoriesFilterStateMap.getValue(selectedCategory),
@@ -174,10 +174,10 @@ class HentaiFox(
         if (response.request.url.encodedPath.endsWith(sidebarPath)) {
             val document = response.asJsoup()
             val mangas = document.select(sidebarMangaSelector())
-                .map {
+                .mapNotNull {
                     SMangaDto(
-                        title = it.sidebarMangaTitle()!!,
-                        url = it.sidebarMangaUrl()!!,
+                        title = it.sidebarMangaTitle() ?: return@mapNotNull null,
+                        url = it.sidebarMangaUrl() ?: return@mapNotNull null,
                         thumbnail = it.sidebarMangaThumbnail(),
                         lang = LANGUAGE_MULTI,
                     )

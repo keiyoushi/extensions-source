@@ -118,7 +118,7 @@ class ChapterData(
         if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
             name += ": $title"
         }
-        url = "/read/$mangaUrl/chapter-$chapterNum-sub"
+        url = "/manga/$mangaUrl/chapter-$chapterNum-sub"
         date_upload = uploadDates?.sub.parseDate()
     }
 

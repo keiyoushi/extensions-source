@@ -74,8 +74,8 @@ private fun decryptAesGcm(encoded: String): String {
         .digest(AES_KEY.toByteArray(Charsets.UTF_8))
 
     val data = Base64.decode(encoded, Base64.DEFAULT)
-    val iv = data.copyOfRange(0, 12)
-    val ciphertext = data.copyOfRange(12, data.size)
+    val iv = data.copyOfRange(1, 13)
+    val ciphertext = data.copyOfRange(13, data.size)
 
     val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
         init(
@@ -88,7 +88,7 @@ private fun decryptAesGcm(encoded: String): String {
     return cipher.doFinal(ciphertext).toString(Charsets.UTF_8)
 }
 
-private const val AES_KEY = "SimtVuagFbGR2K7P"
+private const val AES_KEY = "Xot36i3lK3:v1"
 
 inline fun <reified T> List<*>.firstInstanceOrNull(): T? = filterIsInstance<T>().firstOrNull()
 
