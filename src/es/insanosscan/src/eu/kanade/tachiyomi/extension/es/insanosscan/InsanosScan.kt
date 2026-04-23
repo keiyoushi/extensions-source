@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.insanosscan
 
-import android.app.Application
-import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -14,20 +13,18 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -45,13 +42,9 @@ class InsanosScan :
 
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("es"))
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     // ========================= Preferences =========================
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences = getPreferences()
 
     private val showPaidChapters: Boolean
         get() = preferences.getBoolean(PREF_SHOW_PAID, false)
@@ -73,7 +66,7 @@ class InsanosScan :
             ?.attr("src")
             ?.removePrefix("data:text/javascript;base64,")
             ?: return@lazy ""
-        val js = String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
+        val js = String(Base64.decode(b64, Base64.DEFAULT))
         NONCE_REGEX.find(js)?.groupValues?.get(1) ?: ""
     }
 
@@ -112,19 +105,27 @@ class InsanosScan :
         return POST("$baseUrl/wp-admin/admin-ajax.php", headers, body)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val root = response.parseAs<JsonObject>()
-        val data = root["data"]?.jsonArray ?: return MangasPage(emptyList(), false)
+    @Serializable
+    private data class SearchResponse(
+        val data: List<SearchItem>? = null,
+    )
 
-        val mangas = data.map { element ->
-            val obj = element.jsonObject
+    @Serializable
+    private data class SearchItem(
+        val url: String,
+        val title: String,
+        val cover: String? = null,
+    )
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<SearchResponse>()
+        val mangas = (result.data ?: return MangasPage(emptyList(), false)).map { item ->
             SManga.create().apply {
-                setUrlWithoutDomain(obj["url"]!!.jsonPrimitive.content)
-                title = obj["title"]!!.jsonPrimitive.content
-                thumbnail_url = obj["cover"]?.jsonPrimitive?.content?.ifEmpty { null }
+                setUrlWithoutDomain(item.url)
+                title = item.title
+                thumbnail_url = item.cover?.ifEmpty { null }
             }
         }
-
         return MangasPage(mangas, false)
     }
 
@@ -192,7 +193,7 @@ class InsanosScan :
         val raw = LOCKED_REGEX.find(scriptBody)?.groupValues?.get(1) ?: return emptySet()
 
         return runCatching {
-            json.parseToJsonElement(raw).jsonObject
+            Json.parseToJsonElement(raw).jsonObject
                 .entries
                 .filter { (_, v) -> v.jsonPrimitive.int > 0 }
                 .map { (k, _) -> k }
