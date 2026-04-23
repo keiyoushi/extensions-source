@@ -12,14 +12,11 @@ class InsanosScanActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size >= 2) {
-            val slug = pathSegments[1]
-            val query = slug.replace('-', ' ')
-
+        val uri = intent?.data
+        if (uri != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
+                putExtra("query", uri.toString())
                 putExtra("filter", packageName)
             }
             try {
