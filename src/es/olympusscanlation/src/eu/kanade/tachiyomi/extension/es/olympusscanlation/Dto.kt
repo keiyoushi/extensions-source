@@ -4,32 +4,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonTransformingSerializer
 import java.text.ParseException
 import java.text.SimpleDateFormat
 
 @Serializable
-class PayloadHomeDto(
-    val data: HomeDto,
-)
-
-@Serializable
-class HomeDto(
-    @SerialName("popular_comics")
-    @Serializable(with = PopularComicsSerializer::class)
-    val popularComics: List<MangaDto>,
-)
-
-object PopularComicsSerializer : JsonTransformingSerializer<List<MangaDto>>(ListSerializer(MangaDto.serializer())) {
-    override fun transformDeserialize(element: JsonElement): JsonElement = if (element is JsonPrimitive && element.isString) {
-        Json.parseToJsonElement(element.content)
-    } else {
-        element
-    }
+class RankingDto(
+    val data: List<MangaDto>,
+    @SerialName("current_page") private val currentPage: Int,
+    @SerialName("last_page") private val lastPage: Int,
+) {
+    fun hasNextPage() = currentPage < lastPage
 }
 
 @Serializable
@@ -55,7 +39,7 @@ class PayloadMangaDto(val data: List<MangaDto>)
 @Serializable
 class MangaDto(
     val id: Int,
-    private val name: String,
+    val name: String,
     val slug: String,
     private val cover: String? = null,
     val type: String? = null,
