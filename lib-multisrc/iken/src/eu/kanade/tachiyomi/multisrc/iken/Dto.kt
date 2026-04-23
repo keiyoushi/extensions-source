@@ -47,7 +47,7 @@ class Manga(
             append(Jsoup.parse(desc.replace("\n", "<br>")).text())
         }
         alternativeTitles?.takeUnless { it.isEmpty() }?.let { altName ->
-            append("\n\n\n")
+            append("\n\n")
             append("Alternative Names: ")
             append(altName)
         }
