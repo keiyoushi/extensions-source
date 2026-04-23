@@ -30,18 +30,19 @@ class Yupmanga : HttpSource() {
 
     override val supportsLatest = true
 
-    // Cached CSRF token, populated by the token interceptor during normal browsing flow.
+    // Cached CSRF token and data-k value, populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
+    private var dataK: String = ""
 
-    // Peeks at every HTML response to extract the _token input value without consuming the body.
+    // Peeks at every HTML response to extract the token and data-k values without consuming the body.
     private val tokenInterceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
         if (response.header("Content-Type").orEmpty().contains("text/html")) {
-            Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-                .selectFirst("input[name=_token]")
-                ?.attr("value")
-                ?.takeIf { it.isNotEmpty() }
-                ?.let { csrfToken = it }
+            // Peak a max of 3MB of data to prevent OutOfMemoryError
+            val html = response.peekBody(3 * 1024 * 1024L).string()
+
+            TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
+            DATAK_REGEX.find(html)?.groupValues?.get(1)?.let { dataK = it }
         }
         response
     }
@@ -105,16 +106,18 @@ class Yupmanga : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            with(document.selectFirst("main > div.container")!!) {
-                title = selectFirst("h1")!!.text()
-                description = selectFirst("p#synopsisText")?.text()
-                author = selectFirst("i[title=Editorial] + span")?.text()
-                status = selectFirst("span:has(i[title=Estado])").parseStatus()
-                genre = select("a.genre-tag").joinToString { genre ->
-                    genre.text().replaceFirstChar { it.uppercase() }
-                }
-                thumbnail_url = document.selectFirst("meta[property=og:image]")!!.attr("content")
+            val container = document.selectFirst("main > div.container")
+                ?: throw Exception("No se pudo encontrar la información del manga")
+
+            title = container.selectFirst("h1")?.text()
+                ?: throw Exception("Título del manga no encontrado")
+            description = container.selectFirst("p#synopsisText")?.text()
+            author = container.selectFirst("i[title=Editorial] + span")?.text()
+            status = container.selectFirst("span:has(i[title=Estado])").parseStatus()
+            genre = container.select("a.genre-tag").joinToString { genre ->
+                genre.text().replaceFirstChar { it.uppercase() }
             }
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
         }
     }
 
@@ -162,12 +165,17 @@ class Yupmanga : HttpSource() {
         return allChapters
     }
 
-    private fun parseChapterList(document: Document, mangaId: String): List<SChapter> = document.select("div.comic-card").map { element ->
-        val chapterId = element.selectFirst("a[data-chapter]")!!.attr("data-chapter")
+    private fun parseChapterList(document: Document, mangaId: String): List<SChapter> {
+        return document.select("div.comic-card").mapNotNull { element ->
+            val chapterId = element.selectFirst("a[data-chapter]")?.attr("data-chapter")
+                ?: return@mapNotNull null
+            val chapterName = element.selectFirst("h3")?.text()
+                ?: return@mapNotNull null
 
-        SChapter.create().apply {
-            name = element.selectFirst("h3")!!.text()
-            url = "$chapterId#$mangaId"
+            SChapter.create().apply {
+                name = chapterName
+                url = "$chapterId#$mangaId"
+            }
         }
     }
 
@@ -194,8 +202,12 @@ class Yupmanga : HttpSource() {
             mangaId = chapter.url.substringAfter("#")
         }
 
-        // The CSRF token is captured passively by tokenInterceptor during normal browsing —
-        // no extra GET request needed here.
+        // If opened directly from the library/cached details and dataK is empty,
+        // we must fetch the series page to trigger the interceptor and populate the values.
+        if ((dataK.isEmpty() || csrfToken.isEmpty()) && mangaId.isNotEmpty()) {
+            client.newCall(GET("$baseUrl/series.php?id=$mangaId", headers)).execute().close()
+        }
+
         val challengeUrl = "$baseUrl/ajax/get_challenge.php".toHttpUrl().newBuilder()
             .addQueryParameter("chapter", chapterId)
             .apply {
@@ -208,14 +220,17 @@ class Yupmanga : HttpSource() {
             throw Exception("Error fetching challenge")
         }
 
-        // Broad mocking to avoid "cannot read property 'length' of undefined" in QuickJs evaluation.
+        // Broad mocking to avoid "cannot read property" crashes in QuickJs evaluation.
         val answer = QuickJs.create().use {
             it.evaluate(
                 """
                 var mockElem = {
                     value: "$csrfToken",
-                    getAttribute: function(attr) { return "$csrfToken"; },
-                    dataset: { token: "$csrfToken" },
+                    getAttribute: function(attr) {
+                        if (attr === 'data-k') return "$dataK";
+                        return "$csrfToken";
+                    },
+                    dataset: { token: "$csrfToken", k: "$dataK" },
                     textContent: "$csrfToken",
                     innerText: "$csrfToken",
                     innerHTML: "$csrfToken",
@@ -259,11 +274,37 @@ class Yupmanga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val requestUrl = response.request.url
 
+        val chapterId = requestUrl.queryParameter("chapter")
+        val token = requestUrl.queryParameter("token")
+
+        // In 'Manga' mode, only the first image is present in the DOM, so we must rely on the inline config script.
+        // This will successfully generate the pages accurately for both Webtoon & Manga modes.
+        val scriptData = document.selectFirst("script:containsData(totalPages:)")?.data()
+
+        if (scriptData != null && chapterId != null && token != null) {
+            val totalPagesStr = scriptData.substringAfter("totalPages:").substringBefore(",").trim()
+            val totalPages = totalPagesStr.toIntOrNull()
+
+            if (totalPages != null && totalPages > 0) {
+                return (1..totalPages).map { pageNum ->
+                    val imageUrl = "$baseUrl/image-proxy-v2.php?chapter=$chapterId&page=$pageNum&token=$token&context=reader"
+                    Page(pageNum - 1, imageUrl = imageUrl)
+                }
+            }
+        }
+
+        // Fallback to DOM scraping just in case
         return document.select("div#readerContent img.page-image").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
+        private val DATAK_REGEX = """id=["']app-cfg["']\s+data-k=["']([^"']+)["']""".toRegex()
+    }
 }
