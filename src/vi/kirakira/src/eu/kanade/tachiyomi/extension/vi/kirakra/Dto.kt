@@ -12,7 +12,7 @@ class ComicListDto(
 @Serializable
 class ComicDto(
     val id: String? = null,
-    val title: String? = null,
+    val title: String,
     val thumbnail: String? = null,
     val banner_image_url: String? = null,
 )
@@ -20,7 +20,7 @@ class ComicDto(
 @Serializable
 class ComicDetailsDto(
     val id: String? = null,
-    val title: String? = null,
+    val title: String,
     val thumbnail: String? = null,
     val banner_image_url: String? = null,
     val description: String? = null,

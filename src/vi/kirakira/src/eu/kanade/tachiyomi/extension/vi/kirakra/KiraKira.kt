@@ -134,7 +134,7 @@ class KiraKira :
         val payload = response.parseAs<ComicDetailsDto>()
 
         return SManga.create().apply {
-            title = payload.title ?: throw Exception("Không tìm thấy tên truyện")
+            title = payload.title
             thumbnail_url = payload.thumbnail?.ifBlank { null } ?: payload.banner_image_url?.ifBlank { null }
             author = "Unknown"
             status = parseStatus(payload.status)
@@ -326,10 +326,9 @@ class KiraKira :
     private fun ComicListDto.toMangasPage(): MangasPage {
         val mangas = comics.mapNotNull { comic ->
             val slug = comic.id ?: return@mapNotNull null
-            val mangaTitle = comic.title ?: return@mapNotNull null
 
             SManga.create().apply {
-                title = mangaTitle
+                title = comic.title
                 setUrlWithoutDomain("/comics/$slug")
                 thumbnail_url = comic.thumbnail?.ifBlank { null } ?: comic.banner_image_url?.ifBlank { null }
             }
