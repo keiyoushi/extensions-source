@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -86,9 +87,10 @@ class HentaiKun : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("div.single_title h1")?.text() ?: ""
+            title = document.selectFirst("div.single_title h1")?.text()
+                ?: throw Exception("Title not found")
 
-            thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
+            thumbnail_url = document.selectFirst("meta[property='og:image']")?.absUrl("content")
 
             author = document.select("h2:has(strong:contains(Artist)) a")
                 .joinToString(", ") { it.text() }
@@ -103,6 +105,7 @@ class HentaiKun : HttpSource() {
             }.joinToString(", ").ifEmpty { null }
 
             status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             initialized = true
         }
     }
