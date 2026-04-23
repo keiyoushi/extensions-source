@@ -1,9 +1,7 @@
 ext {
-    extName = 'TuManhwas.Club'
-    extClass = '.TuManhwasClub'
-    themePkg = 'manga18'
-    baseUrl = 'https://tumanhwas.club'
-    overrideVersionCode = 0
+    extName = 'ManhwasMe'
+    extClass = '.ManhwasMe'
+    extVersionCode = 3
     isNsfw = true
 }
 
