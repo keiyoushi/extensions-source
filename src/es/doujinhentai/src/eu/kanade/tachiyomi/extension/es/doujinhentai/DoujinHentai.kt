@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -36,7 +37,7 @@ class DoujinHentai :
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.attr("href"))
-        manga.title = element.selectFirst("h3.font-bold")?.text()?.trim() ?: ""
+        manga.title = element.selectFirst("h3.font-bold")?.text() ?: ""
         manga.thumbnail_url = element.selectFirst("img")?.let { img ->
             img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
         }
@@ -125,22 +126,22 @@ class DoujinHentai :
         val main: Element = document.selectFirst("main#main-content") ?: document.body()
         val manga = SManga.create()
 
-        manga.title = main.selectFirst("h1")?.text()?.trim() ?: ""
+        manga.title = main.selectFirst("h1")?.text() ?: ""
 
         val authors = main.select("a[rel=author]")
-            .map { it.text().trim() }.filter { it.isNotEmpty() }
+            .map { it.text() }.filter { it.isNotEmpty() }
         val artists = main.select("a[href*='/artist/']")
-            .map { it.text().trim() }.filter { it.isNotEmpty() }
+            .map { it.text() }.filter { it.isNotEmpty() }
 
         manga.author = authors.ifEmpty { artists }.joinToString(", ").ifEmpty { null }
         manga.artist = artists.ifEmpty { authors }.joinToString(", ").ifEmpty { null }
 
-        manga.description = main.selectFirst("div.prose")?.text()?.trim()
+        manga.description = main.selectFirst("div.prose")?.text()
 
         val categories = main.select("a[rel=tag][href*='/category/']")
-            .map { it.text().trim() }.filter { it.isNotEmpty() }
+            .map { it.text() }.filter { it.isNotEmpty() }
         val tags = main.select("a[rel=tag][href*='/tag/']")
-            .map { it.text().trimStart('#').trim() }.filter { it.isNotEmpty() }
+            .map { it.text().trimStart('#') }.filter { it.isNotEmpty() }
         manga.genre = (categories + tags).distinct().joinToString(", ").ifEmpty { null }
 
         val statusText = main.selectFirst("span[aria-label^=Estado]")?.text()
@@ -168,17 +169,17 @@ class DoujinHentai :
             ?: element.selectFirst("div.flex-1 a")
         chapterLink?.let { chapter.setUrlWithoutDomain(it.attr("href")) }
 
-        val baseName = chapterLink?.text()?.removePrefix("Leer ")?.trim() ?: ""
-        val subTitle = element.selectFirst("div.flex-1 div.text-sm.font-medium")?.text()?.trim() ?: ""
+        val baseName = chapterLink?.text()?.removePrefix("Leer ") ?: ""
+        val subTitle = element.selectFirst("div.flex-1 div.text-sm.font-medium")?.text() ?: ""
         chapter.name = if (subTitle.isNotEmpty() && subTitle != baseName) "$baseName: $subTitle" else baseName
 
         chapter.scanlator = element.select("div.text-sm.text-right a[href*='/user/']")
-            .firstOrNull()?.text()?.trim()
+            .firstOrNull()?.text()
 
         val dateText = element.select("div.text-sm.text-right span.font-medium")
-            .lastOrNull()?.text()?.trim()
+            .lastOrNull()?.text()
         if (!dateText.isNullOrEmpty()) {
-            chapter.date_upload = runCatching { chapterDateFormat.parse(dateText)?.time ?: 0L }.getOrDefault(0L)
+            chapter.date_upload = chapterDateFormat.tryParse(dateText)
         }
 
         return chapter
@@ -190,12 +191,11 @@ class DoujinHentai :
         document.select("script").map { it.data() }
             .firstOrNull { it.contains("pageUrls") }
             ?.let { script ->
-                val json = Regex("""const pageUrls\s*=\s*(\{[^;]+\})""")
-                    .find(script)?.groupValues?.get(1)
+                val json = PAGE_URLS_JSON_REGEX.find(script)?.groupValues?.get(1)
                 if (json != null) {
-                    val pages = Regex(""""(\d+)"\s*:\s*"([^"]+)"""")
+                    val pages = PAGE_ENTRIES_REGEX
                         .findAll(json)
-                        .map { Page(it.groupValues[1].toInt() - 1, "", it.groupValues[2].replace("\\/", "/")) }
+                        .map { Page(it.groupValues[1].toInt() - 1, imageUrl = it.groupValues[2].replace("\\/", "/")) }
                         .sortedBy { it.index }
                         .toList()
                     if (pages.isNotEmpty()) return pages
@@ -207,14 +207,14 @@ class DoujinHentai :
             .takeIf { it.isNotEmpty() }
             ?.let { imgs ->
                 return imgs.mapIndexed { idx, img ->
-                    Page(idx, "", img.attr("abs:src").ifEmpty { img.attr("src") })
+                    Page(idx, imageUrl = img.attr("abs:src").ifEmpty { img.attr("src") })
                 }
             }
 
         // Estrategia 3: single page mode
         return document.select("div.single-page-mode img.manga-image")
             .mapIndexed { idx, img ->
-                Page(idx, "", img.attr("abs:src").ifEmpty { img.attr("src") }.trim())
+                Page(idx, imageUrl = img.attr("abs:src").ifEmpty { img.attr("src") })
             }
     }
 
@@ -335,4 +335,9 @@ class DoujinHentai :
                 Pair("X", "x"), Pair("Y", "y"), Pair("Z", "z"),
             ),
         )
+
+    companion object {
+        private val PAGE_URLS_JSON_REGEX = Regex("""const pageUrls\s*=\s*(\{[^;]+\})""")
+        private val PAGE_ENTRIES_REGEX = Regex(""""(\d+)"\s*:\s*"([^"]+)"""")
+    }
 }
