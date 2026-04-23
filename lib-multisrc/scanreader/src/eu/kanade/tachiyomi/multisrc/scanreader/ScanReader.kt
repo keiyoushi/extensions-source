@@ -52,6 +52,7 @@ abstract class ScanReader(
         val mangas = response.asJsoup()
             .select("div.popular-section div.manga-card")
             .map { mangaFromCard(it) }
+            .filterNot { it.title.contains("(Novel)") }
         return MangasPage(mangas, false)
     }
 
@@ -63,6 +64,7 @@ abstract class ScanReader(
         val mangas = response.asJsoup()
             .select("div.recent-section div.manga-latest-card")
             .map { mangaFromLatestCard(it) }
+            .filterNot { it.title.contains("(Novel)") }
         return MangasPage(mangas, false)
     }
 
@@ -75,13 +77,9 @@ abstract class ScanReader(
         val cards = document.select("div.manga-card").ifEmpty {
             document.select("div.manga-latest-card")
         }
-        val mangas = cards.map { element ->
-            if (element.hasClass("manga-latest-card")) {
-                mangaFromLatestCard(element)
-            } else {
-                mangaFromCard(element)
-            }
-        }
+        val mangas = cards
+            .map { if (it.hasClass("manga-latest-card")) mangaFromLatestCard(it) else mangaFromCard(it) }
+            .filterNot { it.title.contains("(Novel)") }
         return MangasPage(mangas, false)
     }
 
