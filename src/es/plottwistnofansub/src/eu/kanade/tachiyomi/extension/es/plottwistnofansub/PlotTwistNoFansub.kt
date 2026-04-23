@@ -10,8 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -39,8 +39,6 @@ class PlotTwistNoFansub : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -62,7 +60,8 @@ class PlotTwistNoFansub : HttpSource() {
                 val a = element.selectFirst("a")!!
                 setUrlWithoutDomain(a.attr("href"))
                 title = a.attr("title").takeIf { it.isNotEmpty() }
-                    ?: element.selectFirst("figcaption")?.text() ?: ""
+                    ?: element.selectFirst("figcaption")?.text()
+                    ?: throw Exception("Missing title for manga at ${a.attr("href")}")
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
         }
@@ -120,7 +119,8 @@ class PlotTwistNoFansub : HttpSource() {
                 val a = element.selectFirst(".post-title a") ?: element.selectFirst("a")!!
                 setUrlWithoutDomain(a.attr("href"))
                 title = a.text().takeIf { it.isNotEmpty() }
-                    ?: element.selectFirst("a")?.attr("title") ?: ""
+                    ?: element.selectFirst("a")?.attr("title")
+                    ?: throw Exception("Missing title for manga at ${a.attr("href")}")
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
         }
@@ -191,7 +191,7 @@ class PlotTwistNoFansub : HttpSource() {
             POST("$baseUrl/wp-json/plot/v1/getcaps7", headers, form),
         ).execute()
 
-        val apiData = json.decodeFromString<ChapterApiResponse>(apiResponse.body.string())
+        val apiData = apiResponse.parseAs<ChapterApiResponse>()
 
         val mangaPath = response.request.url.encodedPath
 
@@ -214,15 +214,9 @@ class PlotTwistNoFansub : HttpSource() {
     // =============================== Pages ================================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val pages = document.select("div.page-break img").mapIndexed { i, img ->
+        return document.select("div.page-break img").mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr())
         }
-
-        if (pages.isEmpty()) {
-            throw Exception("No se encontraron páginas. Posible captcha o error de carga.")
-        }
-
-        return pages
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
