@@ -6,14 +6,19 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import uy.kohesive.injekt.injectLazy
 
 class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
+
+    private val json: Json by injectLazy()
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = super.popularMangaParse(response).mangas
@@ -67,31 +72,19 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
     override val typeSelector = "[alt=Type]"
 
     override fun pageListParse(document: Document): List<Page> {
-        val (pages, baseLink) = document.selectFirst("[x-data*=pages]")!!.attr("x-data")
-            .replace(spaces, "")
-            .let {
-                val pages = pagesRegex.find(it)!!.groupValues[1]
-                    .replace("&quot;", "\"")
-                    .parseAs<List<Path>>()
+        val data = json.parseToJsonElement(document.selectFirst("script[type=\"application/ld+json\"]")!!.data()).jsonObject
+        val seriesURL = data["isPartOf"]!!.jsonObject["url"]!!.jsonPrimitive.content
+        val seriesID = seriesURL.substring(seriesURL.lastIndexOf('/') + 1)
+        val chapterURL = data["url"]!!.jsonPrimitive.content
+        val chapterID = chapterURL.substring(chapterURL.lastIndexOf('/') + 1)
+        val numberOfPages = data["numberOfPages"]!!.jsonPrimitive.int
 
-                val baseLink = linkRegex.find(
-                    it.replace("\"", "'"),
-                )!!.groupValues[1]
-
-                pages to baseLink
-            }
-
-        return pages.mapIndexed { i, img ->
-            Page(i, document.location(), baseLink + img.path)
+        return (1..numberOfPages).mapIndexed { i, page ->
+            Page(
+                i,
+                document.location(),
+                "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
+            )
         }
     }
 }
-
-private val spaces = Regex("\\s")
-private val pagesRegex = Regex("pages:(\\[[^]]+])")
-private val linkRegex = Regex("baseLink:'([^']+)'")
-
-@Serializable
-class Path(
-    val path: String,
-)
