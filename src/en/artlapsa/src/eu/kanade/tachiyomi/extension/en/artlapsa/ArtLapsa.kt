@@ -27,8 +27,7 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
 
     override fun genresRequest() = GET("$baseUrl/search", headers)
 
-    override fun parseGenres(document: Document): List<Genre> =
-        document.select("[wire:model.live=genre] option:not(:contains(All))").map { Genre(it.text(), it.attr("value")) }
+    override fun parseGenres(document: Document): List<Genre> = document.select("[wire:model.live=genre] option:not(:contains(All))").map { Genre(it.text(), it.attr("value")) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
