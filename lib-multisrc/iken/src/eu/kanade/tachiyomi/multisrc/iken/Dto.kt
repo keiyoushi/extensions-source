@@ -18,9 +18,9 @@ class SearchResponse(
 @Serializable
 class Manga(
     private val id: Int,
-    val slug: String,
+    private val slug: String,
     private val postTitle: String,
-    val postContent: String? = null,
+    private val postContent: String? = null,
     val isNovel: Boolean = false,
     private val featuredImage: String? = null,
     private val alternativeTitles: String? = null,
@@ -28,7 +28,7 @@ class Manga(
     private val artist: String? = null,
     private val seriesType: String? = null,
     private val seriesStatus: String? = null,
-    val genres: List<Genre> = emptyList(),
+    private val genres: List<Genre> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
         url = "$slug#$id"
@@ -75,11 +75,6 @@ class Manga(
 class Genre(
     val id: Int,
     val name: String,
-)
-
-@Serializable
-class DescriptionDto(
-    val description: String,
 )
 
 @Serializable
@@ -146,10 +141,11 @@ class Page(
     val isShortLinkLocked: Boolean = false,
 )
 
+@Suppress("unused")
 @Serializable
 class ViewQuery(
-    val postId: Int?,
-    val chapterId: Int?,
+    private val postId: Int?,
+    private val chapterId: Int?,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
