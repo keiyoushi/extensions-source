@@ -7,6 +7,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 
+private val chapterNameRegex = Regex("""(?i)(?:chapter|ch|episode|ep|第).?\s*(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
+private val splitChapterRegex = Regex("""(\d+(?:\.\d+)?)\s*[(（](\d+)[)）]""")
+private val fallbackChapterRegex = Regex("""^(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
+private val partSuffixRegex = Regex("""\s*[(（]\d+[)）]""")
+
 // Popular
 @Serializable
 class RankingApiResponse(
@@ -92,8 +97,32 @@ class Episode(
     fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
         url = "/title/$titleId/episode/$episodeId"
         val lock = if (isLocked) "🔒 " else ""
-        name = lock + episodeName
-        chapter_number = index.toFloat()
+        var parsedName = episodeName
+
+        val match = chapterNameRegex.find(episodeName)
+            ?: splitChapterRegex.find(episodeName)
+            ?: fallbackChapterRegex.find(episodeName)
+
+        chapter_number = if (match != null) {
+            val main = match.groupValues[1]
+            val part = match.groupValues[2]
+
+            if (part.isNotEmpty()) {
+                val replacement = match.value.replaceFirst(partSuffixRegex, ".$part")
+                parsedName = parsedName.replaceRange(match.range, replacement)
+                if (main.contains(".")) {
+                    main.toFloatOrNull() ?: index.toFloat()
+                } else {
+                    "$main.$part".toFloatOrNull() ?: index.toFloat()
+                }
+            } else {
+                main.toFloatOrNull() ?: index.toFloat()
+            }
+        } else {
+            index.toFloat()
+        }
+
+        name = lock + parsedName
         date_upload = dateFormat.tryParse(startTime)
     }
 }

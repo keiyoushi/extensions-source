@@ -7,7 +7,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -216,16 +215,16 @@ class Manga(
                         }
                         result.append("\n")
                     }
-                }
-
-                // Recurse into content array for other node types
-                node["content"]?.jsonArray?.forEach { child ->
-                    extractTextFromNode(child, result)
+                    // Recurse into content array for other node types
+                    else -> {
+                        node["content"]?.jsonArray?.forEach { child ->
+                            extractTextFromNode(child, result)
+                        }
+                    }
                 }
             }
             is JsonArray -> node.forEach { extractTextFromNode(it, result) }
             is JsonPrimitive -> result.append(node.content)
-            is JsonNull -> { /* do nothing */ }
         }
     }
 }

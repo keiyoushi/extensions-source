@@ -1,9 +1,7 @@
 ext {
-    extName = 'Insanos Scan'
+    extName = 'InsanosScan'
     extClass = '.InsanosScan'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://insanosmanhua.com'
-    overrideVersionCode = 0
+    extVersionCode = 31
     isNsfw = false
 }
 

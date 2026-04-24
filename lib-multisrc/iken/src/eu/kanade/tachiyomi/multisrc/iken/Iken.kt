@@ -14,10 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -322,53 +319,37 @@ abstract class Iken(
 
     // details
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringBeforeLast("#")}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val body = response.body.string()
-        val manga = body.extractNextJsRsc<Manga>()!!
-
-        return manga.toSManga().apply {
-            if (manga.postContent?.startsWith('$') == true) {
-                body.extractNextJsRsc<DescriptionDto>()?.description.let {
-                    description = manga.getDescription(it)
-                }
-            }
-        }
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val id = manga.url.substringAfterLast("#")
+        return GET("$apiUrl/api/post?postId=$id", headers)
     }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Post<Manga>>().post.toSManga()
 
     // chapters
 
-    override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
+    protected fun Chapter.isVisible(): Boolean = isPublic() && (
+        isAccessible() || (
+            preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && isLocked()
+            )
+        )
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val id = response.request.url.fragment!!
-        val slug = response.request.url.pathSegments.last()
-        val body = response.body.string()
+        val id = response.request.url.queryParameter("postId")
 
-        // Detect vShield / BalooPow challenge page
-        if (vShieldRegex.containsMatchIn(body)) throw Exception(V_SHIELD_MESSAGE)
+        val data = response.parseAs<Post<ChapterListResponse>>()
 
-        launchIO { updateViews(id.toInt()) }
-
-        val data = runCatching {
-            body.extractNextJsRsc<Post<ChapterListResponse>>()
-        }.getOrNull() ?: run {
-            val userId = userIdRegex.find(body)?.groupValues?.get(1).orEmpty()
-            val chapterUrl = "$apiUrl/api/chapters?postId=$id&skip=0&take=900&order=desc&userid=$userId"
-
-            client.newCall(GET(chapterUrl, headers))
-                .execute()
-                .parseAs<Post<ChapterListResponse>>()
-        }
+        launchIO { updateViews(id?.toInt()) }
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
 
         return data.post.chapters
-            .filter { it.isPublic() && (it.isAccessible() || (preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && it.isLocked())) }
-            .map { it.toSChapter(data.post.slug ?: slug) }
+            .filter { it.isVisible() }
+            .map { it.toSChapter(data.post.slug) }
     }
 
     // pages
@@ -376,31 +357,37 @@ abstract class Iken(
     // some extensions need to sort image urls by filename, override this to true if so
     protected open val sortPagesByFilename = false
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val id = chapter.url.substringAfterLast("#")
+        return GET("$apiUrl/api/chapter?chapterId=$id", headers)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val data = response.parseAs<PageResponse>().chapter
 
-        if (document.select("#publicSalt, #challenge").isNotEmpty()) {
-            throw Exception(V_SHIELD_MESSAGE)
+        if (data.isShortLinkLocked) {
+            throw Exception("Chapter locked (short link)")
         }
 
-        if (document.selectFirst("svg.lucide-lock") != null) {
-            throw Exception("Unlock chapter in webview")
+        if (data.isLockedByCoins) {
+            throw Exception("Chapter locked (coins required)")
         }
 
-        val pages = document.extractNextJs<Images>()!!
+        if (data.isPermanentlyLocked) {
+            throw Exception("Chapter permanently locked")
+        }
 
-        launchIO { updateViews(null, pages.id) }
+        launchIO { updateViews(null, data.id) }
 
         val sortedPages = if (sortPagesByFilename) {
-            pages.images.sortedWith(
+            data.images.sortedWith(
                 compareBy { page ->
                     val filename = page.url.substringAfterLast('/')
-                    val number = Regex("\\d+").find(filename)?.value?.toIntOrNull() ?: Int.MAX_VALUE
-                    number
+                    numberRegex.find(filename)?.value?.toIntOrNull() ?: Int.MAX_VALUE
                 },
             )
         } else {
-            pages.images.sortedBy { it.order ?: Int.MAX_VALUE }
+            data.images.sortedBy { it.order ?: Int.MAX_VALUE }
         }
 
         return sortedPages.mapIndexed { idx, p ->
@@ -427,9 +414,7 @@ abstract class Iken(
     companion object {
         const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
-        const val V_SHIELD_MESSAGE = "Open in WebView to pass bot verification"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        val vShieldRegex = Regex("""balooPow\.min\.js|Completing challenge|publicSalt|_2__vShield_v""")
-        val userIdRegex = Regex(""""user\\":\{\\"id\\":\\"([^"']+)\\"""")
+        val numberRegex = Regex("\\d+")
     }
 }
