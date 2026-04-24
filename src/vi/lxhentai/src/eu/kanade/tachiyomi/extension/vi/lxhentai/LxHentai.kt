@@ -210,35 +210,48 @@ class LxHentai :
     // ============================== Pages =================================
 
     override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
+        val document = response.asJsoup()
+        val html = document.outerHtml()
         val actionToken = ACTION_TOKEN_REGEX.find(html)?.groupValues?.get(1)
             ?: throw Exception("Không tìm thấy action token")
         val encryptedPayload = ENCRYPTED_IMAGES_REGEX.find(html)?.groupValues?.get(1)
             ?: throw Exception("Không tìm thấy dữ liệu ảnh")
 
-        val imageUrls = ENCRYPTED_IMAGE_ROW_REGEX.findAll(encryptedPayload)
+        val encryptedRows = ENCRYPTED_IMAGE_ROW_REGEX.findAll(encryptedPayload)
             .mapNotNull { row ->
                 row.groupValues.getOrNull(1)
                     ?.split(',')
                     ?.mapNotNull(String::toIntOrNull)
                     ?.takeIf { values -> values.isNotEmpty() }
             }
+            .toList()
+
+        val imageUrls = document.select("#image-container[data-idx]")
+            .mapNotNull { element -> element.attr("data-idx").toIntOrNull() }
+            .distinct()
+            .sorted()
+            .mapNotNull { idx -> encryptedRows.getOrNull(idx) }
             .map { codes -> decodeImageUrl(codes, actionToken) }
             .filter(String::isNotBlank)
+            .toList()
 
-        return imageUrls.mapIndexed { index, imageUrl ->
+        val sanitizedImageUrls = imageUrls.toMutableList().apply {
+            var checks = 0
+            while (isNotEmpty() && checks < 3) {
+                if (isImageReachable(last())) break
+                removeAt(lastIndex)
+                checks++
+            }
+        }
+
+        return sanitizedImageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }.toList()
     }
 
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl ?: throw Exception("Không tìm thấy URL ảnh")
-        val imageHeaders = super.headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("Origin", baseUrl)
-            .add("Token", "364b9dccc5ef526587f108c4d4fd63ee35286e19e36ec55b93bd4d79410dbbf6")
-            .build()
-        return GET(imageUrl, imageHeaders)
+        return GET(imageUrl, imageHeaders())
     }
 
     private fun decodeImageUrl(codes: List<Int>, actionToken: String): String {
@@ -248,6 +261,26 @@ class LxHentai :
             result.append((code xor keyCode).toChar())
         }
         return result.toString()
+    }
+
+    private fun imageHeaders() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+        .add("Token", "364b9dccc5ef526587f108c4d4fd63ee35286e19e36ec55b93bd4d79410dbbf6")
+        .build()
+
+    private fun isImageReachable(imageUrl: String): Boolean {
+        val request = GET(
+            imageUrl,
+            imageHeaders().newBuilder()
+                .add("Range", "bytes=0-0")
+                .build(),
+        )
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                response.code == 200 || response.code == 206
+            }
+        }.getOrDefault(false)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
