@@ -362,7 +362,6 @@ abstract class Iken(
     override fun relatedMangaListParse(response: Response): List<SManga> = response.parseAs<RelatedManga>().recommendations.filterNot { it.isNovel }
         .map { it.toSManga() }
 
-
     // pages
 
     // some extensions need to sort image urls by filename, override this to true if so
