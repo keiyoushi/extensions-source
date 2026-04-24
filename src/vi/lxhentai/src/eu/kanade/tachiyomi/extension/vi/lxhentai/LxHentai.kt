@@ -151,7 +151,7 @@ class LxHentai :
         return SManga.create().apply {
             title = document.selectFirst("div.flex.flex-row.truncate.mb-4 span.grow.text-lg.ml-1.text-ellipsis.font-semibold")!!.text()
             thumbnail_url = document.selectFirst("div.md\\:col-span-2 div.cover-frame > div.cover")
-                ?.let { cover ->
+                ?.let { cover: Element ->
                     cover.absUrl("data-bg")
                         .ifEmpty { parseBackgroundUrl(cover.attr("style")).orEmpty() }
                         .ifEmpty { null }
@@ -235,18 +235,9 @@ class LxHentai :
             .filter(String::isNotBlank)
             .toList()
 
-        val sanitizedImageUrls = imageUrls.toMutableList().apply {
-            var checks = 0
-            while (isNotEmpty() && checks < 3) {
-                if (isImageReachable(last())) break
-                removeAt(lastIndex)
-                checks++
-            }
-        }
-
-        return sanitizedImageUrls.mapIndexed { index, imageUrl ->
+        return imageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
-        }.toList()
+        }
     }
 
     override fun imageRequest(page: Page): Request {
@@ -268,20 +259,6 @@ class LxHentai :
         .add("Origin", baseUrl)
         .add("Token", "364b9dccc5ef526587f108c4d4fd63ee35286e19e36ec55b93bd4d79410dbbf6")
         .build()
-
-    private fun isImageReachable(imageUrl: String): Boolean {
-        val request = GET(
-            imageUrl,
-            imageHeaders().newBuilder()
-                .add("Range", "bytes=0-0")
-                .build(),
-        )
-        return runCatching {
-            client.newCall(request).execute().use { response ->
-                response.code == 200 || response.code == 206
-            }
-        }.getOrDefault(false)
-    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
