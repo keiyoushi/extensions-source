@@ -35,6 +35,8 @@ class HentaiCB :
 
     override val id: Long = 823638192569572166
 
+    override val paginateChapters = true
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .followRedirects(false)
