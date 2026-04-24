@@ -178,26 +178,26 @@ class SanaScans :
                 ?.substringBefore(" Manga - Sana scans")
             ?: document.title()
 
-        val description = document.selectFirst("[itemprop=description]")?.text()
-            ?.takeIf(String::isNotEmpty)
-            ?: document.selectFirst("meta[property=og:description]")?.attr("content")
-                ?.takeIf(String::isNotEmpty)
-            ?: document.selectFirst("meta[name=twitter:description]")?.attr("content")
-                ?.takeIf(String::isNotEmpty)
-            ?: document.selectFirst("meta[name=description]")?.attr("content")
-                ?.takeIf(String::isNotEmpty)
-            ?: run {
-                val jsonLdDescriptions = extractJsonLdDescriptions(document)
-                val jsonLdCandidate = jsonLdDescriptions
-                    .map { Jsoup.parse(it).text().trim() }
-                    .firstOrNull { it.isNotEmpty() && looksLikeDescription(it) }
-
-                if (!jsonLdCandidate.isNullOrEmpty()) {
-                    return@run jsonLdCandidate
-                }
-
-                extractPostContent(body)
-            }
+        val description = (
+            extractPostContent(body)
+                ?: document.select("[itemprop=description]").asSequence()
+                    .map {
+                        val paragraphs = it.select("p")
+                        if (paragraphs.isNotEmpty()) {
+                            paragraphs.joinToString("\n\n") { p -> p.text() }
+                        } else {
+                            it.text().ifBlank { it.attr("content") }
+                        }
+                    }
+                    .filter { it.isNotEmpty() && !it.endsWith("...") }
+                    .maxByOrNull { it.length }
+                ?: extractJsonLdDescriptions(document)
+                    .map { it.stripHtml() }
+                    .firstOrNull { it.isNotEmpty() && !it.endsWith("...") && looksLikeDescription(it) }
+                ?: document.selectFirst("meta[property=og:description]")?.attr("content")?.stripHtml()
+                ?: document.selectFirst("meta[name=twitter:description]")?.attr("content")?.stripHtml()
+                ?: document.selectFirst("meta[name=description]")?.attr("content")?.stripHtml()
+            )
         val thumbnailUrl = document.selectFirst("meta[property=og:image]")?.attr("content")
 
         val genres = runCatching { extractJsonArray(body, "genres").parseAs<List<GenreDto>>() }
@@ -355,27 +355,14 @@ class SanaScans :
     }
 
     private fun extractPostContent(body: String): String? {
-        val patterns = listOf(
-            Regex(""""postContent"\s*:\s*"((?:\\.|[^"])*)""""),
-            Regex("""\\\"postContent\\\"\s*:\s*\\\"((?:\\\\.|[^\\"])*)\\\""""),
-        )
+        val pattern = Regex("""postContent["\\]+:\s*["\\]+(.*?)["\\]+[,}]""")
 
-        var best: String? = null
-        for (pattern in patterns) {
-            val matches = pattern.findAll(body)
-            for (match in matches) {
-                val raw = match.groupValues.getOrNull(1) ?: continue
-                val decoded = parseJsonStringLiteral(raw) ?: raw
-                val text = Jsoup.parse(decoded).text().trim()
-                if (text.isNotEmpty() && looksLikeDescription(text)) {
-                    if (best == null || text.length > best.length) {
-                        best = text
-                    }
-                }
-            }
+        return pattern.find(body)?.groupValues?.get(1)?.let { raw ->
+            raw.replace(Regex("""\\*u003c"""), "<")
+                .replace(Regex("""\\*u003e"""), ">")
+                .replace("\\\"", "\"")
+                .stripHtml()
         }
-
-        return best
     }
 
     private fun parseJsonStringLiteral(raw: String): String? {
@@ -419,6 +406,11 @@ class SanaScans :
         private val diacriticsRegex = Regex("\\p{M}+")
         private val nonAlphanumericRegex = Regex("[^a-z0-9]+")
         private val multiSpaceRegex = Regex("\\s+")
+    }
+
+    private fun String.stripHtml(): String = Jsoup.parse(this).let { doc ->
+        doc.select("p, br").prepend("\\n")
+        doc.text().replace("\\n", "\n").replace("\n ", "\n").trim()
     }
 }
 
