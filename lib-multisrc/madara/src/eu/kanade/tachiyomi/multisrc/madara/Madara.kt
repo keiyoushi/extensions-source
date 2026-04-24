@@ -27,6 +27,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
@@ -831,6 +832,11 @@ abstract class Madara(
      */
     private var oldChapterEndpointDisabled: Boolean = false
 
+    /**
+     * Set it to true if the source paginates the chapters list.
+     */
+    protected open val paginateChapters: Boolean = false
+
     protected open fun oldXhrChaptersRequest(mangaId: String): Request {
         val form = FormBody.Builder()
             .add("action", "manga_get_chapters")
@@ -841,6 +847,17 @@ abstract class Madara(
     }
 
     protected open fun xhrChaptersRequest(mangaUrl: String): Request = POST("$mangaUrl/ajax/chapters", xhrHeaders)
+
+    protected open fun xhrChaptersRequest(mangaUrl: String, page: Int): Request {
+        val request = xhrChaptersRequest(mangaUrl)
+        if (page <= 1) return request
+
+        val url = request.url.newBuilder()
+            .addQueryParameter("t", page.toString())
+            .build()
+
+        return request.newBuilder().url(url).build()
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -855,25 +872,60 @@ abstract class Madara(
             val mangaUrl = document.location().removeSuffix("/")
             val mangaId = chaptersWrapper.attr("data-id")
 
-            var xhrRequest = if (useNewChapterEndpoint || oldChapterEndpointDisabled) {
-                xhrChaptersRequest(mangaUrl)
-            } else {
-                oldXhrChaptersRequest(mangaId)
-            }
-            var xhrResponse = client.newCall(xhrRequest).execute()
+            if (!paginateChapters) {
+                // Keep original logic untouched for non-paginated sources
+                var xhrRequest = if (useNewChapterEndpoint || oldChapterEndpointDisabled) {
+                    xhrChaptersRequest(mangaUrl)
+                } else {
+                    oldXhrChaptersRequest(mangaId)
+                }
+                var xhrResponse = client.newCall(xhrRequest).execute()
 
-            // Newer Madara versions throws HTTP 400 when using the old endpoint.
-            if (!useNewChapterEndpoint && xhrResponse.code == 400) {
+                // Newer Madara versions throws HTTP 400 when using the old endpoint.
+                if (!useNewChapterEndpoint && xhrResponse.code == 400) {
+                    xhrResponse.close()
+                    // Set it to true so following calls will be made directly to the new endpoint.
+                    oldChapterEndpointDisabled = true
+
+                    xhrRequest = xhrChaptersRequest(mangaUrl)
+                    xhrResponse = client.newCall(xhrRequest).execute()
+                }
+
+                chapterElements = xhrResponse.asJsoup().select(chapterListSelector())
                 xhrResponse.close()
-                // Set it to true so following calls will be made directly to the new endpoint.
-                oldChapterEndpointDisabled = true
+            } else {
+                // New logic for paginated sources
+                val allChapters = Elements()
+                var page = 1
 
-                xhrRequest = xhrChaptersRequest(mangaUrl)
-                xhrResponse = client.newCall(xhrRequest).execute()
+                while (true) {
+                    var xhrRequest = if (useNewChapterEndpoint || oldChapterEndpointDisabled) {
+                        if (page > 1) xhrChaptersRequest(mangaUrl, page) else xhrChaptersRequest(mangaUrl)
+                    } else {
+                        oldXhrChaptersRequest(mangaId)
+                    }
+                    var xhrResponse = client.newCall(xhrRequest).execute()
+
+                    if (!useNewChapterEndpoint && xhrResponse.code == 400 && page == 1) {
+                        xhrResponse.close()
+                        oldChapterEndpointDisabled = true
+                        xhrRequest = xhrChaptersRequest(mangaUrl)
+                        xhrResponse = client.newCall(xhrRequest).execute()
+                    }
+
+                    val xhrDocument = xhrResponse.asJsoup()
+                    allChapters.addAll(xhrDocument.select(chapterListSelector()))
+
+                    val hasNextPage = xhrDocument.selectFirst("div.pagination a[data-page='${page + 1}']") != null
+                    xhrResponse.close()
+
+                    if (!hasNextPage || (!useNewChapterEndpoint && !oldChapterEndpointDisabled)) {
+                        break
+                    }
+                    page++
+                }
+                chapterElements = allChapters
             }
-
-            chapterElements = xhrResponse.asJsoup().select(chapterListSelector())
-            xhrResponse.close()
         }
 
         return chapterElements.map(::chapterFromElement)
