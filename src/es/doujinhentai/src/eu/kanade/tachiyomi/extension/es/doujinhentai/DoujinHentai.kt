@@ -15,6 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -131,20 +132,18 @@ class DoujinHentai : HttpSource() {
 
         manga.title = main.selectFirst("h1")!!.text()
 
-        val authors = main.select("a[rel=author]")
-            .map { it.text() }.filter { it.isNotEmpty() }
-        val artists = main.select("a[href*='/artist/']")
-            .map { it.text() }.filter { it.isNotEmpty() }
+        val authors = main.select("a[rel=author]").texts()
+        val artists = main.select("a[href*='/artist/']").texts()
 
         manga.author = authors.ifEmpty { artists }.joinToString(", ").ifEmpty { null }
         manga.artist = artists.ifEmpty { authors }.joinToString(", ").ifEmpty { null }
 
         manga.description = main.selectFirst("div.prose")?.text()
 
-        val categories = main.select("a[rel=tag][href*='/category/']")
-            .map { it.text() }.filter { it.isNotEmpty() }
-        val tags = main.select("a[rel=tag][href*='/tag/']")
-            .map { it.text().trimStart('#') }.filter { it.isNotEmpty() }
+        val categories = main.select("a[rel=tag][href*='/category/']").texts()
+        val tags = main.select("a[rel=tag][href*='/tag/']").mapNotNull {
+            it.text().trimStart('#').takeIf { t -> t.isNotBlank() }
+        }
         manga.genre = (categories + tags).distinct().joinToString(", ").ifEmpty { null }
 
         val statusText = main.selectFirst("span[aria-label^=Estado]")?.text()
@@ -198,7 +197,8 @@ class DoujinHentai : HttpSource() {
         val document = response.asJsoup()
 
         // Estrategia 1: JSON embebido → const pageUrls = {"1":"url",...};
-        document.select("script").map { it.data() }
+        document.select("script").asSequence()
+            .map { it.data() }
             .firstOrNull { it.contains("pageUrls") }
             ?.let { script ->
                 val json = PAGE_URLS_JSON_REGEX.find(script)?.groupValues?.get(1)
@@ -257,3 +257,5 @@ class DoujinHentai : HttpSource() {
         private val PAGE_ENTRIES_REGEX = Regex(""""(\d+)"\s*:\s*"([^"]+)"""")
     }
 }
+
+private fun Elements.texts(): List<String> = this.mapNotNull { it.text().takeIf { t -> t.isNotBlank() } }
