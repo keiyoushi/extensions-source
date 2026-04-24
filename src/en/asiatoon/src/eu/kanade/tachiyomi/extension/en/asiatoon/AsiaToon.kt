@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -90,7 +89,7 @@ class AsiaToon :
         checkForChallenge(document)
 
         title = document.select("h1, h2")
-            .map { it.text().trim() }
+            .map { it.text() }
             .firstOrNull { it.isNotBlank() && it !in blockedHeadings && !it.endsWith("at Asiatoon.net") }
             ?: ""
 
@@ -102,7 +101,7 @@ class AsiaToon :
                 ?.takeUnless { it.startsWith("data:", ignoreCase = true) }
 
         genre = document.select("a[href*='/en/genres/']")
-            .map { it.text().trim() }
+            .map { it.text() }
             .filter { it in genreNames }
             .distinct()
             .joinToString()
@@ -121,7 +120,7 @@ class AsiaToon :
                 val url = element.absUrl("href")
                 if (url.isBlank()) return@mapNotNull null
 
-                val text = element.text().replace(Regex("\\s+"), " ").trim()
+                val text = element.text().replace(WHITESPACE_REGEX, " ")
                 val dateText = MONTH_DATE_REGEX.find(text)?.value
                 val name = text.substringBefore(dateText ?: "").trim().ifBlank { text }
 
@@ -174,7 +173,7 @@ class AsiaToon :
             .sortedWith(compareBy<Pair<Int?, String>> { it.first ?: Int.MAX_VALUE }.thenBy { it.second })
 
         val pages = extractedPages
-            .mapIndexed { index, (_, url) -> Page(index, document.location(), url) }
+            .mapIndexed { index, (_, url) -> Page(index, imageUrl = url) }
 
         if (pages.isNotEmpty()) {
             return pages
@@ -193,47 +192,7 @@ class AsiaToon :
         throw Exception("No readable pages found for this AsiaToon chapter.")
     }
 
-    override val browseList = listOf(
-        Pair("Home", "en"),
-        Pair("New", "en/genres/New"),
-        Pair("Completed", "en/completed"),
-        Pair("Page: Honey Toon", "en/pages/honey-toon"),
-        Pair("Page: Manhwa toon", "en/pages/manhwa-toon"),
-        Pair("Page: Manga toon", "en/pages/manga-toon"),
-        Pair("Page: Comics toon", "en/pages/comics-toon"),
-        Pair("Page: Toon God", "en/pages/toon-god"),
-        Pair("Page: Toon Porn", "en/pages/toon-porn"),
-        Pair("Genre: All", "en/genres"),
-        Pair("Genre: Vanilla", "en/genres/Vanilla"),
-        Pair("Genre: Monster Girls", "en/genres/Monster_Girls"),
-        Pair("Genre: School Life", "en/genres/School_Life"),
-        Pair("Genre: Horror Thriller", "en/genres/Horror_Thriller"),
-        Pair("Genre: Slice of Life", "en/genres/Slice_of_Life"),
-        Pair("Genre: Supernatural", "en/genres/Supernatural"),
-        Pair("Genre: Office", "en/genres/Office"),
-        Pair("Genre: Sexy", "en/genres/Sexy"),
-        Pair("Genre: MILF", "en/genres/MILF"),
-        Pair("Genre: In-Law", "en/genres/In-Law"),
-        Pair("Genre: Harem", "en/genres/Harem"),
-        Pair("Genre: Cheating", "en/genres/Cheating"),
-        Pair("Genre: College", "en/genres/College"),
-        Pair("Genre: Isekai", "en/genres/Isekai"),
-        Pair("Genre: UNCENSORED", "en/genres/UNCENSORED"),
-        Pair("Genre: GL", "en/genres/GL"),
-        Pair("Genre: sexy comics", "en/genres/sexy_comics"),
-        Pair("Genre: Sci-fi", "en/genres/Sci-fi"),
-        Pair("Genre: Sports", "en/genres/Sports"),
-        Pair("Genre: School life", "en/genres/School_life"),
-        Pair("Genre: Historical", "en/genres/Historical"),
-        Pair("Genre: Action", "en/genres/Action"),
-        Pair("Genre: Thriller", "en/genres/Thriller"),
-        Pair("Genre: Horror", "en/genres/Horror"),
-        Pair("Genre: Fantasy", "en/genres/Fantasy"),
-        Pair("Genre: Comedy", "en/genres/Comedy"),
-        Pair("Genre: Drama", "en/genres/Drama"),
-        Pair("Genre: BL", "en/genres/BL"),
-        Pair("Genre: Romance", "en/genres/Romance"),
-    )
+    override val browseList = browseEntries
 
     private fun mangaFromElement(element: Element): SManga? {
         val url = element.absUrl("href").substringBefore("#")
@@ -266,7 +225,7 @@ class AsiaToon :
 
         var sibling = headingElement.nextElementSibling()
         while (sibling != null) {
-            val text = sibling.text().trim()
+            val text = sibling.text()
             if (text.isNotBlank() && text !in blockedHeadings) {
                 return text
             }
@@ -291,25 +250,17 @@ class AsiaToon :
     private fun isValidTitle(title: String): Boolean {
         if (title.isBlank()) return false
         if (title in blockedTitleTokens || title in genreNames) return false
-        if (title.matches(Regex("^[0-9.]+[KM]?$"))) return false
+        if (title.matches(NUMERIC_TITLE_REGEX)) return false
         return title.any { it.isLetter() }
     }
 
     private fun cleanupTitle(title: String): String = title
-        .replace(Regex("\\b(?:UP|NEW|18\\+)\\b"), " ")
-        .replace(Regex("\\s+\\d+(?:[.,]\\d+)?[KM]?$"), "")
-        .replace(Regex("\\s{2,}"), " ")
+        .replace(TITLE_MARKER_REGEX, " ")
+        .replace(TRAILING_COUNT_REGEX, "")
+        .replace(MULTISPACE_REGEX, " ")
         .trim()
 
-    private fun parseDate(date: String?): Long {
-        date ?: return 0L
-
-        return try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (_: ParseException) {
-            0L
-        }
-    }
+    private fun parseDate(date: String?) = dateFormat.tryParse(date)
 
     private fun isPageImage(url: String): Boolean {
         if (url.isBlank()) return false
@@ -342,7 +293,19 @@ class AsiaToon :
         else -> absUrl("src")
     }
 
+    private fun SimpleDateFormat.tryParse(date: String?): Long = try {
+        if (date == null) return 0L
+        parse(date)?.time ?: 0L
+    } catch (_: Exception) {
+        0L
+    }
+
     private companion object {
         val MONTH_DATE_REGEX = Regex("(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{2},\\s+\\d{4}")
+        val WHITESPACE_REGEX = Regex("\\s+")
+        val TITLE_MARKER_REGEX = Regex("\\b(?:UP|NEW|18\\+)\\b")
+        val TRAILING_COUNT_REGEX = Regex("\\s+\\d+(?:[.,]\\d+)?[KM]?$")
+        val MULTISPACE_REGEX = Regex("\\s{2,}")
+        val NUMERIC_TITLE_REGEX = Regex("^[0-9.]+[KM]?$")
     }
 }
