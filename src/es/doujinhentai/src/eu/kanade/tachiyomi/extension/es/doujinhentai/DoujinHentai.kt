@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -32,12 +32,10 @@ class DoujinHentai : HttpSource() {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun Response.asJsoup(): Document = Jsoup.parse(body.string(), request.url.toString())
-
-    private fun mangaFromElement(element: Element): SManga {
+    private fun mangaFromElement(element: Element): SManga? {
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.attr("href"))
-        manga.title = element.selectFirst("h3.font-bold")?.text() ?: throw Exception()
+        manga.title = element.selectFirst("h3.font-bold")?.text() ?: return null
         manga.thumbnail_url = element.selectFirst("img")?.let { img ->
             img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
         }
@@ -47,7 +45,7 @@ class DoujinHentai : HttpSource() {
     private fun mangasPageFromDocument(document: Document): MangasPage {
         val mangas = document
             .select("div.group.bg-white.rounded-2xl a.block")
-            .map { mangaFromElement(it) }
+            .mapNotNull { mangaFromElement(it) }
         val hasNextPage = document.selectFirst("a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -131,7 +129,7 @@ class DoujinHentai : HttpSource() {
         val main: Element = document.selectFirst("main#main-content") ?: document.body()
         val manga = SManga.create()
 
-        manga.title = main.selectFirst("h1")?.text() ?: throw Exception()
+        manga.title = main.selectFirst("h1")!!.text()
 
         val authors = main.select("a[rel=author]")
             .map { it.text() }.filter { it.isNotEmpty() }
@@ -169,7 +167,7 @@ class DoujinHentai : HttpSource() {
         val document = response.asJsoup()
         return document
             .select("div.flex.items-center.gap-4.p-3.mb-2.border.rounded-lg")
-            .map { chapterFromElement(it) }
+            .mapNotNull { chapterFromElement(it) }
     }
 
     private fun chapterFromElement(element: Element): SChapter {
