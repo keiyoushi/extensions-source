@@ -359,7 +359,7 @@ abstract class Iken(
         return GET("$apiUrl/api/recommendations?postId=$id&limit=25", headers)
     }
 
-    override fun relatedMangaListParse(response: Response): List<SManga> = response.parseAs<RelatedManga>().recommendations.filterNot { it.isNovel }
+    override fun relatedMangaListParse(response: Response): List<SManga> = response.parseAs<RelatedMangaDto>().recommendations.filterNot { it.isNovel }
         .map { it.toSManga() }
 
     // pages

@@ -85,7 +85,8 @@ class DescriptionDto(
 @Serializable
 class Post<T>(val post: T)
 
-class RelatedManga(
+@Serializable
+class RelatedMangaDto(
     val recommendations: List<Manga>,
 )
 
