@@ -3,57 +3,68 @@ package eu.kanade.tachiyomi.extension.es.doujinhentai
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DoujinHentai : ParsedHttpSource() {
+class DoujinHentai : HttpSource() {
 
     override val name = "DoujinHentai"
     override val baseUrl = "https://doujinhentai.net"
     override val lang = "es"
     override val supportsLatest = true
 
-    // SimpleDateFormat no es thread-safe; se declara con by lazy para
-    // reutilizarlo sin reinstanciarlo en cada capítulo.
     private val chapterDateFormat by lazy { SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH) }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    // ── Popular ──────────────────────────────────────────────────────────────
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=views&page=$page", headers)
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    override fun popularMangaSelector() = "div.group.bg-white.rounded-2xl a.block"
+    private fun Response.asJsoup(): Document = Jsoup.parse(body.string(), request.url.toString())
 
-    override fun popularMangaFromElement(element: Element): SManga {
+    private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.attr("href"))
-        manga.title = element.selectFirst("h3.font-bold")?.text() ?: ""
+        manga.title = element.selectFirst("h3.font-bold")?.text() ?: throw Exception()
         manga.thumbnail_url = element.selectFirst("img")?.let { img ->
             img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
         }
         return manga
     }
 
-    override fun popularMangaNextPageSelector() = "a[rel=next]"
+    private fun mangasPageFromDocument(document: Document): MangasPage {
+        val mangas = document
+            .select("div.group.bg-white.rounded-2xl a.block")
+            .map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("a[rel=next]") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    // ── Latest ───────────────────────────────────────────────────────────────
+    // ── Popular ───────────────────────────────────────────────────────────────
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=views&page=$page", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage = mangasPageFromDocument(response.asJsoup())
+
+    // ── Latest ────────────────────────────────────────────────────────────────
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=last&page=$page", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = mangasPageFromDocument(response.asJsoup())
 
-    // ── Search ───────────────────────────────────────────────────────────────
+    // ── Search ────────────────────────────────────────────────────────────────
     // El endpoint /search?query= devuelve JSON (live-search), no HTML.
     // La búsqueda real por texto usa /lista-manga-hentai?search=<query>
     //
@@ -96,12 +107,7 @@ class DoujinHentai : ParsedHttpSource() {
             genre.isNotEmpty() -> url.addPathSegments("lista-manga-hentai/category/$genre")
             artist.isNotEmpty() -> url.addPathSegments("lista-manga-hentai/artist/${artist.replace(" ", "%20")}")
             author.isNotEmpty() -> url.addPathSegments("lista-manga-hentai/author/${author.replace(" ", "%20")}")
-            // Scanlator → /user/{nombre}?page=N
-            // La página de usuario usa exactamente el mismo HTML de tarjetas
-            // que el listado general, por lo que los selectores existentes funcionan.
-            scanlator.isNotEmpty() -> {
-                url.addPathSegments("user/${scanlator.replace(" ", "%20")}")
-            }
+            scanlator.isNotEmpty() -> url.addPathSegments("user/${scanlator.replace(" ", "%20")}")
             letter.isNotEmpty() -> url.addPathSegments("lista-manga-hentai/letra/$letter")
             type.isNotEmpty() -> url.addPathSegment("lista-de-$type")
             else -> {
@@ -114,19 +120,18 @@ class DoujinHentai : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response): MangasPage = mangasPageFromDocument(response.asJsoup())
 
-    // ── Manga details ─────────────────────────────────────────────────────────
+    // ── Manga details ──────────────────────────────────────────────────────────
     // "Autor(es)"  → <a rel="author" href=".../author/...">
     // "Artista(s)" → <a href=".../artist/...">  (sin rel="author")
     // Algunos títulos solo tienen artista, otros solo autor, otros ambos.
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val main: Element = document.selectFirst("main#main-content") ?: document.body()
         val manga = SManga.create()
 
-        manga.title = main.selectFirst("h1")?.text() ?: ""
+        manga.title = main.selectFirst("h1")?.text() ?: throw Exception()
 
         val authors = main.select("a[rel=author]")
             .map { it.text() }.filter { it.isNotEmpty() }
@@ -158,11 +163,16 @@ class DoujinHentai : ParsedHttpSource() {
         return manga
     }
 
-    // ── Chapter list ─────────────────────────────────────────────────────────
+    // ── Chapter list ───────────────────────────────────────────────────────────
     // El slug del capítulo NO siempre contiene "chapter" (ej: /roman, /bokura)
-    override fun chapterListSelector() = "div.flex.items-center.gap-4.p-3.mb-2.border.rounded-lg"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document
+            .select("div.flex.items-center.gap-4.p-3.mb-2.border.rounded-lg")
+            .map { chapterFromElement(it) }
+    }
 
-    override fun chapterFromElement(element: Element): SChapter {
+    private fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
 
         val chapterLink = element.selectFirst("div.flex-1 > a.font-bold")
@@ -185,8 +195,10 @@ class DoujinHentai : ParsedHttpSource() {
         return chapter
     }
 
-    // ── Pages ────────────────────────────────────────────────────────────────
-    override fun pageListParse(document: Document): List<Page> {
+    // ── Pages ──────────────────────────────────────────────────────────────────
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
         // Estrategia 1: JSON embebido → const pageUrls = {"1":"url",...};
         document.select("script").map { it.data() }
             .firstOrNull { it.contains("pageUrls") }
@@ -218,10 +230,9 @@ class DoujinHentai : ParsedHttpSource() {
             }
     }
 
-    // ParsedHttpSource requiere imageUrlParse(Document), pero este método nunca se invoca en la práctica.
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("imageUrlParse no se utiliza")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ── Filters ──────────────────────────────────────────────────────────────
+    // ── Filters Layout────────────────────────────────────────────────────────────────
     override fun getFilterList() = FilterList(
         Filter.Header("La búsqueda por texto ignora los filtros"),
         Filter.Header("Los filtros de ruta son mutuamente excluyentes"),
@@ -242,111 +253,6 @@ class DoujinHentai : ParsedHttpSource() {
         Filter.Header("Filtrar por primera letra del título"),
         LetterFilter(),
     )
-
-    // ── Filter classes ────────────────────────────────────────────────────────
-    open class UriPartFilter(
-        displayName: String,
-        private val vals: Array<Pair<String, String>>,
-        state: Int = 0,
-    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
-        fun toUriPart() = vals[state].second
-    }
-
-    // Géneros/categorías → /lista-manga-hentai/category/{slug}
-    class GenreFilter :
-        UriPartFilter(
-            "Género",
-            arrayOf(
-                Pair("<todos>", ""),
-                Pair("Ahegao", "ahegao"),
-                Pair("Anal", "anal"),
-                Pair("Bikini", "bikini"),
-                Pair("Casadas", "casadas"),
-                Pair("Chica Con Pene", "chica-con-pene"),
-                Pair("Cosplay", "cosplay"),
-                Pair("Doble Penetracion", "doble-penetracion"),
-                Pair("Ecchi", "ecchi"),
-                Pair("Embarazada", "embarazada"),
-                Pair("Enfermera", "enfermera"),
-                Pair("Escolares", "escolares"),
-                Pair("Full Color", "full-colo"),
-                Pair("Futanari", "futanari"),
-                Pair("Grandes Pechos", "grandes-pechos"),
-                Pair("Harem", "harem"),
-                Pair("Incesto", "incesto"),
-                Pair("Interracial", "interracial"),
-                Pair("Juguetes Sexuales", "juguetes-sexuales"),
-                Pair("Lolicon", "lolicon"),
-                Pair("Maduras", "maduras"),
-                Pair("Mamadas", "mamadas"),
-                Pair("Masturbacion", "masturbacion"),
-                Pair("MILF", "milf"),
-                Pair("Orgias", "orgias"),
-                Pair("Profesores", "profesores"),
-                Pair("Romance", "romance"),
-                Pair("Shota", "shota"),
-                Pair("Sin Censura", "sin-censura"),
-                Pair("Sirvientas", "sirvientas"),
-                Pair("Tentaculos", "tentaculos"),
-                Pair("Tetonas", "tetonas"),
-                Pair("Virgenes", "virgenes"),
-                Pair("Yaoi", "yaoi"),
-                Pair("Yuri", "yuri"),
-            ),
-        )
-
-    // Tipo de obra → /lista-de-{doujin|manga|comic}
-    // Milftoon no tiene tipo propio; se busca por artista/autor.
-    class TypeFilter :
-        UriPartFilter(
-            "Tipo de obra",
-            arrayOf(
-                Pair("<todos>", ""),
-                Pair("Doujin", "doujin"),
-                Pair("Manga", "manga"),
-                Pair("Comic", "comic"),
-            ),
-        )
-
-    // Ordenación → ?orderby=  (solo cuando no hay otro filtro de ruta activo)
-    class SortFilter :
-        UriPartFilter(
-            "Ordenar por (sin otros filtros)",
-            arrayOf(
-                Pair("Alfabético", "alphabet"),
-                Pair("Más vistos", "views"),
-                Pair("Más recientes", "last"),
-            ),
-        )
-
-    // Artista → /lista-manga-hentai/artist/{nombre}
-    // Soporta nombres exactos: saigado, milftoon, toono suika, etc.
-    class ArtistFilter : Filter.Text("Artista (ej: saigado, milftoon)")
-
-    // Autor → /lista-manga-hentai/author/{nombre}
-    class AuthorFilter : Filter.Text("Autor (ej: horori, milftoon)")
-
-    // Scanlator/usuario → /user/{nombre}?page=N
-    // Muestra todos los aportes subidos por ese usuario.
-    // El nombre es sensible a mayúsculas (ej: NekoCreme, Fritz Translations).
-    class ScanlatorFilter : Filter.Text("Scanlator/usuario (ej: NekoCreme, Fritz Translations)")
-
-    // Primera letra → /lista-manga-hentai/letra/{a-z|0}
-    class LetterFilter :
-        UriPartFilter(
-            "Primera letra",
-            arrayOf(
-                Pair("<todas>", ""),
-                Pair("#  (0-9)", "0"),
-                Pair("A", "a"), Pair("B", "b"), Pair("C", "c"), Pair("D", "d"),
-                Pair("E", "e"), Pair("F", "f"), Pair("G", "g"), Pair("H", "h"),
-                Pair("I", "i"), Pair("J", "j"), Pair("K", "k"), Pair("L", "l"),
-                Pair("M", "m"), Pair("N", "n"), Pair("Ñ", "n"), Pair("O", "o"),
-                Pair("P", "p"), Pair("Q", "q"), Pair("R", "r"), Pair("S", "s"),
-                Pair("T", "t"), Pair("U", "u"), Pair("V", "v"), Pair("W", "w"),
-                Pair("X", "x"), Pair("Y", "y"), Pair("Z", "z"),
-            ),
-        )
 
     companion object {
         private val PAGE_URLS_JSON_REGEX = Regex("""const pageUrls\s*=\s*(\{[^;]+\})""")

@@ -1,9 +1,7 @@
 ext {
     extName = 'DoujinHentai'
     extClass = '.DoujinHentai'
-    themePkg = 'madara'
-    baseUrl = 'https://doujinhentai.net'
-    overrideVersionCode = 3
+    extVersionCode = 49
     isNsfw = true
 }
 
