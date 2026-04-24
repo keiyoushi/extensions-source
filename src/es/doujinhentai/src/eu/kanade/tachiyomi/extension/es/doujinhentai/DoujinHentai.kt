@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.doujinhentai
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,19 +15,19 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DoujinHentai :
-    Madara(
-        "DoujinHentai",
-        "https://doujinhentai.net",
-        "es",
-        SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH),
-    ) {
+class DoujinHentai : ParsedHttpSource() {
 
-    override val fetchGenres = false
+    override val name = "DoujinHentai"
+    override val baseUrl = "https://doujinhentai.net"
+    override val lang = "es"
+    override val supportsLatest = true
 
     // SimpleDateFormat no es thread-safe; se declara con by lazy para
     // reutilizarlo sin reinstanciarlo en cada capítulo.
     private val chapterDateFormat by lazy { SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH) }
+
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // ── Popular ──────────────────────────────────────────────────────────────
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=views&page=$page", headers)
@@ -218,6 +218,9 @@ class DoujinHentai :
             }
     }
 
+    // ParsedHttpSource requiere imageUrlParse(Document), pero este método nunca se invoca en la práctica.
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("imageUrlParse no se utiliza")
+
     // ── Filters ──────────────────────────────────────────────────────────────
     override fun getFilterList() = FilterList(
         Filter.Header("La búsqueda por texto ignora los filtros"),
@@ -239,6 +242,15 @@ class DoujinHentai :
         Filter.Header("Filtrar por primera letra del título"),
         LetterFilter(),
     )
+
+    // ── Filter classes ────────────────────────────────────────────────────────
+    open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+        state: Int = 0,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+        fun toUriPart() = vals[state].second
+    }
 
     // Géneros/categorías → /lista-manga-hentai/category/{slug}
     class GenreFilter :
