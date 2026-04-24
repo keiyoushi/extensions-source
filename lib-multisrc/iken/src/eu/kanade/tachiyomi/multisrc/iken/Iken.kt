@@ -352,6 +352,17 @@ abstract class Iken(
             .map { it.toSChapter(data.post.slug) }
     }
 
+    // Related Manga
+
+    override fun relatedMangaListRequest(manga: SManga): Request {
+        val id = manga.url.substringAfterLast("#")
+        return GET("$apiUrl/api/recommendations?postId=$id&limit=25", headers)
+    }
+
+    override fun relatedMangaListParse(response: Response): List<SManga> = response.parseAs<RelatedManga>().recommendations.filterNot { it.isNovel }
+        .map { it.toSManga() }
+
+
     // pages
 
     // some extensions need to sort image urls by filename, override this to true if so
