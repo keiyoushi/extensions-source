@@ -197,7 +197,7 @@ class AllManga :
         val chapterUrlParts = chapter.url.split("/")
         val mangaId = chapterUrlParts[2]
         val chapterSlug = chapterUrlParts[4]
-        return "$baseUrl/read/$mangaId/$chapterSlug"
+        return "$baseUrl/manga/$mangaId/$chapterSlug"
     }
 
     /* Pages */

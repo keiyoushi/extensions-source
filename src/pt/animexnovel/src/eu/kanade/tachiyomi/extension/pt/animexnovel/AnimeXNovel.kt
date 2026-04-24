@@ -42,7 +42,7 @@ class AnimeXNovel : HttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .readTimeout(1, TimeUnit.MINUTES)
         .callTimeout(1, TimeUnit.MINUTES)
-        .rateLimit(2)
+        .rateLimit(3, 1)
         .build()
 
     // ========================== Popular ===================================
@@ -118,11 +118,21 @@ class AnimeXNovel : HttpSource() {
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
-        title = document.selectFirst("h2.spnc-entry-title")!!.text()
+        title = document.selectFirst("meta[itemprop=name]")!!.attr("content")
+        thumbnail_url = document.selectFirst("meta[itemprop=image]")?.absUrl("content")
         author = document.selectFirst("li:contains(Autor:)")?.text()?.substringAfter(":")?.trim()
         artist = document.selectFirst("li:contains(Arte:)")?.text()?.substringAfter(":")?.trim()
-        genre = document.selectFirst("li:contains(Arte:)")?.text()?.substringAfter(":")?.trim()
-        description = document.selectFirst("meta[itemprop='description']")?.attr("content")
+        genre = document.selectFirst("meta[itemprop=genre]")?.attr("content")
+        description = document.selectFirst("meta[itemprop=description]")?.attr("content")
+        document.selectFirst("meta[itemprop=creativeWorkStatus]")?.attr("content")?.let {
+            status = when (it.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        }
+
+        setUrlWithoutDomain(document.location())
     }
 
     // ========================== Chapters ==================================
@@ -197,7 +207,7 @@ class AnimeXNovel : HttpSource() {
         }
     }
 
-    private fun filterRequest(): Request = GET("$baseUrl/obras", headers)
+    private fun filterRequest(): Request = GET("$baseUrl/pesquisar", headers)
 
     private fun parseOptions(document: Document): List<Pair<String, List<BoxValue>>> {
         val filtersSelectors = setOf(
