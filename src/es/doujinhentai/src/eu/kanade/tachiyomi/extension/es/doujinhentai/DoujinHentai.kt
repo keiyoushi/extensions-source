@@ -32,7 +32,6 @@ class DoujinHentai : HttpSource() {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun Response.asJsoup(): Document = Jsoup.parse(body.string(), request.url.toString())
 
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
