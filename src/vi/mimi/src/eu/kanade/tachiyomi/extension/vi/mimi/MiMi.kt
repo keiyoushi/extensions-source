@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -40,72 +41,75 @@ class MiMi : HttpSource() {
         .addInterceptor(MiMiImageInterceptor())
         .build()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var genreList: List<Pair<String, Int>> = emptyList()
+    private var fetchGenresAttempts: Int = 0
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    // ============================== Popular ======================================
+    // ============================== Common ======================================
 
-    override fun popularMangaRequest(page: Int): Request = GET(
-        apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("tatcatruyen")
-            addQueryParameter("page", (page - 1).toString())
-            addQueryParameter("sort", "views")
-            addQueryParameter("ex", "196")
-            addQueryParameter("reup", "true")
-        }.build(),
-        headers,
-    )
+    private fun HttpUrl.Builder.addCommonParams(page: Int) = apply {
+        addQueryParameter("page", (page - 1).toString())
+        addQueryParameter("ex", "196")
+        addQueryParameter("reup", "true")
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangaPage(response: Response): MangasPage {
         val result = response.parseAs<DataDto>()
         val mangas = result.data.map { it.toSManga() }
         val hasNextPage = result.currentPage < result.totalPage - 1
         return MangasPage(mangas, hasNextPage)
     }
 
+    private fun SManga.pureUrl() = url.removePrefix("/g/").removePrefix("/")
+
+    // ============================== Popular ======================================
+
+    override fun popularMangaRequest(page: Int): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("tatcatruyen")
+            .addQueryParameter("sort", "views")
+            .addCommonParams(page)
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response)
+
     // ============================== Latest ======================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("tatcatruyen")
-            addQueryParameter("page", (page - 1).toString())
-            addQueryParameter("sort", "updated_at")
-            addQueryParameter("ex", "196")
-            addQueryParameter("reup", "true")
-        }.build(),
-        headers,
-    )
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("tatcatruyen")
+            .addQueryParameter("sort", "updated_at")
+            .addCommonParams(page)
+            .build()
+        return GET(url, headers)
+    }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = parseMangaPage(response)
 
     // ============================== Search ======================================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith(PREFIX_ID_SEARCH) -> {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val isIdSearch = query.startsWith(PREFIX_ID_SEARCH) ||
+            (query.length >= 4 && query.toIntOrNull() != null)
+
+        if (isIdSearch) {
             val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(searchMangaByIdRequest(id))
+            return client.newCall(GET("$apiUrl/info/$id", headers))
                 .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response) }
+                .map { MangasPage(listOf(it.parseAs<MangaDto>().toSManga()), false) }
         }
-        query.toIntOrNull() != null -> {
-            client.newCall(searchMangaByIdRequest(query))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response) }
-        }
-        else -> super.fetchSearchManga(page, query, filters)
-    }
-
-    private fun searchMangaByIdRequest(id: String) = GET("$apiUrl/info/$id", headers)
-
-    private fun searchMangaByIdParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response)
-        return MangasPage(listOf(details), false)
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("advance-search")
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            (filters.ifEmpty { getFilterList() }).forEach { filter ->
                 when (filter) {
                     is SortByList -> addQueryParameter("sort", filter.values[filter.state].id)
 
@@ -128,21 +132,19 @@ class MiMi : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response) = parseMangaPage(response)
 
-    private fun genresRequest(): Request = GET("$apiUrl/genres", headers)
-
-    private fun parseGenres(response: Response): List<Pair<String, Int>> = response.parseAs<List<GenreDto>>().map { Pair(it.name, it.id) }
-
-    private var fetchGenresAttempts: Int = 0
     private fun fetchGenres() {
-        if (fetchGenresAttempts >= 3 || genreList.isEmpty()) {
-            launchIO {
+        if (genreList.isEmpty() && fetchGenresAttempts < 3) {
+            scope.launch {
                 try {
-                    client.newCall(genresRequest()).await()
-                        .use { parseGenres(it) }
-                        .takeIf { it.isNotEmpty() }
-                        ?.also { genreList = it }
+                    client.newCall(GET("$apiUrl/genres", headers)).await()
+                        .use { response ->
+                            response.parseAs<List<GenreDto>>()
+                                .map { Pair(it.name, it.id) }
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { genreList = it }
+                        }
                 } catch (_: Exception) {
                 } finally {
                     fetchGenresAttempts++
@@ -150,10 +152,6 @@ class MiMi : HttpSource() {
             }
         }
     }
-
-    private fun launchIO(block: suspend () -> Unit) = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { block() }
-
-    private var genreList: List<Pair<String, Int>> = emptyList()
 
     // ============================== Filters ======================================
 
@@ -164,10 +162,7 @@ class MiMi : HttpSource() {
 
     // ============================== Details ======================================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val checkUrl = if (manga.url.startsWith("/g/")) manga.url.replace("/g/", "") else manga.url
-        return GET("$apiUrl/info/$checkUrl", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/info/${manga.pureUrl()}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
@@ -175,10 +170,7 @@ class MiMi : HttpSource() {
 
     // ============================== Chapters ======================================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val checkUrl = if (manga.url.startsWith("/g/")) manga.url.replace("/g/", "") else manga.url
-        return GET("$apiUrl/gallery/$checkUrl", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/gallery/${manga.pureUrl()}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val segments = response.request.url.pathSegments
