@@ -22,7 +22,7 @@ class MangaDetailsResponse(
     val originalName: String? = null,
     val genres: List<Genre>? = null,
     val id: Int,
-    val name: String? = null,
+    val name: String,
     val status: String,
 )
 
