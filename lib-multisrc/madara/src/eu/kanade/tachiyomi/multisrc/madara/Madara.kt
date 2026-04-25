@@ -837,6 +837,11 @@ abstract class Madara(
      */
     protected open val paginateChapters: Boolean = false
 
+    /**
+     * The delay between each request in the chapter list pagination (in milliseconds).
+     */
+    protected open val chapterListPaginationDelay: Long = 250L
+
     protected open fun oldXhrChaptersRequest(mangaId: String): Request {
         val form = FormBody.Builder()
             .add("action", "manga_get_chapters")
@@ -899,6 +904,10 @@ abstract class Madara(
                 var page = 1
 
                 while (true) {
+                    if (page > 1 && chapterListPaginationDelay > 0) {
+                        Thread.sleep(chapterListPaginationDelay)
+                    }
+
                     var xhrRequest = if (useNewChapterEndpoint || oldChapterEndpointDisabled) {
                         if (page > 1) xhrChaptersRequest(mangaUrl, page) else xhrChaptersRequest(mangaUrl)
                     } else {
