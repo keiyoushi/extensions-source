@@ -1,6 +1,6 @@
 # Contributing
 
-This guide has some instructions and tips on how to create a new Keiyoushi extension. Please **read
+This guide has some instructions and tips on how to create a new Keiyoushi extension. Please **read 
 it carefully** if you're a new contributor or don't have any experience on the required languages
 and knowledges.
 
@@ -159,7 +159,7 @@ and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-c
 ## Getting help
 
 - Join [the Discord server](https://discord.gg/3FbCpdKbdY) for online help and to ask questions while
-developing your extension. When doing so, please ask it in the `#programming` channel.
+developing your extension. When doing so, please ask them in the `#programming` channel.
 - There are some features and tricks that are not explored in this document. Refer to existing
 extension code for examples.
 
@@ -182,7 +182,7 @@ the full locale string instead.
 By default, all individual and multisrc extensions are loaded for local development.
 This may be inconvenient and can drastically slow down your system when working on a single extension.
 
-To adjust which modules are loaded, make adjustments to the `settings.gradle.kts` file as needed. You can specify the single extension you want to work on in the load individual extension function. This helps avoid loading unnecessary modules, making the build process more efficient and preventing your CPU from being overworked.
+To adjust which modules are loaded, make adjustments to the `settings.gradle.kts` file as needed. You can specify the single extension you want to work on in the `load individual extension` function. This helps avoid loading unnecessary modules, making the build process more efficient and preventing your CPU from being overworked.
 
 #### Extension file structure
 
@@ -255,7 +255,7 @@ apply from: "$rootDir/common.gradle"
 The extension's version name is generated automatically by concatenating `1.4` and `extVersionCode`.
 With the example used above, the version would be `1.4.1`.
 
-### Core dependencies
+## Core dependencies
 
 #### Extension API
 
@@ -264,14 +264,14 @@ some interfaces and stubs from the [app](https://github.com/mihonapp/mihon) for 
 purposes. The actual implementations can be found [here](https://github.com/mihonapp/mihon/tree/main/app/src/main/java/eu/kanade/tachiyomi/source).
 Referencing the actual implementation will help with understanding extensions' call flow.
 
-## lib tools
+#### lib tools
 
 The `lib/` directory contains reusable Gradle modules that solve common problems shared across
 multiple extensions, such as cookie injection, image descrambling, JavaScript deobfuscation, and
 more. Before implementing something from scratch, check whether an existing lib already covers your
 use case. Each lib is self-documented via KDoc comments and/or a README in its own folder.
 
-### Available libs
+#### Available libs
 
 | Module | Description |
 |---|---|
@@ -285,7 +285,7 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 > [!NOTE]
 > The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their specific READMEs.
 
-### Adding a lib dependency
+#### Adding a lib dependency
 
 Declare the module in your extension's `build.gradle`:
 
@@ -306,7 +306,7 @@ dependencies {
 Gradle resolves transitive dependencies automatically, so you only need to declare the lib you are
 directly using.
 
-### Creating a new lib
+#### Creating a new lib
 
 If no existing lib fits your needs and the functionality is generic enough to be shared across
 multiple extensions, you can create a new one.
@@ -430,7 +430,7 @@ chapter.date_upload = dateFormat.tryParse(dateStr)
 ```
 
 **Do not** write manual try/catch blocks or null-guards around `SimpleDateFormat.parse()` —
-`tryParse` handles both. Also always declare your `SimpleDateFormat` as a class-level or
+`tryParse` handles both. Also, always declare your `SimpleDateFormat` as a class-level or
 file-level `val` so it is not reconstructed for every chapter.
 
 **Filter helpers — `firstInstance` / `firstInstanceOrNull`**
@@ -598,9 +598,9 @@ and in the table below.
 | `Filter.Group<V>`  | `List<V>`   | A group of filters (preferentially of the same type). The state will be a `List` with all the states.                                                                    |
 | `Filter.Sort`      | `Selection` | A control for sorting, with support for the ordering. The state indicates which item index is selected and if the sorting is `ascending`.                                |
 
-All control filters can have a default state set. It's usually recommended if the source have filters
-to make the initial state match the popular manga list, so when the user open the filter sheet, the
-state is equal and represents the current manga showing.
+All control filters can have a default state set. It's usually recommended, if the source has filters
+to make the initial state match the popular manga list. This way, when the user opens the filter sheet
+the state accurately represents the currently displayed manga.
 
 The `Filter` classes can also be extended, so you can create new custom filters like the `UriPartFilter`:
 
@@ -667,10 +667,10 @@ will be cached.
 
 - When user opens a chapter, `getPageList` will be called and it will return a list of `Page`s.
 - While a chapter is open in the reader or is being downloaded, `fetchImageUrl` will be called to get
-URLs for each page of the manga if the `Page.imageUrl` is empty.
-- If the source provides all the `Page.imageUrl`'s directly, you can fill them and let the `Page.url`
-empty, so the app will skip the `fetchImageUrl` step and call directly `fetchImage`.
-- The `Page.url` and `Page.imageUrl` attributes **should be set as an absolute URL**.
+the URL for each page of the manga if `Page.imageUrl` is empty.
+- If the source provides all the `Page.imageUrl`s directly, you can fill them and leave `Page.url`
+empty, so the app will skip the `fetchImageUrl` step and directly call `fetchImage`.
+- The `Page.url` and `Page.imageUrl` attributes **should be set as absolute URLs**.
 - The list of `Page`s should be returned already sorted, the `index` field is ignored.
 - If you need to pass additional data to the image fetcher, it is recommended to pass it as a URL fragment (e.g. `url + "#data"`). OkHttp does not send fragments to the server, so there is no need to strip it out afterwards.
 
@@ -739,7 +739,7 @@ To do this, you need two files:
 </manifest>
 ```
 
-The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the "path" of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
+The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the path of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
 
 Next, you have the `<data android:scheme="https" android:host="host" android:pathPattern="/..*" />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://developer.android.com/guide/topics/manifest/data-element).
 
@@ -747,7 +747,7 @@ Now, as for `UrlActivity`, you can just use the example below.
 
 > [!CAUTION]
 > The activity does not support any Kotlin Intrinsics specific methods or calls,
-> and using them will causes crashes in the activity. Consider using Java's equivalent
+> and using them will cause crashes in the activity. Consider using Java's equivalent
 > methods instead, such as using `String`'s `equals()` instead of using `==`.
 >
 > You can use Kotlin Intrinsics in the extension source class, this limitation only
@@ -806,11 +806,10 @@ You can find a complete example of how URLs work in the [Riztranslation extensio
 
 #### Update strategy
 
-There are some cases where titles in a source will always only have the same chapter list
-(i.e. immutable), and don't need to be included in a global update of the app because of that, saving
-a lot of requests and preventing causing unnecessary damage to the source servers. To change the
-update strategy of a `SManga`, use the `update_strategy` field. You can find below a description of
-the current possible values.
+In some cases, titles in a source will always have the same chapter list (i.e., they are immutable).
+These do not need to be included in global app updates. Excluding them saves a lot of network requests
+and prevents unnecessary load on the source servers. To change the update strategy of a `SManga`,
+use the `update_strategy` field. You can find below a description of the current possible values.
 
 - `UpdateStrategy.ALWAYS_UPDATE`: Titles marked as always update will be included in the library
 update if they aren't excluded by additional restrictions.
@@ -822,12 +821,12 @@ If not set, it defaults to `ALWAYS_UPDATE`.
 
 #### Renaming existing sources
 
-There are some cases where existing sources changes their name on the website. To correctly reflect
+There are some cases where existing sources change their names on the website. To correctly reflect
 these changes in the extension, you need to explicitly set the `id` to the same old value, otherwise
 it will get changed by the new `name` value and users will be forced to migrate back to the source.
 
 To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/keiyoushi/extensions/blob/repo/index.json)
-by looking into the `sources` attribute of the extension. When you have the `id` copied, you can
+by looking at the `sources` attribute of the extension. When you have the `id` copied, you can
 override it in the source:
 
 ```kotlin
@@ -954,7 +953,7 @@ For other builds, replace  `app.mihon.dev` with the corresponding package IDs:
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
 
-If the extension builds and runs successfully then the code changes should be ready to test in your local app.
+If the extension builds and runs successfully, then the code changes should be ready to test in your local app.
 
 > [!IMPORTANT]
 > If you're deploying to Android 11 or higher, enable the `Always install with package manager` option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
@@ -991,16 +990,16 @@ show up in the [`Logcat`](https://developer.android.com/studio/debug/am-logcat) 
 
 ### Inspecting network calls
 
-One of the easiest ways to inspect network issues (such as HTTP errors 404, 429, no chapter found etc.)
+One of the easiest ways to inspect network issues (such as HTTP errors 404, 429, no chapter found, etc.)
 is to use the [`Logcat`](https://developer.android.com/studio/debug/am-logcat) panel of Android Studio
-and filtering by the `OkHttpClient` tag.
+and filter by the `OkHttpClient` tag.
 
-To be able to check the calls done by OkHttp, you need to enable verbose logging in the app, that is
+To be able to check the calls made by OkHttp, you need to enable verbose logging in the app, which is
 not enabled by default. To enable it, go to
 More -> Settings -> Advanced -> Verbose logging. After enabling it, don't forget to restart the app.
 
-Inspecting the Logcat allows you to get a good look at the call flow and it's more than enough in most
-cases where issues occurs. However, alternatively, you can also use an external tool like `mitm-proxy`.
+Inspecting the Logcat allows you to get a good look at the call flow and is more than enough in most
+cases where issues occur. However, alternatively, you can also use an external tool like `mitm-proxy`.
 For that, refer to the subsequent sections.
 
 On newer Android Studio versions, you can use its built-in Network Inspector inside the
@@ -1010,17 +1009,17 @@ To use it, follow the [official documentation](https://developer.android.com/stu
 and select the app's package name in the process list.
 
 ### Using external network inspecting tools
-If you want to take a deeper look into the network flow, such as taking a look into the request and
-response bodies, you can use an external tool like `mitm-proxy`.
+If you want a deeper look into the network flow, such as inspecting the request and response bodies
+you can use an external tool like `mitm-proxy`.
 
 #### Setup your proxy server
 We are going to use [mitm-proxy](https://mitmproxy.org/) but you can replace it with any other Web
 Debugger (i.e. Charles, Burp Suite, Fiddler etc). To install and execute, follow the commands below.
 
 ```console
-Install the tool.
+# Install the tool.
 $ sudo pip3 install mitmproxy
-Execute the web interface and the proxy.
+# Execute the web interface and the proxy.
 $ mitmweb
 ```
 
