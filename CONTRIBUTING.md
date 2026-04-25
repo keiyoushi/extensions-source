@@ -258,7 +258,7 @@ apply from: "$rootDir/common.gradle"
 The extension's version name is generated automatically by concatenating `1.4` and `extVersionCode`.
 With the example used above, the version would be `1.4.1`.
 
-## Core dependencies
+### Core dependencies
 
 #### Extension API
 
