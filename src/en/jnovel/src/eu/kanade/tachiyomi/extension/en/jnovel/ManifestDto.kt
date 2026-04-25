@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.jnovel
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 
-// in e4p_client.js
 @Serializable
 class E4PQSTicket(
     @ProtoNumber(1) val type: Int,
@@ -34,24 +33,17 @@ class E4PQSWrapper(
 
 object TicketType {
     const val PLAIN_UNSPECIFIED = 0
-    const val OPAQUE = 1
     const val TDRM_V1 = 2
 }
 
 object WrapperType {
     const val PLAIN_UNSPECIFIED = 0
-    const val OPAQUE = 1
     const val CDRM_V1 = 2
 }
 
 object DataType {
-    const val UNSPECIFIED = 0
-    const val WEBPUB = 1
     const val PROTOPUB = 2
-    const val PROTOPUB_ZSTD = 3
-    const val PROTOTICKET = 4
     const val PROTOPUB_ZLIB = 5
-    const val HTML = 101
 }
 
 @Serializable
@@ -66,25 +58,21 @@ class Link(
 
 @Serializable
 class Variant(
-    @ProtoNumber(1) val link: String = "",
+    @ProtoNumber(1) val link: String,
     @ProtoNumber(2) val image: ImageProps?,
 )
 
 @Serializable
 class ImageProps(
-    @ProtoNumber(1) val width: Int = 0,
-    @ProtoNumber(2) val height: Int = 0,
     @ProtoNumber(3) val drm: EDRM?,
 )
 
 @Serializable
 class EDRM(
     @ProtoNumber(1) val version: Int = 0,
-    @ProtoNumber(2) val kid: String = "",
-    @ProtoNumber(3) val iv: ByteArray = EMPTY,
-    @ProtoNumber(4) val challenge: ByteArray = EMPTY,
-) {
-    companion object {
-        private val EMPTY = ByteArray(0)
-    }
+    @ProtoNumber(3) val iv: ByteArray,
+)
+
+object EdrmVersion {
+    const val XEBP = 2
 }

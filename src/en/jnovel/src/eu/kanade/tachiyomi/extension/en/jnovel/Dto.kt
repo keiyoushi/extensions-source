@@ -94,9 +94,10 @@ class Part(
     private val launch: Time?,
     private val number: Int?,
     private val preview: Boolean?,
+    private val rental: Rental?,
 ) {
     val isLocked: Boolean
-        get() = preview == false
+        get() = preview == false && rental == null
 
     fun toSChapter(mangaTitle: String): SChapter = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
@@ -111,4 +112,9 @@ class Part(
 @Serializable
 class Time(
     val seconds: String?,
+)
+
+@Serializable
+class Rental(
+    val expiresAt: Time?,
 )

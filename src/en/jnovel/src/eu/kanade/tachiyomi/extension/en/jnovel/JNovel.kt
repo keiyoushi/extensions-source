@@ -40,7 +40,7 @@ class JNovel :
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
-            if (response.code == 402 && response.request.url.toString().startsWith(viewerUrl)) {
+            if (!response.isSuccessful && response.request.url.toString().startsWith(viewerUrl)) {
                 throw IOException("Log in via WebView and purchase this chapter to read.")
             }
             response
@@ -104,8 +104,12 @@ class JNovel :
         val manifestUrl = manifestUrlStr.toHttpUrl()
         val manifestResponse = client.newCall(GET(manifestUrlStr, headers)).execute()
         val ticketBytes = manifestResponse.parseAsProto<E4PQSTicket>()
-        val pub = decoder.decodeManifest(ticketBytes)
+        val decoded = decoder.decodeManifestFull(ticketBytes)
+        val pub = decoded.pub
         val manifestQueryNames = manifestUrl.queryParameterNames
+
+        val consumerIdStr = (ticketBytes.consumer + "0".repeat(32)).substring(0, 32)
+        val consumerId = consumerIdStr.toByteArray(Charsets.US_ASCII)
 
         return pub.spine.mapIndexedNotNull { index, link ->
             val h2048 = link.variants.firstOrNull {
@@ -119,7 +123,24 @@ class JNovel :
                 }
             }.build()
 
-            Page(index, imageUrl = withAuth.toString())
+            val drm = h2048.image?.drm
+            val iv = drm?.iv
+            val finalUrl = if (drm?.version == EdrmVersion.XEBP && iv != null && iv.size == 32 &&
+                decoded.pbexSeed != null && decoded.pbexSeed.size == 48
+            ) {
+                val xebpFragment = listOf(
+                    withAuth.fragment.orEmpty(),
+                    XebpDecoder.hex(iv),
+                    ticketBytes.contentId,
+                    XebpDecoder.hex(consumerId),
+                    XebpDecoder.hex(decoded.pbexSeed),
+                ).joinToString("\n")
+                withAuth.newBuilder().fragment(xebpFragment).build()
+            } else {
+                withAuth
+            }
+
+            Page(index, imageUrl = finalUrl.toString())
         }
     }
 

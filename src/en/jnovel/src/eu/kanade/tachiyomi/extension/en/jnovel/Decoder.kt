@@ -9,8 +9,10 @@ import org.kotlincrypto.hash.blake2.BLAKE2b
 import java.security.MessageDigest
 import java.util.zip.Inflater
 
+class DecodedManifest(val pub: ProtoPub, val pbexSeed: ByteArray?)
+
 class Decoder {
-    fun decodeManifest(ticket: E4PQSTicket): ProtoPub {
+    fun decodeManifestFull(ticket: E4PQSTicket): DecodedManifest {
         val wrapper = when (ticket.type) {
             TicketType.TDRM_V1 -> unwrapTdrmV1(ticket)
             TicketType.PLAIN_UNSPECIFIED -> ticket.child
@@ -23,15 +25,11 @@ class Decoder {
             else -> throw Exception("Unsupported wrapper type: ${wrapper.type}")
         }
 
-        val payload = if (decrypted.size >= 52 &&
+        val hasPbex = decrypted.size >= 52 &&
             decrypted[0] == 'P'.code.toByte() && decrypted[1] == 'B'.code.toByte() &&
             decrypted[2] == 'E'.code.toByte() && decrypted[3] == 'X'.code.toByte()
-        ) {
-            // Skip 4-byte "PBEX" magic + 48 bytes of XEBP seed
-            decrypted.copyOfRange(52, decrypted.size)
-        } else {
-            decrypted
-        }
+        val pbexSeed = if (hasPbex) decrypted.copyOfRange(4, 52) else null
+        val payload = if (hasPbex) decrypted.copyOfRange(52, decrypted.size) else decrypted
 
         val inflated = when (wrapper.dataType) {
             DataType.PROTOPUB -> payload
@@ -39,7 +37,7 @@ class Decoder {
             else -> throw Exception("Unsupported dataType: ${wrapper.dataType}")
         }
 
-        return inflated.decodeProto<ProtoPub>()
+        return DecodedManifest(pub = inflated.decodeProto<ProtoPub>(), pbexSeed = pbexSeed)
     }
 
     // func 'f127' in drm_worker.js
