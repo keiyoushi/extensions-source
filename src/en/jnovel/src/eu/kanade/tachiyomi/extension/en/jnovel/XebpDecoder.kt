@@ -14,7 +14,7 @@ import java.nio.ByteOrder
 // master key from pbexSeed WASM func f_pn
 object XebpDecoder {
     // WASM data offset 128708
-    private val XXTEA_KEY = hexToBytes("6ca87b0fa8513e36165347af5de51989")
+    private val XXTEA_KEY = "6ca87b0fa8513e36165347af5de51989".decodeHex()
 
     // TIFF little-endian magic "II*\x00", must appear after tfix decrypt
     private val TIFF_MAGIC_LE = byteArrayOf(0x49, 0x49, 0x2A, 0x00)
@@ -142,7 +142,7 @@ object XebpDecoder {
         val countU32 = encryptedHex.length / 8
         require(countU32 >= 2) { "ZSTR needs at least 2 uint32s, got $countU32" }
 
-        val encrypted = hexToBytes(encryptedHex)
+        val encrypted = encryptedHex.decodeHex()
         val u32s = IntArray(countU32)
         for (i in 0 until countU32) u32s[i] = le32(encrypted, i * 4)
 
@@ -292,15 +292,11 @@ object XebpDecoder {
         return sb.toString()
     }
 
-    internal fun hexToBytes(hex: String): ByteArray {
-        require(hex.length % 2 == 0) { "hex length must be even" }
-        val out = ByteArray(hex.length / 2)
-        for (i in out.indices) {
-            out[i] = (
-                (Character.digit(hex[i * 2], 16) shl 4) or
-                    Character.digit(hex[i * 2 + 1], 16)
-                ).toByte()
-        }
-        return out
+    internal fun String.decodeHex(): ByteArray {
+        check(length % 2 == 0) { "Must have an even length" }
+
+        return chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
     }
 }

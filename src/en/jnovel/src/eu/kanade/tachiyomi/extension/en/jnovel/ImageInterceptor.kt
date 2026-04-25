@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
+import eu.kanade.tachiyomi.extension.en.jnovel.XebpDecoder
+import eu.kanade.tachiyomi.extension.en.jnovel.XebpDecoder.decodeHex
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -46,10 +48,10 @@ class ImageInterceptor : Interceptor {
 
         val ctx = if (fragmentParts.size == 5) {
             XebpContext(
-                iv = XebpDecoder.hexToBytes(fragmentParts[1]),
+                iv = fragmentParts[1].decodeHex(),
                 contentId = fragmentParts[2],
-                consumerId = XebpDecoder.hexToBytes(fragmentParts[3]),
-                pbexSeed = XebpDecoder.hexToBytes(fragmentParts[4]),
+                consumerId = fragmentParts[3].decodeHex(),
+                pbexSeed = fragmentParts[4].decodeHex(),
             )
         } else {
             null
