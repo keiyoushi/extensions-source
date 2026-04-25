@@ -1,7 +1,8 @@
 ext {
     extName = 'West Manga'
     extClass = '.WestManga'
-    extVersionCode = 40
+    extVersionCode = 41
+    extBaseUrl = 'https://westmanga.co'
     isNsfw = false
 }
 
