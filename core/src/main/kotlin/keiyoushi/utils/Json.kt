@@ -5,8 +5,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
+import java.io.InputStream
 
 val jsonInstance: Json by injectLazy()
 
@@ -34,7 +38,7 @@ inline fun <reified T> Response.parseAs(json: Json = jsonInstance): T = use { js
  * @param json The [Json] instance to use for parsing. Defaults to the injected instance.
  * @param transform A function to transform the JSON string before it's decoded.
  */
-inline fun <reified T> Response.parseAs(json: Json = jsonInstance, transform: (String) -> String): T = use { body.string().parseAs(json, transform) }
+inline fun <reified T> Response.parseAs(json: Json = jsonInstance, transform: (String) -> String): T = use { it.body.string().parseAs(json, transform) }
 
 /**
  * Parses a [JsonElement] into an object of type [T].
@@ -44,6 +48,18 @@ inline fun <reified T> Response.parseAs(json: Json = jsonInstance, transform: (S
 inline fun <reified T> JsonElement.parseAs(json: Json = jsonInstance): T = json.decodeFromJsonElement(this)
 
 /**
+ * Parses a [InputStream] into an object of type [T]
+ *
+ * @param json The [Json] instance to use for parsing. Defaults to the injected instance.
+ */
+inline fun <reified T> InputStream.parseAs(json: Json = jsonInstance): T = use { json.decodeFromStream(it) }
+
+/**
  * Serializes the object to a JSON string.
  */
 inline fun <reified T> T.toJsonString(json: Json = jsonInstance): String = json.encodeToString(this)
+
+/**
+ * Encodes the object to a Response Body.
+ */
+inline fun <reified T> T.toJsonRequest(json: Json = jsonInstance): RequestBody = toJsonString(json).toRequestBody("application/json".toMediaType())
