@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.uk.zenko
 
-import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import keiyoushi.utils.getPreferencesLazy
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ChapterResponseItem
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.MangaDetailsResponse
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ZenkoMangaListResponse
@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
