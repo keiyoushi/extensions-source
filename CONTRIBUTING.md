@@ -375,7 +375,7 @@ val dto = response.parseAs<MyDto> { it.substringAfter("callback(").dropLast(1) }
 
 **Do not** create a local `private val json: Json by injectLazy()` unless you specifically need a custom JSON configuration (e.g., `isLenient = true` or custom serializers). For standard parsing, the global instance is already available via `jsonInstance` and the `parseAs` helpers use it automatically.
 
-**JSON serialization - `toJsonString`**
+##### JSON serialization — `toJsonString`
 
 Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string.
 
@@ -416,7 +416,7 @@ class MyDto(
 ```
 
 
-**Date parsing - `tryParse`**
+###### Date parsing — `tryParse`
 
 Use `keiyoushi.utils.tryParse` on a `SimpleDateFormat` instance to safely parse a date string.
 It returns `0L` on failure or when the input is `null`, which is exactly what the app expects.
@@ -436,7 +436,7 @@ chapter.date_upload = dateFormat.tryParse(dateStr)
 `tryParse` handles both. Also, always declare your `SimpleDateFormat` as a class-level or
 file-level `val` so it is not reconstructed for every chapter.
 
-**Filter helpers - `firstInstance` / `firstInstanceOrNull`**
+###### Filter helpers — `firstInstance` / `firstInstanceOrNull`
 
 Use these instead of `filterIsInstance<T>().first()` / `filterIsInstance<T>().firstOrNull()`.
 
@@ -462,7 +462,7 @@ private val preferences = getPreferences()
 private val preferences by getPreferencesLazy()
 ```
 
-**Next.js data extraction - `extractNextJs` / `extractNextJsRsc`**
+###### Next.js data extraction — `extractNextJs` / `extractNextJsRsc`
 
 If the site is built with Next.js, use `keiyoushi.utils.extractNextJs` on a `Document` or `Response`,
 or `keiyoushi.utils.extractNextJsRsc` on a raw RSC response string to pull typed data out of the
@@ -483,7 +483,8 @@ request header and use `extractNextJsRsc` on the response body string.
 See [#14266](https://github.com/keiyoushi/extensions-source/pull/14266) and
 [#14446](https://github.com/keiyoushi/extensions-source/pull/14446) for real-world usage.
 
-**Extracting URLs - `setUrlWithoutDomain` + `absUrl`**
+###### Extracting URLs — `setUrlWithoutDomain` + `absUrl`
+
 When extracting URLs from HTML, prefer `element.absUrl("href")` or `element.attr("abs:href")` over manually concatenating `baseUrl` + `path`. Combined with `setUrlWithoutDomain()`, this safely handles both absolute and relative links.
 
 #### Additional dependencies
