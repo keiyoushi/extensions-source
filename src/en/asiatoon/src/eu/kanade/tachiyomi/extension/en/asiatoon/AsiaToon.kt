@@ -1,27 +1,30 @@
 package eu.kanade.tachiyomi.extension.en.asiatoon
 
-import eu.kanade.tachiyomi.multisrc.hotcomics.HotComics
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AsiaToon :
-    HotComics(
-        "AsiaToon",
-        "en",
-        "https://asiatoon.net",
-    ) {
+class AsiaToon : HttpSource() {
+    override val name = "AsiaToon"
+    override val lang = "en"
+    override val baseUrl = "https://asiatoon.net"
+    override val supportsLatest = true
+
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
     private val blockedHeadings = setOf("Log in", "Sign up", "Description", "Details", "Genres", "Tags", "Episodes Details")
-    private val blockedTitleTokens = setOf("Popular", "Newest series", "Family Safe", "Login", "More", "Home", "My Library", "Genres", "Daily", "New")
     private val genreNames = setOf(
         "All",
         "Vanilla",
@@ -56,6 +59,15 @@ class AsiaToon :
         "Romance",
     )
 
+    override val client = network.cloudflareClient.newBuilder()
+        .addNetworkInterceptor(
+            CookieInterceptor(baseUrl.removePrefix("https://"), "hc_vfs" to "Y"),
+        )
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/en/genres?page=$page", headers)
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/en/genres/New?page=$page", headers)
@@ -64,43 +76,54 @@ class AsiaToon :
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query.isNotEmpty()) {
+                addEncodedPathSegments("en/search")
+                addQueryParameter("keyword", query.trim())
+            } else {
+                val filter = filters.filterIsInstance<BrowseFilter>().first()
+                addEncodedPathSegments(filter.selected)
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
+
+        return GET(url, headers)
+    }
+
+    override fun getFilterList() = browseFilters()
+
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        checkForChallenge(document)
+        val isTextSearch = !response.request.url.queryParameter("keyword").isNullOrBlank()
+        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val nextPage = currentPage + 1
 
-        val mangas = document
-            .select("a[href*='/en/'][href$='.html']:not([href*='/episode-'])")
+        val selector = if (isTextSearch) {
+            "li.search-item-wrap"
+        } else {
+            "article.component-item"
+        }
+
+        val mangas = document.select(selector)
             .mapNotNull(::mangaFromElement)
             .distinctBy { it.url }
 
-        if (mangas.isEmpty()) {
-            throw Exception("AsiaToon returned an empty page. In Suwayomi this usually means a Cloudflare challenge; enable FlareSolverr or Byparr.")
-        }
-
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val nextPage = currentPage + 1
-        val hasNextPage = document.select("a[href*='page=$nextPage']").isNotEmpty()
+        val hasNextPage = !isTextSearch && document.select("a[href*='page=$nextPage']").isNotEmpty()
 
         return MangasPage(mangas, hasNextPage)
     }
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
-        checkForChallenge(document)
 
-        title = document.select("h1, h2")
-            .map { it.text() }
-            .firstOrNull { it.isNotBlank() && it !in blockedHeadings && !it.endsWith("at Asiatoon.net") }
-            ?: ""
+        title = document.selectFirst(".info__right h1, .info__right h2, h1, h2")?.text().orEmpty()
 
-        thumbnail_url = document.selectFirst(".thumb-wrapper a.thumb.js-thumbnail img, a.thumb.js-thumbnail img")?.imgAttr()
+        thumbnail_url = document.selectFirst(".info__left .thumb-wrapper img, .thumb-wrapper a.thumb.js-thumbnail img, a.thumb.js-thumbnail img")
+            ?.imgAttr()
             ?.takeUnless { it.startsWith("data:", ignoreCase = true) }
-            ?: document.selectFirst("meta[property=og:image], meta[name=twitter:image]")?.absUrl("content")
-                ?.takeUnless { it.startsWith("data:", ignoreCase = true) }
-            ?: document.selectFirst("img[alt]:not([alt=icon]):not([alt=''])")?.imgAttr()
-                ?.takeUnless { it.startsWith("data:", ignoreCase = true) }
 
-        genre = document.select("a[href*='/en/genres/']")
+        genre = document.select(".info__right a[href*='/en/genres/'], a[href*='/en/genres/']")
             .map { it.text() }
             .filter { it in genreNames }
             .distinct()
@@ -113,7 +136,6 @@ class AsiaToon :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        checkForChallenge(document)
 
         return document.select("a[href*='/episode-']")
             .mapNotNull { element ->
@@ -127,94 +149,44 @@ class AsiaToon :
                 SChapter.create().apply {
                     setUrlWithoutDomain(url)
                     this.name = name
-                    date_upload = parseDate(dateText)
+                    date_upload = dateFormat.tryParse(dateText)
                 }
             }
             .distinctBy { it.url }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        checkForChallenge(document)
-
-        val candidates = document.select(
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup()
+        .select(
             "article.viewer__body img.content__img[data-index], " +
                 "article.js-episode-article img.content__img[data-index], " +
                 ".viewer__body img.content__img[data-index]",
-        ).ifEmpty {
-            document.select(
-                "article.viewer__body img.content__img, " +
-                    "article.js-episode-article img.content__img, " +
-                    ".viewer__body img.content__img",
-            )
-        }
+        )
+        .sortedBy { it.attr("data-index").toIntOrNull() ?: Int.MAX_VALUE }
+        .mapIndexed { index, img -> Page(index, imageUrl = img.imgAttr()) }
 
-        val extractedPages = candidates
-            .mapNotNull { img ->
-                val url = img.imgAttr()
-                if (!isPageImage(url)) return@mapNotNull null
-
-                val index = img.attr("data-index").toIntOrNull()
-                index to url
-            }
-            .let { pages ->
-                val dominantHost = pages
-                    .mapNotNull { (_, url) -> urlHost(url) }
-                    .groupingBy { it }
-                    .eachCount()
-                    .maxByOrNull { it.value }
-                    ?.key
-
-                pages.filter { (_, url) ->
-                    dominantHost == null || urlHost(url) == dominantHost
-                }
-            }
-            .distinctBy { it.second }
-            .sortedWith(compareBy<Pair<Int?, String>> { it.first ?: Int.MAX_VALUE }.thenBy { it.second })
-
-        val pages = extractedPages
-            .mapIndexed { index, (_, url) -> Page(index, imageUrl = url) }
-
-        if (pages.isNotEmpty()) {
-            return pages
-        }
-
-        val hasVipBlock = document.select("*").any {
-            it.ownText().contains("VIP Access Required", ignoreCase = true) ||
-                it.ownText().contains("Subscribe to unlock", ignoreCase = true) ||
-                it.ownText().contains("Unlock this chapter", ignoreCase = true)
-        }
-
-        if (hasVipBlock) {
-            throw Exception("This AsiaToon chapter requires VIP access.")
-        }
-
-        throw Exception("No readable pages found for this AsiaToon chapter.")
-    }
-
-    override val browseList = browseEntries
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun mangaFromElement(element: Element): SManga? {
-        val url = element.absUrl("href").substringBefore("#")
-        if (url.isBlank() || "/episode-" in url || !url.contains("/en/")) return null
-
+        val anchor = element.selectFirst("a.thumb.js-thumbnail, a.thumb, a[href$='.html']") ?: return null
         val title = sequenceOf(
-            element.attr("title"),
-            element.selectFirst("img[alt]:not([alt=icon]):not([alt=''])")?.attr("alt"),
-            element.selectFirst("h1, h2, h3, h4, h5, h6")?.text(),
-            cleanupTitle(element.text()),
+            anchor.attr("title"),
+            element.selectFirst("[title]")?.attr("title"),
+            element.selectFirst("p.line-clamp-3, p.webtoon-title")?.text(),
+            element.selectFirst(".title")?.text(),
+            element.selectFirst("img[alt]:not([alt=icon]):not([alt=img-thumb]):not([alt=wuf])")?.attr("alt"),
         )
             .filterNotNull()
-            .map(String::trim)
-            .map(::cleanupTitle)
-            .firstOrNull(::isValidTitle)
-            ?: return null
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+
+        if (title.isBlank()) return null
 
         return SManga.create().apply {
-            setUrlWithoutDomain(url)
+            setUrlWithoutDomain(anchor.absUrl("href"))
             this.title = title
-            thumbnail_url = element.selectFirst("img")?.imgAttr()
-                ?: element.parent()?.selectFirst("img")?.imgAttr()
+            thumbnail_url = anchor.selectFirst("img")?.imgAttr()
+                ?: element.selectFirst("img")?.imgAttr()
         }
     }
 
@@ -235,58 +207,6 @@ class AsiaToon :
         return null
     }
 
-    private fun checkForChallenge(document: Document) {
-        val text = document.text()
-        if (
-            document.title().contains("Just a moment", ignoreCase = true) ||
-            text.contains("Enable JavaScript and cookies to continue", ignoreCase = true) ||
-            text.contains("cf-mitigated", ignoreCase = true) ||
-            document.selectFirst("script[src*='/cdn-cgi/challenge-platform'], #challenge-error-text, form#challenge-form") != null
-        ) {
-            throw Exception("AsiaToon is behind Cloudflare. In Suwayomi enable FlareSolverr or Byparr, or open the source in WebView on Mihon.")
-        }
-    }
-
-    private fun isValidTitle(title: String): Boolean {
-        if (title.isBlank()) return false
-        if (title in blockedTitleTokens || title in genreNames) return false
-        if (title.matches(NUMERIC_TITLE_REGEX)) return false
-        return title.any { it.isLetter() }
-    }
-
-    private fun cleanupTitle(title: String): String = title
-        .replace(TITLE_MARKER_REGEX, " ")
-        .replace(TRAILING_COUNT_REGEX, "")
-        .replace(MULTISPACE_REGEX, " ")
-        .trim()
-
-    private fun parseDate(date: String?) = dateFormat.tryParse(date)
-
-    private fun isPageImage(url: String): Boolean {
-        if (url.isBlank()) return false
-
-        val lower = url.lowercase()
-        if (!lower.startsWith("http")) return false
-
-        return listOf(
-            "icon",
-            "logo",
-            "facebook",
-            "twitter",
-            "reddit",
-            "email",
-            "thumbsup",
-            "search",
-            "close",
-            "drop",
-            "check",
-        ).none { lower.contains(it) }
-    }
-
-    private fun urlHost(url: String): String? = runCatching {
-        java.net.URI(url).host?.lowercase()
-    }.getOrNull()
-
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> absUrl("data-src")
         hasAttr("data-original") -> absUrl("data-original")
@@ -303,9 +223,5 @@ class AsiaToon :
     private companion object {
         val MONTH_DATE_REGEX = Regex("(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{2},\\s+\\d{4}")
         val WHITESPACE_REGEX = Regex("\\s+")
-        val TITLE_MARKER_REGEX = Regex("\\b(?:UP|NEW|18\\+)\\b")
-        val TRAILING_COUNT_REGEX = Regex("\\s+\\d+(?:[.,]\\d+)?[KM]?$")
-        val MULTISPACE_REGEX = Regex("\\s{2,}")
-        val NUMERIC_TITLE_REGEX = Regex("^[0-9.]+[KM]?$")
     }
 }

@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.asiatoon
 
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+
 internal val browseEntries = listOf(
     "Home" to "en",
     "New" to "en/genres/New",
@@ -40,4 +43,18 @@ internal val browseEntries = listOf(
     "Genre: Drama" to "en/genres/Drama",
     "Genre: BL" to "en/genres/BL",
     "Genre: Romance" to "en/genres/Romance",
+)
+
+internal class BrowseFilter :
+    Filter.Select<String>(
+        "Browse",
+        browseEntries.map { it.first }.toTypedArray(),
+    ) {
+    val selected get() = browseEntries[state].second
+}
+
+internal fun browseFilters() = FilterList(
+    Filter.Header("Doesn't work with Text search"),
+    Filter.Separator(),
+    BrowseFilter(),
 )
