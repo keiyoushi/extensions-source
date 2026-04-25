@@ -528,11 +528,12 @@ either `SourceFactory` or `HttpSource`.
 - **Formatting Chapter Numbers:** Do not write custom `DecimalFormat` logic just to remove trailing zeros from float chapter numbers. Simply use `.toString().removeSuffix(".0")`.
 
 - **Generating Page lists:** The app ignores the `index` passed to the `Page` object, but you must ensure the list itself is sorted correctly according to the source. You can use Kotlin's `mapIndexed` to easily instantiate `Page` objects, or rely on the index provided by the source API if available:
-```kotlin
-  return document.select(".pages img").mapIndexed { index, img ->
-      Page(index, imageUrl = img.attr("abs:src"))
-  }
-```
+
+    ```kotlin
+    return document.select(".pages img").mapIndexed { index, img ->
+        Page(index, imageUrl = img.attr("abs:src"))
+    }
+    ```
 
 * **Memory-efficient Image Interceptors:** When implementing interceptors for descrambling, stitching, or decrypting images, avoid loading the entire image into a `ByteArray`, as this can cause `OutOfMemoryError` on low-end devices. Prefer stream-based processing instead:
 
