@@ -539,20 +539,20 @@ either `SourceFactory` or `HttpSource`.
     }
     ```
 
-* **Memory-efficient Image Interceptors:** When implementing interceptors for descrambling, stitching, or decrypting images, avoid loading the entire image into a `ByteArray`, as this can cause `OutOfMemoryError` on low-end devices. Prefer stream-based processing instead:
+- **Memory-efficient Image Interceptors:** When implementing interceptors for descrambling, stitching, or decrypting images, avoid loading the entire image into a `ByteArray`, as this can cause `OutOfMemoryError` on low-end devices. Prefer stream-based processing instead:
 
-  * **Read:** Use `response.body.byteStream()` with `BitmapFactory.decodeStream()` to decode images directly from the stream.
-  * **Write:** Write the processed bitmap into an Okio `Buffer` via `output.outputStream()` and convert it using `asResponseBody(mediaType)`.
-  * **Decryption:** Use Okio's `cipherSource` extension for stream-based decryption rather than decrypting a full byte array in memory.
-  * Note: `readByteArray()` should generally be avoided here because it forces full in-memory buffering of the image. Streaming directly keeps memory usage lower and more stable.
-  * Always wrap network responses in `response.use { ... }` to ensure the response body is properly closed and to prevent memory leaks.
-  * If applicable, call `bitmap.recycle()` after you're done with it to free native memory early.
+  - **Read:** Use `response.body.byteStream()` with `BitmapFactory.decodeStream()` to decode images directly from the stream.
+  - **Write:** Write the processed bitmap into an Okio `Buffer` via `output.outputStream()` and convert it using `asResponseBody(mediaType)`.
+  - **Decryption:** Use Okio's `cipherSource` extension for stream-based decryption rather than decrypting a full byte array in memory.
+  - Note: `readByteArray()` should generally be avoided here because it forces full in-memory buffering of the image. Streaming directly keeps memory usage lower and more stable.
+  - Always wrap network responses in `response.use { ... }` to ensure the response body is properly closed and to prevent memory leaks.
+  - If applicable, call `bitmap.recycle()` after you're done with it to free native memory early.
 
 ### OkHttp and Network
 
-* **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually.
+- **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually.
 
-* **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings.
+- **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings.
 
 ### Extension call flow
 
