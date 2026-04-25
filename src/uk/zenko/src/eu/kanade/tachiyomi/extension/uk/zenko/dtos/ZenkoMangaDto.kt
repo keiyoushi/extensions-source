@@ -19,6 +19,7 @@ class MangaDetailsResponse(
     val coverImg: String,
     val description: String,
     val engName: String? = null,
+    val originalName: String? = null,
     val genres: List<Genre>? = null,
     val id: Int,
     val name: String,

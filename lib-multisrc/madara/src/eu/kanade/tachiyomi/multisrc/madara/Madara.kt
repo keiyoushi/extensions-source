@@ -803,6 +803,7 @@ abstract class Madara(
         element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
         element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
         element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
+        element.hasAttr("data-manga-src") -> element.attr("abs:data-manga-src")
         else -> element.attr("abs:src")
     }
 
