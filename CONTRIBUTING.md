@@ -22,10 +22,8 @@ or fixing it directly by submitting a Pull Request.
    5. [Misc notes](#misc-notes)
    6. [Advanced extension features](#advanced-extension-features)
 4. [Multi-source themes](#multi-source-themes)
-   1. [The directory structure](#the-directory-structure)
-   2. [Development workflow](#development-workflow)
-   3. [Scaffolding overrides](#scaffolding-overrides)
-   4. [Additional Notes](#additional-notes)
+   1. [Creating a new theme](#creating-a-new-theme)
+   2. [Using a Theme](#using-a-theme)
 5. [Running](#running)
 6. [Debugging](#debugging)
    1. [Android Debugger](#android-debugger)
@@ -433,10 +431,7 @@ chapter.date_upload = dateFormat.tryParse(dateStr)
 
 **Do not** write manual try/catch blocks or null-guards around `SimpleDateFormat.parse()` —
 `tryParse` handles both. Also always declare your `SimpleDateFormat` as a class-level or
-file-level `val` so it is not reconstructed for every chapter (seen in
-[#13619](https://github.com/keiyoushi/extensions-source/pull/13619),
-[#13813](https://github.com/keiyoushi/extensions-source/pull/13813),
-[#13936](https://github.com/keiyoushi/extensions-source/pull/13936)).
+file-level `val` so it is not reconstructed for every chapter.
 
 **Filter helpers — `firstInstance` / `firstInstanceOrNull`**
 
@@ -448,9 +443,6 @@ import keiyoushi.utils.firstInstanceOrNull
 
 val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 ```
-
-Seen requested in [#13813](https://github.com/keiyoushi/extensions-source/pull/13813) and
-[#14246](https://github.com/keiyoushi/extensions-source/pull/14246).
 
 **SharedPreferences — `getPreferences` / `getPreferencesLazy`**
 
@@ -466,9 +458,6 @@ private val preferences = getPreferences()
 // Lazy (recommended for most cases):
 private val preferences by getPreferencesLazy()
 ```
-
-Seen requested in [#14600](https://github.com/keiyoushi/extensions-source/pull/14600) and
-[#14446](https://github.com/keiyoushi/extensions-source/pull/14446).
 
 **Next.js data extraction — `extractNextJs` / `extractNextJsRsc`**
 
@@ -515,7 +504,7 @@ the main app has at the expense of app size.
 ### Extension main class
 
 The class which is referenced and defined by `extClass` in `build.gradle`. This class should implement
-either `SourceFactory` or extend one of the `Source` implementations: `HttpSource` or `ParsedHttpSource`.
+either `SourceFactory` or `HttpSource`.
 
 | Class              | Description                                                                                                                      |
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------|
@@ -865,175 +854,88 @@ sites use the same site generator tool (usually a CMS) for bootstrapping their w
 them similar enough to prompt code reuse through inheritance/composition; which from now on we will
 use the general **theme** term to refer to.
 
-We no longer use code generation scripts for multisrc. Instead, themes are distributed as shared
-Gradle libraries within the `lib-multisrc` folder.
+Themes are provided as libraries within `lib-multisrc`. You can apply a theme to an extension by specifying the `themePkg` property in its `build.gradle` file.
 
-To create a source based on a theme, you apply the theme library via the `themePkg` property in
-your extension's `build.gradle` and inherit from the theme's base class in your Kotlin source.
-For example:
+### Creating a new theme
+
+To create a new theme, you need to set up a new module inside the `lib-multisrc` directory. The structure is similar to a regular extension, but it acts as a base library that other extensions can depend on.
+
+#### Theme directory structure
+
+```console
+$ tree lib-multisrc/<theme_name>/
+lib-multisrc/<theme_name>/
+├── build.gradle.kts
+└── src
+    └── main
+        └── java
+            └── eu
+                └── kanade
+                    └── tachiyomi
+                        └── multisrc
+                            └── <theme_name>
+                                └── <ThemeName>.kt
+```
+
+`<theme_name>` should be adapted from the CMS/theme name, and can only contain lowercase ASCII letters and digits. Your theme code must be placed in the package `eu.kanade.tachiyomi.multisrc.<theme_name>`.
+
+#### Theme build.gradle.kts
+
+Make sure that your new theme's `build.gradle.kts` file follows this structure:
+
+```kotlin
+plugins {
+    id("lib-multisrc")
+}
+
+baseVersionCode = 1
+```
+
+| Field             | Description                                                                                                                                                                    |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `baseVersionCode` | The base version code for the theme. This must be a positive integer and **incremented** whenever a change is made to the theme's implementation that affects the extensions. |
+
+#### Theme main class
+
+The main class of the theme (e.g., `<ThemeName>.kt`) contains the default implementation for the source sites. It should be declared as an `abstract class` extending `HttpSource`, allowing individual extensions to inherit and override its properties and methods.
+
+```kotlin
+package eu.kanade.tachiyomi.multisrc.<theme_name>
+
+import eu.kanade.tachiyomi.source.online.HttpSource
+
+abstract class <ThemeName>(
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
+) : HttpSource() {
+    
+    // Theme default implementation...
+    
+}
+```
+
+### Using a Theme
+
+To use a theme in your extension, follow the regular extension creation steps and add the `themePkg` property to your `build.gradle`:
 
 ```groovy
 ext {
-    extName = 'My Multisrc Extension'
-    extClass = '.MyMultisrcExtension'
-    extVersionCode = 1
-    themePkg = 'madara'
+    extName = '<My source name>'
+    extClass = '.<MySourceName>'
+    themePkg = '<theme_name>'
+    overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
 ```
-This section needs to be rewritten. Come to the `#programming` channel in our Discord server for help.
 
-<details>
-<summary>Outdated information</summary>
+Notice that instead of `extVersionCode`, extensions using a theme must use `overrideVersionCode`. The final extension version code (`extVersionCode`) is automatically calculated during the build process as `theme.baseVersionCode + ext.overrideVersionCode`.
 
-This module contains the *default implementation* for each theme and definitions for each source that
-builds upon that default implementation and also it's overrides upon that default implementation,
-all of this becomes a set of source code which then is used to generate individual extensions from.
+Because themes are provided as libraries, your extension's main class will directly inherit from the theme's base class.
 
-### The directory structure
-```console
-$ tree multisrc
-multisrc
-├── build.gradle.kts
-├── overrides
-│   └── <themepkg>
-│       ├── default
-│       │   ├── additional.gradle
-│       │   └── res
-│       │       ├── mipmap-hdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-mdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xhdpi
-│       │       │   └── ic_launcher.png
-│       │       ├── mipmap-xxhdpi
-│       │       │   └── ic_launcher.png
-│       │       └── mipmap-xxxhdpi
-│       │           └── ic_launcher.png
-│       └── <sourcepkg>
-│           ├── additional.gradle
-│           ├── AndroidManifest.xml
-│           ├── res
-│           │   ├── mipmap-hdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-mdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xhdpi
-│           │   │   └── ic_launcher.png
-│           │   ├── mipmap-xxhdpi
-│           │   │   └── ic_launcher.png
-│           │   └── mipmap-xxxhdpi
-│           │       └── ic_launcher.png
-│           └── src
-│               └── <SourceName>.kt
-└── src
-    └── main
-        ├── AndroidManifest.xml
-        └── java
-            ├── eu
-            │   └── kanade
-            │       └── tachiyomi
-            │           └── multisrc
-            │               └── <themepkg>
-            │                   ├── <ThemeName>Generator.kt
-            │                   └── <ThemeName>.kt
-            └── generator
-                ├── GeneratorMain.kt
-                ├── IntelijConfigurationGeneratorMain.kt
-                └── ThemeSourceGenerator.kt
-```
-
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<themepkg>/<Theme>.kt` defines the theme's
-default implementation.
-- `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/<Theme>Generator.kt` defines the theme's
-generator class, this is similar to a `SourceFactory` class.
-- `multisrc/overrides/<themepkg>/default/res` is the theme's default icons, if a source doesn't have
-overrides for `res`, then default icons will be used.
-- `multisrc/overrides/<themepkg>/default/additional.gradle` defines additional gradle code, this will
-be copied at the end of all generated sources from this theme.
-- `multisrc/overrides/<themepkg>/<sourcepkg>` contains overrides for a source that is defined inside
-the `<Theme>Generator.kt` class.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/src` contains source overrides.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/res` contains override for icons.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/additional.gradle` defines additional gradle code, this
-will be copied at the end of the generated gradle file below the theme's `additional.gradle`.
-- `multisrc/overrides/<themepkg>/<sourcepkg>/AndroidManifest.xml` is copied as an override to the
-default `AndroidManifest.xml` generation if it exists.
-
-> [!NOTE]
-> Files ending with `Gen.kt` (i.e. `multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/<theme>/XxxGen.kt`)
-> are considered helper files and won't be copied to generated sources.
-
-### Development workflow
-There are three steps in running and testing a theme source:
-
-1. Generate the sources
-    - **Option 1: Only generate sources from one theme**
-        - **Method 1:** Find and run `<ThemeName>Generator` run configuration from the
-        `Run/Debug Configuration` menu.
-        - **Method 2:** Directly run `<themepkg>.<ThemeName>Generator.main` by pressing the play
-        button in front of the method shown inside Android Studio's Code Editor to generate sources
-        from the said theme.
-    - **Option 2: Generate sources from all themes**
-        - **Method 1:** Run `./gradlew multisrc:generateExtensions` from a terminal window to
-        generate all sources.
-        - **Method 2:** Directly run `Generator.GeneratorMain.main` by pressing the play button
-        in front of the method shown inside Android Studio's Code Editor to generate all sources.
-2. Sync gradle to import the new generated sources inside `generated-src`
-    - **Method 1:** Android Studio might prompt to sync the gradle. Click on `Sync Now`.
-    - **Method 2:** Manually re-sync by opening `File` -> `Sync Project with Gradle Files` or by
-    pressing `Alt+f` then `g`.
-3. Build and test the generated Extension like normal `src` sources.
-    - It's recommended to make changes here to skip going through step 1 and 2 multiple times, and
-    when you are done, copying the changes back to `multisrc`.
-
-### Scaffolding overrides
-You can use this python script to generate scaffolds for source overrides.
-Put it inside `multisrc/overrides/<themepkg>/` as `scaffold.py`.
-```python
-import os, sys
-from pathlib import Path
-
-theme = Path(os.getcwd()).parts[-1]
-
-print(f"Detected theme: {theme}")
-
-if len(sys.argv) < 3:
-    print("Must be called with a class name and lang, for Example 'python scaffold.py LeviatanScans en'")
-    exit(-1)
-
-source = sys.argv[1]
-package = source.lower()
-lang = sys.argv[2]
-
-print(f"working on {source} with lang {lang}")
-
-os.makedirs(f"{package}/src")
-os.makedirs(f"{package}/res")
-
-with open(f"{package}/src/{source}.kt", "w") as f:
-    f.write(f"package eu.kanade.tachiyomi.extension.{lang}.{package}\n\n")
-```
-
-### Additional Notes
-- Generated sources extension version code is calculated as
-`baseVersionCode + overrideVersionCode + multisrcLibraryVersion`.
-    - Currently `multisrcLibraryVersion` is `0`
-    - When a new source is added, it doesn't need to set `overrideVersionCode` as it's default is `0`.
-    - For each time a source changes in a way that should the version increase, `overrideVersionCode`
-    should be increased by one.
-    - When a theme's default implementation changes, `baseVersionCode` should be increased, the
-    initial value should be `1`.
-    - For example, for a new theme with a new source, extension version code will be `0 + 0 + 1 = 1`.
-- `IntelijConfigurationGeneratorMainKt` should be run on creating or removing a multisrc theme.
-    - On removing a theme, you can manually remove the corresponding configuration in the `.run`
-    folder instead.
-    - Be careful if you're using sparse checkout. If other configurations are accidentally removed,
-    `git add` the file you want and `git restore` the others. Another choice is to allow
-    `/multisrc/src/main/java/eu/kanade/tachiyomi/multisrc/*` before running the generator.
-
-</details>
+Any site-specific overrides, custom functions, or custom icons are implemented directly in your extension's module (`src/<lang>/<mysourcename>`) by overriding the inherited theme properties and functions.
 
 ## Running
 
@@ -1059,6 +961,8 @@ If the extension builds and runs successfully then the code changes should be re
 ## Debugging
 
 ### Android Debugger
+> [!NOTE]
+> It is generally recommended to rely on logging instead of the Android Debugger. Using standard logs (like `Log.d` or viewing OkHttp logs) is typically much faster, easier to set up, and is more than sufficient for debugging web scraping logic.
 
 > [!IMPORTANT]
 > If you didn't **build the main app** from source with **debug enabled** and are using a release/beta APK, you **need a rooted device**.
