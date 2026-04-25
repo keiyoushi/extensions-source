@@ -152,26 +152,15 @@ class LeituraManga : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val password = document.getAESPassword()
-        val content = document.decryptPayload(password)
+        val content = document.decryptPayload(password).takeUnless(String::isBlank)
+            ?: throw IOException("Páginas encontradas")
 
         return content.parseAs<List<ImageDto>>().mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl(cdnUrl))
         }
     }
 
-    private fun Document.getAESPassword(): String = buildString {
-        selectFirst("[name=apple-mobile-web-app-id]")
-            ?.attr("content")
-            ?.let(::append)
-
-        append(extractNextJs<PageInfoDto>()!!.id)
-
-        selectFirst(".chapter-reading-container")
-            ?.attr("style")
-            ?.substringAfter("'")
-            ?.substringBeforeLast("'")
-            ?.let(::append)
-    }
+    private fun Document.getAESPassword(): String = extractNextJs<AESPassword>()?.variant?.joinToString("") ?: throw IOException("Senha não encontrada")
 
     private fun Document.decryptPayload(password: String): String {
         val script = QuickJs.create().use {

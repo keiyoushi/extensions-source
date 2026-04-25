@@ -37,7 +37,7 @@ class HentaiNexus : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    // Images on this site goes through the free Jetpack Photon CDN.
+    // Images on this site go through the free Jetpack Photon CDN.
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
@@ -84,7 +84,6 @@ class HentaiNexus : ParsedHttpSource() {
             if (actualPage > 1) {
                 addPathSegments("page/$actualPage")
             }
-
             addQueryParameter("q", (combineQuery(filters) + query).trim())
         }.build()
 
@@ -103,26 +102,31 @@ class HentaiNexus : ParsedHttpSource() {
         val table = document.selectFirst(".view-page-details")!!
 
         title = document.selectFirst("h1.title")!!.text()
-        artist = table.select("td.viewcolumn:contains(Artist) + td a").joinToString { it.ownText() }
-        author = table.select("td.viewcolumn:contains(Author) + td a").joinToString { it.ownText() }
+
+        val artists = table.select("td.viewcolumn:contains(Artist) + td a").map { it.ownText() }
+        val authors = table.select("td.viewcolumn:contains(Author) + td a").map { it.ownText() }
+        author = (authors + artists).distinct().joinToString().takeIf { it.isNotBlank() }
+        artist = null
+
         description = buildString {
             listOf("Circle", "Event", "Magazine", "Parody", "Publisher", "Pages", "Favorites").forEach { key ->
                 val cell = table.selectFirst("td.viewcolumn:contains($key) + td")
-
                 cell
                     ?.ownText()
-                    ?.ifEmpty { cell.selectFirst("a")!!.ownText() }
+                    ?.ifEmpty { cell.selectFirst("a")?.ownText() }
                     ?.let { appendLine("$key: $it") }
             }
-            appendLine()
 
             table.selectFirst("td.viewcolumn:contains(Description) + td")?.text()?.let {
-                appendLine(it)
+                appendLine()
+                append(it)
             }
-        }
+        }.trim()
+
         genre = table.select("span.tag a").joinToString {
             it.text().replace(tagCountRegex, "")
-        }
+        }.takeIf { it.isNotBlank() }
+
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         status = SManga.COMPLETED
 
@@ -138,7 +142,8 @@ class HentaiNexus : ParsedHttpSource() {
         val table = document.selectFirst(".view-page-details")!!
         val dateUploadStr = table.selectFirst("td.viewcolumn:contains(Published) + td")?.text()
 
-        val id = response.request.url.toString().split("/").last()
+        // Use HttpUrl path segments instead of fragile string splitting.
+        val id = response.request.url.pathSegments.last()
         return listOf(
             SChapter.create().apply {
                 url = "/read/$id"
@@ -154,7 +159,7 @@ class HentaiNexus : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val script = document.selectFirst("script:containsData(initReader)")?.data()
-            ?: throw Exception("Could not find chapter data")
+            ?: throw Exception("Could not find initReader script; the page structure may have changed")
         val encoded = script.substringAfter("initReader(\"").substringBefore("\",")
         val data = HentaiNexusUtils.decryptData(encoded)
 
