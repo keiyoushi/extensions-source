@@ -1,16 +1,21 @@
 package eu.kanade.tachiyomi.extension.uk.zenko
 
+import android.widget.Toast
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ChapterResponseItem
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.MangaDetailsResponse
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ZenkoMangaListResponse
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,11 +23,14 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class Zenko : HttpSource() {
+class Zenko :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Zenko"
     override val baseUrl = "https://zenko.online"
     override val lang = "uk"
     override val supportsLatest = true
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Origin", "$baseUrl")
@@ -79,9 +87,9 @@ class Zenko : HttpSource() {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val mangaDto = response.parseAs<MangaDetailsResponse>()
         setUrlWithoutDomain("/titles/${mangaDto.id}")
-        title = mangaDto.engName ?: mangaDto.name
+        title = getSelectedLanguage(isEng(), mangaDto.engName, mangaDto.name)
         thumbnail_url = buildImageUrl(mangaDto.coverImg)
-        description = "${mangaDto.name}\n${mangaDto.description}"
+        description = "${mangaDto.name}\n\n${mangaDto.engName}, ${mangaDto.originalName}\n\n${mangaDto.description}"
         genre = mangaDto.genres!!.joinToString { it.name }
         author = mangaDto.author!!.username
         status = mangaDto.status.toStatus()
@@ -153,7 +161,7 @@ class Zenko : HttpSource() {
 
     private fun makeSManga(mangaDto: MangaDetailsResponse) = SManga.create().apply {
         setUrlWithoutDomain("/titles/${mangaDto.id}")
-        title = mangaDto.engName ?: mangaDto.name
+        title = getSelectedLanguage(isEng(), mangaDto.engName, mangaDto.name)
         thumbnail_url = buildImageUrl(mangaDto.coverImg)
         status = mangaDto.status.toStatus()
     }
@@ -189,5 +197,33 @@ class Zenko : HttpSource() {
         private const val IMAGE_STORAGE_URL = "https://storage.zenko.online"
 
         private val json: Json by injectLazy()
+
+        private const val LANGUAGE_PREF = "TitleLanguagePref"
+        private const val LANGUAGE_PREF_TITLE = "Вибір мови на обкладинці"
+    }
+
+    // ============================ Preferences =============================
+
+    private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "ua")!!
+
+    private fun getSelectedLanguage(isEng: String, engName: String?, name: String): String = when {
+        isEng == "eng" && engName.orEmpty().isNotEmpty() -> engName!!
+        else -> name
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = LANGUAGE_PREF
+            title = LANGUAGE_PREF_TITLE
+            entries = arrayOf("Українська", "Англійська")
+            entryValues = arrayOf("ua", "eng")
+            summary = "%s"
+            setDefaultValue("ua")
+            setOnPreferenceChangeListener { _, _ ->
+                val warning = "Якщо мова обкладинки не змінилася, очистіть базу даних у програмі (Налаштування -> Додатково -> Очистити базу даних)"
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
     }
 }
