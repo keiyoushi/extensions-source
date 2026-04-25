@@ -352,7 +352,7 @@ The `core/utils` module provides a set of shared extension functions that are av
 without any extra Gradle dependency. Prefer using these helpers instead of implementing your own equivalents, as they provide standardized and maintained solutions.
 The utilities live in the `keiyoushi.utils` package and are imported individually.
 
-**JSON parsing — `parseAs`**
+**JSON parsing - `parseAs`**
 
 Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, and `JsonElement`
 receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`).
