@@ -47,6 +47,10 @@ abstract class Iken(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    protected val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
+
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
@@ -347,8 +351,6 @@ abstract class Iken(
             .filter { it.isVisible() }
             .map { it.toSChapter(data.post.slug) }
     }
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
     // pages
 
