@@ -283,7 +283,7 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 | [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua) | Fetches and rotates real-world User-Agent strings |
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony) | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox) |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor) | Renders plain text or HTML as a PNG image page |
-| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker) | Unpacks Dean Edwards–packed JavaScript; substring extraction helpers |
+| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker) | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers |
 
 > [!NOTE]
 > The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their specific READMEs.
@@ -355,7 +355,7 @@ The `core/utils` module provides a set of shared extension functions that are av
 without any extra Gradle dependency. Prefer using these helpers instead of implementing your own equivalents, as they provide standardized and maintained solutions.
 The utilities live in the `keiyoushi.utils` package and are imported individually.
 
-**JSON parsing - `parseAs`**
+##### JSON parsing - `parseAs`
 
 Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, and `JsonElement`
 receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`).
@@ -375,7 +375,7 @@ val dto = response.parseAs<MyDto> { it.substringAfter("callback(").dropLast(1) }
 
 **Do not** create a local `private val json: Json by injectLazy()` unless you specifically need a custom JSON configuration (e.g., `isLenient = true` or custom serializers). For standard parsing, the global instance is already available via `jsonInstance` and the `parseAs` helpers use it automatically.
 
-**JSON serialization — `toJsonString`**
+**JSON serialization - `toJsonString`**
 
 Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string.
 
@@ -416,7 +416,7 @@ class MyDto(
 ```
 
 
-**Date parsing — `tryParse`**
+**Date parsing - `tryParse`**
 
 Use `keiyoushi.utils.tryParse` on a `SimpleDateFormat` instance to safely parse a date string.
 It returns `0L` on failure or when the input is `null`, which is exactly what the app expects.
@@ -424,7 +424,7 @@ It returns `0L` on failure or when the input is `null`, which is exactly what th
 ```kotlin
 import keiyoushi.utils.tryParse
 
-// Declare dateFormat at class/file level — creating SimpleDateFormat is expensive:
+// Declare dateFormat at class/file level - creating SimpleDateFormat is expensive:
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
     timeZone = TimeZone.getTimeZone("UTC")
 }
@@ -432,11 +432,11 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale
 chapter.date_upload = dateFormat.tryParse(dateStr)
 ```
 
-**Do not** write manual try/catch blocks or null-guards around `SimpleDateFormat.parse()` —
+**Do not** write manual try/catch blocks or null-guards around `SimpleDateFormat.parse()` -
 `tryParse` handles both. Also, always declare your `SimpleDateFormat` as a class-level or
 file-level `val` so it is not reconstructed for every chapter.
 
-**Filter helpers — `firstInstance` / `firstInstanceOrNull`**
+**Filter helpers - `firstInstance` / `firstInstanceOrNull`**
 
 Use these instead of `filterIsInstance<T>().first()` / `filterIsInstance<T>().firstOrNull()`.
 
@@ -447,7 +447,7 @@ import keiyoushi.utils.firstInstanceOrNull
 val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 ```
 
-**SharedPreferences — `getPreferences` / `getPreferencesLazy`**
+**SharedPreferences - `getPreferences` / `getPreferencesLazy`**
 
 Use these instead of accessing `Injekt` manually.
 
@@ -462,7 +462,7 @@ private val preferences = getPreferences()
 private val preferences by getPreferencesLazy()
 ```
 
-**Next.js data extraction — `extractNextJs` / `extractNextJsRsc`**
+**Next.js data extraction - `extractNextJs` / `extractNextJsRsc`**
 
 If the site is built with Next.js, use `keiyoushi.utils.extractNextJs` on a `Document` or `Response`,
 or `keiyoushi.utils.extractNextJsRsc` on a raw RSC response string to pull typed data out of the
@@ -483,7 +483,7 @@ request header and use `extractNextJsRsc` on the response body string.
 See [#14266](https://github.com/keiyoushi/extensions-source/pull/14266) and
 [#14446](https://github.com/keiyoushi/extensions-source/pull/14446) for real-world usage.
 
-**Extracting URLs — `setUrlWithoutDomain` + `absUrl`**
+**Extracting URLs - `setUrlWithoutDomain` + `absUrl`**
 When extracting URLs from HTML, prefer `element.absUrl("href")` or `element.attr("abs:href")` over manually concatenating `baseUrl` + `path`. Combined with `setUrlWithoutDomain()`, this safely handles both absolute and relative links.
 
 #### Additional dependencies
@@ -687,7 +687,7 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 - **Do not hardcode `User-Agent`:** Unless absolutely necessary (e.g., to bypass Cloudflare/protection, or to retrieve a specific mobile layout/different selectors), do not hardcode a specific `User-Agent`. Calling `super.headersBuilder()` already provides the app's default User-Agent.
 - **Use `buildString { }`:** When building descriptions or dynamic strings, use Kotlin's `buildString { ... }` instead of manually instantiating a `StringBuilder()`.
 - **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Use `"application/json".toMediaType()`.
-- **Use `getUrlWithoutDomain` carefully:** It can be useful when parsing target source URLs, but note a current issue with spaces—replace them with URL-encoded characters (e.g., `%20`).
+- **Use `getUrlWithoutDomain` carefully:** It can be useful when parsing target source URLs, but note a current issue with spaces-replace them with URL-encoded characters (e.g., `%20`).
 - **Follow `HttpSource` workflow:** Stick to the general workflow from this base class when possible; deviating may introduce unnecessary complexity.
 - **Do not override default `HttpSource` methods:** Avoid overriding methods like `mangaDetailsRequest` or `chapterListRequest` if they only replicate the default behavior (`GET(baseUrl + manga.url, headers`). Only override them if the source requires a different URL structure or custom headers for those specific requests.
 - **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
@@ -744,7 +744,7 @@ To do this, you need two files:
 
 The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the path of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
 
-Next, you have the `<data android:scheme="https" android:host="host" android:pathPattern="/..*" />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this [here](https://developer.android.com/guide/topics/manifest/data-element).
+Next, you have the `<data android:scheme="https" android:host="host" android:pathPattern="/..*" />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this in Android's [`<data>` documentation](https://developer.android.com/guide/topics/manifest/data-element).
 
 Now, as for `UrlActivity`, you can just use the example below.
 
@@ -964,6 +964,7 @@ If the extension builds and runs successfully, then the code changes should be r
 ## Debugging
 
 ### Android Debugger
+
 > [!NOTE]
 > It is generally recommended to rely on logging instead of the Android Debugger. Using standard logs (like `Log.d` or viewing OkHttp logs) is typically much faster, easier to set up, and is more than sufficient for debugging web scraping logic.
 
