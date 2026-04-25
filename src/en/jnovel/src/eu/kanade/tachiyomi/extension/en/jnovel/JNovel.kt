@@ -12,8 +12,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAsProto
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -62,14 +64,21 @@ class JNovel :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/series".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "manga")
+        fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
 
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("search", query)
-        }
+        val url = "$baseUrl/series".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "manga")
 
-        return GET(url.build(), rscHeaders)
+            if (query.isNotEmpty()) {
+                addQueryParameter("search", query)
+            }
+
+            addFilter("sort", filters.firstInstance<SortFilter>())
+            addFilter("label", filters.firstInstance<LabelFilter>())
+            addFilter("status", filters.firstInstance<StatusFilter>())
+            addFilter("rentals", filters.firstInstance<RentalFilter>())
+        }.build()
+        return GET(url, rscHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -143,6 +152,13 @@ class JNovel :
             Page(index, imageUrl = finalUrl.toString())
         }
     }
+
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        LabelFilter(),
+        StatusFilter(),
+        RentalFilter(),
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
