@@ -1,97 +1,150 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.utils.getPreferences
-import okhttp3.FormBody
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
+import okhttp3.Response
 
-class MangaLivre :
-    Madara("Manga Livre", "https://mangalivre.tv", "pt-BR", SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)),
-    ConfigurableSource {
+class MangaLivre : HttpSource() {
 
-    override val id: Long = 2834885536325274328
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val baseUrl by lazy { preferences.getString(BASE_URL_PREF, super.baseUrl)!! }
+    override val name: String = "Manga Livre"
 
-    private val preferences by lazy { getPreferences() }
+    override val baseUrl: String = "https://toonlivre.net"
+
+    override val lang: String = "pt-BR"
+
+    override val supportsLatest: Boolean = true
+
+    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
+        .rateLimit(2, 1)
         .build()
 
-    override val useNewChapterEndpoint = true
+    private val apiUrl: String = "$baseUrl/api"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
-        .set("Cache-Control", "no-cache")
-        .set("Pragma", "no-cache")
-        .set("Upgrade-Insecure-Requests", "1")
-        .setRandomUserAgent()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Accept", "*/*")
+        .add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+        .add("Sec-Fetch-Dest", "empty")
+        .add("Sec-Fetch-Mode", "cors")
+        .add("Sec-Fetch-Site", "same-origin")
 
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div"
+    // ============================== Popular =======================================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+    private val popularFilter = FilterList(
+        listOf(
+            OrderByFilter("", listOf("" to "popular")),
+            OrderDirectionFilter("", listOf("Crescente" to "desc")),
+        ),
+    )
 
-    override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", popularFilter)
 
-    override fun xhrChaptersRequest(mangaUrl: String) = POST("$mangaUrl/ajax/chapters/", xhrHeaders, FormBody.Builder().build())
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+
+    // ============================== Latest =======================================
+
+    private val latestFilter = FilterList(
+        listOf(
+            OrderByFilter("", listOf("" to "updated")),
+            OrderDirectionFilter("", listOf("Crescente" to "desc")),
+        ),
+    )
+
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", latestFilter)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+
+    // ============================== Search =======================================
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$apiUrl/mangas/search".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "24")
+
+        if (query.isNotBlank()) {
+            url.addQueryParameter("q", query)
+        }
+
+        filters.forEach { filter ->
+            when (filter) {
+                is OrderByFilter -> {
+                    url.addQueryParameter("sortBy", filter.selected())
+                }
+                is OrderDirectionFilter -> {
+                    url.addQueryParameter("sortOrder", filter.selected())
+                }
+                else -> {}
+            }
+        }
+        return GET(url.build(), headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val dto = response.parseAs<WrapperDto>()
+        val mangas = dto.mangas.map(MangaDto::toSManga)
+        return MangasPage(mangas, dto.hasNextPage)
+    }
+
+    // ============================== Details =======================================
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga-by-slug/${manga.url}", headers)
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
+
+    // ============================== Chapters =======================================
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaDto>().toSChapterList()
+
+    // ============================== Pages =======================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val fullUrl = if (chapter.url.startsWith("http")) {
-            chapter.url
-        } else {
-            "$baseUrl${chapter.url}"
-        }
-        return GET(fullUrl, headers)
+        val dto = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
+        return GET("$apiUrl/mangas/${dto.mangaId}/chapters/${dto.chapterId}", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".reading-content .page-break img.wp-manga-chapter-img[src]")
-        .mapIndexed { idx, img ->
-            Page(idx, document.location(), img.attr("abs:src").trim())
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageDto>().toPageList()
 
-    override fun imageRequest(page: Page): Request {
-        val referer = if (page.url.isNotEmpty()) page.url else "$baseUrl/"
-        val requestHeaders = headers.newBuilder()
-            .set("Referer", referer)
-            .build()
-        return GET(page.imageUrl!!, requestHeaders)
-    }
+    override fun imageUrlParse(response: Response): String = ""
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
+    // ============================== Filters =======================================
 
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Override Base URL"
-            summary = "Default: ${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart app to apply.", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also(screen::addPreference)
-    }
-
-    companion object {
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        listOf(
+            OrderByFilter(
+                "Ordem",
+                listOf(
+                    "Mais Visualizados" to "popular",
+                    "Lançamentos" to "release",
+                    "Última Atualização" to "updated",
+                    "Melhor Avaliação" to "rating",
+                    "A-Z" to "title",
+                ),
+            ),
+            Filter.Separator(),
+            OrderDirectionFilter(
+                "Ordem",
+                listOf(
+                    "Decrescente" to "desc",
+                    "Crescente" to "asc",
+                ),
+            ),
+        ),
+    )
 }
