@@ -76,6 +76,7 @@ class Volume(
 @Serializable
 class VolumeInfo(
     val creators: List<Creator>?,
+    val owned: Boolean?,
 )
 
 @Serializable
@@ -98,11 +99,10 @@ class Part(
     private val preview: Boolean?,
     private val rental: Rental?,
 ) {
-    val isLocked: Boolean
-        get() = preview == false && rental == null
+    fun isLocked(owned: Boolean): Boolean = !owned && preview == false && rental == null
 
-    fun toSChapter(mangaTitle: String): SChapter = SChapter.create().apply {
-        val lock = if (isLocked) "🔒 " else ""
+    fun toSChapter(mangaTitle: String, owned: Boolean): SChapter = SChapter.create().apply {
+        val lock = if (isLocked(owned)) "🔒 " else ""
         val chapterName = title.removePrefix(mangaTitle).trim().ifEmpty { title }
         url = slug
         name = lock + chapterName

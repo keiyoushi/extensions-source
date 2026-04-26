@@ -96,10 +96,13 @@ class JNovel :
     override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val result = response.extractNextJs<SeriesDetailsResponse>()
-        return result?.volumes.orEmpty()
-            .flatMap { it.parts }
-            .filter { !hideLocked || !it.isLocked }
-            .map { it.toSChapter(result?.series?.title!!) }
+        val title = result?.series?.title
+        return result?.volumes.orEmpty().flatMap { volume ->
+            val owned = volume.volume?.owned == true
+            volume.parts
+                .filter { !hideLocked || !it.isLocked(owned) }
+                .map { it.toSChapter(title!!, owned) }
+        }
             .reversed()
     }
 
