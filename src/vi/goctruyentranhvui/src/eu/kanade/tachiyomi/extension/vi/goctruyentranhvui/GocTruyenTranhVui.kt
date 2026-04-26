@@ -41,7 +41,7 @@ class GocTruyenTranhVui :
     ConfigurableSource {
     override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui22.com"
+    override val baseUrl = "https://goctruyentranhvui23.com"
 
     override val name = "Goc Truyen Tranh Vui"
 
@@ -57,6 +57,23 @@ class GocTruyenTranhVui :
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+        .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
+        .add("Cache-Control", "max-age=0")
+        .add("Sec-Ch-Ua-Mobile", "?1")
+        .add("Sec-Ch-Ua-Platform", "\"Android\"")
+        .add("Sec-Fetch-Dest", "document")
+        .add("Sec-Fetch-Mode", "navigate")
+        .add("Sec-Fetch-Site", "same-origin")
+        .add("Sec-Fetch-User", "?1")
+        .add("Upgrade-Insecure-Requests", "1")
+        .apply {
+            build()["user-agent"]?.let { userAgent ->
+                set("user-agent", removeWebViewToken(userAgent))
+            }
+        }
+
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
     private val xhrHeaders by lazy {
         headersBuilder()
@@ -280,5 +297,6 @@ class GocTruyenTranhVui :
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
     }
 }
