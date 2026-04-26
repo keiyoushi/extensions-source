@@ -10,7 +10,7 @@ import java.util.Locale
 class ManhwaDesu :
     MangaThemesia(
         "ManhwaDesu",
-        "https://manhwadesu.art",
+        "https://manhwadesu.store",
         "id",
         "/komik",
         SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
