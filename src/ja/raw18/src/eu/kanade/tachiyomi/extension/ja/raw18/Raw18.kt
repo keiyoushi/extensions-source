@@ -5,8 +5,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -26,7 +28,8 @@ class Raw18 : WPComics("Raw18", "https://raw18.tel", "ja", SimpleDateFormat("yyy
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         document.selectFirst("article#item-detail").let { info ->
             author = info?.selectFirst("li.author p.col-xs-8")?.text()
             status = info?.selectFirst("li.status p.col-xs-8")?.text().toStatus()
