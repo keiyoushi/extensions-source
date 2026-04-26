@@ -3,7 +3,7 @@ ext {
     extClass = '.Siyahmelek'
     themePkg = 'initmanga'
     baseUrl = 'https://siyahmelek.vip'
-    overrideVersionCode = 59
+    overrideVersionCode = 60
     isNsfw = true
 }
 
