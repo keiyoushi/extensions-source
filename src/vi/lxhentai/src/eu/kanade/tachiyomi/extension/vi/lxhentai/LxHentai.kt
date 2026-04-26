@@ -32,6 +32,8 @@ class LxHentai :
 
     override val name = "LXManga"
 
+    override val id = 6495630445796108150
+
     override val lang = "vi"
 
     private val defaultBaseUrl = "https://lxmanga.space"
