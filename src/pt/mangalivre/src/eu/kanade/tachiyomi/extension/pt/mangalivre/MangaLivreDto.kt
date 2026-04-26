@@ -33,10 +33,10 @@ class MangaDto(
     val description: String? = null,
     val alternativeTitle: String? = null,
     val chapters: List<ChapterDto>? = null,
-
+    val status: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        this.title = this@MangaDto.title
+    fun toSManga(useAlternativeTitle: Boolean) = SManga.create().apply {
+        this.title = if (useAlternativeTitle && !alternativeTitle.isNullOrBlank()) alternativeTitle else this@MangaDto.title
         this.thumbnail_url = this@MangaDto.thumbnailUrl
         this.description = buildString {
             if (!this@MangaDto.description.isNullOrBlank()) {
@@ -50,6 +50,13 @@ class MangaDto(
         author = authors?.joinToString()
         artist = artists?.joinToString()
         genre = genres?.joinToString()
+        this@MangaDto.status?.let {
+            status = when (it.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        }
         this.url = id
     }
 

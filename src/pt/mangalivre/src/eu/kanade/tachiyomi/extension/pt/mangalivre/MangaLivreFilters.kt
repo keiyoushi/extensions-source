@@ -10,6 +10,6 @@ open class SelectedFilter(
     fun selected(): String = options[state].second
 }
 
-class OrderByFilter(title: String, options: List<Pair<String, String>>) : SelectedFilter(title, options)
+class OrderByFilter(title: String = "", options: List<Pair<String, String>>) : SelectedFilter(title, options)
 
-class OrderDirectionFilter(title: String, options: List<Pair<String, String>>) : SelectedFilter(title, options)
+class OrderDirectionFilter(title: String = "", options: List<Pair<String, String>>) : SelectedFilter(title, options)

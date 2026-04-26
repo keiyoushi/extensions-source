@@ -1,7 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,7 +20,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class MangaLivre : HttpSource() {
+class MangaLivre :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name: String = "Manga Livre"
 
@@ -29,10 +35,12 @@ class MangaLivre : HttpSource() {
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2, 1)
+        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
         .build()
 
     private val apiUrl: String = "$baseUrl/api"
+
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "*/*")
@@ -45,8 +53,8 @@ class MangaLivre : HttpSource() {
 
     private val popularFilter = FilterList(
         listOf(
-            OrderByFilter("", listOf("" to "popular")),
-            OrderDirectionFilter("", listOf("Crescente" to "desc")),
+            OrderByFilter(options = listOf("" to "popular")),
+            OrderDirectionFilter(options = listOf("" to "desc")),
         ),
     )
 
@@ -58,8 +66,8 @@ class MangaLivre : HttpSource() {
 
     private val latestFilter = FilterList(
         listOf(
-            OrderByFilter("", listOf("" to "updated")),
-            OrderDirectionFilter("", listOf("Crescente" to "desc")),
+            OrderByFilter(options = listOf("" to "updated")),
+            OrderDirectionFilter(options = listOf("" to "desc")),
         ),
     )
 
@@ -94,7 +102,7 @@ class MangaLivre : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto>()
-        val mangas = dto.mangas.map(MangaDto::toSManga)
+        val mangas = dto.mangas.map { it.toSManga(useAlternativeTitle) }
         return MangasPage(mangas, dto.hasNextPage)
     }
 
@@ -104,7 +112,7 @@ class MangaLivre : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga-by-slug/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(useAlternativeTitle)
 
     // ============================== Chapters =======================================
 
@@ -147,4 +155,30 @@ class MangaLivre : HttpSource() {
             ),
         ),
     )
+
+    val useAlternativeTitle: Boolean get() =
+        preferences.getBoolean(ALTERNATIVE_TITLE_PREF, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ALTERNATIVE_TITLE_PREF
+            title = "Titulo alternativo"
+            summary = buildString {
+                append("Use titulos alternativos como principal quando disponivel.")
+                append(" Essa opção não tem efeito sobre obras já adicionadas na sua bibilioteca")
+            }
+
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(ALTERNATIVE_TITLE_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
+    }
 }
