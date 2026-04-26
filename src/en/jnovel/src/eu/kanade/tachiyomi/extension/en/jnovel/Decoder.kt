@@ -115,7 +115,7 @@ class Decoder {
         val key = deriveCdrmKey(contentId, iv)
         val nonce = iv.copyOfRange(16, 24)
         val initialCounter = iv[24].toLong() and 0xFFL
-        return chacha8(key, nonce, initialCounter, data)
+        return XebpDecoder.chaCha8Decrypt(data, key, nonce, initialCounter)
     }
 
     private fun deriveCdrmKey(contentId: String, iv: ByteArray): ByteArray {
@@ -236,70 +236,6 @@ class Decoder {
                 out[i] = ((data[i].toInt() and 0xFF) xor s[k]).toByte()
             }
             return out
-        }
-
-        // ChaCha8 (8 rounds, 64-byte keystream block)
-        private fun chacha8(
-            key: ByteArray,
-            nonce: ByteArray,
-            initialCounter: Long,
-            input: ByteArray,
-        ): ByteArray {
-            require(key.size == 32) { "ChaCha8 key must be 32 bytes" }
-            require(nonce.size == 8) { "ChaCha8 nonce must be 8 bytes" }
-
-            val state = IntArray(16)
-            state[0] = 0x61707865 // "expa"
-            state[1] = 0x3320646e // "nd 3"
-            state[2] = 0x79622d32 // "2-by"
-            state[3] = 0x6b206574 // "te k"
-            for (i in 0 until 8) state[4 + i] = le32(key, i * 4)
-            state[14] = le32(nonce, 0)
-            state[15] = le32(nonce, 4)
-
-            val out = ByteArray(input.size)
-            val work = IntArray(16)
-            var counter = initialCounter
-            var pos = 0
-            while (pos < input.size) {
-                state[12] = counter.toInt()
-                state[13] = (counter ushr 32).toInt()
-
-                System.arraycopy(state, 0, work, 0, 16)
-                repeat(4) {
-                    // column rounds
-                    qround(work, 0, 4, 8, 12)
-                    qround(work, 1, 5, 9, 13)
-                    qround(work, 2, 6, 10, 14)
-                    qround(work, 3, 7, 11, 15)
-                    // diagonal rounds
-                    qround(work, 0, 5, 10, 15)
-                    qround(work, 1, 6, 11, 12)
-                    qround(work, 2, 7, 8, 13)
-                    qround(work, 3, 4, 9, 14)
-                }
-                for (i in 0..15) work[i] += state[i]
-
-                val blockLen = minOf(64, input.size - pos)
-                for (i in 0 until blockLen) {
-                    val ks = (work[i ushr 2] ushr ((i and 3) shl 3)) and 0xFF
-                    out[pos + i] = ((input[pos + i].toInt() and 0xFF) xor ks).toByte()
-                }
-                pos += blockLen
-                counter++
-            }
-            return out
-        }
-
-        private fun qround(s: IntArray, a: Int, b: Int, c: Int, d: Int) {
-            s[a] += s[b]
-            s[d] = Integer.rotateLeft(s[d] xor s[a], 16)
-            s[c] += s[d]
-            s[b] = Integer.rotateLeft(s[b] xor s[c], 12)
-            s[a] += s[b]
-            s[d] = Integer.rotateLeft(s[d] xor s[a], 8)
-            s[c] += s[d]
-            s[b] = Integer.rotateLeft(s[b] xor s[c], 7)
         }
 
         private fun le32(b: ByteArray, off: Int): Int = (b[off].toInt() and 0xFF) or

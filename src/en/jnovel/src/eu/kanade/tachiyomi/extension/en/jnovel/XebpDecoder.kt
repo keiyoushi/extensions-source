@@ -161,6 +161,7 @@ object XebpDecoder {
         return ZstrMeta(version, nonce, xorLen)
     }
 
+    // ChaCha8 (8 rounds, 64-byte keystream block)
     fun chaCha8Decrypt(
         data: ByteArray,
         key: ByteArray,
@@ -171,10 +172,10 @@ object XebpDecoder {
         require(nonce.size == 8) { "ChaCha8 nonce must be 8 bytes, got ${nonce.size}" }
 
         val state = IntArray(16)
-        state[0] = 0x61707865
-        state[1] = 0x3320646E
-        state[2] = 0x79622D32
-        state[3] = 0x6B206574
+        state[0] = 0x61707865 // "expa"
+        state[1] = 0x3320646E // "nd 3"
+        state[2] = 0x79622D32 // "2-by"
+        state[3] = 0x6B206574 // "te k"
         for (i in 0 until 8) state[4 + i] = le32(key, i * 4)
         state[14] = le32(nonce, 0)
         state[15] = le32(nonce, 4)
@@ -188,10 +189,12 @@ object XebpDecoder {
             state[13] = (counter ushr 32).toInt()
             System.arraycopy(state, 0, work, 0, 16)
             repeat(4) {
+                // column rounds
                 qround(work, 0, 4, 8, 12)
                 qround(work, 1, 5, 9, 13)
                 qround(work, 2, 6, 10, 14)
                 qround(work, 3, 7, 11, 15)
+                // diagonal rounds
                 qround(work, 0, 5, 10, 15)
                 qround(work, 1, 6, 11, 12)
                 qround(work, 2, 7, 8, 13)
