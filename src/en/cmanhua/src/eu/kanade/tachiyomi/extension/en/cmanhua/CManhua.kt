@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -22,9 +23,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -39,20 +38,8 @@ class CManhua : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (request.header("Referer") == null) {
-                val newRequest = request.newBuilder()
-                    .header("Referer", "$baseUrl/")
-                    .build()
-                return@addInterceptor chain.proceed(newRequest)
-            }
-            chain.proceed(request)
-        }
-        .build()
-
-    private val requestHeaders = headersBuilder().add("Referer", "$baseUrl/").build()
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // ============================== Popular =====================================
 
@@ -138,7 +125,7 @@ class CManhua : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, requestHeaders)
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
     // ============================== Filters =====================================
 
@@ -194,13 +181,13 @@ class CManhua : HttpSource() {
     private fun chapterApiRequest(encoded: String, referer: String): Request {
         val body = buildJsonObject {
             put("enc", encoded)
-        }.toString().toRequestBody("application/json".toMediaType())
+        }.toJsonRequestBody()
 
         return POST(
             "$baseUrl/Service.asmx/getchapter",
             headersBuilder()
                 .add("X-Requested-With", "XMLHttpRequest")
-                .add("Referer", referer)
+                .set("Referer", referer)
                 .build(),
             body,
         )
