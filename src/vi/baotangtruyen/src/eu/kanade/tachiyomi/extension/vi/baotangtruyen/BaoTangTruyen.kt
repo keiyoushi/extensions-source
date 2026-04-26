@@ -108,6 +108,8 @@ class BaoTangTruyen : HttpSource() {
 
     private fun extractMangaSlug(url: String): String? = MANGA_SLUG_REGEX.find(url)?.groupValues?.getOrNull(1)
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = extractMangaSlug(manga.url)
             ?: throw Exception("Không tìm thấy truyện")
@@ -180,6 +182,14 @@ class BaoTangTruyen : HttpSource() {
     }
 
     // ============================== Chapters ==============================
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val segments = chapter.url.substringBefore("?").removeSuffix("/").split("/")
+        val chapterSlug = segments.lastOrNull() ?: return baseUrl
+        val mangaSlug = segments.getOrNull(segments.size - 2) ?: return baseUrl
+
+        return "$baseUrl/truyen-tranh/$mangaSlug/$chapterSlug"
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = extractMangaSlug(manga.url)

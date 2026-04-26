@@ -6,8 +6,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,8 +14,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.float
+import keiyoushi.utils.toJsonRequestBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -37,10 +38,12 @@ class AllManga :
 
     override val supportsLatest = true
 
+    override val supportsRelatedMangas = false
+
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+        .rateLimitHost(apiUrl.toHttpUrl(), 1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -157,20 +160,13 @@ class AllManga :
     }
 
     /* Chapters */
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            chapterListParse(response, manga)
-        }
-
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.split("/")[2]
 
         val payload = GraphQL(
             ChapterListVariables(
-                id = "manga@$mangaId",
-                chapterNumStart = 0f,
-                chapterNumEnd = 9999f,
+                id = mangaId,
+                showId = "manga@$mangaId",
             ),
             CHAPTERS_QUERY,
         )
@@ -180,18 +176,17 @@ class AllManga :
         return POST(apiUrl, headers, requestBody)
     }
 
-    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
+    override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ApiChapterListResponse>()
+        val mangaUrl = "${result.data.manga.mangaId}/${result.data.manga.name.titleToSlug()}"
 
-        val chapters = result.data.chapterList?.sortedByDescending { it.chapterNum.float }
-            ?: return emptyList()
+        val availableChapters = result.data.manga.availableChaptersDetail.sub
+        val chapterDetails = result.data.chapterList.associateBy { it.chapterNum.content }
 
-        val mangaUrl = manga.url.substringAfter("/manga/")
-
-        return chapters.map { it.toSChapter(mangaUrl) }
+        return availableChapters.map { chapterNum ->
+            chapterDetails[chapterNum]!!.toSChapter(mangaUrl)
+        }
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
 
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterUrlParts = chapter.url.split("/")
@@ -221,23 +216,39 @@ class AllManga :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pageListData = response.parsePageList()
-        val pages = pageListData.pageList?.edges?.get(0) ?: return emptyList()
+        val pageListData = response.parseAs<ApiPageListResponse>().data.pageList
+            ?: return emptyList()
+
+        val pages = pageListData.edges.firstOrNull {
+            val fullUrlAvailable = it.pictureUrls.randomOrNull()?.url?.matches(urlRegex) == true
+            val serverAvailable = it.serverUrl != null
+
+            fullUrlAvailable || serverAvailable
+        }
+            ?: pageListData.edges.firstOrNull()
+            ?: return emptyList()
 
         val imageDomain = pages.serverUrl?.let { server ->
             if (server.matches(urlRegex)) {
-                server
+                server.removeSuffix("/")
             } else {
-                "https://$server"
+                "https://${server.removeSuffix("/")}"
             }
-        } ?: return emptyList()
+        } ?: "https://ytimgf.youtube-anime.com/"
 
-        return pages.pictureUrls?.mapIndexed { index, image ->
+        return pages.pictureUrls.mapIndexedNotNull { index, image ->
+            image.url ?: return@mapIndexedNotNull null
+
+            val imageUrl = if (image.url.matches(urlRegex)) {
+                image.url
+            } else {
+                imageDomain + image.url.removePrefix("/")
+            }
             Page(
                 index = index,
-                imageUrl = "$imageDomain${image.url}",
+                imageUrl = imageUrl,
             )
-        } ?: emptyList()
+        }
     }
 
     override fun imageRequest(page: Page): Request {

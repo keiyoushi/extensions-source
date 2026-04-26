@@ -8,18 +8,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class HentaiVNx : ParsedHttpSource() {
+class HentaiVNx : HttpSource() {
 
     override val name = "HentaiVNx"
 
@@ -40,38 +40,32 @@ class HentaiVNx : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortByList(1)))
 
-    override fun popularMangaSelector(): String = ".items .item"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
 
-    override fun popularMangaNextPageSelector(): String = "ul.pagination li:last-child:not(.disabled) a"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val linkElement = element.selectFirst("h3 a")
-            ?: element.selectFirst("a.jtip")
-            ?: element.selectFirst(".image a")!!
-        setUrlWithoutDomain(linkElement.absUrl("href"))
-        title = linkElement.attr("title").ifEmpty { linkElement.text() }
-        thumbnail_url = element.selectFirst("img")?.let { element ->
-            imageElement(element)
+        val mangas = document.select(".items .item").map { element ->
+            SManga.create().apply {
+                val linkElement = element.selectFirst("h3 a")
+                    ?: element.selectFirst("a.jtip")
+                    ?: element.selectFirst(".image a")!!
+                setUrlWithoutDomain(linkElement.absUrl("href"))
+                title = linkElement.attr("title").ifEmpty { linkElement.text() }
+                thumbnail_url = imageElement(element.selectFirst("img")!!)
+            }
         }
+
+        val hasNextPage = document.selectFirst("ul.pagination li:last-child:not(.disabled) a") != null
+
+        return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ===============================
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaSelector(): String = popularMangaSelector()
-
-    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
         query.startsWith(PREFIX_ID_SEARCH) -> {
@@ -129,32 +123,35 @@ class HentaiVNx : ParsedHttpSource() {
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1.title-detail")!!.text()
-        author = document.selectFirst("li.author .col-xs-8")?.text()?.trim()
-        description = document.select(".detail-content").joinToString { it.wholeText().trim() }
-        genre = document.select("li.kind .col-xs-8 a").joinToString { it.text().trim() }
-        thumbnail_url = document.selectFirst(".detail-info .col-image img")?.let { element ->
-            imageElement(element)
-        }
+    override fun mangaDetailsParse(response: Response): SManga = response.asJsoup().run {
+        SManga.create().apply {
+            title = selectFirst("h1.title-detail")!!.text()
+            author = selectFirst("li.author .col-xs-8")?.text()?.trim()
+            description = select(".detail-content").joinToString { it.wholeText().trim() }
+            genre = select("li.kind .col-xs-8 a").joinToString { it.text().trim() }
+            thumbnail_url = imageElement(selectFirst(".detail-info .col-image img")!!)
 
-        val statusText = document.selectFirst("li.status .col-xs-8")?.text()
-        status = when {
-            statusText == null -> SManga.UNKNOWN
-            statusText.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
-            statusText.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+            val statusText = selectFirst("li.status .col-xs-8")?.text()
+            status = when {
+                statusText == null -> SManga.UNKNOWN
+                statusText.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
+                statusText.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
         }
     }
 
     // ============================== Chapters ===============================
 
-    override fun chapterListSelector(): String = "#nt_listchapter.list-chapter ul li.row"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("div.chapter a")!!.absUrl("href"))
-        name = element.selectFirst("div.chapter a")!!.text()
-        date_upload = element.selectFirst("div.col-xs-4")?.text().toDate()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("#nt_listchapter.list-chapter ul li.row").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.selectFirst("div.chapter a")!!.absUrl("href"))
+                name = element.selectFirst("div.chapter a")!!.text()
+                date_upload = element.selectFirst("div.col-xs-4")?.text().toDate()
+            }
+        }
     }
 
     private fun String?.toDate(): Long {
@@ -216,7 +213,8 @@ class HentaiVNx : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val images = document.select(".reading-detail img, .page-chapter img")
             .ifEmpty { document.select(".chapter-content img") }
 
@@ -225,7 +223,7 @@ class HentaiVNx : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"

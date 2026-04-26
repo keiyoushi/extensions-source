@@ -60,6 +60,7 @@ class FullAlbum(
     @SerialName("number_of_animated_pictures")
     val numberOfAnimatedPictures: Int,
     val content: ItemWithTitle,
+    val created: Double? = null,
 )
 
 @Serializable
@@ -89,6 +90,8 @@ class Variables(
 class Input(
     val display: String?,
     val page: Int,
+    @SerialName("items_per_page")
+    val itemsPerPage: Int = 50,
     val filters: List<Filter>,
 )
 

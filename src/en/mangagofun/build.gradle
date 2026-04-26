@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaGo.fun'
+    extClass = '.MangaGoFun'
+    themePkg = 'madara'
+    baseUrl = 'https://www.mangago.fun'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

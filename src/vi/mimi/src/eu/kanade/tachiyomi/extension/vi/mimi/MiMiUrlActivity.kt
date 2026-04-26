@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.mimi
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -20,8 +21,10 @@ class MiMiUrlActivity : Activity() {
 
             try {
                 startActivity(mainIntent)
-            } catch (e: Exception) {
-                Log.e("MiMiUrlActivity", "Error: " + e.message)
+            } catch (e: ActivityNotFoundException) {
+                Log.e("MiMiUrlActivity", "Activity not found: " + e.message)
+            } catch (e: Throwable) {
+                Log.e("MiMiUrlActivity", "Unexpected throwable: " + e.message)
             }
         } else {
             Log.e("MiMiUrlActivity", "Unable to parse URI: $data")
