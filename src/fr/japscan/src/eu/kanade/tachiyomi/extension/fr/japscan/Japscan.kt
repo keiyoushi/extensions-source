@@ -234,7 +234,7 @@ class Japscan :
 
     override fun chapterFromElement(element: Element): SChapter {
         // Only search for a tag with any attribute containing manga/manhua/manhwa
-        val urlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
+        val allUrlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
             .mapNotNull { el ->
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
@@ -251,6 +251,18 @@ class Japscan :
                 }
             }
             .distinctBy { it.second }
+
+        // Filter out known anti-scraping honeypots (e.g. "Chapitre Love You MikeZeDev Volume").
+        // Real chapter URLs end with a numeric segment (e.g. /manga/one-piece/1100/).
+        // Honeypots either have non-numeric URL segments or contain tell-tale strings in their name.
+        val filtered = allUrlPairs
+            .filter { (name, url, _) ->
+                !name.contains("MikeZeDev", ignoreCase = true) &&
+                    url.trimEnd('/').substringAfterLast('/').all { it.isDigit() }
+            }
+
+        // Fall back to the unfiltered list in case the heuristics are too aggressive.
+        val urlPairs = (filtered.ifEmpty { allUrlPairs })
             .sortedWith(
                 compareByDescending<Triple<String, String, Boolean>> { it.third }
                     .thenBy { it.second.length },
