@@ -252,13 +252,14 @@ class Japscan :
             }
             .distinctBy { it.second }
 
-        // Filter out known anti-scraping honeypots (e.g. "Chapitre Love You MikeZeDev Volume").
-        // Real chapter URLs end with a numeric segment (e.g. /manga/one-piece/1100/).
-        // Honeypots either have non-numeric URL segments or contain tell-tale strings in their name.
+        // Filter out anti-scraping honeypots by binding name and URL together:
+        // a real chapter URL ends in a numeric segment (e.g. /manga/one-piece/1100/)
+        // and that same number appears in the chapter's name ("Chapitre 1100: ...").
+        // Stripping non-digits from the name handles half-chapters like "Chapitre 1100.5" + /11005/.
         val filtered = allUrlPairs
             .filter { (name, url, _) ->
-                !name.contains("MikeZeDev", ignoreCase = true) &&
-                    url.trimEnd('/').substringAfterLast('/').all { it.isDigit() }
+                val urlNum = url.trimEnd('/').substringAfterLast('/')
+                urlNum.all { it.isDigit() } && name.filter { it.isDigit() }.contains(urlNum)
             }
 
         // Fall back to the unfiltered list in case the heuristics are too aggressive.
