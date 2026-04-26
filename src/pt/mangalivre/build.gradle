@@ -1,13 +1,8 @@
 ext {
     extName = 'Manga Livre'
     extClass = '.MangaLivre'
-    themePkg = 'madara'
-    baseUrl = 'https://mangalivre.tv'
-    overrideVersionCode = 15
+    extVersionCode = 63
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:randomua'))
-}
