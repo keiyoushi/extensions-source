@@ -24,19 +24,23 @@ fun PostDto.toSMangaDetailsModel(): SManga {
     if (cleanTitle.isEmpty()) throw Exception(MISSING_TITLE_MESSAGE)
 
     return SManga.create().apply {
-        url = "$slug#$id"
+        url = if (!slug.isNullOrEmpty() && id != null) "$slug#$id" else slug.orEmpty()
         title = cleanTitle
-        description = buildDescription(this@toSMangaDetailsModel)
+        description = buildDescription(postContent, alternativeTitles)
         author = this@toSMangaDetailsModel.author?.trim()?.takeUnless { it.isEmpty() }
+            ?: studio?.trim()?.takeUnless { it.isEmpty() }
         artist = this@toSMangaDetailsModel.artist?.trim()?.takeUnless { it.isEmpty() }
         genre = buildGenre(seriesType, genres)
         status = mapStatus(seriesStatus)
-        thumbnail_url = featuredImage
+        thumbnail_url = featuredImage?.trim()?.takeUnless { it.isEmpty() }
         initialized = true
     }
 }
 
-fun PostChapterDto.toSChapterModel(mangaSlug: String, dateFormat: SimpleDateFormat): SChapter {
+fun ChapterDto.toSChapterModel(dateFormat: SimpleDateFormat): SChapter {
+    val mangaSlug = mangaPost?.slug?.takeIf { it.isNotBlank() }
+        ?: throw Exception("Chapter missing manga slug")
+
     val rawNumber = number.toString().trim('"').trim()
     val fallbackNumber = slug.substringAfter("chapter-", "")
     val chapterNumberText = if (rawNumber.isNotEmpty()) rawNumber else fallbackNumber
@@ -65,8 +69,8 @@ fun PostChapterDto.toSChapterModel(mangaSlug: String, dateFormat: SimpleDateForm
     }
 }
 
-private fun buildDescription(post: PostDto): String? {
-    val synopsis = post.postContent
+private fun buildDescription(postContent: String?, alternativeTitles: String?): String? {
+    val synopsis = postContent
         ?.takeIf { it.isNotBlank() }
         ?.replace("<br>", "\n")
         ?.replace("<br/>", "\n")
@@ -75,7 +79,7 @@ private fun buildDescription(post: PostDto): String? {
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
 
-    val alternativeTitles = post.alternativeTitles
+    val altTitles = alternativeTitles
         ?.lineSequence()
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
@@ -85,7 +89,7 @@ private fun buildDescription(post: PostDto): String? {
 
     return buildString {
         synopsis?.let { append(it) }
-        alternativeTitles?.let {
+        altTitles?.let {
             if (isNotEmpty()) append("\n\n")
             append("Alternative titles:\n")
             append(it)

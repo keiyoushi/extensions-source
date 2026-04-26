@@ -2,7 +2,7 @@ ext {
     extName = 'Vortex Scans'
     extClass = '.VortexScans'
     baseUrl = 'https://vortexscans.org'
-    extVersionCode = 61
+    extVersionCode = 63
     isNsfw = false
 }
 

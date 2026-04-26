@@ -31,22 +31,32 @@ class PostResponseDto(
 
 @Serializable
 class PostDto(
-    val id: Int,
-    val slug: String,
+    val id: Int? = null,
+    val slug: String? = null,
     val postTitle: String,
     val postContent: String? = null,
     val alternativeTitles: String? = null,
     val author: String? = null,
+    val studio: String? = null,
     val artist: String? = null,
     val featuredImage: String? = null,
     val seriesType: String? = null,
     val seriesStatus: String? = null,
     val genres: List<GenreDto> = emptyList(),
-    val chapters: List<PostChapterDto> = emptyList(),
 )
 
 @Serializable
-class PostChapterDto(
+class ChaptersResponseDto(
+    val post: ChaptersPostDto,
+)
+
+@Serializable
+class ChaptersPostDto(
+    val chapters: List<ChapterDto> = emptyList(),
+)
+
+@Serializable
+class ChapterDto(
     val id: Int,
     val slug: String,
     val number: JsonPrimitive,
@@ -54,22 +64,10 @@ class PostChapterDto(
     val createdAt: String,
     val isLocked: Boolean? = null,
     val isAccessible: Boolean? = null,
+    val mangaPost: ChapterMangaPostDto? = null,
 )
 
 @Serializable
-class ChapterResponseDto(
-    val chapter: ChapterDto,
-)
-
-@Serializable
-class ChapterDto(
-    val isLocked: Boolean? = null,
-    val isAccessible: Boolean? = null,
-    val images: List<ChapterImageDto> = emptyList(),
-)
-
-@Serializable
-class ChapterImageDto(
-    val url: String,
-    val order: Int? = null,
+class ChapterMangaPostDto(
+    val slug: String,
 )
