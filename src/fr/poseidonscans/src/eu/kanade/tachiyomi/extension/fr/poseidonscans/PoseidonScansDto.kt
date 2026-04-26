@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
+import keiyoushi.utils.nextJsSerializer.NextJSDate
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -45,9 +46,9 @@ class CategoryData(val name: String)
 class ChapterData(
     val number: Float,
     val title: String? = null,
-    val createdAt: String,
+    val createdAt: NextJSDate,
     val isPremium: Boolean? = false,
-    val premiumUntil: String? = null,
+    val premiumUntil: NextJSDate? = null,
     val isVolume: Boolean? = false,
 )
 
