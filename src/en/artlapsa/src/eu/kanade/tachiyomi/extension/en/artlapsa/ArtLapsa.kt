@@ -6,19 +6,14 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 
 class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
-
-    private val json: Json by injectLazy()
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = super.popularMangaParse(response).mangas.distinctBy { it.url }
@@ -61,14 +56,11 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val data = json.parseToJsonElement(document.selectFirst("script[type=\"application/ld+json\"]")!!.data()).jsonObject
-        val seriesURL = data["isPartOf"]!!.jsonObject["url"]!!.jsonPrimitive.content
-        val seriesID = seriesURL.substring(seriesURL.lastIndexOf('/') + 1)
-        val chapterURL = data["url"]!!.jsonPrimitive.content
-        val chapterID = chapterURL.substring(chapterURL.lastIndexOf('/') + 1)
-        val numberOfPages = data["numberOfPages"]!!.jsonPrimitive.int
+        val data = document.selectFirst("script[type=\"application/ld+json\"]")!!.data().parseAs<ChapterLD>()
+        val seriesID = data.url.substring(data.url.lastIndexOf('/') + 1)
+        val chapterID = data.isPartOf.url.substring(data.isPartOf.url.lastIndexOf('/') + 1)
 
-        return (1..numberOfPages).mapIndexed { i, page ->
+        return (1..data.numberOfPages).mapIndexed { i, page ->
             Page(
                 i,
                 document.location(),
@@ -77,3 +69,15 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
         }
     }
 }
+
+@Serializable
+internal class ChapterLD(
+    val isPartOf: SeriesLD,
+    val numberOfPages: Int,
+    val url: String,
+)
+
+@Serializable
+internal class SeriesLD(
+    val url: String,
+)
