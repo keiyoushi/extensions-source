@@ -357,33 +357,38 @@ The utilities live in the `keiyoushi.utils` package and are imported individuall
 
 ##### JSON parsing - `parseAs`
 
-Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, and `JsonElement`
-receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`).
+Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, `InputStream`, and `JsonElement` receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`). The `Response` and `InputStream` variants use efficient stream decoding and automatically close the stream after reading.
 
 ```kotlin
 import keiyoushi.utils.parseAs
 
-// From a Response (consumes the body):
+// From a Response (uses streaming and consumes the body):
 val dto = response.parseAs<MyDto>()
 
 // From a String:
 val dto = jsonString.parseAs<MyDto>()
 
-// With a transform applied before parsing:
+// With a transform applied before parsing (e.g., stripping JSONP callbacks):
 val dto = response.parseAs<MyDto> { it.substringAfter("callback(").dropLast(1) }
 ```
 
 **Do not** create a local `private val json: Json by injectLazy()` unless you specifically need a custom JSON configuration (e.g., `isLenient = true` or custom serializers). For standard parsing, the global instance is already available via `jsonInstance` and the `parseAs` helpers use it automatically.
 
-##### JSON serialization - `toJsonString`
+##### JSON serialization - `toJsonString` / `toJsonRequestBody`
 
-Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string.
+Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string. If you are sending a POST/PUT request, use `keiyoushi.utils.toJsonRequestBody` to directly convert your object into an OkHttp `RequestBody` with the correct `application/json` media type.
 
 ```kotlin
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 
-val body = myRequestDto.toJsonString().toRequestBody("application/json".toMediaType())
+// To a RequestBody for OkHttp (recommended for APIs):
+val body = myRequestDto.toJsonRequestBody()
+
+// To a simple String:
+val jsonString = myRequestDto.toJsonString()
 ```
+
 
 ##### JSON models (DTOs) and serialization
 
