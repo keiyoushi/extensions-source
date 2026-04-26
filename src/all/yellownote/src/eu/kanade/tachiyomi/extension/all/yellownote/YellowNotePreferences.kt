@@ -60,7 +60,7 @@ object YellowNotePreferences {
             title = intl["config.domain.title"]
             summary = intl["config.domain.summary"]
             dialogTitle = intl["config.domain.dialog.title"]
-            dialogMessage = "${intl["config.domain.dialog.message"]}$DEFAULT_DOMAIN"
+            dialogMessage = "${intl["config.domain.dialog.message"]} $DEFAULT_DOMAIN"
 
             setDefaultValue(DEFAULT_DOMAIN)
             setOnPreferenceChangeListener { _, newValue ->
