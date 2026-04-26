@@ -1,0 +1,14 @@
+ext {
+    extName = 'J-Novel'
+    extClass = '.JNovel'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation("org.kotlincrypto.hash:blake2:0.8.0") {
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
+    }
+}

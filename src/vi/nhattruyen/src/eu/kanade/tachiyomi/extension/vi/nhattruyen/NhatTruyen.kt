@@ -6,12 +6,12 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -31,7 +31,8 @@ class NhatTruyen :
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.
      */
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         document.select("article#item-detail").let { info ->
             author = info.select("li.author p.col-xs-8").text()
             status = info.select("li.status p.col-xs-8").text().toStatus()

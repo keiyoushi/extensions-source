@@ -5,10 +5,11 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
@@ -26,7 +27,7 @@ abstract class ManhwaZ(
     final override val lang: String,
     private val mangaDetailsAuthorHeading: String = "author(s)",
     private val mangaDetailsStatusHeading: String = "status",
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -44,33 +45,52 @@ abstract class ManhwaZ(
     )
     protected open val searchPath = "search"
 
+    // ============================== Common ======================================
+
+    private fun parseMangaPage(response: Response, selector: String, fromElement: (Element) -> SManga): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(selector).map(fromElement)
+        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector: String ->
+            document.selectFirst(selector) != null
+        } ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    // ============================== Popular ======================================
+
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun popularMangaSelector() = "#slide-top > .item"
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response, popularMangaSelector(), ::popularMangaFromElement)
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst(".info-item a")!!.let {
+    protected open fun popularMangaSelector() = "#slide-top > .item"
+
+    protected open fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".info-item a")!!.also { it: Element ->
             title = it.text()
             setUrlWithoutDomain(it.attr("href"))
         }
         thumbnail_url = element.selectFirst(".img-item img")?.imgAttr()
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
+    // ============================== Latest ======================================
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
-    override fun latestUpdatesSelector() = ".page-item-detail"
+    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response, latestUpdatesSelector(), ::latestUpdatesFromElement)
 
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst(".item-summary a")!!.let {
+    protected open fun latestUpdatesSelector() = ".page-item-detail"
+
+    protected open fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".item-summary a")!!.also { it: Element ->
             title = it.text()
             setUrlWithoutDomain(it.attr("href"))
         }
         thumbnail_url = element.selectFirst(".item-thumb img")?.imgAttr()
     }
 
-    override fun latestUpdatesNextPageSelector(): String? = "ul.pager a[rel=next]"
+    protected open fun latestUpdatesNextPageSelector(): String? = "ul.pager a[rel=next]"
+
+    // ============================== Search ======================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
@@ -107,16 +127,16 @@ abstract class ManhwaZ(
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = latestUpdatesSelector()
+    override fun searchMangaParse(response: Response): MangasPage = parseMangaPage(response, searchMangaSelector(), ::searchMangaFromElement)
 
-    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+    protected open fun searchMangaSelector() = latestUpdatesSelector()
 
-    override fun searchMangaNextPageSelector(): String? = latestUpdatesNextPageSelector()
+    protected open fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
 
-    private val ongoingStatusList = listOf("ongoing", "đang ra")
-    private val completedStatusList = listOf("completed", "hoàn thành", "Truyện Full")
+    // ============================== Details ======================================
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         val statusText = document.selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")
             ?.text()
             ?: ""
@@ -133,24 +153,41 @@ abstract class ManhwaZ(
         thumbnail_url = document.selectFirst("div.summary_image img")?.imgAttr()
     }
 
-    override fun chapterListSelector() = "li.wp-manga-chapter"
+    private val ongoingStatusList = listOf("ongoing", "đang ra")
+    private val completedStatusList = listOf("completed", "hoàn thành", "Truyện Full")
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst("a")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            name = it.text()
-        }
+    // ============================== Chapters ======================================
 
-        element.selectFirst("span.chapter-release-date")?.text()?.let {
-            date_upload = parseRelativeDate(it)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector()).map { element ->
+            SChapter.create().apply {
+                element.selectFirst("a")!!.also { it: Element ->
+                    setUrlWithoutDomain(it.attr("href"))
+                    name = it.text()
+                }
+
+                element.selectFirst("span.chapter-release-date")?.text()?.let { date: String ->
+                    date_upload = parseRelativeDate(date)
+                }
+            }
         }
     }
 
-    override fun pageListParse(document: Document) = document.select("div.page-break img").mapIndexed { i, it ->
-        Page(i, imageUrl = it.imgAttr())
+    protected open fun chapterListSelector() = "li.wp-manga-chapter"
+
+    // ============================== Pages ======================================
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.page-break img").mapIndexed { i, it ->
+            Page(i, imageUrl = it.imgAttr())
+        }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Filters ======================================
 
     override fun getFilterList(): FilterList {
         fetchGenreList()

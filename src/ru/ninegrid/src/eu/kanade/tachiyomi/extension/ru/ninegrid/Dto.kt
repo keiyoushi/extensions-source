@@ -19,9 +19,10 @@ class SeriesDto(
     val genres: List<String> = emptyList(),
     val status: String? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
+    fun toSManga(apiBase: String): SManga = SManga.create().apply {
         url = id.toString()
         title = name
+        thumbnail_url = "$apiBase/series/${this@SeriesDto.id}/thumbnail"
         description = this@SeriesDto.description
         author = publisherName
         genre = genres.joinToString()

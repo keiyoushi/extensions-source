@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bun Manga'
+    extClass = '.BunManga'
+    themePkg = 'madara'
+    baseUrl = 'https://bunmanga.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

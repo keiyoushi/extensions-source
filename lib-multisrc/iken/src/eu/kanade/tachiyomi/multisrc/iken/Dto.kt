@@ -86,6 +86,11 @@ class DescriptionDto(
 class Post<T>(val post: T)
 
 @Serializable
+class RelatedMangaDto(
+    val recommendations: List<Manga>,
+)
+
+@Serializable
 class ChapterListResponse(
     val isNovel: Boolean = false,
     val slug: String? = null,
