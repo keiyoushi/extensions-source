@@ -415,6 +415,32 @@ class MyDto(
 }
 ```
 
+##### Protobuf parsing and serialization — `parseAsProto` / `toRequestBodyProto`
+
+If a source's API uses Protocol Buffers (Protobuf) instead of JSON, use the `keiyoushi.utils` helpers to decode and encode the data. These extensions use a shared `protoInstance` and automatically handle resource management.
+
+```kotlin
+import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.toRequestBodyProto
+import keiyoushi.utils.decodeProtoBase64
+
+// From a Response (automatically closes the body):
+val dto = response.parseAsProto<MyProtoDto>()
+
+// From a Response with a transform applied before decoding:
+val dto = response.parseAsProto<MyProtoDto> { bytes -> bytes.drop(4).toByteArray() }
+
+// Decoding a Base64-encoded Protobuf string:
+val dto = base64String.decodeProtoBase64<MyProtoDto>()
+
+// Creating a RequestBody for a POST request (defaults to application/protobuf):
+val requestBody = myRequestDto.toRequestBodyProto()
+````
+
+If you only need to work with raw bytes, you can also use `.decodeProto()` and `.encodeProto()` directly on a `ByteArray`.
+
+Do not create a local `private val proto: ProtoBuf by injectLazy()` unless you specifically need a custom configuration. For standard parsing, the global instance is already available and the `parseAsProto` helpers use it automatically.
+
 ##### Date parsing - `tryParse`
 
 Use `keiyoushi.utils.tryParse` on a `SimpleDateFormat` instance to safely parse a date string.
