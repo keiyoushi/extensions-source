@@ -24,7 +24,45 @@ class WestManga : HttpSource() {
     override val id = 8883916630998758688
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+
+            // 1. Ambil host utama secara dinamis dari variabel apiUrl yang ada di class
+            val primaryHost = apiUrl.toHttpUrl().host
+
+            // 2. Hanya cegat jika request menuju ke API utama
+            if (url.host == primaryHost) {
+                try {
+                    // Percobaan pertama
+                    val response = chain.proceed(request)
+                    if (response.isSuccessful) {
+                        return@addInterceptor response
+                    }
+                    response.close()
+                } catch (e: Exception) {
+                    // NXDOMAIN (UnknownHostException) akan jatuh ke sini secara diam-diam.
+                    // Kita biarkan kosong agar tidak crash ke UI.
+                }
+
+                // --- 3. EKSEKUSI FALLBACK ---
+                // Jika kode sampai sini, berarti server utama gagal
+                val fallbackUrl = url.newBuilder()
+                    .host("data.mantweh.online")
+                    .build()
+
+                val fallbackRequest = request.newBuilder()
+                    .url(fallbackUrl)
+                    .build()
+
+                return@addInterceptor chain.proceed(fallbackRequest)
+            }
+
+            // 4. Request lain (seperti memuat gambar) lewat jalur normal
+            chain.proceed(request)
+        }
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
