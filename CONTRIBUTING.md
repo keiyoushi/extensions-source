@@ -415,7 +415,6 @@ class MyDto(
 }
 ```
 
-
 ##### Date parsing - `tryParse`
 
 Use `keiyoushi.utils.tryParse` on a `SimpleDateFormat` instance to safely parse a date string.
