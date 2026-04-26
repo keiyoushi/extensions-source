@@ -76,7 +76,7 @@ class Decoder {
         var rc4Key = consumerBytes + contentIdBytes + VF124
         if (rc4Key.size > 256) rc4Key = rc4Key.copyOf(256)
 
-        // RC4-decrypt (iv ‖ data[0...v261]) with 769-byte discard
+        // RC4-decrypt (iv || data[0...v261]) with 769-byte discard
         val v261 = minOf(wrapper.data.size, 123 + (contentIdBytes[2].toInt() and 0xFF))
         val rc4Input = ByteArray(wrapper.iv.size + v261).apply {
             System.arraycopy(wrapper.iv, 0, this, 0, wrapper.iv.size)

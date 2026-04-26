@@ -12,7 +12,7 @@ class SortFilter :
         "Sort By",
         arrayOf(
             Pair("Newest", ""),
-            Pair("Oldest", "oldest"),
+            Pair("Oldest", "old"),
             Pair("A-Z", "asc"),
             Pair("Z-A", "desc"),
         ),
@@ -37,7 +37,7 @@ class StatusFilter :
             Pair("Show All", ""),
             Pair("Ongoing", "ongoing"),
             Pair("Complete", "complete"),
-            Pair("On Hiatus", "hiatus"),
+            Pair("On Hiatus", "inactive"),
         ),
     )
 
@@ -47,7 +47,6 @@ class RentalFilter :
         arrayOf(
             Pair("Show All", ""),
             Pair("Available", "available"),
-            Pair("Partially Available", "partial"),
             Pair("Unavailable", "unavailable"),
         ),
     )

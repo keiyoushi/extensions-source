@@ -56,6 +56,8 @@ class SeriesDetails(
         genre = tags?.joinToString()
         status = when (this@SeriesDetails.status) {
             0 -> SManga.ONGOING
+            1 -> SManga.COMPLETED
+            2 -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
 
