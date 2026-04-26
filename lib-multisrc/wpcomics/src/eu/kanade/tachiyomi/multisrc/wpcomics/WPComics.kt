@@ -64,8 +64,7 @@ abstract class WPComics(
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$popularPath" + if (page > 1) "?page=$page" else "", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        parseMangaPage(response, popularMangaSelector(), ::popularMangaFromElement)
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response, popularMangaSelector(), ::popularMangaFromElement)
 
     protected open fun popularMangaSelector() = "div.items div.item"
 
@@ -83,8 +82,7 @@ abstract class WPComics(
 
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        parseMangaPage(response, latestUpdatesSelector(), ::latestUpdatesFromElement)
+    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response, latestUpdatesSelector(), ::latestUpdatesFromElement)
 
     protected open fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -115,8 +113,7 @@ abstract class WPComics(
         return GET(url.toString(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        parseMangaPage(response, searchMangaSelector(), ::searchMangaFromElement)
+    override fun searchMangaParse(response: Response): MangasPage = parseMangaPage(response, searchMangaSelector(), ::searchMangaFromElement)
 
     protected open fun searchMangaSelector() = "div.items div.item"
 
