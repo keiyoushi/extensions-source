@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga
 
+import androidx.preference.MultiSelectListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.CompleteHoneyMangaDto
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterPagesDto
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterResponseDto
@@ -8,16 +10,21 @@ import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaResponseDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,13 +34,18 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.collections.emptySet
 
-class HoneyManga : HttpSource() {
+class HoneyManga :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "HoneyManga"
     override val baseUrl = "https://honey-manga.com.ua"
     override val lang = "uk"
     override val supportsLatest = true
+
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
@@ -140,16 +152,40 @@ class HoneyManga : HttpSource() {
 
     private fun parseAsMangaResponseArray(response: Response): MangasPage {
         val mangaList = response.asClass<List<HoneyMangaDto>>()
-        return makeMangasPage(mangaList)
+        return makeMangasPageSearch(mangaList)
     }
 
     private fun makeHoneyMangaRequest(page: Int, sortBy: String): Request {
+        val blockedGenres = blockGenres()
+        val blockedTypes = blockTypes()
         val body = buildJsonObject {
             put("page", page)
             put("pageSize", DEFAULT_PAGE_SIZE)
             putJsonObject("sort") {
                 put("sortBy", sortBy)
                 put("sortOrder", "DESC")
+            }
+            if (blockedGenres.isNotEmpty() || blockedTypes.isNotEmpty()) {
+                putJsonArray("filters") {
+                    if (blockedTypes.isNotEmpty()) {
+                        addJsonObject {
+                            put("filterBy", "type")
+                            put("filterOperator", "NOT_IN")
+                            putJsonArray("filterValue") {
+                                blockedTypes.forEach { add(it) }
+                            }
+                        }
+                    }
+                    if (blockedGenres.isNotEmpty()) {
+                        addJsonObject {
+                            put("filterBy", "genres")
+                            put("filterOperator", "NOT_IN")
+                            putJsonArray("filterValue") {
+                                blockedGenres.forEach { add(it) }
+                            }
+                        }
+                    }
+                }
             }
         }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
@@ -158,6 +194,14 @@ class HoneyManga : HttpSource() {
 
     private fun makeMangasPage(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
         mangaList.map(::makeSManga),
+        mangaList.size == DEFAULT_PAGE_SIZE,
+    )
+
+    private fun makeMangasPageSearch(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
+        mangaList
+            .filter { !blockTypes().contains(it.type) }
+            .filter { blockGenres().intersect((it.genres ?: emptyList()).toSet()).isEmpty() }
+            .map(::makeSManga),
         mangaList.size == DEFAULT_PAGE_SIZE,
     )
 
@@ -182,6 +226,9 @@ class HoneyManga : HttpSource() {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
         }
 
+        private const val GENRES_PREF = "pref_genres_exclude"
+        private const val TYPE_PREF = "pref_types_exclude"
+
         private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
             .getOrNull() ?: 0L
 
@@ -190,5 +237,101 @@ class HoneyManga : HttpSource() {
         private inline fun <reified T> Response.asClass(): T = use {
             json.decodeFromStream(it.body.byteStream())
         }
+
+        private val GenresList = arrayOf(
+            "Ісекай",
+            "Історія",
+            "Апокаліпсис",
+            "Ваншот",
+            "Вестерн",
+            "Героїчне фентезі",
+            "Готика",
+            "Деменція",
+            "Детектив",
+            "Джьосей",
+            "Доджінші",
+            "Драма",
+            "Екшн",
+            "Еротика",
+            "Еччі",
+            "Жахи",
+            "Йонкома",
+            "Комедія",
+            "Магія",
+            "Махо-шьоджьо",
+            "Махо-шьонен",
+            "Меха",
+            "Містика",
+            "Наукова фантастика",
+            "Омегаверс",
+            "Пародія",
+            "Повсякденність",
+            "Постапокаліпсис",
+            "Пригоди",
+            "Психологія",
+            "Романтика",
+            "Сейнен",
+            "Спокон",
+            "Трагедія",
+            "Триллер",
+            "Фантастика",
+            "Фентезі",
+            "Філософія",
+            "Шьоджьо",
+            "Шьоджьо-ай",
+            "Шьонен",
+            "Шьонен-ай",
+            "Юрі",
+            "Яой",
+        )
+        private val mangaType = arrayOf(
+            "Артбук",
+            "Вебкомікс",
+            "Графічний роман",
+            "Мальопис",
+            "Манхва",
+            "Маньхва",
+            "Манґа",
+            "Новела",
+        )
+    }
+
+    // ============================ Preferences =============================
+
+    private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet<String>())!!
+    private fun blockTypes(): Set<String> = preferences.getStringSet(TYPE_PREF, emptySet<String>())!!
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        MultiSelectListPreference(screen.context).apply {
+            key = GENRES_PREF
+            title = "Приховані жанри"
+            entries = GenresList
+            entryValues = GenresList
+            summary = blockGenres().joinToString()
+            dialogTitle = "Виберіть жанри які потрібно сховати"
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, values ->
+                val selected = values as Set<*>
+                this.summary = selected.joinToString()
+                true
+            }
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = TYPE_PREF
+            title = "Приховані категорії"
+            entries = mangaType
+            entryValues = mangaType
+            summary = blockTypes().joinToString()
+            dialogTitle = "Виберіть категорії які потрібно сховати"
+            setDefaultValue(setOf("Новела"))
+
+            setOnPreferenceChangeListener { _, values ->
+                val selected = values as Set<*>
+                this.summary = selected.joinToString()
+                true
+            }
+        }.let(screen::addPreference)
     }
 }
