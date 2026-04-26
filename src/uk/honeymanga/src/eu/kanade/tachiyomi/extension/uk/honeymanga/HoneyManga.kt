@@ -200,7 +200,7 @@ class HoneyManga :
     private fun makeMangasPageSearch(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
         mangaList
             .filter { !blockTypes().contains(it.type) }
-            .filter { blockGenres().intersect((it.genres?:emptyList()).toSet()).isEmpty() }
+            .filter { blockGenres().intersect((it.genres ?: emptyList()).toSet()).isEmpty() }
             .map(::makeSManga),
         mangaList.size == DEFAULT_PAGE_SIZE,
     )
