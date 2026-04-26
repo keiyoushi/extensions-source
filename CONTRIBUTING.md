@@ -357,33 +357,38 @@ The utilities live in the `keiyoushi.utils` package and are imported individuall
 
 ##### JSON parsing - `parseAs`
 
-Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, and `JsonElement`
-receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`).
+Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Response`, `InputStream`, and `JsonElement` receivers and uses the shared `jsonInstance` (a pre-configured `Json` with `ignoreUnknownKeys = true`). The `Response` and `InputStream` variants use efficient stream decoding and automatically close the stream after reading.
 
 ```kotlin
 import keiyoushi.utils.parseAs
 
-// From a Response (consumes the body):
+// From a Response (uses streaming and consumes the body):
 val dto = response.parseAs<MyDto>()
 
 // From a String:
 val dto = jsonString.parseAs<MyDto>()
 
-// With a transform applied before parsing:
+// With a transform applied before parsing (e.g., stripping JSONP callbacks):
 val dto = response.parseAs<MyDto> { it.substringAfter("callback(").dropLast(1) }
 ```
 
 **Do not** create a local `private val json: Json by injectLazy()` unless you specifically need a custom JSON configuration (e.g., `isLenient = true` or custom serializers). For standard parsing, the global instance is already available via `jsonInstance` and the `parseAs` helpers use it automatically.
 
-##### JSON serialization - `toJsonString`
+##### JSON serialization - `toJsonString` / `toJsonRequestBody`
 
-Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string.
+Use `keiyoushi.utils.toJsonString` to serialize an object to a JSON string. If you are sending a POST/PUT request, use `keiyoushi.utils.toJsonRequestBody` to directly convert your object into an OkHttp `RequestBody` with the correct `application/json` media type.
 
 ```kotlin
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 
-val body = myRequestDto.toJsonString().toRequestBody("application/json".toMediaType())
+// To a RequestBody for OkHttp (recommended for APIs):
+val body = myRequestDto.toJsonRequestBody()
+
+// To a simple String:
+val jsonString = myRequestDto.toJsonString()
 ```
+
 
 ##### JSON models (DTOs) and serialization
 
@@ -414,6 +419,32 @@ class MyDto(
     }
 }
 ```
+
+##### Protobuf parsing and serialization — `parseAsProto` / `toRequestBodyProto`
+
+If a source's API uses Protocol Buffers (Protobuf) instead of JSON, use the `keiyoushi.utils` helpers to decode and encode the data. These extensions use a shared `protoInstance` and automatically handle resource management.
+
+```kotlin
+import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.toRequestBodyProto
+import keiyoushi.utils.decodeProtoBase64
+
+// From a Response (automatically closes the body):
+val dto = response.parseAsProto<MyProtoDto>()
+
+// From a Response with a transform applied before decoding:
+val dto = response.parseAsProto<MyProtoDto> { bytes -> bytes.drop(4).toByteArray() }
+
+// Decoding a Base64-encoded Protobuf string:
+val dto = base64String.decodeProtoBase64<MyProtoDto>()
+
+// Creating a RequestBody for a POST request (defaults to application/protobuf):
+val requestBody = myRequestDto.toRequestBodyProto()
+````
+
+If you only need to work with raw bytes, you can also use `.decodeProto()` and `.encodeProto()` directly on a `ByteArray`.
+
+Do not create a local `private val proto: ProtoBuf by injectLazy()` unless you specifically need a custom configuration. For standard parsing, the global instance is already available and the `parseAsProto` helpers use it automatically.
 
 ##### Date parsing - `tryParse`
 
@@ -686,7 +717,7 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 - **Cache Regex instances:** Define `Regex` instances at the class level or in a `companion object` so they aren't recompiled on every method call.
 - **Do not hardcode `User-Agent`:** Unless absolutely necessary (e.g., to bypass Cloudflare/protection, or to retrieve a specific mobile layout/different selectors), do not hardcode a specific `User-Agent`. Calling `super.headersBuilder()` already provides the app's default User-Agent.
 - **Use `buildString { }`:** When building descriptions or dynamic strings, use Kotlin's `buildString { ... }` instead of manually instantiating a `StringBuilder()`.
-- **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Use `"application/json".toMediaType()`.
+- **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Prefer helper functions like `toJsonRequestBody()` instead of manually specifying media types (e.g., `"application/json".toMediaType()`).
 - **Use `getUrlWithoutDomain` carefully:** It can be useful when parsing target source URLs, but note a current issue with spaces-replace them with URL-encoded characters (e.g., `%20`).
 - **Follow `HttpSource` workflow:** Stick to the general workflow from this base class when possible; deviating may introduce unnecessary complexity.
 - **Do not override default `HttpSource` methods:** Avoid overriding methods like `mangaDetailsRequest` or `chapterListRequest` if they only replicate the default behavior (`GET(baseUrl + manga.url, headers`). Only override them if the source requires a different URL structure or custom headers for those specific requests.
