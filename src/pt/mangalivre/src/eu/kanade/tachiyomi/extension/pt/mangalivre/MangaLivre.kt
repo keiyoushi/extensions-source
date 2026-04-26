@@ -147,10 +147,10 @@ class MangaLivre :
             ),
             Filter.Separator(),
             OrderDirectionFilter(
-                "Ordem",
+                "Direção",
                 listOf(
-                    "Decrescente" to "desc",
-                    "Crescente" to "asc",
+                    "↑ Decrescente" to "desc",
+                    "↓ Crescente" to "asc",
                 ),
             ),
         ),
