@@ -11,10 +11,11 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -32,7 +33,7 @@ class DocTruyen3Q :
     ),
     ConfigurableSource {
 
-    override fun pageListParse(document: Document): List<Page> = document.select("div.page-chapter[id] img").mapIndexed { index, element ->
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.page-chapter[id] img").mapIndexed { index, element ->
         val rawUrl = element.attr("abs:src").ifEmpty { element.attr("abs:data-src") }
         Page(index, imageUrl = rawUrl)
     }.distinctBy { it.imageUrl }
@@ -69,7 +70,8 @@ class DocTruyen3Q :
         return GET(url.toString(), headers)
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         title = document.selectFirst("h1.title-manga")!!.text()
         description = document.select("p.detail-summary").joinToString { it.wholeText().trim() }
         status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
