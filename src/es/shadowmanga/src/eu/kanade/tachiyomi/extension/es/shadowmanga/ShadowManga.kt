@@ -1,17 +1,21 @@
 package eu.kanade.tachiyomi.extension.es.shadowmanga
 
+import eu.kanade.tachiyomi.extension.es.shadowmanga.interceptor.ImageFallbackInterceptor
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import kotlin.concurrent.thread
 
 class ShadowManga : HttpSource() {
 
@@ -20,8 +24,16 @@ class ShadowManga : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
+    private val cdnHosts = listOf(
+        "media.shadowmanga.es",
+        "cdn.shadowmanga.es",
+    )
+
+    private val fallbackPrefix = "/api/media/"
+
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrl.toHttpUrl().host, fallbackPrefix))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -46,12 +58,28 @@ class ShadowManga : HttpSource() {
         url.addQueryParameter("showSinPortada", "false")
         url.addQueryParameter("take", MAX_RESULTS.toString())
 
-        return GET(url.build(), headers)
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+
+        genreFilter?.getIncluded()?.forEach {
+            url.addQueryParameter("tags", it)
+        }
+
+        val excludedGenres = genreFilter?.getExcluded().orEmpty()
+
+        return GET(url.build(), headers).newBuilder()
+            .tag(List::class.java, excludedGenres)
+            .build()
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<List<Series>>()
-        val mangas = result.map { it.toSManga() }
+        val excludedGenres = response.request.tag(List::class.java) as? List<String>
+        val mangas = response.parseAs<List<Series>>()
+            .filter { series ->
+                excludedGenres.isNullOrEmpty() || series.getGenreList().none { genre ->
+                    genre in excludedGenres
+                }
+            }.sortedBy { it.title }
+            .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -87,6 +115,39 @@ class ShadowManga : HttpSource() {
             Page(index, imageUrl = url)
         }
     }
+
+    override fun getFilterList(): FilterList {
+        fetchFilters()
+        return FilterList(
+            if (genresList.isEmpty()) {
+                Filter.Header("Presione 'Reiniciar' para intentar cargar los filtros.")
+            } else {
+                GenreFilter(genresList)
+            },
+        )
+    }
+
+    private var genresList: List<String> = emptyList()
+    private var fetchFiltersAttempts = 0
+    private var filtersState = FiltersState.NOT_FETCHED
+
+    private fun fetchFilters() {
+        if (filtersState != FiltersState.NOT_FETCHED || fetchFiltersAttempts >= 3) return
+        filtersState = FiltersState.FETCHING
+        fetchFiltersAttempts++
+        thread {
+            try {
+                val response = client.newCall(GET("$baseUrl/api/series-locales/tags", headers)).execute()
+                genresList = response.parseAs<List<String>>()
+
+                filtersState = FiltersState.FETCHED
+            } catch (_: Throwable) {
+                filtersState = FiltersState.NOT_FETCHED
+            }
+        }
+    }
+
+    private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 

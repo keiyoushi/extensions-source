@@ -16,7 +16,7 @@ class SeriesWrapper(
 @Serializable
 class Series(
     val id: Int,
-    @SerialName("titulo") private val title: String,
+    @SerialName("titulo") val title: String,
     @SerialName("portadaUrl") private val thumbnailUrl: String?,
     @SerialName("descripcion") private val description: String?,
     @SerialName("autor") private val author: String?,
@@ -35,9 +35,11 @@ class Series(
         thumbnail_url = this@Series.thumbnailUrl
         description = this@Series.description
         author = this@Series.author
-        genre = genres?.split(",")?.joinToString()
+        genre = genres?.split(",")?.joinToString { it.trim() }
         status = this@Series.status.parseStatus()
     }
+
+    fun getGenreList(): List<String> = genres.orEmpty().split(",").map { it.trim() }
 
     private fun String?.parseStatus(): Int = when (this?.lowercase()) {
         "en curso" -> SManga.ONGOING
