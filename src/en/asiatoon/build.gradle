@@ -1,7 +1,7 @@
 ext {
     extName = 'AsiaToon'
     extClass = '.AsiaToon'
-    overrideVersionCode = 0
+    extVersionCode = 1
     isNsfw = true
 }
 

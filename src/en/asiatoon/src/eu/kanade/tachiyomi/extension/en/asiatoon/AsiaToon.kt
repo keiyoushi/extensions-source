@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -59,14 +58,11 @@ class AsiaToon : HttpSource() {
         "Romance",
     )
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor(
-            CookieInterceptor(baseUrl.removePrefix("https://"), "hc_vfs" to "Y"),
-        )
-        .build()
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+        .set("Cookie", "hc_vfs=Y")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/en/genres?page=$page", headers)
 
