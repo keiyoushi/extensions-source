@@ -4,10 +4,11 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,7 +21,7 @@ import org.jsoup.select.Evaluator
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangainua : ParsedHttpSource() {
+class Mangainua : HttpSource() {
 
     // Info
     override val name = "MANGA/in/UA"
@@ -44,9 +45,13 @@ class Mangainua : ParsedHttpSource() {
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl)
 
-    override fun popularMangaSelector() = "div.owl-carousel div.card--big"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.owl-carousel div.card--big").map(::mangaFromElement)
+        return MangasPage(mangas, false)
+    }
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
         element.selectFirst("h3.card__title a")!!.run {
             setUrlWithoutDomain(attr("href"))
             title = text()
@@ -56,16 +61,15 @@ class Mangainua : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector() = null
-
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page/")
 
-    override fun latestUpdatesSelector() = "main.main article.item"
-
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = "a:contains(Наступна)"
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("main.main article.item").map(::mangaFromElement)
+        val hasNextPage = document.selectFirst("a:contains(Наступна)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.length > 2) {
@@ -83,14 +87,11 @@ class Mangainua : ParsedHttpSource() {
         throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
     }
 
-    override fun searchMangaSelector() = latestUpdatesSelector()
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         title = document.selectFirst("span.UAname")!!.text()
         description = document.selectFirst("div.item__full-description")!!.text()
         thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.absUrl("src")
@@ -120,10 +121,6 @@ class Mangainua : ParsedHttpSource() {
     private fun Document.getInfoElement(text: String): Element? = selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
 
     // ============================== Chapters ==============================
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-
     private fun parseChapterElements(elements: Elements): List<SChapter> {
         var previousChapterName: String? = null
         var previousChapterNumber: Float = 0F
@@ -176,7 +173,8 @@ class Mangainua : ParsedHttpSource() {
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters_image"
         val userHashQuery = document.parseUserHashQuery(endpoint)
@@ -190,7 +188,7 @@ class Mangainua : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
     companion object {
