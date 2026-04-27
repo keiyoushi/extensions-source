@@ -2,7 +2,7 @@ ext {
     extName = 'Bloom Scans'
     extClass = '.Bloomscans'
     themePkg = "mangathemesia"
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     baseUrl = "https://bloomscans.com"
     isNsfw = true
 }
