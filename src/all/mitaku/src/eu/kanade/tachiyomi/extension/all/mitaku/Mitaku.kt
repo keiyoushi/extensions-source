@@ -227,7 +227,7 @@ class Mitaku : HttpSource() {
         title = element.selectFirst("a")?.attr("title")
             ?.takeIf { it.isNotBlank() }
             ?: element.selectFirst("h1, h2, h3")?.text()?.takeIf { it.isNotBlank() }
-                ?: throw Exception("Title is mandatory")
+            ?: throw Exception("Title is mandatory")
 
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
