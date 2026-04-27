@@ -7,10 +7,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,10 +18,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -30,7 +27,7 @@ import java.util.concurrent.TimeUnit
 open class Viz(
     final override val name: String,
     private val servicePath: String,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val baseUrl = "https://www.viz.com"
 
@@ -46,12 +43,9 @@ open class Viz(
         .rateLimit(1, 1, TimeUnit.SECONDS)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/$servicePath")
-
-    private val json: Json by injectLazy()
 
     private var mangaList: List<SManga>? = null
 
@@ -74,43 +68,24 @@ open class Viz(
             throw Exception(COUNTRY_NOT_SUPPORTED)
         }
 
-        val mangasPage = super.popularMangaParse(response)
+        val document = response.asJsoup()
 
-        mangaList = mangasPage.mangas.sortedBy { it.title }
+        val mangas = document.select("section.section_chapters div.o_sort_container div.o_sortable > a.o_chapters-link").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("div.pad-x-rg")!!.text()
+                thumbnail_url = element.selectFirst("div.pos-r img.disp-bl")?.attr("data-original")
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
+        }
 
-        return mangasPage
+        mangaList = mangas.sortedBy { it.title }
+
+        return MangasPage(mangas, false)
     }
-
-    override fun popularMangaSelector(): String = "section.section_chapters div.o_sort_container div.o_sortable > a.o_chapters-link"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div.pad-x-rg")!!.text()
-        thumbnail_url = element.selectFirst("div.pos-r img.disp-bl")
-            ?.attr("data-original")
-        url = element.attr("href")
-    }
-
-    override fun popularMangaNextPageSelector(): String? = null
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        if (!response.request.url.toString().contains("section/free-chapters")) {
-            throw Exception(COUNTRY_NOT_SUPPORTED)
-        }
-
-        val mangasPage = super.latestUpdatesParse(response)
-
-        mangaList = mangasPage.mangas.sortedBy { it.title }
-
-        return mangasPage
-    }
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String? = null
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(PREFIX_URL_SEARCH)) {
@@ -134,41 +109,29 @@ open class Viz(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(page)
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (!response.request.url.toString().contains("section/free-chapters")) {
-            throw Exception(COUNTRY_NOT_SUPPORTED)
-        }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-        return super.searchMangaParse(response)
-    }
-
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String? = null
-
-    override fun mangaDetailsParse(document: Document): SManga {
-        val seriesIntro = document.select("section#series-intro").first()!!
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val seriesIntro = document.selectFirst("section#series-intro")
+            ?: throw Exception("Series intro not found")
 
         // Get the thumbnail url from the manga list (if available),
         // or fetch it for the first time (in backup restore, for example).
         if (mangaList == null) {
             val request = popularMangaRequest(1)
-            val response = client.newCall(request).execute()
-            // Call popularMangaParse to fill the manga list.
-            popularMangaParse(response)
+            client.newCall(request).execute().use { popularMangaParse(it) }
         }
 
         val mangaUrl = document.location().substringAfter(baseUrl)
-        val mangaFromList = mangaList!!.firstOrNull { it.url == mangaUrl }
+        val mangaFromList = mangaList?.firstOrNull { it.url == mangaUrl }
 
         return SManga.create().apply {
-            author = seriesIntro.select("div.type-rg span").firstOrNull()?.text()
+            author = seriesIntro.selectFirst("div.type-rg span")?.text()
                 ?.replace("Created by ", "")
             artist = author
             status = SManga.ONGOING
-            description = seriesIntro.select("div.line-solid").firstOrNull()?.text()
+            description = seriesIntro.selectFirst("div.line-solid")?.text()
             thumbnail_url = if (!mangaFromList?.thumbnail_url.isNullOrEmpty()) {
                 mangaFromList!!.thumbnail_url // Can't be null in this branch
             } else {
@@ -184,14 +147,36 @@ open class Viz(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val allChapters = super.chapterListParse(response)
+        val document = response.asJsoup()
+        val elements = document.select("section.section_chapters div.o_sortable > a.o_chapter-container, section.section_chapters div.o_sortable div.o_chapter-vol-container tr.o_chapter a.o_chapter-container")
+
+        val allChapters = elements.map { element ->
+            SChapter.create().apply {
+                val isVolume = element.selectFirst("div:nth-child(1) table") == null
+
+                if (isVolume) {
+                    name = element.text()
+                } else {
+                    val leftSide = element.selectFirst("div:nth-child(1) table")!!
+                    val rightSide = element.selectFirst("div:nth-child(2) table")!!
+
+                    name = rightSide.selectFirst("td")!!.text()
+                    val dateStr = leftSide.selectFirst("td[align=right]")!!.text()
+                    date_upload = DATE_FORMATTER.tryParse(dateStr)
+                }
+
+                chapter_number = name.substringAfter("Ch. ").toFloatOrNull() ?: -1F
+                scanlator = "VIZ Media"
+                url = element.attr("data-target-url")
+            }
+        }
 
         checkIfIsLoggedIn()
 
         if (loggedIn == true) {
             return allChapters.map { oldChapter ->
                 oldChapter.apply {
-                    url = url.substringAfter("'").substringBeforeLast("'") + "&locked=true"
+                    this.url = this.url.substringAfter("'").substringBeforeLast("'") + "&locked=true"
                 }
             }
                 .sortedByDescending { it.chapter_number }
@@ -199,27 +184,6 @@ open class Viz(
 
         return allChapters.filter { !it.url.startsWith("javascript") }
             .sortedByDescending { it.chapter_number }
-    }
-
-    override fun chapterListSelector() = "section.section_chapters div.o_sortable > a.o_chapter-container, " +
-        "section.section_chapters div.o_sortable div.o_chapter-vol-container tr.o_chapter a.o_chapter-container"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val isVolume = element.select("div:nth-child(1) table").first() == null
-
-        if (isVolume) {
-            name = element.text()
-        } else {
-            val leftSide = element.select("div:nth-child(1) table").first()!!
-            val rightSide = element.select("div:nth-child(2) table").first()!!
-
-            name = rightSide.select("td").first()!!.text()
-            date_upload = leftSide.select("td[align=right]").first()!!.text().toDate()
-        }
-
-        chapter_number = name.substringAfter("Ch. ").toFloatOrNull() ?: -1F
-        scanlator = "VIZ Media"
-        url = element.attr("data-target-url")
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -234,11 +198,12 @@ open class Viz(
         return GET(baseUrl + chapter.url, newHeaders)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pageCount = document.select("script:containsData(var pages)").first()!!.data()
-            .substringAfter("= ")
-            .substringBefore(";")
-            .toInt()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val pageCount = document.selectFirst("script:containsData(var pages)")?.data()
+            ?.substringAfter("= ")
+            ?.substringBefore(";")
+            ?.toInt() ?: 0
         val mangaId = document.location()
             .substringAfterLast("/")
             .substringBefore("?")
@@ -262,7 +227,7 @@ open class Viz(
         }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -274,20 +239,21 @@ open class Viz(
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private fun checkIfIsLoggedIn(chain: Interceptor.Chain? = null) {
+    private fun checkIfIsLoggedIn() {
         val refreshHeaders = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
         val loginCheckRequest = GET("$baseUrl/$REFRESH_LOGIN_LINKS_URL", refreshHeaders)
-        val loginCheckResponse = chain?.proceed(loginCheckRequest)
-            ?: client.newCall(loginCheckRequest).execute()
-        val document = loginCheckResponse.asJsoup()
-
-        loggedIn = document.select("div#o_account-links-content").firstOrNull()
-            ?.attr("logged_in")?.toBoolean() ?: false
-
-        loginCheckResponse.close()
+        try {
+            network.cloudflareClient.newCall(loginCheckRequest).execute().use { response ->
+                val document = response.asJsoup()
+                loggedIn = document.selectFirst("div#o_account-links-content")
+                    ?.attr("logged_in")?.toBoolean() ?: false
+            }
+        } catch (e: Exception) {
+            loggedIn = false
+        }
     }
 
     private fun headersIntercept(chain: Interceptor.Chain): Response {
@@ -300,7 +266,7 @@ open class Viz(
 
     private fun authCheckIntercept(chain: Interceptor.Chain): Response {
         if (loggedIn == null) {
-            checkIfIsLoggedIn(chain)
+            checkIfIsLoggedIn()
         }
 
         return chain.proceed(chain.request())
@@ -326,7 +292,9 @@ open class Viz(
             .addQueryParameter("manga_id", mangaId)
             .toString()
         val authCheckRequest = GET(authCheckUrl, authCheckHeaders)
-        val authCheckResponse = chain.proceed(authCheckRequest).parseAs<VizMangaAuthDto>()
+
+        // This fully consumes and closes the authCheckResponse
+        val authCheckResponse = chain.proceed(authCheckRequest).parseAs<MangaAuthDto>()
 
         if (authCheckResponse.ok == 1 && authCheckResponse.archiveInfo?.ok == 1) {
             val newChapterUrl = chain.request().url.newBuilder()
@@ -346,21 +314,10 @@ open class Viz(
         throw IOException(authCheckResponse.archiveInfo?.error?.message ?: AUTH_CHECK_FAILED)
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
-
-    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
-        .getOrNull() ?: 0L
-
     companion object {
         private const val ACCEPT_JSON = "application/json, text/javascript, */*; q=0.01"
-        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
 
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
-        }
+        private val DATE_FORMATTER = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
 
         private const val COUNTRY_NOT_SUPPORTED = "Your country is not supported by the service."
         private const val SESSION_EXPIRED = "Your session has expired, please log in through WebView again."
