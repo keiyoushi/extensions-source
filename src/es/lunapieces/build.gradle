@@ -1,0 +1,10 @@
+ext {
+    extName = 'Luna Pieces'
+    extClass = '.LunaPieces'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://lunapiecesfansub.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
