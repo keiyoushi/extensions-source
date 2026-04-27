@@ -1,7 +1,7 @@
 ext {
     extName = 'The Duck Webcomics'
     extClass = '.TheDuckWebcomics'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = true
 }
 
