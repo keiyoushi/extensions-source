@@ -79,5 +79,4 @@ class ChapterPagesDto(
 class PageEntryDto(
     val orden: Int = 0,
     val url: String = "",
-    val bloqueada: Boolean = false,
 )

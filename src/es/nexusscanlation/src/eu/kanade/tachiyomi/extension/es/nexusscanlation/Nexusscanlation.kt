@@ -172,9 +172,7 @@ class Nexusscanlation : HttpSource() {
             return emptyList()
         }
 
-        return pageList
-            .filter { !it.bloqueada && it.url.isNotBlank() }
-            .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
+        return pageList.mapIndexed { index, page -> Page(index, imageUrl = page.url) }
     }
 
     // ======================= Helpers =======================================
@@ -191,10 +189,18 @@ class Nexusscanlation : HttpSource() {
     private fun chapterToModel(seriesSlug: String, chapter: ChapterEntryDto): SChapter {
         val chapterNumber = chapter.numero.toString().removeSuffix(".0")
 
-        val title = chapter.titulo?.takeIf { it.isNotBlank() }
-        var chapterName = if (title != null) "Chapter $chapterNumber - $title" else "Chapter $chapterNumber"
-        if (chapter.esPremium) {
-            chapterName = "🔒 $chapterName"
+        val chapterName = buildString {
+            if (chapter.esPremium) {
+                append("🔒 ")
+            }
+
+            append("Chapter $chapterNumber")
+
+            chapter.titulo
+                ?.takeIf { it.isNotBlank() }
+                ?.let { title ->
+                    append(" - $title")
+                }
         }
 
         return SChapter.create().apply {
