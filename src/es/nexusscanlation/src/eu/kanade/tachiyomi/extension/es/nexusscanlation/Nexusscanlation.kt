@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.nexusscanlation
 
-import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,12 +10,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -29,59 +26,10 @@ class Nexusscanlation : HttpSource() {
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
-    private val apiHost = "https://api.nexusscanlation.com".toHttpUrl()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
-    private val json by injectLazy<Json>()
-
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(apiHost, 1, 3) // API: max 1 request per 3 seconds
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-
-            // For API requests, sync headers
-            if (url.startsWith(apiBaseUrl)) {
-                val newRequest = request.newBuilder()
-
-                newRequest.header("Accept", "application/json, text/plain, */*")
-                newRequest.header("Accept-Language", "es-419,es;q=0.9,es-ES;q=0.8")
-                newRequest.header("Origin", baseUrl)
-                newRequest.header("Referer", "$baseUrl/")
-
-                newRequest.header("sec-fetch-dest", "empty")
-                newRequest.header("sec-fetch-mode", "cors")
-                newRequest.header("sec-fetch-site", "same-site")
-
-                val cookies = getCookiesForDomain("https://api.nexusscanlation.com")
-                if (cookies.isNotBlank()) {
-                    newRequest.header("Cookie", cookies)
-                }
-
-                val response = chain.proceed(newRequest.build())
-
-                if (response.code == 429) {
-                    response.close()
-                    throw IOException("Demasiadas peticiones. Espera unos segundos e intenta de nuevo.")
-                }
-
-                if (response.code == 403) {
-                    val bodySnippet = response.peekBody(500).string()
-                    response.close()
-                    if (bodySnippet.contains("cloudflare", ignoreCase = true) || bodySnippet.contains("just a moment", ignoreCase = true)) {
-                        throw IOException("Cloudflare bloqueó la IP. Abre WebView para resolver captcha.")
-                    } else {
-                        val msg = Regex(""""message"\s*:\s*"([^"]+)"""").find(bodySnippet)?.groupValues?.get(1)
-                            ?: "Bloqueado por WAF (Cliente no permitido)"
-                        throw IOException("API: $msg")
-                    }
-                }
-
-                return@addInterceptor response
-            }
-
-            chain.proceed(request)
-        }
+        .rateLimitHost(apiBaseUrl.toHttpUrl(), 1, 3) // API: max 1 request per 3 seconds
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -89,27 +37,13 @@ class Nexusscanlation : HttpSource() {
         .add("Origin", baseUrl)
         .add("Accept-Language", "es-419,es;q=0.9,es-ES;q=0.8")
 
-    // ======================= Cookie Helpers =======================
-    private fun getCookiesForDomain(url: String): String = try {
-        val apiCookies = CookieManager.getInstance()?.getCookie(url) ?: ""
-        val mainCookies = CookieManager.getInstance()?.getCookie(baseUrl) ?: ""
-
-        val cookieMap = mutableMapOf<String, String>()
-        parseCookieString(mainCookies, cookieMap)
-        parseCookieString(apiCookies, cookieMap)
-        cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
-    } catch (_: Exception) {
-        ""
-    }
-
-    private fun parseCookieString(cookies: String, into: MutableMap<String, String>) {
-        if (cookies.isBlank()) return
-        cookies.split(";").forEach { cookie ->
-            val parts = cookie.trim().split("=", limit = 2)
-            if (parts.size == 2) {
-                into[parts[0].trim()] = parts[1].trim()
-            }
-        }
+    private val apiHeaders by lazy {
+        headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("sec-fetch-dest", "empty")
+            .add("sec-fetch-mode", "cors")
+            .add("sec-fetch-site", "same-site")
+            .build()
     }
 
     // ======================= Manga URLs ===================================
@@ -129,7 +63,7 @@ class Nexusscanlation : HttpSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("orden", "popular")
             .build()
-        return GET(url, headers)
+        return GET(url, apiHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -145,7 +79,7 @@ class Nexusscanlation : HttpSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("orden", "nuevo")
             .build()
-        return GET(url, headers)
+        return GET(url, apiHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -165,7 +99,7 @@ class Nexusscanlation : HttpSource() {
         }
 
         urlBuilder.addQueryParameter("page", page.toString())
-        return GET(urlBuilder.build(), headers)
+        return GET(urlBuilder.build(), apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -177,7 +111,7 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment("series")
             .addPathSegment(manga.url)
             .build()
-        return GET(url, headers)
+        return GET(url, apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -192,7 +126,7 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment("series")
             .addPathSegment(manga.url)
             .build()
-        return GET(url, headers)
+        return GET(url, apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -216,43 +150,31 @@ class Nexusscanlation : HttpSource() {
             .addPathSegment(chapterSlug)
             .build()
 
-        return GET(url, headers)
+        return GET(url, apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val body = response.peekBody(Long.MAX_VALUE).string()
+        val body = response.body.string()
 
-        // The API may return pages in two formats:
-        // Wrapped:  { "data": { "paginas": [...], "requiere_registro": ... } }
-        // Direct:   { "paginas": [...], "requiere_registro": ... }
         val chapterPagesDto = try {
-            json.decodeFromString<ChapterPagesWrapperDto>(body).data
+            body.parseAs<ChapterPagesWrapperDto>().data
         } catch (_: Exception) {
-            null
-        } ?: try {
-            json.decodeFromString<ChapterPagesDto>(body)
-        } catch (_: Exception) {
-            null
-        } ?: throw IOException("Error al decodificar la respuesta del servidor.")
+            body.parseAs<ChapterPagesDto>()
+        } ?: throw IOException("Failed to decode server response.")
 
         if (chapterPagesDto.esPremium || chapterPagesDto.locked) {
-            throw IOException("Capítulo Premium. No disponible.")
+            throw IOException("Premium chapter. Not available.")
         }
 
         val pageList = chapterPagesDto.paginas
 
         if (pageList.isNullOrEmpty()) {
-            throw IOException("No se encontraron páginas para este capítulo.")
+            return emptyList()
         }
 
         return pageList
             .filter { !it.bloqueada && it.url.isNotBlank() }
             .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
-            .also {
-                if (it.isEmpty()) {
-                    throw IOException("Todas las páginas de este capítulo están bloqueadas.")
-                }
-            }
     }
 
     // ======================= Helpers =======================================
@@ -269,7 +191,8 @@ class Nexusscanlation : HttpSource() {
     private fun chapterToModel(seriesSlug: String, chapter: ChapterEntryDto): SChapter {
         val chapterNumber = chapter.numero.toString().removeSuffix(".0")
 
-        var chapterName = chapter.titulo?.takeIf { it.isNotBlank() } ?: "Capítulo $chapterNumber"
+        val title = chapter.titulo?.takeIf { it.isNotBlank() }
+        var chapterName = if (title != null) "Chapter $chapterNumber - $title" else "Chapter $chapterNumber"
         if (chapter.esPremium) {
             chapterName = "🔒 $chapterName"
         }
