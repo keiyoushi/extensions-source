@@ -1,7 +1,7 @@
 ext {
     extName = 'VIZ'
     extClass = '.VizFactory'
-    extVersionCode = 22
+    extVersionCode = 23
     isNsfw = false
 }
 

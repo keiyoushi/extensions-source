@@ -4,25 +4,24 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class VizPageUrlDto(
-    val ok: Int = 0,
+class PageUrlDto(
     val data: Map<Int, String>? = null,
 )
 
 @Serializable
-data class VizMangaAuthDto(
+class MangaAuthDto(
     val ok: Int = 0,
-    @SerialName("archive_info") val archiveInfo: VizArchiveInfoDto? = null,
+    @SerialName("archive_info") val archiveInfo: ArchiveInfoDto? = null,
 )
 
 @Serializable
-data class VizArchiveInfoDto(
+class ArchiveInfoDto(
     val ok: Int = 0,
-    @SerialName("err") val error: VizErrorDto? = null,
+    @SerialName("err") val error: ErrorDto? = null,
 )
 
 @Serializable
-data class VizErrorDto(
+class ErrorDto(
     val code: Int,
     @SerialName("msg") val message: String? = null,
 )
