@@ -37,6 +37,10 @@ class Mangainua : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
+    private fun ajaxHeaders() = headersBuilder()
+        .add("X-Requested-With", "XMLHttpRequest")
+        .build()
+
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl)
 
@@ -150,6 +154,7 @@ class Mangainua : ParsedHttpSource() {
             }
         }
     }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val userHash = document.parseUserHash()
@@ -157,13 +162,14 @@ class Mangainua : ParsedHttpSource() {
         val userHashQuery = document.parseUserHashQuery(endpoint)
         val metaElement = document.selectFirst(Evaluator.Id("linkstocomics"))!!
         val body = FormBody.Builder()
-            .addEncoded("action", "show")
-            .addEncoded("news_id", metaElement.attr("data-news_id"))
-            .addEncoded("news_category", metaElement.attr("data-news_category"))
-            .addEncoded("this_link", metaElement.attr("data-this_link"))
-            .addEncoded(userHashQuery, userHash)
+            .add("action", "show")
+            .add("news_id", metaElement.attr("data-news_id"))
+            .add("news_category", metaElement.attr("data-news_category"))
+            .add("this_link", metaElement.attr("data-this_link"))
+            .add(userHashQuery, userHash)
             .build()
-        val request = POST("$baseUrl/$endpoint", headers, body)
+
+        val request = POST("$baseUrl/$endpoint", ajaxHeaders(), body)
 
         val chaptersDoc = client.newCall(request).execute().use { it.asJsoup() }
         return parseChapterElements(chaptersDoc.body().children()).asReversed()
@@ -176,7 +182,8 @@ class Mangainua : ParsedHttpSource() {
         val userHashQuery = document.parseUserHashQuery(endpoint)
         val newsId = document.selectFirst(Evaluator.Id("comics"))!!.attr("data-news_id")
         val url = "$baseUrl/$endpoint&news_id=$newsId&action=show&$userHashQuery=$userHash"
-        val pagesDoc = client.newCall(GET(url, headers)).execute()
+
+        val pagesDoc = client.newCall(GET(url, ajaxHeaders())).execute()
             .use { it.asJsoup() }
         return pagesDoc.getElementsByTag("img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("data-src"))
@@ -202,18 +209,14 @@ class Mangainua : ParsedHttpSource() {
             return hash.ifEmpty { throw Exception("Couldn't find user hash") }
         }
 
+        private val userHashQueryRegex = Regex("""(\w+)\s*:\s*site_login_hash""")
+
         private fun Document.parseUserHashQuery(endpoint: String): String {
             val script = selectFirst("script:containsData($endpoint)")?.data()
-            val queries = script?.run {
-                substringAfter(endpoint).substringAfter('{').substringBefore('}')
-            }
-            val query = queries.orEmpty()
-                .substringBefore(SITE_LOGIN_HASH, "")
-                .substringBeforeLast(':')
-                .trimEnd()
-                .substringAfterLast(' ')
+                ?: throw Exception("Couldn't find user hash query script!")
 
-            return query.ifEmpty { throw Exception("Couldn't find user hash query!") }
+            return userHashQueryRegex.find(script)?.groupValues?.get(1)
+                ?: throw Exception("Couldn't find user hash query!")
         }
     }
 }
