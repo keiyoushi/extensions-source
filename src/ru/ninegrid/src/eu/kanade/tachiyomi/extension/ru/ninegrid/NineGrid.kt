@@ -68,11 +68,7 @@ class NineGrid :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SeriesListResponse>()
-        val mangas = data.content.map {
-            it.toSManga().apply {
-                thumbnail_url = "$apiBase/series/$id/thumbnail"
-            }
-        }
+        val mangas = data.content.map { it.toSManga(apiBase) }
         return MangasPage(mangas, data.page + 1 < data.totalPages)
     }
 
@@ -128,10 +124,7 @@ class NineGrid :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val s = response.parseAs<SeriesDto>()
-        return s.toSManga().apply {
-            thumbnail_url = "$apiBase/series/${s.id}/thumbnail"
-            initialized = true
-        }
+        return s.toSManga(apiBase).apply { initialized = true }
     }
 
     // Chapter List

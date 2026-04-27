@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiEnvy'
+    extClass = '.HentaiEnvyFactory'
+    overrideVersionCode = 0
+    themePkg = 'galleryadults'
+	baseUrl = 'https://hentaienvy.com'
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

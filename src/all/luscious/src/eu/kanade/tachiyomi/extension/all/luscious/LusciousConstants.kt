@@ -66,7 +66,7 @@ fragment AlbumStandard on Album {
 
 const val MERGE_CHAPTER_PREF_KEY = "MERGE_CHAPTER"
 const val MERGE_CHAPTER_PREF_TITLE = "Merge Chapter"
-const val MERGE_CHAPTER_PREF_SUMMARY = "If checked, merges all content of one Album into one Chapter"
+const val MERGE_CHAPTER_PREF_SUMMARY = "If checked, merges all content of one album into chapters of up to 1000 images each, labeled as 'Merged Chapter (Part 1)', 'Merged Chapter (Part 2)', and so on. Note: you must be logged into the WebView to access more than 1000 images."
 const val MERGE_CHAPTER_PREF_DEFAULT_VALUE = false
 
 const val RESOLUTION_PREF_KEY = "RESOLUTION"

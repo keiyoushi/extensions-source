@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
 class MeDamTruyen : HttpSource() {
     override val name = "MeDamTruyen"
     override val lang = "vi"
-    override val baseUrl = "https://metongtai.top"
+    override val baseUrl = "https://tramngontinh.top"
     override val supportsLatest = true
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->

@@ -7,6 +7,8 @@ data class HoneyMangaDto(
     val id: String,
     val posterId: String,
     val title: String,
+    val type: String,
+    val genres: List<String>? = emptyList(),
 )
 
 @Serializable
