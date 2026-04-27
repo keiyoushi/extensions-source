@@ -1,7 +1,6 @@
 ext {
     extName = 'AsiaToon'
     extClass = '.AsiaToon'
-    themePkg = 'hotcomics'
     overrideVersionCode = 0
     isNsfw = true
 }
