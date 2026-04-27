@@ -12,10 +12,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import kotlin.concurrent.thread
 
 class ShadowManga : HttpSource() {
 
@@ -23,6 +25,8 @@ class ShadowManga : HttpSource() {
     override val baseUrl = "https://shadowmanga.es"
     override val lang = "es"
     override val supportsLatest = true
+
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     private val cdnHosts = listOf(
         "media.shadowmanga.es",
@@ -135,7 +139,7 @@ class ShadowManga : HttpSource() {
         if (filtersState != FiltersState.NOT_FETCHED || fetchFiltersAttempts >= 3) return
         filtersState = FiltersState.FETCHING
         fetchFiltersAttempts++
-        thread {
+        scope.launch {
             try {
                 val response = client.newCall(GET("$baseUrl/api/series-locales/tags", headers)).execute()
                 genresList = response.parseAs<List<String>>()
