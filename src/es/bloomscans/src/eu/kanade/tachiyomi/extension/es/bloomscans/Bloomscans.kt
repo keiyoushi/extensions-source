@@ -20,51 +20,67 @@ class Bloomscans :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("page")
-            .addPathSegment(page.toString())
-            .addQueryParameter("s", query)
 
-        filters.forEach { filter ->
-            when (filter) {
-                is AuthorFilter -> {
-                    url.addQueryParameter("author", filter.state)
-                }
+        // Text Search
+        if (query.isNotEmpty() && filters.isEmpty()) {
+            url.addPathSegment("page")
+            url.addPathSegment(page.toString())
+            url.addQueryParameter("s", query)
+        } else {
+            // Filtered Search
+            url.addPathSegment(mangaUrlDirectory.substring(1))
+            url.addPathSegment("page")
+            url.addPathSegment(page.toString())
 
-                is YearFilter -> {
-                    url.addQueryParameter("yearx", filter.state)
-                }
+            if (query.isNotEmpty()) {
+                url.addQueryParameter("title", query)
+            }
 
-                is StatusFilter -> {
-                    url.addQueryParameter("status", filter.selectedValue())
-                }
+            filters.forEach { filter ->
+                when (filter) {
+                    is AuthorFilter -> {
+                        url.addQueryParameter("author", filter.state)
+                    }
 
-                is TypeFilter -> {
-                    url.addQueryParameter("type", filter.selectedValue())
-                }
+                    is YearFilter -> {
+                        url.addQueryParameter("yearx", filter.state)
+                    }
 
-                is OrderByFilter -> {
-                    url.addQueryParameter("order", filter.selectedValue())
-                }
+                    is StatusFilter -> {
+                        url.addQueryParameter("status", filter.selectedValue())
+                    }
 
-                is GenreListFilter -> {
-                    filter.state
-                        .filter { it.state != Filter.TriState.STATE_IGNORE }
-                        .forEach {
-                            val value = if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
-                            url.addQueryParameter("genre[]", value)
+                    is TypeFilter -> {
+                        url.addQueryParameter("type", filter.selectedValue())
+                    }
+
+                    is OrderByFilter -> {
+                        url.addQueryParameter("order", filter.selectedValue())
+                    }
+
+                    is GenreListFilter -> {
+                        filter.state
+                            .filter { it.state != Filter.TriState.STATE_IGNORE }
+                            .forEach {
+                                val value = if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
+                                url.addQueryParameter("genre[]", value)
+                            }
+                    }
+
+                    // if site has project page, default value "hasProjectPage" = false
+                    is ProjectFilter -> {
+                        if (filter.selectedValue() == "project-filter-on") {
+                            url.setPathSegment(0, projectPageString.substring(1))
                         }
-                }
+                    }
 
-                // if site has project page, default value "hasProjectPage" = false
-                is ProjectFilter -> {
-                    if (filter.selectedValue() == "project-filter-on") {
-                        url.setPathSegment(0, projectPageString.substring(1))
+                    else -> {
+                        /* Do Nothing */
                     }
                 }
-
-                else -> { /* Do Nothing */ }
             }
         }
+
         url.addPathSegment("")
         return GET(url.build(), headers)
     }
