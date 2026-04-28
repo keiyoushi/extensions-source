@@ -1,0 +1,25 @@
+package eu.kanade.tachiyomi.extension.pt.mrtenzus
+
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import okhttp3.OkHttpClient
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.concurrent.TimeUnit
+
+class MRTenzus :
+    Madara(
+        "MR Tenzus",
+        "https://mrtenzus.com",
+        "pt-BR",
+        SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
+    ) {
+
+    override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(3, 1, TimeUnit.SECONDS)
+        .build()
+
+    override val useNewChapterEndpoint = true
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+}

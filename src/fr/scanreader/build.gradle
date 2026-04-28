@@ -1,0 +1,10 @@
+ext {
+    extName = 'Scan Reader'
+    extClass = '.ScanReader'
+    themePkg = 'scanreader'
+    baseUrl = 'https://scanreader.net'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

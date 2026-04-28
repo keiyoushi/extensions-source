@@ -46,6 +46,8 @@ class MangaLivre :
         .set("Upgrade-Insecure-Requests", "1")
         .setRandomUserAgent()
 
+    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div"
+
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"

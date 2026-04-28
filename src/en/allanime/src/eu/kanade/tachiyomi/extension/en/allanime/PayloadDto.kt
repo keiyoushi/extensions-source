@@ -46,8 +46,7 @@ class IDVariables(
 @Serializable
 class ChapterListVariables(
     private val id: String,
-    private val chapterNumStart: Float,
-    private val chapterNumEnd: Float,
+    private val showId: String,
 )
 
 @Serializable

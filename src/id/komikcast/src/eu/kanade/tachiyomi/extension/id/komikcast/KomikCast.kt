@@ -19,8 +19,8 @@ class KomikCast : HttpSource() {
 
     override val id = 972717448578983812
     override val name = "Komik Cast"
-    override val baseUrl = "https://v1.komikcast.fit"
-    private val apiUrl = "https://be.komikcast.fit"
+    override val baseUrl = "https://v2.komikcast.fit"
+    private val apiUrl = "https://be.komikcast.cc"
     override val lang = "id"
     override val supportsLatest = true
 

@@ -8,6 +8,9 @@ object HentaiNexusUtils {
 
     private val primeNumbers = intArrayOf(2, 3, 5, 7, 11, 13, 17, 19)
 
+    // XOR polynomial mask used in the CRC-like prime-index derivation step.
+    private const val PRIME_IDX_XOR_MASK = 12
+
     private fun decryptData(data: ByteArray): String {
         val hostname = "hentainexus.com"
 
@@ -25,7 +28,7 @@ object HentaiNexusUtils {
 
             for (j in 0 until 8) {
                 primeIdx = if (primeIdx and 1 != 0) {
-                    primeIdx ushr 1 xor 12
+                    primeIdx ushr 1 xor PRIME_IDX_XOR_MASK
                 } else {
                     primeIdx ushr 1
                 }

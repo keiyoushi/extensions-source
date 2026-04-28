@@ -3,17 +3,19 @@ package eu.kanade.tachiyomi.extension.vi.truyenhentai18
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class TruyenHentai18 : ParsedHttpSource() {
+class TruyenHentai18 : HttpSource() {
 
     override val name = "Truyện Hentai 18+"
 
@@ -34,27 +36,27 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/xem-nhieu-nhat" + if (page > 1) "/page/$page" else "", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.selectFirst("h2")!!.text()
-        thumbnail_url = element.selectFirst("img")?.let { element ->
-            imageElement(element)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.select("div.col-6.col-md-4.col-lg-2.mb-3").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                title = element.selectFirst("h2")!!.text()
+                thumbnail_url = imageElement(element.selectFirst("img")!!)
+            }
         }
+
+        val hasNextPage = document.selectFirst("ul.pagination li a:contains(»)") != null
+
+        return MangasPage(mangas, hasNextPage)
     }
-
-    override fun popularMangaNextPageSelector(): String = "ul.pagination li a:contains(»)"
-
-    override fun popularMangaSelector(): String = "div.col-6.col-md-4.col-lg-2.mb-3"
 
     // ============================== Latest ======================================
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/moi-cap-nhat" + if (page > 1) "/page/$page" else "", headers)
 
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ======================================
 
@@ -71,11 +73,7 @@ class TruyenHentai18 : ParsedHttpSource() {
         }
     }
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
-
-    override fun searchMangaSelector(): String = popularMangaSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Filters ======================================
 
@@ -83,47 +81,51 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     // ============================== Details ======================================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document.selectFirst("img.manga-cover")?.absUrl("src")
-            ?: document.selectFirst(".card img.img-fluid")?.absUrl("src")
+    override fun mangaDetailsParse(response: Response): SManga = response.asJsoup().run {
+        SManga.create().apply {
+            title = selectFirst("h1")!!.text()
+            thumbnail_url = selectFirst("img.manga-cover")?.absUrl("src")
+                ?: selectFirst(".card img.img-fluid")?.absUrl("src")
 
-        genre = document.select("a.badge.bg-primary").joinToString { it.text() }
+            genre = select("a.badge.bg-primary").joinToString { it.text() }
 
-        document.select(".list-group-item, div").forEach { element ->
-            val text = element.text()
-            when {
-                text.contains("Trạng thái:", ignoreCase = true) -> {
-                    status = when {
-                        text.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
-                        text.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
-                        else -> SManga.UNKNOWN
+            select(".list-group-item, div").forEach { element ->
+                val text = element.text()
+                when {
+                    text.contains("Trạng thái:", ignoreCase = true) -> {
+                        status = when {
+                            text.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
+                            text.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
+                            else -> SManga.UNKNOWN
+                        }
+                    }
+
+                    text.contains("Tác giả:", ignoreCase = true) -> {
+                        author = text.substringAfter(":").trim()
                     }
                 }
-
-                text.contains("Tác giả:", ignoreCase = true) -> {
-                    author = text.substringAfter(":").trim()
-                }
             }
-        }
 
-        description = document.select(".description").joinToString("\n") { it.wholeText().trim() }
+            description = select(".description").joinToString("\n") { it.wholeText().trim() }
+        }
     }
 
     // ============================== Chapters ======================================
 
-    override fun chapterListSelector(): String = "div.chapter-item"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a.fw-bold")!!.absUrl("href"))
-        name = element.selectFirst("a.fw-bold")!!.text()
-        val dateText = element.selectFirst("div.chapter-date")?.text()
-        date_upload = dateText.toDate()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div.chapter-item").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a.fw-bold")!!.absUrl("href"))
+                name = element.selectFirst("a.fw-bold")!!.text()
+                val dateText = element.selectFirst("div.chapter-date")?.text()
+                date_upload = dateText.toDate()
+            }
+        }
     }
 
     private fun String?.toDate(): Long {
         this ?: return 0L
-
         if (!this.contains("trước", ignoreCase = true)) {
             return 0L
         }
@@ -132,13 +134,13 @@ class TruyenHentai18 : ParsedHttpSource() {
             val calendar = Calendar.getInstance()
 
             val patterns = listOf(
-                Regex("""(\d+)\s*giờ""", RegexOption.IGNORE_CASE) to Calendar.HOUR_OF_DAY,
+                Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to Calendar.SECOND,
+                Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to Calendar.MINUTE,
+                Regex("""(\d+)\s*(giờ|tiếng)""", RegexOption.IGNORE_CASE) to Calendar.HOUR_OF_DAY,
                 Regex("""(\d+)\s*ngày""", RegexOption.IGNORE_CASE) to Calendar.DAY_OF_MONTH,
                 Regex("""(\d+)\s*tuần""", RegexOption.IGNORE_CASE) to Calendar.WEEK_OF_YEAR,
                 Regex("""(\d+)\s*tháng""", RegexOption.IGNORE_CASE) to Calendar.MONTH,
                 Regex("""(\d+)\s*năm""", RegexOption.IGNORE_CASE) to Calendar.YEAR,
-                Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to Calendar.MINUTE,
-                Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to Calendar.SECOND,
             )
 
             for ((pattern, field) in patterns) {
@@ -156,8 +158,11 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     // ============================== Pages ======================================
 
-    override fun pageListParse(document: Document): List<Page> = document.select("div#viewer.chapter-container img").mapIndexed { index, element ->
-        Page(index, imageUrl = imageElement(element))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div#viewer.chapter-container img").mapIndexed { index, element ->
+            Page(index, imageUrl = imageElement(element))
+        }
     }
 
     private fun imageElement(element: Element): String? = when {
@@ -165,5 +170,5 @@ class TruyenHentai18 : ParsedHttpSource() {
         else -> element.attr("abs:src")
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

@@ -36,6 +36,33 @@ class AlbumList(
     val items: List<Album>,
 )
 
+// ALBUM RELATED
+@Serializable
+class AlbumRelatedResponse(
+    val data: AlbumRelatedData,
+)
+
+@Serializable
+class AlbumRelatedData(
+    val album: AlbumRelatedDataAlbum,
+)
+
+@Serializable
+class AlbumRelatedDataAlbum(
+    @SerialName("list_related")
+    val listRelated: AlbumRelated,
+)
+
+@Serializable
+class AlbumRelated(
+    @SerialName("more_like_this")
+    val moreLikeThis: List<Album>?,
+    @SerialName("items_liked_like_this")
+    val itemsLikedLikeThis: List<Album>?,
+    @SerialName("items_created_by_this_user")
+    val itemsCreatedByThisUser: List<Album>?,
+)
+
 // ALBUM
 @Serializable
 class Album(
@@ -60,6 +87,7 @@ class FullAlbum(
     @SerialName("number_of_animated_pictures")
     val numberOfAnimatedPictures: Int,
     val content: ItemWithTitle,
+    val created: Double? = null,
 )
 
 @Serializable
@@ -89,6 +117,8 @@ class Variables(
 class Input(
     val display: String?,
     val page: Int,
+    @SerialName("items_per_page")
+    val itemsPerPage: Int = 50,
     val filters: List<Filter>,
 )
 

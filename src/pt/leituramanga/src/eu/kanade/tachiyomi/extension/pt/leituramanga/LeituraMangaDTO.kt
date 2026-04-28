@@ -103,9 +103,8 @@ class MangaInfoDto(
 )
 
 @Serializable
-class PageInfoDto(
-    val id: String,
-    val mangaSlug: String,
+class AESPassword(
+    val variant: List<String>,
 )
 
 @Serializable

@@ -2,19 +2,20 @@ package eu.kanade.tachiyomi.extension.en.porncomix
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import okhttp3.Response
 import rx.Observable
 
-class PornComix : ParsedHttpSource() {
+class PornComix : HttpSource() {
 
     override val name = "PornComix"
 
@@ -40,36 +41,30 @@ class PornComix : ParsedHttpSource() {
         GET("$baseUrl/multporn-net/page/$page/", headers)
     }
 
-    override fun popularMangaSelector() = "#loops-wrapper article"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("#loops-wrapper article").map { element ->
+            SManga.create().apply {
+                val anchor = element.selectFirst("h2.post-title a")!!
+                setUrlWithoutDomain(anchor.attr("href"))
+                title = anchor.text()
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        val anchor = element.selectFirst("h2.post-title a")!!
-
-        manga.setUrlWithoutDomain(anchor.attr("href"))
-        manga.title = anchor.text().trim()
-
-        manga.thumbnail_url = element.selectFirst("img")?.let { img ->
-            img.absUrl("data-pagespeed-lazy-src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("src") }
+                thumbnail_url = element.selectFirst("img")?.let { img ->
+                    img.absUrl("data-pagespeed-lazy-src")
+                        .ifEmpty { img.absUrl("data-src") }
+                        .ifEmpty { img.absUrl("src") }
+                }
+            }
         }
-
-        return manga
+        val hasNextPage = document.selectFirst("a.nextp") != null
+        return MangasPage(mangas, hasNextPage)
     }
-
-    override fun popularMangaNextPageSelector() = "a.nextp"
 
     // ======================== Latest (disabled) ========================
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ======================== Search ========================
 
@@ -87,15 +82,12 @@ class PornComix : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ======================== Details ========================
 
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val manga = SManga.create()
 
         manga.title = document.selectFirst("h1.post-title, h1.entry-title")!!.text()
@@ -104,8 +96,8 @@ class PornComix : ParsedHttpSource() {
             "div.post-inner img, div.entry-content img, article img",
         )?.let { img ->
             img.absUrl("data-pagespeed-lazy-src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("src") }
+                .ifEmpty { img.absUrl("data-src") }
+                .ifEmpty { img.absUrl("src") }
         }
 
         manga.description = document.selectFirst(
@@ -136,19 +128,18 @@ class PornComix : ParsedHttpSource() {
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListSelector(): String = "unused"
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException("Not used")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
 
     // ======================== Pages ========================
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val pswp = document.select(".pswp-gallery__item")
 
         if (pswp.isNotEmpty()) {
             return pswp.mapIndexed { index, element ->
                 val url = element.absUrl("data-pswp-src")
-                Page(index, "", url)
+                Page(index, imageUrl = url)
             }
         }
 
@@ -156,14 +147,14 @@ class PornComix : ParsedHttpSource() {
 
         return images.mapIndexed { index, img ->
             val url = img.absUrl("data-pagespeed-lazy-src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("src") }
+                .ifEmpty { img.absUrl("data-src") }
+                .ifEmpty { img.absUrl("src") }
 
             Page(index, imageUrl = url)
         }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     // ======================== Filters ========================
 

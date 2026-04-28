@@ -1,0 +1,8 @@
+ext {
+    extName = 'NineGrid'
+    extClass = '.NineGrid'
+    extVersionCode = 2
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

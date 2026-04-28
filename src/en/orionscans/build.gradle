@@ -1,0 +1,10 @@
+ext {
+    extName = 'Orion Scans'
+    extClass = '.OrionScans'
+    themePkg = 'iken'
+    baseUrl = 'https://orion-scans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

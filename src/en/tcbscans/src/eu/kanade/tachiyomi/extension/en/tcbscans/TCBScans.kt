@@ -8,19 +8,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 
-class TCBScans : ParsedHttpSource() {
+class TCBScans : HttpSource() {
 
     override val name = "TCB Scans"
     override val baseUrl = "https://tcbonepiecechapters.com"
@@ -45,23 +44,25 @@ class TCBScans : ParsedHttpSource() {
     // popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/projects", headers)
 
-    override fun popularMangaSelector() = "div.bg-card"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        with(element.selectFirst("a[href].text-white")!!) {
-            setUrlWithoutDomain(absUrl("href"))
-            title = text()
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.bg-card").map { element ->
+            SManga.create().apply {
+                with(element.selectFirst("a[href].text-white")!!) {
+                    setUrlWithoutDomain(absUrl("href"))
+                    title = text()
+                }
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            }
         }
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        return MangasPage(mangas, false)
     }
 
-    override fun popularMangaNextPageSelector() = null
-
     // latest
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -77,49 +78,55 @@ class TCBScans : ParsedHttpSource() {
         return Observable.just(MangasPage(mangas, false))
     }
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
-    override fun searchMangaSelector(): String = popularMangaSelector()
-
     // manga details
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        with(document.selectFirst("div.order-1")!!) {
-            thumbnail_url = selectFirst("img")?.absUrl("src")
-            title = selectFirst("h1")!!.text()
-            description = selectFirst("p")?.text()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            with(document.selectFirst("div.order-1")!!) {
+                thumbnail_url = selectFirst("img")?.absUrl("src")
+                title = selectFirst("h1")!!.text()
+                description = selectFirst("p")?.text()
+            }
         }
     }
 
     // chapters
-    override fun chapterListSelector() = "div.grid a"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div.grid a").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
+                val title = element.select("div.font-bold:not(.flex)").text()
+                val description = element.selectFirst(".text-gray-500")
+                    ?.text()?.takeIf { it.isNotEmpty() }
+                val chapNumber = TITLE_REGEX.find(title)?.value
 
-        val title = element.select("div.font-bold:not(.flex)").text()
-        val description = element.selectFirst(".text-gray-500")
-            ?.text()?.takeIf { it.isNotBlank() }
-        val chapNumber = TITLE_REGEX.find(title)?.value
-
-        name = buildString {
-            if (chapNumber != null) {
-                append("Chapter ")
-                append(chapNumber)
-            } else {
-                append(title)
-            }
-            if (description != null) {
-                append(": ")
-                append(description)
+                name = buildString {
+                    if (chapNumber != null) {
+                        append("Chapter ")
+                        append(chapNumber)
+                    } else {
+                        append(title)
+                    }
+                    if (description != null) {
+                        append(": ")
+                        append(description)
+                    }
+                }
             }
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("picture img, .image-container img").mapIndexed { i, img ->
-        Page(i, imageUrl = img.absUrl("src"))
+    // pages
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("picture img, .image-container img").mapIndexed { i, img ->
+            Page(i, imageUrl = img.absUrl("src"))
+        }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     init {
         val context = Injekt.get<Application>()

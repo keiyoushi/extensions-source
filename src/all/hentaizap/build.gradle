@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiZap'
+    extClass = '.HentaiZapFactory'
+    themePkg = 'galleryadults'
+    baseUrl = 'https://hentaizap.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,25 +1,23 @@
 package eu.kanade.tachiyomi.extension.en.oppaistream
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.URLDecoder
 import java.util.Calendar
 
-class OppaiStream : ParsedHttpSource() {
+class OppaiStream : HttpSource() {
 
     override val name = "Oppai Stream"
 
@@ -39,24 +37,12 @@ class OppaiStream : ParsedHttpSource() {
     // popular
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderByFilter("views")))
 
-    override fun popularMangaSelector() = searchMangaSelector()
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // latest
     override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderByFilter("uploaded")))
 
-    override fun latestUpdatesSelector() = searchMangaSelector()
-
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
-
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // search
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -74,19 +60,12 @@ class OppaiStream : ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/api-search.php".toHttpUrl().newBuilder().apply {
             addQueryParameter("text", query)
-            filters.forEach { filter ->
-                when (filter) {
-                    is OrderByFilter -> {
-                        addQueryParameter("order", filter.selectedValue())
-                    }
-
-                    is GenreListFilter -> {
-                        addQueryParameter("genres", filter.state.filter { it.isIncluded() }.joinToString(",") { it.value })
-                        addQueryParameter("blacklist", filter.state.filter { it.isExcluded() }.joinToString(",") { it.value })
-                    }
-
-                    else -> {}
-                }
+            filters.firstInstanceOrNull<OrderByFilter>()?.let {
+                addQueryParameter("order", it.selectedValue())
+            }
+            filters.firstInstanceOrNull<GenreListFilter>()?.let { filter ->
+                addQueryParameter("genres", filter.state.filter { it.isIncluded() }.joinToString(",") { it.value })
+                addQueryParameter("blacklist", filter.state.filter { it.isExcluded() }.joinToString(",") { it.value })
             }
             addQueryParameter("page", "$page")
             addQueryParameter("limit", "$SEARCH_LIMIT")
@@ -95,56 +74,49 @@ class OppaiStream : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "div.in-grid > a"
-
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val elements = document.select(searchMangaSelector())
+        val elements = document.select("div.in-grid > a")
 
         val mangas = elements.map { element ->
-            searchMangaFromElement(element)
+            SManga.create().apply {
+                thumbnail_url = element.select("img.read-cover").attr("src")
+                title = element.select("h3.man-title").text()
+                val rawUrl = element.absUrl("href")
+                val url = if (rawUrl.contains("/fw?to=")) {
+                    URLDecoder.decode(rawUrl.substringAfter("/fw?to="), "UTF-8")
+                } else {
+                    rawUrl
+                }
+                setUrlWithoutDomain(url)
+            }
         }
 
-        val hasNextPage = elements.size >= SEARCH_LIMIT
-
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, elements.size >= SEARCH_LIMIT)
     }
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.select("img.read-cover").attr("src")
-        title = element.select("h3.man-title").text()
-        val rawUrl = element.absUrl("href")
-        val url = if (rawUrl.contains("/fw?to=")) {
-            URLDecoder.decode(rawUrl.substringAfter("/fw?to="), "UTF-8")
-        } else {
-            rawUrl
-        }
-        setUrlWithoutDomain(url)
-    }
-
-    override fun searchMangaNextPageSelector() = null
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         thumbnail_url = document.select(".cover-img").attr("src")
-        document.select(".manhwa-info-in").let { it ->
-            it.select("h1").run {
+        document.select(".manhwa-info-in").let { info ->
+            info.select("h1").run {
                 title = text().substringBeforeLast("By").trim()
-                author = select("a.red").text().trim()
+                author = select("a.red").text()
                 artist = author
             }
-            genre = it.select(".genres h5").joinToString { it.text() }
-            description = it.select(".description").text()
+            genre = info.select(".genres h5").joinToString { it.text() }
+            description = info.select(".description").text()
         }
     }
 
     // chapter list
-    override fun chapterListSelector() = ".sort-chapters > a"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.select("div > h4").text()
-        date_upload = element.select("div > h6").text().parseRelativeDate()
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".sort-chapters > a").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.select("div > h4").text()
+            date_upload = element.select("div > h6").text().parseRelativeDate()
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
@@ -158,122 +130,17 @@ class OppaiStream : ParsedHttpSource() {
         return GET("$cdnUrl/manhwa/im.php?f-m=$slug&c=$chapNo", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("img").mapIndexed { index, img ->
-        Page(index = index, imageUrl = img.attr("src"))
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("img").mapIndexed { index, img ->
+        Page(index, imageUrl = img.attr("src"))
     }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // filters
-    open class SelectFilter(
-        displayName: String,
-        private val vals: Array<Pair<String, String>>,
-        defaultValue: String? = null,
-    ) : Filter.Select<String>(
-        displayName,
-        vals.map { it.first }.toTypedArray(),
-        vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
-    ) {
-        fun selectedValue() = vals[state].second
-    }
-
-    private class OrderByFilter(defaultOrder: String? = null) :
-        SelectFilter(
-            "Sort By",
-            arrayOf(
-                Pair("", ""),
-                Pair("A-Z", "az"),
-                Pair("Z-A", "za"),
-                Pair("Recently Released", "recent"),
-                Pair("Oldest Releases", "old"),
-                Pair("Most Views", "views"),
-                Pair("Highest Rated", "rating"),
-                Pair("Recently Uploaded", "uploaded"),
-            ),
-            defaultOrder,
-        )
-
-    internal class TriState(name: String, val value: String) : Filter.TriState(name)
-
-    private fun getGenreList(): List<TriState> = listOf(
-        TriState("Adventure", "adventure"),
-        TriState("Beach", "beach"),
-        TriState("Blackmail", "blackmail"),
-        TriState("Cheating", "cheating"),
-        TriState("Comedy", "comedy"),
-        TriState("Cooking", "cooking"),
-        TriState("Drama", "drama"),
-        TriState("Fantasy", "fantasy"),
-        TriState("Harem", "harem"),
-        TriState("Historical", "historical"),
-        TriState("Horror", "horror"),
-        TriState("Incest", "incest"),
-        TriState("Mind Break", "mindbreak"),
-        TriState("Mind Control", "mindcontrol"),
-        TriState("Monster", "monster"),
-        TriState("Mystery", "mystery"),
-        TriState("NTR", "ntr"),
-        TriState("Psychological", "psychological"),
-        TriState("Rape", "rape"),
-        TriState("Reverse Rape", "reverserape"),
-        TriState("Romance", "romance"),
-        TriState("School Life", "schoollife"),
-        TriState("Sci-fi", "sci-fi"),
-        TriState("Secret Relationship", "secretrelationship"),
-        TriState("Slice of Life", "sliceoflife"),
-        TriState("Smut", "smut"),
-        TriState("Sports", "sports"),
-        TriState("Supernatural", "supernatural"),
-        TriState("Tragedy", "tragedy"),
-        TriState("Yaoi", "yaoi"),
-        TriState("Yuri", "yuri"),
-        TriState("Big Boobs", "bigboobs"),
-        TriState("Black Hair", "blackhair"),
-        TriState("Blonde Hair", "blondehair"),
-        TriState("Blue Hair", "bluehair"),
-        TriState("Brown Hair", "brownhair"),
-        TriState("Cosplay", "cosplay"),
-        TriState("Dark Skin", "darkskin"),
-        TriState("Demon", "demon"),
-        TriState("Dominant Girl", "dominantgirl"),
-        TriState("Elf", "elf"),
-        TriState("Futanari", "futanari"),
-        TriState("Glasses", "glasses"),
-        TriState("Green Hair", "greenhair"),
-        TriState("Gyaru", "gyaru"),
-        TriState("Inverted Nipples", "invertednipples"),
-        TriState("Loli", "loli"),
-        TriState("Maid", "maid"),
-        TriState("Milf", "milf"),
-        TriState("Nekomimi", "nekomimi"),
-        TriState("Nurse", "nurse"),
-        TriState("Pink Hair", "pinkhair"),
-        TriState("Pregnant", "pregnant"),
-        TriState("Purple Hair", "purplehair"),
-        TriState("Red Hair", "redhair"),
-        TriState("School Girl", "schoolgirl"),
-        TriState("Short Hair", "shorthair"),
-        TriState("Small Boobs", "smallboobs"),
-        TriState("Succubus", "succubus"),
-        TriState("Swimsuit", "swimsuit"),
-        TriState("Teacher", "teacher"),
-        TriState("Tsundere", "tsundere"),
-        TriState("Vampire", "vampire"),
-        TriState("Virgin", "virgin"),
-        TriState("White Hair", "whitehair"),
-        TriState("Old", "old"),
-        TriState("Shota", "shota"),
-        TriState("Trap", "trap"),
-        TriState("Ugly Bastard", "uglybastard"),
-    )
-
-    private class GenreListFilter(genres: List<OppaiStream.TriState>) : Filter.Group<TriState>("Genre", genres)
-
     override fun getFilterList() = FilterList(
         OrderByFilter(),
         GenreListFilter(getGenreList()),
     )
-
-    // Unused
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // helpers
     private fun String.parseRelativeDate(): Long {
@@ -284,51 +151,22 @@ class OppaiStream : ParsedHttpSource() {
             set(Calendar.MILLISECOND, 0)
         }
 
-        var parsedDate = 0L
-
         val relativeDate = try {
             this.split(" ")[0].trim().toInt()
         } catch (e: NumberFormatException) {
             return 0L
         }
 
-        when {
-            // parse: 30 seconds ago
-            "second" in this -> {
-                parsedDate = now.apply { add(Calendar.SECOND, -relativeDate) }.timeInMillis
-            }
-
-            // parses: "42 minutes ago"
-            "minute" in this -> {
-                parsedDate = now.apply { add(Calendar.MINUTE, -relativeDate) }.timeInMillis
-            }
-
-            // parses: "1 hour ago" and "2 hours ago"
-            "hour" in this -> {
-                parsedDate = now.apply { add(Calendar.HOUR, -relativeDate) }.timeInMillis
-            }
-
-            // parses: "2 days ago"
-            "day" in this -> {
-                parsedDate = now.apply { add(Calendar.DAY_OF_YEAR, -relativeDate) }.timeInMillis
-            }
-
-            // parses: "2 weeks ago"
-            "week" in this -> {
-                parsedDate = now.apply { add(Calendar.WEEK_OF_YEAR, -relativeDate) }.timeInMillis
-            }
-
-            // parses: "2 months ago"
-            "month" in this -> {
-                parsedDate = now.apply { add(Calendar.MONTH, -relativeDate) }.timeInMillis
-            }
-
-            // parse: "2 years ago"
-            "year" in this -> {
-                parsedDate = now.apply { add(Calendar.YEAR, -relativeDate) }.timeInMillis
-            }
+        return when {
+            "second" in this -> now.apply { add(Calendar.SECOND, -relativeDate) }.timeInMillis
+            "minute" in this -> now.apply { add(Calendar.MINUTE, -relativeDate) }.timeInMillis
+            "hour" in this -> now.apply { add(Calendar.HOUR, -relativeDate) }.timeInMillis
+            "day" in this -> now.apply { add(Calendar.DAY_OF_YEAR, -relativeDate) }.timeInMillis
+            "week" in this -> now.apply { add(Calendar.WEEK_OF_YEAR, -relativeDate) }.timeInMillis
+            "month" in this -> now.apply { add(Calendar.MONTH, -relativeDate) }.timeInMillis
+            "year" in this -> now.apply { add(Calendar.YEAR, -relativeDate) }.timeInMillis
+            else -> 0L
         }
-        return parsedDate
     }
 
     companion object {

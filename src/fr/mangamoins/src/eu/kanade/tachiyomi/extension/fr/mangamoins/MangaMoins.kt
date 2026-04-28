@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.util.Locale
@@ -25,6 +26,21 @@ class MangaMoins : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api/v1"
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            if (response.code == 403 && request.url.toString().contains("/api/v1/")) {
+                response.close()
+                val homeRequest = GET(baseUrl, headers)
+                super.client.newCall(homeRequest).execute().close()
+                return@addInterceptor chain.proceed(request)
+            }
+            response
+        }
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")

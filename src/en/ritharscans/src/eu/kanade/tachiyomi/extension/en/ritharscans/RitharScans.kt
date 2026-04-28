@@ -67,31 +67,28 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
     override val typeSelector = "[alt=Type]"
 
     override fun pageListParse(document: Document): List<Page> {
-        val (pages, baseLink) = document.selectFirst("[x-data*=pages]")!!.attr("x-data")
-            .replace(spaces, "")
-            .let {
-                val pages = pagesRegex.find(it)!!.groupValues[1]
-                    .replace("&quot;", "\"")
-                    .parseAs<List<Path>>()
+        val data = document.selectFirst("script[type=\"application/ld+json\"]")!!.data().parseAs<ChapterLD>()
+        val seriesID = data.url.substringAfterLast('/')
+        val chapterID = data.isPartOf.url.substringAfterLast('/')
 
-                val baseLink = linkRegex.find(
-                    it.replace("\"", "'"),
-                )!!.groupValues[1]
-
-                pages to baseLink
-            }
-
-        return pages.mapIndexed { i, img ->
-            Page(i, document.location(), baseLink + img.path)
+        return (1..data.numberOfPages).mapIndexed { i, page ->
+            Page(
+                i,
+                document.location(),
+                "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
+            )
         }
     }
 }
 
-private val spaces = Regex("\\s")
-private val pagesRegex = Regex("pages:(\\[[^]]+])")
-private val linkRegex = Regex("baseLink:'([^']+)'")
+@Serializable
+internal class ChapterLD(
+    val isPartOf: SeriesLD,
+    val numberOfPages: Int,
+    val url: String,
+)
 
 @Serializable
-class Path(
-    val path: String,
+internal class SeriesLD(
+    val url: String,
 )

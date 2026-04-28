@@ -106,6 +106,9 @@ class TiaManhwa :
         return MangasPage(mangas, hasNextPage)
     }
 
+    // Details
+    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div"
+
     // Chapters
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-item, div.chapter"
 }
