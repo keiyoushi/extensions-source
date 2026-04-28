@@ -101,6 +101,18 @@ class MissKon : SimpleParsedHttpSource() {
             }
         }
     }
+
+    /* Related titles */
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val document = response.asJsoup()
+        return document.select(".content > .yarpp-related a.yarpp-thumbnail").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.attr("abs:href"))
+                title = element.attr("title")
+                thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+            }
+        }
+    }
     // endregion
 
     // region Pages
