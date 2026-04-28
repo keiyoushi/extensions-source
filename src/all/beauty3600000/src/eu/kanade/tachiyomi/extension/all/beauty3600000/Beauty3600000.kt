@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.beauty3600000
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,6 +13,11 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -123,7 +129,46 @@ class Beauty3600000 : HttpSource() {
         headers,
     )
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<PostDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<PostDto>().toSManga().apply {
+        runCatching {
+            runBlocking {
+                getTags(url)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { tags -> genre = tags.joinToString { it.name } }
+            }
+        }
+    }
+
+    private suspend fun getTags(mangaId: String): List<TermDto> {
+        val request = GET(
+            baseUrl.toHttpUrlOrNull()!!.newBuilder()
+                .addPathSegments(API_BASE)
+                .addPathSegment("tags")
+                .addQueryParameter("post", mangaId)
+                .build(),
+            headers,
+        )
+        return client.newCall(request).awaitSuccess()
+            .parseAs<List<TermDto>>()
+    }
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val tags = getTags(manga.url)
+
+        return tags.parallelCatchingFlatMap { tag ->
+            val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
+                .addPathSegments(API_BASE)
+                .addPathSegment("posts")
+                .apply {
+                    addQueryParameter("page", "1")
+                    addQueryParameter("per_page", PER_PAGE.toString())
+                    addQueryParameter("tags", tag.id.toString())
+                }.build()
+
+            client.newCall(GET(url, headers)).awaitSuccess()
+                .use { searchMangaParse(it) }.mangas
+        }
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/?p=${manga.url}"
 
@@ -173,10 +218,26 @@ class Beauty3600000 : HttpSource() {
         return MangasPage(mangas, currentPage < totalPages)
     }
 
+    /**
+     * Parallel implementation of [Iterable.flatMap], but running
+     * the transformation function inside a try-catch block.
+     */
+    private suspend inline fun <A, B> Iterable<A>.parallelCatchingFlatMap(crossinline f: suspend (A) -> Iterable<B>): List<B> = withContext(Dispatchers.IO) {
+        map {
+            async {
+                try {
+                    f(it)
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                    emptyList()
+                }
+            }
+        }.awaitAll().flatten()
+    }
+
     // disable suggested mangas on Komikku
     // site doesn't support keyword search and too slow
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
 
     companion object {
         private const val API_BASE = "wp-json/wp/v2"
