@@ -22,15 +22,15 @@ import okhttp3.Response
 class ShadowManga : HttpSource() {
 
     override val name = "Shadow Manga"
-    override val baseUrl = "https://shadowmanga.es"
+    override val baseUrl = "https://shademanga.com"
     override val lang = "es"
     override val supportsLatest = true
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val cdnHosts = listOf(
-        "media.shadowmanga.es",
-        "cdn.shadowmanga.es",
+        "media.shademanga.com",
+        "cdn.shademanga.com",
     )
 
     private val fallbackPrefix = "/api/media/"
