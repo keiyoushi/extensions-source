@@ -2,6 +2,7 @@ ext {
     extName = 'TCB Scans'
     extClass = '.TCBScans'
     extVersionCode = 12
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
