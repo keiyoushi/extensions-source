@@ -15,8 +15,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -337,53 +335,11 @@ class E621 :
         }.toMap()
     }
 
+
     private fun parseDate(dateStr: String): Long = try {
         val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US)
         format.parse(dateStr)?.time ?: 0L
     } catch (e: Exception) {
         0L
     }
-
-    // JSON
-
-    @Serializable
-    data class Pool(
-        val id: Int,
-        val name: String,
-        val description: String = "",
-        @SerialName("post_ids") val postIds: List<Int> = emptyList(),
-        @SerialName("is_active") val isActive: Boolean? = null,
-        val category: String? = null,
-        @SerialName("updated_at") val updatedAt: String = "",
-    )
-
-    @Serializable
-    data class PostsResponse(
-        val posts: List<Post> = emptyList(),
-    )
-
-    @Serializable
-    data class Post(
-        val id: Int,
-        val flags: Flags = Flags(),
-        val preview: ImageData = ImageData(),
-        val sample: ImageData = ImageData(),
-        val file: ImageData = ImageData(),
-        val tags: Tags = Tags(),
-    )
-
-    @Serializable
-    data class Flags(
-        val deleted: Boolean = false,
-    )
-
-    @Serializable
-    data class ImageData(
-        val url: String? = null,
-    )
-
-    @Serializable
-    data class Tags(
-        val artist: List<String> = emptyList(),
-    )
 }
