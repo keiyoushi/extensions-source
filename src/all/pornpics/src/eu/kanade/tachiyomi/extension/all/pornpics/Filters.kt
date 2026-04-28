@@ -3,10 +3,9 @@ package eu.kanade.tachiyomi.extension.all.pornpics
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.lib.i18n.Intl
-import kotlinx.serialization.Serializable
 import java.util.Locale
 
-class PornPicsFilters {
+class Filters {
 
     data class SortOption(val name: String, val urlPart: String? = null) {
         override fun toString() = this.name
@@ -25,7 +24,7 @@ class PornPicsFilters {
         ;
 
         companion object {
-            val mNameToCategoryType = CategoryType.values().associateBy { it.name.lowercase(Locale.US) }
+            private val mNameToCategoryType = CategoryType.values().associateBy { it.name.lowercase(Locale.US) }
 
             fun of(name: String) = mNameToCategoryType[name.lowercase(Locale.US)]!!
         }
@@ -74,9 +73,6 @@ class PornPicsFilters {
             ),
         )
 
-        @Serializable
-        data class RecommendCategoryDto(val name: String, val categoryTypeName: String, val link: String)
-
         fun createRecommendSelector(intl: Intl): CategorySelector {
             val options = JsonFileLoader.loadLangJsonAs<List<RecommendCategoryDto>>(
                 "recommend_categories",
@@ -91,15 +87,11 @@ class PornPicsFilters {
             )
         }
 
-        @Serializable
-        data class CategoryDto(val name: String, val link: String)
-
         fun createCategorySelector(intl: Intl): CategorySelector {
             val options = JsonFileLoader.loadLangJsonAs<List<CategoryDto>>("categories", intl.chosenLanguage)
                 .map { CategoryOption(it.name, CategoryType.CATEGORY, it.link) }
                 .sortedBy { it.name }
                 .toTypedArray()
-
             return CategorySelector(
                 intl["filter.category-type.categories.title"],
                 options,
@@ -111,7 +103,6 @@ class PornPicsFilters {
                 .map { CategoryOption(it.name, CategoryType.TAG, it.link) }
                 .sortedBy { it.name }
                 .toTypedArray()
-
             return CategorySelector(
                 intl["filter.category-type.tags.title"],
                 options,
