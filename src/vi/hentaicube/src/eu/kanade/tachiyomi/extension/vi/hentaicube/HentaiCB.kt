@@ -155,10 +155,6 @@ class HentaiCB :
             var page = 1
 
             while (true) {
-                if (page > 1) {
-                    Thread.sleep(250)
-                }
-
                 val xhrRequest = xhrChaptersRequest(mangaUrl, page)
                 var xhrResponse = client.newCall(xhrRequest).execute()
 
