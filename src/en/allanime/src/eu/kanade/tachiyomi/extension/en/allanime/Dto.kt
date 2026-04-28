@@ -6,6 +6,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
+import org.jsoup.Jsoup
 
 typealias ApiPopularResponse = Data<PopularData>
 
@@ -82,7 +83,7 @@ class Manga(
         title = englishName ?: name
         url = "/manga/$id/${name.titleToSlug()}"
         thumbnail_url = thumbnail?.parseThumbnailUrl()
-        description = this@Manga.description?.parseDescription()
+        description = this@Manga.description?.let { Jsoup.parseBodyFragment(it).wholeText() }
         if (!altNames.isNullOrEmpty()) {
             if (description.isNullOrEmpty()) {
                 description = "Alternative Titles:\n"
@@ -148,8 +149,14 @@ class DateDto(
 
 // page list
 @Serializable
+class EncryptedData(
+    @SerialName("tobeparsed")
+    val encrypted: String,
+)
+
+@Serializable
 class PageListData(
-    @SerialName("chaptersForRead") val pageList: Edges<Servers>?,
+    @SerialName("chapterPages") val pageList: Edges<Servers>?,
 )
 
 @Serializable

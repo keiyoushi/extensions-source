@@ -64,6 +64,21 @@ fragment AlbumStandard on Album {
 }
 """.trimIndent()
 
+val albumListRelatedQuery = $$"""
+query AlbumListRelated($id: ID!) {
+    album {
+        list_related(id: $id) {
+            more_like_this { ...AlbumInSearchList }
+            items_liked_like_this { ...AlbumInSearchList }
+            items_created_by_this_user { ...AlbumInSearchList }
+        }
+    }
+}
+fragment AlbumInSearchList on Album {
+    title url cover { url }
+}
+""".trimIndent()
+
 const val MERGE_CHAPTER_PREF_KEY = "MERGE_CHAPTER"
 const val MERGE_CHAPTER_PREF_TITLE = "Merge Chapter"
 const val MERGE_CHAPTER_PREF_SUMMARY = "If checked, merges all content of one album into chapters of up to 1000 images each, labeled as 'Merged Chapter (Part 1)', 'Merged Chapter (Part 2)', and so on. Note: you must be logged into the WebView to access more than 1000 images."

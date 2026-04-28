@@ -96,7 +96,7 @@ const val PAGE_QUERY: String = $$"""
         $translationType: VaildTranslationTypeMangaEnumType!
         $chapterNum: String!
     ) {
-        chaptersForRead(
+        chapterPages(
             mangaId: $id
             translationType: $translationType
             chapterString: $chapterNum

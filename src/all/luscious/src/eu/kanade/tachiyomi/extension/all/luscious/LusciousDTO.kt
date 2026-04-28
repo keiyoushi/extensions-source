@@ -36,6 +36,33 @@ class AlbumList(
     val items: List<Album>,
 )
 
+// ALBUM RELATED
+@Serializable
+class AlbumRelatedResponse(
+    val data: AlbumRelatedData,
+)
+
+@Serializable
+class AlbumRelatedData(
+    val album: AlbumRelatedDataAlbum,
+)
+
+@Serializable
+class AlbumRelatedDataAlbum(
+    @SerialName("list_related")
+    val listRelated: AlbumRelated,
+)
+
+@Serializable
+class AlbumRelated(
+    @SerialName("more_like_this")
+    val moreLikeThis: List<Album>?,
+    @SerialName("items_liked_like_this")
+    val itemsLikedLikeThis: List<Album>?,
+    @SerialName("items_created_by_this_user")
+    val itemsCreatedByThisUser: List<Album>?,
+)
+
 // ALBUM
 @Serializable
 class Album(

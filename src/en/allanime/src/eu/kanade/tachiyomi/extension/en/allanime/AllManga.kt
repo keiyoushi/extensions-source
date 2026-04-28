@@ -216,7 +216,7 @@ class AllManga :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pageListData = response.parseAs<ApiPageListResponse>().data.pageList
+        val pageListData = response.decryptPageList().pageList
             ?: return emptyList()
 
         val pages = pageListData.edges.firstOrNull {
@@ -230,9 +230,9 @@ class AllManga :
 
         val imageDomain = pages.serverUrl?.let { server ->
             if (server.matches(urlRegex)) {
-                server.removeSuffix("/")
+                "${server.removeSuffix("/")}/"
             } else {
-                "https://${server.removeSuffix("/")}"
+                "https://${server.removeSuffix("/")}/"
             }
         } ?: "https://ytimgf.youtube-anime.com/"
 

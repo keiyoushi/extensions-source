@@ -14,12 +14,17 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -27,7 +32,7 @@ import java.util.Locale
 class HentaiCB :
     Madara(
         "CBHentai",
-        "https://2tencb.net",
+        "https://2tencb.pro",
         "vi",
         SimpleDateFormat("dd/MM/yyyy", Locale("vi")),
     ),
@@ -135,6 +140,58 @@ class HentaiCB :
     // Change old entries from mangaSubString
     override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga)
         .replace(oldMangaUrlRegex, "$baseUrl/$mangaSubString/")
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val chaptersWrapper = document.select("div[id^=manga-chapters-holder]")
+
+        var chapterElements = document.select(chapterListSelector())
+
+        if (chapterElements.isEmpty() && !chaptersWrapper.isNullOrEmpty()) {
+            val mangaUrl = document.location().removeSuffix("/")
+            val mangaId = chaptersWrapper.attr("data-id")
+
+            val allChapters = Elements()
+            var page = 1
+
+            while (true) {
+                val xhrRequest = xhrChaptersRequest(mangaUrl, page)
+                var xhrResponse = client.newCall(xhrRequest).execute()
+
+                // Newer Madara versions throws HTTP 400 when using the old endpoint.
+                if (xhrResponse.code == 400 && page == 1) {
+                    xhrResponse.close()
+                    val oldRequest = oldXhrChaptersRequest(mangaId)
+                    xhrResponse = client.newCall(oldRequest).execute()
+                }
+
+                val xhrDocument = xhrResponse.asJsoup()
+                allChapters.addAll(xhrDocument.select(chapterListSelector()))
+
+                val hasNextPage = xhrDocument.selectFirst("div.pagination a[data-page='${page + 1}']") != null
+                xhrResponse.close()
+
+                if (!hasNextPage) {
+                    break
+                }
+                page++
+            }
+            chapterElements = allChapters
+        }
+
+        return chapterElements.map(::chapterFromElement)
+    }
+
+    private fun xhrChaptersRequest(mangaUrl: String, page: Int): Request {
+        val request = xhrChaptersRequest(mangaUrl)
+        if (page <= 1) return request
+
+        val url = request.url.newBuilder()
+            .addQueryParameter("t", page.toString())
+            .build()
+
+        return request.newBuilder().url(url).build()
+    }
 
     override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).distinctBy { it.imageUrl }
 

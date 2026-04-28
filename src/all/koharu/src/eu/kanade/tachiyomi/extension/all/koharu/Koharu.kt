@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetched
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -450,6 +451,15 @@ class Koharu(
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, lazyHeaders)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun relatedMangaListRequest(manga: SManga) = POST("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
+
+    override suspend fun fetchRelatedMangaList(manga: SManga) = clearanceClient.newCall(relatedMangaListRequest(manga))
+        .awaitSuccess()
+        .use { response ->
+            val data = response.parseAs<MangaData>()
+            data.similar.map(::getManga)
+        }
 
     // Settings
 

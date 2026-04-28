@@ -34,6 +34,7 @@ class YuriNeko : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
+        .addInterceptor(ImageDecryptor::interceptor)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -262,6 +263,17 @@ class YuriNeko : HttpSource() {
             ?: normalizeChapterImageUrl(value)
     }
 
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl!!
+        val xIk = ImageDecryptor.extractKey(imageUrl)
+
+        val imageHeaders = headersBuilder().apply {
+            xIk?.let { add("x-ik", it) }
+        }.build()
+
+        return GET(imageUrl, imageHeaders)
+    }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun cdnImageUrl(path: String?): String? {
@@ -288,6 +300,9 @@ class YuriNeko : HttpSource() {
             resolved.startsWith("/chapters/") || resolved.startsWith("chapters/") -> {
                 cdnImageUrl(resolved)
             }
+            resolved.startsWith("/api/img") -> {
+                "$baseUrl$resolved"
+            }
             else -> null
         }
     }
@@ -305,6 +320,7 @@ class YuriNeko : HttpSource() {
         }.getOrNull() ?: return null
 
         return decoded.substringBefore('|')
+            .takeIf { it.startsWith("http") || it.startsWith("/chapters/") || it.startsWith("chapters/") }
     }
 
     private fun resolveMangaId(response: Response): String = response.request.url.mangaIdOrNull()
@@ -341,7 +357,7 @@ class YuriNeko : HttpSource() {
         private val UUID_REGEX = Regex(UUID_PATTERN, RegexOption.IGNORE_CASE)
         private val MANGA_PATH_ID_REGEX = Regex("/manga/($UUID_PATTERN)", RegexOption.IGNORE_CASE)
         private val CHAPTER_NUMBER_REGEX = Regex("""\d+(?:\.\d+)?""")
-        private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\\\s]+|/?chapters/[^"'\\\s]+)""")
+        private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\s]+|/?chapters/[^"'\\\s]+)""")
         private val CHAPTER_IMAGE_PATH_REGEX = Regex("""(?:^|/)chapters/""")
     }
 }
