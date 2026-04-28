@@ -4,8 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ComikeyComic(
-    val id: Int,
+class ComikeyComic(
     val link: String,
     val name: String,
     val author: List<ComikeyAuthor>,
@@ -13,56 +12,53 @@ data class ComikeyComic(
     val tags: List<ComikeyNameWrapper>,
     val description: String,
     val excerpt: String,
-    val e4pid: String,
     val format: Int,
-    val uslug: String,
     @SerialName("full_cover") val fullCover: String,
     @SerialName("update_status") val updateStatus: Int,
     @SerialName("update_text") val updateText: String,
 )
 
 @Serializable
-data class ComikeyEpisodeListResponse(
+class ComikeyEpisodeListResponse(
     val episodes: List<ComikeyEpisode> = emptyList(),
 )
 
 @Serializable
-data class ComikeyEpisode(
+class ComikeyEpisode(
     val id: String,
     val number: Float = 0F,
     val title: String,
     val subtitle: String? = null,
     val releasedAt: String,
-    val availability: ComikeyEpisodeAvailability,
-    val finalPrice: Int = 0,
-    val owned: Boolean = false,
+    private val finalPrice: Int = 0,
+    private val owned: Boolean = false,
 ) {
-    val readable
+    val readable: Boolean
         get() = finalPrice == 0 || owned
 }
 
 @Serializable
-data class ComikeyEpisodeManifest(
+class ComikeyEpisodeManifest(
     val metadata: ComikeyEpisodeManifestMetadata,
     val readingOrder: List<ComikeyPage>,
 )
 
 @Serializable
-data class ComikeyEpisodeManifestMetadata(
+class ComikeyEpisodeManifestMetadata(
     val readingProgression: String,
 )
 
 @Serializable
-data class ComikeyPage(
+class ComikeyPage(
     val href: String,
     val type: String,
     val height: Int,
     val width: Int,
-    val alternate: List<ComikeyAlternatePage>,
+    val alternate: List<ComikeyAlternatePage> = emptyList(),
 )
 
 @Serializable
-data class ComikeyAlternatePage(
+class ComikeyAlternatePage(
     val href: String,
     val type: String,
     val height: Int,
@@ -70,22 +66,11 @@ data class ComikeyAlternatePage(
 )
 
 @Serializable
-data class ComikeyEpisodeAvailability(
-    val purchaseEnabled: Boolean = false,
-)
-
-@Serializable
-data class ComikeyLmaoInitData(
-    val manifest: String,
-)
-
-@Serializable
-data class ComikeyNameWrapper(
+class ComikeyNameWrapper(
     val name: String,
 )
 
 @Serializable
-data class ComikeyAuthor(
-    val id: Int,
+class ComikeyAuthor(
     val name: String,
 )
