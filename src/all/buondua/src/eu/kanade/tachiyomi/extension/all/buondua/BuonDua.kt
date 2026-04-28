@@ -4,24 +4,25 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class BuonDua : ParsedHttpSource() {
+class BuonDua : HttpSource() {
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
@@ -36,69 +37,68 @@ class BuonDua : ParsedHttpSource() {
         .setRandomUserAgent(UserAgentType.MOBILE)
 
     // Latest
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").attr("abs:src")
-        manga.title = element.select(".item-content .item-link").text()
-        manga.setUrlWithoutDomain(element.select(".item-content .item-link").attr("abs:href"))
-        return manga
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}", headers)
 
-    override fun latestUpdatesNextPageSelector() = ".pagination-next:not([disabled])"
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}")
-
-    override fun latestUpdatesSelector() = ".blog > div"
+    override fun latestUpdatesParse(response: Response): MangasPage = parseMangasPage(response)
 
     // Popular
-    override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
-    override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}", headers)
 
-    override fun popularMangaSelector() = latestUpdatesSelector()
+    override fun popularMangaParse(response: Response): MangasPage = parseMangasPage(response)
 
     // Search
-    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
-    override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tagFilter = filters.findInstance<TagFilter>()!!
+        val tagFilter = filters.firstInstanceOrNull<Filter.Text>()
         return when {
-            query.isNotEmpty() -> GET("$baseUrl/?search=$query&start=${20 * (page - 1)}")
-            tagFilter.state.isNotEmpty() -> GET("$baseUrl/tag/${tagFilter.state}&start=${20 * (page - 1)}")
+            query.isNotEmpty() -> GET("$baseUrl/?search=$query&start=${20 * (page - 1)}", headers)
+            tagFilter?.state?.isNotEmpty() == true -> GET("$baseUrl/tag/${tagFilter.state}&start=${20 * (page - 1)}", headers)
             else -> popularMangaRequest(page)
         }
     }
 
-    override fun searchMangaSelector() = latestUpdatesSelector()
+    override fun searchMangaParse(response: Response): MangasPage = parseMangasPage(response)
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.title = document.select(".article-header").text()
-        manga.description = document.select(".article-info > strong").text().trim()
-        val genres = mutableListOf<String>()
-        document.select(".article-tags").first()!!.select(".tags > .tag").forEach {
-            genres.add(it.text().substringAfter("#"))
+    private fun parseMangasPage(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".blog > div").mapNotNull { element ->
+            val link = element.selectFirst(".item-content .item-link") ?: return@mapNotNull null
+            SManga.create().apply {
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = link.text()
+                setUrlWithoutDomain(link.attr("abs:href"))
+            }
         }
-        manga.genre = genres.joinToString(", ")
-        return manga
+        val hasNextPage = document.selectFirst(".pagination-next:not([disabled])") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    // Details
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst(".article-header")?.text() ?: ""
+            description = document.selectFirst(".article-info > strong")?.text()
+            genre = document.selectFirst(".article-tags")?.select(".tags > .tag")
+                ?.joinToString(", ") { it.text().substringAfter("#") }
+        }
+    }
+
+    // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
         val dateUploadStr = doc.selectFirst(".article-info > small")?.text()
         val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
-        // /xiuren-no-10051---10065-1127-photos-467c89d5b3e204eebe33ddbc54d905b1-47452?page=57
+
         val maxPage = doc.select("nav.pagination:first-of-type a.pagination-next").last()
-            ?.absUrl("href")
+            ?.attr("abs:href")
             ?.takeIf { it.startsWith("http") }
-            ?.toHttpUrl()
-            ?.queryParameter("page")?.toInt() ?: 1
-        val basePageUrl = response.request.url
+            ?.toHttpUrlOrNull()
+            ?.queryParameter("page")?.toIntOrNull() ?: 1
+
+        val basePageUrl = response.request.url.toString()
+
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
                 setUrlWithoutDomain("$basePageUrl?page=$page")
@@ -109,23 +109,23 @@ class BuonDua : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> = document.select(".article-fulltext img")
-        .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".article-fulltext img").mapIndexed { i, imgEl ->
+            Page(i, imageUrl = imgEl.attr("abs:src"))
+        }
+    }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
         Filter.Separator(),
-        TagFilter(),
+        object : Filter.Text("Tag ID") {},
     )
 
-    class TagFilter : Filter.Text("Tag ID")
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
-
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US)
+        private val DATE_FORMAT = SimpleDateFormat("HH:mm dd-MM-yyyy", Locale.US)
     }
 }
