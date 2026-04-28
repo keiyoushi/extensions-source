@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.vgperson
 
+import android.os.Build.VERSION
+import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,8 +26,12 @@ class Vgperson : HttpSource() {
 
     override val baseUrl = "https://vgperson.com/other/mangaviewer.php"
 
+    private val userAgent =
+        "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
+        .add("User-Agent", userAgent)
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
