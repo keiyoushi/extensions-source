@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.everiaclub
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +16,10 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -161,6 +165,16 @@ class EveriaClub : HttpSource() {
         initialized = true
     }
 
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val genres = manga.genre?.split(",")?.map { it.trim() } ?: return emptyList()
+        return genres.parallelCatchingFlatMap { genre ->
+            val request = searchMangaRequest(1, genre, FilterList())
+            client.newCall(request).awaitSuccess().use { response ->
+                searchMangaParse(response).mangas
+            }
+        }
+    }
+
     // ========================= Chapters =========================
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -267,6 +281,23 @@ class EveriaClub : HttpSource() {
         }
         val hasNextPage = document.selectFirst(".next") != null
         return MangasPage(mangas, hasNextPage)
+    }
+
+    /**
+     * Parallel implementation of [Iterable.flatMap], but running
+     * the transformation function inside a try-catch block.
+     */
+    private suspend inline fun <A, B> Iterable<A>.parallelCatchingFlatMap(crossinline f: suspend (A) -> Iterable<B>): List<B> = withContext(Dispatchers.IO) {
+        map {
+            async {
+                try {
+                    f(it)
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                    emptyList()
+                }
+            }
+        }.awaitAll().flatten()
     }
 
     private fun getDate(str: String): Long {
