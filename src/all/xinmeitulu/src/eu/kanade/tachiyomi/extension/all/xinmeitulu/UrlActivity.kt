@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class XinmeituluUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -18,7 +18,7 @@ class XinmeituluUrlActivity : Activity() {
             val query = fromUrl(pathSegments)
 
             if (query == null) {
-                Log.e("XinmeiTuluUrlActivity", "Unable to parse URI from intent $intent")
+                Log.e("UrlActivity", "Unable to parse URI from intent $intent")
                 finish()
                 exitProcess(1)
             }
@@ -32,7 +32,7 @@ class XinmeituluUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("XinmeiTuluUrlActivity", e.toString())
+                Log.e("UrlActivity", e.toString())
             }
         }
 
