@@ -3,15 +3,17 @@ package eu.kanade.tachiyomi.extension.all.mangatoon
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
@@ -21,7 +23,7 @@ import java.util.concurrent.TimeUnit
 open class MangaToon(
     final override val lang: String,
     private val urlLang: String = lang,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val name = "MangaToon (Limited)"
 
@@ -51,69 +53,81 @@ open class MangaToon(
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        // Portuguese website doesn't seen to have popular titles.
+        // Portuguese website doesn't seem to have popular titles.
         val path = if (lang == "pt-BR") "comic" else "hot"
-
         return GET("$baseUrl/$urlLang/genre/$path?type=1&page=${page - 1}", headers)
     }
 
-    override fun popularMangaSelector() = "div.genre-content div.items a"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("div.content-title").text().trim()
-        thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.genre-content div.items a").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("span.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
-
-    override fun popularMangaNextPageSelector() = "span.next"
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val searchUrl = "$baseUrl/$urlLang/search".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
             .toString()
-
         return GET(searchUrl, headers)
     }
 
-    override fun searchMangaSelector() = "div.comics-result div.recommend-item:has(a[abs:href^=$baseUrl])"
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("div.recommend-comics-title").text().trim()
-        thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.comics-result div.recommend-item:has(a[abs:href^=$baseUrl])").map { element ->
+            SManga.create().apply {
+                title = element.select("div.recommend-comics-title").text()
+                thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            }
+        }
+        val hasNextPage = document.selectFirst("span.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.select("div.content-title").text()
+        thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
+        setUrlWithoutDomain(element.absUrl("href"))
+    }
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        author = document.select("div.detail-author-name span").text()
-            .substringAfter(": ")
-        description = document.select("div.detail-description-short p")
-            .joinToString("\n\n") { it.text() }
-        genre = document.select("div.detail-tags-info span").text()
-            .split("/")
-            .map { it.capitalize(locale) }
-            .sorted()
-            .joinToString { it.trim() }
-        status = document.select("div.detail-status").text().trim().toStatus()
-        val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
-        if (!thumbnail.contains("cartoon-big-images")) {
-            thumbnail_url = thumbnail
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            author = document.select("div.detail-author-name span").text()
+                .substringAfter(": ")
+            description = document.select("div.detail-description-short p")
+                .joinToString("\n\n") { it.text() }
+            genre = document.select("div.detail-tags-info span").text()
+                .split("/")
+                .map { it.capitalize(locale) }
+                .sorted()
+                .joinToString { it.trim() }
+            status = document.select("div.detail-status").text().toStatus()
+            val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
+            if (!thumbnail.contains("cartoon-big-images")) {
+                thumbnail_url = thumbnail
+            }
         }
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "/episodes", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList = super.chapterListParse(response)
+        val document = response.asJsoup()
+        val chapterList = document.select("a.episode-item-new").map { element ->
+            SChapter.create().apply {
+                name = element.select("div.episode-title-new:last-child").text()
+                chapter_number = element.select("div.episode-number").text()
+                    .toFloatOrNull() ?: -1f
+                date_upload = DATE_FORMAT.tryParse(element.select("div.episode-date span.open-date").text())
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
+        }
 
         // Finds the last free chapter to filter the paid ones from the list.
         // The desktop website doesn't indicate which chapters are paid in
@@ -122,10 +136,8 @@ open class MangaToon(
             if (breakpoint > chapterList.size) {
                 return@find false
             }
-
             val pageListRequest = pageListRequest(chapterList[breakpoint - 1])
             val pageListResponse = client.newCall(pageListRequest).execute()
-
             runCatching { pageListParse(pageListResponse) }
                 .getOrDefault(emptyList()).isEmpty()
         }
@@ -135,24 +147,14 @@ open class MangaToon(
             .reversed()
     }
 
-    override fun chapterListSelector() = "a.episode-item-new"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = element.select("div.episode-title-new:last-child").text().trim()
-        chapter_number = element.select("div.episode-number").text().trim()
-            .toFloatOrNull() ?: -1f
-        date_upload = element.select("div.episode-date span.open-date").text().toDate()
-        setUrlWithoutDomain(element.attr("href"))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.pictures div img:first-child")
+            .mapIndexed { i, element -> Page(i, imageUrl = element.imgAttr()) }
+            .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("div.pictures div img:first-child")
-        .mapIndexed { i, element -> Page(i, "", element.imgAttr()) }
-        .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
-
-    override fun imageUrlParse(document: Document) = ""
-
-    private fun String.toDate(): Long = runCatching { DATE_FORMAT.parse(this)?.time }
-        .getOrNull() ?: 0L
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     protected open fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
@@ -186,9 +188,7 @@ open class MangaToon(
             "fin",
         )
 
-        private val DATE_FORMAT by lazy {
-            SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        }
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
         private val POSTER_SUFFIX = "(jpg)-poster(.*)\\d+?$".toRegex()
 
