@@ -167,6 +167,7 @@ class EveriaClub : HttpSource() {
 
     override val disableRelatedMangasBySearch = true
 
+    // TODO: After converting the whole extension to use API, we can request list of tags' ID directly then use them to build queries.
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val genres = manga.genre?.split(",")?.map { it.trim() } ?: return emptyList()
         return genres.parallelCatchingFlatMap { genre ->
@@ -186,7 +187,11 @@ class EveriaClub : HttpSource() {
                     ),
                 )
             } else {
-                searchMangaRequest(1, genre, FilterList())
+                searchMangaRequest(
+                    1,
+                    genre,
+                    FilterList(Filter.Header("Avoid running `launchFilters()`")),
+                )
             }
             client.newCall(request).awaitSuccess().use { response ->
                 searchMangaParse(response).mangas
@@ -266,23 +271,21 @@ class EveriaClub : HttpSource() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val categoriesResponse = client.newCall(GET("$baseUrl/wp-json/wp/v2/categories?per_page=100&hide_empty=true", headers)).execute()
-                val tagsResponse = client.newCall(GET("$baseUrl/wp-json/wp/v2/tags?per_page=100&hide_empty=true&orderby=count&order=desc", headers)).execute()
-
-                if (categoriesResponse.isSuccessful) {
-                    val catDtos = categoriesResponse.parseAs<List<WPCategoryDto>>()
-                    if (catDtos.isNotEmpty()) {
+                client.newCall(GET("$baseUrl/wp-json/wp/v2/categories?per_page=100&hide_empty=true", headers))
+                    .awaitSuccess()
+                    .parseAs<List<WPCategoryDto>>()
+                    .let { catDtos ->
                         categories = arrayOf("Any" to "") + catDtos.map { it.name to it.id.toString() }.toTypedArray()
                     }
-                }
-
-                if (tagsResponse.isSuccessful) {
-                    val tagDtos = tagsResponse.parseAs<List<WPTagDto>>()
-                    tags = tagDtos.map { TagFilter(it.name, it.id) }
-                }
+                client.newCall(GET("$baseUrl/wp-json/wp/v2/tags?per_page=100&hide_empty=true&orderby=count&order=desc", headers))
+                    .awaitSuccess()
+                    .parseAs<List<WPTagDto>>()
+                    .let { tagDtos ->
+                        tags = tagDtos.map { TagFilter(it.name, it.id) }
+                    }
 
                 filtersState = FilterState.Fetched
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 filtersState = FilterState.Unfetched
             }
         }
