@@ -75,7 +75,7 @@ class YuriGarden :
             SManga.create().apply {
                 url = "/comic/${comic.id}"
                 title = comic.title
-                thumbnail_url = comic.image?.toThumbnailUrl()
+                thumbnail_url = comic.image.takeIf(String::isNotBlank)?.toThumbnailUrl()
             }
         }
 
@@ -352,7 +352,20 @@ class YuriGarden :
 
     // disable suggested mangas on Komikku due to heavy rate limit
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
+
+    override fun relatedMangaListRequest(manga: SManga) = GET("$apiUrl/comics/related/${mangaId(manga)}", apiHeaders())
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val result = response.parseAs<List<Comic>>()
+
+        return result.map { comic ->
+            SManga.create().apply {
+                url = "/comic/${comic.id}"
+                title = comic.title
+                thumbnail_url = comic.thumbnail?.toThumbnailUrl()
+            }
+        }
+    }
 
     // ============================== Helpers ================================
 
