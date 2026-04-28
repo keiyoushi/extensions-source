@@ -3,7 +3,7 @@ ext {
     extClass = '.ArtLapsa'
     themePkg = 'keyoapp'
     baseUrl = 'https://artlapsa.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
