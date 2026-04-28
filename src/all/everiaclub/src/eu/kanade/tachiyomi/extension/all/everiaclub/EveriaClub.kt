@@ -170,7 +170,24 @@ class EveriaClub : HttpSource() {
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val genres = manga.genre?.split(",")?.map { it.trim() } ?: return emptyList()
         return genres.parallelCatchingFlatMap { genre ->
-            val request = searchMangaRequest(1, genre, FilterList())
+            val tag = tags.firstOrNull { it.name.equals(genre, ignoreCase = true) }
+            val request = if (tag != null) {
+                searchMangaRequest(
+                    1,
+                    "",
+                    FilterList(
+                        listOf(
+                            TagGroup(
+                                listOf(
+                                    TagFilter(tag.name, tag.id).apply { state = Filter.TriState.STATE_INCLUDE },
+                                ),
+                            ),
+                        ),
+                    ),
+                )
+            } else {
+                searchMangaRequest(1, genre, FilterList())
+            }
             client.newCall(request).awaitSuccess().use { response ->
                 searchMangaParse(response).mangas
             }
