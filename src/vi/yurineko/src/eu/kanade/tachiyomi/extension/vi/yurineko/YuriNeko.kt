@@ -345,7 +345,19 @@ class YuriNeko : HttpSource() {
 
     // disable suggested mangas on Komikku due to heavy rate limit
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
+
+    override fun relatedMangaListRequest(manga: SManga): Request {
+        val mangaId = "$baseUrl${manga.url}"
+            .toHttpUrl()
+            .mangaIdOrNull()
+            ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
+        return GET("$apiUrl/mangas/$mangaId/related", headers)
+    }
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val related = response.parseAs<List<MangaDto>>()
+        return related.map(::mangaFromDto)
+    }
 
     companion object {
         private const val POPULAR_LIMIT = 10
