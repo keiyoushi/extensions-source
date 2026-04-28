@@ -9,7 +9,7 @@ import androidx.preference.Preference
 import keiyoushi.lib.i18n.Intl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-object YellowNotePreferences {
+object Preferences {
 
     private const val PS_KEY_ROOT = "XChina"
     private const val PS_KEY_DOMAIN = "$PS_KEY_ROOT::DOMAIN"
@@ -92,7 +92,7 @@ object YellowNotePreferences {
         entries = LanguageUtils.getSupportedLanguageDisplayNames()
         entryValues = LanguageUtils.getSupportedLanguageKeys()
         setDefaultValue("")
-        setOnPreferenceChangeListener { _, newValue ->
+        setOnPreferenceChangeListener { _, _ ->
             Toast.makeText(
                 context,
                 intl["config.language.changed-success"],
