@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -133,8 +134,8 @@ class KingComiX : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h1.singleTitle-h1, h1.widget-title")?.text() ?: ""
-            author = document.selectFirst("meta[name=author]")?.attr("content") ?: "KingComiX"
+            title = document.selectFirst("h1.singleTitle-h1, h1.widget-title")!!.text()
+            author = document.selectFirst("meta[name=author]")?.attr("content")
 
             val tags = document.select(".caTotal .tagsPost a.taxLink").map { it.text() }
             genre = tags.joinToString(", ")
@@ -143,6 +144,7 @@ class KingComiX : HttpSource() {
                 ?: document.selectFirst(".entry-content img")?.attr("abs:src")
 
             status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
