@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.extension.all.misskon.SourceCategorySelector.Companio
 import eu.kanade.tachiyomi.extension.all.misskon.SourceCategorySelector.Companion.CategoryPresets.TOP
 import eu.kanade.tachiyomi.source.model.Filter
 
-data class SourceCategory(private val name: String, val url: String) {
+class SourceCategory(private val name: String, val url: String) {
     override fun toString() = this.name
 }
 
