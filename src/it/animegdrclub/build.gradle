@@ -1,7 +1,8 @@
 ext {
     extName = 'Anime GDR Club'
     extClass = '.AnimeGDRClub'
-    extVersionCode = 1
+    extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
