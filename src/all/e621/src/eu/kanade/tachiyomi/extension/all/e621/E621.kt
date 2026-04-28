@@ -7,7 +7,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -184,13 +183,30 @@ class E621 :
 
     // Pages
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+
+        return if (chapterUrl.pathSegments.getOrNull(0) == "posts") {
+            val postId = chapterUrl.pathSegments.last().toIntOrNull()
+            val url = "$baseUrl/posts.json".toHttpUrl().newBuilder().apply {
+                if (postId != null) {
+                    addQueryParameter("tags", "id:$postId")
+                    addQueryParameter("limit", "1")
+                }
+            }.build()
+            GET(url, headers)
+        } else {
+            val poolId = chapterUrl.pathSegments.last()
+            GET("$baseUrl/pools/$poolId.json", headers)
+        }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val url = response.request.url
 
-        // Check if this is a single post chapter (split chapters mode)
-        if (url.pathSegments.getOrNull(0) == "posts") {
-            val postId = url.pathSegments.last().toIntOrNull() ?: return emptyList()
-            val post = batchFetchPosts(listOf(postId)).firstOrNull()
+        // Single post chapter (split chapters mode)
+        if (url.encodedPath == "/posts.json") {
+            val post = response.parseAs<PostsResponse>().posts.firstOrNull()
             val imageUrl = when {
                 post == null -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted" // Not returned by API
                 isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
@@ -199,16 +215,9 @@ class E621 :
             return listOf(Page(0, imageUrl = imageUrl))
         }
 
-        // Otherwise, it's a pool with all pages
-        val poolId = url.pathSegments.last()
-        val poolResponse = client.newCall(
-            GET("$baseUrl/pools.json?search[id]=$poolId&limit=1", headers),
-        ).execute()
-
-        val postIds = poolResponse.parseAs<List<Pool>>()
-            .firstOrNull()
-            ?.postIds
-            ?: return emptyList()
+        // Pool chapter with all pages
+        val postIds = response.parseAs<Pool>().postIds
+        if (postIds.isEmpty()) return emptyList()
 
         val posts = batchFetchPosts(postIds)
         val postMap = posts.associateBy { it.id }
