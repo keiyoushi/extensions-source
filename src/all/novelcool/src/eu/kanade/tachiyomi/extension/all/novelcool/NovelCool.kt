@@ -14,24 +14,21 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,7 +36,7 @@ open class NovelCool(
     final override val baseUrl: String,
     final override val lang: String,
     private val siteLang: String = lang,
-) : ParsedHttpSource(),
+) : HttpSource(),
     ConfigurableSource {
 
     override val name = "NovelCool"
@@ -58,8 +55,6 @@ open class NovelCool(
             .build()
     }
 
-    private val json: Json by injectLazy()
-
     private val preference by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = when (preference.useAppApi) {
@@ -70,22 +65,12 @@ open class NovelCool(
         else -> super.fetchPopularManga(page)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        // popular on the site only have novels
-        return GET("$baseUrl/category/new_list.html", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/new_list.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
-
-        return super.popularMangaParse(response)
+        return parseMangasPage(response.asJsoup())
     }
-
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
-
-    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
-
-    override fun popularMangaSelector() = searchMangaSelector()
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = when (preference.useAppApi) {
         true -> client.newCall(commonApiRequest("$apiUrl/elite/latest/", page))
@@ -99,15 +84,8 @@ open class NovelCool(
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
-
-        return super.latestUpdatesParse(response)
+        return parseMangasPage(response.asJsoup())
     }
-
-    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
-
-    override fun latestUpdatesSelector() = searchMangaSelector()
-
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when (preference.useAppApi) {
         true -> client.newCall(commonApiRequest("$apiUrl/book/search/", page, query))
@@ -151,52 +129,21 @@ open class NovelCool(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
+        val document = response.asJsoup()
         runCatching { fetchGenres(document) }
-
-        return super.searchMangaParse(response)
+        return parseMangasPage(document)
     }
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.select(".book-pic").attr("title")
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        thumbnail_url = element.select("img").imgAttr()
-    }
-
-    override fun searchMangaSelector() = ".book-list .book-item:not(:has(.book-type-novel))"
-
-    override fun searchMangaNextPageSelector() = "div.page-nav a div.next"
-
-    private class AuthorFilter(title: String) : Filter.Text(title)
-
-    private class GenreFilter(title: String, genres: List<Pair<String, String>>) : Filter.Group<Genre>(title, genres.map { Genre(it.first, it.second) }) {
-        val included: List<String>
-            get() = state.filter { it.isIncluded() }.map { it.id }
-
-        val excluded: List<String>
-            get() = state.filter { it.isExcluded() }.map { it.id }
-    }
-    class Genre(name: String, val id: String) : Filter.TriState(name)
-
-    private fun getStatusList() = listOf(
-        Pair("All", ""),
-        Pair("Completed", "YES"),
-        Pair("Ongoing", "NO"),
-    )
-
-    private class StatusFilter(title: String, private val status: List<Pair<String, String>>) : Filter.Select<String>(title, status.map { it.first }.toTypedArray()) {
-        fun getValue() = status[state].second
-    }
-
-    private fun getRatingList() = listOf(
-        Pair("All", ""),
-        Pair("5 Star", "5"),
-        Pair("4 Star", "4"),
-        Pair("3 Star", "3"),
-        Pair("2 Star", "2"),
-    )
-    private class RatingFilter(title: String, private val ratings: List<Pair<String, String>>) : Filter.Select<String>(title, ratings.map { it.first }.toTypedArray()) {
-        fun getValue() = ratings[state].second
+    private fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select(".book-list .book-item:not(:has(.book-type-novel))").map { element ->
+            SManga.create().apply {
+                title = element.select(".book-pic").attr("title")
+                setUrlWithoutDomain(element.select("a").attr("href"))
+                thumbnail_url = element.select("img").imgAttr()
+            }
+        }
+        val hasNextPage = document.selectFirst("div.page-nav a div.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun getFilterList(): FilterList {
@@ -257,13 +204,16 @@ open class NovelCool(
             )
         }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.bookinfo-title")!!.text()
-        description = document.selectFirst("div.bk-summary-txt")?.text()
-        genre = document.select(".bookinfo-category-list a").joinToString { it.text() }
-        author = document.selectFirst(".bookinfo-author > a")?.attr("title")
-        thumbnail_url = document.selectFirst(".bookinfo-pic-img")?.attr("abs:src")
-        status = document.select(".bookinfo-category-list a").first()?.text().parseStatus()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1.bookinfo-title")!!.text()
+            description = document.selectFirst("div.bk-summary-txt")?.text()
+            genre = document.select(".bookinfo-category-list a").joinToString { it.text() }
+            author = document.selectFirst(".bookinfo-author > a")?.attr("title")
+            thumbnail_url = document.selectFirst(".bookinfo-pic-img")?.attr("abs:src")
+            status = document.select(".bookinfo-category-list a").first()?.text().parseStatus()
+        }
     }
 
     private fun String?.parseStatus(): Int {
@@ -275,16 +225,18 @@ open class NovelCool(
         }
     }
 
-    override fun chapterListSelector() = ".chapter-item-list a"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.attr("title")
-        date_upload = element.select(".chapter-item-time").text().parseDate()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(".chapter-item-list a").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("href"))
+                name = element.attr("title")
+                date_upload = element.select(".chapter-item-time").text().parseDate()
+            }
+        }
     }
 
-    private fun String.parseDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
-        .getOrNull() ?: 0L
+    private fun String.parseDate(): Long = DATE_FORMATTER.tryParse(this)
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = pageClient.newCall(pageListRequest(chapter))
         .asObservableSuccess()
@@ -294,8 +246,8 @@ open class NovelCool(
         .addHeader("Referer", baseUrl)
         .build()
 
-    override fun pageListParse(document: Document): List<Page> {
-        var doc = document
+    override fun pageListParse(response: Response): List<Page> {
+        var doc = response.asJsoup()
         val serverUrl = doc.selectFirst("section.section div.post-content-body > a")?.attr("href")
 
         if (serverUrl != null) {
@@ -308,20 +260,23 @@ open class NovelCool(
         val script = doc.select("script:containsData(all_imgs_url)").html()
 
         val images = imgRegex.find(script)?.groupValues?.get(1)
-            ?.let { json.decodeFromString<List<String>>("[$it]") }
+            ?.let { "[$it]".parseAs<List<String>>() }
             ?: return singlePageParse(doc)
 
         return images.mapIndexed { idx, img ->
-            Page(idx, "", img)
+            Page(idx, imageUrl = img)
         }
     }
 
     private fun singlePageParse(document: Document): List<Page> = document.selectFirst(".mangaread-pagenav > .sl-page")?.select("option")
         ?.mapIndexed { idx, page ->
-            Page(idx, page.attr("value"))
+            Page(idx, url = page.attr("value"))
         } ?: emptyList()
 
-    override fun imageUrlParse(document: Document): String = document.select(".mangaread-manga-pic").attr("src")
+    override fun imageUrlParse(response: Response): String {
+        val document = response.asJsoup()
+        return document.select(".mangaread-manga-pic").attr("src")
+    }
 
     private fun Elements.imgAttr(): String = when {
         hasAttr("lazy_url") -> attr("abs:lazy_url")
@@ -383,41 +338,28 @@ open class NovelCool(
             secret = APP_SECRET,
         )
 
-        val body = json.encodeToString(payload)
-            .toRequestBody(JSON_MEDIA_TYPE)
-
-        val apiHeaders = headersBuilder()
-            .add("Content-Length", body.contentLength().toString())
-            .add("Content-Type", body.contentType().toString())
-            .build()
-
-        return POST(url, apiHeaders, body)
+        return POST(url, headers, payload.toJsonRequestBody())
     }
 
     private fun commonApiResponseParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
 
-        val browse = json.decodeFromString<NovelCoolBrowseResponse>(response.body.string())
-
-        val hasNextPage = browse.list?.size == SIZE
-
-        return browse.list?.map {
-            SManga.create().apply {
+        val browse = response.parseAs<NovelCoolBrowseResponse>()
+        val mangas = browse.list?.map {
+            it.toSManga().apply {
                 setUrlWithoutDomain(it.url)
-                title = it.name
-                thumbnail_url = it.cover
             }
-        }.let { MangasPage(it ?: emptyList(), hasNextPage) }
+        }.orEmpty()
+
+        return MangasPage(mangas, browse.list?.size == SIZE)
     }
 
     companion object {
         private const val APP_ID = "202201290625004"
         private const val APP_SECRET = "c73a8590641781f203660afca1d37ada"
         private const val SIZE = 20
-        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
-        }
+
+        private val DATE_FORMATTER = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
         private val imgRegex = Regex("""all_imgs_url\s*:\s*\[\s*([^]]*)\s*,\s*]""")
 
         private const val PREF_API_SEARCH = "pref_use_search_api"
