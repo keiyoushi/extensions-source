@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.extension.ru.inkstory
+package eu.kanade.tachiyomi.extension.ru.inkstory
 
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference

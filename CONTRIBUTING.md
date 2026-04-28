@@ -10,32 +10,69 @@ or fixing it directly by submitting a Pull Request.
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-   1. [Tools](#tools)
-   2. [Cloning the repository](#cloning-the-repository)
-2. [Getting help](#getting-help)
-3. [Writing an extension](#writing-an-extension)
-   1. [Setting up a new Gradle module](#setting-up-a-new-gradle-module)
-   2. [Loading a subset of Gradle modules](#loading-a-subset-of-gradle-modules)
-4. [Core dependencies](#core-dependencies)
-   1. [Extension main class](#extension-main-class)
-   2. [HTML and Image Processing](#html-and-image-processing)
-   3. [OkHttp and Network](#okhttp-and-network)
-   4. [Extension call flow](#extension-call-flow)
-   5. [Misc notes](#misc-notes)
-   6. [Advanced Extension features](#advanced-extension-features)
-5. [Multi-source themes](#multi-source-themes)
-   1. [Creating a new theme](#creating-a-new-theme)
-   2. [Using a Theme](#using-a-theme)
-6. [Running](#running)
-7. [Debugging](#debugging)
-   1. [Android Debugger](#android-debugger)
-   2. [Logs](#logs)
-   3. [Inspecting network calls](#inspecting-network-calls)
-   4. [Using external network inspecting tools](#using-external-network-inspecting-tools)
-8. [Building](#building)
-9. [Submitting the changes](#submitting-the-changes)
-   1. [Pull Request checklist](#pull-request-checklist)
+- [Contributing](#contributing)
+  - [Table of Contents](#table-of-contents)
+  - [Prerequisites](#prerequisites)
+    - [Tools](#tools)
+    - [Cloning the repository](#cloning-the-repository)
+  - [Getting help](#getting-help)
+  - [Writing an extension](#writing-an-extension)
+    - [Setting up a new Gradle module](#setting-up-a-new-gradle-module)
+    - [Loading a subset of Gradle modules](#loading-a-subset-of-gradle-modules)
+      - [Extension file structure](#extension-file-structure)
+      - [AndroidManifest.xml (optional)](#androidmanifestxml-optional)
+      - [build.gradle](#buildgradle)
+    - [Core dependencies](#core-dependencies)
+      - [Extension API](#extension-api)
+      - [lib tools](#lib-tools)
+      - [Available libs](#available-libs)
+      - [Adding a lib dependency](#adding-a-lib-dependency)
+      - [Creating a new lib](#creating-a-new-lib)
+      - [keiyoushi.utils (core utilities)](#keiyoushiutils-core-utilities)
+        - [JSON parsing - `parseAs`](#json-parsing---parseas)
+        - [JSON serialization - `toJsonString` / `toJsonRequestBody`](#json-serialization---tojsonstring--tojsonrequestbody)
+        - [JSON models (DTOs) and serialization](#json-models-dtos-and-serialization)
+        - [Protobuf parsing and serialization — `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization--parseasproto--torequestbodyproto)
+        - [Date parsing - `tryParse`](#date-parsing---tryparse)
+        - [Filter helpers - `firstInstance` / `firstInstanceOrNull`](#filter-helpers---firstinstance--firstinstanceornull)
+        - [Next.js data extraction - `extractNextJs` / `extractNextJsRsc`](#nextjs-data-extraction---extractnextjs--extractnextjsrsc)
+        - [Extracting URLs - `setUrlWithoutDomain` + `absUrl`](#extracting-urls---seturlwithoutdomain--absurl)
+      - [Additional dependencies](#additional-dependencies)
+    - [Extension main class](#extension-main-class)
+      - [Main class key variables](#main-class-key-variables)
+    - [HTML and Image Processing](#html-and-image-processing)
+    - [OkHttp and Network](#okhttp-and-network)
+    - [Extension call flow](#extension-call-flow)
+      - [Popular Manga](#popular-manga)
+      - [Latest Manga](#latest-manga)
+      - [Manga Search](#manga-search)
+        - [Filters](#filters)
+      - [Manga Details](#manga-details)
+      - [Chapter](#chapter)
+      - [Chapter Pages](#chapter-pages)
+    - [Misc notes](#misc-notes)
+    - [Advanced Extension features](#advanced-extension-features)
+      - [Extension logic and app features](#extension-logic-and-app-features)
+      - [URL intent filter](#url-intent-filter)
+      - [Update strategy](#update-strategy)
+      - [Renaming existing sources](#renaming-existing-sources)
+  - [Multi-source themes](#multi-source-themes)
+    - [Creating a new theme](#creating-a-new-theme)
+      - [Theme directory structure](#theme-directory-structure)
+      - [Theme build.gradle.kts](#theme-buildgradlekts)
+      - [Theme main class](#theme-main-class)
+    - [Using a Theme](#using-a-theme)
+  - [Running](#running)
+  - [Debugging](#debugging)
+    - [Android Debugger](#android-debugger)
+    - [Logs](#logs)
+    - [Inspecting network calls](#inspecting-network-calls)
+    - [Using external network inspecting tools](#using-external-network-inspecting-tools)
+      - [Setup your proxy server](#setup-your-proxy-server)
+      - [OkHttp proxy setup](#okhttp-proxy-setup)
+  - [Building](#building)
+  - [Submitting the changes](#submitting-the-changes)
+    - [Pull Request checklist](#pull-request-checklist)
 
 ## Prerequisites
 
@@ -45,10 +82,10 @@ that existing contributors will not actively teach these to you.
 - Basic [Android development](https://developer.android.com/)
 - [Kotlin](https://kotlinlang.org/)
 - Web scraping
-    - [HTML](https://developer.mozilla.org/en-US/docs/Web/HTML)
-    - [CSS selectors](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Selectors)
-    - [OkHttp](https://square.github.io/okhttp/)
-    - [JSoup](https://jsoup.org/)
+  - [HTML](https://developer.mozilla.org/en-US/docs/Web/HTML)
+  - [CSS selectors](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Selectors)
+  - [OkHttp](https://square.github.io/okhttp/)
+  - [JSoup](https://jsoup.org/)
 
 ### Tools
 
@@ -67,10 +104,12 @@ navigate and build. This will also reduce disk usage and network traffic.
 <details><summary>Steps</summary>
 
 1. Do a partial clone.
+
     ```bash
     git clone --filter=blob:none --sparse <fork-repo-url>
     cd extensions-source/
     ```
+
 2. Configure sparse checkout.
 
     There are two modes of pattern matching. The default is cone (🔺) mode.
@@ -106,7 +145,9 @@ navigate and build. This will also reduce disk usage and network traffic.
     # alternatively, if you have VS Code installed
     code .git/info/sparse-checkout
     ```
+
     Here's an example:
+
     ```bash
     /*
     !/src/*
@@ -123,6 +164,7 @@ navigate and build. This will also reduce disk usage and network traffic.
     while retaining project folders, then add the needed sources back manually.
 
 3. Configure remotes.
+
     ```bash
     # add upstream
     git remote add upstream <keiyoushi-repo-url>
@@ -135,7 +177,9 @@ navigate and build. This will also reduce disk usage and network traffic.
     # track main of upstream instead of fork
     git branch main -u upstream/main
     ```
+
 4. Useful configurations. (optional)
+
     ```bash
     # prune obsolete remote branches on fetch
     git config remote.origin.prune true
@@ -149,6 +193,7 @@ navigate and build. This will also reduce disk usage and network traffic.
     # on main branch, which is bad practice.
     git config alias.sync-main '!git switch main && git fetch upstream && git reset --keep FETCH_HEAD'
     ```
+
 5. Later, if you change the sparse checkout filter, run `git sparse-checkout reapply`.
 
 Read more on
@@ -231,10 +276,12 @@ Your extension code must be placed in the package `eu.kanade.tachiyomi.extension
 > Note: While older extensions might use the repeated name pattern, avoiding it is a newly enforced convention to maintain consistency across the repository.
 
 #### AndroidManifest.xml (optional)
+
 You only need to create this file if you want to add deep linking to your extension.
 See [URL intent filter](#url-intent-filter) for more information.
 
 #### build.gradle
+
 Make sure that your new extension's `build.gradle` file follows the following structure:
 
 ```groovy
@@ -264,7 +311,7 @@ With the example used above, the version would be `1.4.1`.
 
 Extensions rely on [extensions-lib](https://github.com/tachiyomiorg/extensions-lib), which provides
 some interfaces and stubs from the [app](https://github.com/mihonapp/mihon) for compilation
-purposes. The actual implementations can be found [here](https://github.com/mihonapp/mihon/tree/main/app/src/main/java/eu/kanade/tachiyomi/source).
+purposes. The actual implementations can be found [in the Mihon source code](https://github.com/mihonapp/mihon/tree/main/app/src/main/java/eu/kanade/tachiyomi/source).
 Referencing the actual implementation will help with understanding extensions' call flow.
 
 #### lib tools
@@ -276,14 +323,14 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 
 #### Available libs
 
-| Module | Description |
-|---|---|
-| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain |
-| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes) | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation |
-| [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua) | Fetches and rotates real-world User-Agent strings |
-| [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony) | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox) |
-| [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor) | Renders plain text or HTML as a PNG image page |
-| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker) | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers |
+| Module                                                                                                    | Description                                                          |
+|-----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------|
+| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain              |
+| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes)                 | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation    |
+| [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua)                   | Fetches and rotates real-world User-Agent strings                    |
+| [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)  |
+| [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                       |
+| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers |
 
 > [!NOTE]
 > The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their specific READMEs.
@@ -388,7 +435,6 @@ val body = myRequestDto.toJsonRequestBody()
 // To a simple String:
 val jsonString = myRequestDto.toJsonString()
 ```
-
 
 ##### JSON models (DTOs) and serialization
 
@@ -592,7 +638,7 @@ a.k.a. the Browse source entry point in the app (invoked by tapping on the sourc
 
 - The app calls `fetchPopularManga` which should return a `MangasPage` containing the first batch of
 found `SManga` entries.
-    - This method supports pagination. When user scrolls the manga list and more results must be fetched,
+  - This method supports pagination. When user scrolls the manga list and more results must be fetched,
     the app calls it again with increasing `page` values (starting with `page=1`). This continues while
     `MangasPage.hasNextPage` is passed as `true` and `MangasPage.mangas` is not empty.
 - To show the list properly, the app needs `url`, `title` and `thumbnail_url`. You **must** set them
@@ -610,7 +656,7 @@ the source name).
 
 - When the user searches inside the app, `fetchSearchManga` will be called and the rest of the flow
 is similar to what happens with `fetchPopularManga`.
-    - If search functionality is not available, return `Observable.just(MangasPage(emptyList(), false))`
+  - If search functionality is not available, return `Observable.just(MangasPage(emptyList(), false))`
 - `getFilterList` will be called to get all filters and filter types.
 
 ##### Filters
@@ -618,7 +664,7 @@ is similar to what happens with `fetchPopularManga`.
 The search flow has support for filters that can be added to a `FilterList` inside the `getFilterList`
 method. When the user changes the filters' state, they will be passed to the `searchRequest`, and they
 can be iterated to create the request (by getting the `filter.state` value, where the type varies
-depending on the `Filter` used). You can check the filter types available [here](https://github.com/mihonapp/mihon/blob/main/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
+depending on the `Filter` used). You can check the [filter types available in Filter.kt](https://github.com/mihonapp/mihon/blob/main/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
 and in the table below.
 
 | Filter             | State type  | Description                                                                                                                                                              |
@@ -649,18 +695,18 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 - When user taps on a manga, `getMangaDetails` and `getChapterList` will be called and the results
 will be cached.
-    - A `SManga` entry is identified by it's `url`.
+  - A `SManga` entry is identified by it's `url`.
 - `getMangaDetails` is called to update a manga's details from when it was initialized earlier.
-    - `SManga.initialized` tells the app if it should call `getMangaDetails`. If you are overriding
-    `getMangaDetails`, make sure to pass it as `true`.
-    - `SManga.genre` is a string containing list of all genres separated with `", "`.
-    - `SManga.status` is an "enum" value. Refer to [the values in the `SManga` companion object](https://github.com/tachiyomiorg/extensions-lib/blob/master/library/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt#L26).
-    - During a backup, only `url` and `title` are stored. To restore the rest of the manga data, the
-    app calls `getMangaDetails`, so all fields should be (re)filled in if possible.
-    - If a `SManga` is cached, `getMangaDetails` will be only called when the user does a manual
-    update (Swipe-to-Refresh).
+  - `SManga.initialized` tells the app if it should call `getMangaDetails`. If you are overriding
+  `getMangaDetails`, make sure to pass it as `true`.
+  - `SManga.genre` is a string containing list of all genres separated with `", "`.
+  - `SManga.status` is an "enum" value. Refer to [the values in the `SManga` companion object](https://github.com/tachiyomiorg/extensions-lib/blob/8240b5cfecbd281bc737ac159ea7d4e5825ed3df/library/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt#L26).
+  - During a backup, only `url` and `title` are stored. To restore the rest of the manga data, the
+  app calls `getMangaDetails`, so all fields should be (re)filled in if possible.
+  - If a `SManga` is cached, `getMangaDetails` will be only called when the user does a manual
+  update (Swipe-to-Refresh).
 - `getChapterList` is called to display the chapter list.
-    - **The list should be sorted descending by the source order**.
+  - **The list should be sorted descending by the source order**.
 - `getMangaUrl` is called when the user taps "Open in WebView".
   - If the source uses an API to fetch the data, consider overriding this method to return the manga
   absolute URL in the website instead.
@@ -670,28 +716,28 @@ will be cached.
 
 - `SChapter.date_upload` is the [UNIX Epoch time](https://en.wikipedia.org/wiki/Unix_time)
 **expressed in milliseconds**.
-    - If you don't pass `SChapter.date_upload` and leave it zero, the app will use the default date
-    instead, but it's recommended to always fill it if it's available.
-    - To get the time in milliseconds from a date string, you can use a `SimpleDateFormat` like in
-    the example below.
+  - If you don't pass `SChapter.date_upload` and leave it zero, the app will use the default date
+  instead, but it's recommended to always fill it if it's available.
+  - To get the time in milliseconds from a date string, you can use a `SimpleDateFormat` like in
+  the example below.
 
-      ```kotlin
-      import keiyoushi.utils.tryParse
+    ```kotlin
+    import keiyoushi.utils.tryParse
 
-      chapter.date_upload = dateFormat.tryParse(dateStr)
+    chapter.date_upload = dateFormat.tryParse(dateStr)
 
-      private val dateFormat by lazy {
-          SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
-      }
-      ```
+    private val dateFormat by lazy {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+    }
+    ```
 
-      Make sure you make the `SimpleDateFormat` a class constant or variable so it doesn't get
-    recreated for every chapter. If you need to parse or format dates in manga description, create
-    another instance since `SimpleDateFormat` is not thread-safe.
-    - If the parsing has any problems, make sure to return `0L` so the app will use the default date
-    instead.
-    - The app will overwrite dates of existing old chapters **UNLESS** `0L` is returned.
-    - If the source only provides the manga's updated date, assign it to the latest chapter only.
+    Make sure you make the `SimpleDateFormat` a class constant or variable so it doesn't get
+  recreated for every chapter. If you need to parse or format dates in manga description, create
+  another instance since `SimpleDateFormat` is not thread-safe.
+  - If the parsing has any problems, make sure to return `0L` so the app will use the default date
+  instead.
+  - The app will overwrite dates of existing old chapters **UNLESS** `0L` is returned.
+  - If the source only provides the manga's updated date, assign it to the latest chapter only.
 - `getChapterUrl` is called when the user taps "Open in WebView" in the reader.
   - If the source uses an API to fetch the data, consider overriding this method to return the
   chapter absolute URL in the website instead.
@@ -739,10 +785,12 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 Extensions can define a URL pattern so that these URLs can be opened in Mihon.
 
 To do this, you need two files:
+
 - `AndroidManifest.xml` which must be placed in the root directory of your extension (Example: `src/id/riztranslation/AndroidManifest.xml`)
 - `UrlActivity.kt` which should be placed next to your main file. (Example: `src/id/riztranslation/src/eu/kanade/tachiyomi/extension/id/riztranslation/UrlActivity.kt`)
 
 `AndroidManifest.xml` example :
+
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -816,6 +864,7 @@ class UrlActivity : Activity() {
 ```
 
 Now all you need to do is adapt the search function (`fetchSearchManga`) in your extension so that, given a URL, it returns a single manga that matches that URL. For example:
+
 ```kotlin
 if (query.startsWith("https://")) {
     val url = query.toHttpUrlOrNull()
@@ -833,9 +882,10 @@ To test if the URL intent filter is working as expected, you can try opening the
 and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively,
 you can use the `adb` command below.
 
-```console
-$ adb shell am start -d "<your-link>" -a android.intent.action.VIEW
+```bash
+adb shell am start -d "<your-link>" -a android.intent.action.VIEW
 ```
+
 You can find a complete example of how URLs work in the [Riztranslation extension](https://github.com/keiyoushi/extensions-source/tree/main/src/id/riztranslation).
 
 #### Update strategy
@@ -925,8 +975,8 @@ plugins {
 baseVersionCode = 1
 ```
 
-| Field             | Description                                                                                                                                                                    |
-|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Field             | Description                                                                                                                                                                   |
+|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `baseVersionCode` | The base version code for the theme. This must be a positive integer and **incremented** whenever a change is made to the theme's implementation that affects the extensions. |
 
 #### Theme main class
@@ -943,9 +993,9 @@ abstract class <ThemeName>(
     override val baseUrl: String,
     override val lang: String,
 ) : HttpSource() {
-    
+
     // Theme default implementation...
-    
+
 }
 ```
 
@@ -975,15 +1025,16 @@ Any site-specific overrides, custom functions, or custom icons are implemented d
 
 For local development, use the following run configuration to launch the app directly into the Browse panel.
 
-![](https://i.imgur.com/6s2dvax.png)
+![Android Studio: Run/Debug Configurations](https://i.imgur.com/6s2dvax.png)
 
 Copy the following into `Launch Flags` for the Debug build of Mihon:
 
-```
+```bash
 -W -S -n app.mihon.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
 ```
 
 For other builds, replace  `app.mihon.dev` with the corresponding package IDs:
+
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
 
@@ -1011,12 +1062,11 @@ You *cannot* simply use Android Studio's `Debug 'module.name'` -> this will most
 error while launching.
 
 Instead, once you've built and installed your extension on the target device, use
-`Attach Debugger to Android Process` to start debugging the app. 
+`Attach Debugger to Android Process` to start debugging the app.
 
 Inside the `Attach Debugger to Android Process` window, once the app is running on your device and `Show all processes` is checked, you should be able to select `app.mihon.dev` and press OK.
 
-![](https://i.imgur.com/SUhdB52.png)
-
+![Android Studio: Choose Process](https://i.imgur.com/SUhdB52.png)
 
 ### Logs
 
@@ -1044,10 +1094,12 @@ To use it, follow the [official documentation](https://developer.android.com/stu
 and select the app's package name in the process list.
 
 ### Using external network inspecting tools
+
 If you want a deeper look into the network flow, such as inspecting the request and response bodies
 you can use an external tool like `mitm-proxy`.
 
 #### Setup your proxy server
+
 We are going to use [mitm-proxy](https://mitmproxy.org/) but you can replace it with any other Web
 Debugger (i.e. Charles, Burp Suite, Fiddler etc). To install and execute, follow the commands below.
 
@@ -1060,16 +1112,17 @@ $ mitmweb
 
 Alternatively, you can also use the Docker image:
 
-```
+```bash
 $ docker run --rm -it -p 8080:8080 \
     -p 127.0.0.1:8081:8081 \
     --web-host 0.0.0.0 \
     mitmproxy/mitmproxy mitmweb
 ```
 
-After installing and running, open your browser and navigate to http://127.0.0.1:8081.
+After installing and running, open your browser and navigate to <http://127.0.0.1:8081>.
 
 #### OkHttp proxy setup
+
 Since most of the manga sources are going to use HTTPS, we need to disable SSL verification in order
 to use the web debugger. For that, add this code to inside your source class:
 

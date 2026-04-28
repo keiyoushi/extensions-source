@@ -1,0 +1,10 @@
+ext {
+    extName = 'HentaiRox'
+    extClass = '.HentaiRoxFactory'
+    themePkg = 'galleryadults'
+    baseUrl = 'https://hentairox.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

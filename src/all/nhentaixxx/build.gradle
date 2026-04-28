@@ -1,0 +1,10 @@
+ext {
+    extName = 'NHentai.xxx'
+    extClass = '.NHentaiXXXFactory'
+    themePkg = 'galleryadults'
+    baseUrl = 'https://nhentai.xxx'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

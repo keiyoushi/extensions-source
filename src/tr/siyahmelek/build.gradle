@@ -2,8 +2,8 @@ ext {
     extName = 'Siyah Melek'
     extClass = '.Siyahmelek'
     themePkg = 'initmanga'
-    baseUrl = 'https://siyahmelek.mom'
-    overrideVersionCode = 59
+    baseUrl = 'https://siyahmelek.vip'
+    overrideVersionCode = 60
     isNsfw = true
 }
 

@@ -207,6 +207,18 @@ abstract class Luscious(
         return GET(url, headers)
     }
 
+    private fun buildAlbumListRelatedRequestInput(id: String) = buildAlbumInfoRequestInput(id)
+
+    private fun buildAlbumListRelatedRequest(id: String): Request {
+        val input = buildAlbumListRelatedRequestInput(id)
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("operationName", "AlbumListRelated")
+            .addQueryParameter("query", albumListRelatedQuery)
+            .addQueryParameter("variables", input.toJsonString())
+            .build()
+        return GET(url, headers)
+    }
+
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request = buildAlbumListRequest(page, getSortFilters(LATEST_DEFAULT_SORT_STATE, lusLang))
@@ -407,6 +419,32 @@ abstract class Luscious(
     }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
+    // Related
+
+    override fun relatedMangaListRequest(manga: SManga): Request {
+        val id = manga.url.substringAfterLast("_").removeSuffix("/")
+        return buildAlbumListRelatedRequest(id)
+    }
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val data = response.parseAs<AlbumRelatedResponse>()
+        with(data.data.album.listRelated) {
+            return listOfNotNull(
+                moreLikeThis,
+                itemsLikedLikeThis,
+                itemsCreatedByThisUser,
+            ).flatMap { relatedItems ->
+                relatedItems.map {
+                    SManga.create().apply {
+                        url = it.url
+                        title = it.title
+                        thumbnail_url = it.cover.url
+                    }
+                }
+            }
+        }
+    }
 
     // Popular
 
