@@ -1,7 +1,8 @@
 ext {
     extName = "Comikey"
     extClass = ".ComikeyFactory"
-    extVersionCode = 4
+    extVersionCode = 5
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
