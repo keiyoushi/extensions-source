@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.allanime
 
 import android.util.Base64
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
@@ -47,7 +46,6 @@ inline fun <reified T> Response.parseAs(): T = parseAs(json)
 fun Response.decryptPageList(): PageListData {
     val encrypted = parseAs<Data<EncryptedData>>().data.encrypted
     val decrypted = decryptAesGcm(encrypted)
-    Log.d("AllManga", decrypted)
     return decrypted.parseAs<PageListData>(json)
 }
 
