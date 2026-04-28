@@ -7,14 +7,16 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
@@ -27,24 +29,18 @@ import kotlin.math.absoluteValue
 import kotlin.random.Random
 
 class Nudemoon :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
-
     override val name = "Nude-Moon"
-
     override val lang = "ru"
-
     override val supportsLatest = true
-
     private val preferences: SharedPreferences = getPreferences()
-
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
-
     private val cookieManager by lazy { CookieManager.getInstance() }
-
     private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
+
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36")
         .add("Referer", baseUrl)
@@ -54,150 +50,121 @@ class Nudemoon :
     }
 
     private val cookiesHeader by lazy {
-        val cookies = mutableMapOf<String, String>()
-        cookies["NMfYa"] = "1"
-        cookies["nm_mobile"] = "1"
-        buildCookies(cookies)
-    }
-
-    private fun buildCookies(cookies: Map<String, String>) = cookies.entries.joinToString(separator = "; ", postfix = ";") {
-        "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+        mapOf("NMfYa" to "1", "nm_mobile" to "1").entries.joinToString(separator = "; ", postfix = ";") { (k, v) ->
+            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
+        }
     }
 
     override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
-            val newReq = chain
-                .request()
-                .newBuilder()
+            val newReq = chain.request().newBuilder()
                 .addHeader("Cookie", cookiesHeader)
                 .addHeader("Referer", baseUrl)
                 .build()
-
             chain.proceed(newReq)
         }.build()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/all_manga?views&rowstart=${30 * (page - 1)}", headers)
-
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/all_manga?date&rowstart=${30 * (page - 1)}", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Search by query on this site works really badly, i don't even sure of the need to implement it
         val url = if (query.isNotEmpty()) {
             "$baseUrl/search?stext=${URLEncoder.encode(query, "CP1251")}&rowstart=${30 * (page - 1)}"
         } else {
-            var genres = ""
-            var order = ""
-            for (filter in if (filters.isEmpty()) getFilterList() else filters) {
-                if (filter is GenreList) {
-                    filter.state.forEach { f ->
-                        if (f.state) {
-                            genres += f.id + '+'
-                        }
-                    }
+            val currentFilters = if (filters.isEmpty()) getFilterList() else filters
+            val genreList = currentFilters.firstInstanceOrNull<GenreList>()
+            val orderFilter = currentFilters.firstInstanceOrNull<OrderBy>()
+
+            val genres = buildString {
+                genreList?.state?.forEach { f ->
+                    if (f.state) append(f.id).append('+')
                 }
             }
 
-            if (genres.isNotEmpty()) {
-                for (filter in filters) {
-                    if (filter is OrderBy) {
-                        // The site has no ascending order
-                        order = arrayOf("&date", "&views", "&like")[filter.state!!.index]
-                    }
-                }
-                "$baseUrl/tags/${genres.dropLast(1)}$order&rowstart=${30 * (page - 1)}"
+            val orderIndex = orderFilter?.state?.index ?: 1
+            val order = if (genres.isNotEmpty()) {
+                arrayOf("&date", "&views", "&like")[orderIndex]
             } else {
-                for (filter in filters) {
-                    if (filter is OrderBy) {
-                        // The site has no ascending order
-                        order = arrayOf(
-                            "all_manga?date",
-                            "all_manga?views",
-                            "all_manga?like",
-                        )[filter.state!!.index]
-                    }
-                }
-                "$baseUrl/$order&rowstart=${30 * (page - 1)}"
+                arrayOf("all_manga?date", "all_manga?views", "all_manga?like")[orderIndex]
             }
+
+            val path = if (genres.isNotEmpty()) "tags/${genres.dropLast(1)}$order" else order
+            "$baseUrl/$path&rowstart=${30 * (page - 1)}"
         }
         return GET(url, headers)
     }
 
-    override fun popularMangaSelector() = "table.news_pic2"
+    private val mangaSelector = "table.news_pic2"
+    private val nextPageSelector = "a.small:contains(>)"
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun popularMangaFromElement(element: Element): SManga {
+    private fun parseMangaElement(element: Element): SManga? {
         val manga = SManga.create()
-
         manga.thumbnail_url = element.selectFirst("a img")?.attr("abs:src")
-        element.selectFirst("a:has(h2)")!!.let {
+        element.selectFirst("a:has(h2)")?.let {
             manga.title = it.text().substringBefore(" / ").substringBefore(" №")
             manga.setUrlWithoutDomain(it.attr("href"))
+            return manga
         }
-
-        return manga
+        return null
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(mangaSelector).mapNotNull(::parseMangaElement)
+        val hasNextPage = document.selectFirst(nextPageSelector) != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun popularMangaNextPageSelector() = "a.small:contains(>)"
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val manga = SManga.create()
-        val infoElement = document.selectFirst("table.news_pic2")
-        manga.title = document.selectFirst("h1")!!.text().substringBefore(" / ").substringBefore(" №")
+        val infoElement = document.selectFirst(mangaSelector)
+        manga.title = document.selectFirst("h1")?.text()?.substringBefore(" / ")?.substringBefore(" №") ?: ""
         manga.author = infoElement?.selectFirst("a[href*=mangaka]")?.text()
         manga.genre = infoElement?.select("div.tag-links a")?.joinToString { it.text() }
         manga.description = document.selectFirst(".description")?.text()
         manga.thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
-
         return manga
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
-    override fun chapterListSelector() = popularMangaSelector()
-    protected fun chapterListNextPageSelector() = popularMangaNextPageSelector()
-
     override fun chapterListParse(response: Response): List<SChapter> = mutableListOf<SChapter>().apply {
         val document = response.asJsoup()
-
         document.selectFirst("td.button a:contains(Все главы)")?.let { allPageElement ->
-            var page = 1
-            var pageListDocument: Document
             var pageListLink = allPageElement.absUrl("href")
-            do {
-                client.newCall(
-                    GET(pageListLink, headers),
-                ).execute().run {
-                    if (!isSuccessful) {
-                        close()
-                        throw Exception("HTTP error $code")
-                    }
-                    pageListDocument = this.asJsoup()
-                }
-                if (pageListDocument.select(chapterListSelector()).isEmpty() && page == 1) {
-                    add(chapterFromSinglePage(document, response.request.url.toString()))
-                    break
-                } else {
-                    pageListDocument.select(chapterListSelector())
-                        .forEach {
-                            add(chapterFromElement(it))
+            var hasNextPage = true
+            while (hasNextPage) {
+                client.newCall(GET(pageListLink, headers)).execute().use { res ->
+                    if (!res.isSuccessful) throw Exception("HTTP error ${res.code}")
+                    val pageDoc = res.asJsoup()
+                    val chapters = pageDoc.select(mangaSelector).mapNotNull { element ->
+                        SChapter.create().apply {
+                            val nameAndUrl = element.selectFirst("tr[valign=top] a:has(h2)")
+                            name = nameAndUrl?.selectFirst("h2")?.text() ?: return@mapNotNull null
+                            setUrlWithoutDomain(nameAndUrl.attr("abs:href"))
+                            val informBlock = element.selectFirst("tr[valign=top] td[align=left]")
+                            scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
+                            date_upload = informBlock?.selectFirst("span.small2")?.text()?.let { text ->
+                                dateParseRu.tryParse(text.replace("Май", "Мая"))
+                            } ?: 0L
+                            chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
                         }
+                    }
+                    if (chapters.isEmpty()) {
+                        add(chapterFromSinglePage(document, response.request.url.toString()))
+                        break
+                    }
+                    addAll(chapters)
+                    val nextPageElement = pageDoc.selectFirst(nextPageSelector)
+                    if (nextPageElement != null) {
+                        pageListLink = nextPageElement.absUrl("href")
+                    } else {
+                        hasNextPage = false
+                    }
                 }
-                pageListDocument.selectFirst(chapterListNextPageSelector())?.let { nextPageElement ->
-                    page++
-                    pageListLink = nextPageElement.absUrl("href")
-                }
-            } while (pageListDocument.selectFirst(chapterListNextPageSelector()) != null)
+            }
         } ?: run {
             add(chapterFromSinglePage(document, response.request.url.toString()))
         }
@@ -211,160 +178,24 @@ class Nudemoon :
             url = url.replace(baseUrl, "")
         }
         scanlator = document.selectFirst("table.news_pic2 a[href*=perevod]")?.text()
-        date_upload = document.selectFirst("""table.news_pic2 span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text()?.let {
-            dateParseWithReplace(it)
+        date_upload = document.selectFirst("table.news_pic2 span.small2")?.text()?.let { text ->
+            dateParseRu.tryParse(text.replace("Май", "Мая"))
         } ?: 0L
         chapter_number = 0F
     }
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val nameAndUrl = element.selectFirst("tr[valign=top] a:has(h2)")
-        name = nameAndUrl!!.selectFirst("h2")!!.text()
-        setUrlWithoutDomain(nameAndUrl.attr("abs:href"))
-        if (url.contains(baseUrl)) {
-            url = url.replace(baseUrl, "")
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val pages = document.select("""img[title~=.+][loading="lazy"]""").mapIndexed { index, img ->
+            Page(index, imageUrl = img.attr("abs:data-src"))
         }
-        val informBlock = element.selectFirst("tr[valign=top] td[align=left]")
-        scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
-        date_upload = informBlock?.selectFirst("""span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text()?.let {
-            dateParseWithReplace(it)
-        } ?: 0L
-        chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
-    }
-
-    private fun dateParseWithReplace(textDate: String): Long = textDate.replace("Май", "Мая").let {
-        try {
-            dateParseRu.parse(it)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
-        response.asJsoup().select("""img[title~=.+][loading="lazy"]""").mapIndexed { index, img ->
-            add(Page(index, imageUrl = img.attr("abs:data-src")))
-        }
-        if (isEmpty() && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
+        if (pages.isEmpty() && !cookieManager.getCookie(baseUrl).contains("fusion_user")) {
             throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
         }
+        return pages
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-
-    private class Genre(name: String, val id: String = name.replace(' ', '_')) : Filter.CheckBox(name.replaceFirstChar { it.uppercaseChar() })
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)
-    private class OrderBy :
-        Filter.Sort(
-            "Сортировка",
-            arrayOf("Дата", "Просмотры", "Лайки"),
-            Selection(1, false),
-        )
-
-    override fun getFilterList() = FilterList(
-        OrderBy(),
-        GenreList(getGenreList()),
-    )
-
-    private fun getGenreList() = listOf(
-        Genre("анал"),
-        Genre("без цензуры"),
-        Genre("беременные"),
-        Genre("большие груди"),
-        Genre("в бассейне"),
-        Genre("в больнице"),
-        Genre("в ванной"),
-        Genre("в общественном месте"),
-        Genre("в первый раз"),
-        Genre("в транспорте"),
-        Genre("в туалете"),
-        Genre("гарем"),
-        Genre("гипноз"),
-        Genre("горничные"),
-        Genre("горячий источник"),
-        Genre("групповой секс"),
-        Genre("гуро"),
-        Genre("драма"),
-        Genre("запредельное"),
-        Genre("золотой дождь"),
-        Genre("зрелые женщины"),
-        Genre("идолы"),
-        Genre("извращение"),
-        Genre("измена"),
-        Genre("имеют парня"),
-        Genre("инцест"),
-        Genre("клизма"),
-        Genre("колготки"),
-        Genre("комикс"),
-        Genre("копро"),
-        Genre("косплей"),
-        Genre("лоликон"),
-        Genre("манхва"),
-        Genre("мастурбация"),
-        Genre("мерзкий мужик"),
-        Genre("много спермы"),
-        Genre("молоко"),
-        Genre("монстры"),
-        Genre("на камеру"),
-        Genre("на природе"),
-        Genre("насекомые"),
-        Genre("недоперевод"),
-        Genre("нейросеть"),
-        Genre("обычный секс"),
-        Genre("огромный член"),
-        Genre("пляж"),
-        Genre("подглядывание"),
-        Genre("пояс верности"),
-        Genre("принуждение"),
-        Genre("продажность"),
-        Genre("пьяные"),
-        Genre("рабыни"),
-        Genre("романтика"),
-        Genre("с ушками"),
-        Genre("секс игрушки"),
-        Genre("сетакон"),
-        Genre("спящие"),
-        Genre("страпон"),
-        Genre("студенты"),
-        Genre("суккуб"),
-        Genre("тентакли"),
-        Genre("толстушки"),
-        Genre("трапы"),
-        Genre("ужасы"),
-        Genre("униформа"),
-        Genre("учитель и ученик"),
-        Genre("фемдом"),
-        Genre("фетиш"),
-        Genre("фурри"),
-        Genre("футанари"),
-        Genre("футджоб"),
-        Genre("фэнтези"),
-        Genre("цветная"),
-        Genre("чикан"),
-        Genre("чулки"),
-        Genre("шимейл"),
-        Genre("эксгибиционизм"),
-        Genre("эльфы"),
-        Genre("юмор"),
-        Genre("юные"),
-        Genre("юри"),
-        Genre("яой"),
-        Genre("3D арт"),
-        Genre("ahegao"),
-        Genre("bdsm"),
-        Genre("ganguro"),
-        Genre("gender bender"),
-        Genre("megane"),
-        Genre("mind break"),
-        Genre("monstergirl"),
-        Genre("netorare"),
-        Genre("nipple penetration"),
-        Genre("skinsuit"),
-        Genre("titsfuck"),
-        Genre("vore"),
-        Genre("x-ray"),
-    )
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
