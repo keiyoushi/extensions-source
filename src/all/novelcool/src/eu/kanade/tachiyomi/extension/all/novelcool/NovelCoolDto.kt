@@ -1,27 +1,33 @@
 package eu.kanade.tachiyomi.extension.all.novelcool
 
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class NovelCoolBrowsePayload(
-    val appId: String,
-    @SerialName("keyword") val query: String? = null,
-    val lang: String,
-    @SerialName("lc_type") val type: String,
-    val page: String,
-    @SerialName("page_size") val size: String,
-    val secret: String,
+class NovelCoolBrowsePayload(
+    private val appId: String,
+    @SerialName("keyword") private val query: String? = null,
+    private val lang: String,
+    @SerialName("lc_type") private val type: String,
+    private val page: String,
+    @SerialName("page_size") private val size: String,
+    private val secret: String,
 )
 
 @Serializable
-data class NovelCoolBrowseResponse(
+class NovelCoolBrowseResponse(
     val list: List<Manga>? = emptyList(),
 )
 
 @Serializable
-data class Manga(
+class Manga(
     val url: String,
-    val name: String,
-    val cover: String,
-)
+    private val name: String,
+    private val cover: String,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = name
+        thumbnail_url = cover
+    }
+}
