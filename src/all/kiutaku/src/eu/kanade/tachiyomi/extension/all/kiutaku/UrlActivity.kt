@@ -11,7 +11,7 @@ import kotlin.system.exitProcess
  * Springboard that accepts https://kiutaku.com/<item> intents
  * and redirects them to the main Tachiyomi process.
  */
-class KiutakuUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
