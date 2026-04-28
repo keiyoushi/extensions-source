@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".all.akuma.AkumaUrlActivity"
+            android:name=".all.akuma.UrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
