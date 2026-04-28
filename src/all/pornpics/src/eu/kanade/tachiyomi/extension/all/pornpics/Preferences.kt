@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import keiyoushi.lib.i18n.Intl
 
-object PornPicsPreferences {
+object Preferences {
 
     private const val PS_KEY_ROOT = "PornPics"
 
