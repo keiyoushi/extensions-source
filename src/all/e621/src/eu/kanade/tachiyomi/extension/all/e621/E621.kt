@@ -33,6 +33,8 @@ class E621 :
     override val lang: String = "all"
     override val supportsLatest: Boolean = true
 
+    override fun getFilterList(): FilterList = getE621FilterList(preferences.categoryPref)
+
     override val client = network.cloudflareClient
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -234,52 +236,6 @@ class E621 :
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    // Filters
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("Search by pool name"),
-        DescriptionFilter(),
-        OrderFilter(),
-        CategoryFilter(getDefaultCategoryIndex()),
-        ActiveOnlyFilter(),
-    )
-
-    private fun getDefaultCategoryIndex(): Int = when (preferences.categoryPref) {
-        "series" -> 1
-        "collection" -> 2
-        else -> 0 // "" (both) maps to "Any"
-    }
-
-    private class OrderFilter :
-        UriPartFilter(
-            "Order by",
-            arrayOf(
-                Pair("Recently Updated", "updated_at"),
-                Pair("Most Posts", "post_count"),
-                Pair("Name (A-Z)", "name"),
-                Pair("Newest First", "created_at"),
-            ),
-        )
-
-    private class CategoryFilter(defaultIndex: Int = 0) :
-        UriPartFilter(
-            "Category",
-            arrayOf(
-                Pair("Any", ""),
-                Pair("Series", "series"),
-                Pair("Collection", "collection"),
-            ),
-            defaultIndex,
-        )
-
-    private class ActiveOnlyFilter : Filter.CheckBox("Active pools only", false)
-
-    private class DescriptionFilter : Filter.Text("Description contains")
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, defaultIndex: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultIndex) {
-        fun toUriPart() = vals[state].second
-    }
 
     // Preferences
 
