@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.e621
 
 import android.content.SharedPreferences
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -33,6 +31,8 @@ class E621 :
     override val supportsLatest: Boolean = true
 
     override fun getFilterList(): FilterList = getE621FilterList(preferences.categoryPref)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) = setupE621PreferenceScreen(screen)
 
     override val client = network.cloudflareClient
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -236,37 +236,6 @@ class E621 :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    // Preferences
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = CATEGORY_PREF
-            title = "Pool category filter for Popular and Latest"
-            entries = arrayOf("Series only", "Collections only", "Both")
-            entryValues = arrayOf("series", "collection", "")
-            setDefaultValue("series")
-            summary = "%s"
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SPLIT_CHAPTERS_PREF
-            title = "Split posts into individual chapters"
-            summary = "Each post in a pool will be shown as a separate chapter instead of one merged chapter"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-    }
-
-    private val SharedPreferences.categoryPref: String
-        get() = getString(CATEGORY_PREF, "series")!!
-
-    private val SharedPreferences.splitChaptersPref: Boolean
-        get() = getBoolean(SPLIT_CHAPTERS_PREF, false)
-
-    companion object {
-        private const val CATEGORY_PREF = "category_filter"
-        private const val SPLIT_CHAPTERS_PREF = "split_chapters"
-    }
-
     // Helpers
 
     private fun isPostDeleted(post: Post): Boolean = post.flags.deleted
@@ -336,7 +305,5 @@ class E621 :
         }.toMap()
     }
 
-
-    private fun parseDate(dateStr: String): Long =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).tryParse(dateStr)
+    private fun parseDate(dateStr: String): Long = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).tryParse(dateStr)
 }
