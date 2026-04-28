@@ -165,6 +165,8 @@ class EveriaClub : HttpSource() {
         initialized = true
     }
 
+    override val disableRelatedMangasBySearch = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val genres = manga.genre?.split(",")?.map { it.trim() } ?: return emptyList()
         return genres.parallelCatchingFlatMap { genre ->
