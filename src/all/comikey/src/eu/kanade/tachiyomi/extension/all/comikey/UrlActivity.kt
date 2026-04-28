@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class ComikeyUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -23,10 +23,10 @@ class ComikeyUrlActivity : Activity() {
             try {
                 startActivity(intent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("ComikeyUrlActivity", "Could not start activity", e)
+                Log.e("UrlActivity", "Could not start activity", e)
             }
         } else {
-            Log.e("ComikeyUrlActivity", "Could not parse URI from intent $intent")
+            Log.e("UrlActivity", "Could not parse URI from intent $intent")
         }
 
         finish()
