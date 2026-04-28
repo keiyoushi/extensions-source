@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.es.bloomscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -19,70 +18,15 @@ class Bloomscans :
     ) {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-
-        // Text Search
         if (query.isNotEmpty() && filters.isEmpty()) {
-            url.addPathSegment("page")
-            url.addPathSegment(page.toString())
-            url.addQueryParameter("s", query)
-        } else {
-            // Filtered Search
-            url.addPathSegment(mangaUrlDirectory.substring(1))
-            url.addPathSegment("page")
-            url.addPathSegment(page.toString())
-
-            if (query.isNotEmpty()) {
-                url.addQueryParameter("title", query)
-            }
-
-            filters.forEach { filter ->
-                when (filter) {
-                    is AuthorFilter -> {
-                        url.addQueryParameter("author", filter.state)
-                    }
-
-                    is YearFilter -> {
-                        url.addQueryParameter("yearx", filter.state)
-                    }
-
-                    is StatusFilter -> {
-                        url.addQueryParameter("status", filter.selectedValue())
-                    }
-
-                    is TypeFilter -> {
-                        url.addQueryParameter("type", filter.selectedValue())
-                    }
-
-                    is OrderByFilter -> {
-                        url.addQueryParameter("order", filter.selectedValue())
-                    }
-
-                    is GenreListFilter -> {
-                        filter.state
-                            .filter { it.state != Filter.TriState.STATE_IGNORE }
-                            .forEach {
-                                val value = if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
-                                url.addQueryParameter("genre[]", value)
-                            }
-                    }
-
-                    // if site has project page, default value "hasProjectPage" = false
-                    is ProjectFilter -> {
-                        if (filter.selectedValue() == "project-filter-on") {
-                            url.setPathSegment(0, projectPageString.substring(1))
-                        }
-                    }
-
-                    else -> {
-                        /* Do Nothing */
-                    }
-                }
-            }
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("page")
+                .addPathSegment(page.toString())
+                .addQueryParameter("s", query)
+                .addPathSegment("")
+            return GET(url.build(), headers)
         }
-
-        url.addPathSegment("")
-        return GET(url.build(), headers)
+        return super.searchMangaRequest(page, query, filters)
     }
 
     override val seriesTitleSelector = ".lrs-title"
