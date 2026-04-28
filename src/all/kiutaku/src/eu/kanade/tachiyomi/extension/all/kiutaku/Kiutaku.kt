@@ -9,16 +9,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class Kiutaku : ParsedHttpSource() {
+class Kiutaku : HttpSource() {
 
     override val name = "Kiutaku"
 
@@ -41,27 +40,26 @@ class Kiutaku : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/hot?start=${getPage(page)}", headers)
 
-    override fun popularMangaSelector() = "div.blog > div.items-row"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a.item-link")!!.attr("href"))
-        thumbnail_url = element.selectFirst("img")?.attr("src")
-        title = element.selectFirst("h2")?.text() ?: "Cosplay"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.blog > div.items-row").map(::mangaFromElement)
+        val hasNextPage = document.selectFirst("nav > a.pagination-next:not([disabled])") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun popularMangaNextPageSelector() = "nav > a.pagination-next:not([disabled])"
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a.item-link")!!.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        title = element.selectFirst("h2")?.text() ?: "Cosplay"
+    }
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?start=${getPage(page)}", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) {
         val id = query.removePrefix(PREFIX_SEARCH)
         client.newCall(GET("$baseUrl/$id"))
             .asObservableSuccess()
@@ -71,7 +69,7 @@ class Kiutaku : ParsedHttpSource() {
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response.use { it.asJsoup() })
+        val details = mangaDetailsParse(response)
         return MangasPage(listOf(details), false)
     }
 
@@ -84,14 +82,11 @@ class Kiutaku : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         title = document.selectFirst("div.article-header")?.text() ?: "Cosplay"
@@ -102,24 +97,26 @@ class Kiutaku : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
-    // Fix chapter order
-    override fun chapterListParse(response: Response) = super.chapterListParse(response).reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup()
+        .select("nav.pagination:first-of-type a")
+        .map(::chapterFromElement)
+        .reversed()
 
-    override fun chapterListSelector() = "nav.pagination:first-of-type a"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
+    private fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
         val text = element.text()
         name = "Page $text"
         chapter_number = text.toFloatOrNull() ?: 1F
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> = document.select("div.article-fulltext img[src]").mapIndexed { index, item ->
-        Page(index, "", item.attr("src"))
-    }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup()
+        .select("div.article-fulltext img[src]")
+        .mapIndexed { index, item ->
+            Page(index, imageUrl = item.absUrl("src"))
+        }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         const val PREFIX_SEARCH = "id:"
