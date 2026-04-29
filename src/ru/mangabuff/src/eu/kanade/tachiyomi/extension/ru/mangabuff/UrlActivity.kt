@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class MangaBuffUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -24,10 +24,10 @@ class MangaBuffUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("MangaBuffUrlActivity", e.toString())
+                Log.e("UrlActivity", e.toString())
             }
         } else {
-            Log.e("MangaBuffUrlActivity", "could not parse uri from intent $intent")
+            Log.e("UrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
