@@ -13,7 +13,7 @@ import kotlin.system.exitProcess
  * you have this extension installed, but still let the main tachiyomi app control
  * things.
  */
-class JinmantiantangUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
