@@ -51,10 +51,11 @@ class LoppyToon : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangaList = document.select("div.hot-comic-item a.hot-comic-item").map { element ->
+        val mangaList = document.select("div.hot-comic-item a.hot-comic-item").mapNotNull { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                title = element.selectFirst("div.comic-title")!!.text()
+                title = element.selectFirst("div.comic-title")?.text()
+                    ?.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
@@ -69,7 +70,7 @@ class LoppyToon : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangaList = document.select("div.comic-item").map { element ->
+        val mangaList = document.select("div.comic-item").mapNotNull { element ->
             mangaFromElement(element)
         }
 
@@ -139,14 +140,14 @@ class LoppyToon : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h1.manga-title")!!.text()
+            document.selectFirst("h1.manga-title")?.text()?.let { title = it }
 
             author = document.selectFirst("span.meta-label:contains(Tác giả)")
                 ?.nextElementSibling()?.text()
 
             genre = document.select(".manga-tags a.tag").joinToString { it.text() }
 
-            thumbnail_url = document.selectFirst(".manga-cover img")?.absUrl("src")
+            thumbnail_url = document.selectFirst("img.cover-image")?.absUrl("src")
 
             val altName = document.selectFirst("span.meta-label:contains(Tên khác)")
                 ?.nextElementSibling()?.text()?.trim()
@@ -177,12 +178,15 @@ class LoppyToon : HttpSource() {
         }
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        val linkElement = element.selectFirst("a")!!
+    private fun mangaFromElement(element: Element): SManga? = SManga.create().apply {
+        val linkElement = element.selectFirst("a") ?: return null
         setUrlWithoutDomain(linkElement.absUrl("href"))
-        title = element.selectFirst("h3.comic-title")!!.text()
+        title = element.selectFirst("h3.comic-title")?.text()
+            ?.takeIf(String::isNotBlank) ?: return null
         thumbnail_url = element.selectFirst(".comic-cover img")?.absUrl("src")
     }
+
+    override fun relatedMangaListParse(response: Response) = latestUpdatesParse(response).mangas
 
     // ============================== Chapters ==============================
 
@@ -201,11 +205,10 @@ class LoppyToon : HttpSource() {
             chapters.size >= 20
 
         while (hasMore) {
-            val ajaxResponse = client.newCall(
+            val chapterData = client.newCall(
                 GET("$baseUrl/load-more-chapters?slug=$slug&offset=$offset&sortByPosition=desc", headers),
             ).execute()
-
-            val chapterData = ajaxResponse.parseAs<ChapterResponse>()
+                .parseAs<ChapterResponse>()
 
             if (!chapterData.html.isNullOrBlank()) {
                 val chapterDoc = Jsoup.parse(chapterData.html)
@@ -278,5 +281,4 @@ class LoppyToon : HttpSource() {
     // =============================== Related ================================
     // disable suggested mangas on Komikku due to heavy rate limit
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
 }
