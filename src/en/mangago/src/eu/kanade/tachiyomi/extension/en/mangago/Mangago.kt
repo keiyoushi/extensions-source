@@ -16,10 +16,11 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
@@ -41,7 +42,7 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class Mangago :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
 
     override val name = "Mangago"
@@ -104,19 +105,17 @@ class Mangago :
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=view&e=", headers)
 
-    override fun popularMangaSelector(): String = genreListingSelector
-
-    override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
-
-    override fun popularMangaNextPageSelector() = genreListingNextPageSelector
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(genreListingSelector)
+            .map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst(genreListingNextPageSelector) != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=update_date&e=", headers)
 
-    override fun latestUpdatesSelector() = genreListingSelector
-
-    override fun latestUpdatesFromElement(element: Element) = mangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = genreListingNextPageSelector
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotBlank()) {
@@ -158,11 +157,13 @@ class Mangago :
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "$genreListingSelector, .pic_list > li"
-
-    override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = genreListingNextPageSelector
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("$genreListingSelector, .pic_list > li")
+            .map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst(genreListingNextPageSelector) != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
     private val titleRegex: Regex by lazy {
         Regex(
@@ -171,54 +172,66 @@ class Mangago :
         )
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst(".w-title h1")!!.text()
-        if (isRemoveTitleVersion()) {
-            title = title.replace(titleRegex, "").trim()
-        }
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
 
-        document.getElementById("information")!!.let {
-            thumbnail_url = it.selectFirst("img")!!.attr("abs:src")
-            description = it.selectFirst(".manga_summary")?.let { summary ->
-                summary.selectFirst("font")?.remove()
-                summary.text()
+        return SManga.create().apply {
+            document.selectFirst(".w-title h1")?.text()?.let {
+                title = if (isRemoveTitleVersion()) {
+                    it.replace(titleRegex, "").trim()
+                } else {
+                    it
+                }
             }
-            it.select(".manga_info li, .manga_right tr").forEach { el ->
-                when (el.selectFirst("b, label")!!.text().lowercase()) {
-                    "alternative:" -> description += "\n\n${el.text()}"
 
-                    "status:" -> status = when (el.selectFirst("span")!!.text().lowercase()) {
-                        "ongoing" -> SManga.ONGOING
-                        "completed" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
+            document.getElementById("information")?.let { info: Element ->
+                thumbnail_url = info.selectFirst("img")?.attr("abs:src")
+                description = info.selectFirst(".manga_summary")?.let { summary: Element ->
+                    summary.selectFirst("font")?.remove()
+                    summary.text()
+                }
+                info.select(".manga_info li, .manga_right tr").forEach { el ->
+                    when (el.selectFirst("b, label")?.text()?.lowercase()) {
+                        "alternative:" -> description += "\n\n${el.text()}"
+
+                        "status:" -> status = when (el.selectFirst("span")?.text()?.lowercase()) {
+                            "ongoing" -> SManga.ONGOING
+                            "completed" -> SManga.COMPLETED
+                            else -> SManga.UNKNOWN
+                        }
+
+                        "author(s):", "author:" -> author = el.select("a").joinToString { it.text() }
+
+                        "genre(s):" -> genre = el.select("a").joinToString { it.text() }
                     }
-
-                    "author(s):", "author:" -> author = el.select("a").joinToString { it.text() }
-
-                    "genre(s):" -> genre = el.select("a").joinToString { it.text() }
                 }
             }
         }
     }
 
-    override fun chapterListSelector() = "table#chapter_table > tbody > tr, table.uk-table > tbody > tr"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("table#chapter_table > tbody > tr, table.uk-table > tbody > tr")
+            .map { element ->
+                SChapter.create().apply {
+                    val link = element.select("a.chico")
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val link = element.select("a.chico")
-
-        val urlOriginal = link.attr("href")
-        if (urlOriginal.startsWith("http")) url = urlOriginal else setUrlWithoutDomain(urlOriginal)
-        name = link.text().trim()
-        date_upload = runCatching {
-            dateFormat.parse(element.select("td:last-child").text().trim())?.time
-        }.getOrNull() ?: 0L
-        scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()?.trim()
-        if (scanlator.isNullOrBlank()) {
-            scanlator = "Unknown"
-        }
+                    val urlOriginal = link.attr("href")
+                    if (urlOriginal.startsWith("http")) url = urlOriginal else setUrlWithoutDomain(urlOriginal)
+                    name = link.text().trim()
+                    date_upload = runCatching {
+                        dateFormat.parse(element.select("td:last-child").text().trim())?.time
+                    }.getOrNull() ?: 0L
+                    scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()?.trim()
+                    if (scanlator.isNullOrBlank()) {
+                        scanlator = "Unknown"
+                    }
+                }
+            }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val availableImages = getChapterImageUrls(document)
 
         if (availableImages.none { it.isBlank() }) {
@@ -298,8 +311,6 @@ class Mangago :
             ?.takeIf { it.isNotBlank() }
             ?: throw Exception("Unable to find image for page ${index + 1}")
     }
-
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun getChapterImageUrls(document: Document): List<String> {
         val images = document.selectFirst("script:containsData(imgsrcs)")
