@@ -196,8 +196,8 @@ class Atsumaru : HttpSource() {
 
         val scanlatorMap = try {
             val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
-            client.newCall(detailsRequest).execute().use {
-                it.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
+            client.newCall(detailsRequest).execute().use { response ->
+                response.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
             }.orEmpty()
         } catch (_: Exception) {
             emptyMap()
