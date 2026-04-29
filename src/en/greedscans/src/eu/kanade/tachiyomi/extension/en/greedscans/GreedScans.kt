@@ -10,7 +10,7 @@ import keiyoushi.utils.getPreferences
 class GreedScans :
     MangaThemesia(
         "Greed Scans",
-        "https://greedscans.com",
+        "https://gojoscans.com",
         "en",
     ),
     ConfigurableSource {
