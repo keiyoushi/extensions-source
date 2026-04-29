@@ -1,241 +1,113 @@
 package eu.kanade.tachiyomi.extension.ko.navercomic
 
-import android.annotation.SuppressLint
-import android.net.Uri
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() {
+abstract class NaverComicBase(protected val mType: String) : HttpSource() {
     override val lang: String = "ko"
     override val baseUrl: String = "https://comic.naver.com"
     internal val mobileUrl = "https://m.comic.naver.com"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
-    internal val json: Json by injectLazy()
 
-    private val mobileHeaders = super.headersBuilder()
-        .add("Referer", mobileUrl)
-        .build()
+    protected open val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.KOREA)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/search/$mType?keyword=$query&page=$page")
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/search/$mType?keyword=$query&page=$page", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = json.decodeFromString<ApiMangaSearchResponse>(response.body.string())
-        val mangas = result.searchList.map {
-            SManga.create().apply {
-                title = it.titleName
-                description = it.synopsis
-                thumbnail_url = it.thumbnailUrl
-                url = "/$mType/list?titleId=${it.titleId}"
-            }
-        }
-
-        return MangasPage(mangas, result.pageInfo.nextPage != 0)
+        val result = response.parseAs<ApiMangaSearchResponse>()
+        return MangasPage(result.toSMangas(mType), result.hasNextPage)
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterListRequest(manga: SManga) = chapterListRequest(manga.url, 1)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val titleId = (baseUrl + manga.url).toHttpUrl().queryParameter("titleId")
+        return GET("$baseUrl/api/article/list/info?titleId=$titleId", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Manga>().toSManga(mType)
+
+    override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url, 1)
+
     private fun chapterListRequest(mangaUrl: String, page: Int): Request {
-        val titleId = Uri.parse("$baseUrl$mangaUrl").getQueryParameter("titleId")
-        return GET("$baseUrl/api/article/list?titleId=$titleId&page=$page")
+        val titleId = (baseUrl + mangaUrl).toHttpUrl().queryParameter("titleId")
+        return GET("$baseUrl/api/article/list?titleId=$titleId&page=$page", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        var result = json.decodeFromString<ApiMangaChapterListResponse>(response.body.string())
+        var result = response.parseAs<ApiMangaChapterListResponse>()
         val chapters = mutableListOf<SChapter>()
-        chapters.addAll(result.articleList.map { createChapter(it, result.titleId) })
 
-        while (result.pageInfo.nextPage != 0) {
-            result = json.decodeFromString(client.newCall(chapterListRequest("/$mType/list?titleId=${result.titleId}", result.pageInfo.nextPage)).execute().body.string())
-            chapters.addAll(result.articleList.map { createChapter(it, result.titleId) })
+        while (true) {
+            chapters.addAll(
+                result.articleList.map { chapter ->
+                    chapter.toSChapter(mType, result.titleId).apply {
+                        date_upload = parseChapterDate(chapter.serviceDateDescription)
+                    }
+                },
+            )
+
+            if (!result.hasNextPage) break
+
+            val nextRequest = chapterListRequest("/$mType/list?titleId=${result.titleId}", result.pageInfo.nextPage)
+            result = client.newCall(nextRequest).execute().parseAs<ApiMangaChapterListResponse>()
         }
 
         return chapters
     }
 
-    private fun createChapter(chapter: MangaChapter, id: Int): SChapter = SChapter.create().apply {
-        url = "/$mType/detail?titleId=$id&no=${chapter.no}"
-        name = chapter.subtitle
-        chapter_number = chapter.no.toFloat()
-        date_upload = parseChapterDate(chapter.serviceDateDescription)
+    protected fun parseChapterDate(date: String): Long = if (date.contains(":")) {
+        Calendar.getInstance().timeInMillis
+    } else {
+        dateFormat.tryParse(date)
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
 
-    @SuppressLint("SimpleDateFormat")
-    private fun parseChapterDate(date: String): Long {
-        return if (date.contains(":")) {
-            Calendar.getInstance().timeInMillis
-        } else {
-            return try {
-                SimpleDateFormat("yy.MM.dd", Locale.KOREA).parse(date)?.time ?: 0L
-            } catch (e: Exception) {
-                e.printStackTrace()
-                0
-            }
-        }
-    }
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val titleId = Uri.parse(manga.url).getQueryParameter("titleId")
-        return client.newCall(GET("$baseUrl/api/article/list/info?titleId=$titleId")).asObservableSuccess().map { mangaDetailsParse(it) }
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = json.decodeFromString<Manga>(response.body.string())
-        val authors = manga.communityArtists.joinToString { it.name }
-
-        return SManga.create().apply {
-            title = manga.titleName
-            author = authors
-            description = manga.synopsis
-            thumbnail_url = manga.thumbnailUrl
-            status = when {
-                manga.rest -> SManga.ON_HIATUS
-                manga.finished -> SManga.COMPLETED
-                else -> SManga.ONGOING
-            }
-        }
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        try {
-            document.select(".wt_viewer img")
-                .map {
-                    it.attr("src")
-                }
-                .ifEmpty {
-                    // for mobile user agent
-                    document.select(".toon_view_lst img")
-                        .map {
-                            it.attr("data-src")
-                        }
-                }
-                .forEach {
-                    pages.add(Page(pages.size, "", it))
-                }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        var urls = document.select(".wt_viewer img").map { it.attr("abs:src").ifEmpty { it.attr("src") } }
+        if (urls.isEmpty()) {
+            urls = document.select(".toon_view_lst img").map { it.attr("abs:data-src").ifEmpty { it.attr("data-src") } }
         }
 
-        return pages
+        return urls.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
-    // We are able to get the image URL directly from the page list
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }
 
 abstract class NaverComicChallengeBase(mType: String) : NaverComicBase(mType) {
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun popularMangaParse(response: Response): MangasPage {
-        val apiMangaResponse = json.decodeFromString<ApiMangaChallengeResponse>(response.body.string())
-        val mangas = apiMangaResponse.list.map {
-            SManga.create().apply {
-                title = it.titleName
-                thumbnail_url = it.thumbnailUrl
-                url = "/$mType/list?titleId=${it.titleId}"
-            }
-        }
+        val apiMangaResponse = response.parseAs<ApiMangaChallengeResponse>()
+        val mangas = apiMangaResponse.toSMangas(mType)
 
         var pageInfo = apiMangaResponse.pageInfo
 
         if (pageInfo == null) {
             val page = response.request.url.queryParameter("page")
-            pageInfo = client.newCall(GET("$baseUrl/api/$mType/pageInfo?order=VIEW&page=$page")).execute().let { parsePageInfo(it) }
+            val pageInfoResponse = client.newCall(GET("$baseUrl/api/$mType/pageInfo?order=VIEW&page=$page", headers)).execute()
+            pageInfo = pageInfoResponse.parseAs<ApiMangaChallengeResponse>().pageInfo
         }
 
-        return MangasPage(mangas, pageInfo?.nextPage != 0)
+        return MangasPage(mangas, pageInfo?.nextPage ?: 0 != 0)
     }
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    private fun parsePageInfo(response: Response): PageInfo? = json.decodeFromString<ApiMangaChallengeResponse>(response.body.string()).pageInfo
 }
-
-@Serializable
-data class ApiMangaSearchResponse(
-    val pageInfo: PageInfo,
-    val searchList: List<Manga>,
-)
-
-@Serializable
-data class ApiMangaChallengeResponse(
-    val pageInfo: PageInfo?,
-    val list: List<MangaChallenge>,
-)
-
-@Serializable
-data class ApiMangaChapterListResponse(
-    val pageInfo: PageInfo,
-    val titleId: Int,
-    val articleList: List<MangaChapter>,
-)
-
-@Serializable
-data class PageInfo(
-    val nextPage: Int,
-)
-
-@Serializable
-data class MangaChapter(
-    val serviceDateDescription: String,
-    val subtitle: String,
-    val no: Int,
-)
-
-@Serializable
-data class Manga(
-    val thumbnailUrl: String,
-    val titleName: String,
-    val titleId: Int,
-    val finished: Boolean,
-    val rest: Boolean,
-    val communityArtists: List<Author>,
-    val synopsis: String,
-)
-
-@Serializable
-data class MangaChallenge(
-    val thumbnailUrl: String,
-    val titleName: String,
-    val titleId: Int,
-    val finish: Boolean,
-    val author: String,
-)
-
-@Serializable
-data class Author(
-    val artistId: Int,
-    val name: String,
-)
