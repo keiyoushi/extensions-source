@@ -91,6 +91,10 @@ class Beauty3600000 : HttpSource() {
         val categoryFilter = filterList.firstInstance<CategoryFilter>()
         val tagFilter = filterList.firstInstance<TagFilter>()
 
+        if (categoryFilter.state == 0 && tagFilter.state == 0) {
+            throw IllegalArgumentException("No filters selected")
+        }
+
         val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
             .addPathSegments(API_BASE)
             .addPathSegment("posts")
