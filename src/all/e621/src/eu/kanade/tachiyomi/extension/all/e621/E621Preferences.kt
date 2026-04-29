@@ -11,6 +11,7 @@ private const val CATEGORY_PREF = "category_filter"
 private const val SPLIT_CHAPTERS_PREF = "split_chapters"
 private const val USERNAME_PREF = "username"
 private const val API_KEY_PREF = "api_key"
+private const val ACCOUNT_BLACKLIST_PREF = "account_blacklist"
 
 fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     ListPreference(screen.context).apply {
@@ -45,6 +46,13 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
             it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
     }.also(screen::addPreference)
+
+    SwitchPreferenceCompat(screen.context).apply {
+        key = ACCOUNT_BLACKLIST_PREF
+        title = "Apply account blacklist to posts"
+        summary = "Enables blacklisting posts when loading"
+        setDefaultValue(false)
+    }.also(screen::addPreference)
 }
 
 val SharedPreferences.categoryPref: String
@@ -58,3 +66,6 @@ val SharedPreferences.usernamePref: String
 
 val SharedPreferences.apiKeyPref: String
     get() = getString(API_KEY_PREF, "")!!
+
+val SharedPreferences.accountBlacklistPref: Boolean
+    get() = getBoolean(ACCOUNT_BLACKLIST_PREF, false)

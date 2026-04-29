@@ -14,6 +14,9 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,6 +29,12 @@ class E621 :
     HttpSource(),
     ConfigurableSource {
 
+    private companion object {
+        const val DELETED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
+        const val BLACKLISTED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Blacklisted"
+        const val NO_IMAGE_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
+    }
+
     override val name: String = "e621"
     override val baseUrl: String = "https://e621.net"
     override val lang: String = "all"
@@ -37,6 +46,10 @@ class E621 :
 
     override val client = network.cloudflareClient
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    @Volatile private var cachedAccountBlacklist: String? = null
+
+    @Volatile private var cachedAccountBlacklistCredentials: String? = null
 
     // e621 needs a custom User-Agent header
     override fun headersBuilder() = Headers.Builder()
@@ -213,13 +226,32 @@ class E621 :
     override fun pageListParse(response: Response): List<Page> {
         val url = response.request.url
 
+        // Helper to check if a post matches any blacklist entry
+        fun isBlacklisted(post: Post, blacklist: List<List<String>>): Boolean {
+            if (blacklist.isEmpty()) return false
+            val allTags = post.tags.allTags
+            return blacklist.any { group -> group.all { tag -> tag in allTags } }
+        }
+
+        val blacklist: List<List<String>> =
+            if (preferences.accountBlacklistPref) {
+                fetchAccountBlacklist()
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .map { line -> line.split(Regex("\\s+")).filter { it.isNotEmpty() } }
+            } else {
+                emptyList()
+            }
+
         // Single post chapter (split chapters mode)
         if (url.encodedPath == "/posts.json") {
             val post = response.parseAs<PostsResponse>().posts.firstOrNull()
             val imageUrl = when {
-                post == null -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted" // Not returned by API
-                isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
-                else -> extractImageUrl(post) ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
+                post == null -> NO_IMAGE_PLACEHOLDER
+                isPostDeleted(post) -> DELETED_PLACEHOLDER
+                isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
+                else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
             }
             return listOf(Page(0, imageUrl = imageUrl))
         }
@@ -234,9 +266,10 @@ class E621 :
         return postIds.mapIndexed { index, postId ->
             val post = postMap[postId]
             val imageUrl = when {
-                post == null -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted" // Not returned by API
-                isPostDeleted(post) -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
-                else -> extractImageUrl(post) ?: "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
+                post == null -> NO_IMAGE_PLACEHOLDER
+                post != null && isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
+                isPostDeleted(post) -> DELETED_PLACEHOLDER
+                else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
             }
             Page(index, imageUrl = imageUrl)
         }
@@ -311,6 +344,39 @@ class E621 :
         return batchFetchPosts(postIds).mapNotNull { post ->
             extractThumbnailUrl(post)?.let { post.id to it }
         }.toMap()
+    }
+
+    private fun fetchAccountBlacklist(): String {
+        if (!preferences.accountBlacklistPref) return ""
+
+        val username = preferences.usernamePref.trim()
+        val apiKey = preferences.apiKeyPref.trim()
+        if (username.isEmpty() || apiKey.isEmpty()) return ""
+
+        val credentials = "$username:$apiKey"
+        val cached = cachedAccountBlacklist
+        if (cached != null && cachedAccountBlacklistCredentials == credentials) {
+            return cached
+        }
+
+        val blacklist = runCatching {
+            client.newCall(GET("$baseUrl/users/me.json", apiHeaders())).execute().use { response ->
+                if (!response.isSuccessful) return@use ""
+
+                val json = response.parseAs<JsonObject>()
+                (
+                    json["blacklisted_tags"]?.jsonPrimitive?.contentOrNull
+                        ?: (json["user"] as? JsonObject)
+                            ?.get("blacklisted_tags")
+                            ?.jsonPrimitive
+                            ?.contentOrNull
+                    ).orEmpty()
+            }
+        }.getOrDefault("")
+
+        cachedAccountBlacklist = blacklist
+        cachedAccountBlacklistCredentials = credentials
+        return blacklist
     }
 
     private fun parseDate(dateStr: String): Long = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).tryParse(dateStr)
