@@ -118,7 +118,6 @@ class E621 :
                 title = pool.name.replace("_", " ")
                 thumbnail_url = pool.postIds.firstOrNull()
                     ?.let { thumbnailMap[it] }
-                    ?: ""
             }
         }
 
