@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import java.io.IOException
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -51,11 +52,11 @@ class MiMiHentai : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangaList = document.select("a.group").map { element ->
+        val mangaList = document.select("a.group").mapNotNull { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                title = element.selectFirst("h1")!!.text()
-                thumbnail_url = element.selectFirst("img")?.let {
+                title = element.selectFirst("h1")?.text()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                thumbnail_url = element.selectFirst("img")?.let { it: Element ->
                     it.absUrl("data-src")
                         .ifEmpty { it.absUrl("src") }
                 }
@@ -116,8 +117,8 @@ class MiMiHentai : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("div.title p")!!.text()
-            thumbnail_url = document.selectFirst("img.rounded.shadow-md.w-full")?.let {
+            document.selectFirst("div.title p")?.text()?.let { title = it }
+            thumbnail_url = document.selectFirst("img.rounded.shadow-md.w-full")?.let { it: Element ->
                 it.absUrl("data-src")
                     .ifEmpty { it.absUrl("src") }
             }
@@ -144,7 +145,7 @@ class MiMiHentai : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst("h1")?.text()
-                    ?: element.attr("title")
+                    ?: element.attr("title").takeIf(String::isNotBlank)
                     ?: element.text()
 
                 val dateText = element.parent()?.selectFirst("span.timeago")?.text()
@@ -196,7 +197,6 @@ class MiMiHentai : HttpSource() {
     // =============================== Related ================================
     // disable suggested mangas on Komikku due to heavy rate limit
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
 
     // ============================== Filters ===============================
 
