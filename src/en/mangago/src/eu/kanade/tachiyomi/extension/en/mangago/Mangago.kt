@@ -193,7 +193,7 @@ class Mangago :
                 }
                 info.select(".manga_info li, .manga_right tr").forEach { el ->
                     when (el.selectFirst("b, label")?.text()?.lowercase()) {
-                        "alternative:" -> description += "\n\n${el.text()}"
+                        "alternative:" -> description = listOfNotNull(description, el.text()).joinToString("\n\n")
 
                         "status:" -> status = when (el.selectFirst("span")?.text()?.lowercase()) {
                             "ongoing" -> SManga.ONGOING
