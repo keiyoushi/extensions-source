@@ -1,7 +1,7 @@
 ext {
     extName = 'Taiyō'
     extClass = '.Taiyo'
-    extVersionCode = 8
+    extVersionCode = 9
     isNsfw = true
 }
 
