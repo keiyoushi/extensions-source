@@ -130,18 +130,19 @@ class Beauty3600000 : HttpSource() {
     )
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<PostDto>().toSManga().apply {
-        runCatching {
-            runBlocking { getTags(url) }
-                .takeIf { it.isNotEmpty() }
-                ?.let { tags -> genre = tags.joinToString { it.name } }
-        }
+        genre = runBlocking {
+            listOf("categories", "tags").parallelCatchingFlatMap { term ->
+                getTerms(url, term)
+            }
+        }.takeIf { it.isNotEmpty() }
+            ?.joinToString { it.name }
     }
 
-    private suspend fun getTags(mangaId: String): List<TermDto> {
+    private suspend fun getTerms(mangaId: String, term: String): List<TermDto> {
         val request = GET(
             baseUrl.toHttpUrlOrNull()!!.newBuilder()
                 .addPathSegments(API_BASE)
-                .addPathSegment("tags")
+                .addPathSegment(term)
                 .addQueryParameter("post", mangaId)
                 .build(),
             headers,
@@ -151,7 +152,7 @@ class Beauty3600000 : HttpSource() {
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val tags = getTags(manga.url)
+        val tags = getTerms(manga.url, "tags")
             .sortedBy { it.name.startsWith('[') }
 
         return tags.parallelCatchingFlatMap { tag ->
