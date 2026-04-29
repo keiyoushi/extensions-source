@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.Credentials
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -41,6 +42,14 @@ class E621 :
     override fun headersBuilder() = Headers.Builder()
         .add("User-Agent", "E621/1.4.${BuildConfig.VERSION_CODE} Keiyoushi (https://github.com/keiyoushi/extensions-source)")
 
+    private fun apiHeaders(): Headers = headers.newBuilder().apply {
+        val username = preferences.usernamePref.trim()
+        val apiKey = preferences.apiKeyPref.trim()
+        if (username.isNotEmpty() && apiKey.isNotEmpty()) {
+            add("Authorization", Credentials.basic(username, apiKey))
+        }
+    }.build()
+
     private val artistFilter = setOf(
         "conditional_dnp",
         "unknown_artist",
@@ -56,7 +65,7 @@ class E621 :
         if (category.isNotEmpty()) {
             url.addQueryParameter("search[category]", category)
         }
-        return GET(url.build(), headers)
+        return GET(url.build(), apiHeaders())
     }
     override fun popularMangaParse(response: Response): MangasPage = parsePoolList(response)
 
@@ -67,7 +76,7 @@ class E621 :
         if (category.isNotEmpty()) {
             url.addQueryParameter("search[category]", category)
         }
-        return GET(url.build(), headers)
+        return GET(url.build(), apiHeaders())
     }
     override fun latestUpdatesParse(response: Response): MangasPage = parsePoolList(response)
 
@@ -100,7 +109,7 @@ class E621 :
             url.addQueryParameter("search[description_matches]", description)
         }
 
-        return GET(url.build(), headers)
+        return GET(url.build(), apiHeaders())
     }
 
     override fun searchMangaParse(response: Response): MangasPage = parsePoolList(response)
@@ -127,7 +136,7 @@ class E621 :
     // Details
     override fun mangaDetailsRequest(manga: SManga): Request {
         val poolId = manga.url
-        return GET("$baseUrl/pools/$poolId.json", headers)
+        return GET("$baseUrl/pools/$poolId.json", apiHeaders())
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -153,7 +162,7 @@ class E621 :
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
         val poolId = manga.url
-        return GET("$baseUrl/pools/$poolId.json", headers)
+        return GET("$baseUrl/pools/$poolId.json", apiHeaders())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -194,10 +203,10 @@ class E621 :
                     addQueryParameter("limit", "1")
                 }
             }.build()
-            GET(url, headers)
+            GET(url, apiHeaders())
         } else {
             val poolId = chapterUrl.pathSegments.last()
-            GET("$baseUrl/pools/$poolId.json", headers)
+            GET("$baseUrl/pools/$poolId.json", apiHeaders())
         }
     }
 
@@ -288,7 +297,7 @@ class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
-                val data = client.newCall(GET(url, headers)).execute()
+                val data = client.newCall(GET(url, apiHeaders())).execute()
                     .parseAs<PostsResponse>()
 
                 data.posts

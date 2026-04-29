@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.all.e621
 
 import android.content.SharedPreferences
+import android.text.InputType
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 
 private const val CATEGORY_PREF = "category_filter"
 private const val SPLIT_CHAPTERS_PREF = "split_chapters"
+private const val USERNAME_PREF = "username"
+private const val API_KEY_PREF = "api_key"
 
 fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     ListPreference(screen.context).apply {
@@ -24,6 +28,23 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         summary = "Each post in a pool will be shown as a separate chapter instead of one merged chapter"
         setDefaultValue(false)
     }.also(screen::addPreference)
+
+    EditTextPreference(screen.context).apply {
+        key = USERNAME_PREF
+        title = "Username"
+        summary = "Optional: e621 account username for authenticated requests"
+        setDefaultValue("")
+    }.also(screen::addPreference)
+
+    EditTextPreference(screen.context).apply {
+        key = API_KEY_PREF
+        title = "API key"
+        summary = "Optional: e621 account API key"
+        setDefaultValue("")
+        setOnBindEditTextListener {
+            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+    }.also(screen::addPreference)
 }
 
 val SharedPreferences.categoryPref: String
@@ -31,3 +52,9 @@ val SharedPreferences.categoryPref: String
 
 val SharedPreferences.splitChaptersPref: Boolean
     get() = getBoolean(SPLIT_CHAPTERS_PREF, false)
+
+val SharedPreferences.usernamePref: String
+    get() = getString(USERNAME_PREF, "")!!
+
+val SharedPreferences.apiKeyPref: String
+    get() = getString(API_KEY_PREF, "")!!
