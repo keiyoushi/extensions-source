@@ -124,8 +124,7 @@ class BaoBua : HttpSource() {
             ?: return pages
 
         val nextDoc = client.newCall(GET(nextPageUrl, headers))
-            .execute()
-            .asJsoup()
+            .execute().use { it.asJsoup() }
 
         val nextPages = recursivePageListParse(nextDoc)
         val offset = pages.size
@@ -142,11 +141,11 @@ class BaoBua : HttpSource() {
 
     // ========================= Helpers =========================
     private fun parseMangasPage(document: Document): MangasPage {
-        val mangas = document.select(".product-item").map { element ->
+        val mangas = document.select(".product-item").mapNotNull { element ->
             SManga.create().apply {
-                val absUrl = element.selectFirst("a")!!.absUrl("href")
+                val absUrl = element.selectFirst("a")?.absUrl("href") ?: return@mapNotNull null
                 url = absUrl.toHttpUrlOrNull()?.encodedPath ?: absUrl
-                title = element.selectFirst(".product-title")?.text() ?: throw Exception("Title is mandatory")
+                title = element.selectFirst(".product-title")?.text() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img.product-imgreal")?.absUrl("src")
                     ?.let { normalizeImageUrl(it) }
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
