@@ -384,13 +384,15 @@ class Mangago :
 
     override fun relatedMangaListParse(response: Response): List<SManga> {
         val document = response.asJsoup()
-        return document.select(".also_like + div .listitem, .also-like li")
-            .mapNotNull { elements ->
-                elements.selectFirst("a[title]")?.let { elm: Element ->
+        return document.select("div.pic_list .updatesli, .also-like li")
+            .mapNotNull { element ->
+                element.selectFirst("a[title]")?.let { elm: Element ->
                     SManga.create().apply {
-                        title = elm.attr("title").takeIf(String::isNotBlank) ?: return@mapNotNull null
+                        title = elm.attr("title").takeIf(String::isNotBlank)
+                            ?: elm.ownText().takeIf(String::isNotBlank)
+                            ?: return@mapNotNull null
                         setUrlWithoutDomain(elm.absUrl("href"))
-                        thumbnail_url = elements.selectFirst("img")?.imgAttr()
+                        thumbnail_url = element.selectFirst("img")?.imgAttr()
                     }
                 }
                     ?: return@mapNotNull null
