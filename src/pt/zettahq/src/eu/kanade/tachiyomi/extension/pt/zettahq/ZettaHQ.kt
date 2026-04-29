@@ -7,16 +7,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.Normalizer
 
-class ZettaHQ : ParsedHttpSource() {
+class ZettaHQ : HttpSource() {
 
     override val name = "ZettaHQ"
 
@@ -29,6 +30,7 @@ class ZettaHQ : ParsedHttpSource() {
     override val client = network.cloudflareClient
 
     // ============================== Popular ==============================
+
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page", headers)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
@@ -36,11 +38,14 @@ class ZettaHQ : ParsedHttpSource() {
         return super.fetchPopularManga(page)
     }
 
-    override fun popularMangaSelector() = "div.post-item article"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.post-item article").map(::mangaFromElement)
+        val hasNextPage = document.selectFirst(".next.page-numbers") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaNextPageSelector() = ".next.page-numbers"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    private fun mangaFromElement(element: Element) = SManga.create().apply {
         element.selectFirst("h3 a")!!.let { anchor ->
             title = anchor.text()
             setUrlWithoutDomain(anchor.absUrl("href"))
@@ -48,12 +53,10 @@ class ZettaHQ : ParsedHttpSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    // ============================== Popular ==============================
+    // ============================== Latest ==============================
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ==============================
 
@@ -77,7 +80,6 @@ class ZettaHQ : ParsedHttpSource() {
 
                         if (isCategoryEnable) {
                             url.addQueryParameter("tag", genresSelected)
-
                             return@forEach
                         }
 
@@ -132,13 +134,12 @@ class ZettaHQ : ParsedHttpSource() {
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         title = document.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
         genre = document.select(".tags > a.tag").joinToString { it.text() }
@@ -148,6 +149,7 @@ class ZettaHQ : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapters = listOf(
             SChapter.create().apply {
@@ -158,16 +160,18 @@ class ZettaHQ : ParsedHttpSource() {
         return Observable.just(chapters)
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".content-container article img").mapIndexed { index, element ->
-        Page(index, imageUrl = element.absUrl("src"))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".content-container article img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("src"))
+        }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // =============================== Filters ===============================
 
@@ -234,28 +238,12 @@ class ZettaHQ : ParsedHttpSource() {
 
     private fun String.removeAccents(): String {
         val normalized = Normalizer.normalize(this, Normalizer.Form.NFD)
-        return normalized.replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
-    }
-
-    interface Sort {
-        val priority: Int
-    }
-
-    private class GenreList(title: String, genres: List<Genre>, override val priority: Int = 0) :
-        Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) }),
-        Sort
-
-    private class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class Genre(val name: String, val id: String = name)
-
-    private open class SelectFilter(title: String, private val vals: Array<Pair<String, String>>, state: Int = 0, val query: String = "", override val priority: Int = 0) :
-        Filter.Select<String>(title, vals.map { it.first }.toTypedArray(), state),
-        Sort {
-        fun selected() = vals[state].second
+        return normalized.replace(ACCENT_REGEX, "")
     }
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val SPACE_REGEX = """\s+""".toRegex()
+        val SPACE_REGEX = Regex("""\s+""")
+        private val ACCENT_REGEX = Regex("""[\p{InCombiningDiacriticalMarks}]""")
     }
 }
