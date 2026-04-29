@@ -7,19 +7,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.jsonInstance
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
-class OhtaWebComic : ParsedHttpSource() {
+class OhtaWebComic : HttpSource() {
 
     override val name = "Ohta Web Comic"
 
@@ -29,116 +26,103 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    private val json = Injekt.get<Json>()
-
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(json))
+        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private lateinit var directory: List<Element>
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
-        client.newCall(popularMangaRequest(page))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return client.newCall(popularMangaRequest(page))
             .asObservableSuccess()
-            .map { popularMangaParse(it) }
-    } else {
-        Observable.just(parseDirectory(page, ::popularMangaFromElement))
+            .map { response ->
+                val document = response.asJsoup()
+                val directory = document.select(".bnrList ul li a")
+
+                val startIndex = (page - 1) * 24
+                if (startIndex >= directory.size) {
+                    return@map MangasPage(emptyList(), false)
+                }
+
+                val endRange = minOf(page * 24, directory.size)
+                val manga = directory.subList(startIndex, endRange).map(::parseMangaFromElement)
+                val hasNextPage = endRange < directory.size
+
+                MangasPage(manga, hasNextPage)
+            }
     }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-        directory = document.select(popularMangaSelector())
-        return parseDirectory(1, ::popularMangaFromElement)
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                val document = response.asJsoup()
+                val directory = document.select(".bnrList ul li a")
+                    .filter { it.selectFirst(".title")?.text()?.contains(query, true) == true }
+
+                val startIndex = (page - 1) * 24
+                if (startIndex >= directory.size) {
+                    return@map MangasPage(emptyList(), false)
+                }
+
+                val endRange = minOf(page * 24, directory.size)
+                val manga = directory.subList(startIndex, endRange).map(::parseMangaFromElement)
+                val hasNextPage = endRange < directory.size
+
+                MangasPage(manga, hasNextPage)
+            }
     }
 
-    private fun parseDirectory(page: Int, parseFn: (element: Element) -> SManga): MangasPage {
-        val endRange = minOf(page * 24, directory.size)
-        val manga = directory.subList((page - 1) * 24, endRange).map { parseFn(it) }
-        val hasNextPage = endRange < directory.lastIndex
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/list/", headers)
 
-        return MangasPage(manga, hasNextPage)
-    }
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaSelector() = ".bnrList ul li a"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    private fun parseMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         title = element.selectFirst(".title")!!.text()
         thumbnail_url = element.selectFirst(".pic img")?.absUrl("src")
     }
 
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (page == 1) {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { searchMangaParse(it, query) }
-    } else {
-        Observable.just(parseDirectory(page, ::searchMangaFromElement))
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = popularMangaRequest(page)
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
+    override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("[itemprop=name]")!!.text()
+            author = document.selectFirst("[itemprop=author]")?.text()
+            thumbnail_url = document.selectFirst(".contentHeader")
+                ?.attr("style")
+                ?.substringAfter("background-image:url(")
+                ?.substringBefore(");")
+            description = buildString {
+                var currentNode = document.selectFirst("h3.titleBoader:contains(作品について) + dl")
+                    ?: return@buildString
 
-        directory = document.select(searchMangaSelector())
-            .filter { it ->
-                it.selectFirst(".title")?.text()?.contains(query, true) == true
-            }
-        return parseDirectory(1, ::searchMangaFromElement)
-    }
+                while (true) {
+                    val nextSibling = currentNode.nextElementSibling()
+                        ?: break
 
-    override fun searchMangaSelector() = popularMangaSelector()
+                    if (nextSibling.nodeName() != "p") {
+                        break
+                    }
 
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("[itemprop=name]")!!.text()
-        author = document.selectFirst("[itemprop=author]")?.text()
-        thumbnail_url = document.selectFirst(".contentHeader")
-            ?.attr("style")
-            ?.substringAfter("background-image:url(")
-            ?.substringBefore(");")
-        description = buildString {
-            var currentNode = document.selectFirst("h3.titleBoader:contains(作品について) + dl")
-                ?: return@buildString
-
-            while (true) {
-                val nextSibling = currentNode.nextElementSibling()
-                    ?: break
-
-                if (nextSibling.nodeName() != "p") {
-                    break
+                    appendLine(nextSibling.text())
+                    currentNode = nextSibling
                 }
-
-                appendLine(nextSibling.text())
-                currentNode = nextSibling
             }
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val chapters = document.select(chapterListSelector())
+        val chapters = document.select(".backnumberList a[onclick*=openBook]")
             .sortedByDescending {
                 it.selectFirst("dt.number")!!.ownText().toInt()
             }
@@ -157,31 +141,32 @@ class OhtaWebComic : ParsedHttpSource() {
             }
     }
 
-    override fun chapterListSelector() = ".backnumberList a[onclick*=openBook]"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+    private fun chapterFromElement(element: Element) = SChapter.create().apply {
         url = "/contents/${element.getChapterId()}"
         name = element.selectFirst("div.title")!!.text()
     }
 
-    private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
+    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) }
 
     override fun pageListRequest(chapter: SChapter) = GET("https://www.yondemill.jp${chapter.url}?view=1&u0=1", headers)
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val readerUrl = document.selectFirst("script:containsData(location.href)")!!
             .data()
             .substringAfter("location.href='")
             .substringBefore("';")
-        val headers = headers.newBuilder()
-            .set("Referer", document.location())
+
+        val requestHeaders = headers.newBuilder()
+            .set("Referer", response.request.url.toString())
             .build()
-        val readerResponse = client.newCall(GET(readerUrl, headers)).execute()
+
+        val readerResponse = client.newCall(GET(readerUrl, requestHeaders)).execute()
 
         return reader.pageListParse(readerResponse)
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
 
 private fun Element.getChapterId(): String = attr("onclick")
