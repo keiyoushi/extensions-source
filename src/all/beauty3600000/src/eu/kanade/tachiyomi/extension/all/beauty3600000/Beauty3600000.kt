@@ -72,7 +72,7 @@ class Beauty3600000 : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val queryUrl = query.toHttpUrlOrNull()
         if (queryUrl != null && queryUrl.host == baseUrl.toHttpUrlOrNull()?.host) {
-            val id = queryUrl.queryParameter("p")
+            val id = queryUrl.queryParameter("p")?.trim()
             val slug = if (id == null) queryUrl.pathSegments.lastOrNull { it.isNotBlank() }?.removeSuffix(".html") else null
             val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
                 .addPathSegments(API_BASE)
@@ -94,6 +94,9 @@ class Beauty3600000 : HttpSource() {
         val tagFilter = filterList.firstInstance<TagFilter>()
 
         if (categoryFilter.state == 0 && tagFilter.state == 0) {
+            if (query.isBlank()) {
+                return popularMangaRequest(page)
+            }
             throw IllegalArgumentException("No filters selected")
         }
 
@@ -131,7 +134,7 @@ class Beauty3600000 : HttpSource() {
             addPathSegments(API_BASE)
             addPathSegment("posts")
             manga.url.toIntOrNull()?.let { addPathSegment(manga.url) }
-                ?: addQueryParameter("slug", manga.url.removeSuffix("/").substringAfterLast('/'))
+                ?: addQueryParameter("slug", manga.url.removeSurrounding("/"))
         }
             .build(),
         headers,
@@ -189,7 +192,9 @@ class Beauty3600000 : HttpSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/?p=${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = manga.url.toIntOrNull()
+        ?.let { "$baseUrl/?p=${manga.url}" }
+        ?: "$baseUrl${manga.url}"
 
     private fun Response.toPost(): PostDto {
         val url = request.url.toString()
@@ -198,7 +203,8 @@ class Beauty3600000 : HttpSource() {
             jsonArrayRegex.find(body)
                 ?.value
                 ?.parseAs<List<PostDto>>()
-                ?.firstOrNull()!!
+                ?.firstOrNull()
+                ?: throw IllegalArgumentException("Post not found")
         } else {
             parseAs<PostDto>()
         }
