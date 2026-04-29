@@ -3,20 +3,23 @@ package eu.kanade.tachiyomi.extension.id.bacami
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Bacami : ParsedHttpSource() {
+class Bacami : HttpSource() {
 
     override val name = "Bacami"
     override val baseUrl = "https://bacami.net"
@@ -30,20 +33,27 @@ class Bacami : ParsedHttpSource() {
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/custom-search/orderby/score/page/$page/", headers)
 
-    override fun popularMangaSelector() = "article.genre-card"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("article.genre-card").map { element ->
+            searchMangaFromElement(element)
+        }
+        val hasNextPage = document.selectFirst("div.paginate a.next.page-numbers") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector() = "div.paginate a.next.page-numbers"
+    private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("div.genre-info > a")!!.text()
+        setUrlWithoutDomain(element.selectFirst("div.genre-cover > a")!!.attr("href"))
+        thumbnail_url = element.selectFirst("div.genre-cover > a > img")?.let {
+            it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
+        }
+    }
 
     // ============================== Latest ================================
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/custom-search/orderby/latest/page/$page/", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -74,37 +84,29 @@ class Bacami : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div.genre-info > a")!!.text()
-        setUrlWithoutDomain(element.selectFirst("div.genre-cover > a")!!.attr("href"))
-        // Selector diperbaiki untuk menargetkan gambar cover secara spesifik
-        thumbnail_url = element.selectFirst("div.genre-cover > a > img")?.let {
-            it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
-        }
-    }
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val content = document.selectFirst("#komik > section.manga-content")!!
-        title = content.selectFirst("header > h1")!!.text()
-        thumbnail_url = content.selectFirst("figure .image-wrap img")?.let {
-            it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
-        }
-        author = content.selectFirst(".info-item:contains(Author) .info-value")?.text()
-            ?.ifBlank { content.selectFirst("div > div > div:nth-child(3) > span.info-value")?.text() }
-        genre = content.select("nav > span > a").joinToString { it.text() }
-        status = parseStatus(document)
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            val content = document.selectFirst("#komik > section.manga-content")!!
+            title = content.selectFirst("header > h1")!!.text()
+            thumbnail_url = content.selectFirst("figure .image-wrap img")?.let {
+                it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
+            }
+            author = content.selectFirst(".info-item:contains(Author) .info-value")?.text()
+                ?.ifEmpty { content.selectFirst("div > div > div:nth-child(3) > span.info-value")?.text() }
+            genre = content.select("nav > span > a").joinToString { it.text() }
+            status = parseStatus(document)
 
-        val altTitle = content.select("p.manga-altname").text()
-        description = content.select("p.manga-description").text().let {
-            if (altTitle.isNotBlank()) {
-                "${it.trim()}\n\nAlternative Title: $altTitle".trim()
-            } else {
-                it
+            val altTitle = content.select("p.manga-altname").text()
+            description = content.select("p.manga-description").text().let {
+                if (altTitle.isNotEmpty()) {
+                    "$it\n\nAlternative Title: $altTitle".trim()
+                } else {
+                    it
+                }
             }
         }
     }
@@ -116,19 +118,21 @@ class Bacami : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListSelector() = "ol.chapter-list > li"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val link = element.selectFirst("a.ch-link")!!
-        name = link.text().substringAfter("–").trim()
-        setUrlWithoutDomain(link.attr("href"))
-        date_upload = parseChapterDate(element.select("span.ch-date").text())
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("ol.chapter-list > li").map { element ->
+            SChapter.create().apply {
+                val link = element.selectFirst("a.ch-link")!!
+                name = link.text().substringAfter("–").trim()
+                setUrlWithoutDomain(link.attr("href"))
+                date_upload = dateFormat.tryParse(element.select("span.ch-date").text())
+            }
+        }
     }
 
-    private fun parseChapterDate(date: String): Long = dateFormat.tryParse(date)
-
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val scriptContent = document.selectFirst("script:containsData(imageUrls)")?.data()
             ?: return emptyList()
 
@@ -139,7 +143,7 @@ class Bacami : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
     // ============================== Filters ===============================
     override fun getFilterList(): FilterList = FilterList(
@@ -153,143 +157,4 @@ class Bacami : ParsedHttpSource() {
         Filter.Header("Centang 'Komik Baru' akan mengabaikan filter lain."),
         NewKomikFilter(),
     )
-
-    private class NewKomikFilter : Filter.CheckBox("Komik Baru")
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
-
-    private class OrderByFilter :
-        UriPartFilter(
-            "Order By",
-            arrayOf(
-                Pair("Latest Updates", "latest"),
-                Pair("Alphabetical", "name"),
-                Pair("Score", "score"),
-            ),
-        )
-
-    private class StatusFilter :
-        UriPartFilter(
-            "Status",
-            arrayOf(
-                Pair("All", "all"),
-                Pair("Hot", "hot"),
-                Pair("Project", "project"),
-                Pair("Completed", "tamat"),
-            ),
-        )
-
-    private class TypeFilter :
-        UriPartFilter(
-            "Type",
-            arrayOf(
-                Pair("All", "all"),
-                Pair("Manga", "manga"),
-                Pair("Manhua", "manhua"),
-                Pair("Manhwa", "manhwa"),
-            ),
-        )
-
-    private class GenreFilter :
-        UriPartFilter(
-            "Genre",
-            arrayOf(
-                Pair("All", "all"),
-                Pair("Action", "action-2"),
-                Pair("Adult", "adult"),
-                Pair("Adventure", "adventure"),
-                Pair("Apocalypse", "apocalypse"),
-                Pair("Comedy", "comedy"),
-                Pair("Comedy Mystery Romance Slice Of Life Supernatural", "comedy-mystery-romance-slice-of-life-supernatural"),
-                Pair("Comedy Romance Slice Of Life", "comedy-romance-slice-of-life"),
-                Pair("Cooking", "cooking"),
-                Pair("Crime", "crime"),
-                Pair("Cultivation", "cultivation"),
-                Pair("Demons", "demons"),
-                Pair("Doujinshi", "doujinshi"),
-                Pair("Drama", "drama"),
-                Pair("Ecchi", "ecchi"),
-                Pair("Fantasy", "fantasy"),
-                Pair("Furry", "furry"),
-                Pair("Game", "game"),
-                Pair("Gender Bender", "gender-bender"),
-                Pair("Genius", "genius"),
-                Pair("Gore", "gore"),
-                Pair("Harem", "harem"),
-                Pair("Hentai", "hentai"),
-                Pair("Historical", "historical"),
-                Pair("Horror", "horror"),
-                Pair("Isekai", "isekai"),
-                Pair("Josei", "josei"),
-                Pair("Lolicon", "lolicon"),
-                Pair("Long Strip", "long-strip"),
-                Pair("Love Polygon", "love-polygon"),
-                Pair("Magic", "magic"),
-                Pair("Magical Girl", "magical-girl"),
-                Pair("Manhua", "manhua"),
-                Pair("Manhwa", "manhwa"),
-                Pair("Martial Art", "martial-art"),
-                Pair("Martial Arts", "martial-arts"),
-                Pair("Mature", "mature"),
-                Pair("Mecha", "mecha"),
-                Pair("Medical", "medical"),
-                Pair("Military", "military"),
-                Pair("Monster", "monster"),
-                Pair("Monster Girls", "monster-girls"),
-                Pair("Monsters", "monsters"),
-                Pair("Music", "music"),
-                Pair("Mystery", "mystery"),
-                Pair("Mystery Shounen", "mystery-shounen"),
-                Pair("Mythology", "mythology"),
-                Pair("One Shot", "one-shot"),
-                Pair("Oneshot", "oneshot"),
-                Pair("Parody", "parody"),
-                Pair("Philosophical", "philosophical"),
-                Pair("Police", "police"),
-                Pair("Post-Apocalyptic", "post-apocalyptic"),
-                Pair("Psychological", "psychological"),
-                Pair("Rebirth", "rebirth"),
-                Pair("Reincarnation", "reincarnation"),
-                Pair("Romance", "romance"),
-                Pair("Romantic Subtext", "romantic-subtext"),
-                Pair("Samurai", "samurai"),
-                Pair("School", "school"),
-                Pair("School Life", "school-life"),
-                Pair("Sci-fi", "sci-fi"),
-                Pair("Seinen", "seinen"),
-                Pair("Shotacon", "shotacon"),
-                Pair("Shoujo", "shoujo"),
-                Pair("Shoujo Ai", "shoujo-ai"),
-                Pair("Shounen", "shounen"),
-                Pair("Shounen Ai", "shounen-ai"),
-                Pair("Slice of Life", "slice-of-life"),
-                Pair("Smut", "smut"),
-                Pair("Space", "space"),
-                Pair("Sports", "sports"),
-                Pair("Superhero", "superhero"),
-                Pair("Supernatural", "supernatural"),
-                Pair("Super Power", "super-power"),
-                Pair("Survival", "survival"),
-                Pair("Suspense", "suspense"),
-                Pair("System", "system"),
-                Pair("Team Sports", "team-sports"),
-                Pair("Thriller", "thriller"),
-                Pair("Time Travel", "time-travel"),
-                Pair("Tragedy", "tragedy"),
-                Pair("Urban", "urban"),
-                Pair("Urban Fantasy", "urban-fantasy"),
-                Pair("Vampire", "vampire"),
-                Pair("Video Game", "video-game"),
-                Pair("Villainess", "villainess"),
-                Pair("Visual Arts", "visual-arts"),
-                Pair("Webtoon", "webtoon"),
-                Pair("Webtoons", "webtoons"),
-                Pair("Wuxia", "wuxia"),
-                Pair("Yaoi", "yaoi"),
-                Pair("Yuri", "yuri"),
-                Pair("Zombies", "zombies"),
-            ),
-        )
 }
