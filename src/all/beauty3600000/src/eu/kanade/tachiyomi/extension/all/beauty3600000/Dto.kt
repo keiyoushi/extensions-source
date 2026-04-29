@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 
 @Serializable
 class PostDto(
@@ -16,7 +17,9 @@ class PostDto(
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
-        title = this@PostDto.title.rendered.takeIf { it.isNotBlank() } ?: throw Exception("Title is mandatory")
+        title = this@PostDto.title.rendered.decodeHtmlEntities()
+            .takeIf { it.isNotBlank() }
+            ?: throw Exception("Title is mandatory")
         thumbnail_url = Jsoup.parseBodyFragment(content.rendered).selectFirst("img")?.attr("src")
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -32,6 +35,8 @@ class PostDto(
 class RenderedDto(
     val rendered: String,
 )
+
+private fun String.decodeHtmlEntities(): String = Parser.unescapeEntities(this, false)
 
 @Serializable
 class TermDto(
