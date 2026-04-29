@@ -14,35 +14,34 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
-class Taiyo : ParsedHttpSource() {
+class Taiyo : HttpSource() {
 
     override val name = "Taiyō"
 
@@ -50,7 +49,6 @@ class Taiyo : ParsedHttpSource() {
 
     override val lang = "pt-BR"
 
-    // The source doesn't show the title on the home page
     override val supportsLatest = false
 
     private val preferences: SharedPreferences = getPreferences()
@@ -63,26 +61,21 @@ class Taiyo : ParsedHttpSource() {
         .addInterceptor(::authorizationInterceptor)
         .build()
 
-    private val json: Json by injectLazy()
-
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun popularMangaNextPageSelector() = null
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = null
+
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) {
         val id = query.removePrefix(PREFIX_SEARCH)
         client.newCall(GET("$baseUrl/media/$id"))
             .asObservableSuccess()
@@ -92,14 +85,14 @@ class Taiyo : ParsedHttpSource() {
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response.asJsoup())
+        val details = mangaDetailsParse(response)
         return MangasPage(listOf(details), false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val limit = 21
 
-        val jsonObj = buildJsonObject {
+        val requestBody = buildJsonObject {
             put(
                 "queries",
                 buildJsonArray {
@@ -114,9 +107,7 @@ class Taiyo : ParsedHttpSource() {
                     )
                 },
             )
-        }
-
-        val requestBody = json.encodeToString(jsonObj).toRequestBody(MEDIA_TYPE)
+        }.toJsonRequestBody()
 
         return POST("https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search", getApiHeaders(), requestBody)
     }
@@ -141,14 +132,10 @@ class Taiyo : ParsedHttpSource() {
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
-
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         setUrlWithoutDomain(document.location())
         thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
         title = document.selectFirst("p.media-title")!!.text()
@@ -180,6 +167,9 @@ class Taiyo : ParsedHttpSource() {
     }
 
     // ============================== Chapters ==============================
+
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val id = manga.url.substringAfter("/media/").trimEnd('/')
         var page = 1
@@ -199,22 +189,23 @@ class Taiyo : ParsedHttpSource() {
                 page++
 
                 val pageUrl = apiUrl.newBuilder()
-                    .addQueryParameter("input", json.encodeToString(input))
+                    .addQueryParameter("input", jsonInstance.encodeToString(input))
                     .build()
 
-                val chapters = client.newCall(GET(pageUrl, headers)).execute().let {
+                val chaptersJson = client.newCall(GET(pageUrl, headers)).execute().let {
                     CHAPTER_REGEX.find(it.body.string())?.groups?.get(1)?.value
                 }
 
-                val parsed = json.decodeFromString<ChapterListDto>(chapters!!)
+                val parsed = chaptersJson!!.parseAs<ChapterListDto>()
 
                 addAll(
                     parsed.chapters.map {
                         SChapter.create().apply {
                             chapter_number = it.number
-                            name = it.title?.takeIf(String::isNotBlank) ?: "Capítulo ${it.number}".replace(".0", "")
+                            name = it.title?.takeIf(String::isNotBlank)
+                                ?: "Capítulo ${it.number.toString().removeSuffix(".0")}"
                             url = "/chapter/${it.id}/1"
-                            date_upload = it.createdAt.orEmpty().toDate()
+                            date_upload = DATE_FORMATTER.tryParse(it.createdAt)
                         }
                     },
                 )
@@ -224,12 +215,10 @@ class Taiyo : ParsedHttpSource() {
         return Observable.just(chapters.sortedByDescending { it.chapter_number })
     }
 
-    override fun chapterListSelector(): String = throw UnsupportedOperationException()
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val chapterObj = document.parseJsonFromDocument<MediaChapterDto>("mediaChapter") {
             substringBefore(",\\\"chapters\\\"") + "}}"
         }!!
@@ -241,17 +230,11 @@ class Taiyo : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
+
     private fun Element.getImageUrl() = absUrl("srcset").substringBefore(" ")
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
-    }
-
-    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
-        .getOrNull() ?: 0L
 
     private inline fun <reified T> Document.parseJsonFromDocument(
         itemName: String = "media",
@@ -261,10 +244,10 @@ class Taiyo : ParsedHttpSource() {
         val obj = script.substringAfter(",{\\\"$itemName\\\":")
             .run(transformer)
             .replace("\\", "")
-        json.decodeFromString<T>(obj)
+        obj.parseAs<T>()
     }.onFailure { it.printStackTrace() }.getOrNull()
 
-    // ============================= Authorization ========================
+    // ============================= Authorization ===========================
 
     private fun authorizationInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -322,10 +305,10 @@ class Taiyo : ParsedHttpSource() {
 
         private const val IMG_CDN = "https://cdn.taiyo.moe/medias"
 
-        private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-
         private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
         }
     }
 }
