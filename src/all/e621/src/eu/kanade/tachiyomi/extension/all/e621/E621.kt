@@ -248,8 +248,7 @@ class E621 :
         if (url.encodedPath == "/posts.json") {
             val post = response.parseAs<PostsResponse>().posts.firstOrNull()
             val imageUrl = when {
-                post == null -> NO_IMAGE_PLACEHOLDER
-                isPostDeleted(post) -> DELETED_PLACEHOLDER
+                post == null || isPostDeleted(post) -> DELETED_PLACEHOLDER
                 isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
                 else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
             }
@@ -266,9 +265,8 @@ class E621 :
         return postIds.mapIndexed { index, postId ->
             val post = postMap[postId]
             val imageUrl = when {
-                post == null -> NO_IMAGE_PLACEHOLDER
-                post != null && isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
-                isPostDeleted(post) -> DELETED_PLACEHOLDER
+                post == null || isPostDeleted(post) -> DELETED_PLACEHOLDER
+                isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
                 else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
             }
             Page(index, imageUrl = imageUrl)
