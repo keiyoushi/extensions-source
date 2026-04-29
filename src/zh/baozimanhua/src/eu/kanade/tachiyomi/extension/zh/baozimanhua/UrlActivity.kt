@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class BaoziUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -26,10 +26,10 @@ class BaoziUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("BaoziUrlActivity", e.toString())
+                Log.e("UrlActivity", e.toString())
             }
         } else {
-            Log.e("BaoziUrlActivity", "could not parse uri from intent $intent")
+            Log.e("UrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
