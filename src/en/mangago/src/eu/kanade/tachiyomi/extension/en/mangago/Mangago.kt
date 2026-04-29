@@ -93,14 +93,15 @@ class Mangago :
 
     private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
 
-    private fun mangaFromElement(element: Element) = SManga.create().apply {
-        val linkElement = element.selectFirst(".thm-effect")!!
+    private fun mangaFromElement(element: Element): SManga? = SManga.create().apply {
+        val linkElement = element.selectFirst(".thm-effect") ?: return null
 
         setUrlWithoutDomain(linkElement.attr("href"))
-        title = linkElement.attr("title")
+        title = linkElement.attr("title").takeIf(String::isNotBlank) ?: return null
 
-        val thumbnailElem = linkElement.selectFirst("img")!!
-        thumbnail_url = thumbnailElem.attr("abs:data-src").ifBlank { thumbnailElem.attr("abs:src") }
+        val thumbnailElem = linkElement.selectFirst("img")
+        thumbnail_url = thumbnailElem?.attr("abs:data-src")?.takeIf(String::isNotBlank)
+            ?: thumbnailElem?.attr("abs:src")
     }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/genre/all/$page/?f=1&o=1&sortby=view&e=", headers)
@@ -108,7 +109,7 @@ class Mangago :
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(genreListingSelector)
-            .map { mangaFromElement(it) }
+            .mapNotNull { mangaFromElement(it) }
         val hasNextPage = document.selectFirst(genreListingNextPageSelector) != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -160,7 +161,7 @@ class Mangago :
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("$genreListingSelector, .pic_list > li")
-            .map { mangaFromElement(it) }
+            .mapNotNull { mangaFromElement(it) }
         val hasNextPage = document.selectFirst(genreListingNextPageSelector) != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -323,7 +324,7 @@ class Mangago :
         val chapterJs = SoJsonV4Deobfuscator.decode(
             client.newCall(
                 GET(chapterJsUrl, headers),
-            ).execute().body.string(),
+            ).execute().use { it.body.string() },
         )
         val key = findHexEncodedVariable(chapterJs, "key").decodeHex()
         val iv = findHexEncodedVariable(chapterJs, "iv").decodeHex()
