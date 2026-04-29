@@ -1,7 +1,7 @@
 ext {
     extName = "Weekly Young Magazine"
     extClass = ".YanmagaFactory"
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 
