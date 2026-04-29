@@ -2,19 +2,20 @@ package eu.kanade.tachiyomi.extension.ja.yanmaga
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -25,7 +26,7 @@ abstract class Yanmaga(
     private val searchCategoryClass: String,
     private val highQualityImages: Boolean = false,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT),
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val baseUrl = "https://yanmaga.jp"
 
@@ -56,15 +57,21 @@ abstract class Yanmaga(
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "ul.search-list > li.search-item:has(.$searchCategoryClass)"
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("ul.search-list > li.search-item:has(.$searchCategoryClass)").map {
+            searchMangaFromElement(it)
+        }
+        val hasNextPage = document.selectFirst("ul.pagination > li.page-item > a.page-next") != null
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    protected open fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         title = element.selectFirst(".search-item-title")!!.text()
         thumbnail_url = element.selectFirst(".search-item-thumbnail-image img")?.absUrl("src")
     }
-
-    override fun searchMangaNextPageSelector() = "ul.pagination > li.page-item > a.page-next"
 
     // Longer chapter lists are fetched through AJAX, the response being a JavaScript script
     // that inserts raw HTML into the DOM. Horror.
@@ -72,7 +79,7 @@ abstract class Yanmaga(
         val document = response.asJsoup()
 
         if (document.selectFirst(".js-episode") == null) {
-            return document.select(chapterListSelector())
+            return document.select("ul.mod-episode-list > li.mod-episode-item:has(.mod-episode-title)")
                 .map { chapterFromElement(it) }
                 .filter { it.url.isNotEmpty() }
         }
@@ -120,7 +127,8 @@ abstract class Yanmaga(
 
                     addQueryParameter("cb", System.currentTimeMillis().toString())
                 }.build()
-                val script = client.newCall(GET(url, headers)).execute().body.string()
+
+                val script = client.newCall(GET(url, headers)).execute().use { it.body.string() }
 
                 parseInsertAdjacentHtmlScript(script)
                     .map { chapterFromElement(Jsoup.parseBodyFragment(it, chapterUrl)) }
@@ -132,9 +140,7 @@ abstract class Yanmaga(
             .filter { it.url.isNotEmpty() }
     }
 
-    override fun chapterListSelector() = "ul.mod-episode-list > li.mod-episode-item:has(.mod-episode-title)"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+    private fun chapterFromElement(element: Element) = SChapter.create().apply {
         // The first chapter sometimes is a fake one. However, this still count towards the total
         // chapter count, so we can't filter this out yet.
         url = ""
@@ -142,16 +148,14 @@ abstract class Yanmaga(
             setUrlWithoutDomain(it)
         }
         name = element.selectFirst(".mod-episode-title")!!.text()
-        date_upload = try {
-            dateFormat.parse(element.selectFirst(".mod-episode-date")!!.text())!!.time
-        } catch (_: Exception) {
-            0L
-        }
+        date_upload = dateFormat.tryParse(element.selectFirst(".mod-episode-date")?.text())
     }
 
     private val reader by lazy { SpeedBinbReader(client, headers, json, highQualityImages) }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
         if (document.selectFirst(".ga-rental-modal-sign-up") != null) {
             // Please log in with WebView to read this story
             throw Exception("このストーリーを読むには WebView でログイン")
@@ -165,5 +169,5 @@ abstract class Yanmaga(
         return reader.pageListParse(document)
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
