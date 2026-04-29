@@ -211,7 +211,11 @@ class Beauty3600000 : HttpSource() {
     // ========================= Helpers =========================
 
     private fun parseMangasPage(response: Response): MangasPage {
-        val posts = response.parseAs<List<PostDto>>()
+        val body = response.body.string()
+        val posts = jsonArrayRegex.find(body)
+            ?.value
+            ?.parseAs<List<PostDto>>()
+            ?: return MangasPage(emptyList(), false)
         val mangas = posts.map { it.toSManga() }
         val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 0
         val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
@@ -242,6 +246,7 @@ class Beauty3600000 : HttpSource() {
     companion object {
         private const val API_BASE = "wp-json/wp/v2"
         private const val PER_PAGE = 100
+        private val jsonArrayRegex by lazy { Regex("""\[.*]\s*$""") }
 
         private val DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
