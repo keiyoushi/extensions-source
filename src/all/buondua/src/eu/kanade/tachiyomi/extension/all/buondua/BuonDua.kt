@@ -95,15 +95,17 @@ class BuonDua : HttpSource() {
 
             description = StringBuilder().apply {
                 if (articleInfo.isNotBlank()) {
-                    append(articleInfo).append("\n")
+                    append(articleInfo)
                 }
                 if (downloadLinks.isNotBlank()) {
-                    append("\n").append(downloadLinks).append("\n")
+                    if (isNotEmpty()) append("\n\n")
+                    append(downloadLinks)
                 }
                 if (password.isNotBlank()) {
-                    append("\n").append(password)
+                    if (isNotEmpty()) append("\n\n")
+                    append(password)
                 }
-            }.toString()
+            }.toString().trim()
 
             genre = document.selectFirst(".article-tags")?.select(".tags > .tag")
                 ?.joinToString { it.text().substringAfter("#") }
