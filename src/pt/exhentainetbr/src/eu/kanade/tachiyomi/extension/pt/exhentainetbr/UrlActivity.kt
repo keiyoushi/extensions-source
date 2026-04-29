@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class ExHentaiNetBRUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
