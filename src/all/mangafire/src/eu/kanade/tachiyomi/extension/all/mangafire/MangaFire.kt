@@ -78,7 +78,6 @@ class MangaFire(
     // disable suggested mangas on Komikku
     // we don't want to spawn N webviews for N search token
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
 
     // ============================== Popular ===============================
 
@@ -125,7 +124,7 @@ class MangaFire(
             addQueryParameter("page", page.toString())
 
             if (stdQuery.isNotBlank()) {
-                val vrf = vrfCache.get(stdQuery)
+                val vrf = vrfCache[stdQuery]
                     ?: runBlocking {
                         webViewHelper.loadInWebView(
                             url = "$baseUrl/home",
@@ -186,7 +185,7 @@ class MangaFire(
     private fun searchMangaSelector() = ".original.card-lg .unit .inner"
 
     private fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst(".info > a")!!.let {
+        element.selectFirst(".info > a")!!.let { it: Element ->
             setUrlWithoutDomain(it.attr("href"))
             title = it.ownText()
         }
@@ -225,16 +224,29 @@ class MangaFire(
                     append(it.joinToString("\n\n"))
                 }
 
-                selectFirst("h6")?.let {
+                selectFirst("h6")?.let { it: Element ->
                     append("\n\nAlternative title: ${it.text()}")
                 }
             }.trim()
 
-            selectFirst(".meta")?.let {
+            selectFirst(".meta")?.let { it: Element ->
                 author = it.selectFirst("span:contains(Author:) + span")?.text()
                 val type = it.selectFirst("span:contains(Type:) + span")?.text()
                 val genres = it.selectFirst("span:contains(Genres:) + span")?.text()
                 genre = listOfNotNull(type, genres).joinToString()
+            }
+        }
+    }
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val document = response.asJsoup()
+        return document.select(".original a.unit").mapNotNull { element: Element ->
+            SManga.create().apply {
+                element.attr("href").takeIf(String::isNotBlank)
+                    ?.let { setUrlWithoutDomain(it) } ?: return@mapNotNull null
+                element.selectFirst(".info h6")?.text()?.takeIf(String::isNotBlank)
+                    ?.let { title = it } ?: return@mapNotNull null
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
     }
