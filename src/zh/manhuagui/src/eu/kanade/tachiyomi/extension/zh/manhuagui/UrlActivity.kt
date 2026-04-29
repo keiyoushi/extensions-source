@@ -13,7 +13,7 @@ import kotlin.system.exitProcess
  * you have this extension installed, but still let the main tachiyomi app control
  * things.
  */
-class ManhuaguiUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,10 +29,10 @@ class ManhuaguiUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("ManhuaguiUrlActivity", e.toString())
+                Log.e("UrlActivity", e.toString())
             }
         } else {
-            Log.e("ManhuaguiUrlActivity", "could not parse uri from intent $intent")
+            Log.e("UrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
