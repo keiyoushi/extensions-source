@@ -25,18 +25,15 @@ class MangaTube : HttpSource() {
 
     override val supportsLatest = true
 
-    private val cookieJar = MemoryCookieJar()
-
     override val client: OkHttpClient by lazy {
         val baseClient = network.client.newBuilder()
-            .cookieJar(cookieJar)
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(1, TimeUnit.MINUTES)
             .writeTimeout(1, TimeUnit.MINUTES)
             .build()
 
         baseClient.newBuilder()
-            .addInterceptor(ChallengeInterceptor(baseUrl, headers, baseClient, cookieJar))
+            .addInterceptor(ChallengeInterceptor(baseUrl, headers, baseClient, network.client.cookieJar))
             .build()
     }
 
