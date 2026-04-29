@@ -23,6 +23,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -42,6 +43,10 @@ class Beauty3600000 : HttpSource() {
         .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .rateLimit(1)
+        .build()
+
+    private val searchingClient: OkHttpClient = client.newBuilder()
+        .rateLimit(1, 30)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -69,6 +74,19 @@ class Beauty3600000 : HttpSource() {
 
     // ========================= Search =========================
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val request = searchMangaRequest(page, query, filters)
+        val requestUrl = request.url
+        val searchParams = requestUrl.queryParameter("search")
+        return Observable.fromCallable {
+            if (searchParams != null) {
+                searchingClient.newCall(request).execute()
+            } else {
+                client.newCall(request).execute()
+            }
+        }.map { searchMangaParse(it) }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val queryUrl = query.toHttpUrlOrNull()
         if (queryUrl != null && queryUrl.host == baseUrl.toHttpUrlOrNull()?.host) {
@@ -94,14 +112,13 @@ class Beauty3600000 : HttpSource() {
         val tagFilter = filterList.firstInstance<TagFilter>()
         var tagSearch: Int? = null
 
-        if (categoryFilter.state == 0 && tagFilter.state == 0) {
+        if (categoryFilter.state <= 0 && tagFilter.state <= 0) {
             if (query.isBlank()) {
                 return popularMangaRequest(page)
             }
 
-            val tags = runCatching { runBlocking { searchTag(query) } }.getOrNull()
-            tagSearch = tags?.firstOrNull()?.id
-                ?: throw IllegalArgumentException("No filters selected")
+            val tags = runCatching { runBlocking { getTag(query.trim()) } }.getOrNull()
+            tagSearch = tags?.firstOrNull { it.name.equals(query.trim(), ignoreCase = true) }?.id
         }
 
         val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
@@ -111,9 +128,13 @@ class Beauty3600000 : HttpSource() {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("per_page", PER_PAGE.toString())
 
+                if (query.isNotBlank() && tagSearch == null) {
+                    addQueryParameter("search", query.trim())
+                }
+
                 when {
-                    categoryFilter.state != 0 -> addQueryParameter("categories", categoryFilter.toUriPart())
-                    tagFilter.state != 0 -> addQueryParameter("tags", tagFilter.toUriPart())
+                    categoryFilter.state > 0 -> addQueryParameter("categories", categoryFilter.toUriPart())
+                    tagFilter.state > 0 -> addQueryParameter("tags", tagFilter.toUriPart())
                     tagSearch != null -> addQueryParameter("tags", tagSearch.toString())
                 }
             }.build()
@@ -171,7 +192,7 @@ class Beauty3600000 : HttpSource() {
             .parseAs<List<TermDto>>()
     }
 
-    private suspend fun searchTag(slug: String): List<TermDto> {
+    private suspend fun getTag(slug: String): List<TermDto> {
         val request = GET(
             baseUrl.toHttpUrlOrNull()!!.newBuilder()
                 .addPathSegments(API_BASE)
@@ -215,8 +236,8 @@ class Beauty3600000 : HttpSource() {
         ?: "$baseUrl${manga.url}"
 
     private fun Response.toPost(): PostDto {
-        val url = request.url.toString()
-        return if (url.contains("slug=")) {
+        val slugParam = request.url.queryParameter("slug")
+        return if (slugParam != null) {
             val body = body.string()
             jsonArrayRegex.find(body)
                 ?.value
@@ -296,7 +317,6 @@ class Beauty3600000 : HttpSource() {
     }
 
     // disable suggested mangas on Komikku
-    // site doesn't support keyword search and too slow
     override val disableRelatedMangasBySearch = true
 
     companion object {
