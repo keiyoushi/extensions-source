@@ -131,11 +131,9 @@ class Beauty3600000 : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<PostDto>().toSManga().apply {
         runCatching {
-            runBlocking {
-                getTags(url)
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { tags -> genre = tags.joinToString { it.name } }
-            }
+            runBlocking { getTags(url) }
+                .takeIf { it.isNotEmpty() }
+                ?.let { tags -> genre = tags.joinToString { it.name } }
         }
     }
 
@@ -154,6 +152,7 @@ class Beauty3600000 : HttpSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val tags = getTags(manga.url)
+            .sortedBy { it.name.startsWith('[') }
 
         return tags.parallelCatchingFlatMap { tag ->
             val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()

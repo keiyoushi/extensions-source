@@ -20,7 +20,6 @@ class PostDto(
         thumbnail_url = Jsoup.parseBodyFragment(content.rendered).selectFirst("img")?.attr("src")
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        initialized = true
     }
 
     fun toSChapter() = SChapter.create().apply {
