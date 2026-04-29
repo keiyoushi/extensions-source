@@ -257,12 +257,36 @@ open class Comikey(
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
+            // Somewhat useful if you need to debug WebView issues. Don't delete.
+            //
+            /*innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage == null) { return false }
+                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("comikey", logContent)
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e("comikey", logContent)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i("comikey", logContent)
+                        ConsoleMessage.MessageLevel.TIP -> Log.i("comikey", logContent)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w("comikey", logContent)
+                        else -> Log.d("comikey", logContent)
+                    }
+
+                    return true
+                }
+            }*/
+
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     view?.evaluateJavascript(webviewScript.replace("__interface__", interfaceName)) {}
                 }
 
+                // If you're logged in, the manifest URL sent to the client is not a direct link;
+                // it only redirects to the real one when you call it.
+                //
+                // In order to avoid a later call and remove an avenue for sniffing out users,
+                // we intercept said request so we can grab the real manifest URL.
                 override fun shouldInterceptRequest(
                     view: WebView?,
                     request: WebResourceRequest?,
