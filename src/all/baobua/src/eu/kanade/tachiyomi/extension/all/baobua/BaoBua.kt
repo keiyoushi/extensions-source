@@ -26,6 +26,7 @@ class BaoBua : HttpSource() {
     override val baseUrl = "https://baobua.net"
     override val lang = "all"
     override val supportsLatest = false
+    override val disableRelatedMangas = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
