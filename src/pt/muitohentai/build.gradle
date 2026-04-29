@@ -1,7 +1,7 @@
 ext {
     extName = 'Muito Hentai'
     extClass = '.MuitoHentai'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = true
 }
 
