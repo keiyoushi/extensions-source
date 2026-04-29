@@ -29,10 +29,10 @@ class GaugauMonsterPlus : HttpSource() {
 
     override val supportsLatest = false
 
-    private val json = Injekt.get<Json>()
+    private val jsonInstance = Injekt.get<Json>()
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(json))
+        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -124,9 +124,9 @@ class GaugauMonsterPlus : HttpSource() {
         }
     }
 
-    private val reader by lazy { SpeedBinbReader(client, headers, json) }
+    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) }
 
-    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response.asJsoup())
+    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
