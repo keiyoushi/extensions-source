@@ -12,12 +12,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstance
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.jsonInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class GaugauMonsterPlus : HttpSource() {
 
@@ -28,8 +26,6 @@ class GaugauMonsterPlus : HttpSource() {
     override val lang = "ja"
 
     override val supportsLatest = false
-
-    private val jsonInstance = Injekt.get<Json>()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(jsonInstance))
