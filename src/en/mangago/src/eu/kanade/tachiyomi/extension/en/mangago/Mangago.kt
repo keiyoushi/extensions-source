@@ -370,6 +370,21 @@ class Mangago :
         }
     }
 
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val document = response.asJsoup()
+        return document.select(".also_like + div .listitem, .also-like li")
+            .mapNotNull { elements ->
+                elements.selectFirst("a[title]")?.let { elm: Element ->
+                    SManga.create().apply {
+                        title = elm.attr("title").takeIf(String::isNotBlank) ?: return@mapNotNull null
+                        setUrlWithoutDomain(elm.absUrl("href"))
+                        thumbnail_url = elements.selectFirst("img")?.imgAttr()
+                    }
+                }
+                    ?: return@mapNotNull null
+            }
+    }
+
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Ignored if using text search"),
         SortFilter(),
@@ -590,6 +605,14 @@ class Mangago :
                 "?",
             )
         }
+    }
+
+    private fun Element.imgAttr() = when {
+        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
+        hasAttr("data-src") -> absUrl("data-src")
+        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
+        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
+        else -> absUrl("src")
     }
 
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
