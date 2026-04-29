@@ -63,6 +63,8 @@ class MangaDto(
 
     // Chapters
     val chapters: List<ChapterDto>? = null,
+
+    val recommendations: List<MangaDto>? = null,
 ) {
     private fun getImagePath(): String? {
         val url = when (imagePath) {
@@ -102,6 +104,8 @@ class MangaDto(
             }
         }
     }
+
+    fun recommendations(baseUrl: String) = recommendations?.map { it.toSManga(baseUrl) } ?: emptyList()
 
     @Serializable
     class TagDto(
