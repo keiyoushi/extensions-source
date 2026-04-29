@@ -310,13 +310,15 @@ class Kagane :
 
     override fun relatedMangaListParse(response: Response): List<SManga> {
         val dto = response.parseAs<DetailsDto>()
-        val sources = getSourcesMap()
         val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
         val trackerRequest = GET("$apiUrl/api/v2/trackers/$trackerId/series", apiHeaders)
-        return client.newCall(trackerRequest).execute().takeIf { it.isSuccessful }
-            ?.parseAs<TrackerDto>()?.series
-            ?.map { it.toSManga(apiUrl, preferences.showSource, sources) }
-            ?: emptyList()
+        val series = client.newCall(trackerRequest).execute().use { resp ->
+            if (!resp.isSuccessful) return emptyList()
+            resp.parseAs<TrackerDto>().series
+        }
+        val sources = getSourcesMap()
+        return series
+            .map { it.toSManga(apiUrl, preferences.showSource, sources) }
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -835,19 +837,24 @@ class Kagane :
     private fun fetchMetadata() {
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
-                val genreResponse = metadataClient.newCall(
+                val genres = metadataClient.newCall(
                     GET("$apiUrl/api/v2/genres/list", apiHeaders),
-                ).execute()
-                val tagsResponse = metadataClient.newCall(
+                ).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
+                }
+                val tags = metadataClient.newCall(
                     GET("$apiUrl/api/v2/tags/list", apiHeaders),
-                ).execute()
-                val sourcesResponse = getSourcesResponse()
+                ).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.parseAs<List<TagDto>>().associate { it.id to it.tagName }
+                }
+                val sources = getSourcesResponse().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.parseAs<SourcesDto>().sources
+                }
 
-                if (genreResponse.isSuccessful && tagsResponse.isSuccessful && sourcesResponse.isSuccessful) {
-                    val genres = genreResponse.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
-                    val tags = tagsResponse.parseAs<List<TagDto>>().associate { it.id to it.tagName }
-                    val sources = sourcesResponse.parseAs<SourcesDto>().sources
-
+                if (genres != null && tags != null && sources != null) {
                     metadata = MetadataDto(genres, tags, sources)
                     Log.d(name, "Metadata fetched and updated")
                 } else {
