@@ -71,6 +71,30 @@ class SearchDto(
 }
 
 @Serializable
+class TrackerDto(
+    val series: List<Book> = emptyList(),
+) {
+    @Serializable
+    class Book(
+        val id: String,
+        val title: String,
+        @SerialName("source_id")
+        val sourceId: String? = null,
+        @SerialName("current_books")
+        val booksCount: Int,
+        @SerialName("cover_image_id")
+        val coverImage: String? = null,
+    ) {
+
+        fun toSManga(domain: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
+            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
+            url = id
+            thumbnail_url = coverImage?.let { "$domain/api/v2/image/$it" }
+        }
+    }
+}
+
+@Serializable
 class AlternateSeries(
     @SerialName("current_books")
     val booksCount: Int,
@@ -97,6 +121,8 @@ class DetailsDto(
     val seriesBooks: List<ChapterDto.Book> = emptyList(),
     @SerialName("edition_info")
     val editionInfo: String? = null,
+    @SerialName("tracker_id")
+    val trackerId: String? = null,
 ) {
     @Serializable
     class SeriesStaff(
