@@ -79,7 +79,9 @@ class Beauty3600000 : HttpSource() {
                 .addPathSegment("posts")
                 .apply {
                     if (id != null) {
-                        addQueryParameter("include", id)
+                        id.toIntOrNull()?.let { addQueryParameter("include", it.toString()) }
+                            // Allow copy old entry's `manga.url` to search for old entry for migration which is in format "https://3600000.xyz/?p=/{slug}/"
+                            ?: addQueryParameter("slug", id.removeSurrounding("/"))
                     } else if (slug != null) {
                         addQueryParameter("slug", slug)
                     }
