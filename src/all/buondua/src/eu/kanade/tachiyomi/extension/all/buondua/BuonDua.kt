@@ -78,10 +78,36 @@ class BuonDua : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".article-header")?.text() ?: ""
-            description = document.selectFirst(".article-info > strong")?.text()
+            document.selectFirst(".article-header")?.text()
+                ?.replace(titlePageRegex, "")?.trim()
+                ?.let { title = it }
+
+            val articleInfo = document.select(".article-info > strong").text()
+                .replace("Buondua", "").trim()
+
+            val password = document.select("code").text()
+            val downloadAvailable = document.select(".article-links a[href]")
+            val downloadLinks = downloadAvailable.joinToString("\n") { element ->
+                val serviceText = element.text()
+                val link = element.attr("href")
+                "[$serviceText]($link)"
+            }
+
+            description = StringBuilder().apply {
+                if (articleInfo.isNotBlank()) {
+                    append(articleInfo).append("\n")
+                }
+                if (downloadLinks.isNotBlank()) {
+                    append("\n").append(downloadLinks).append("\n")
+                }
+                if (password.isNotBlank()) {
+                    append("\n").append(password)
+                }
+            }.toString()
+
             genre = document.selectFirst(".article-tags")?.select(".tags > .tag")
-                ?.joinToString(", ") { it.text().substringAfter("#") }
+                ?.joinToString { it.text().substringAfter("#") }
+                ?.takeIf { it.isNotBlank() }
         }
     }
 
@@ -127,5 +153,7 @@ class BuonDua : HttpSource() {
 
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("HH:mm dd-MM-yyyy", Locale.US)
+
+        private val titlePageRegex by lazy { Regex(""" - \( Page \d+ / \d+ \)""") }
     }
 }
