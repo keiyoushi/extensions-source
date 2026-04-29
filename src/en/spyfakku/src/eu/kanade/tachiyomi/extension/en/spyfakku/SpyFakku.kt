@@ -228,18 +228,26 @@ class SpyFakku :
 
         if (response1.isSuccessful) {
             add = response1.parseAs<ShortHentai>()
+            response1.close()
         } else {
+            response1.close()
             var response: Response = client.newCall(mangaDetailsRequest(manga)).execute()
             var attempts = 0
             while (attempts < 3 && response.code != 200) {
                 try {
+                    response.close()
                     response = client.newCall(mangaDetailsRequest(manga)).execute()
                 } catch (_: Exception) {
                 } finally {
                     attempts++
                 }
             }
+            if (response.code != 200) {
+                response.close()
+                throw Exception("Failed to fetch manga details after 3 attempts")
+            }
             add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            response.close()
         }
 
         return Observable.just(
@@ -328,18 +336,27 @@ class SpyFakku :
 
         if (response1.isSuccessful) {
             add = response1.parseAs<ShortHentai>()
+            response1.close()
         } else {
+            response1.close()
             var response: Response = client.newCall(chapterListRequest2(manga)).execute()
             var attempts = 0
             while (attempts < 3 && response.code != 200) {
                 try {
+                    response.close()
                     response = client.newCall(mangaDetailsRequest(manga)).execute()
                 } catch (_: Exception) {
                 } finally {
                     attempts++
                 }
             }
+
+            if (response.code != 200) {
+                response.close()
+                throw Exception("Failed to fetch chapter list after 3 attempts")
+            }
             add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            response.close()
         }
         return Observable.just(
             listOf(
@@ -365,14 +382,21 @@ class SpyFakku :
             val response1 = client.newCall(pageListRequest(chapter)).execute()
             if (response1.isSuccessful) {
                 val hentai = response1.parseAs<Hentai>()
+                response1.close()
                 return Observable.just(
                     List(hentai.pages) { index ->
                         Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/${index + 1}")
                     },
                 )
             }
+            response1.close()
             val response = client.newCall(pageListRequest2(chapter)).execute()
+            if (response.code != 200) {
+                response.close()
+                throw Exception("Failed to fetch page list after 3 attempts")
+            }
             val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            response.close()
             return Observable.just(
                 List(add.pages) { index ->
                     Page(index, imageUrl = "$baseImageUrl/${add.hash}/${index + 1}")
@@ -426,6 +450,8 @@ class SpyFakku :
             setDefaultValue("0")
         }.also(screen::addPreference)
     }
+
+    override val supportsRelatedMangas = false
 }
 
 private const val MIRROR_PREF_KEY = "pref_mirror"
