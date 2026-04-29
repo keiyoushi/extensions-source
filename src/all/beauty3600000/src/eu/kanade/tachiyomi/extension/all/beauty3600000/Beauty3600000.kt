@@ -92,12 +92,16 @@ class Beauty3600000 : HttpSource() {
         val filterList = filters.ifEmpty { getFilterList() }
         val categoryFilter = filterList.firstInstance<CategoryFilter>()
         val tagFilter = filterList.firstInstance<TagFilter>()
+        var tagSearch: Int? = null
 
         if (categoryFilter.state == 0 && tagFilter.state == 0) {
             if (query.isBlank()) {
                 return popularMangaRequest(page)
             }
-            throw IllegalArgumentException("No filters selected")
+
+            val tags = runCatching { runBlocking { searchTag(query) } }.getOrNull()
+            tagSearch = tags?.firstOrNull()?.id
+                ?: throw IllegalArgumentException("No filters selected")
         }
 
         val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
@@ -110,6 +114,7 @@ class Beauty3600000 : HttpSource() {
                 when {
                     categoryFilter.state != 0 -> addQueryParameter("categories", categoryFilter.toUriPart())
                     tagFilter.state != 0 -> addQueryParameter("tags", tagFilter.toUriPart())
+                    tagSearch != null -> addQueryParameter("tags", tagSearch.toString())
                 }
             }.build()
 
@@ -159,6 +164,19 @@ class Beauty3600000 : HttpSource() {
                 .addPathSegments(API_BASE)
                 .addPathSegment(term)
                 .addQueryParameter("post", mangaId.toString())
+                .build(),
+            headers,
+        )
+        return client.newCall(request).awaitSuccess()
+            .parseAs<List<TermDto>>()
+    }
+
+    private suspend fun searchTag(slug: String): List<TermDto> {
+        val request = GET(
+            baseUrl.toHttpUrlOrNull()!!.newBuilder()
+                .addPathSegments(API_BASE)
+                .addPathSegment("tags")
+                .addQueryParameter("slug", slug)
                 .build(),
             headers,
         )
