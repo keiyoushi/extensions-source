@@ -9,13 +9,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
  * Code that used to handle Saturday Morning Breakfast Comics has been split to its
  * own separate extension at eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
  */
-class Hiveworks : ParsedHttpSource() {
+class Hiveworks : HttpSource() {
 
     // Info
 
@@ -48,24 +48,18 @@ class Hiveworks : ParsedHttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
-    override fun popularMangaNextPageSelector(): String? = null
-    override fun popularMangaSelector() = "div.comicblock"
-    override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
+
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select(popularMangaSelector()).filterNot {
+        val mangas = document.select(POPULAR_MANGA_SELECTOR).filterNot {
             val url = it.select("a.comiclink").first()!!.attr("abs:href")
             url.contains("sparklermonthly.com") || url.contains("explosm.net") // Filter Unsupported Comics
         }.map { element ->
-            popularMangaFromElement(element)
+            mangaFromElement(element)
         }
 
-        val hasNextPage = popularMangaNextPageSelector()?.let { selector ->
-            document.select(selector).first()
-        } != null
-
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, false)
     }
 
     // Latest
@@ -75,9 +69,6 @@ class Hiveworks : ParsedHttpSource() {
         return GET("$baseUrl/home/update-day/$day", headers)
     }
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = mangaFromElement(element)
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
@@ -106,41 +97,32 @@ class Hiveworks : ParsedHttpSource() {
         return GET(uri.toString(), headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector() + ", div.originalsblock"
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaParse(response: Response): MangasPage {
         val url = response.request.url.toString()
         val document = response.asJsoup()
 
-        val selectManga = document.select(searchMangaSelector()).toList()
+        val selectManga = document.select(SEARCH_MANGA_SELECTOR).toList()
         val mangas = when {
             url.endsWith("localSearch") -> {
-                selectManga.filter { it.text().contains(searchQuery, true) }.map { element -> searchMangaFromElement(element) }
+                selectManga.filter { it.text().contains(searchQuery, true) }.map { mangaFromElement(it) }
             }
-
             url.contains("originals") -> {
-                selectManga.map { element -> searchOriginalMangaFromElement(element) }
+                selectManga.map { searchOriginalMangaFromElement(it) }
             }
-
             else -> {
-                selectManga.map { element -> searchMangaFromElement(element) }
+                selectManga.map { mangaFromElement(it) }
             }
         }
 
-        val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
-            document.select(selector).first()
-        } != null
-
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, false)
     }
 
-    override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
     private fun searchOriginalMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.select("img")[1].attr("abs:src")
         title = element.select("div.header").text().substringBefore("by").trim()
         author = element.select("div.header").text().substringAfter("by").trim()
         artist = author
-        description = element.select("div.description").text().trim()
+        description = element.select("div.description").text()
         url = element.select("a").first()!!.attr("href")
     }
 
@@ -149,12 +131,12 @@ class Hiveworks : ParsedHttpSource() {
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         manga.url = element.select("a.comiclink").first()!!.attr("abs:href")
-        manga.title = element.select("h1").text().trim()
+        manga.title = element.select("h1").text()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         manga.artist = element.select("h2").text().removePrefix("by").trim()
         manga.author = manga.artist
-        manga.description = element.select("div.description").text().trim()
-        manga.genre = element.select("div.comicrating").text().trim()
+        manga.description = element.select("div.description").text()
+        manga.genre = element.select("div.comicrating").text()
         return manga
     }
 
@@ -171,10 +153,12 @@ class Hiveworks : ParsedHttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers) // Used to open proper page in webview
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
     private fun mangaDetailsParse(response: Response, url: String): SManga {
         val document = response.asJsoup()
-        return document.select(popularMangaSelector())
+        return document.select(POPULAR_MANGA_SELECTOR)
             .firstOrNull { url == it.select("a.comiclink").first()!!.attr("abs:href") }
             ?.let { mangaFromElement(it) } ?: SManga.create()
     }
@@ -192,7 +176,6 @@ class Hiveworks : ParsedHttpSource() {
         Observable.error(Exception("Licensed - No chapters to show"))
     }
 
-    override fun chapterListSelector() = "select[name=comic] option"
     override fun chapterListRequest(manga: SManga): Request {
         val uri = Uri.parse(manga.url).buildUpon()
         when {
@@ -220,7 +203,7 @@ class Hiveworks : ParsedHttpSource() {
         }
         val document = response.asJsoup()
         val baseUrl = document.select("div script").html().substringAfter("href='").substringBefore("'")
-        val elements = document.select(chapterListSelector())
+        val elements = document.select(CHAPTER_LIST_SELECTOR)
         if (elements.isNullOrEmpty()) throw Exception("This comic has a unsupported chapter list")
         val chapters = mutableListOf<SChapter>()
         for (i in 1 until elements.size) {
@@ -236,21 +219,20 @@ class Hiveworks : ParsedHttpSource() {
     private fun createChapter(element: Element, baseUrl: String?) = SChapter.create().apply {
         name = element.text().substringAfter("-").trim()
         url = baseUrl + element.attr("value")
-        date_upload = parseDate(element.text().substringBefore("-").trim(), DATE_FORMATTER)
+        date_upload = DATE_FORMATTER.tryParse(element.text().substringBefore("-").trim())
     }
-
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Pages
 
     override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers)
+
     override fun pageListParse(response: Response): List<Page> {
         val url = response.request.url.toString()
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
 
         document.select("div#cc-comicbody img").forEach {
-            pages.add(Page(pages.size, "", it.attr("src")))
+            pages.add(Page(pages.size, imageUrl = it.attr("src")))
         }
 
         // Site specific pages can be added here
@@ -258,18 +240,15 @@ class Hiveworks : ParsedHttpSource() {
             "sssscomic" in url -> {
                 val urlPath = document.select("img.comicnormal").attr("src")
                 val urlimg = response.request.url.resolve("../../$urlPath").toString()
-                pages.add(Page(pages.size, "", urlimg))
+                pages.add(Page(pages.size, imageUrl = urlimg))
             }
-
             else -> { /*Do Nothing*/ }
         }
 
         return pages
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-    override fun imageUrlRequest(page: Page) = throw UnsupportedOperationException()
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Filters
 
@@ -289,135 +268,6 @@ class Hiveworks : ParsedHttpSource() {
         HiatusFilter(),
     )
 
-    private class OriginalsFilter : Filter.CheckBox("Original Comics")
-    private class KidsFilter : Filter.CheckBox("Kids Comics")
-    private class CompletedFilter : Filter.CheckBox("Completed Comics")
-    private class HiatusFilter : Filter.CheckBox("On Hiatus Comics")
-
-    private open class UriSelectFilter(
-        displayName: String,
-        val uriParam: String,
-        val vals: Array<Pair<String, String>>,
-        val firstIsUnspecified: Boolean = true,
-        defaultValue: Int = 0,
-    ) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
-        UriFilter {
-        override fun addToUri(uri: Uri.Builder) {
-            if (state != 0 || !firstIsUnspecified) {
-                uri.appendPath(uriParam)
-                    .appendPath(vals[state].first)
-            }
-        }
-    }
-
-    private interface UriFilter {
-        fun addToUri(uri: Uri.Builder)
-    }
-
-    private class UpdateDay :
-        UriSelectFilter(
-            "Update Day",
-            "update-day",
-            arrayOf(
-                Pair("all", "All"),
-                Pair("monday", "Monday"),
-                Pair("tuesday", "Tuesday"),
-                Pair("wednesday", "Wednesday"),
-                Pair("thursday", "Thursday"),
-                Pair("friday", "Friday"),
-                Pair("saturday", "Saturday"),
-                Pair("sunday", "Sunday"),
-            ),
-        )
-
-    private class RatingFilter :
-        UriSelectFilter(
-            "Rating",
-            "age",
-            arrayOf(
-                Pair("all", "All"),
-                Pair("everyone", "Everyone"),
-                Pair("teen", "Teen"),
-                Pair("young-adult", "Young Adult"),
-                Pair("mature", "Mature"),
-            ),
-        )
-
-    private class GenreFilter :
-        UriSelectFilter(
-            "Genre",
-            "genre",
-            arrayOf(
-                Pair("all", "All"),
-                Pair("action/adventure", "Action/Adventure"),
-                Pair("animated", "Animated"),
-                Pair("autobio", "Autobio"),
-                Pair("comedy", "Comedy"),
-                Pair("drama", "Drama"),
-                Pair("dystopian", "Dystopian"),
-                Pair("fairytale", "Fairytale"),
-                Pair("fantasy", "Fantasy"),
-                Pair("finished", "Finished"),
-                Pair("historical-fiction", "Historical Fiction"),
-                Pair("horror", "Horror"),
-                Pair("lgbt", "LGBT"),
-                Pair("mystery", "Mystery"),
-                Pair("romance", "Romance"),
-                Pair("sci-fi", "Science Fiction"),
-                Pair("slice-of-life", "Slice of Life"),
-                Pair("steampunk", "Steampunk"),
-                Pair("superhero", "Superhero"),
-                Pair("urban-fantasy", "Urban Fantasy"),
-            ),
-        )
-
-    private class TitleFilter :
-        UriSelectFilter(
-            "Title",
-            "alpha",
-            arrayOf(
-                Pair("all", "All"),
-                Pair("a", "A"),
-                Pair("b", "B"),
-                Pair("c", "C"),
-                Pair("d", "D"),
-                Pair("e", "E"),
-                Pair("f", "F"),
-                Pair("g", "G"),
-                Pair("h", "H"),
-                Pair("i", "I"),
-                Pair("j", "J"),
-                Pair("k", "K"),
-                Pair("l", "L"),
-                Pair("m", "M"),
-                Pair("n", "N"),
-                Pair("o", "O"),
-                Pair("p", "P"),
-                Pair("q", "Q"),
-                Pair("r", "R"),
-                Pair("s", "S"),
-                Pair("t", "T"),
-                Pair("u", "U"),
-                Pair("v", "V"),
-                Pair("w", "W"),
-                Pair("x", "X"),
-                Pair("y", "Y"),
-                Pair("z", "Z"),
-                Pair("numbers-symbols", "Numbers / Symbols"),
-            ),
-        )
-
-    private class SortFilter :
-        UriSelectFilter(
-            "Sort By",
-            "sortby",
-            arrayOf(
-                Pair("none", "None"),
-                Pair("a-z", "A-Z"),
-                Pair("z-a", "Z-A"),
-            ),
-        )
-
     // Other Code
 
     private fun awkwardzombieChapterListParse(response: Response): List<SChapter> {
@@ -429,7 +279,7 @@ class Hiveworks : ParsedHttpSource() {
                     chapter_number = chapterNumber.toFloat()
                     name = "#$chapterNumber ${it.select("div.archive-title").text()} (${it.select(".archive-game").text()})"
                     url = it.select("a").attr("abs:href")
-                    date_upload = parseDate(it.select(".archive-date").text().substringAfter(", "), awkwardzombieDateFormat)
+                    date_upload = AWKWARDZOMBIE_DATE_FORMAT.tryParse(it.select(".archive-date").text().substringAfter(", "))
                 },
             )
         }
@@ -497,11 +347,12 @@ class Hiveworks : ParsedHttpSource() {
         }
     }
 
-    private fun parseDate(dateStr: String, format: SimpleDateFormat): Long = runCatching { format.parse(dateStr)?.time }
-        .getOrNull() ?: 0L
-
     companion object {
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMM dd, yyyy", Locale.US) }
-        private val awkwardzombieDateFormat by lazy { SimpleDateFormat("MM-dd-yy", Locale.US) }
+        private val AWKWARDZOMBIE_DATE_FORMAT by lazy { SimpleDateFormat("MM-dd-yy", Locale.US) }
+
+        private const val POPULAR_MANGA_SELECTOR = "div.comicblock"
+        private const val SEARCH_MANGA_SELECTOR = "div.comicblock, div.originalsblock"
+        private const val CHAPTER_LIST_SELECTOR = "select[name=comic] option"
     }
 }
