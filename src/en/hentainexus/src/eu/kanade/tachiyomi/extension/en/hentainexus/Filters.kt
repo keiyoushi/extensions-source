@@ -19,7 +19,7 @@ open class AdvSearchEntryFilter(
     val key: String = name.lowercase().removeSuffix("s"),
 ) : Filter.Text(name)
 
-data class AdvSearchEntry(val key: String, val text: String, val exclude: Boolean)
+private class AdvSearchEntry(val key: String, val text: String, val exclude: Boolean)
 
 private fun splitFilterState(state: String): List<String> {
     val tokens = mutableListOf<String>()
