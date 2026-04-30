@@ -36,7 +36,7 @@ class KomikIndoID : HttpSource() {
         val mangas = document.select("div.animepost").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("div.limit img")?.attr("abs:src")
-                title = element.selectFirst("div.tt h4")?.text() ?: ""
+                title = element.selectFirst("div.tt h3")?.text() ?: ""
                 element.selectFirst("div.animposx > a")?.let {
                     setUrlWithoutDomain(it.attr("abs:href"))
                 }
