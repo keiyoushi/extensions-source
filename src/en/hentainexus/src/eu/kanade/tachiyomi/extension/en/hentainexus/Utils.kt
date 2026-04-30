@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.hentainexus
 import android.util.Base64
 import kotlin.experimental.xor
 
-object HentaiNexusUtils {
+object Utils {
     fun decryptData(data: String): String = decryptData(Base64.decode(data, Base64.DEFAULT))
 
     private val primeNumbers = intArrayOf(2, 3, 5, 7, 11, 13, 17, 19)
