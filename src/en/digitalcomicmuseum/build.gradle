@@ -1,7 +1,7 @@
 ext {
     extName = 'Digital Comic Museum'
     extClass = '.DigitalComicMuseum'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = false
 }
 
