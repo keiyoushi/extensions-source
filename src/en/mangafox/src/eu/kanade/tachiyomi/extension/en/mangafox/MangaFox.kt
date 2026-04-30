@@ -5,11 +5,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -17,14 +19,13 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class MangaFox : ParsedHttpSource() {
+class MangaFox : HttpSource() {
 
     override val name: String = "MangaFox"
 
@@ -35,8 +36,6 @@ class MangaFox : ParsedHttpSource() {
     override val lang: String = "en"
 
     override val supportsLatest: Boolean = true
-
-    private val json by injectLazy<Json>()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 1)
@@ -72,33 +71,43 @@ class MangaFox : ParsedHttpSource() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
+    private val dateFormat = SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH)
+
     override fun popularMangaRequest(page: Int): Request {
         val pageStr = if (page != 1) "$page.html" else ""
         return GET("$baseUrl/directory/$pageStr", headers)
     }
 
-    override fun popularMangaSelector(): String = "ul.manga-list-1-list li"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun popularMangaSelector() = "ul.manga-list-1-list li"
+
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.select("a").first()!!.let {
-            setUrlWithoutDomain(it.attr("href"))
+            setUrlWithoutDomain(it.absUrl("href"))
             title = it.attr("title")
             thumbnail_url = it.select("img").attr("abs:src")
         }
     }
 
-    override fun popularMangaNextPageSelector(): String = ".pager-list-left a.active + a + a"
+    private fun popularMangaNextPageSelector() = ".pager-list-left a.active + a + a"
 
     override fun latestUpdatesRequest(page: Int): Request {
         val pageStr = if (page != 1) "$page.html" else ""
         return GET("$baseUrl/directory/$pageStr?latest", headers)
     }
 
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val genres = mutableListOf<Int>()
@@ -142,14 +151,20 @@ class MangaFox : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector(): String = "ul.manga-list-4-list li"
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    private fun searchMangaSelector() = "ul.manga-list-4-list li"
 
-    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
+    private fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        document.select(".detail-info-right").first()!!.let {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
+        document.select(".detail-info-right").first()!!.let { it ->
             author = it.select(".detail-info-right-say a").joinToString(", ") { it.text() }
             genre = it.select(".detail-info-right-tag-list a").joinToString(", ") { it.text() }
             description = it.select("p.fullcontent").first()?.text()
@@ -158,10 +173,15 @@ class MangaFox : ParsedHttpSource() {
         }
     }
 
-    override fun chapterListSelector() = "ul.detail-main-list li a"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector()).map { chapterFromElement(it) }
+    }
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
+    private fun chapterListSelector() = "ul.detail-main-list li a"
+
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
         name = element.select(".detail-main-list-main p").first()?.text().orEmpty()
         date_upload = element.select(".detail-main-list-main p").last()?.text()?.let { parseChapterDate(it) } ?: 0
     }
@@ -182,9 +202,7 @@ class MangaFox : ParsedHttpSource() {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     } else {
-        runCatching {
-            SimpleDateFormat("MMM d,yyyy", Locale.ENGLISH).parse(date)?.time
-        }.getOrNull() ?: 0L
+        dateFormat.tryParse(date)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -195,11 +213,14 @@ class MangaFox : ParsedHttpSource() {
         return GET("$mobileUrl$mobilePath", headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("#viewer img").mapIndexed { idx, it ->
-        Page(idx, imageUrl = it.attr("abs:data-original"))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("#viewer img").mapIndexed { idx, it ->
+            Page(idx, imageUrl = it.attr("abs:data-original"))
+        }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun parseStatus(status: String) = when {
         status.contains("Ongoing") -> SManga.ONGOING
@@ -216,148 +237,5 @@ class MangaFox : ParsedHttpSource() {
         RatingFilter(),
         YearFilter(),
         GenreFilter(getGenreList()),
-    )
-
-    open class UriPartFilter(
-        name: String,
-        val query: String,
-        private val vals: Array<Pair<String, String>>,
-        state: Int = 0,
-    ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
-        fun toUriPart() = vals[state].second
-    }
-
-    open class TextSearchMethodFilter(name: String, query: String) : UriPartFilter(name, query, arrayOf(Pair("contain", "cw"), Pair("begin", "bw"), Pair("end", "ew")))
-
-    open class TextSearchFilter(name: String, val query: String) : Filter.Text(name)
-
-    open class FilterWithMethodAndText(name: String, state: List<Filter<*>>) : Filter.Group<Filter<*>>(name, state)
-
-    private class NameFilter : TextSearchFilter("Name", "name")
-
-    private class EntryTypeFilter :
-        UriPartFilter(
-            "Type",
-            "type",
-            arrayOf(
-                Pair("Any", "0"),
-                Pair("Japanese Manga", "1"),
-                Pair("Korean Manhwa", "2"),
-                Pair("Chinese Manhua", "3"),
-                Pair("European Manga", "4"),
-                Pair("American Manga", "5"),
-                Pair("HongKong Manga", "6"),
-                Pair("Other Manga", "7"),
-            ),
-        )
-
-    private class AuthorMethodFilter : TextSearchMethodFilter("Method", "author_method")
-
-    private class AuthorTextFilter : TextSearchFilter("Author", "author")
-
-    private class AuthorFilter : FilterWithMethodAndText("Author", listOf(AuthorMethodFilter(), AuthorTextFilter()))
-
-    private class ArtistMethodFilter : TextSearchMethodFilter("Method", "artist_method")
-
-    private class ArtistTextFilter : TextSearchFilter("Artist", "artist")
-
-    private class ArtistFilter : FilterWithMethodAndText("Artist", listOf(ArtistMethodFilter(), ArtistTextFilter()))
-
-    private class RatingMethodFilter :
-        UriPartFilter(
-            "Method",
-            "rating_method",
-            arrayOf(
-                Pair("is", "eq"),
-                Pair("less than", "lt"),
-                Pair("more than", "gt"),
-            ),
-        )
-
-    private class RatingValueFilter :
-        UriPartFilter(
-            "Rating",
-            "rating",
-            arrayOf(
-                Pair("any star", ""),
-                Pair("no star", "0"),
-                Pair("1 star", "1"),
-                Pair("2 stars", "2"),
-                Pair("3 stars", "3"),
-                Pair("4 stars", "4"),
-                Pair("5 stars", "5"),
-            ),
-        )
-
-    private class RatingFilter : Filter.Group<UriPartFilter>("Rating", listOf(RatingMethodFilter(), RatingValueFilter()))
-
-    private class YearMethodFilter :
-        UriPartFilter(
-            "Method",
-            "released_method",
-            arrayOf(
-                Pair("on", "eq"),
-                Pair("before", "lt"),
-                Pair("after", "gt"),
-            ),
-        )
-
-    private class YearTextFilter : TextSearchFilter("Release year", "released")
-
-    private class YearFilter : FilterWithMethodAndText("Release year", listOf(YearMethodFilter(), YearTextFilter()))
-
-    private class CompletedFilter :
-        UriPartFilter(
-            "Completed Series",
-            "st",
-            arrayOf(
-                Pair("Either", "0"),
-                Pair("Yes", "2"),
-                Pair("No", "1"),
-            ),
-        )
-
-    private class Genre(name: String, val id: Int) : Filter.TriState(name)
-    private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
-
-    // console.log([...document.querySelectorAll(".tag-box a")].map(e => `Genre("${e.innerHTML}", ${e.dataset.val})`).join(",\n"))
-    private fun getGenreList() = listOf(
-        Genre("Action", 1),
-        Genre("Adventure", 2),
-        Genre("Comedy", 3),
-        Genre("Drama", 4),
-        Genre("Fantasy", 5),
-        Genre("Martial Arts", 6),
-        Genre("Shounen", 7),
-        Genre("Horror", 8),
-        Genre("Supernatural", 9),
-        Genre("Harem", 10),
-        Genre("Psychological", 11),
-        Genre("Romance", 12),
-        Genre("School Life", 13),
-        Genre("Shoujo", 14),
-        Genre("Mystery", 15),
-        Genre("Sci-fi", 16),
-        Genre("Seinen", 17),
-        Genre("Tragedy", 18),
-        Genre("Ecchi", 19),
-        Genre("Sports", 20),
-        Genre("Slice of Life", 21),
-        Genre("Mature", 22),
-        Genre("Shoujo Ai", 23),
-        Genre("Webtoons", 24),
-        Genre("Doujinshi", 25),
-        Genre("One Shot", 26),
-        Genre("Smut", 27),
-        Genre("Yaoi", 28),
-        Genre("Josei", 29),
-        Genre("Historical", 30),
-        Genre("Shounen Ai", 31),
-        Genre("Gender Bender", 32),
-        Genre("Adult", 33),
-        Genre("Yuri", 34),
-        Genre("Mecha", 35),
-        Genre("Lolicon", 36),
-        Genre("Shotacon", 37),
     )
 }
