@@ -11,7 +11,7 @@ import kotlin.system.exitProcess
  * Springboard that accepts https://hentaihere.com/m/Sxxxxx intents and redirects them to
  * the main Tachiyomi process.
  */
-class HentaiHereUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -26,10 +26,10 @@ class HentaiHereUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("HentaiHereUrlActivity", e.toString())
+                Log.e("UrlActivity", e.toString())
             }
         } else {
-            Log.e("HentaiHereUrlActivity", "could not parse uri from intent $intent")
+            Log.e("UrlActivity", "could not parse uri from intent $intent")
         }
 
         finish()
