@@ -8,18 +8,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
-class HentaiHere : ParsedHttpSource() {
+class HentaiHere : HttpSource() {
 
     override val name = "HentaiHere"
 
@@ -29,16 +27,10 @@ class HentaiHere : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
     // Popular
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
 
-    override fun popularMangaSelector() = searchMangaSelector()
-
-    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Search
     override fun fetchSearchManga(
@@ -64,10 +56,10 @@ class HentaiHere : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val sortFilter = filterList.find { it is SortFilter } as SortFilter
-        val alphabetFilter = filterList.find { it is AlphabetFilter } as AlphabetFilter
-        val statusFilter = filterList.find { it is StatusFilter } as StatusFilter
-        val categoryFilter = filterList.find { it is CategoryFilter } as CategoryFilter
+        val sortFilter = filterList.firstInstanceOrNull<SortFilter>()!!
+        val alphabetFilter = filterList.firstInstanceOrNull<AlphabetFilter>()!!
+        val statusFilter = filterList.firstInstanceOrNull<StatusFilter>()!!
+        val categoryFilter = filterList.firstInstanceOrNull<CategoryFilter>()!!
 
         val sortIndex = sortFilter.state
         val sortItem = sortFilterList[sortIndex]
@@ -78,28 +70,21 @@ class HentaiHere : ParsedHttpSource() {
         val alphabet = if (alphabetIndex != 0) "/${alphabetItem.first}" else ""
 
         val url = when {
-            // query + sort_min ~ /search?s=ore&sort=most-popular
-            query.isNotBlank() -> {
+            query.isNotEmpty() -> {
                 "$baseUrl/search".toHttpUrl().newBuilder().apply {
                     addQueryParameter("s", query)
                     addQueryParameter("sort", sortMin)
                     addQueryParameter("page", page.toString())
                 }.toString()
             }
-
-            // category + sort_min + alphabet (optional) ~ /search/t34/newest/a
             categoryFilter.state != 0 -> {
                 val category = categoryFilterList[categoryFilter.state].first
                 "$baseUrl/search/$category/$sortMin$alphabet?page=$page"
             }
-
-            // status + alphabet  (optional) ~ /directory/ongoing/a
             statusFilter.state != 0 -> {
                 val status = statusFilterList[statusFilter.state].first
                 "$baseUrl/directory/$status$alphabet?page=$page"
             }
-
-            // sort + alphabet (optional) ~ /directory/staff-pick/a
             else -> {
                 val sort = sortItem.first
                 "$baseUrl/directory/$sort$alphabet?page=$page"
@@ -108,101 +93,83 @@ class HentaiHere : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = ".item"
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".item").map { element ->
+            val a = element.select("a")
+            val img = element.select(".pos-rlt img")
+            val mutedText = element.select("div:not(.pos-rtl) > .text-muted").text()
+            val artistName = mutedText
+                .substringAfter("by ")
+                .substringBefore(".")
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        val a = element.select("a")
-        val img = element.select(".pos-rlt img")
-        val mutedText = element.select("div:not(.pos-rtl) > .text-muted").text()
-        val artistName = mutedText
-            .substringAfter("by ")
-            .substringBefore(".")
-
-        return SManga.create().apply {
-            setUrlWithoutDomain(a.attr("href"))
-            title = img.attr("alt")
-            author = when (artistName) {
-                "-", "Unknown" -> null
-                else -> artistName
+            SManga.create().apply {
+                setUrlWithoutDomain(a.attr("abs:href"))
+                title = img.attr("alt")
+                author = when (artistName) {
+                    "-", "Unknown" -> null
+                    else -> artistName
+                }
+                thumbnail_url = img.attr("src")
             }
-            thumbnail_url = img.attr("src")
         }
+        val hasNextPage = document.selectFirst(".pagination > li:last-child:not(.disabled)") != null
+        return MangasPage(mangas, hasNextPage)
     }
-
-    override fun searchMangaNextPageSelector() = ".pagination > li:last-child:not(.disabled)"
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/newest?page=$page")
 
-    override fun latestUpdatesSelector() = searchMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val categories = document.select("#info .text-info:contains(Cat) ~ a")
         val contents = document.select("#info .text-info:contains(Content:) ~ a")
         val licensed = categories.find { it.text() == "Licensed" }
 
-        title = document.select("h4 > a").first()!!.ownText()
-        author = document.select("#info .text-info:contains(Artist:) ~ a")
-            .joinToString { it.text() }
-
-        description = document.select("#info > div:has(> .text-info:contains(Brief Summary:))")
-            .first()
-            ?.ownText()
-        if (description == "Nothing yet!") {
-            description = ""
-        }
-
-        genre = (categories + contents).joinToString { it.text() }
-        status = when (licensed) {
-            null -> document.select("#info .text-info:contains(Status:) ~ a")
+        return SManga.create().apply {
+            title = document.select("h4 > a").first()!!.ownText()
+            author = document.select("#info .text-info:contains(Artist:) ~ a")
+                .joinToString { it.text() }
+            description = document.select("#info > div:has(> .text-info:contains(Brief Summary:))")
                 .first()
-                ?.text()
-                ?.toStatus()
-                ?: SManga.UNKNOWN
-
-            else -> SManga.LICENSED
+                ?.ownText()
+                ?.takeUnless { it == "Nothing yet!" }
+            genre = (categories + contents).joinToString { it.text() }
+            status = when (licensed) {
+                null -> document.select("#info .text-info:contains(Status:) ~ a")
+                    .first()
+                    ?.text()
+                    ?.toStatus()
+                    ?: SManga.UNKNOWN
+                else -> SManga.LICENSED
+            }
+            thumbnail_url = document.select("#cover img").first()!!.attr("src")
         }
-        thumbnail_url = document.select("#cover img")
-            .first()!!
-            .attr("src")
     }
 
     // Chapters
-    override fun chapterListSelector() = "li.sub-chp > a"
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("li.sub-chp > a").map { element ->
+        val chapterName = element.text().substringBefore("(").trim()
+        val chapterNumber = chapterName.substringBefore(" ").toFloatOrNull() ?: -1f
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapterName = element
-            .text()
-            .substringBefore("(")
-            .trim()
-        val chapterNumber = chapterName
-            .substringBefore(" ")
-            .toFloatOrNull() ?: -1f
-
-        return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("abs:href"))
             name = chapterName
             chapter_number = chapterNumber
         }
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> = json.decodeFromString<List<String>>(
-        response.body.string()
-            .substringAfter("var rff_imageList = ")
-            .substringBefore(";"),
-    ).mapIndexed { i, imagePath ->
-        Page(i, "", "$IMAGE_SERVER_URL/hentai$imagePath")
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<List<String>> {
+        it.substringAfter("var rff_imageList = ").substringBefore(";")
+    }.mapIndexed { i, imagePath ->
+        Page(i, imageUrl = "$IMAGE_SERVER_URL/hentai$imagePath")
     }
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList = FilterList(
@@ -219,102 +186,6 @@ class HentaiHere : ParsedHttpSource() {
         Filter.Header("Note: Ignored for text search!"),
         CategoryFilter(categoryFilterList.map { it.second }.toTypedArray()),
     )
-
-    val sortFilterList = listOf(
-        Pair("newest", "Newest"),
-        Pair("most-popular", "Most Popular"),
-        Pair("last-updated", "Last Updated"),
-        Pair("most-viewed", "Most Viewed"),
-        Pair("alphabetical", "Alphabetical"),
-        Pair("", "----"),
-        Pair("staff-pick", "Staff Pick"),
-        Pair("last-month", "Popular (Monthly)"),
-        Pair("last-week", "Popular (Weekly)"),
-        Pair("yesterday", "Popular (Daily)"),
-        Pair("trending", "Trending"),
-    )
-
-    val alphabetFilterList = listOf(
-        Pair("", "All"),
-        Pair("a", "A"),
-        Pair("b", "B"),
-        Pair("c", "C"),
-        Pair("d", "D"),
-        Pair("e", "E"),
-        Pair("f", "F"),
-        Pair("g", "G"),
-        Pair("h", "H"),
-        Pair("i", "I"),
-        Pair("j", "J"),
-        Pair("k", "K"),
-        Pair("l", "L"),
-        Pair("m", "M"),
-        Pair("n", "N"),
-        Pair("o", "O"),
-        Pair("p", "P"),
-        Pair("q", "Q"),
-        Pair("r", "R"),
-        Pair("s", "S"),
-        Pair("t", "T"),
-        Pair("u", "U"),
-        Pair("v", "V"),
-        Pair("w", "W"),
-        Pair("x", "X"),
-        Pair("y", "Y"),
-        Pair("z", "Z"),
-    )
-
-    val statusFilterList = listOf(
-        Pair("", "All"),
-        Pair("ongoing", "Ongoing"),
-        Pair("completed", "Completed"),
-    )
-
-    // /tags/category
-    // copy($$('.item > a').map(el => `Pair("t${/[^T]+$/.exec(el.href)[0]}", "${el.querySelector("span.clear > span").textContent}"),`).join("\r\n"))
-    val categoryFilterList = listOf(
-        Pair("", "All"),
-        Pair("t34", "Adult"),
-        Pair("t7", "Anal"),
-        Pair("t372", "Beastiality"),
-        Pair("t20", "Big Breasts"),
-        Pair("t43", "Comedy"),
-        Pair("t46", "Compilation"),
-        Pair("t42", "Doujinshi"),
-        Pair("t40", "Ecchi"),
-        Pair("t6", "Fantasy"),
-        Pair("t14", "Futanari"),
-        Pair("t302", "Guro"),
-        Pair("t31", "Harem"),
-        Pair("t15", "Incest"),
-        Pair("t2650", "Isekai (Otherworld)"),
-        Pair("t2158", "Korean Comic"),
-        Pair("t50", "Licensed"),
-        Pair("t17", "Lolicon"),
-        Pair("t30", "Mecha"),
-        Pair("t2503", "No Penetration"),
-        Pair("t33", "Oneshot"),
-        Pair("t23", "Rape"),
-        Pair("t567", "Reverse Harem"),
-        Pair("t41", "Romance"),
-        Pair("t432", "Scat"),
-        Pair("t48", "School Life"),
-        Pair("t5", "Sci-fi"),
-        Pair("t32", "Serialized"),
-        Pair("t44", "Shotacon"),
-        Pair("t49", "Tragedy"),
-        Pair("t47", "Uncensored"),
-        Pair("t27", "Yaoi"),
-        Pair("t28", "Yuri"),
-    )
-
-    class SortFilter(sortables: Array<String>, state: Int = 1) : Filter.Select<String>("Sort", sortables, state)
-
-    class AlphabetFilter(alphabet: Array<String>) : Filter.Select<String>("Starts With", alphabet, 0)
-
-    class StatusFilter(statuses: Array<String>) : Filter.Select<String>("Status", statuses, 0)
-
-    class CategoryFilter(categories: Array<String>) : Filter.Select<String>("Category", categories, 0)
 
     private fun String.toStatus(): Int = when (this) {
         "Completed" -> SManga.COMPLETED
