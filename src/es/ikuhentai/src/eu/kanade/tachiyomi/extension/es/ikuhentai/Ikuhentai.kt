@@ -4,29 +4,29 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Ikuhentai : ParsedHttpSource() {
+class Ikuhentai : HttpSource() {
     override val name = "Ikuhentai"
     override val baseUrl = "https://ikuhentai.net"
     override val lang = "es"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
-    }
+    private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 
     override fun popularMangaRequest(page: Int): Request {
         val pagePath = if (page > 1) "page/$page/" else ""
@@ -38,26 +38,27 @@ class Ikuhentai : ParsedHttpSource() {
         return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest", headers)
     }
 
-    override fun popularMangaSelector() = "div.page-listing-item .page-item-detail, div.c-tabs-item__content"
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.page-listing-item .page-item-detail, div.c-tabs-item__content").map {
+            mangaFromElement(it)
+        }
+        val hasNextPage = document.selectFirst("a.nextpostslink, div.nav-previous > a") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
-    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // WordPress switches pagination structure on subsequent pages and search pages
-    override fun popularMangaNextPageSelector() = "a.nextpostslink, div.nav-previous > a"
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaFromElement(element: Element): SManga {
+    private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        val img: Element? = element.selectFirst("img")
+        val img = element.selectFirst("img")
         manga.thumbnail_url = img?.let {
             it.absUrl("data-lazy-src").ifEmpty { it.absUrl("src") }
         }
 
-        val link: Element? = element.selectFirst("div.item-thumb > a, div.tab-thumb > a")
+        val link = element.selectFirst("div.item-thumb > a, div.tab-thumb > a")
         if (link != null) {
             manga.setUrlWithoutDomain(link.absUrl("href"))
             manga.title = link.attr("title").ifEmpty { link.text() }
@@ -78,12 +79,12 @@ class Ikuhentai : ParsedHttpSource() {
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
                     is GenreList -> {
-                        filter.state.filter { it.state == 1 }.forEach {
+                        filter.state.filter { it.state == Filter.TriState.STATE_INCLUDE }.forEach {
                             addQueryParameter("genre[]", it.id)
                         }
                     }
                     is StatusList -> {
-                        filter.state.filter { it.state == 1 }.forEach {
+                        filter.state.filter { it.state == Filter.TriState.STATE_INCLUDE }.forEach {
                             addQueryParameter("status[]", it.id)
                         }
                     }
@@ -106,8 +107,9 @@ class Ikuhentai : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement: Element = document.selectFirst("div.site-content") ?: document
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val infoElement = document.selectFirst("div.site-content") ?: document
 
         val manga = SManga.create()
         manga.author = infoElement.select("div.author-content").text()
@@ -121,7 +123,7 @@ class Ikuhentai : ParsedHttpSource() {
 
         manga.description = document.select("div.description-summary").text()
 
-        val img: Element? = document.selectFirst("div.summary_image img")
+        val img = document.selectFirst("div.summary_image img")
         manga.thumbnail_url = img?.let {
             it.absUrl("data-lazy-src").ifEmpty { it.absUrl("src") }
         }
@@ -140,33 +142,36 @@ class Ikuhentai : ParsedHttpSource() {
         return POST("$url/ajax/chapters/", headers)
     }
 
-    override fun chapterListSelector() = "li.wp-manga-chapter"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("li.wp-manga-chapter").map { element ->
+            val urlElement = element.selectFirst("a")!!
+            val url = urlElement.absUrl("href").toHttpUrl().newBuilder().apply {
+                removeAllQueryParameters("style")
+                addQueryParameter("style", "list")
+            }.build().toString()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val urlElement: Element = element.selectFirst("a")!!
-        val url = urlElement.absUrl("href").toHttpUrl().newBuilder().apply {
-            removeAllQueryParameters("style")
-            addQueryParameter("style", "list")
-        }.build().toString()
+            SChapter.create().apply {
+                setUrlWithoutDomain(url)
+                name = urlElement.text()
 
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(url)
-        chapter.name = urlElement.text()
-
-        val dateElement: Element? = element.selectFirst("span.chapter-release-date i")
-        dateElement?.let {
-            chapter.date_upload = dateFormat.tryParse(it.text())
+                val dateElement = element.selectFirst("span.chapter-release-date i")
+                if (dateElement != null) {
+                    date_upload = dateFormat.tryParse(dateElement.text())
+                }
+            }
         }
-
-        return chapter
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select("div.reading-content * img").mapIndexed { i, element ->
-        val url = element.absUrl("data-lazy-src").ifEmpty { element.absUrl("src") }
-        Page(i, "", url)
-    }.filter { it.imageUrl!!.isNotEmpty() }
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.reading-content * img").mapIndexedNotNull { i, element ->
+            val url = element.absUrl("data-lazy-src").ifEmpty { element.absUrl("src") }
+            if (url.isNotEmpty()) Page(i, imageUrl = url) else null
+        }
+    }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
     override fun imageRequest(page: Page): Request {
         val imgHeader = headers.newBuilder().apply {
@@ -175,27 +180,6 @@ class Ikuhentai : ParsedHttpSource() {
         return GET(page.imageUrl!!, imgHeader)
     }
 
-    private class TextField(name: String, val key: String) : Filter.Text(name)
-
-    private class SortBy :
-        UriPartFilter(
-            "Ordenar por",
-            arrayOf(
-                Pair("Relevance", ""),
-                Pair("Latest", "latest"),
-                Pair("A-Z", "alphabet"),
-                Pair("Calificación", "rating"),
-                Pair("Tendencia", "trending"),
-                Pair("Más visto", "views"),
-                Pair("Nuevo", "new-manga"),
-            ),
-        )
-
-    private class Genre(name: String, val id: String = name) : Filter.TriState(name)
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
-    private class Status(name: String, val id: String = name) : Filter.TriState(name)
-    private class StatusList(statuses: List<Status>) : Filter.Group<Status>("Estado", statuses)
-
     override fun getFilterList() = FilterList(
         TextField("Autor", "author"),
         TextField("Año de publicación", "release"),
@@ -203,61 +187,4 @@ class Ikuhentai : ParsedHttpSource() {
         StatusList(getStatusList()),
         GenreList(getGenreList()),
     )
-
-    private fun getStatusList() = listOf(
-        Status("Completado", "end"),
-        Status("En emisión", "on-going"),
-        Status("Cancelado", "canceled"),
-        Status("Pausado", "on-hold"),
-    )
-
-    private fun getGenreList() = listOf(
-        Genre("Ahegao", "ahegao"),
-        Genre("Anal", "anal"),
-        Genre("Bestiality", "bestialidad"),
-        Genre("Bondage", "bondage"),
-        Genre("Bukkake", "bukkake"),
-        Genre("Chicas monstruo", "chicas-monstruo"),
-        Genre("Chikan", "chikan"),
-        Genre("Colegialas", "colegialas"),
-        Genre("Comics porno", "comics-porno"),
-        Genre("Dark Skin", "dark-skin"),
-        Genre("Demonios", "demonios"),
-        Genre("Ecchi", "ecchi"),
-        Genre("Embarazadas", "embarazadas"),
-        Genre("Enfermeras", "enfermeras"),
-        Genre("Eroges", "eroges"),
-        Genre("Fantasía", "fantasia"),
-        Genre("Futanari", "futanari"),
-        Genre("Gangbang", "gangbang"),
-        Genre("Gemelas", "gemelas"),
-        Genre("Gender Bender", "gender-bender"),
-        Genre("Gore", "gore"),
-        Genre("Handjob", "handjob"),
-        Genre("Harem", "harem"),
-        Genre("Hipnosis", "hipnosis"),
-        Genre("Incesto", "incesto"),
-        Genre("Loli", "loli"),
-        Genre("Maids", "maids"),
-        Genre("Masturbación", "masturbacion"),
-        Genre("Milf", "milf"),
-        Genre("Mind Break", "mind-break"),
-        Genre("My Hero Academia", "my-hero-academia"),
-        Genre("Naruto", "naruto"),
-        Genre("Netorare", "netorare"),
-        Genre("Paizuri", "paizuri"),
-        Genre("Pokemon", "pokemon"),
-        Genre("Profesora", "profesora"),
-        Genre("Prostitución", "prostitucion"),
-        Genre("Romance", "romance"),
-        Genre("Straight Shota", "straight-shota"),
-        Genre("Tentáculos", "tentaculos"),
-        Genre("Virgen", "virgen"),
-        Genre("Yaoi", "yaoi"),
-        Genre("Yuri", "yuri"),
-    )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
 }
