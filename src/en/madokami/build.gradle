@@ -1,7 +1,8 @@
 ext {
     extName = 'Madokami'
     extClass = '.Madokami'
-    extVersionCode = 12
+    extVersionCode = 13
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
