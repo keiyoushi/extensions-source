@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.es.akaya
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(name: String, val id: Int) : Filter.CheckBox(name)
+
 open class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Géneros", genres)
 
 class GenreFilter :
@@ -30,7 +31,6 @@ class GenreFilter :
             Genre("Supernatural", 22),
             Genre("Suspenso", 14),
             Genre("Thriller", 12),
-
         ),
     )
 
