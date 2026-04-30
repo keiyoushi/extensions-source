@@ -11,7 +11,7 @@ import kotlin.system.exitProcess
  * Springboard that accepts https://hentaimode.com/g/<item> intents
  * and redirects them to the main Tachiyomi process.
  */
-class HentaiModeUrlActivity : Activity() {
+class UrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
