@@ -12,7 +12,7 @@ internal class OrderBy :
         Filter.Sort.Selection(1, false),
     )
 
-fun getFilterList(): FilterList = FilterList(
+fun getFilters(): FilterList = FilterList(
     OrderBy(),
     GenreList(getGenreList()),
 )
