@@ -22,6 +22,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -36,11 +37,11 @@ class LxHentai :
 
     override val lang = "vi"
 
+    override val supportsLatest = true
+
     private val defaultBaseUrl = "https://lxmanga.space"
 
     override val baseUrl get() = getPrefBaseUrl()
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences = getPreferences {
         getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
@@ -62,31 +63,31 @@ class LxHentai :
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "-views")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("filter[status]", "ongoing,completed,paused")
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = browseMangaRequest(page, "-views")
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response)
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "-updated_at")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("filter[status]", "ongoing,completed,paused")
-            .build()
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = browseMangaRequest(page, "-updated_at")
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response)
 
     // ============================== Search ================================
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> {
+            val slug = query.substringAfter(PREFIX_ID_SEARCH)
+            val mangaUrl = "/truyen/$slug"
+            fetchMangaDetails(SManga.create().apply { url = mangaUrl })
+                .map {
+                    it.url = mangaUrl
+                    it.initialized = true
+                    MangasPage(listOf(it), false)
+                }
+        }
+        else -> super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "-updated_at"
@@ -120,14 +121,24 @@ class LxHentai :
 
     override fun getFilterList(): FilterList = getFilters()
 
+    private fun browseMangaRequest(page: Int, sortBy: String): Request {
+        val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", sortBy)
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("filter[status]", "ongoing,completed,paused")
+            .build()
+        return GET(url, headers)
+    }
+
     private fun parseMangaPage(response: Response): MangasPage {
         val document = response.asJsoup()
         val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
         val mangaList = document.select("div.manga-vertical")
-            .map(::mangaFromElement)
+            .map { element: Element -> mangaFromElement(element) }
         val hasNextPage = document.select("a#pagination[data-page]")
-            .mapNotNull { element -> element.attr("data-page").toIntOrNull() }
-            .any { page -> page > currentPage }
+            .asSequence()
+            .mapNotNull { element: Element -> element.attr("data-page").toIntOrNull() }
+            .any { page: Int -> page > currentPage }
 
         return MangasPage(mangaList, hasNextPage)
     }
@@ -138,12 +149,14 @@ class LxHentai :
 
         return SManga.create().apply {
             title = titleElement.text()
-            setUrlWithoutDomain(titleElement.absUrl("href").toRelativeUrl())
-            thumbnail_url = coverElement?.absUrl("data-bg")
-                ?.ifEmpty { parseBackgroundUrl(coverElement.attr("style")).orEmpty() }
-                ?.ifEmpty { null }
+            setUrlWithoutDomain(titleElement.absUrl("href"))
+            thumbnail_url = coverElement?.let { it: Element -> getThumbnailUrl(it) }
         }
     }
+
+    private fun getThumbnailUrl(element: Element): String? = element.absUrl("data-bg")
+        .ifEmpty { parseBackgroundUrl(element.attr("style")).orEmpty() }
+        .ifBlank { null }
 
     // ============================== Details ===============================
 
@@ -153,32 +166,37 @@ class LxHentai :
         return SManga.create().apply {
             title = document.selectFirst("div.flex.flex-row.truncate.mb-4 span.grow.text-lg.ml-1.text-ellipsis.font-semibold")!!.text()
             thumbnail_url = document.selectFirst("div.md\\:col-span-2 div.cover-frame > div.cover")
-                ?.let { cover: Element ->
-                    cover.absUrl("data-bg")
-                        .ifEmpty { parseBackgroundUrl(cover.attr("style")).orEmpty() }
-                        .ifEmpty { null }
-                }
+                ?.let { element: Element -> getThumbnailUrl(element) }
             author = document.infoRow("Tác giả:")
                 ?.select("a[href*=/tac-gia/]")
-                ?.joinToString { element -> element.text() }
+                ?.joinToString { it: Element -> it.text() }
                 ?.ifEmpty { null }
+
             genre = document.infoRow("Thể loại:")
                 ?.select("a[href*=/the-loai/]")
-                ?.joinToString { element -> element.text() }
+                ?.joinToString { it: Element -> it.text() }
                 ?.ifEmpty { null }
-            description = document.select("div.pt-4.border-t")
-                .firstOrNull { section ->
-                    section.selectFirst("p.text-lg.font-semibold")?.text() == "Tóm tắt"
+
+            val altNames = document.infoRow("Tên khác:")
+                ?.select("a, span:not(.font-semibold)")
+                ?.joinToString { it.text().trim() }
+                ?.takeIf { it.isNotBlank() }
+
+            val summary = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") { it.wholeText() }.trim()
+
+            description = buildString {
+                if (altNames != null) {
+                    append("Tên khác: ", altNames, "\n\n")
                 }
-                ?.selectFirst("p.whitespace-pre-wrap.break-words")
-                ?.text()
-                ?.ifEmpty { null }
+                append(summary)
+            }.trim()
+
             status = parseStatus(document.infoRow("Tình trạng:")?.text())
         }
     }
 
-    private fun Document.infoRow(label: String): Element? = select("div.mt-2")
-        .firstOrNull { row -> row.selectFirst("span.font-semibold")?.text() == label }
+    private fun Document.infoRow(label: String): Element? = select("div")
+        .firstOrNull { row: Element -> row.selectFirst("> span.font-semibold")?.text() == label }
 
     private fun parseStatus(rawStatus: String?): Int = when {
         rawStatus.isNullOrBlank() -> SManga.UNKNOWN
@@ -195,10 +213,10 @@ class LxHentai :
         val chapterElements = document.select("ul.overflow-y-auto a[href^=/truyen/]:has(span.timeago)")
             .ifEmpty { document.select("a[href^=/truyen/]:has(span.timeago)") }
 
-        return chapterElements.map { element ->
+        return chapterElements.map { element: Element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href").toRelativeUrl())
-                name = element.selectFirst("span.text-ellipsis")!!.text()
+                setUrlWithoutDomain(element.absUrl("href"))
+                name = element.selectFirst("span.text-ellipsis")?.text() ?: "Chapter"
                 date_upload = parseChapterDate(element.selectFirst("span.timeago"))
             }
         }
@@ -206,7 +224,7 @@ class LxHentai :
 
     private fun parseChapterDate(timeElement: Element?): Long = timeElement?.attr("datetime")
         ?.ifEmpty { null }
-        ?.let { value -> DATE_TIME_FORMAT.tryParse(value).takeIf { parsed -> parsed != 0L } }
+        ?.let { value: String -> DATE_TIME_FORMAT.tryParse(value).takeIf { parsed -> parsed != 0L } }
         ?: 0L
 
     // ============================== Pages =================================
@@ -220,24 +238,25 @@ class LxHentai :
             ?: throw Exception("Không tìm thấy dữ liệu ảnh")
 
         val encryptedRows = ENCRYPTED_IMAGE_ROW_REGEX.findAll(encryptedPayload)
-            .mapNotNull { row ->
+            .mapNotNull { row: MatchResult ->
                 row.groupValues.getOrNull(1)
                     ?.split(',')
-                    ?.mapNotNull(String::toIntOrNull)
-                    ?.takeIf { values -> values.isNotEmpty() }
+                    ?.mapNotNull { it.toIntOrNull() }
+                    ?.takeIf { it.isNotEmpty() }
             }
             .toList()
 
         val imageUrls = document.select("#image-container[data-idx]")
-            .mapNotNull { element -> element.attr("data-idx").toIntOrNull() }
+            .asSequence()
+            .mapNotNull { element: Element -> element.attr("data-idx").toIntOrNull() }
             .distinct()
             .sorted()
-            .mapNotNull { idx -> encryptedRows.getOrNull(idx) }
-            .map { codes -> decodeImageUrl(codes, actionToken) }
-            .filter(String::isNotBlank)
+            .mapNotNull { idx: Int -> encryptedRows.getOrNull(idx) }
+            .map { codes: List<Int> -> decodeImageUrl(codes, actionToken) }
+            .filter { it.isNotBlank() }
             .toList()
 
-        return imageUrls.mapIndexed { index, imageUrl ->
+        return imageUrls.mapIndexed { index: Int, imageUrl: String ->
             Page(index, imageUrl = imageUrl)
         }
     }
@@ -289,13 +308,8 @@ class LxHentai :
             ?: "$baseUrl${rawUrl.takeIf { it.startsWith("/") } ?: "/$rawUrl"}"
     }
 
-    private fun String.toRelativeUrl(): String {
-        val httpUrl = toHttpUrlOrNull() ?: return this
-        val query = httpUrl.encodedQuery?.let { value -> "?$value" }.orEmpty()
-        return httpUrl.encodedPath + query
-    }
-
     companion object {
+        const val PREFIX_ID_SEARCH = "id:"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
@@ -303,7 +317,7 @@ class LxHentai :
 
         private val BACKGROUND_URL_REGEX = Regex("""background-image:\s*url\(['"]?([^'")]+)""", RegexOption.IGNORE_CASE)
         private val ACTION_TOKEN_REGEX = Regex("""<meta\s+name=["']action_token["']\s+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-        private val ENCRYPTED_IMAGES_REGEX = Regex("""var\s+_u\s*=\s*(\[\[.*?]]);""", setOf(RegexOption.DOT_MATCHES_ALL))
+        private val ENCRYPTED_IMAGES_REGEX = Regex("""var\s+_u\s*=\s*(\[\[.*?]]);""", RegexOption.DOT_MATCHES_ALL)
         private val ENCRYPTED_IMAGE_ROW_REGEX = Regex("""\[(\d+(?:,\d+)*)]""")
 
         private val DATE_TIME_FORMAT by lazy {
