@@ -5,14 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 
-class GunnerkriggCourt : ParsedHttpSource() {
+class GunnerkriggCourt : HttpSource() {
     override val name = "Gunnerkrigg Court"
     override val baseUrl = "https://www.gunnerkrigg.com"
     override val lang = "en"
@@ -25,65 +24,59 @@ class GunnerkriggCourt : ParsedHttpSource() {
             author = artist
             status = SManga.ONGOING
             url = "/archives/"
-            description = "Gunnerkrigg Court is a Science Fantasy webcomic by Tom Siddell about a" +
-                " strange young girl attending an equally strange school. The intricate story is " +
-                "deeply rooted in world mythology, but has a strong focus on science (chemistry " +
-                "and robotics, most prominently) as well.\n\n" +
-                "Antimony Carver begins classes at the eponymous U.K. Boarding School, and soon " +
-                "notices that strange events are happening: a shadow creature follows her around;" +
-                " a robot calls her \"Mummy\"; a Rogat Orjak smashes in the dormitory roof; odd " +
-                "birds, ticking like clockwork, stand guard in out-of-the-way places.\n\n" +
-                "Stranger still, in the middle of all this, Annie remains calm and polite to a fault."
-            thumbnail_url = "https://i.imgur.com/g2ukAIKh.jpgss"
+            description = """
+                Gunnerkrigg Court is a Science Fantasy webcomic by Tom Siddell about a strange young girl attending an equally strange school. The intricate story is deeply rooted in world mythology, but has a strong focus on science (chemistry and robotics, most prominently) as well.
+
+                Antimony Carver begins classes at the eponymous U.K. Boarding School, and soon notices that strange events are happening: a shadow creature follows her around; a robot calls her "Mummy"; a Rogat Orjak smashes in the dormitory roof; odd birds, ticking like clockwork, stand guard in out-of-the-way places.
+
+                Stranger still, in the middle of all this, Annie remains calm and polite to a fault.
+            """.trimIndent()
+            thumbnail_url = "https://i.imgur.com/g2ukAIKh.jpg"
         }
 
-        return Observable.just(MangasPage(arrayListOf(manga).reversed(), false))
+        return Observable.just(MangasPage(listOf(manga), false))
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
-    override fun chapterListSelector() = """div.chapters option[value~=\d*]"""
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
+        return document.select("div.chapters option[value~=\\d*]").map { element ->
+            SChapter.create().apply {
+                val chapterNumStr = element.attr("value")
+                chapter_number = chapterNumStr.toFloatOrNull() ?: -1f
+                setUrlWithoutDomain("/?p=$chapterNumStr")
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        chapter_number = element.attr("value").toFloat()
-        setUrlWithoutDomain("/?p=" + element.attr("value"))
-        name = element.parent()!!.previousElementSibling()!!.text() + " (" + chapter_number.toInt() + ")"
-        // date_upload // Find by using hovertext above "Tom" on actual comic page
+                val title = element.parent()?.previousElementSibling()?.text() ?: "Chapter"
+                name = "$title (${if (chapter_number >= 0f) chapter_number.toInt() else chapterNumStr})"
+            }
+        }.reversed()
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".comic_image").mapIndexed { i, element -> Page(i, "", baseUrl + element.attr("src")) }
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
 
-    // <editor-fold desc="Not Used">
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+        return document.select(".comic_image").mapIndexed { i, element ->
+            Page(i, imageUrl = element.absUrl("src"))
+        }
+    }
 
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    // </editor-fold>
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }
