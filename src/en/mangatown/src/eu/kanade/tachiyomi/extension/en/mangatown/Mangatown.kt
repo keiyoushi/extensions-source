@@ -2,23 +2,24 @@ package eu.kanade.tachiyomi.extension.en.mangatown
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Mangatown : ParsedHttpSource() {
+class Mangatown : HttpSource() {
 
     override val name = "Mangatown"
 
@@ -33,15 +34,11 @@ class Mangatown : ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaSelector() = "li:has(a.manga_cover)"
+    private fun popularMangaSelector() = "li:has(a.manga_cover)"
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/directory/0-0-0-0-0-0/$page.htm", headers)
+    private fun popularMangaNextPageSelector() = "a.next:not([href^=javascript])"
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest/$page.htm", headers)
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.select("p.title a").first()!!.let {
             setUrlWithoutDomain(it.attr("href"))
             title = it.text()
@@ -49,11 +46,23 @@ class Mangatown : ParsedHttpSource() {
         thumbnail_url = element.select("img").attr("abs:src")
     }
 
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/directory/0-0-0-0-0-0/$page.htm", headers)
 
-    override fun popularMangaNextPageSelector() = "a.next:not([href^=javascript])"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest/$page.htm", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
@@ -63,13 +72,15 @@ class Mangatown : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val infoElement = document.select("div.article_content")
 
         return SManga.create().apply {
@@ -94,50 +105,42 @@ class Mangatown : ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "ul.chapter_list li"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.select("a").let { urlElement ->
-            setUrlWithoutDomain(urlElement.attr("href"))
-            name = "${urlElement.text()} ${element.select("span:not(span.time,span.new)").joinToString(" ") { it.text() }}"
-        }
-        date_upload = parseDate(element.select("span.time").text())
-    }
-
-    private fun parseDate(date: String): Long = when {
-        date.contains("Today") -> Calendar.getInstance().apply {}.timeInMillis
-
-        date.contains("Yesterday") -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
-
-        else -> {
-            try {
-                SimpleDateFormat("MMM dd,yyyy", Locale.US).parse(date)?.time ?: 0L
-            } catch (e: Exception) {
-                0L
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("ul.chapter_list li").map { element ->
+            SChapter.create().apply {
+                element.select("a").let { urlElement ->
+                    setUrlWithoutDomain(urlElement.attr("href"))
+                    name = "${urlElement.text()} ${element.select("span:not(span.time,span.new)").joinToString(" ") { it.text() }}"
+                }
+                date_upload = parseDate(element.select("span.time").text())
             }
         }
     }
 
-    // check for paged first, then try longstrip
-    override fun pageListParse(document: Document): List<Page> = document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))").let { elements ->
-        if (elements.isNotEmpty()) {
+    private val dateFormat = SimpleDateFormat("MMM dd,yyyy", Locale.US)
+
+    private fun parseDate(date: String): Long = when {
+        date.contains("Today") -> Calendar.getInstance().timeInMillis
+        date.contains("Yesterday") -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+        else -> dateFormat.tryParse(date)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val elements = document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))")
+        return if (elements.isNotEmpty()) {
             elements.mapIndexed { i, e ->
-                Page(i, e.attr("value").substringAfter("com"))
+                Page(i, e.attr("value"))
             }
         } else {
             document.select("#viewer .image").mapIndexed { i, e ->
-                Page(i, "", e.attr("abs:src"))
+                Page(i, imageUrl = e.attr("abs:src"))
             }
         }
     }
 
-    // Get the page
-    override fun imageUrlRequest(page: Page) = GET(baseUrl + page.url, headers)
-
-    // Get the image from the requested page
     override fun imageUrlParse(response: Response): String = response.asJsoup().select("div#viewer img").attr("abs:src")
-
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }
