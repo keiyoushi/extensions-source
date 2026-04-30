@@ -3,7 +3,7 @@
     <application>
         <activity
             android:exported="true"
-            android:name=".en.hentainexus.HentaiNexusActivity"
+            android:name=".en.hentainexus.UrlActivity"
             android:theme="@android:style/Theme.NoDisplay"
             android:excludeFromRecents="true">
             <intent-filter>
