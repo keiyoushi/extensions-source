@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhwalike
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.RequestBody
@@ -30,11 +31,7 @@ object ManhwalikeHelper {
         else -> SManga.UNKNOWN
     }
 
-    fun String?.toDate(): Long = try {
-        dateFormat.parse(this).time
-    } catch (_: Exception) {
-        0L
-    }
+    fun String?.toDate(): Long = dateFormat.tryParse(this)
 
     fun Element.toOriginal(): String = when {
         hasAttr("data-original") -> absUrl("data-original")
