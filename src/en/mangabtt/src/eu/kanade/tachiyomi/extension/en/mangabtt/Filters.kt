@@ -4,8 +4,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 
 data class FilterOption(val displayName: String, val value: String)
 
-inline fun <reified T> List<*>.firstInstanceOrNull() = firstOrNull { it is T } as? T
-
 open class EnhancedSelect(name: String, private val _values: List<FilterOption>, state: Int = 0) : Filter.Select<String>(name, _values.map { it.displayName }.toTypedArray(), state) {
 
     val selectedValue: String?
