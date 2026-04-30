@@ -166,13 +166,7 @@ class Nexusscanlation : HttpSource() {
             throw IOException("Premium chapter. Not available.")
         }
 
-        val pageList = chapterPagesDto.paginas
-
-        if (pageList.isNullOrEmpty()) {
-            return emptyList()
-        }
-
-        return pageList.mapIndexed { index, page -> Page(index, imageUrl = page.url) }
+        return chapterPagesDto.paginas.orEmpty().mapIndexed { index, page -> Page(index, imageUrl = page.url) }
     }
 
     // ======================= Helpers =======================================
@@ -194,7 +188,7 @@ class Nexusscanlation : HttpSource() {
                 append("🔒 ")
             }
 
-            append("Chapter $chapterNumber")
+            append("Capítulo $chapterNumber")
 
             chapter.titulo
                 ?.takeIf { it.isNotBlank() }
