@@ -21,7 +21,13 @@ class FavComic :
     HttpSource(),
     ConfigurableSource {
 
-    override val baseUrl by lazy { mirrorUrls[pref.getString(PREF_BASE_URL, "0")!!.toInt()] }
+    override val baseUrl: String
+        get() {
+            val index = preferences.getString(PREF_BASE_URL, "0")!!.toInt()
+                .coerceAtMost(mirrorUrls.size - 1)
+
+            return mirrorUrls[index]
+        }
 
     override val lang = "zh"
 
