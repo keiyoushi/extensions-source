@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.manhwaxxl
 import kotlinx.serialization.Serializable
 
 @Serializable
-class ChaptersHtmlDTO(
+class Dto(
     val data: Data,
 ) {
     @Serializable
