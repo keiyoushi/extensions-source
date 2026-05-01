@@ -47,6 +47,11 @@ class HDoujin(
 
     override val name = "HDoujin"
 
+    override val id: Long = when (lang) {
+        "ko" -> 1528745830L
+        else -> super.id
+    }
+
     override val supportsLatest = true
     private val preferences = getPreferences()
     private fun quality() = preferences.getString(PREF_IMAGE_RES, "1280")!!
