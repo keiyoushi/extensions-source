@@ -25,11 +25,10 @@ class MGKomik :
     override val mangaSubString = "komik"
 
     override fun headersBuilder() = super.headersBuilder().apply {
-        add("Sec-Fetch-Dest", "document")
-        add("Sec-Fetch-Mode", "navigate")
-        add("Sec-Fetch-Site", "same-origin")
-        add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
+        set("Sec-Fetch-Site", "same-origin")
+        set("Upgrade-Insecure-Requests", "1")
+        set("Referer", "$baseUrl/")
+        set("Sec-Fetch-Site", "none")
     }
 
     override val client = network.cloudflareClient.newBuilder()
@@ -98,12 +97,5 @@ class MGKomik :
             Genre(a.text(), a.absUrl("href"))
         }
         return genres
-    }
-
-    // =============================== Utilities ==============================
-
-    private fun randomString(length: Int): String {
-        val charPool = ('a'..'z') + ('A'..'Z') + ('.')
-        return List(length) { charPool.random() }.joinToString("")
     }
 }
