@@ -306,7 +306,7 @@ class Mangainua :
             title = SITE_TAGS_SEARCH_TITLE
             summary = SITE_TAGS_SEARCH_SUM
             setDefaultValue(false)
-        }.also { screen.addPreference(it) }
+        }.let(screen::addPreference)
     }
 
     companion object {
