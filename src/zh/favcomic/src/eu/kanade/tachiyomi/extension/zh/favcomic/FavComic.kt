@@ -23,9 +23,8 @@ class FavComic :
 
     override val baseUrl: String
         get() {
-            val index = preferences.getString(PREF_BASE_URL, "0")!!.toInt()
+            val index = pref.getString(PREF_BASE_URL, "0")!!.toInt()
                 .coerceAtMost(mirrorUrls.size - 1)
-
             return mirrorUrls[index]
         }
 
