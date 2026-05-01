@@ -11,7 +11,7 @@ import javax.crypto.spec.SecretKeySpec
 
 class ImageDecryptInterceptor : Interceptor {
 
-    private val keyBytes by lazy { Base64.decode("NlgrYjYuRT5ic1hifSs9Tg==", Base64.DEFAULT) }
+    private val keyBytes = Base64.decode("NlgrYjYuRT5ic1hifSs9Tg==", Base64.DEFAULT)
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()

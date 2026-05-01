@@ -43,7 +43,13 @@ class FavComic :
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/rank?range=${pref.getString(PREF_RANK_TYPE, "1")}&comicType=0&vip=0")
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/rank".toHttpUrl().newBuilder()
+            .addQueryParameter("range", pref.getString(PREF_RANK_TYPE, "1"))
+            .addQueryParameter("comicType", pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringAfter('-'))
+            .addQueryParameter("vip", "0")
+        return GET(url.build())
+    }
 
     override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
         val mangas = doc.select(".rank_item > a").map { a ->
@@ -60,7 +66,7 @@ class FavComic :
     }
 
     // Latest Page
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/${pref.getString(PREF_MANGA_TYPE, "boy")}?page=$page")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/${pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringBefore('-')}?page=$page")
 
     override fun latestUpdatesParse(response: Response) = response.asJsoup().let { doc ->
         val mangas = doc.select(".cover_box > a").map { a ->
