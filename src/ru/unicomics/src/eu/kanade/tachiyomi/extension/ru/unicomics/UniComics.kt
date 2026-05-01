@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -35,37 +36,40 @@ class UniComics : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comics/series/page/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".comics-grid .comic-card").map { element ->
+        val mangas = document.select(".comics-grid .comic-card").mapNotNull { element ->
             popularMangaFromElement(element)
         }
         val hasNextPage = document.selectFirst("select.mobilePageSelector option[selected] ~ option") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val titleLink = element.selectFirst(".comic-title-link") ?: element.selectFirst("a")
+    private fun popularMangaFromElement(element: Element): SManga? {
+        val titleLink = element.selectFirst(".comic-title-link") ?: element.selectFirst("a") ?: return null
+        val url = titleLink.absUrl("href").takeIf { it.isNotEmpty() } ?: return null
         val ruTitle = element.selectFirst(".comic-title-ru")?.text()
         val enTitle = element.selectFirst(".comic-title-en")?.text()
-
-        title = ruTitle.takeUnless { it.isNullOrEmpty() }
+        val title = ruTitle.takeUnless { it.isNullOrEmpty() }
             ?: enTitle.takeUnless { it.isNullOrEmpty() }
-            ?: titleLink?.text() ?: ""
+            ?: titleLink.text().takeIf { it.isNotEmpty() } ?: return null
 
-        setUrlWithoutDomain(titleLink?.absUrl("href") ?: "")
-        thumbnail_url = element.selectFirst(".comic-image-link img, img")?.absUrl("src")
+        return SManga.create().apply {
+            this.title = title
+            setUrlWithoutDomain(url)
+            thumbnail_url = element.selectFirst(".comic-image-link img, img")?.absUrl("src")
+        }
     }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comics/online/page/$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".comics-grid .comic-card").map { element ->
+        val mangas = document.select(".comics-grid .comic-card").mapNotNull { element ->
             popularMangaFromElement(element)
         }
         val hasNextPage = document.selectFirst("select.mobilePageSelector option[selected] ~ option") != null
@@ -74,7 +78,17 @@ class UniComics : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return GET("https://yandex.ru/search/site/?searchid=14915852&text=$query&web=0&l10n=ru&p=${page - 1}", headers)
+            val url = HttpUrl.Builder()
+                .scheme("https")
+                .host("yandex.ru")
+                .addPathSegments("search/site/")
+                .addQueryParameter("searchid", "14915852")
+                .addQueryParameter("text", query)
+                .addQueryParameter("web", "0")
+                .addQueryParameter("l10n", "ru")
+                .addQueryParameter("p", (page - 1).toString())
+                .build()
+            return GET(url, headers)
         }
 
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
@@ -122,18 +136,22 @@ class UniComics : HttpSource() {
         }
 
         if (response.request.url.encodedPath.contains(PATH_EVENTS)) {
-            val mangas = document.select(".events-grid .event-card, .list_events").map { element ->
+            val mangas = document.select(".events-grid .event-card, .list_events").mapNotNull { element ->
+                val a = element.selectFirst("a") ?: return@mapNotNull null
+                val url = a.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val title = element.selectFirst(".comic-title-ru, .event-title")?.text()?.takeIf { it.isNotEmpty() }
+                    ?: a.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
                 SManga.create().apply {
-                    val a = element.selectFirst("a") ?: element
-                    setUrlWithoutDomain(a.absUrl("href"))
-                    title = element.selectFirst(".comic-title-ru, .event-title")?.text() ?: a.text()
+                    setUrlWithoutDomain(url)
+                    this.title = title
                     thumbnail_url = element.selectFirst("img")?.absUrl("src")
                 }
             }
             return MangasPage(mangas, false)
         }
 
-        val mangas = document.select(".comics-grid .comic-card").map { element ->
+        val mangas = document.select(".comics-grid .comic-card").mapNotNull { element ->
             popularMangaFromElement(element)
         }
         val hasNextPage = document.selectFirst("select.mobilePageSelector option[selected] ~ option") != null
