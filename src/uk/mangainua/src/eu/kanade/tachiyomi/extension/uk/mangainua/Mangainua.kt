@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.uk.mangainua
 
-import androidx.preference.CheckBoxPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -42,7 +41,6 @@ class Mangainua :
         .add("Referer", baseUrl)
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 5)
         .build()
 
     // ============================== Popular ===============================
@@ -204,9 +202,9 @@ class Mangainua :
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters"
         val userHashQuery = document.parseUserHashQuery(endpoint)
-        val newsId = document.selectFirst("div#linkstocomics")?.attr("data-news_id").toString()
-        val newsCategory = document.selectFirst("div#linkstocomics")?.attr("data-news_category").toString()
-        val thisLink = document.selectFirst("div#linkstocomics")?.attr("data-this_link").toString()
+        val newsId = document.selectFirst("div#linkstocomics")!!.attr("data-news_id")
+        val newsCategory = document.selectFirst("div#linkstocomics")!!.attr("data-news_category")
+        val thisLink = document.selectFirst("div#linkstocomics")!!.attr("data-this_link")
 
         val newBody = FormBody.Builder()
             .add("action", "show")
@@ -234,7 +232,7 @@ class Mangainua :
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters_image"
         val userHashQuery = document.parseUserHashQuery(endpoint)
-        val newsId = document.selectFirst("div#comics")?.attr("data-news_id").toString()
+        val newsId = document.selectFirst("div#comics")!!.attr("data-news_id")
         val url = "$baseUrl/$endpoint&news_id=$newsId&action=show&$userHashQuery=$userHash"
 
         return client.newCall(GET(url, ajaxHeaders()))
@@ -303,12 +301,12 @@ class Mangainua :
             }
         }.let(screen::addPreference)
 
-        CheckBoxPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = SITE_TAGS_SEARCH
             title = SITE_TAGS_SEARCH_TITLE
             summary = SITE_TAGS_SEARCH_SUM
             setDefaultValue(false)
-        }.let(screen::addPreference)
+        }.also { screen.addPreference(it) }
     }
 
     companion object {
@@ -317,7 +315,7 @@ class Mangainua :
         private const val SITE_LOGIN_HASH = "site_login_hash"
         private const val SITE_TAGS_PREF = "site_hidden_tags"
         private const val SITE_TAGS_PREF_TITLE = "Приховані категорії"
-        private const val SITE_TAGS_PREF_SUM = "\nⓘ Ці категорії будуть приховані при користуванні вкладкою 'Фільтр', навіть ящо вони там не вибрані"
+        private const val SITE_TAGS_PREF_SUM = "\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'."
         private const val SITE_TAGS_SEARCH = "site_hidden_tags_search"
         private const val SITE_TAGS_SEARCH_TITLE = "Приховувати обрані категорії при пошуку за назвою"
         private const val SITE_TAGS_SEARCH_SUM = "\nⓘ При зміні цього параметра необхідно перезапустити програму з повною зупинкою."
