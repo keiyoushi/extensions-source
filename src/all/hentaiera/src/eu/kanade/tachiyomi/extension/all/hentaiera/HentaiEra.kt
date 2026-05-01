@@ -33,7 +33,7 @@ class HentaiEra(
             if (it == LANGUAGE_SPEECHLESS) mangaLang else null
         }
         ?: selectFirst(".g_flag")?.classNames()
-            ?.firstOrNull { it != "g_flag" }
+            ?.firstOrNull { it.startsWith("flag-") }
             ?.substringAfter("flag-")
             ?.let { langFlags[it] }
         ?: mangaLang
