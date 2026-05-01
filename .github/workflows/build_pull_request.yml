@@ -101,5 +101,5 @@ jobs:
           find ~/apk-artifacts -name "*.apk" -type f -exec mv {} apk/ \;
           INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "apk" "output.json" "tmp"
+          java -Xverify:none -jar ./Inspector.jar "apk" "output.json" "tmp"
           jq . output.json
