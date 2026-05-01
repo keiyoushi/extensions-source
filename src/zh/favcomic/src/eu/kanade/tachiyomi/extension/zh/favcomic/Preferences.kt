@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.favcomic
 
 import android.content.Context
-import android.widget.Toast
 import androidx.preference.ListPreference
 
 const val PREF_BASE_URL = "BASE_URL"
