@@ -3,5 +3,5 @@ plugins {
 }
 
 dependencies {
-    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.3.2")
+    compileOnlyApi("com.squareup.okhttp3:okhttp-brotli:5.3.2")
 }
