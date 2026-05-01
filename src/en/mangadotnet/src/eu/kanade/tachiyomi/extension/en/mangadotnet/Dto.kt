@@ -85,6 +85,14 @@ class Manga(
     private val rating: Float? = null,
     @SerialName("anilist_id")
     private val anilistID: Long? = null,
+    @SerialName("mangaupdates_id")
+    private val mangaupdatesID: String? = null,
+    @SerialName("mangabaka_id")
+    private val mangabakaID: Long? = null,
+    @SerialName("mal_id")
+    private val malID: Long? = null,
+    @SerialName("kitsu_id")
+    private val kitsuID: Long? = null,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = id.toString()
@@ -134,6 +142,10 @@ class Manga(
 
             listOfNotNull(
                 anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
+                mangaupdatesID?.let { "[MangaUpdates](https://mangaupdates.com/series/$it)" },
+                mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
+                malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
+                kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
                 sourceUrl?.let { "[Source]($it)" },
             ).also { links ->
                 if (links.isNotEmpty()) {

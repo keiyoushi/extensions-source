@@ -34,6 +34,7 @@ private val status = listOf(
     "Any Status" to null,
     "Ongoing" to "Ongoing",
     "Completed" to "Completed",
+    "Hiatus" to "Hiatus",
 )
 
 class TypeFilter :
