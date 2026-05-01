@@ -23,10 +23,6 @@ fun preferencesInternal(context: Context) = arrayOf(
         entries = Array(mirrorUrls.size) { mirrorUrls[it].substringAfter("//") }
         entryValues = Array(mirrorUrls.size) { it.toString() }
         setDefaultValue("0")
-        setOnPreferenceChangeListener { _, _ ->
-            Toast.makeText(context, "重启后生效", Toast.LENGTH_SHORT).show()
-            true
-        }
     },
     ListPreference(context).apply {
         key = PREF_RANK_TYPE
