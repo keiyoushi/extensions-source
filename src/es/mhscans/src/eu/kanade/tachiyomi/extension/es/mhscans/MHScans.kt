@@ -9,13 +9,11 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -51,53 +49,32 @@ class MHScans :
         return "$baseSelector:not(.premium)"
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val initialRequest = super.pageListRequest(chapter)
-        val response = client.newCall(initialRequest).execute()
-        val document = response.asJsoup()
+    override fun pageListParse(document: Document): List<Page> {
+        launchIO { countViews(document) }
 
-        // Si la página original ya tiene las imágenes, no hacemos el redireccionamiento señuelo
-        if (document.select("div.page-break img").isNotEmpty()) {
-            return initialRequest
+        // If the page already has standard Madara images, use the default parser
+        val standardPages = document.select(pageListParseSelector)
+        if (standardPages.isNotEmpty()) {
+            return super.pageListParse(document)
         }
 
         val html = document.html()
 
-        // Extraemos el nonce inyectado en el script
         val nonce = NONCE_REGEX.find(html)?.groupValues?.get(1)
             ?: throw Exception("Could not find the security nonce")
 
-        val chapterId = document.select(".wp-manga-action-button[data-chapter]").attr("data-chapter").ifEmpty {
-            document.select("#wp-manga-chapter-id").attr("value")
-        }.ifEmpty {
-            document.select("link[rel=shortlink]").attr("href").substringAfter("p=").substringBefore("&")
-        }.ifEmpty {
-            CHAPTER_ID_REGEX.find(html)?.groupValues?.get(1) ?: ""
-        }.takeIf { it.isNotEmpty() } ?: throw Exception("Could not find chapter ID")
+        val chapterId = document.selectFirst("#wp-manga-current-chap")?.attr("data-id")
+            ?.takeIf { it.isNotEmpty() }
+            ?: throw Exception("Could not find chapter ID")
+        val mangaId = document.selectFirst("#manga-reading-nav-head")?.attr("data-id")
+            ?.takeIf { it.isNotEmpty() }
+            ?: throw Exception("Could not find manga ID")
 
-        val mangaId = document.select(".wp-manga-action-button[data-post]").attr("data-post").ifEmpty {
-            document.select("#wp-manga-current-manga").attr("value")
-        }.ifEmpty {
-            MANGA_ID_REGEX.find(html)?.groupValues?.get(1) ?: ""
-        }.takeIf { it.isNotEmpty() } ?: throw Exception("Could not find manga ID")
-
-        // Extraemos el slug del capítulo de la URL
-        val chapterSlug = chapter.url.trimEnd('/').substringAfterLast('/')
-
-        // 0. Registramos la vista (requerido antes de pedir el token)
+        // Request the token and reader URL
         val ajaxHeaders = headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val viewsBody = FormBody.Builder()
-            .add("action", "manga_views")
-            .add("manga", mangaId)
-            .add("chapter", chapterSlug)
-            .build()
-
-        client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, viewsBody)).execute().close()
-
-        // 1. Pedimos el Token y la URL destino
         val tokenBody = FormBody.Builder()
             .add("action", "rk_get_token")
             .add("nonce", nonce)
@@ -114,28 +91,18 @@ class MHScans :
             throw Exception("Failed to get reader token (chapter=$chapterId, manga=$mangaId): $tokenResponseBody")
         }
 
-        // 2. Construimos la petición a la página señuelo
+        // Fetch the decoy reader page with the token
         val readerBody = FormBody.Builder()
             .add("rt", tokenData.token)
             .add("chapter_id", tokenData.chapterId.toString())
             .add("manga_id", tokenData.mangaId.toString())
             .build()
 
-        return POST(tokenData.readerUrl, headers, readerBody)
-    }
+        val readerDocument = client.newCall(POST(tokenData.readerUrl, headers, readerBody)).execute().asJsoup()
 
-    override fun pageListParse(document: Document): List<Page> {
-        // Extraemos desde el lector señuelo
-        val pages = document.select("div.rk-page-wrap img, img.rk-img").mapIndexed { i, img ->
+        return readerDocument.select("div.rk-page-wrap img, img.rk-img").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") })
         }
-
-        if (pages.isNotEmpty()) {
-            return pages
-        }
-
-        // Fallback al Madara original
-        return super.pageListParse(document)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -156,7 +123,5 @@ class MHScans :
         private const val REMOVE_PREMIUM_CHAPTERS_DEFAULT = true
 
         private val NONCE_REGEX = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
-        private val CHAPTER_ID_REGEX = """chapter_id["']?\s*[:=]\s*["']?(\d+)""".toRegex()
-        private val MANGA_ID_REGEX = """manga_id["']?\s*[:=]\s*["']?(\d+)""".toRegex()
     }
 }
