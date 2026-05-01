@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.unicomics
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
