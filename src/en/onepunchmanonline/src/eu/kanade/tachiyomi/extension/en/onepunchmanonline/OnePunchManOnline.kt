@@ -6,45 +6,33 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 
-class OnePunchManOnline : ParsedHttpSource() {
+class OnePunchManOnline : HttpSource() {
 
     override val name = "One Punch Man Online"
-    override val baseUrl = "https://w10.1punchman.com"
+    override val baseUrl = "https://w11.1punchman.com"
     override val lang = "en"
     override val supportsLatest = true
 
-    // =========================================================================
-    //  Popular Manga (Hardcoded Single Entry)
-    // =========================================================================
+    // ============================== Popular ===============================
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun popularMangaNextPageSelector(): String? = null
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    // =========================================================================
-    //  Latest Updates
-    // =========================================================================
+    // =============================== Latest ================================
     override fun fetchLatestUpdates(page: Int) = fetchPopularManga(page)
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = null
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    // =========================================================================
-    //  Search (Client-Side Safe Filtering)
-    // =========================================================================
+    // =============================== Search ================================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
         val manga = createManga()
-        // If query matches title, return the manga. Otherwise return empty list.
         if (query.isBlank() || manga.title.contains(query, ignoreCase = true)) {
             MangasPage(listOf(manga), false)
         } else {
@@ -54,21 +42,16 @@ class OnePunchManOnline : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun searchMangaNextPageSelector() = null
 
-    // =========================================================================
-    //  Manga Details
-    // =========================================================================
+    // ============================== Details ===============================
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
 
-    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     private fun createManga(): SManga = SManga.create().apply {
         title = "One Punch Man"
         url = "/"
-        thumbnail_url = "https://comicvine.gamespot.com/a/uploads/original/11111/111114608/3458824-8589005300-YICcI.jpg"
+        thumbnail_url = "https://1punchman.com/wp-content/uploads/2024/02/9782380712018_1_75.jpg"
         author = "ONE"
         artist = "Murata Yusuke"
         status = SManga.ONGOING
@@ -76,29 +59,30 @@ class OnePunchManOnline : ParsedHttpSource() {
         description = "One-Punch Man is a superhero who has trained so hard that his hair has fallen out, and who can overcome any enemy with one punch."
     }
 
-    // =========================================================================
-    //  Chapter List
-    // =========================================================================
+    // ============================== Chapters ===============================
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl, headers)
 
-    // Catches ALL links containing "/manga/" to get both "punch" and "chapter" URLs
-    override fun chapterListSelector() = "ul li a[href*='/manga/']"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href"))
-        name = element.text()
-    }
-
-    // =========================================================================
-    //  Page List
-    // =========================================================================
-    override fun pageListParse(document: Document): List<Page> {
-        val images = document.select("div.entry-content img, .separator img, p img")
-
-        return images.mapIndexed { index, img ->
-            Page(index, imageUrl = img.attr("abs:src"))
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("ul li a[href*='/manga/']").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("abs:href"))
+            name = element.text()
         }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    // =============================== Pages ================================
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.entry-content img, .separator img, p img")
+            .map { img ->
+                img.attr("abs:data-src")
+                    .ifEmpty { img.attr("abs:data-lazy-src") }
+                    .ifEmpty { img.attr("abs:src") }
+            }
+            .filter { it.startsWith("http") }
+            .mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
+    }
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
