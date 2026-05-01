@@ -3,7 +3,7 @@ ext {
     extClass = '.MHScans'
     themePkg = 'madara'
     baseUrl = 'https://mh.inventariooculto.com'
-    overrideVersionCode = 10
+    overrideVersionCode = 11
     isNsfw = false
 }
 
