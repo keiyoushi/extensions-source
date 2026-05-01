@@ -8,14 +8,21 @@ const val PREF_BASE_URL = "BASE_URL"
 const val PREF_RANK_TYPE = "RANK_TYPE"
 const val PREF_MANGA_TYPE = "MANGA_TYPE"
 
+val mirrorUrls = arrayOf(
+    "https://www.favcomic.com",
+    "https://www.favcomic.xyz",
+    "https://www.favcomic.net",
+    "https://www.favcomic.cc",
+)
+
 fun preferencesInternal(context: Context) = arrayOf(
     ListPreference(context).apply {
         key = PREF_BASE_URL
         title = "镜像站点"
         summary = "注：各站点之间不共享登录状态"
-        entries = arrayOf("favcomic.com（主站）", "favcomic.xyz", "favcomic.net", "favcomic.cc")
-        entryValues = arrayOf("https://www.favcomic.com", "https://www.favcomic.xyz", "https://www.favcomic.net", "https://www.favcomic.cc")
-        setDefaultValue("https://www.favcomic.com")
+        entries = Array(mirrorUrls.size) { mirrorUrls[it].substringAfter("//") }
+        entryValues = Array(mirrorUrls.size) { it.toString() }
+        setDefaultValue("0")
         setOnPreferenceChangeListener { _, _ ->
             Toast.makeText(context, "重启后生效", Toast.LENGTH_SHORT).show()
             true

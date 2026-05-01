@@ -4,7 +4,9 @@ import android.util.Base64
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.cipherSource
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -21,24 +23,15 @@ class ImageDecryptInterceptor : Interceptor {
             return response
         }
 
-        val decryptedBytes = decryptAesCbc(response.body.bytes())
-
-        val mimeType = getMimeType(request.url.toString())
-
-        return response.newBuilder().code(200).message("OK")
-            .header("Content-Type", mimeType)
-            .body(decryptedBytes.toResponseBody(mimeType.toMediaType()))
-            .build()
-    }
-
-    private fun decryptAesCbc(encrypted: ByteArray): ByteArray {
-        val iv = encrypted.copyOfRange(0, 16)
-        val ciphertext = encrypted.copyOfRange(16, encrypted.size)
-
+        val source = response.body.source()
+        val iv = source.readByteArray(16)
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        val keySpec = SecretKeySpec(keyBytes, "AES")
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(iv))
-        return cipher.doFinal(ciphertext)
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(iv))
+
+        val contentType = getMimeType(request.url.toString()).toMediaType()
+        val body = source.cipherSource(cipher).buffer().asResponseBody(contentType)
+
+        return response.newBuilder().body(body).build()
     }
 
     private fun getMimeType(url: String): String {

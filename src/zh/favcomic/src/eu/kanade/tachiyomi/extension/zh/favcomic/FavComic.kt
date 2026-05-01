@@ -21,7 +21,7 @@ class FavComic :
     HttpSource(),
     ConfigurableSource {
 
-    override val baseUrl: String
+    override val baseUrl by lazy { mirrorUrls[pref.getString(PREF_BASE_URL, "0")!!.toInt()] }
 
     override val lang = "zh"
 
@@ -30,10 +30,6 @@ class FavComic :
     override val supportsLatest = true
 
     private val pref by getPreferencesLazy()
-
-    init {
-        baseUrl = pref.getString(PREF_BASE_URL, "https://www.favcomic.com")!!
-    }
 
     override val client = super.client.newBuilder().addInterceptor(ImageDecryptInterceptor()).build()
 
