@@ -11,7 +11,7 @@ import kotlin.system.exitProcess
  * Springboard that accepts https://myhentaigallery.com/gallery/thumbnails/xxxxx intents and redirects them to
  * the main Tachiyomi process.
  */
-class MyHentaiGalleryUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
