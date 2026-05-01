@@ -1,7 +1,8 @@
 ext {
     extName = 'Randowiz'
     extClass = '.Randowiz'
-    extVersionCode = 1
+    extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
