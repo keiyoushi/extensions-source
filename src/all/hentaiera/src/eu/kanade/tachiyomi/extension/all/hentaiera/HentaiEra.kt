@@ -40,7 +40,7 @@ class HentaiEra(
 
     private val langFlags by lazy {
         getLanguageURIs()
-            .associate { it.uri to it.name }
+            .associate { it.second to it.first }
             .toMutableMap()
             .apply {
                 // Keep the existing English flag alias in case the site uses `flag-us`
