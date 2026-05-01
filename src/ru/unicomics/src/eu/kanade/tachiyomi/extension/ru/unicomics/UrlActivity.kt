@@ -22,7 +22,7 @@ class UrlActivity : Activity() {
 
             try {
                 startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
+            } catch (e: Throwable) {
                 Log.e("UrlActivity", e.toString())
             }
         } else {
