@@ -1,7 +1,7 @@
 ext {
     extName = 'Argos Scan'
     extClass = '.ArgosScan'
-    extVersionCode = 27
+    extVersionCode = 28
     isNsfw = false
 }
 
