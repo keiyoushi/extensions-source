@@ -5,5 +5,5 @@ plugins {
 baseVersionCode = 9
 
 dependencies {
-    implementation(project(":lib:zipinterceptor"))
+    api(project(":lib:zipinterceptor"))
 }
