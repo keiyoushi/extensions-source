@@ -14,11 +14,11 @@ class SortFilter :
 
 private val sortOrders = listOf(
     "Relevance" to "relevance",
-    "Alphabetical" to "Alphabetical",
+    "Alphabetical" to "alphabetical",
     "Latest Update" to "latest",
     "Total Chapters" to "chapters",
     "Most Viewed" to "views",
-    "Most Bookmarked" to "bookmarks",
+    "Most Tracked" to "tracked",
     "Top Rated" to "rating",
 )
 
