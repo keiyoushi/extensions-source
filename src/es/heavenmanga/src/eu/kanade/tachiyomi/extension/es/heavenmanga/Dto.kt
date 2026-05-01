@@ -4,18 +4,18 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PayloadChaptersDto(
+class PayloadChaptersDto(
     val data: List<ChapterDto>,
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: Int,
     val slug: String,
-    @SerialName("created_at") val createdAt: String,
+    @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable
-data class PageDto(
+class PageDto(
     val imgURL: String,
 )
