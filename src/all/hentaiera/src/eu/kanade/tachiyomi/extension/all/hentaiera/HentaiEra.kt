@@ -30,8 +30,25 @@ class HentaiEra(
         .removeSuffix("/").substringAfterLast("/")
         .let {
             // Include Speechless in search results
-            if (it == LANGUAGE_SPEECHLESS) mangaLang else it
+            if (it == LANGUAGE_SPEECHLESS) mangaLang else null
         }
+        ?: selectFirst(".g_flag")?.classNames()
+            ?.firstOrNull { it != "g_flag" }
+            ?.substringAfter("flag-")
+            ?.let { langFlags[it] }
+        ?: mangaLang
+
+    private val langFlags by lazy {
+        mapOf(
+            "us" to LANGUAGE_ENGLISH,
+            "jp" to LANGUAGE_JAPANESE,
+            "es" to LANGUAGE_SPANISH,
+            "fr" to LANGUAGE_FRENCH,
+            "kr" to LANGUAGE_KOREAN,
+            "de" to LANGUAGE_GERMAN,
+            "ru" to LANGUAGE_RUSSIAN,
+        )
+    }
 
     override fun popularMangaRequest(page: Int): Request = if (mangaLang.isBlank()) {
         // Popular browsing for LANGUAGE_MULTI
