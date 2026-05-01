@@ -39,15 +39,13 @@ class HentaiEra(
         ?: mangaLang
 
     private val langFlags by lazy {
-        mapOf(
-            "us" to LANGUAGE_ENGLISH,
-            "jp" to LANGUAGE_JAPANESE,
-            "es" to LANGUAGE_SPANISH,
-            "fr" to LANGUAGE_FRENCH,
-            "kr" to LANGUAGE_KOREAN,
-            "de" to LANGUAGE_GERMAN,
-            "ru" to LANGUAGE_RUSSIAN,
-        )
+        getLanguageURIs()
+            .associate { it.uri to it.name }
+            .toMutableMap()
+            .apply {
+                // Keep the existing English flag alias in case the site uses `flag-us`
+                putIfAbsent("us", LANGUAGE_ENGLISH)
+            }
     }
 
     override fun popularMangaRequest(page: Int): Request = if (mangaLang.isBlank()) {
