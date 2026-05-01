@@ -5,16 +5,19 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class RealLifeComics : ParsedHttpSource() {
+class RealLifeComics : HttpSource() {
+
     override val name = "Real Life Comics"
 
     override val baseUrl = "https://reallifecomics.com"
@@ -22,6 +25,9 @@ class RealLifeComics : ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = false
+
+    private val dateFormat = SimpleDateFormat("MMMM yyyy dd", Locale.US)
+    private val nameFormat = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.US)
 
     // Helper
 
@@ -39,92 +45,74 @@ class RealLifeComics : ParsedHttpSource() {
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         // create one manga entry for each yearly archive
         // skip 2016 and 2017 as they don't have any archive
-        return (currentYear downTo 1999).filter { it !in 2016..2017 }
-            .map { createManga(it) }
-            .let { Observable.just(MangasPage(it, false))!! }
+        val mangas = (currentYear downTo 1999)
+            .filter { it !in 2016..2017 }
+            .map(::createManga)
+
+        return Observable.just(MangasPage(mangas, false))
     }
 
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1).map { mangaList ->
-        mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
+        val filtered = mangaList.mangas.filter { it.title.contains(query, ignoreCase = true) }
+        MangasPage(filtered, mangaList.hasNextPage)
     }
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga) = Observable.just(
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(
         manga.apply {
             initialized = true
         },
-    )!!
+    )
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).distinct().mapIndexed { index, chapter ->
-        chapter.apply { chapter_number = index.toFloat() }
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup()
+        .select(".calendar tbody tr td a")
+        .map(::chapterFromElement)
+        .distinctBy { it.url }
+        .mapIndexed { index, chapter ->
+            chapter.apply { chapter_number = index.toFloat() }
+        }
 
-    override fun chapterListSelector() = ".calendar tbody tr td a"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.attr("href")
 
         // entries between 1999-2014 do not have dates in the link
         // but all entries are placed in a calendar class which has the month & year as heading
         // figure out a date using the calendar
-        // perhaps there might be a better way to get this but for now this works
-        val monthYear = element
-            .parent()!!
-            .parent()!!
-            .parent()!!
-            .parent()!!
-            .firstElementSibling()
-            .text()
+        val monthYear = element.closest(".calendar")?.previousElementSibling()?.text().orEmpty()
 
-        val date = "$monthYear ${element.text()}"
-        val parsedDate = SimpleDateFormat("MMMM yyyy dd", Locale.US).parse(date)
-        date_upload = parsedDate?.time ?: 0L
+        val date = "$monthYear ${element.text()}".trim()
+        val time = dateFormat.tryParse(date)
 
-        // chapter names are kept the same as what the site has
-        name = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.US).format(parsedDate ?: 0L)
+        date_upload = time
+        name = if (time != 0L) {
+            nameFormat.format(time)
+        } else {
+            date
+        }
     }
 
     // Page
 
-    override fun pageListParse(document: Document): List<Page> {
-        val image = document.select(".comic img").attr("src")
-        return listOf(Page(0, "", image))
+    override fun pageListParse(response: Response): List<Page> {
+        val image = response.asJsoup().selectFirst(".comic img")?.attr("abs:src").orEmpty()
+        return listOf(Page(0, imageUrl = image))
     }
 
     // Unsupported
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val LOGO = "/images/logo.png"
@@ -133,8 +121,7 @@ class RealLifeComics : ParsedHttpSource() {
 
         private const val SUMMARY = "The normal daily lives of some abnormal people. This entry includes all the chapters published in"
 
-        private val currentYear by lazy {
-            Calendar.getInstance()[Calendar.YEAR]
-        }
+        private val currentYear: Int
+            get() = Calendar.getInstance()[Calendar.YEAR]
     }
 }
