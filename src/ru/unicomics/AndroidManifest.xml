@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".ru.unicomics.UniComicsActivity"
+            android:name=".ru.unicomics.UrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -13,7 +13,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- UniComicsaActivity sites can be added here. -->
+                <!-- UrlActivity sites can be added here. -->
                 <data
                     android:host="unicomics.ru"
                     android:pathPattern="/comics/series/..*"
