@@ -74,6 +74,12 @@ android {
                     : signingConfigs.debug
             minifyEnabled = true
             proguardFiles(layout.buildDirectory.file('extension-proguard-rules.pro').get().asFile)
+
+            File extensionProguardFile = file('proguard-rules.pro')
+            if (extensionProguardFile.exists()) {
+                proguardFile extensionProguardFile
+            }
+            
             vcsInfo.include = false
         }
     }
