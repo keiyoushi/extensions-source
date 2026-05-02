@@ -24,6 +24,10 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
 
 private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"
@@ -63,8 +67,14 @@ class Dilar : HttpSource(), ConfigurableSource {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = """{"query":"$query","includes":["Manga","Team","Member"]}"""
-            .toRequestBody("application/json".toMediaType())
+        val body = buildJsonObject {
+            put("query", query)
+            put("includes", buildJsonArray {
+                add("Manga")
+                add("Team")
+                add("Member")
+            })
+        }.toString().toRequestBody("application/json".toMediaType())
         return POST("$baseUrl/api/search/quick_search", headers, body)
     }
 
