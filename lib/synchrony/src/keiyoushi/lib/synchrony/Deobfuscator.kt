@@ -1,6 +1,8 @@
 package keiyoushi.lib.synchrony
 
 import app.cash.quickjs.QuickJs
+import keiyoushi.utils.jsonInstance
+import kotlinx.serialization.builtins.serializer
 
 /**
  * Helper class to deobfuscate JavaScript strings with synchrony.
@@ -19,23 +21,13 @@ object Deobfuscator {
             originalScript.replace(match.value, replacement)
         } ?: return null
 
+        val sourceLiteral = jsonInstance.encodeToString(String.serializer(), source)
+
         return QuickJs.create().use { engine ->
             engine.evaluate("globalThis.console = { log: () => {}, warn: () => {}, error: () => {}, trace: () => {} };")
             engine.evaluate(synchronyScript)
-
-            engine.set(
-                "source",
-                TestInterface::class.java,
-                object : TestInterface {
-                    override fun getValue() = source
-                },
-            )
-            engine.evaluate("new Deobfuscator().deobfuscateSource(source.getValue())") as? String
+            engine.evaluate("new Deobfuscator().deobfuscateSource($sourceLiteral)") as? String
         }
-    }
-
-    private interface TestInterface {
-        fun getValue(): String
     }
 }
 
