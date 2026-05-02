@@ -32,7 +32,7 @@ class JeazScans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val id = 5292079548510508306
+    override val versionId = 2
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
@@ -48,15 +48,13 @@ class JeazScans : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("section:has(h3:matchesOwn((?i)Top Rankings)) a[href*='manga.php?id=']").map { element ->
-            val manga = SManga.create()
-            val link = element.attr("abs:href")
-            val title = element.selectFirst("h4, h5")?.text().orEmpty()
-            val thumb = element.selectFirst("img")?.attr("abs:src").orEmpty()
+            SManga.create().apply {
+                setUrlWithoutDomain(element.attr("abs:href"))
+                title = element.selectFirst("h4, h5")!!.text()
 
-            manga.setUrlWithoutDomain(link)
-            manga.title = title
-            if (thumb.isNotBlank()) manga.thumbnail_url = thumb
-            manga
+                val thumb = element.selectFirst("img")?.attr("abs:src").orEmpty()
+                if (thumb.isNotEmpty()) thumbnail_url = thumb
+            }
         }
         return MangasPage(mangas, false)
     }
@@ -67,17 +65,15 @@ class JeazScans : HttpSource() {
         val document = response.asJsoup()
         val mangas = document.select("section:has(h3:contains(Lanzamientos)) .manga-card")
             .map { element ->
-                val manga = SManga.create()
-                val linkElement = element.selectFirst("a[href*='manga.php?id=']")
-                val title = element.selectFirst("figcaption")?.text().orEmpty()
-                val thumb = element.selectFirst("img")?.attr("abs:src").orEmpty()
+                SManga.create().apply {
+                    setUrlWithoutDomain(element.selectFirst("a[href*='manga.php?id=']")?.attr("abs:href").orEmpty())
+                    title = element.selectFirst("figcaption")!!.text()
 
-                manga.setUrlWithoutDomain(linkElement?.attr("abs:href").orEmpty())
-                manga.title = title
-                if (thumb.isNotBlank()) manga.thumbnail_url = thumb
-                manga
+                    val thumb = element.selectFirst("img")?.attr("abs:src").orEmpty()
+                    if (thumb.isNotEmpty()) thumbnail_url = thumb
+                }
             }
-            .filter { it.url.isNotEmpty() && it.title.isNotEmpty() }
+            .filter { it.url.isNotEmpty() }
             .distinctBy { it.url }
 
         return MangasPage(mangas, false)
@@ -86,8 +82,7 @@ class JeazScans : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            val titleText = document.selectFirst("h1.blood-title")?.text().orEmpty()
-            if (titleText.isNotEmpty()) title = titleText
+            title = document.selectFirst("h1.blood-title")!!.text()
 
             val descriptionBlock = document.selectFirst("div.text-gray-200:has(h3:matchesOwn((?i)SINOPSIS))")
                 ?: document.selectFirst("div.text-gray-200")
@@ -107,14 +102,13 @@ class JeazScans : HttpSource() {
                 .distinct()
             if (genres.isNotEmpty()) genre = genres.joinToString()
 
-            val statusText = document.selectFirst("span.status-badge")?.text().orEmpty()
+            val statusText = document.selectFirst("span.status-badge")?.text().orEmpty().lowercase()
             if (statusText.isNotEmpty()) {
                 status = when {
-                    statusText.contains("complet", ignoreCase = true) -> SManga.COMPLETED
-                    statusText.contains("pausa", ignoreCase = true) || statusText.contains("hiato", ignoreCase = true) -> SManga.ON_HIATUS
-                    statusText.contains("cancel", ignoreCase = true) || statusText.contains("aband", ignoreCase = true) -> SManga.CANCELLED
-                    statusText.contains("cultivo", ignoreCase = true) || statusText.contains("curso", ignoreCase = true) ||
-                        statusText.contains("ongoing", ignoreCase = true) || statusText.contains("emision", ignoreCase = true) -> SManga.ONGOING
+                    statusText.contains("complet") -> SManga.COMPLETED
+                    arrayOf("pausa", "hiato").any { statusText.contains(it) } -> SManga.ON_HIATUS
+                    arrayOf("cancel", "aband").any { statusText.contains(it) } -> SManga.CANCELLED
+                    arrayOf("cultivo", "curso", "ongoing", "emision").any { statusText.contains(it) } -> SManga.ONGOING
                     else -> SManga.UNKNOWN
                 }
             }
@@ -124,32 +118,30 @@ class JeazScans : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select("#chaptersContainer a.chapter-item").map { element ->
-            val chapter = SChapter.create()
+            SChapter.create().apply {
+                val chapterUrl = element.attr("abs:href")
+                setUrlWithoutDomain(chapterUrl)
 
-            val chapterUrl = element.attr("abs:href")
-            chapter.setUrlWithoutDomain(chapterUrl)
+                val parsedChapterNumber = element.attr("data-chapter-number")
+                    .toFloatOrNull()
+                    ?: CHAPTER_NUMBER_REGEX
+                        .find(chapterUrl)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.toFloatOrNull()
+                    ?: -1f
+                chapter_number = parsedChapterNumber
 
-            val chapterNumber = element.attr("data-chapter-number")
-                .toFloatOrNull()
-                ?: CHAPTER_NUMBER_REGEX
-                    .find(chapterUrl)
-                    ?.groupValues
-                    ?.getOrNull(1)
-                    ?.toFloatOrNull()
-                ?: -1f
-            chapter.chapter_number = chapterNumber
+                val chapterTitle = element.selectFirst(".chapter-title")?.text().orEmpty()
+                name = if (chapterTitle.isNotEmpty()) {
+                    chapterTitle
+                } else {
+                    "Chapter ${parsedChapterNumber.toString().removeSuffix(".0")}"
+                }
 
-            val chapterTitle = element.selectFirst(".chapter-title")?.text().orEmpty()
-            chapter.name = if (chapterTitle.isNotEmpty()) {
-                chapterTitle
-            } else {
-                "Chapter ${chapterNumber.toString().removeSuffix(".0")}"
+                val dateText = element.selectFirst("span:has(i.ph-clock)")?.text()
+                date_upload = parseChapterDate(dateText)
             }
-
-            val dateText = element.selectFirst("span:has(i.ph-clock)")?.text()
-            chapter.date_upload = parseChapterDate(dateText)
-
-            chapter
         }
     }
 

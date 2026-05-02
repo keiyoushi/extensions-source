@@ -12,22 +12,22 @@ class ApiLectorResponse(
 
 @Serializable
 class ApiLectorPage(
-    val orden: Int = 0,
-    @SerialName("data_verify") val dataVerify: String = "",
+    val orden: Int,
+    @SerialName("data_verify") val dataVerify: String,
 )
 
 @Serializable
 class SearchResponseItem(
-    private val id: Int = -1,
-    private val titulo: String = "",
-    private val portada: String = "",
+    private val id: Int,
+    private val titulo: String,
+    private val portada: String?,
 ) {
     fun toSManga(baseUrl: String): SManga? {
         if (id == -1 || titulo.isBlank()) return null
         return SManga.create().apply {
             url = "/manga.php?id=$id"
             title = titulo
-            if (portada.isNotBlank()) {
+            if (!portada.isNullOrBlank()) {
                 thumbnail_url = if (portada.startsWith("http")) portada else "$baseUrl/${portada.trimStart('/')}"
             }
         }
