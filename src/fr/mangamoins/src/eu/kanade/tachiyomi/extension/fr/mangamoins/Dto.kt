@@ -3,11 +3,14 @@ package eu.kanade.tachiyomi.extension.fr.mangamoins
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.parser.Parser
 import java.util.Locale
 
 internal fun String.toMangaSlug(): String = this.lowercase(Locale.ROOT)
     .replace(Regex("[^a-z0-9]+"), "_")
     .trim('_')
+
+internal fun String.unescapeHtml(): String = Parser.unescapeEntities(this, false)
 
 @Serializable
 class MangaListResponse(
@@ -30,7 +33,7 @@ class MangaListItem(
     @SerialName("slug") val trendSlug: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaListItem.title
+        title = this@MangaListItem.title.unescapeHtml()
         url = this@MangaListItem.slug ?: this@MangaListItem.trendSlug ?: title.toMangaSlug()
         thumbnail_url = this@MangaListItem.cover
     }

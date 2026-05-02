@@ -3,7 +3,7 @@ ext {
     extClass = '.MerlinScans'
     themePkg = 'initmanga'
     baseUrl = 'https://merlintoon.com'
-    overrideVersionCode = 32
+    overrideVersionCode = 33
     isNsfw = false
 }
 

@@ -279,7 +279,9 @@ class Japscan :
         val filtered = allUrlPairs
             .filter { (name, url, _) ->
                 val segments = url.split('/').filter { it.isNotEmpty() }
-                if (mangaSlug != null && segments.getOrNull(1) != mangaSlug) return@filter false
+                if (segments.size != 3) return@filter false
+                if (segments[0] !in CHAPTER_PATH_TYPES) return@filter false
+                if (mangaSlug != null && segments[1] != mangaSlug) return@filter false
                 val urlNum = url.trimEnd('/').substringAfterLast('/')
                 if (!urlNum.all { it.isDigit() }) return@filter false
                 val chapterNum = Regex("""(?i)chapitre\s+([\d.]+)""").find(name)

@@ -11,18 +11,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -31,21 +25,17 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
 import okio.cipherSource
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class Manwa :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
     override val name: String = "漫蛙"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-    private val json: Json by injectLazy()
     private val preferences: SharedPreferences = getPreferences()
     override val baseUrl: String = getTargetUrl()
 
@@ -86,51 +76,44 @@ class Manwa :
             .addInterceptor(updateMirror)
             .build()
 
-    private val baseHttpUrl = baseUrl.toHttpUrlOrNull()
-
     // Popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/rank", headers)
-    override fun popularMangaNextPageSelector(): String? = null
-    override fun popularMangaSelector(): String = "#rankList_2 > a"
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.attr("title")
-        url = element.attr("href")
-        thumbnail_url = element.select("img").attr("data-original")
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("#rankList_2 > a").map { element ->
+            SManga.create().apply {
+                title = element.attr("title")
+                url = element.attr("href")
+                thumbnail_url = element.selectFirst("img")?.attr("abs:data-original")
+            }
+        }
+        return MangasPage(mangas, false)
     }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/getUpdate?page=${page * 15 - 15}&date=", headers)
+
     override fun latestUpdatesParse(response: Response): MangasPage {
+        val responseData = response.parseAs<LatestUpdatesDto>()
+
         // Get image host
         val resp = client.newCall(
             GET(
                 "$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}",
+                headers,
             ),
         ).execute()
         val document = resp.asJsoup()
-        val imgHost = document.selectFirst(".manga-list-2-cover-img")!!.attr(":src").drop(1).substringBefore("'")
+        val imgHost = document.selectFirst(".manga-list-2-cover-img")?.attr(":src")?.drop(1)?.substringBefore("'") ?: ""
 
-        val jsonObject = json.parseToJsonElement(response.body.string()).jsonObject
-        val mangas = jsonObject["books"]!!.jsonArray.map {
-            SManga.create().apply {
-                val obj = it.jsonObject
-                title = obj["book_name"]!!.jsonPrimitive.content
-                url = "/book/${obj["id"]!!.jsonPrimitive.content}"
-                thumbnail_url = imgHost + obj["cover_url"]!!.jsonPrimitive.content
-            }
-        }
+        val mangas = responseData.books.map { it.toSManga(imgHost) }
+        val currentOffset = response.request.url.queryParameter("page")?.toIntOrNull() ?: 0
 
-        val currentPage = response.request.url.toString().substringAfter("page=").substringBefore("&").toInt()
-        val totalPage = jsonObject["total"]!!.jsonPrimitive.int
-        return MangasPage(mangas, totalPage > currentPage + 15)
+        return MangasPage(mangas, responseData.total > currentOffset + 15)
     }
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-
     // Search
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query != "" && !query.contains("-")) {
@@ -140,14 +123,8 @@ class Manwa :
                 encodedPath("/booklist")
                 (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                     when (filter) {
-                        is UriPartFilter -> {
-                            filter.setParamPair(this)
-                        }
-
-                        is TagCheckBoxFilterGroup -> {
-                            filter.setParamPair(this)
-                        }
-
+                        is UriPartFilter -> filter.setParamPair(this)
+                        is TagCheckBoxFilterGroup -> filter.setParamPair(this)
                         else -> {}
                     }
                 }
@@ -172,9 +149,9 @@ class Manwa :
             lis.forEach { li ->
                 mangas.add(
                     SManga.create().apply {
-                        title = li.selectFirst("p.manga-list-2-title")!!.text()
+                        title = li.selectFirst("p.manga-list-2-title")?.text() ?: ""
                         setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
-                        thumbnail_url = li.selectFirst("img")?.attr("src")
+                        thumbnail_url = li.selectFirst("img")?.attr("abs:src")
                     },
                 )
             }
@@ -183,9 +160,9 @@ class Manwa :
             lis.forEach { li ->
                 mangas.add(
                     SManga.create().apply {
-                        title = li.selectFirst("p.book-list-info-title")!!.text()
+                        title = li.selectFirst("p.book-list-info-title")?.text() ?: ""
                         setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
-                        thumbnail_url = li.selectFirst("img")?.attr("data-original")
+                        thumbnail_url = li.selectFirst("img")?.attr("abs:data-original")
                     },
                 )
             }
@@ -195,15 +172,11 @@ class Manwa :
         return MangasPage(mangas, next)
     }
 
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
     @Volatile
     private var isUpdateTag = false
 
     @Synchronized
-    private fun updateTagList(doc: Document) {
+    private fun updateTagList(doc: org.jsoup.nodes.Document) {
         if (isUpdateTag) {
             return
         }
@@ -224,33 +197,36 @@ class Manwa :
     }
 
     // Details
-
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".detail-main-info-title")!!.text()
-        thumbnail_url = document.selectFirst("div.detail-main-cover > img")!!.attr("data-original")
-        author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
-        artist = author
-        status = when (document.select("p.detail-main-info-author:contains(更新状态) > span.detail-main-info-value")!!.text()) {
-            "连载中" -> SManga.ONGOING
-            "已完结" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst(".detail-main-info-title")?.text() ?: ""
+            thumbnail_url = document.selectFirst("div.detail-main-cover > img")?.attr("abs:data-original")
+            author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
+            artist = author
+            status = when (document.select("p.detail-main-info-author:contains(更新状态) > span.detail-main-info-value").text()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+            genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
+            description = document.selectFirst("#detail > p.detail-desc")?.text()
         }
-        genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
-        description = document.selectFirst("#detail > p.detail-desc")!!.text()
     }
 
     // Chapters
-
-    override fun chapterListSelector(): String = "ul#detail-list-select > li > a"
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        url = element.attr("href")
-        name = element.text()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("ul#detail-list-select > li > a").map { element ->
+            SChapter.create().apply {
+                url = element.attr("href")
+                name = element.text()
+            }
+        }.reversed()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        client.newCall(GET("$baseUrl/static/images/pv.gif")).execute()
+        client.newCall(GET("$baseUrl/static/images/pv.gif", headers)).execute()
         return super.fetchPageList(chapter)
     }
 
@@ -260,18 +236,16 @@ class Manwa :
         headers,
     )
 
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        val cssQuery = "#cp_img > div.img-content > img[data-r-src]"
-        val elements = document.select(cssQuery)
-        elements.forEachIndexed { index, it ->
-            add(Page(index, "", it.attr("data-r-src")))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("#cp_img > div.img-content > img[data-r-src]").mapIndexed { index, it ->
+            Page(index, imageUrl = it.attr("abs:data-r-src"))
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     // Filters
-
     override fun getFilterList() = FilterList(
         EndFilter(),
         CGenderFilter(),
@@ -283,13 +257,10 @@ class Manwa :
         ),
     )
 
-    private fun getFilterTags(): LinkedHashMap<String, String> {
-        val lhm: LinkedHashMap<String, String> = try {
-            preferences.getString(APP_TAG_LIST_KEY, "")!!.parseAs<LinkedHashMap<String, String>>()
-        } catch (_: Exception) {
-            linkedMapOf(Pair("全部", ""))
-        }
-        return lhm
+    private fun getFilterTags(): LinkedHashMap<String, String> = try {
+        preferences.getString(APP_TAG_LIST_KEY, "")!!.parseAs<LinkedHashMap<String, String>>()
+    } catch (_: Exception) {
+        linkedMapOf(Pair("全部", ""))
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

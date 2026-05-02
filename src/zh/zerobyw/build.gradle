@@ -1,7 +1,8 @@
 ext {
     extName = 'Zerobyw'
     extClass = '.Zerobyw'
-    extVersionCode = 19
+    extVersionCode = 20
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

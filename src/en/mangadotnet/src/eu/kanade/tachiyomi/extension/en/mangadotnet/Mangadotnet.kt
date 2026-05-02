@@ -170,13 +170,16 @@ class Mangadotnet :
                         }
                     }
                     is TypeFilter -> {
-                        filter.selected?.also { selected ->
-                            addQueryParameter("origin", selected)
+                        filter.checked.forEach { origin ->
+                            addQueryParameter("origin", origin)
                         }
                     }
                     is GenreFilter -> {
-                        filter.checked.forEach { genre ->
+                        filter.included.forEach { genre ->
                             addQueryParameter("genre", genre)
+                        }
+                        filter.excluded.forEach { genre ->
+                            addQueryParameter("genre", "-$genre")
                         }
                     }
                     else -> throw IllegalStateException("Unknown filter: ${filter::class.simpleName}")

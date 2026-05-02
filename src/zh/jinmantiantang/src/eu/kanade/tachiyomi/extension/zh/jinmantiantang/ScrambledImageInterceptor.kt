@@ -7,8 +7,8 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
@@ -37,9 +37,11 @@ object ScrambledImageInterceptor : Interceptor {
         } else {
             response.body.byteStream()
         }
+
         val newBody = input.use {
             decodeImage(it, getRows(aid, imgIndex))
-        }.toResponseBody(jpegMediaType)
+        }.asResponseBody(jpegMediaType)
+
         return responseBuilder.body(newBody).build()
     }
 
@@ -64,7 +66,7 @@ object ScrambledImageInterceptor : Interceptor {
     }
 
     // 对被分割的图片进行分割,排序处理
-    private fun decodeImage(img: InputStream, rows: Int): ByteArray {
+    private fun decodeImage(img: InputStream, rows: Int): Buffer {
         // 使用bitmap进行图片处理
         val input = BitmapFactory.decodeStream(img)
         // 漫画高度 and width
@@ -73,13 +75,14 @@ object ScrambledImageInterceptor : Interceptor {
         // 未除尽像素
         val remainder = (height % rows)
         // 创建新的图片对象
-        val resultBitmap = Bitmap.createBitmap(input.width, input.height, Bitmap.Config.ARGB_8888)
+        val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(resultBitmap)
+
         // 分割图片
         for (x in 0 until rows) {
             // 分割算法(详情见html源码页的方法"function scramble_image(img)")
             var copyH = floor(height / rows.toDouble()).toInt()
-            var py = copyH * (x)
+            var py = copyH * x
             val y = height - (copyH * (x + 1)) - remainder
             if (x == 0) {
                 copyH += remainder
@@ -93,10 +96,15 @@ object ScrambledImageInterceptor : Interceptor {
 
             canvas.drawBitmap(input, crop, splic, null)
         }
+
         // 创建输出流
-        val output = ByteArrayOutputStream()
-        resultBitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        return output.toByteArray()
+        val buffer = Buffer()
+        resultBitmap.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+
+        resultBitmap.recycle()
+        input.recycle()
+
+        return buffer
     }
 
     private val jpegMediaType = "image/jpeg".toMediaType()

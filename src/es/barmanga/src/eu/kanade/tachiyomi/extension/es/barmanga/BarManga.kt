@@ -34,8 +34,9 @@ class BarManga :
         val tokens = PAGE_TOKENS_REGEX.find(script)?.groupValues?.last()?.parseAs<Map<String, String>>() ?: return emptyList()
         val nonce = NONCE_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
         val action = ACTION_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
+        val chapterKey = CHAPTER_KEY_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
         return tokens
-            .map { (page, token) -> PageDto(nonce, token, page, action) }
+            .map { (page, token) -> PageDto(nonce, token, page, action, chapterKey) }
             .mapIndexed { index, dto ->
                 Page(index, document.location(), dto.toJsonString())
             }
@@ -49,6 +50,7 @@ class BarManga :
             .addFormDataPart("token", dto.token)
             .addFormDataPart("page", dto.page)
             .addFormDataPart("nonce", dto.nonce)
+            .addFormDataPart("chapter_key", dto.chapterKey)
             .build()
 
         val imageHeaders = headers.newBuilder()
@@ -65,11 +67,14 @@ class BarManga :
         val token: String,
         val page: String,
         val action: String,
+        // Default value is needed for backward compatibility with cached pages to prevent MissingFieldException
+        val chapterKey: String = "",
     )
 
     companion object {
         private val PAGE_TOKENS_REGEX = """(?:_tokens\s+?=\s+?)([^;]+)""".toRegex()
         private val NONCE_REGEX = """nonce:\s+?"([^"]+)""".toRegex()
         private val ACTION_REGEX = """action:\s+?"([^"]+)""".toRegex()
+        private val CHAPTER_KEY_REGEX = """chapterKey:\s+?"([^"]+)""".toRegex()
     }
 }

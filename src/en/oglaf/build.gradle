@@ -1,7 +1,7 @@
 ext {
     extName = 'Oglaf'
     extClass = '.Oglaf'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 

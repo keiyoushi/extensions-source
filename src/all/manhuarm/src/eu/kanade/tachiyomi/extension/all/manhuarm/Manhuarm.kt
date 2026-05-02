@@ -299,16 +299,16 @@ class Manhuarm(
             .removeAllQueryParameters("style")
             .build()
 
-        // Use minimal headers for JSON request - Cloudflare may be blocking complex requests
-        val jsonHeaders = Headers.Builder()
-            .add("Referer", chapterUrl.toString())
-            .add("Accept", "*/*")
-            .add("Content-Type", "application/json")
-            .add("X-Requested-With", "XMLHttpRequest")
-            .add("Cache-Control", "no-cache")
-            .build()
-
         val ocrRequest = ocrUrlInterceptor.getOcrRequest(chapterUrl.toString()) ?: return pages
+
+        val jsonHeaders = Headers.Builder().apply {
+            add("Referer", chapterUrl.toString())
+            add("Accept", "*/*")
+
+            ocrRequest.interceptedHeaders.forEach { (name, value) ->
+                set(name, value)
+            }
+        }.build()
 
         val dialog = try {
             val response = client.newCall(

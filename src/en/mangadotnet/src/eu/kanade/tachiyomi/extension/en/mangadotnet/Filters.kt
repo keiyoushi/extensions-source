@@ -14,11 +14,11 @@ class SortFilter :
 
 private val sortOrders = listOf(
     "Relevance" to "relevance",
-    "Alphabetical" to "Alphabetical",
+    "Alphabetical" to "alphabetical",
     "Latest Update" to "latest",
     "Total Chapters" to "chapters",
     "Most Viewed" to "views",
-    "Most Bookmarked" to "bookmarks",
+    "Most Tracked" to "tracked",
     "Top Rated" to "rating",
 )
 
@@ -34,30 +34,33 @@ private val status = listOf(
     "Any Status" to null,
     "Ongoing" to "Ongoing",
     "Completed" to "Completed",
+    "Hiatus" to "Hiatus",
 )
 
+class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+
 class TypeFilter :
-    Filter.Select<String>(
-        name = "Type",
-        values = types.map { it.first }.toTypedArray(),
+    Filter.Group<TypeCheckBox>(
+        "Type",
+        types.map { TypeCheckBox(it.first, it.second) },
     ) {
-    val selected get() = types[state].second
+    val checked get() = state.filter { it.state }.map { it.value }
 }
 
 private val types = listOf(
-    "All" to null,
     "Manga" to "JP",
     "Manhwa" to "KR",
     "Manhua" to "CN",
     "One Shot" to "ONESHOT",
 )
 
-class CheckBoxFilter(name: String) : Filter.CheckBox(name)
+class TriStateFilter(name: String, val value: String = name) : Filter.TriState(name)
 
 class GenreFilter(genreValues: List<String>) :
-    Filter.Group<CheckBoxFilter>(
+    Filter.Group<TriStateFilter>(
         name = "Genre",
-        state = genreValues.map { CheckBoxFilter(it) },
+        state = genreValues.map { TriStateFilter(it) },
     ) {
-    val checked get() = state.filter { it.state }.map { it.name }
+    val included get() = state.filter { it.isIncluded() }.map { it.value }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.value }
 }
