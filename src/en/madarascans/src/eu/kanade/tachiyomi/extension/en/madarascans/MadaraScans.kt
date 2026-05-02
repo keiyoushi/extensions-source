@@ -57,7 +57,7 @@ class MadaraScans :
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        val chapterName = element.select(".ch-num").text().ifBlank { urlElements.first()!!.text() }
+        val chapterName = element.select(".ch-num").text().ifBlank { urlElements.firstOrNull()?.text().orEmpty() }
         name = if (!element.hasClass("free")) "🔒 $chapterName" else chapterName
         val dateElement = element.select(".ch-date")?.text()
         date_upload = dateElement.parseChapterDate()
