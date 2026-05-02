@@ -7,6 +7,7 @@ class MerlinScans :
         "Merlin Scans",
         "https://merlintoon.com",
         "tr",
+        popularUrlSlug = "seri-siralamasi",
         latestUrlSlug = "son-guncellenenler",
         versionId = 2,
     )
