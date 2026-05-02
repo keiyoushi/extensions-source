@@ -10,12 +10,6 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# For enumeration classes, see http://proguard.sourceforge.net/manual/examples.html#enumerations
--keepclassmembers enum * {
-    public static **[] values();
-    public static ** valueOf(java.lang.String);
-}
-
 # kotlinx-serialization — runtime keeps required for @Serializable types and their
 # generated $serializer companions.
 # https://github.com/Kotlin/kotlinx.serialization/tree/dev/rules
