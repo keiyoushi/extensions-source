@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -32,12 +31,6 @@ open class Niadd(
         private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
         private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
     }
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
