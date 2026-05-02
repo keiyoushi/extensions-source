@@ -9,7 +9,6 @@ import android.webkit.WebViewClient
 import okhttp3.Headers
 import org.json.JSONObject
 import uy.kohesive.injekt.injectLazy
-import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -17,9 +16,7 @@ class OcrUrlInterceptor(private val headers: Headers) {
 
     private val context: Application by injectLazy()
     private val handler = Handler(Looper.getMainLooper())
-    private val bridgeName = ('a'..'z').random() + UUID.randomUUID().toString().replace("-", "").take(10)
-
-    data class OcrRequest(val url: String, val body: String, val interceptedHeaders: Map<String, String>)
+    private val bridgeName = ('a'..'z').shuffled().take(10).joinToString("")
 
     fun getOcrRequest(url: String): OcrRequest? {
         val latch = CountDownLatch(1)
@@ -138,3 +135,9 @@ class OcrUrlInterceptor(private val headers: Headers) {
         )
     }
 }
+
+data class OcrRequest(
+    val url: String,
+    val body: String,
+    val interceptedHeaders: Map<String, String>,
+)
