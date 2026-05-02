@@ -84,7 +84,7 @@ class OcrUrlInterceptor(private val headers: Headers) {
     private fun injectScript(view: WebView?) {
         val utilities = """
             const origin = Math.random;
-            const proxy = () => 0.01;
+            const proxy = () => 0.01 + origin() * 0.09;
 
             Object.setPrototypeOf(proxy, Object.getPrototypeOf(origin));
             Object.defineProperties(proxy, {
