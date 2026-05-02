@@ -5,7 +5,7 @@ import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.source.SourceFactory
 
 @RequiresApi(Build.VERSION_CODES.O)
-class ManhuarmFactory : SourceFactory {
+class Factory : SourceFactory {
     override fun createSources() = languageList.map(::Manhuarm)
 }
 
