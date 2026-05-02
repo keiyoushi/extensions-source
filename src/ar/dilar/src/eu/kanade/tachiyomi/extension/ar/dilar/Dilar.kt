@@ -1,17 +1,29 @@
 package eu.kanade.tachiyomi.extension.ar.dilar
 
+import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.getPreferencesLazy
+import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"
@@ -19,24 +31,88 @@ private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://dilar.tube", "https://go
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
-class Dilar :
-    Gmanga(
-        "Dilar",
-        MIRROR_PREF_DEFAULT_VALUE,
-        "ar",
-    ),
-    ConfigurableSource {
-    override fun chaptersRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$baseUrl/api/mangas/$mangaId/releases", headers)
+class Dilar : HttpSource(), ConfigurableSource {
+
+    override val name = "Dilar"
+    override val lang = "ar"
+    override val supportsLatest = true
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
+
+    override val baseUrl by lazy { mirrorPref() }
+    private val cdnUrl by lazy { baseUrl }
+
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/api/series?page=$page&sort=views", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val list = json.decodeFromString<DilarSeriesListDto>(response.body.string())
+        val mangas = list.data.map { it.toSManga(cdnUrl) }
+        return MangasPage(mangas, list.pagination?.hasNextPage ?: (mangas.size >= 20))
     }
 
-    override fun chaptersParse(response: Response): List<SChapter> {
-        val releases = response.parseAs<ChapterListDto>().releases
-            .filterNot { it.isMonetized }
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/api/series?page=$page&sort=latest", headers)
 
-        return releases.map { it.toSChapter() }
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val body = """{"query":"$query","includes":["Manga","Team","Member"]}"""
+            .toRequestBody("application/json".toMediaType())
+        return POST("$baseUrl/api/search/quick_search", headers, body)
     }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val results = json.decodeFromString<List<DilarSearchGroupDto>>(response.body.string())
+        val mangas = results
+            .filter { it.clazz == "Manga" }
+            .flatMap { it.data }
+            .map { it.toSManga(cdnUrl) }
+        return MangasPage(mangas, false)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga) =
+        GET("$baseUrl/api/series/${mangaId(manga)}", headers)
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val dto = json.decodeFromString<DilarSeriesDto>(response.body.string())
+        return dto.toSManga(cdnUrl)
+    }
+
+    private fun mangaId(manga: SManga) = manga.url.split("/")[2]
+
+    override fun chapterListRequest(manga: SManga) =
+        GET("$baseUrl/api/series/${mangaId(manga)}/releases", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val dto = json.decodeFromString<DilarReleasesDto>(response.body.string())
+        return dto.releases
+            .filter { it.linkControl == 0 }
+            .map { it.toSChapter(dateFormat) }
+            .sortedByDescending { it.chapter_number }
+    }
+
+    override fun pageListRequest(chapter: SChapter) =
+        GET("$baseUrl/api/releases/${releaseId(chapter)}/pages", headers)
+
+    override fun pageListParse(response: Response): List<Page> {
+        val dto = json.decodeFromString<DilarReleaseDetailDto>(response.body.string())
+        return dto.pages
+            .sortedBy { it.order }
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = "$cdnUrl/uploads/releases/${dto.storageKey}/hq/${page.url}")
+            }
+    }
+
+    private fun releaseId(chapter: SChapter) = chapter.url.substringAfterLast("/")
+
+    override fun imageUrlParse(response: Response) = ""
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {
@@ -46,7 +122,6 @@ class Dilar :
             entryValues = MIRROR_PREF_ENTRY_VALUES
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
             summary = "%s"
-
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
                 true
@@ -60,9 +135,7 @@ class Dilar :
         else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
     }
 
-    override val baseUrl by lazy { mirrorPref() }
-
-    override val cdnUrl by lazy { baseUrl }
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 }
