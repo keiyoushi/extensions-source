@@ -78,6 +78,23 @@ class Japscan :
 
     companion object {
         private val CHAPTER_PATH_TYPES = setOf("manga", "manhua", "manhwa", "bd", "comic")
+        private val HIDDEN_STYLE_TOKENS = listOf(
+            "display:none",
+            "visibility:hidden",
+            "opacity:0",
+            "width:0",
+            "height:0",
+            "pointer-events:none",
+            "clip-path:inset(100%",
+            "clip:rect(0,0,0,0",
+            "font-size:0",
+            "text-indent:-",
+        )
+
+        // Match a large absolute offset (3+ digits, positive or negative) on any side.
+        // 3 digits is enough to be off-screen even with viewport units (200vh, 999vw, …)
+        // while still tolerating fine adjustments like top:-1px or right:99px.
+        private val OFFSCREEN_OFFSET_REGEX = Regex("""(?:top|bottom|left|right):-?\d{3,}""")
         val dateFormat by lazy {
             SimpleDateFormat("dd MMM yyyy", Locale.US)
         }
@@ -250,9 +267,34 @@ class Japscan :
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
+    private fun isHidden(el: Element): Boolean {
+        if (el.hasClass("d-none")) return true
+        if (el.hasAttr("hidden")) return true
+        if (el.attr("aria-hidden").equals("true", ignoreCase = true)) return true
+        val style = el.attr("style").replace(" ", "").lowercase()
+        if (HIDDEN_STYLE_TOKENS.any { style.contains(it) }) return true
+        if (OFFSCREEN_OFFSET_REGEX.containsMatchIn(style)) return true
+        return false
+    }
+
+    private fun isHiddenWithin(el: Element, root: Element): Boolean {
+        var cur: Element? = el
+        while (cur != null && cur !== root) {
+            if (isHidden(cur)) return true
+            cur = cur.parent()
+        }
+        return false
+    }
+
     private fun parseChapter(element: Element, mangaSlug: String?): SChapter {
-        // Only search for a tag with any attribute containing manga/manhua/manhwa
+        // Only search for a tag with any attribute containing manga/manhua/manhwa.
+        // Skip elements that are visually hidden — Japscan hides honeypots with
+        // class="d-none", inline display/visibility/opacity:0, zero size, or by
+        // positioning them way off-screen. The visible chapter row never carries
+        // any of these, so to evade detection Japscan would have to make the
+        // honeypots visible to humans too.
         val allUrlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
+            .filterNot { isHiddenWithin(it, element) }
             .mapNotNull { el ->
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
