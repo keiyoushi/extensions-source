@@ -50,12 +50,8 @@ class MHScans :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        launchIO { countViews(document) }
-
-        // If the page already has standard Madara images, use the default parser
-        val standardPages = document.select(pageListParseSelector)
-        if (standardPages.isNotEmpty()) {
-            return super.pageListParse(document)
+        super.pageListParse(document).also {
+            if (it.isNotEmpty()) return it
         }
 
         val html = document.html()
@@ -82,14 +78,9 @@ class MHScans :
             .add("manga_id", mangaId)
             .build()
 
-        val tokenResponse = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, tokenBody)).execute()
-        val tokenResponseBody = tokenResponse.body.string()
-
-        val tokenData = try {
-            tokenResponseBody.parseAs<RkTokenResponse>().data
-        } catch (e: Exception) {
-            throw Exception("Failed to get reader token (chapter=$chapterId, manga=$mangaId): $tokenResponseBody")
-        }
+        val tokenData = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, tokenBody))
+            .execute()
+            .parseAs<RkTokenResponse>().data
 
         // Fetch the decoy reader page with the token
         val readerBody = FormBody.Builder()
