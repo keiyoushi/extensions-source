@@ -127,6 +127,7 @@ tasks.register("writeProguardRules") {
         proguardFile.parentFile.mkdirs()
         proguardFile.withWriter {
             it.writeLine("-dontobfuscate")
+            it.writeLine("-dontoptimize")
             it.writeLine("-keep class ${android.namespace}.${android.defaultConfig.applicationIdSuffix}${extClass} { *; }")
         }
     }
