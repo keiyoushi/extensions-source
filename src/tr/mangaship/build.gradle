@@ -1,11 +1,8 @@
 ext {
-    extName = 'Manga Ship'
-    extClass = '.MangaShip'
-    extVersionCode = 3
+    extName = 'Manga Bahçesi'
+    extClass = '.MangaBahcesi'
+    extVersionCode = 4
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation project(':lib:dataimage')
-}
