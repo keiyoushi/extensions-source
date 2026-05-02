@@ -46,12 +46,10 @@ class MadaraScans :
     override val seriesStatusSelector = "span.status-badge-lux"
     override val seriesThumbnailSelector = ".lh-poster > img"
 
-    override fun chapterListSelector(): String {
-        return if (preferences.getBoolean(PREF_HIDE_PREMIUM_CHAPTERS, true)) {
-            ".ch-item.free"
-        } else {
-            ".ch-item"
-        }
+    override fun chapterListSelector(): String = if (preferences.getBoolean(PREF_HIDE_PREMIUM_CHAPTERS, true)) {
+        ".ch-item.free"
+    } else {
+        ".ch-item"
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
