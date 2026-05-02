@@ -4,6 +4,12 @@
 -keepattributes Signature
 -keep class * extends uy.kohesive.injekt.api.FullTypeReference
 
+# WebView JS bridge — methods annotated with @JavascriptInterface are invoked from
+# JavaScript by name reflectively and must keep their original signatures.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
 # kotlinx-serialization — runtime keeps required for @Serializable types and their
 # generated $serializer companions.
 # https://github.com/Kotlin/kotlinx.serialization/tree/dev/rules
