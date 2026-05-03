@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.madtheme
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
