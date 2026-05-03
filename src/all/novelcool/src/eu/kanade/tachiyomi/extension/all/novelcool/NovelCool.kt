@@ -248,7 +248,12 @@ open class NovelCool(
 
     override fun pageListParse(response: Response): List<Page> {
         var doc = response.asJsoup()
-        val serverUrl = doc.selectFirst("section.section div.post-content-body > a")?.attr("href")
+
+        // Chapter pages redirect (HTTP 302) to an intermediate "choose a source" page on a
+        // partner domain (e.g. techsmartideas.com). That page contains a.vision-button links
+        // which point to the actual image server (e.g. financemasterpro.com). This is the
+        // same shared infrastructure used by NineAnime.
+        val serverUrl = doc.selectFirst("a.vision-button")?.attr("abs:href")
 
         if (serverUrl != null) {
             val serverHeaders = headers.newBuilder()
@@ -257,15 +262,25 @@ open class NovelCool(
             doc = pageClient.newCall(GET(serverUrl, serverHeaders)).execute().asJsoup()
         }
 
-        val script = doc.select("script:containsData(all_imgs_url)").html()
+        // Parse all_imgs_url from the script using a robust approach: extract the array
+        // content as a string and then find all quoted http URLs within it. This avoids
+        // fragile JSON parsing and trailing-comma issues in the original JS array.
+        val scriptData = doc.select("script:containsData(all_imgs_url)").firstOrNull()?.data()
 
-        val images = imgRegex.find(script)?.groupValues?.get(1)
-            ?.let { "[$it]".parseAs<List<String>>() }
-            ?: return singlePageParse(doc)
+        if (scriptData != null) {
+            val arrayContent = scriptData
+                .substringAfter("all_imgs_url: [")
+                .substringBefore("]")
+            val images = imageUrlRegex.findAll(arrayContent)
+                .map { it.groupValues[1].replace("\\/", "/") }
+                .toList()
 
-        return images.mapIndexed { idx, img ->
-            Page(idx, imageUrl = img)
+            if (images.isNotEmpty()) {
+                return images.mapIndexed { idx, img -> Page(idx, imageUrl = img) }
+            }
         }
+
+        return singlePageParse(doc)
     }
 
     private fun singlePageParse(document: Document): List<Page> = document.selectFirst(".mangaread-pagenav > .sl-page")?.select("option")
@@ -360,7 +375,10 @@ open class NovelCool(
         private const val SIZE = 20
 
         private val DATE_FORMATTER = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
-        private val imgRegex = Regex("""all_imgs_url\s*:\s*\[\s*([^]]*)\s*,\s*]""")
+
+        // Matches any http/https URL inside single or double quotes within the all_imgs_url array.
+        // Using the same approach as NineAnime which shares the same image-serving infrastructure.
+        private val imageUrlRegex = Regex("""["'](https?://[^"']+)["']""")
 
         private const val PREF_API_SEARCH = "pref_use_search_api"
 
