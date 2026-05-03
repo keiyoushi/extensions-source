@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.vi.yurigarden
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -242,24 +241,33 @@ class YuriGarden :
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/pages/${chapterId(chapter)}", apiHeaders())
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .doOnNext { response ->
-            if (response.code == 403) {
-                val body = runCatching { response.peekBody(1024 * 1024).string() }.getOrDefault("")
-                val hasTurnstile = isTurnstileChallenge(response, body)
-                response.close()
-                if (hasTurnstile || hasTurnstileChallenge(chapter)) {
-                    throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
-                }
-                throw Exception("HTTP error 403")
-            }
-            if (!response.isSuccessful) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable
+        .fromCallable { executePageListRequest(chapter, allowRetry = true) }
         .map(::pageListParse)
+
+    private fun executePageListRequest(chapter: SChapter, allowRetry: Boolean): Response {
+        val request = pageListRequest(chapter)
+        val response = client.newCall(request).execute()
+        if (response.isSuccessful) return response
+
+        if (response.code == 403) {
+            val body = runCatching { response.peekBody(1024 * 1024).string() }.getOrDefault("")
+            val hasTurnstile = isTurnstileChallenge(response, body) || hasTurnstileChallenge(chapter)
+            response.close()
+
+            if (hasTurnstile && allowRetry) {
+                if (CloudflareResolver.resolve(request.url.toString())) {
+                    return executePageListRequest(chapter, allowRetry = false)
+                }
+                throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
+            }
+            if (hasTurnstile) throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
+            throw Exception("HTTP error 403")
+        }
+
+        response.close()
+        throw Exception("HTTP error ${response.code}")
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = decryptIfNeeded(response)
