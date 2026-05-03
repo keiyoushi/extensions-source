@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.madarascans
 
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -25,6 +25,7 @@ class MadaraScans :
     ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
+    private val paidChapterHelper = MangaThemesiaPaidChapterHelper(lockedChapterSelector = ".locked")
 
     // support for both popular/latest tabs and search
     override fun searchMangaSelector() = "div.listupd>div, div.legend-inner"
@@ -46,11 +47,10 @@ class MadaraScans :
     override val seriesStatusSelector = "span.status-badge-lux"
     override val seriesThumbnailSelector = ".lh-poster > img"
 
-    override fun chapterListSelector(): String = if (preferences.getBoolean(PREF_HIDE_PREMIUM_CHAPTERS, true)) {
-        ".ch-item.free"
-    } else {
-        ".ch-item"
-    }
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        ".ch-item",
+        preferences,
+    )
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
@@ -62,12 +62,7 @@ class MadaraScans :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_HIDE_PREMIUM_CHAPTERS
-            title = "Hide premium chapters"
-            summary = "Turn off to show premium chapters in the chapter list"
-            setDefaultValue(true)
-        }.also(screen::addPreference)
+        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
     override fun getFilterList(): FilterList {
@@ -103,8 +98,4 @@ class MadaraScans :
     }
 
     override val pageSelector = ".pagination, .legendary-pagination, .magma-pagination"
-
-    companion object {
-        private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
-    }
 }
