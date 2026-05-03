@@ -59,7 +59,7 @@ class WNACG :
     }
 
     // Latest
-    
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/albums-index-page-$page.html", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
