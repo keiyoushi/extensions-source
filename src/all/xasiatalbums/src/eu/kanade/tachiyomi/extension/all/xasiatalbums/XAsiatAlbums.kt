@@ -33,18 +33,14 @@ class XAsiatAlbums : HttpSource() {
         path = "albums/",
         blockId = "list_albums_common_albums_list",
         page = page,
-        params = mapOf(
-            "sort_by" to "album_viewed_week",
-        ),
+        params = mapOf("sort_by" to "album_viewed_week"),
     )
 
     override fun latestUpdatesRequest(page: Int): Request = searchQuery(
         path = "albums/",
         blockId = "list_albums_common_albums_list",
         page = page,
-        params = mapOf(
-            "sort_by" to "post_date",
-        ),
+        params = mapOf("sort_by" to "post_date"),
     )
 
     private fun searchQuery(
@@ -54,25 +50,18 @@ class XAsiatAlbums : HttpSource() {
         params: Map<String, String>,
     ): Request {
         val offset = ((page - 1) * ITEMS_PER_PAGE) + 1
-
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments(path.removePrefix("/").removeSuffix("/"))
             addQueryParameter("mode", "async")
             addQueryParameter("function", "get_block")
             addQueryParameter("block_id", blockId)
             addQueryParameter("from", offset.toString())
-
             if (blockId.contains("search")) {
                 addQueryParameter("from_albums", offset.toString())
             }
-
-            params.forEach { (key, value) ->
-                addQueryParameter(key, value)
-            }
-
+            params.forEach { (key, value) -> addQueryParameter(key, value) }
             addQueryParameter("_", System.currentTimeMillis().toString())
         }.build()
-
         return GET(url, headers)
     }
 
@@ -81,7 +70,6 @@ class XAsiatAlbums : HttpSource() {
         val mangas = document.select(".list-albums .item a[href]").mapNotNull { link ->
             val url = link.attr("abs:href")
             if (url.isBlank() || !url.contains("/albums/")) return@mapNotNull null
-
             SManga.create().apply {
                 setUrlWithoutDomain(url)
                 title = link.attr("title").ifBlank {
@@ -94,10 +82,8 @@ class XAsiatAlbums : HttpSource() {
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }.distinctBy { it.url }
-
         val hasNextPage = document.select(".pagination a[href], .pages a[href], .pager a[href]")
             .any { it.text().contains("Next", ignoreCase = true) }
-
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -157,17 +143,12 @@ class XAsiatAlbums : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
-
-        // Add the first image page
         pages.add(Page(0, "", response.request.url.toString()))
-
-        // Add subsequent image pages from pagination
         document.select(".pagination a[href*=get_image], .pager a[href*=get_image]")
             .distinctBy { it.attr("abs:href") }
             .forEachIndexed { index, element ->
                 pages.add(Page(index + 1, "", element.attr("abs:href")))
             }
-
         return pages
     }
 
@@ -185,23 +166,32 @@ class XAsiatAlbums : HttpSource() {
                 .ifBlank { element.attr("abs:data-src") }
                 .ifBlank { element.attr("abs:src") }
 
-            if (url.isNotBlank() && !url.contains("thumb") && !url.contains("logo")) {
-                return url
-            }
+            if (isValidImageUrl(url)) return url
         }
 
-        return document.selectFirst("img[src*=get_image], img[src*=uploads]")
+        // Final fallback: try to find any direct image that looks like the main content
+        val fallbackUrl = document.selectFirst("img[src*=get_image], img[src*=uploads]")
             ?.attr("abs:src")
-            .orEmpty()
+
+        if (isValidImageUrl(fallbackUrl)) return fallbackUrl!!
+
+        // If no image found, throw exception to trigger Mihon's retry mechanism
+        throw Exception("Failed to find valid image URL")
+    }
+
+    private fun isValidImageUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        return !url.contains("data:image/") &&
+            !url.contains("thumb") &&
+            !url.contains("logo") &&
+            (url.contains(".jpg") || url.contains(".jpeg") || url.contains(".png") || url.contains(".webp"))
     }
 
     override fun getFilterList(): FilterList {
-        val pairList = categories
-            .map { Pair(it.key, it.value) }
+        val pairList = categories.map { Pair(it.key, it.value) }
             .distinctBy { it.first }
             .sortedBy { it.first.lowercase() }
             .toTypedArray()
-
         return FilterList(
             Filter.Header("Tags update dynamically after opening albums"),
             Filter.Separator(),
