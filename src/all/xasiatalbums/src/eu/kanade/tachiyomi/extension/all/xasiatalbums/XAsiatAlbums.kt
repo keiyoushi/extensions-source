@@ -27,7 +27,7 @@ class XAsiatAlbums : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "XMLHttpRequest")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     override fun popularMangaRequest(page: Int): Request = searchQuery(
         path = "albums/",
@@ -143,7 +143,11 @@ class XAsiatAlbums : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
+
+        // Add current page as page 0
         pages.add(Page(0, "", response.request.url.toString()))
+
+        // Select only valid image viewer pages
         document.select(".pagination a[href*=get_image], .pager a[href*=get_image]")
             .distinctBy { it.attr("abs:href") }
             .forEachIndexed { index, element ->
@@ -154,38 +158,39 @@ class XAsiatAlbums : HttpSource() {
 
     override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
+
+        // Optimization: Priority selectors based on source code analysis
         val selectors = arrayOf(
             ".image-holder img",
             ".main-image img",
             ".content img",
+            "img#main-image",
         )
 
         for (selector in selectors) {
             val element = document.selectFirst(selector) ?: continue
+
+            // Check original attributes first to bypass lazy-loading
             val url = element.attr("abs:data-original")
                 .ifBlank { element.attr("abs:data-src") }
                 .ifBlank { element.attr("abs:src") }
 
-            if (isValidImageUrl(url)) return url
+            if (isValidImage(url)) return url
         }
 
-        // Final fallback: try to find any direct image that looks like the main content
-        val fallbackUrl = document.selectFirst("img[src*=get_image], img[src*=uploads]")
-            ?.attr("abs:src")
-
-        if (isValidImageUrl(fallbackUrl)) return fallbackUrl!!
-
-        // If no image found, throw exception to trigger Mihon's retry mechanism
-        throw Exception("Failed to find valid image URL")
+        // Final sanity check: if it's not an image URL, throw to retry
+        throw Exception("Failed to resolve image. Server might have returned HTML instead.")
     }
 
-    private fun isValidImageUrl(url: String?): Boolean {
-        if (url.isNullOrBlank()) return false
-        return !url.contains("data:image/") &&
-            !url.contains("thumb") &&
-            !url.contains("logo") &&
-            (url.contains(".jpg") || url.contains(".jpeg") || url.contains(".png") || url.contains(".webp"))
+    private fun isValidImage(url: String): Boolean {
+        val u = url.lowercase()
+        return u.isNotBlank() &&
+            !u.contains("data:image/") &&
+            !u.contains("logo") &&
+            (u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".webp") || u.contains(".jpg?"))
     }
+
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
 
     override fun getFilterList(): FilterList {
         val pairList = categories.map { Pair(it.key, it.value) }
