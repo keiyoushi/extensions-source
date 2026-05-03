@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.toBinary
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -51,12 +52,12 @@ class HentaiZap(
     /* Search */
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Basic search
-        val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
+        val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
         val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
-        val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
+        val favoriteFilter = filters.firstInstanceOrNull<FavoriteFilter>()
 
         // Speechless
-        val speechlessFilter = filters.filterIsInstance<SpeechlessFilter>().firstOrNull()
+        val speechlessFilter = filters.firstInstanceOrNull<SpeechlessFilter>()
 
         return when {
             favoriteFilter?.state == true ->
@@ -80,10 +81,10 @@ class HentaiZap(
      */
     private fun browsingWithFilters(page: Int, filters: FilterList): Request {
         // Basic search
-        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
+        val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
 
         // Intermediate search
-        val categoryFilters = filters.filterIsInstance<CategoryFilters>().firstOrNull()
+        val categoryFilters = filters.firstInstanceOrNull<CategoryFilters>()
 
         // Only for query string or multiple tags
         val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
