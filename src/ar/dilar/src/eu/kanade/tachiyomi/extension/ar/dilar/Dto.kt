@@ -21,8 +21,8 @@ data class DilarSearchItemDto(
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = "/series/$id/$title"
-        this.title = this@DilarSearchItemDto.title ?: ""
+        url = "/series/$id/${title.orEmpty()}"
+        this.title = this@DilarSearchItemDto.title ?: "Unknown"
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
     }
 }
@@ -52,7 +52,7 @@ data class DilarSeriesDto(
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
         url = "/series/$id/$title"
-        this.title = this@DilarSeriesDto.title
+        this.title = this@DilarSeriesDto.title.ifBlank { "Unknown" }
         description = summary
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
         author = staff.filter { it.staffRole?.role == "Author" }.joinToString { it.name }
