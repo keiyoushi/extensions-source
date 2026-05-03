@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -109,7 +108,9 @@ class XAsiatAlbums : HttpSource() {
             val link = href.substringAfter(".com/").removeSuffix("/")
             if (link.isNotEmpty()) categories[tag] = link
             tag
-        } else null
+        } else {
+            null
+        }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
