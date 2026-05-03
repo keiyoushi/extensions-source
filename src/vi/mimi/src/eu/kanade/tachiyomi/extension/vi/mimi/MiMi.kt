@@ -39,7 +39,7 @@ class MiMi : HttpSource() {
         .build()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var genreList: List<Pair<String, Int>> = emptyList()
+    private var genreList: List<GenreDto> = emptyList()
     private var fetchGenresAttempts: Int = 0
 
     override fun headersBuilder() = super.headersBuilder()
@@ -109,9 +109,7 @@ class MiMi : HttpSource() {
             (it is GenresFilter && it.state.any { g -> g.state != Filter.TriState.STATE_IGNORE }) ||
                 (it is TextField && it.state.isNotEmpty())
         }
-        val sortId = filterList.filterIsInstance<SortByList>().firstOrNull()?.let {
-            it.values[it.state].id
-        } ?: ""
+        val sortId = filterList.filterIsInstance<SortByFilter>().firstOrNull()?.selectedSort ?: ""
 
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("manga")
@@ -123,15 +121,15 @@ class MiMi : HttpSource() {
 
             filterList.forEach { filter ->
                 when (filter) {
-                    is SortByList -> {
+                    is SortByFilter -> {
                         if (!isAdvanced && sortId.isNotEmpty()) addQueryParameter("sort", sortId)
                     }
 
                     is GenresFilter -> if (isAdvanced) {
                         filter.state.forEach {
                             when (it.state) {
-                                Filter.TriState.STATE_INCLUDE -> addQueryParameter("genre", it.id)
-                                Filter.TriState.STATE_EXCLUDE -> addQueryParameter("exclude_genre", it.id)
+                                Filter.TriState.STATE_INCLUDE -> addQueryParameter("genre", it.id.toString())
+                                Filter.TriState.STATE_EXCLUDE -> addQueryParameter("exclude_genre", it.id.toString())
                             }
                         }
                     }
@@ -163,8 +161,7 @@ class MiMi : HttpSource() {
                     client.newCall(GET("$apiUrl/genres", headers)).await()
                         .use { response ->
                             response.parseAs<List<GenreDto>>()
-                                .map { Pair(it.name, it.id) }
-                                .sortedBy { it.first }
+                                .sortedBy { it.name }
                                 .takeIf { it.isNotEmpty() }
                                 ?.let { genreList = it }
                         }
