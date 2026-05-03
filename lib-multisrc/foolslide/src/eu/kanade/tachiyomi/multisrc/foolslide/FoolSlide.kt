@@ -151,9 +151,7 @@ abstract class FoolSlide(
             ?.let { url -> client.newCall(allowAdult(GET(url))).execute() }
             ?.use { response -> pageListParse(response).firstOrNull()?.imageUrl }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return mangaDetailsParse(response.asJsoup())
-    }
+    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
     open fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.select(mangaDetailsInfoSelector).firstOrNull()?.html()?.let { infoHtml ->
@@ -301,9 +299,7 @@ abstract class FoolSlide(
 
     override fun pageListRequest(chapter: SChapter) = allowAdult(super.pageListRequest(chapter))
 
-    override fun pageListParse(response: Response): List<Page> {
-        return pageListParse(response.asJsoup())
-    }
+    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val doc = document.toString()
