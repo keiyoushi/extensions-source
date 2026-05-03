@@ -158,10 +158,8 @@ class XAsiatAlbums : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
 
-    private fun pageListParse(document: org.jsoup.nodes.Document): List<Page> {
-        return document.select("a.item").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:href"))
-        }
+    private fun pageListParse(document: org.jsoup.nodes.Document): List<Page> = document.select("a.item").mapIndexed { i, element ->
+        Page(i, imageUrl = element.attr("abs:href"))
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
