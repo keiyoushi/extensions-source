@@ -91,10 +91,21 @@ class Japscan :
             "text-indent:-",
         )
 
-        // Match a large absolute offset (3+ digits, positive or negative) on any side.
+        // Match styles that visually remove an element while leaving it in the DOM:
+        //  - large absolute offset (3+ digits) via top/bottom/left/right or `inset:` shorthand
+        //  - `transform: translate / translateX / translateY / translate3d` with a 3+ digit offset
+        //  - `transform: scale(0)` / `scale3d(0,...)` (collapsed to nothing)
+        //  - `transform: matrix(0,0,0,0,...)` (also collapsed)
+        //  - `max-width:0` / `max-height:0` (mirror of the existing width:0/height:0 tokens)
         // 3 digits is enough to be off-screen even with viewport units (200vh, 999vw, …)
         // while still tolerating fine adjustments like top:-1px or right:99px.
-        private val OFFSCREEN_OFFSET_REGEX = Regex("""(?:top|bottom|left|right):-?\d{3,}""")
+        private val OFFSCREEN_OFFSET_REGEX = Regex(
+            """(?:top|bottom|left|right|inset):-?\d{3,}""" +
+                """|transform:translate(?:3d|x|y)?\([^)]*-?\d{3,}""" +
+                """|transform:scale(?:3d)?\(0[,)]""" +
+                """|transform:matrix\(0,0,0,0""" +
+                """|max-(?:width|height):0""",
+        )
         val dateFormat by lazy {
             SimpleDateFormat("dd MMM yyyy", Locale.US)
         }
@@ -253,9 +264,34 @@ class Japscan :
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mangaSlug = extractMangaSlug(response.request.url)
-        return document.select(chapterListSelector()).mapNotNull { el ->
+        val chapters = document.select(chapterListSelector()).mapNotNull { el ->
             runCatching { parseChapter(el, mangaSlug) }.getOrNull()
         }
+        return filterOutlierChapters(chapters)
+    }
+
+    // Defense in depth: if a honeypot ever slips past the per-row hidden-style
+    // heuristics, its URL number is wildly out of range (e.g. 483181 vs. real 1181).
+    // Drop the upper cluster when consecutive chapter numbers jump by more than 1000.
+    private fun filterOutlierChapters(chapters: List<SChapter>): List<SChapter> {
+        val withNum = chapters.mapNotNull { ch ->
+            val n = ch.url.trimEnd('/').substringAfterLast('/').toLongOrNull() ?: return@mapNotNull null
+            ch to n
+        }
+        if (withNum.size < 2) return chapters
+        val sorted = withNum.sortedBy { it.second }
+        var gapIdx = -1
+        var gapSize = 0L
+        for (i in 1 until sorted.size) {
+            val g = sorted[i].second - sorted[i - 1].second
+            if (g > gapSize) {
+                gapSize = g
+                gapIdx = i
+            }
+        }
+        if (gapSize <= 1000) return chapters
+        val keep = sorted.take(gapIdx).map { it.first }.toSet()
+        return chapters.filter { it in keep }
     }
 
     private fun extractMangaSlug(url: okhttp3.HttpUrl): String? {
