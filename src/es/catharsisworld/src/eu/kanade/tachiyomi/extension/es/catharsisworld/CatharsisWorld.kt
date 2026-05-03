@@ -12,12 +12,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class CatharsisWorld :
     Madara(
         "Catharsis World",
-        "https://catharsisworld.dig-it.info",
+        "https://catharsisworld.lat",
         "es",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
     ConfigurableSource {
 

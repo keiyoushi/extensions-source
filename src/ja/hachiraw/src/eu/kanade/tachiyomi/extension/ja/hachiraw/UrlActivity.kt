@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class HachirawUrlActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -23,10 +23,10 @@ class HachirawUrlActivity : Activity() {
             try {
                 startActivity(intent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("HachirawUrlActivity", "Could not start activity", e)
+                Log.e("UrlActivity", "Could not start activity", e)
             }
         } else {
-            Log.e("HachirawUrlActivity", "Could not parse URI from intent $intent")
+            Log.e("UrlActivity", "Could not parse URI from intent $intent")
         }
 
         finish()

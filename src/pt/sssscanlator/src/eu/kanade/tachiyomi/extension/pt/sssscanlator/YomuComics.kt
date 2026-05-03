@@ -35,6 +35,7 @@ class YomuComics : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("x-yomu-web", "true")
 
     // Popular
 
@@ -130,7 +131,11 @@ class YomuComics : HttpSource() {
         }
 
         return pages.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
+            val proxyUrl = "$baseUrl/api/proxy-image".toHttpUrl().newBuilder()
+                .addQueryParameter("url", imageUrl)
+                .toString()
+
+            Page(index, imageUrl = proxyUrl)
         }
     }
 

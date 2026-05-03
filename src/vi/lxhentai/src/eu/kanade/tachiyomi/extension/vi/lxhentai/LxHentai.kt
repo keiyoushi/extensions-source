@@ -230,40 +230,56 @@ class LxHentai :
     // ============================== Pages =================================
 
     override fun pageListParse(response: Response): List<Page> {
+        val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
-        val html = document.outerHtml()
-        val actionToken = ACTION_TOKEN_REGEX.find(html)?.groupValues?.get(1)
-            ?: throw Exception("Không tìm thấy action token")
-        val encryptedPayload = ENCRYPTED_IMAGES_REGEX.find(html)?.groupValues?.get(1)
-            ?: throw Exception("Không tìm thấy dữ liệu ảnh")
 
-        val encryptedRows = ENCRYPTED_IMAGE_ROW_REGEX.findAll(encryptedPayload)
-            .mapNotNull { row: MatchResult ->
-                row.groupValues.getOrNull(1)
-                    ?.split(',')
-                    ?.mapNotNull { it.toIntOrNull() }
-                    ?.takeIf { it.isNotEmpty() }
-            }
-            .toList()
+        // Try parse the encrypted payload + action_token
+        val localImageUrls: List<String> = runCatching {
+            val html = document.outerHtml()
+            val actionToken = ACTION_TOKEN_REGEX.find(html)?.groupValues?.get(1) ?: return@runCatching emptyList()
+            val encryptedPayload = ENCRYPTED_IMAGES_REGEX.find(html)?.groupValues?.get(1) ?: return@runCatching emptyList()
+            val encryptedRows = ENCRYPTED_IMAGE_ROW_REGEX.findAll(encryptedPayload)
+                .mapNotNull { row: MatchResult ->
+                    row.groupValues.getOrNull(1)
+                        ?.split(',')
+                        ?.mapNotNull { it.toIntOrNull() }
+                        ?.takeIf { it.isNotEmpty() }
+                }
+                .toList()
+            document.select("#image-container[data-idx]")
+                .asSequence()
+                .mapNotNull { element: Element -> element.attr("data-idx").toIntOrNull() }
+                .distinct()
+                .sorted()
+                .mapNotNull { idx: Int -> encryptedRows.getOrNull(idx) }
+                .map { codes: List<Int> -> decodeImageUrl(codes, actionToken) }
+                .filter { it.isNotBlank() }
+                .toList()
+        }.getOrDefault(emptyList())
 
-        val imageUrls = document.select("#image-container[data-idx]")
-            .asSequence()
-            .mapNotNull { element: Element -> element.attr("data-idx").toIntOrNull() }
-            .distinct()
-            .sorted()
-            .mapNotNull { idx: Int -> encryptedRows.getOrNull(idx) }
-            .map { codes: List<Int> -> decodeImageUrl(codes, actionToken) }
-            .filter { it.isNotBlank() }
-            .toList()
+        // Token that images require as the `Token` header must come from /get_token, which
+        // is gated behind Cloudflare Turnstile. Run the chapter page in a headless WebView
+        // so the site's own JS solves Turnstile, calls /get_token and exposes the result via
+        // window.actionToken (and the decoded URLs via window.__imgSrcs).
+        val webViewData = TokenResolver.resolve(chapterUrl)
 
+        val imageUrls = webViewData.srcs.filter { it.isNotBlank() }
+            .ifEmpty { localImageUrls }
+
+        if (imageUrls.isEmpty()) {
+            throw Exception("Không tìm thấy dữ liệu ảnh")
+        }
+
+        val pageMetadata = encodePageMetadata(chapterUrl, webViewData.token)
         return imageUrls.mapIndexed { index: Int, imageUrl: String ->
-            Page(index, imageUrl = imageUrl)
+            Page(index, pageMetadata, imageUrl)
         }
     }
 
     override fun imageRequest(page: Page): Request {
+        val (chapterUrl, actionToken) = decodePageMetadata(page.url)
         val imageUrl = page.imageUrl ?: throw Exception("Không tìm thấy URL ảnh")
-        return GET(imageUrl, imageHeaders())
+        return GET(imageUrl, imageHeaders(chapterUrl, actionToken))
     }
 
     private fun decodeImageUrl(codes: List<Int>, actionToken: String): String {
@@ -275,10 +291,10 @@ class LxHentai :
         return result.toString()
     }
 
-    private fun imageHeaders() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    private fun imageHeaders(chapterUrl: String, actionToken: String) = super.headersBuilder()
+        .add("Referer", chapterUrl)
         .add("Origin", baseUrl)
-        .add("Token", "364b9dccc5ef526587f108c4d4fd63ee35286e19e36ec55b93bd4d79410dbbf6")
+        .add("Token", actionToken)
         .build()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -306,6 +322,19 @@ class LxHentai :
         val rawUrl = BACKGROUND_URL_REGEX.find(styleValue)?.groupValues?.get(1) ?: return null
         return rawUrl.toHttpUrlOrNull()?.toString()
             ?: "$baseUrl${rawUrl.takeIf { it.startsWith("/") } ?: "/$rawUrl"}"
+    }
+
+    private fun encodePageMetadata(chapterUrl: String, actionToken: String): String = "$chapterUrl\n$actionToken"
+
+    private fun decodePageMetadata(rawMetadata: String): Pair<String, String> {
+        val separatorIndex = rawMetadata.lastIndexOf('\n')
+        if (separatorIndex <= 0 || separatorIndex == rawMetadata.lastIndex) {
+            throw Exception("Không đọc được thông tin token ảnh")
+        }
+
+        val chapterUrl = rawMetadata.substring(0, separatorIndex)
+        val actionToken = rawMetadata.substring(separatorIndex + 1)
+        return chapterUrl to actionToken
     }
 
     companion object {

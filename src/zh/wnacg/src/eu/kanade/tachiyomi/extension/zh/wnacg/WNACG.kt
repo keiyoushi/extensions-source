@@ -49,7 +49,7 @@ class WNACG :
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums-index-page-$page.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums-favorite_ranking-$page-type-week.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -58,11 +58,16 @@ class WNACG :
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Latest (not supported)
+    // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/albums-index-page-$page.html", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".gallary_item").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("span.thispage + a") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
     // Search
 

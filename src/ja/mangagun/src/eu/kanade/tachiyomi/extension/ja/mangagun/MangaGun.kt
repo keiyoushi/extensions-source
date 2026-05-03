@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
@@ -125,7 +124,8 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
         return chapterDate.timeInMillis
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val images = document.select("img[id~=page\\d+]")
 
         return images.mapIndexed { index, element ->

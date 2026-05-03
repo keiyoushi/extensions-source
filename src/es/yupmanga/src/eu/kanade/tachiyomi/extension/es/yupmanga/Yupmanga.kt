@@ -42,6 +42,16 @@ class Yupmanga : HttpSource() {
             val html = response.peekBody(3 * 1024 * 1024L).string()
 
             TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
+            TOKEN_JS_REGEX.find(html)?.groupValues?.get(1)?.let { match ->
+                csrfToken = match.split(",").mapNotNull {
+                    val clean = it.trim()
+                    if (clean.startsWith("0x", ignoreCase = true)) {
+                        clean.substring(2).toIntOrNull(16)?.toChar()
+                    } else {
+                        clean.toIntOrNull()?.toChar()
+                    }
+                }.joinToString("")
+            }
             DATAK_REGEX.find(html)?.groupValues?.get(1)?.let { dataK = it }
         }
         response
@@ -202,9 +212,9 @@ class Yupmanga : HttpSource() {
             mangaId = chapter.url.substringAfter("#")
         }
 
-        // If opened directly from the library/cached details and dataK is empty,
+        // If opened directly from the library/cached details and csrfToken is empty,
         // we must fetch the series page to trigger the interceptor and populate the values.
-        if ((dataK.isEmpty() || csrfToken.isEmpty()) && mangaId.isNotEmpty()) {
+        if (csrfToken.isEmpty() && mangaId.isNotEmpty()) {
             client.newCall(GET("$baseUrl/series.php?id=$mangaId", headers)).execute().close()
         }
 
@@ -305,6 +315,7 @@ class Yupmanga : HttpSource() {
 
     companion object {
         private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
+        private val TOKEN_JS_REGEX = """_token.*?String\.fromCharCode\(([^)]+)\)""".toRegex()
         private val DATAK_REGEX = """id=["']app-cfg["']\s+data-k=["']([^"']+)["']""".toRegex()
     }
 }

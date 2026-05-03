@@ -2,26 +2,24 @@ package eu.kanade.tachiyomi.extension.all.niadd
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 open class Niadd(
-    private val nameSuffix: String,
     baseUrlParam: String,
     langParam: String,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val name = "Niadd"
     override val baseUrl = baseUrlParam
@@ -34,28 +32,25 @@ open class Niadd(
         private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
     }
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        // Hardcoded User-Agent required to bypass Niadd hotlink protection for cover images.
-        .set(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        )
-
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/Hot-Manga.html", headers)
 
-    override fun popularMangaSelector() = "div.manga-item"
+    private fun popularMangaSelector() = "div.manga-item"
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("div.manga-name")!!.text()
         val rawUrl = element.selectFirst("a")!!.absUrl("href")
         setUrlWithoutDomain(rawUrl)
         element.selectFirst("div.manga-img img")?.attr("abs:src")?.also { thumbnail_url = it }
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        return MangasPage(mangas, false)
+    }
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -65,23 +60,24 @@ open class Niadd(
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String? = null
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        return MangasPage(mangas, false)
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list/New-Update.html", headers)
 
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String? = null
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        return MangasPage(mangas, false)
+    }
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         val infoElement = document.select("div.bookside-general, div.detail-general")
 
         title = document.selectFirst("h1, .book-headline-name")!!.text()
@@ -135,8 +131,8 @@ open class Niadd(
         }
 
         description = buildString {
-            if (yearClean.isNotBlank()) append("Ano: $yearClean\n\n")
-            if (synopsisText.isNotBlank()) append(synopsisText)
+            if (yearClean.isNotEmpty()) append("Ano: $yearClean\n\n")
+            if (synopsisText.isNotEmpty()) append(synopsisText)
         }
 
         document.selectFirst("div.detail-img img, div.bookside-img img")?.attr("abs:src").also { thumbnail_url = it }
@@ -149,34 +145,32 @@ open class Niadd(
         return GET(chaptersUrl, headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapterListContainer = document.selectFirst("ul.chapter-list")!!
-
-        return document.select(chapterListSelector()).map { chapterFromElement(it) }
-    }
-
-    override fun chapterListSelector() = "ul.chapter-list a.hover-underline"
+    private val chapterListSelector = "ul.chapter-list a.hover-underline"
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
     private fun parseDate(dateString: String): Long {
         if (dateString.contains("atrás", ignoreCase = true) ||
             dateString.contains("ago", ignoreCase = true)
         ) {
-            // TODO: Parse relative date
             return 0L
         }
 
         return dateFormat.tryParse(dateString)
     }
 
-    // Pages
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        document.selectFirst("ul.chapter-list")!!
+
+        return document.select(chapterListSelector).map { chapterFromElement(it) }
+    }
+
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val rawUrl = element.attr("abs:href")
         setUrlWithoutDomain(rawUrl)
 
         name = element.selectFirst("span.chapter-name, span.name")?.text()
-            ?.takeIf(String::isNotBlank)
+            ?.takeIf(String::isNotEmpty)
             ?: element.text()
 
         element.selectFirst("span.chapter-time, span.time")?.text()
@@ -186,7 +180,9 @@ open class Niadd(
             ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    // Pages
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val pages = mutableListOf<Page>()
         val currentUrl = document.location()
         val html = document.html()
@@ -200,7 +196,7 @@ open class Niadd(
                     .filter { it.startsWith("http") }
 
                 urls.forEachIndexed { i, url ->
-                    pages.add(Page(i, currentUrl, url))
+                    pages.add(Page(i, currentUrl, imageUrl = url))
                 }
                 if (pages.isNotEmpty()) return pages
             }
@@ -213,22 +209,22 @@ open class Niadd(
                 .add("Referer", currentUrl)
                 .build()
 
-            return client.newCall(GET(sourceUrl, requestHeaders)).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("Failed to follow redirect: ${response.code}")
-                pageListParse(response.asJsoup())
+            return client.newCall(GET(sourceUrl, requestHeaders)).execute().use { resp ->
+                if (!resp.isSuccessful) throw Exception("Failed to follow redirect: ${resp.code}")
+                pageListParse(resp)
             }
         }
 
         document.select("div.pic_box img, div.reading-content img").forEach { img ->
             val url = img.attr("abs:src")
-            if (url.isNotBlank() && !url.contains("cover") && !url.contains("logo")) {
-                pages.add(Page(pages.size, currentUrl, url))
+            if (url.isNotEmpty() && !url.contains("cover") && !url.contains("logo")) {
+                pages.add(Page(pages.size, currentUrl, imageUrl = url))
             }
         }
 
         val otherSubPages = document.select("select.sl-page option")
             .map { it.attr("value") }
-            .filter { it.isNotBlank() && !currentUrl.contains(it) }
+            .filter { it.isNotEmpty() && !currentUrl.contains(it) }
 
         if (otherSubPages.isNotEmpty()) {
             otherSubPages.forEach { subPath ->
@@ -238,8 +234,8 @@ open class Niadd(
                         val subDoc = resp.asJsoup()
                         subDoc.select("div.pic_box img, div.reading-content img").forEach { img ->
                             val imgUrl = img.attr("abs:src")
-                            if (imgUrl.isNotBlank() && !imgUrl.contains("cover") && !pages.any { it.imageUrl == imgUrl }) {
-                                pages.add(Page(pages.size, subUrl, imgUrl))
+                            if (imgUrl.isNotEmpty() && !imgUrl.contains("cover") && !pages.any { it.imageUrl == imgUrl }) {
+                                pages.add(Page(pages.size, subUrl, imageUrl = imgUrl))
                             }
                         }
                     }

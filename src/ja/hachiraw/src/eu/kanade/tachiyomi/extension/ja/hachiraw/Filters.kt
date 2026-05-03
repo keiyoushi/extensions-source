@@ -19,7 +19,6 @@ class GenreFilter(state: Int = 0) :
     SelectFilter(
         "Genres",
         listOf(
-            // TODO: Is this the correct translation for "All"/"Everything"?
             Selection("すべて", ""),
             Selection("アクション", "action"),
             Selection("メカ", "mecha"),

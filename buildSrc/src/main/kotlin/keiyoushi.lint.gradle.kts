@@ -39,7 +39,7 @@ spotless {
 }
 
 tasks {
-    val spotlessTask = if (System.getenv("CI") != "true") "spotlessApply" else "spotlessCheck"
+    val spotlessTask = if (providers.environmentVariable("CI").orNull != "true") "spotlessApply" else "spotlessCheck"
     named("preBuild") {
         dependsOn(tasks.getByName(spotlessTask))
     }

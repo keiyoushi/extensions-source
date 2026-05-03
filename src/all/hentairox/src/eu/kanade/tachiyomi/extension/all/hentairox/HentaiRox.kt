@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.SpeechlessFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -53,13 +54,13 @@ class HentaiRox(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Basic search
-        val sortOrderFilter = filters.filterIsInstance<SortOrderFilter>().firstOrNull()
-        val genresFilter = filters.filterIsInstance<GenresFilter>().firstOrNull()
+        val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
+        val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
         val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
-        val favoriteFilter = filters.filterIsInstance<FavoriteFilter>().firstOrNull()
+        val favoriteFilter = filters.firstInstanceOrNull<FavoriteFilter>()
 
         // Speechless
-        val speechlessFilter = filters.filterIsInstance<SpeechlessFilter>().firstOrNull()
+        val speechlessFilter = filters.firstInstanceOrNull<SpeechlessFilter>()
 
         // Advanced search
         val advancedSearchFilters = filters.filterIsInstance<AdvancedTextFilter>()

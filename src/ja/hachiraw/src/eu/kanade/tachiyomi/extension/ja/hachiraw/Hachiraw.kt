@@ -7,16 +7,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hachiraw : ParsedHttpSource() {
+class Hachiraw : HttpSource() {
 
     override val name = "Hachiraw"
 
@@ -31,9 +33,7 @@ class Hachiraw : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
-    }
+    private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(
         page,
@@ -41,11 +41,7 @@ class Hachiraw : ParsedHttpSource() {
         FilterList(SortFilter(2)),
     )
 
-    override fun popularMangaSelector() = searchMangaSelector()
-
-    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
         page,
@@ -53,11 +49,7 @@ class Hachiraw : ParsedHttpSource() {
         FilterList(SortFilter(0)),
     )
 
-    override fun latestUpdatesSelector() = searchMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun fetchSearchManga(
         page: Int,
@@ -78,8 +70,8 @@ class Hachiraw : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.ifEmpty { getFilterList() }
-        val sortFilter = filterList.filterIsInstance<SortFilter>().firstOrNull()
-        val genreFilter = filterList.filterIsInstance<GenreFilter>().firstOrNull()
+        val sortFilter = filterList.firstInstanceOrNull<SortFilter>()
+        val genreFilter = filterList.firstInstanceOrNull<GenreFilter>()
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("list-manga")
@@ -87,7 +79,6 @@ class Hachiraw : ParsedHttpSource() {
             if (query.isNotEmpty()) {
                 addQueryParameter("search", query)
             } else if (genreFilter != null && genreFilter.state != 0) {
-                // Searching by genre is under /manga-list
                 setPathSegment(0, "manga-list")
                 addPathSegment(genreFilter.items[genreFilter.state].id)
             }
@@ -104,21 +95,23 @@ class Hachiraw : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = "div.ng-scope > div.top-15"
-
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("a.ng-binding.SeriesName")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            title = it.text()
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.ng-scope > div.top-15").map { element ->
+            SManga.create().apply {
+                element.selectFirst("a.ng-binding.SeriesName")!!.let {
+                    setUrlWithoutDomain(it.attr("href"))
+                    title = it.text()
+                }
+                thumbnail_url = element.selectFirst("img.img-fluid")?.absUrl("src")
+            }
         }
-
-        thumbnail_url = element.selectFirst("img.img-fluid")?.absUrl("src")
+        val hasNextPage = document.selectFirst("ul.pagination li:contains(→)") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaNextPageSelector() = "ul.pagination li:contains(→)"
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val row = document.selectFirst("div.BoxBody > div.row")!!
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val row = response.asJsoup().selectFirst("div.BoxBody > div.row")!!
 
         title = row.selectFirst("h1")!!.text()
         author = row.selectFirst("li.list-group-item:contains(著者)")?.ownText()
@@ -147,28 +140,23 @@ class Hachiraw : ParsedHttpSource() {
         }.trim()
     }
 
-    override fun chapterListSelector() = "a.ChapterLink"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.selectFirst("span")!!.text()
-        date_upload = try {
-            val date = element.selectFirst("span.float-right")!!.text()
-            dateFormat.parse(date)!!.time
-        } catch (_: Exception) {
-            0L
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a.ChapterLink").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.selectFirst("span")!!.text()
+            date_upload = dateFormat.tryParse(
+                element.selectFirst("span.float-right")?.text(),
+            )
         }
     }
 
-    override fun pageListParse(document: Document) = document.select("#TopPage img").mapIndexed { i, it ->
-        Page(i, imageUrl = it.absUrl("src"))
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#TopPage img").mapIndexed { i, img ->
+        Page(i, imageUrl = img.absUrl("src"))
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
-        // TODO: Not Google translate this
-        // "Genre filter is ignored when searching by title"
         Filter.Header("タイトルで検索する場合、ジャンルフィルターは無視されます"),
         Filter.Separator(),
         SortFilter(),

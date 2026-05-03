@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
+
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
@@ -13,10 +14,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -81,7 +82,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     private var captchaUrl: String? = null
 
-    private var cachedGenres: List<FMReader.Genre> = emptyList()
+    private var cachedGenres: List<Genre> = emptyList()
 
     override fun getFilterList(): FilterList {
         val baseFilters = mutableListOf<Filter<*>>(
@@ -94,7 +95,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             SpecialTypeFilter(),
         )
         if (cachedGenres.isNotEmpty()) {
-            baseFilters += FMReader.GenreList(cachedGenres)
+            baseFilters += GenreList(cachedGenres)
         }
         return FilterList(baseFilters)
     }
@@ -123,7 +124,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .addQueryParameter("listType", "pagination")
 
         // PHP keeps the last `tur` in the query string; `tur` is shared with genre + special-type filters.
-        val genreFilter = filters.firstInstanceOrNull<FMReader.GenreList>()
+        val genreFilter = filters.firstInstanceOrNull<GenreList>()
         val includedGenres = genreFilter?.state?.filter { it.isIncluded() }.orEmpty()
         val specialTur = filters.firstInstanceOrNull<SpecialTypeFilter>()?.let { f ->
             arrayOf("", "2")[f.state].takeIf { it.isNotEmpty() }
@@ -182,37 +183,40 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null } ?: super.getMangaUrl(manga)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-            .replace(trailingYearInTitle, "")
-            .trim()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+                .replace(trailingYearInTitle, "")
+                .trim()
 
-        thumbnail_url = document.selectFirst("img[src*='image.mangatr.site'], img.poster-card__image")?.absUrl("src")
-            ?: document.selectFirst("img[title]")?.absUrl("src")
+            thumbnail_url = document.selectFirst("img[src*='image.mangatr.site'], img.poster-card__image")?.absUrl("src")
+                ?: document.selectFirst("img[title]")?.absUrl("src")
 
-        val descBlock = document.selectFirst("div.detail-copy")?.text()?.trim().orEmpty()
-        val altNames = document.selectFirst("div.detail-hero__sub")?.text()?.trim().orEmpty()
-        description = buildString {
-            if (descBlock.isNotEmpty()) append(descBlock)
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative Names: ")
-                append(altNames)
-            }
-        }.ifBlank { null }
+            val descBlock = document.selectFirst("div.detail-copy")?.text()?.trim().orEmpty()
+            val altNames = document.selectFirst("div.detail-hero__sub")?.text()?.trim().orEmpty()
+            description = buildString {
+                if (descBlock.isNotEmpty()) append(descBlock)
+                if (altNames.isNotEmpty()) {
+                    if (isNotEmpty()) append("\n\n")
+                    append("Alternative Names: ")
+                    append(altNames)
+                }
+            }.ifBlank { null }
 
-        author = document.detailMetaLinks("Yazar", "author")
-            .joinToString { it.text().trim() }
-            .takeUnless { it.isBlank() }
+            author = document.detailMetaLinks("Yazar", "author")
+                .joinToString { it.text().trim() }
+                .takeUnless { it.isBlank() }
 
-        artist = document.detailMetaLinks("Sanatçı", "artist")
-            .joinToString { it.text().trim() }
-            .takeUnless { it.isBlank() }
+            artist = document.detailMetaLinks("Sanatçı", "artist")
+                .joinToString { it.text().trim() }
+                .takeUnless { it.isBlank() }
 
-        genre = document.detailMetaLinks("Tür", "tur=").joinToString { it.text() }
+            genre = document.detailMetaLinks("Tür", "tur=").joinToString { it.text() }
 
-        val translateLabel = document.detailMetaLink("Çeviri", "ceviri").orEmpty()
-        status = parseTranslateStatusBadge(translateLabel)
+            val translateLabel = document.detailMetaLink("Çeviri", "ceviri").orEmpty()
+            status = parseTranslateStatusBadge(translateLabel)
+        }
     }
 
     private fun Document.detailMetaLinks(labelSubstring: String, hrefSubstring: String): List<Element> {
@@ -300,7 +304,8 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         if (document.selectFirst("canvas#sliderCanvas, div.box h2:contains(Güvenlik Doğrulaması)") != null) {
             captchaUrl = document.location()
             throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
@@ -318,7 +323,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
                 val orderAttr = page.attr("data-order")
 
                 val urls: List<String> = try {
-                    Json.Default.parseToJsonElement(partsJson).jsonArray.map { it.jsonPrimitive.content }
+                    partsJson.parseAs<JsonArray>().map { it.jsonPrimitive.content }
                 } catch (e: Exception) {
                     continue
                 }
@@ -327,7 +332,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
                 // chapter.js: part index -> vertical canvas order (matches site reader).
                 val mapping = decodePartOrderMapping(orderAttr)
-                if (mapping == null || mapping.isEmpty()) {
+                if (mapping.isNullOrEmpty()) {
                     pages.add(Page(pages.size, imageUrl = urls.first()))
                     continue
                 }
@@ -386,8 +391,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             val raw = Base64.decode(encoded, Base64.DEFAULT)
             val decoded = raw.map { (it.toInt() and 0xFF) xor 0x5A }
             val jsonStr = String(decoded.map { it.toByte() }.toByteArray(), StandardCharsets.UTF_8)
-            val element = Json.Default.parseToJsonElement(jsonStr)
-            when (element) {
+            when (val element = jsonStr.parseAs<JsonElement>()) {
                 is JsonArray -> {
                     element.mapIndexedNotNull { idx, el ->
                         val pos = el.jsonPrimitive.content.toIntOrNull() ?: return@mapIndexedNotNull null
@@ -413,7 +417,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         if (cachedGenres.isNotEmpty()) return
         val parsed = document.select("select[name=tur] option[value]").mapNotNull { opt ->
             val value = opt.attr("value").ifBlank { return@mapNotNull null }
-            FMReader.Genre(opt.text().trim(), value)
+            Genre(opt.text().trim(), value)
         }
         if (parsed.isNotEmpty()) {
             cachedGenres = parsed

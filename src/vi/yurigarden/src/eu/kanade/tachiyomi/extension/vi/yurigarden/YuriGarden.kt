@@ -1,9 +1,10 @@
 package eu.kanade.tachiyomi.extension.vi.yurigarden
 
+import android.app.Application
+import android.webkit.WebSettings
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,8 +20,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.util.concurrent.TimeUnit
 
 class YuriGarden :
@@ -41,9 +43,19 @@ class YuriGarden :
 
     private val preferences by getPreferencesLazy()
 
+    // Use the WebView's native UA on every OkHttp request so that the cf_clearance
+    // cookie issued during the WebView Cloudflare solve stays valid (Cloudflare binds
+    // the cookie to the exact User-Agent that solved the challenge).
+    private val webViewUserAgent: String? by lazy {
+        runCatching { WebSettings.getDefaultUserAgent(Injekt.get<Application>()) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+    }
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
+        .apply { webViewUserAgent?.let { set("User-Agent", it) } }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageDescrambler())
@@ -242,24 +254,35 @@ class YuriGarden :
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/pages/${chapterId(chapter)}", apiHeaders())
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .doOnNext { response ->
-            if (response.code == 403) {
-                val body = runCatching { response.peekBody(1024 * 1024).string() }.getOrDefault("")
-                val hasTurnstile = isTurnstileChallenge(response, body)
-                response.close()
-                if (hasTurnstile || hasTurnstileChallenge(chapter)) {
-                    throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
-                }
-                throw Exception("HTTP error 403")
-            }
-            if (!response.isSuccessful) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable
+        .fromCallable { executePageListRequest(chapter, allowRetry = true) }
         .map(::pageListParse)
+
+    private fun executePageListRequest(chapter: SChapter, allowRetry: Boolean): Response {
+        val request = pageListRequest(chapter)
+        val response = client.newCall(request).execute()
+        if (response.isSuccessful) return response
+
+        if (response.code == 403) {
+            response.close()
+
+            if (allowRetry) {
+                // Load the reader page so Turnstile gets a real browser session, but
+                // wait specifically for the API host's cf_clearance -- the reader page's
+                // JS triggers the API subrequest where the actual challenge for our
+                // OkHttp call lives.
+                CloudflareResolver.resolve(
+                    loadUrl = getChapterUrl(chapter),
+                    cookieUrl = request.url.toString(),
+                )
+                return executePageListRequest(chapter, allowRetry = false)
+            }
+            throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
+        }
+
+        response.close()
+        throw Exception("HTTP error ${response.code}")
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = decryptIfNeeded(response)
@@ -300,51 +323,6 @@ class YuriGarden :
             body.parseAs<ChapterDetail>()
         }
     }
-
-    private fun hasTurnstileChallenge(chapter: SChapter): Boolean {
-        val urls = listOfNotNull(resolveReaderUrl(chapter), getChapterUrl(chapter)).distinct()
-
-        return urls.any { url ->
-            runCatching {
-                client.newCall(GET(url, headers)).execute().use { response ->
-                    val body = runCatching { response.body.string() }.getOrDefault("")
-                    isTurnstileChallenge(response, body)
-                }
-            }.getOrDefault(false)
-        }
-    }
-
-    private fun isTurnstileChallenge(response: Response, body: String): Boolean = response.header("cf-mitigated")?.equals("challenge", ignoreCase = true) == true ||
-        hasTurnstileElement(body) ||
-        body.contains("/cdn-cgi/challenge-platform", ignoreCase = true) ||
-        body.contains("Just a moment", ignoreCase = true)
-
-    private fun hasTurnstileElement(html: String): Boolean {
-        if (html.isBlank()) return false
-
-        val document = Jsoup.parse(html)
-        return document.selectFirst(
-            "div.cf-turnstile, " +
-                "input[name=cf-turnstile-response], " +
-                "iframe[src*=challenges.cloudflare.com], " +
-                "form#challenge-form, " +
-                "#cf-challenge-running, " +
-                "#challenge-stage",
-        ) != null ||
-            html.contains("cf-turnstile", ignoreCase = true) ||
-            html.contains("challenges.cloudflare.com/turnstile", ignoreCase = true)
-    }
-
-    private fun resolveReaderUrl(chapter: SChapter): String? = runCatching {
-        val chapterId = chapterId(chapter)
-        client.newCall(GET("$apiUrl/chapters/$chapterId", apiHeaders())).execute().use { response ->
-            if (!response.isSuccessful) return@use null
-
-            val body = response.body.string()
-            val comicId = COMIC_ID_REGEX.find(body)?.groupValues?.getOrNull(1) ?: return@use null
-            "$baseUrl/comic/$comicId/$chapterId"
-        }
-    }.getOrNull()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -394,7 +372,6 @@ class YuriGarden :
         private const val LIMIT = 15
         private const val AES_PASSWORD = "FYgicJ8oFdIYfgLv"
         private const val CLOUDFLARE_VERIFY_MESSAGE = "Mở webview để xác minh cloudflare cho chương này"
-        private val COMIC_ID_REGEX = """"comic"\s*:\s*\{\s*"id"\s*:\s*(\d+)""".toRegex()
         private const val PREF_SHOW_R18 = "pref_show_r18"
         private const val PREF_SHOW_R18_DEFAULT = false
     }
