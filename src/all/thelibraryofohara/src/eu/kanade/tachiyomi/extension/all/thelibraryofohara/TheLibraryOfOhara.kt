@@ -7,8 +7,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -18,7 +19,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TheLibraryOfOhara(override val lang: String, private val siteLang: String) : ParsedHttpSource() {
+class TheLibraryOfOhara(override val lang: String, private val siteLang: String) : HttpSource() {
 
     override val name = "The Library of Ohara"
 
@@ -28,12 +29,13 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     override val client: OkHttpClient = network.cloudflareClient
 
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
+
     // Popular
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    // only show entries which contain pictures only.
-    override fun popularMangaSelector() = when (lang) {
+    private fun popularMangaSelector() = when (lang) {
         "en" ->
             "#categories-7 ul li.cat-item-589813936," + // Chapter Secrets
                 "#categories-7 ul li.cat-item-607613583, " + // Chapter Secrets Specials
@@ -61,22 +63,22 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
         else -> "#categories-7 ul li.cat-item-693784776, #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.title = element.select("a").text()
-        manga.setUrlWithoutDomain(element.select("a").attr("href"))
-        return manga
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { element ->
+            SManga.create().apply {
+                title = element.select("a").text()
+                setUrlWithoutDomain(element.select("a").attr("abs:href"))
+            }
+        }
+        return MangasPage(mangas, false)
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
+    // Latest - not supported
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String? = null
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
@@ -90,21 +92,19 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     private fun searchMangaParse(response: Response, query: String): MangasPage = MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.title = document.select("h1.page-title").text().replace("Category: ", "")
-        manga.thumbnail_url = chooseChapterThumbnail(document, manga.title)
-        manga.description = ""
-        manga.status = SManga.ONGOING
-        return manga
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val title = document.select("h1.page-title").text().replace("Category: ", "")
+        return SManga.create().apply {
+            this.title = title
+            thumbnail_url = chooseChapterThumbnail(document, title)
+            description = ""
+            status = SManga.ONGOING
+        }
     }
 
     // Use one of the chapter thumbnails as manga thumbnail
@@ -117,14 +117,14 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
         if (mangaTitle.contains("Reverie")) {
             imgElement = document.select("article").firstOrNull { element ->
                 val chapterTitle = element.select("h2.entry-title a").text()
-                (chapterTitle.contains(siteLang) || (lang == "en" && !chapterTitle.contains(Regex("""(French|Arabic|Italian|Indonesia|Spanish)"""))))
+                chapterTitle.contains(siteLang) || (lang == "en" && !chapterTitle.contains(reverieLangRegex))
             }
         }
         // Chapter Secrets (multilingual)
         if (mangaTitle.contains("Chapter Secrets") && lang != "en") {
             imgElement = document.select("article").firstOrNull {
                 val chapterTitle = it.select("h2.entry-title a").text()
-                ((lang == "id" && chapterTitle.contains("Indonesia")) || (lang == "es" && !chapterTitle.contains("Indonesia")))
+                (lang == "id" && chapterTitle.contains("Indonesia")) || (lang == "es" && !chapterTitle.contains("Indonesia"))
             }
         }
 
@@ -135,23 +135,6 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     // Chapters
 
-    override fun chapterListSelector() = "article"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-
-        chapter.setUrlWithoutDomain(element.select("a.entry-thumbnail").attr("href"))
-        chapter.name = element.select("h2.entry-title a").text()
-        chapter.date_upload = parseChapterDate(element.select("span.posted-on time").attr("datetime"))
-
-        return chapter
-    }
-
-    private fun parseChapterDate(date: String): Long {
-        val parsedDate = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.getDefault()).parse(date.replace("+00:00", "+0000"))
-        return parsedDate?.time ?: 0L
-    }
-
     private fun chapterNextPageSelector() = "div.nav-previous a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -159,50 +142,50 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
         var document = response.asJsoup()
 
         while (true) {
-            val pageChapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
+            val pageChapters = document.select("article").map { element ->
+                SChapter.create().apply {
+                    setUrlWithoutDomain(element.select("a.entry-thumbnail").attr("abs:href"))
+                    name = element.select("h2.entry-title a").text()
+                    date_upload = dateFormat.tryParse(
+                        element.select("span.posted-on time").attr("datetime").replace("+00:00", "+0000"),
+                    )
+                }
+            }
             if (pageChapters.isEmpty()) {
                 break
             }
 
             allChapters += pageChapters
 
-            val hasNextPage = document.select(chapterNextPageSelector()).isNotEmpty()
-            if (!hasNextPage) {
+            val nextLink = document.select(chapterNextPageSelector())
+            if (nextLink.isEmpty()) {
                 break
             }
 
-            val nextUrl = document.select(chapterNextPageSelector()).attr("href")
+            val nextUrl = nextLink.attr("abs:href")
             document = client.newCall(GET(nextUrl, headers)).execute().asJsoup()
         }
 
         if (allChapters.isNotEmpty() && allChapters[0].name.contains("Reverie")) {
             return when (lang) {
-                "fr" -> allChapters.filter { it.name.contains("French") }.toMutableList()
-
-                "ar" -> allChapters.filter { it.name.contains("Arabic") }.toMutableList()
-
-                "it" -> allChapters.filter { it.name.contains("Italian") }.toMutableList()
-
-                "id" -> allChapters.filter { it.name.contains("Indonesia") }.toMutableList()
-
-                "es" -> allChapters.filter { it.name.contains("Spanish") }.toMutableList()
-
+                "fr" -> allChapters.filter { it.name.contains("French") }
+                "ar" -> allChapters.filter { it.name.contains("Arabic") }
+                "it" -> allChapters.filter { it.name.contains("Italian") }
+                "id" -> allChapters.filter { it.name.contains("Indonesia") }
+                "es" -> allChapters.filter { it.name.contains("Spanish") }
                 else -> allChapters.filter {
-                    // english
                     !it.name.contains("French") &&
                         !it.name.contains("Arabic") &&
                         !it.name.contains("Italian") &&
                         !it.name.contains("Indonesia") &&
                         !it.name.contains("Spanish")
-                }.toMutableList()
+                }
             }
         }
 
         // Remove Indonesian posts if lang is spanish
-        // Indonesian and Spanish posts are mixed in the same category "multilingual" on the website
-        // BTW, the same problem doesn't apply if lang is Indonesian because Indonesian has its own category
         if (lang == "es") {
-            return allChapters.filter { !it.name.contains("Indonesia") }.toMutableList()
+            return allChapters.filter { !it.name.contains("Indonesia") }
         }
 
         return allChapters
@@ -210,15 +193,16 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-
-        document.select("div.entry-content").select("a img, img.size-full").forEachIndexed { i, img ->
-            pages.add(Page(i, "", img.attr("data-orig-file")))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div.entry-content").select("a img, img.size-full").mapIndexed { i, img ->
+            Page(i, imageUrl = img.attr("data-orig-file"))
         }
-
-        return pages
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        private val reverieLangRegex = Regex("""(French|Arabic|Italian|Indonesia|Spanish)""")
+    }
 }

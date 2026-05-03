@@ -32,7 +32,7 @@ class EmperorScan :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override val mangaDetailsSelectorDescription = "div.summary__content p:not(p:has(a))"
+    override val mangaDetailsSelectorDescription = "div.summary_content div.post-content_item:has(h5:contains(Sinopsis)) div"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addRandomUAPreference()

@@ -2,20 +2,21 @@ package eu.kanade.tachiyomi.extension.zh.hanime1
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class Hanime1 : ParsedHttpSource() {
+class Hanime1 : HttpSource() {
     override val baseUrl: String
-        get() = "https://hanime1.me"
+        get() = "https://hanimeone.me"
     override val lang: String
         get() = "zh"
     override val name: String
@@ -32,7 +33,7 @@ class Hanime1 : ParsedHttpSource() {
             document.select("h3:containsOwn(相關集數列表) ~ div.comic-rows-videos-div")
                 .map { element ->
                     SChapter.create().apply {
-                        val comicUrl = element.select("a").attr("href")
+                        val comicUrl = element.select("a").attr("abs:href")
                         setUrlWithoutDomain("$comicUrl/1")
                         val title = element.select("div.comic-rows-videos-title").text()
                         if (requestUrl == comicUrl) {
@@ -53,21 +54,20 @@ class Hanime1 : ParsedHttpSource() {
         return chapterList
     }
 
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element) = comicDivToManga(element)
-
-    override fun latestUpdatesNextPageSelector() = "ul.pagination a[rel=next]"
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("h3:containsOwn(最新上傳) ~ div.comic-rows-videos-div")
+            .map { comicDivToManga(it) }
+        val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun latestUpdatesRequest(page: Int) = GET("$comicHomepage?page=$page")
 
-    override fun latestUpdatesSelector() = "h3:containsOwn(最新上傳) ~ div.comic-rows-videos-div"
-
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val brief = document.select("h3.title.comics-metadata-top-row").first()?.parent()
         return SManga.create().apply {
             brief?.select(".title.comics-metadata-top-row")?.first()?.text()?.let { title = it }
@@ -80,7 +80,8 @@ class Hanime1 : ParsedHttpSource() {
 
     private fun selectInfo(key: String, brief: Element?): String? = brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val currentImage = document.select("img#current-page-image")
         val dataExtension = currentImage.attr("data-extension")
         val dataPrefix = currentImage.attr("data-prefix")
@@ -90,33 +91,36 @@ class Hanime1 : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaFromElement(element: Element) = comicDivToManga(element)
-
-    override fun popularMangaNextPageSelector() = null
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("h3:containsOwn(發燒漫畫) ~ div.comic-rows-videos-div")
+            .map { comicDivToManga(it) }
+        return MangasPage(mangas, false)
+    }
 
     override fun popularMangaRequest(page: Int) = GET(comicHomepage)
 
-    override fun popularMangaSelector() = "h3:containsOwn(發燒漫畫) ~ div.comic-rows-videos-div"
-
-    override fun searchMangaFromElement(element: Element) = comicDivToManga(element)
-
-    override fun searchMangaNextPageSelector() = "ul.pagination a[rel=next]"
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div#comics-search-tag-top-row + div div.comic-rows-videos-div")
+            .map { comicDivToManga(it) }
+        val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val searchUrl = comicHomepage.toHttpUrl().newBuilder()
             .addPathSegment("search")
             .addQueryParameter("query", query)
             .addQueryParameter("page", "$page")
-        filters.filterIsInstance<SortFilter>().firstOrNull()?.selected?.let {
+        filters.firstInstanceOrNull<SortFilter>()?.selected?.let {
             searchUrl.addQueryParameter("sort", it)
         }
         return GET(searchUrl.build())
     }
 
-    override fun searchMangaSelector() = "div#comics-search-tag-top-row + div div.comic-rows-videos-div"
-
     private fun comicDivToManga(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
+        setUrlWithoutDomain(element.select("a").attr("abs:href"))
         title = element.select("div.comic-rows-videos-title").text()
         thumbnail_url = element.select("img").attr("data-srcset").extraSrc()
     }

@@ -6,31 +6,18 @@ import android.graphics.Color
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.parser.Parser
-import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 
 // This file is modified from DMZJ extension
 
-val json: Json by injectLazy()
-
-@Serializable
-class ChapterCommentDto(
-    val PostContent: String,
-    val Poster: String,
-) {
-    override fun toString() = "$Poster: $PostContent"
-}
-
 fun parseChapterComments(response: Response): List<String> {
-    val result: List<ChapterCommentDto> = json.decodeFromString(response.body.string())
+    val result: List<Dto> = response.parseAs()
     if (result.isEmpty()) return listOf("没有吐槽")
     return result.map {
         Parser.unescapeEntities(it.toString(), false)
@@ -85,6 +72,7 @@ object CommentsInterceptor : Interceptor {
 
         val output = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 0, output)
+        bitmap.recycle()
         val body = output.toByteArray().toResponseBody("image/png".toMediaType())
         return response.newBuilder().body(body).build()
     }

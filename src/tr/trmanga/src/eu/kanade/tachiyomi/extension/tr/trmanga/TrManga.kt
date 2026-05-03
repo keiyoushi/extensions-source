@@ -1,22 +1,26 @@
+@file:Suppress("SpellCheckingInspection")
+
 package eu.kanade.tachiyomi.extension.tr.trmanga
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TrManga : ParsedHttpSource() {
+class TrManga : HttpSource() {
 
     override val name = "TrManga"
 
@@ -30,31 +34,37 @@ class TrManga : ParsedHttpSource() {
 
     // popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/webtoon-listesi?sort=views&short_type=DESC&page=$page", headers)
-    override fun popularMangaSelector() = "div.row>div.col-xl-4"
-    override fun popularMangaNextPageSelector() = "a.page-link:contains(Sonraki)"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    private fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[class]")!!.absUrl("href"))
         title = element.selectFirst("a[class]")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
     }
 
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.row>div.col-xl-4").map { popularMangaFromElement(it) }
+        val hasNextPage = document.selectFirst("a.page-link:contains(Sonraki)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
+
     // latest
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/son-eklenenler?page=$page", headers)
-    override fun latestUpdatesSelector() = "main#bslistMain>div>div"
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
+    private fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst("span.title")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    // search
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("main#bslistMain>div>div").map { latestUpdatesFromElement(it) }
+        val hasNextPage = document.selectFirst("a.page-link:contains(Sonraki)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
+    // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
@@ -74,6 +84,8 @@ class TrManga : ParsedHttpSource() {
         return GET(url, headers)
     }
 
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
     // filters
     override fun getFilterList() = FilterList(
         SortFilter(),
@@ -83,7 +95,8 @@ class TrManga : ParsedHttpSource() {
     )
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val authorArtistLabel = "Yazar & Çizer İsim(ler) : "
         val statusLabel = "Durum :"
         return SManga.create().apply {
@@ -106,18 +119,19 @@ class TrManga : ParsedHttpSource() {
     }
 
     // chapter list
-    override fun chapterListSelector() = "tbody>tr"
+    private val chapterNumberRegex = Regex("""\d+(\.\d+)?""")
 
-    private val chapterNumberRegex = """\d+(\.\d+)?"""
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+    private fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.selectFirst("a")!!.let {
             setUrlWithoutDomain(it.absUrl("href"))
             name = it.text()
             date_upload = parseChapterDate(element.selectFirst("td:last-child span:first-child")?.text())
-            chapter_number = Regex(chapterNumberRegex).find(it.text())!!.value.toFloat()
+            chapter_number = chapterNumberRegex.find(it.text())!!.value.toFloat()
             scanlator = element.selectFirst("td:nth-child(2) a:first-child")?.text()
         }
     }
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("tbody>tr").map { chapterFromElement(it) }
 
     // Date logic lifted from Madara
     private fun parseChapterDate(date: String?): Long {
@@ -149,10 +163,11 @@ class TrManga : ParsedHttpSource() {
     }
 
     // page list
-    override fun pageListParse(document: Document): List<Page> = document.select("img[data-src]").mapIndexed { i, img ->
-        Page(i, document.location(), img.absUrl("data-src"))
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("img[data-src]").mapIndexed { i, img ->
+        Page(i, imageUrl = img.absUrl("data-src"))
     }
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private val NUMBER_REGEX = """\d+""".toRegex()

@@ -3,7 +3,7 @@ ext {
     extClass = '.BarManga'
     themePkg = 'madara'
     baseUrl = 'https://archiviumbar.com'
-    overrideVersionCode = 9
+    overrideVersionCode = 10
     isNsfw = true
 }
 

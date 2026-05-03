@@ -103,10 +103,10 @@ class MangaMoins : HttpSource() {
         val result = response.parseAs<MangaDetailsResponse>()
         val info = result.info
         return SManga.create().apply {
-            title = info.title
-            author = info.author
-            artist = info.author
-            description = info.description.ifBlank { null }
+            title = info.title.unescapeHtml()
+            author = info.author.unescapeHtml()
+            artist = info.author.unescapeHtml()
+            description = info.description.unescapeHtml().ifBlank { null }
             status = when {
                 info.status.lowercase(Locale.FRENCH).contains("en cours") -> SManga.ONGOING
                 info.status.lowercase(Locale.FRENCH).contains("termin") -> SManga.COMPLETED
@@ -127,11 +127,12 @@ class MangaMoins : HttpSource() {
         return result.chapters.map { ch ->
             SChapter.create().apply {
                 name = buildString {
-                    append("Chapitre ")
-                    append(ch.num.toString().removeSuffix(".0"))
-                    if (ch.title.isNotBlank()) {
+                    val chapterName = "Chapitre ${ch.num.toString().removeSuffix(".0")}"
+                    append(chapterName)
+                    val title = ch.title.unescapeHtml()
+                    if (title.isNotBlank() && !title.equals(chapterName, ignoreCase = true)) {
                         append(" - ")
-                        append(ch.title)
+                        append(title)
                     }
                 }
                 url = ch.slug

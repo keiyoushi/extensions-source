@@ -1,7 +1,7 @@
 ext {
-    extName = 'MangaMob'
-    extClass = '.Mangamob'
-    extVersionCode = 1
+    extName = 'Comivex'
+    extClass = '.Comivex'
+    extVersionCode = 2
     isNsfw = false
 }
 

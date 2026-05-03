@@ -1,0 +1,10 @@
+ext {
+    extName = 'El Scan Semanal'
+    extClass = '.ElScanSemanal'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/elscansemanal'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

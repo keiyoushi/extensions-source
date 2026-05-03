@@ -3,23 +3,22 @@ package eu.kanade.tachiyomi.extension.en.nineanime
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Headers
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.text.ParseException
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class NineAnime : ParsedHttpSource() {
+class NineAnime : HttpSource() {
 
     override val name = "NineAnime"
 
@@ -33,75 +32,66 @@ class NineAnime : ParsedHttpSource() {
         .followRedirects(true)
         .build()
 
-    companion object {
-        private const val PAGES_URL = "https://www.gardenhomefuture.com"
-    }
-
-    // not necessary for normal usage but added in an attempt to fix usage with VPN (see #3476)
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) Gecko/20100101 Firefox/77")
-        .add("Accept-Language", "en-US,en;q=0.5")
+    private val imageUrlRegex = Regex("""["'](http[^"']+)["']""")
 
     // Popular
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/index_$page.html?sort=views", headers)
 
-    override fun popularMangaSelector() = "div.post"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("p.title a").let {
-            title = it.text()
-            setUrlWithoutDomain(it.attr("href"))
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.post").map { element ->
+            SManga.create().apply {
+                element.select("p.title a").let {
+                    title = it.text()
+                    setUrlWithoutDomain(it.attr("href"))
+                }
+                thumbnail_url = element.select("img").attr("abs:src")
+            }
         }
-        thumbnail_url = element.select("img").attr("abs:src")
+        val hasNextPage = document.select("a.next").isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
     }
-
-    override fun popularMangaNextPageSelector() = "a.next"
 
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/index_$page.html?sort=updated", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
-        val url = "$baseUrl/search/".toHttpUrl().newBuilder()
-            .addQueryParameter("name", query)
-            .addQueryParameter("page", "$page.html")
-            .build()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotBlank()) {
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+                .addQueryParameter("name", query)
+                .addQueryParameter("page", "$page.html")
+                .build()
 
-        GET(url, headers)
-    } else {
+            return GET(url, headers)
+        }
+
         var url = "$baseUrl/category/"
-        for (filter in if (filters.isEmpty()) getFilterList() else filters) {
-            when (filter) {
-                is GenreFilter -> url += filter.toUriPart() + "_$page.html"
-                else -> {}
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        for (filter in filterList) {
+            if (filter is GenreFilter) {
+                url += filter.toUriPart() + "_$page.html"
             }
         }
-        GET(url, headers)
+        return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         with(document.select("div.manga-detailtop")) {
             thumbnail_url = select("img.detail-cover").attr("abs:src")
             author = select("span:contains(Author) + a").joinToString { it.text() }
             artist = select("span:contains(Artist) + a").joinToString { it.text() }
-            status = when (select("p:has(span:contains(Status))").firstOrNull()?.ownText()) {
+            status = when (select("p:has(span:contains(Status))").firstOrNull()?.ownText()?.trim()) {
                 "Ongoing" -> SManga.ONGOING
                 "Completed" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
@@ -119,60 +109,120 @@ class NineAnime : ParsedHttpSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun chapterListSelector() = "ul.detail-chlist li"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.select("a").let {
-            name = it.select("span").firstOrNull()?.text() ?: it.text()
-            setUrlWithoutDomain(it.attr("href"))
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("ul.detail-chlist li").map { element ->
+            SChapter.create().apply {
+                element.select("a").let {
+                    name = it.select("span").firstOrNull()?.text() ?: it.text()
+                    setUrlWithoutDomain(it.attr("href"))
+                }
+                date_upload = element.select("span.time").text().toDate()
+            }
         }
-        date_upload = element.select("span.time").text().toDate()
     }
 
-    private fun String.toDate(): Long = try {
-        if (this.contains("ago")) {
-            val split = this.split(" ")
+    private val dateFormat by lazy {
+        SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
+    }
+
+    private fun String.toDate(): Long {
+        if (contains("ago")) {
+            val split = split(" ")
+            if (split.size < 2) return 0L
+            val amount = split[0].toIntOrNull() ?: return 0L
             val cal = Calendar.getInstance()
-            when {
-                split[1].contains("minute") -> cal.apply { add(Calendar.MINUTE, split[0].toInt()) }.timeInMillis
-                split[1].contains("hour") -> cal.apply { add(Calendar.HOUR, split[0].toInt()) }.timeInMillis
-                else -> 0
+            return when {
+                split[1].contains("minute") -> cal.apply { add(Calendar.MINUTE, -amount) }.timeInMillis
+                split[1].contains("hour") -> cal.apply { add(Calendar.HOUR, -amount) }.timeInMillis
+                split[1].contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -amount) }.timeInMillis
+                else -> 0L
             }
-        } else {
-            SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH).parse(this)?.time ?: 0L
         }
-    } catch (_: ParseException) {
-        0
+        return dateFormat.tryParse(this)
     }
 
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id: String = chapter.url
-            .substring(chapter.url.lastIndexOf("/", chapter.url.length - 2))
-            .trim('/')
-
-        val pageListHeaders = headersBuilder().add("Referer", "https://www.technologpython.com/")
-
-        return GET("$PAGES_URL/go/jump/?type=nineanime&cid=$id", pageListHeaders.build())
+        val url = baseUrl + chapter.url.trimEnd('/') + "-10-1.html"
+        return GET(url, headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pageListHeaders = headersBuilder().add("Referer", "$baseUrl/manga/").build()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
 
-        val scripturl = document.select("script").firstOrNull()?.data()
+        // Find cid by cleanly parsing it from our appended pageListRequest layout
+        val cid = document.location().substringBefore("-10-1").substringBefore("?").trimEnd('/').substringAfterLast('/')
+        val iframeUrl = "$baseUrl/chapter/iframe_views/$cid"
 
-        val link = scripturl?.split("\"")?.get(1)
-        val pages = client.newCall(GET(PAGES_URL + link, pageListHeaders)).execute().asJsoup()
+        try {
+            val iframeHeaders = headersBuilder().add("Referer", document.location()).build()
+            client.newCall(GET(iframeUrl, iframeHeaders)).execute().use { iframeResponse ->
+                val domain1Doc = iframeResponse.asJsoup()
 
-        val script = pages.select("script:containsData(all_imgs_url)").firstOrNull()?.data()
-            ?: throw Exception("all_imgsurl not found")
-        return Regex(""""(http.*)",""").findAll(script).mapIndexed { i, mr ->
-            Page(i, "", mr.groupValues[1])
-        }.toList()
+                // External routing triggers (redirecting domain chain to dynamic blogs)
+                val jumpUrl = domain1Doc.selectFirst("a.vision-button")?.attr("abs:href")
+
+                if (jumpUrl != null) {
+                    client.newCall(GET(jumpUrl, iframeHeaders)).execute().use { jumpResponse ->
+                        val scriptData = jumpResponse.asJsoup()
+                            .select("script:containsData(all_imgs_url)").firstOrNull()?.data()
+
+                        if (scriptData != null) {
+                            val arrayString = scriptData.substringAfter("all_imgs_url: [").substringBefore("]")
+                            val imageUrls = imageUrlRegex.findAll(arrayString).map {
+                                it.groupValues[1].replace("\\/", "/")
+                            }.toList()
+
+                            if (imageUrls.isNotEmpty()) {
+                                return imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore exception and fall through to native
+        }
+
+        // Native parsing fallback.
+        val pages = mutableListOf<Page>()
+
+        // Scrape images from current page natively
+        document.select("img.manga_pic").forEach { img ->
+            val url = img.attr("abs:src")
+            if (url.isNotEmpty()) {
+                pages.add(Page(pages.size, imageUrl = url))
+            }
+        }
+
+        // Iterate over select options if chapter has more than 10 images natively
+        val options = document.select("select.sl-page option")
+        for (i in 1 until options.size) {
+            val pageUrl = options[i].attr("abs:value")
+            if (pageUrl.isEmpty()) continue
+
+            client.newCall(GET(pageUrl, headers)).execute().use { pageResponse ->
+                val pageDoc = pageResponse.asJsoup()
+
+                pageDoc.select("img.manga_pic").forEach { img ->
+                    val url = img.attr("abs:src")
+                    if (url.isNotEmpty()) {
+                        pages.add(Page(pages.size, imageUrl = url))
+                    }
+                }
+            }
+        }
+
+        if (pages.isEmpty()) {
+            throw Exception("No images found (Natively or Externally Routed)")
+        }
+
+        return pages
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
 
@@ -181,120 +231,4 @@ class NineAnime : ParsedHttpSource() {
         Filter.Separator("-----------------"),
         GenreFilter(),
     )
-
-    private class GenreFilter :
-        UriPartFilter(
-            "Genres",
-            arrayOf(
-                Pair("All", "All"),
-                Pair("4-Koma", "4-Koma"),
-                Pair("Action", "Action"),
-                Pair("Adaptation", "Adaptation"),
-                Pair("Adult", "Adult"),
-                Pair("Adventure", "Adventure"),
-                Pair("Aliens", "Aliens"),
-                Pair("All", "category"),
-                Pair("Animals", "Animals"),
-                Pair("Anthology", "Anthology"),
-                Pair("Award Winning", "Award+Winning"),
-                Pair("Comedy", "Comedy"),
-                Pair("Cooking", "Cooking"),
-                Pair("Crime", "Crime"),
-                Pair("Crossdressing", "Crossdressing"),
-                Pair("Delinquents", "Delinquents"),
-                Pair("Demons", "Demons"),
-                Pair("Doujinshi", "Doujinshi"),
-                Pair("Drama", "Drama"),
-                Pair("Ecchi", "Ecchi"),
-                Pair("Fantasy", "Fantasy"),
-                Pair("Food", "Food"),
-                Pair("Full Color", "Full+color"),
-                Pair("Game", "Game"),
-                Pair("Gender Bender", "Gender+Bender"),
-                Pair("Genderswap", "Genderswap"),
-                Pair("Ghosts", "Ghosts"),
-                Pair("Gossip", "Gossip"),
-                Pair("Gyaru", "Gyaru"),
-                Pair("Harem", "Harem"),
-                Pair("Hentai", "Hentai"),
-                Pair("Historical", "Historical"),
-                Pair("Horror", "Horror"),
-                Pair("Incest", "Incest"),
-                Pair("Isekai", "Isekai"),
-                Pair("Josei", "Josei"),
-                Pair("Kids", "Kids"),
-                Pair("Loli", "Loli"),
-                Pair("Long Strip", "Long+strip"),
-                Pair("Mafia", "Mafia"),
-                Pair("Magic", "Magic"),
-                Pair("Magical Girls", "Magical+Girls"),
-                Pair("Manga", "Manga"),
-                Pair("Manhua", "Manhua"),
-                Pair("Manhwa", "Manhwa"),
-                Pair("Martial Arts", "Martial+Arts"),
-                Pair("Mature", "Mature"),
-                Pair("Mecha", "Mecha"),
-                Pair("Medical", "Medical"),
-                Pair("Military", "Military"),
-                Pair("Monster Girls", "Monster+girls"),
-                Pair("Monsters", "Monsters"),
-                Pair("Music", "Music"),
-                Pair("Mystery", "Mystery"),
-                Pair("N/A", "N%2Fa"),
-                Pair("Ninja", "Ninja"),
-                Pair("None", "None"),
-                Pair("Office Workers", "Office+workers"),
-                Pair("Official Colored", "Official+colored"),
-                Pair("One Shot", "One+Shot"),
-                Pair("Oneshot", "Oneshot"),
-                Pair("Parody", "Parody"),
-                Pair("Philosophical", "Philosophical"),
-                Pair("Police", "Police"),
-                Pair("Post Apocalyptic", "Post+apocalyptic"),
-                Pair("Psychological", "Psychological"),
-                Pair("Reincarnation", "Reincarnation"),
-                Pair("Reverse Harem", "Reverse+harem"),
-                Pair("Romance", "Romance"),
-                Pair("Samurai", "Samurai"),
-                Pair("School Life", "School+Life"),
-                Pair("Sci Fi", "sci+fi"),
-                Pair("Sci-Fi", "Sci-fi"),
-                Pair("Seinen", "Seinen"),
-                Pair("Shota", "Shota"),
-                Pair("Shotacon", "Shotacon"),
-                Pair("Shoujo", "Shoujo"),
-                Pair("Shoujo Ai", "Shoujo+Ai"),
-                Pair("Shounen", "Shounen"),
-                Pair("Shounen Ai", "Shounen+Ai"),
-                Pair("Slice Of Life", "Slice+Of+Life"),
-                Pair("Smut", "Smut"),
-                Pair("Sports", "Sports"),
-                Pair("Super Power", "Super+power"),
-                Pair("Superhero", "Superhero"),
-                Pair("Supernatural", "Supernatural"),
-                Pair("Survival", "Survival"),
-                Pair("Thriller", "Thriller"),
-                Pair("Time Travel", "Time+travel"),
-                Pair("Toomics", "Toomics"),
-                Pair("Tragedy", "Tragedy"),
-                Pair("Uncategorized", "Uncategorized"),
-                Pair("User Created", "User+created"),
-                Pair("Vampire", "Vampire"),
-                Pair("Vampires", "Vampires"),
-                Pair("Video Games", "Video+games"),
-                Pair("Virtual Reality", "Virtual+reality"),
-                Pair("Web Comic", "Web+comic"),
-                Pair("Webtoon", "Webtoon"),
-                Pair("Webtoons", "Webtoons"),
-                Pair("Wuxia", "Wuxia"),
-                Pair("Yaoi", "Yaoi"),
-                Pair("Yuri", "Yuri"),
-                Pair("Zombies", "Zombies"),
-                Pair("[No Chapters]", "%5Bno+chapters%5D"),
-            ),
-        )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
 }

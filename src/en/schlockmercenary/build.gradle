@@ -1,7 +1,8 @@
 ext {
     extName = 'Schlock Mercenary'
     extClass = '.Schlockmercenary'
-    extVersionCode = 1
+    extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

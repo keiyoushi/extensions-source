@@ -4,8 +4,6 @@ import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.Serializable
-import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
 
@@ -35,12 +33,7 @@ class ImageSource(
         }
         val request = GET(
             url = baseUrl,
-            headers = Headers.headersOf(
-                "Accept-Encoding",
-                "gzip",
-                "User-Agent",
-                "okhttp/3.8.1",
-            ),
+            headers = chain.request().headers,
         )
         try {
             chain.proceed(request).use { response ->
@@ -73,9 +66,3 @@ class ImageSource(
         }
     }
 }
-
-@Serializable
-data class ImageSourceInfo(
-    val name: String,
-    val param: String,
-)

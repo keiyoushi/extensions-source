@@ -9,29 +9,31 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Date
 
 class QuestionableContent :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
 
     override val name = "Questionable Content"
     override val baseUrl = "https://www.questionablecontent.net"
-
     override val lang = "en"
-
     override val supportsLatest = false
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(TextInterceptor())
+        .build()
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
@@ -45,64 +47,76 @@ class QuestionableContent :
             initialized = true
         }
 
-        return Observable.just(MangasPage(arrayListOf(manga), false))
+        return Observable.just(MangasPage(listOf(manga), false))
     }
+
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun fetchMangaDetails(manga: SManga) = fetchPopularManga(1).map { it.mangas.first() }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1).map { it.mangas.first() }
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = super.chapterListParse(response).distinct()
-        // set date of most recent chapter to today, use SharedPreferences so that we aren't changing it needlessly on refreshes
-        if (chapters.first().url != preferences.getString(LAST_CHAPTER_URL, null)) {
-            val date = Date().time
-            chapters.first().date_upload = date
-            preferences.edit().putString(LAST_CHAPTER_URL, chapters.first().url).apply()
-            preferences.edit().putLong(LAST_CHAPTER_DATE, date).apply()
-        } else {
-            chapters.first().date_upload = preferences.getLong(LAST_CHAPTER_DATE, 0L)
+        val document = response.asJsoup()
+
+        val chapters = document.select("""div#container a[href^="view.php?comic="]""")
+            .map { element ->
+                val chapterUrl = element.attr("href")
+                val number = URL_REGEX.find(chapterUrl)!!.groupValues[1]
+
+                SChapter.create().apply {
+                    setUrlWithoutDomain("/$chapterUrl")
+                    name = element.text()
+                    chapter_number = number.toFloat()
+                }
+            }
+            .distinct()
+
+        if (chapters.isNotEmpty()) {
+            val firstChapter = chapters.first()
+            if (firstChapter.url != preferences.getString(LAST_CHAPTER_URL, null)) {
+                val date = Date().time
+                firstChapter.date_upload = date
+                preferences.edit()
+                    .putString(LAST_CHAPTER_URL, firstChapter.url)
+                    .putLong(LAST_CHAPTER_DATE, date)
+                    .apply()
+            } else {
+                firstChapter.date_upload = preferences.getLong(LAST_CHAPTER_DATE, 0L)
+            }
         }
+
         return chapters
     }
 
-    override fun chapterListSelector() = """div#container a[href^="view.php?comic="]"""
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val pages = document.select("#strip").mapIndexed { i, element ->
+            Page(i, imageUrl = element.attr("abs:src"))
+        }.toMutableList()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val urlregex =
-            """view\.php\?comic=(.*)""".toRegex()
-        val chapterUrl = element.attr("href")
-        val number = urlregex.find(chapterUrl)!!.groupValues[1]
-
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain("/$chapterUrl")
-        chapter.name = element.text()
-        chapter.chapter_number = number.toFloat()
-        return chapter
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = document.select("#strip").mapIndexed { i, element -> Page(i, "", baseUrl + element.attr("src").substring(1)) }.toMutableList()
         if (showAuthorsNotesPref()) {
             val str = document.selectFirst("#newspost")?.html()
             if (!str.isNullOrEmpty()) {
-                pages.add(Page(pages.size, "", TextInterceptorHelper.createUrl("Author's Notes from $AUTHOR", str)))
+                pages.add(Page(pages.size, imageUrl = TextInterceptorHelper.createUrl("Author's Notes from $AUTHOR", str)))
             }
         }
         return pages
     }
 
-    companion object {
-        private const val LAST_CHAPTER_URL = "QC_LAST_CHAPTER_URL"
-        private const val LAST_CHAPTER_DATE = "QC_LAST_CHAPTER_DATE"
-        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
-        private const val AUTHOR = "Jeph Jacques"
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Author's Notes, Based On Implementation In GrrlPower Extension
     private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_AUTHORS_NOTES_KEY
@@ -113,31 +127,11 @@ class QuestionableContent :
         screen.addPreference(authorsNotesPref)
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    companion object {
+        private const val LAST_CHAPTER_URL = "QC_LAST_CHAPTER_URL"
+        private const val LAST_CHAPTER_DATE = "QC_LAST_CHAPTER_DATE"
+        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
+        private const val AUTHOR = "Jeph Jacques"
+        private val URL_REGEX = """view\.php\?comic=(.*)""".toRegex()
+    }
 }

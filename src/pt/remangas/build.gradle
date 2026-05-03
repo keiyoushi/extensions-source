@@ -1,14 +1,8 @@
 ext {
-    extName = 'Remangas'
-    extClass = '.Remangas'
-    themePkg = 'madara'
-    baseUrl = 'https://remangas.net'
-    overrideVersionCode = 3
-    isNsfw = true
+    extName = 'NoxManga'
+    extClass = '.NoxManga'
+    extVersionCode = 51
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation project(':lib:randomua')
-}

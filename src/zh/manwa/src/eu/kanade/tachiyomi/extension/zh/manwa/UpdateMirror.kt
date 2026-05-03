@@ -5,7 +5,6 @@ import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -50,12 +49,7 @@ class UpdateMirror(
 
         val request = GET(
             url = url,
-            headers = Headers.headersOf(
-                "Accept-Encoding",
-                "gzip",
-                "User-Agent",
-                "okhttp/3.8.1",
-            ),
+            headers = chain.request().headers,
         )
 
         try {
@@ -86,14 +80,13 @@ class UpdateMirror(
         val scripts = doc.getElementsByTag("script")
 
         val prefix = "var lks = JSON.parse(atob("
-        val regex = Regex("""atob\(['"]([A-Za-z0-9+/=]+)['"]\)""")
 
         for (script in scripts) {
             val lines = script.data().lines()
             for (line in lines) {
                 val trimmedLine = line.trim()
                 if (trimmedLine.startsWith(prefix)) {
-                    val match = regex.find(trimmedLine)
+                    val match = BASE64_REGEX.find(trimmedLine)
                     if (match != null) {
                         return match.groupValues[1]
                     }
@@ -101,5 +94,9 @@ class UpdateMirror(
             }
         }
         return null
+    }
+
+    companion object {
+        private val BASE64_REGEX = Regex("""atob\(['"]([A-Za-z0-9+/=]+)['"]\)""")
     }
 }

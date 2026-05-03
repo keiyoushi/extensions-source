@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.extension.uk.mangainua
 
+import androidx.preference.MultiSelectListPreference
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,48 +14,133 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
-import org.jsoup.select.Evaluator
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.getValue
 
-class Mangainua : HttpSource() {
-
+class Mangainua :
+    HttpSource(),
+    ConfigurableSource {
     // Info
     override val name = "MANGA/in/UA"
     override val baseUrl = "https://manga.in.ua"
     override val lang = "uk"
     override val supportsLatest = true
 
-    override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 5)
-            .build()
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
-    private fun ajaxHeaders() = headersBuilder()
-        .add("X-Requested-With", "XMLHttpRequest")
+    override val client = network.cloudflareClient.newBuilder()
         .build()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET(baseUrl)
+    override fun popularMangaRequest(page: Int) = makeSearchRequest("news_read;desc", page)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.owl-carousel div.card--big").map(::mangaFromElement)
-        return MangasPage(mangas, false)
+    override fun popularMangaParse(response: Response) = mangaParse(response)
+
+    // ============================== Latest ======================================
+    override fun latestUpdatesRequest(page: Int) = makeSearchRequest("date;desc", page)
+
+    override fun latestUpdatesParse(response: Response) = mangaParse(response)
+
+    // ============================== Search ======================================
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = makeSearchRequest(null, page, query, filters)
+
+    override fun searchMangaParse(response: Response) = mangaParse(response, true)
+
+    private fun makeSearchRequest(sortBy: String? = null, page: Int, query: String = "", filters: FilterList = FilterList()): Request {
+        // Search by title
+        if (query.isNotEmpty()) {
+            if (query.length < 3) {
+                throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+            }
+
+            return POST(
+                "$baseUrl/index.php?do=search",
+                body = FormBody.Builder()
+                    .add("do", "search")
+                    .add("subaction", "search")
+                    .add("full_search", "1")
+                    .add("story", query)
+                    .add("search_start", page.toString())
+                    .add("result_from", (1 + 12 * (page - 1)).toString())
+                    .build(),
+                headers = headers,
+            )
+        }
+
+        // Search by filters
+        val url = "$baseUrl/filter".toHttpUrl().newBuilder().apply {
+            val ignoredTagsSettings = ignoreTags()
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                when (filter) {
+                    is TagFilter -> {
+                        filter.included?.let { addPathSegment("cat=${it.joinToString(",")}") }
+                        filter.excluded?.let {
+                            val filter = when {
+                                ignoredTagsSettings.isNotEmpty() -> (ignoredTagsSettings + it).distinct().joinToString(",")
+                                else -> it.joinToString(",")
+                            }
+                            addPathSegment("!cat=$filter")
+                        } ?: run {
+                            if (ignoredTagsSettings.isNotEmpty()) {
+                                addPathSegment("!cat=${ignoredTagsSettings.joinToString(",")}")
+                            }
+                        }
+                    }
+                    is StatusFilter -> filter.selected?.let { addPathSegment("b.tra=$it") }
+                    is CategoriesFilter -> filter.selected?.let { addPathSegment("b.type=$it") }
+                    is AgeFilter -> filter.selected?.let { addPathSegment("b.vik=$it") }
+                    is SizeFilter -> filter.selected?.let { addPathSegment("c.lastchappr=$it") }
+                    is YearsFilter -> filter.selected?.let { addPathSegment("c.yer=$it") }
+                    is SortFilter -> {
+                        addPathSegment("sort=${sortBy ?: filter.selected}")
+                    }
+                    else -> {}
+                }
+            }
+            if (page > 1) addPathSegments("page/$page/")
+        }.build()
+
+        return GET(url, headers)
     }
 
-    private fun mangaFromElement(element: Element) = SManga.create().apply {
+    private fun mangaParse(response: Response, fromSearch: Boolean = false): MangasPage {
+        val document = response.asJsoup()
+        val ignoredTags = if (hideChaptersByTag && fromSearch) {
+            val ignoredIds = ignoreTags()
+            TagFilter.options.filter { it.second in ignoredIds }.map { it.first }.toSet()
+        } else {
+            emptySet()
+        }
+        val mangas = document.select("div#site-content article.item").mapNotNull { mangaFromElement(it, ignoredTags) }
+        val hasNextPage = document.selectFirst("a:contains(Наступна)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    private fun mangaFromElement(element: Element, ignoredTags: Set<String>): SManga? = SManga.create().apply {
+        // If there is no img, it's (probably) deleted manga, but site still shows it in search results
+        // Example: https://manga.in.ua/filter/sort=nameukr;asc/
+        element.selectFirst("img") ?: return null
+
+        // Hide manga by tags in Settings
+        if (hideChaptersByTag && ignoredTags.isNotEmpty()) {
+            val mangaTags = element.select("div.card__category a").eachText()
+            if (mangaTags.any { it in ignoredTags }) {
+                return null
+            }
+        }
+
         element.selectFirst("h3.card__title a")!!.run {
             setUrlWithoutDomain(attr("href"))
             title = text()
@@ -61,160 +150,174 @@ class Mangainua : HttpSource() {
         }
     }
 
-    // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page/")
+    // ============================== Manga Details ======================================
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("main.main article.item").map(::mangaFromElement)
-        val hasNextPage = document.selectFirst("a:contains(Наступна)") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.length > 2) {
-        POST(
-            "$baseUrl/index.php?do=search",
-            body = FormBody.Builder()
-                .add("do", "search")
-                .add("subaction", "search")
-                .add("story", query)
-                .add("search_start", page.toString())
-                .build(),
-            headers = headers,
-        )
-    } else {
-        throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
-    }
-
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
-
-    // =========================== Manga Details ============================
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
-        title = document.selectFirst("span.UAname")!!.text()
-        description = document.selectFirst("div.item__full-description")!!.text()
-        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.absUrl("src")
-        status = when (document.getInfoElement("Статус перекладу:")?.text()?.trim()) {
+        title = document.selectFirst("span.UAName")!!.ownText()
+        author = "Невідомо"
+        artist = "Невідомо"
+        description = document.selectFirst("div.item__full-description p")?.wholeText()
+        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.attr("abs:data-src")
+        status = when (document.getInfoElement("Статус перекладу:")?.ownText()?.trim()) {
             "Триває" -> SManga.ONGOING
+            "Заморожено" -> SManga.ON_HIATUS
             "Покинуто" -> SManga.CANCELLED
             "Закінчений" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-
         genre = buildList {
-            // genres
+            add(document.getInfoElement("Тип:")?.text())
             addAll(document.getInfoElement("Жанри:")?.select("a")?.eachText().orEmpty())
-
-            // additional
-            val type = when (document.getInfoElement("Тип:")?.text()) {
-                "ВЕБМАНХВА" -> "Manhwa"
-                "МАНХВА" -> "Manhwa"
-                "МАНЬХВА" -> "Manhua"
-                "ВЕБМАНЬХВА" -> "Manhua"
-                else -> "Manga"
-            }
-            add(type)
         }.joinToString()
     }
 
     private fun Document.getInfoElement(text: String): Element? = selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
 
-    // ============================== Chapters ==============================
-    private fun parseChapterElements(elements: Elements): List<SChapter> {
-        var previousChapterName: String? = null
-        var previousChapterNumber: Float = 0F
-        return elements.map { element ->
+    // ============================== Chapters ======================================
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val newResponse = getAjaxChapters(response)
+        return newResponse.asJsoup().select("div.ltcitems").asReversed().map { element ->
             SChapter.create().apply {
                 val urlElement = element.selectFirst("a")!!
-                setUrlWithoutDomain(urlElement.attr("href"))
                 val chapterName = urlElement.ownText().trim()
                 val chapterNumber = element.attr("manga-chappter")
-                    .ifEmpty { chapterName.substringAfter("Розділ").substringBefore("-").trim() }
-                    .toFloatOrNull() ?: 1F
+                val volumeNumber = element.attr("manga-tom")
 
-                if (chapterName.contains("Альтернативний переклад")) {
-                    // Alternative translation of the previous chapter
-                    name = previousChapterName.orEmpty().substringBefore("-").trim()
-                    scanlator = urlElement.text().substringAfter("від:").trim()
-                    chapter_number = previousChapterNumber
-                } else {
-                    // Normal chapter
-                    name = chapterName
-                    chapter_number = chapterNumber
-                    scanlator = element.attr("translate").takeUnless(String::isBlank)
-
-                    previousChapterName = chapterName
-                    previousChapterNumber = chapterNumber
+                setUrlWithoutDomain(urlElement.attr("abs:href"))
+                scanlator = element.attr("translate").takeUnless(String::isBlank) ?: urlElement.text().substringAfter("від:").trim()
+                date_upload = parseDate(element.child(0).ownText())
+                chapter_number = chapterNumber.toFloat()
+                name = when {
+                    chapterName.contains("Альтернативний") -> "Том $volumeNumber. Розділ $chapterNumber"
+                    else -> chapterName
                 }
-                date_upload = element.child(0).ownText().toDate()
             }
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private fun getAjaxChapters(response: Response): Response {
         val document = response.asJsoup()
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters"
         val userHashQuery = document.parseUserHashQuery(endpoint)
-        val metaElement = document.selectFirst(Evaluator.Id("linkstocomics"))!!
-        val body = FormBody.Builder()
+        val newsId = document.selectFirst("div#linkstocomics")!!.attr("data-news_id")
+        val newsCategory = document.selectFirst("div#linkstocomics")!!.attr("data-news_category")
+        val thisLink = document.selectFirst("div#linkstocomics")!!.attr("data-this_link")
+
+        val newBody = FormBody.Builder()
             .add("action", "show")
-            .add("news_id", metaElement.attr("data-news_id"))
-            .add("news_category", metaElement.attr("data-news_category"))
-            .add("this_link", metaElement.attr("data-this_link"))
+            .add("news_id", newsId)
+            .add("news_category", newsCategory)
+            .add("this_link", thisLink)
             .add(userHashQuery, userHash)
             .build()
 
-        val request = POST("$baseUrl/$endpoint", ajaxHeaders(), body)
-
-        val chaptersDoc = client.newCall(request).execute().use { it.asJsoup() }
-        return parseChapterElements(chaptersDoc.body().children()).asReversed()
+        return client.newCall(POST("$baseUrl/$endpoint", ajaxHeaders(), newBody))
+            .execute()
     }
 
-    // =============================== Pages ================================
+    // ============================== Images ======================================
+
     override fun pageListParse(response: Response): List<Page> {
+        val document = getAjaxImages(response)
+        return document.asJsoup().select("li img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.attr("data-src"))
+        }
+    }
+
+    private fun getAjaxImages(response: Response): Response {
         val document = response.asJsoup()
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters_image"
         val userHashQuery = document.parseUserHashQuery(endpoint)
-        val newsId = document.selectFirst(Evaluator.Id("comics"))!!.attr("data-news_id")
+        val newsId = document.selectFirst("div#comics")!!.attr("data-news_id")
         val url = "$baseUrl/$endpoint&news_id=$newsId&action=show&$userHashQuery=$userHash"
 
-        val pagesDoc = client.newCall(GET(url, ajaxHeaders())).execute()
-            .use { it.asJsoup() }
-        return pagesDoc.getElementsByTag("img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.attr("data-src"))
-        }
+        return client.newCall(GET(url, ajaxHeaders()))
+            .execute()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================= Utilities ==============================
+    // ============================== Utilities ======================================
+
+    private fun ajaxHeaders() = headersBuilder()
+        .add("X-Requested-With", "XMLHttpRequest")
+        .build()
+
+    private fun Document.parseUserHash(): String {
+        val script = selectFirst("script:containsData($SITE_LOGIN_HASH = )")?.data().orEmpty()
+        val hash = script.substringAfter("$SITE_LOGIN_HASH = '").substringBefore("'")
+        return hash.ifEmpty { throw Exception("Couldn't find user hash") }
+    }
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Фільтри не застосовуються під час пошуку за назвою"),
+        CategoriesFilter(),
+        StatusFilter(),
+        TagFilter(),
+        SortFilter("news_read;desc"),
+        SizeFilter(),
+        AgeFilter(),
+        YearsFilter(),
+        Filter.Separator(),
+    )
+
+    private val userHashQueryRegex = Regex("""(\w+)\s*:\s*$SITE_LOGIN_HASH""")
+
+    private fun Document.parseUserHashQuery(endpoint: String): String {
+        val script = selectFirst("script:containsData($endpoint)")?.data()
+            ?: throw Exception("Couldn't find user hash query script!")
+
+        return userHashQueryRegex.find(script)?.groupValues?.get(1)
+            ?: throw Exception("Couldn't find user hash query!")
+    }
+
+    private fun ignoreTags(): Set<String> = preferences.getStringSet(SITE_TAGS_PREF, emptySet<String>())!!
+    private val hideChaptersByTag = preferences.getBoolean(SITE_TAGS_SEARCH, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        MultiSelectListPreference(screen.context).apply {
+            key = SITE_TAGS_PREF
+            title = SITE_TAGS_PREF_TITLE
+            val tags = TagFilter.options
+            entries = tags.map { it.first }.toTypedArray()
+            entryValues = tags.map { it.second }.toTypedArray()
+            summary = tags.filter { it.second in ignoreTags() }
+                .joinToString { it.first }
+                .ifEmpty { "Не вибрано" } + SITE_TAGS_PREF_SUM
+            dialogTitle = "Виберіть категорії які потрібно сховати"
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, values ->
+                @Suppress("UNCHECKED_CAST")
+                val selected = values as Set<String>
+                this.summary = tags.filter { it.second in selected }
+                    .joinToString { it.first }
+                    .ifEmpty { "Не вибрано" } + SITE_TAGS_PREF_SUM
+                true
+            }
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SITE_TAGS_SEARCH
+            title = SITE_TAGS_SEARCH_TITLE
+            summary = SITE_TAGS_SEARCH_SUM
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+
     companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH)
-        }
-
-        private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(trim())?.time }
-            .getOrNull() ?: 0L
-
+        private val dateFormatSite = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
+        private fun parseDate(dateStr: String?): Long = dateFormatSite.tryParse(dateStr)
         private const val SITE_LOGIN_HASH = "site_login_hash"
-
-        private fun Document.parseUserHash(): String {
-            val script = selectFirst("script:containsData($SITE_LOGIN_HASH = )")?.data().orEmpty()
-            val hash = script.substringAfter("$SITE_LOGIN_HASH = '").substringBefore("'")
-            return hash.ifEmpty { throw Exception("Couldn't find user hash") }
-        }
-
-        private val userHashQueryRegex = Regex("""(\w+)\s*:\s*site_login_hash""")
-
-        private fun Document.parseUserHashQuery(endpoint: String): String {
-            val script = selectFirst("script:containsData($endpoint)")?.data()
-                ?: throw Exception("Couldn't find user hash query script!")
-
-            return userHashQueryRegex.find(script)?.groupValues?.get(1)
-                ?: throw Exception("Couldn't find user hash query!")
-        }
+        private const val SITE_TAGS_PREF = "site_hidden_tags"
+        private const val SITE_TAGS_PREF_TITLE = "Приховані категорії"
+        private const val SITE_TAGS_PREF_SUM = "\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'."
+        private const val SITE_TAGS_SEARCH = "site_hidden_tags_search"
+        private const val SITE_TAGS_SEARCH_TITLE = "Приховувати обрані категорії при пошуку за назвою"
+        private const val SITE_TAGS_SEARCH_SUM = "\nⓘ При зміні цього параметра необхідно перезапустити програму з повною зупинкою."
     }
 }
