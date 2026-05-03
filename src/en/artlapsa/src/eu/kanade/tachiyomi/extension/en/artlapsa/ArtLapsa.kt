@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -12,6 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
 
@@ -50,9 +52,15 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
 
     override fun chapterListSelector(): String {
         if (!preferences.showPaidChapters) {
-            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[src*=star-circle]))"
+            return "#chapters > div:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[alt=Coin], img[src*=star-circle]))"
         }
-        return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
+        return "#chapters > div:not(:has(.text-sm span:matches(Upcoming)))"
+    }
+
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        if (element.select("img[alt=Coin], img[src*=star-circle]").isNotEmpty() && !name.startsWith("🔒")) {
+            name = "🔒 $name"
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> {
