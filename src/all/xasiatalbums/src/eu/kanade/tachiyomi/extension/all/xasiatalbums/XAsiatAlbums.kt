@@ -19,7 +19,6 @@ import org.jsoup.nodes.Document
 import rx.Observable
 
 class XAsiatAlbums : HttpSource() {
-
     override val baseUrl = "https://www.xasiat.com"
     override val lang = "all"
     override val name = "XAsiat Albums"
@@ -86,17 +85,14 @@ class XAsiatAlbums : HttpSource() {
 
                 SManga.create().apply {
                     setUrlWithoutDomain(url)
-
                     title = link.attr("title").ifBlank {
                         link.selectFirst("img")?.attr("alt").orEmpty()
                     }
-
                     thumbnail_url = link.selectFirst("img")?.let { img ->
                         img.attr("data-original").ifBlank {
-                            img.attr("abs:src")
+                            img.attr("src")
                         }
                     }
-
                     status = SManga.COMPLETED
                     update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                 }
@@ -120,14 +116,12 @@ class XAsiatAlbums : HttpSource() {
                 page = page,
                 params = mapOf("q" to query),
             )
-
             categoryFilter != null && categoryFilter.state > 0 -> searchQuery(
                 path = categoryFilter.toUriPart(),
                 blockId = "list_albums_common_albums_list",
                 page = page,
                 params = emptyMap(),
             )
-
             else -> latestUpdatesRequest(page)
         }
     }
@@ -156,11 +150,9 @@ class XAsiatAlbums : HttpSource() {
 
             if (tag.isNotBlank() && href.contains("/albums/")) {
                 val link = href.substringAfter(".com/").removeSuffix("/")
-
                 if (link.isNotBlank()) {
                     categories[tag] = link
                 }
-
                 tag
             } else {
                 null
@@ -207,10 +199,10 @@ class XAsiatAlbums : HttpSource() {
                         responses.flatMap { res ->
                             parseImagePages(res.asJsoup())
                         }
-                            .distinct()
-                            .mapIndexed { index, imageUrl ->
-                                Page(index, imageUrl = imageUrl)
-                            }
+                        .distinct()
+                        .mapIndexed { index, imageUrl ->
+                            Page(index, imageUrl = imageUrl)
+                        }
                     }
             }
     }
@@ -226,14 +218,8 @@ class XAsiatAlbums : HttpSource() {
     private fun parseImagePages(document: Document): List<String> {
         return document.select("a.item[href]")
             .map { it.attr("abs:href") }
-            .filter {
-                it.isNotBlank() && (
-                    it.contains("/get_image/") ||
-                        it.endsWith(".jpg") ||
-                        it.endsWith(".jpeg") ||
-                        it.endsWith(".png") ||
-                        it.endsWith(".webp")
-                    )
+            .filter { url ->
+                url.isNotBlank() && (url.contains("/get_image/") || url.endsWith(".jpg") || url.endsWith(".jpeg") || url.endsWith(".png") || url.endsWith(".webp"))
             }
     }
 
@@ -242,7 +228,7 @@ class XAsiatAlbums : HttpSource() {
     }
 
     override fun getFilterList(): FilterList {
-        val pairList = categories.map { (name, value) -> name to value }
+        val pairList = categories.map { Pair(it.key, it.value) }
             .distinctBy { it.first }
             .sortedBy { it.first.lowercase() }
             .toTypedArray()
