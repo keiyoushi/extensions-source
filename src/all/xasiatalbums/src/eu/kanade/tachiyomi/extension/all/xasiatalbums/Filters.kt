@@ -9,6 +9,7 @@ open class UriPartFilter(
     displayName,
     vals.map { it.first }.toTypedArray(),
 ) {
+
     fun toUriPart(): String = vals[state].second
 }
 
