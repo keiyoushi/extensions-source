@@ -1,7 +1,6 @@
 ext {
     extName = 'Yomu Comics'
     extClass = '.YomuComics'
-    baseUrl = 'https://yomu.com.br'
     extVersionCode = 42
     isNsfw = true
 
