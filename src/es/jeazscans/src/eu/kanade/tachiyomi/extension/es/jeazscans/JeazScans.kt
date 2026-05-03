@@ -39,7 +39,7 @@ class JeazScans : HttpSource() {
         .build()
 
     private val dateFormat by lazy {
-        SimpleDateFormat("MMM dd, yyyy", Locale("es"))
+        SimpleDateFormat("dd MMM, yyyy", Locale.US)
     }
 
     // The site migrated to custom home sections and PHP routes for search.
@@ -51,9 +51,7 @@ class JeazScans : HttpSource() {
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
                 title = element.selectFirst("h4, h5")!!.text()
-
-                val thumb = element.selectFirst("img")?.attr("abs:src").orEmpty()
-                if (thumb.isNotEmpty()) thumbnail_url = thumb
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
         return MangasPage(mangas, false)
@@ -66,15 +64,11 @@ class JeazScans : HttpSource() {
         val mangas = document.select("section:has(h3:contains(Lanzamientos)) .manga-card")
             .map { element ->
                 SManga.create().apply {
-                    setUrlWithoutDomain(element.selectFirst("a[href*='manga.php?id=']")?.attr("abs:href").orEmpty())
+                    setUrlWithoutDomain(element.selectFirst("a[href*='manga.php?id=']")!!.attr("abs:href"))
                     title = element.selectFirst("figcaption")!!.text()
-
-                    val thumb = element.selectFirst("img")?.attr("abs:src").orEmpty()
-                    if (thumb.isNotEmpty()) thumbnail_url = thumb
+                    thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 }
             }
-            .filter { it.url.isNotEmpty() }
-            .distinctBy { it.url }
 
         return MangasPage(mangas, false)
     }
@@ -84,23 +78,17 @@ class JeazScans : HttpSource() {
         return SManga.create().apply {
             title = document.selectFirst("h1.blood-title")!!.text()
 
-            val descriptionBlock = document.selectFirst("div.text-gray-200:has(h3:matchesOwn((?i)SINOPSIS))")
-                ?: document.selectFirst("div.text-gray-200")
-            descriptionBlock?.let {
-                val synopsis = it.ownText().ifEmpty { it.text().replace(SINOPSIS_REGEX, "") }
-                if (synopsis.isNotEmpty()) description = synopsis
+            description = buildString {
+                val descriptionBlock = document.selectFirst("div.text-gray-200:has(h3:matchesOwn((?i)SINOPSIS))")
+                    ?: document.selectFirst("div.text-gray-200")
+                descriptionBlock?.let {
+                    append(it.ownText().ifEmpty { it.text().replace(SINOPSIS_REGEX, "") })
+                }
             }
 
-            val thumbnail = document.selectFirst("div.lg\\:col-span-3 div.cultivation-panel img")
-                ?.attr("abs:src")
-                .orEmpty()
-            if (thumbnail.isNotEmpty()) thumbnail_url = thumbnail
+            thumbnail_url = document.selectFirst("div.lg\\:col-span-3 div.cultivation-panel img")?.attr("abs:src")
 
-            val genres = document.select("a[href*='directorio.php?genero=']")
-                .map { it.text() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-            if (genres.isNotEmpty()) genre = genres.joinToString()
+            genre = document.select("a[href*='directorio.php?genero=']").joinToString { it.text() }
 
             val statusText = document.selectFirst("span.status-badge")?.text().orEmpty().lowercase()
             if (statusText.isNotEmpty()) {
@@ -176,24 +164,16 @@ class JeazScans : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val imageElements = document.select(
-            "img.protected-img[src], .page-container img.protected-img[src], " +
-                "img.mv-secure-img[data-sec-src], .reader-body img[data-sec-src], " +
-                ".reader-body img[data-src], .reader-body img[src], " +
-                ".reading-content img[data-src], .reading-content img[src]",
+            ".page-container img.protected-img, .reader-body img, .reading-content img",
         )
 
-        val htmlPages = imageElements.mapNotNull { element ->
+        val htmlPages = imageElements.mapIndexed { index, element ->
             val imageUrl = when {
                 element.hasAttr("data-sec-src") -> element.attr("abs:data-sec-src")
                 element.hasAttr("data-src") -> element.attr("abs:data-src")
-                element.hasAttr("src") -> element.attr("abs:src")
-                else -> ""
+                else -> element.attr("abs:src")
             }
 
-            if (imageUrl.isEmpty()) return@mapNotNull null
-
-            imageUrl
-        }.distinct().mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
 
@@ -304,7 +284,7 @@ class JeazScans : HttpSource() {
         val items = response.parseAs<List<SearchResponseItem>>()
         val mangas = items.mapNotNull { it.toSManga(baseUrl) }
 
-        return MangasPage(mangas.distinctBy { it.url }, false)
+        return MangasPage(mangas, false)
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
