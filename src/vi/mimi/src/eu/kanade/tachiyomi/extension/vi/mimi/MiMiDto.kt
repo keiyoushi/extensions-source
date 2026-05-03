@@ -42,7 +42,8 @@ class MangaDto(
             appendIfNotEmpty("Tên khác", differentNames)
             appendIfNotEmpty("Parody", parodies.map { it.name.trim() })
             appendIfNotEmpty("Nhân vật", characters.map { it.name.trim() })
-            append("Code: $id\n\n")
+            appendIfNotEmpty("Code author", authors.map { it.id.toString().trim() })
+            append("Code manga: $id\n\n")
             append(this@MangaDto.description)
         }
         author = authors.joinToString { it.name }
@@ -65,6 +66,7 @@ private fun StringBuilder.appendIfNotEmpty(label: String, list: List<String>) {
 
 @Serializable
 class AuthorAndParodyAndCharacter(
+    val id: Int? = null,
     val name: String,
 )
 
