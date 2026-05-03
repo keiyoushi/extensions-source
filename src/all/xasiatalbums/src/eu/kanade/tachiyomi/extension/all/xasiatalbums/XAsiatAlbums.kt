@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.xasiatalbums
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -55,7 +54,7 @@ class XAsiatAlbums : HttpSource() {
         page: Int,
         params: Map<String, String>,
     ): Request {
-        val offset = (page - 1) * ITEMS_PER_PAGE
+        val offset = ((page - 1) * ITEMS_PER_PAGE) + 1
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments(path.removePrefix("/").removeSuffix("/"))
@@ -105,8 +104,8 @@ class XAsiatAlbums : HttpSource() {
             }
             .distinctBy { it.url }
 
-        val hasNextPage = document.selectFirst(".load-more") != null ||
-            mangas.size >= ITEMS_PER_PAGE
+        val hasNextPage = document.select(".pagination a[href], .pages a[href], .pager a[href]")
+            .any { it.text().contains("Next", ignoreCase = true) }
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -193,44 +192,44 @@ class XAsiatAlbums : HttpSource() {
         )
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.defer {
+        Observable.just(buildPageList(chapter))
+    }
+
+    private fun buildPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
+        val imageUrls = mutableListOf<String>()
 
-        return client.newCall(
-            GET(chapterUrl, headers),
-        ).asObservableSuccess()
-            .flatMap { response ->
-                val document = response.asJsoup()
+        val firstDocument = client.newCall(GET(chapterUrl, headers))
+            .execute()
+            .use { response ->
+                response.asJsoup()
+            }
 
-                val pageUrls = document.select(
-                    ".pagination a[href], .pages a[href], .pager a[href], a.next[href]",
-                ).map {
-                    it.attr("abs:href")
-                }.filter {
-                    it.isNotBlank() && it.startsWith("http")
-                }.distinct()
+        val pageUrls = firstDocument.select(
+            ".pagination a[href], .pages a[href], .pager a[href]",
+        ).map {
+            it.attr("abs:href")
+        }.filter {
+            it.isNotBlank() && it.startsWith("http")
+        }.distinct()
 
-                val allUrls = (listOf(chapterUrl) + pageUrls).distinct()
+        val allUrls = (listOf(chapterUrl) + pageUrls).distinct()
 
-                Observable.from(allUrls)
-                    .concatMap { url ->
-                        client.newCall(
-                            GET(url, headers),
-                        ).asObservableSuccess()
-                    }
-                    .toList()
-                    .toObservable()
-                    .map { responses ->
-                        responses.flatMap { res ->
-                            parseImagePages(res.asJsoup())
-                        }.distinct()
-                            .mapIndexed { index, imageUrl ->
-                                Page(
-                                    index = index,
-                                    imageUrl = imageUrl,
-                                )
-                            }
-                    }
+        allUrls.forEach { url ->
+            client.newCall(GET(url, headers))
+                .execute()
+                .use { response ->
+                    imageUrls.addAll(parseImagePages(response.asJsoup()))
+                }
+        }
+
+        return imageUrls.distinct()
+            .mapIndexed { index, imageUrl ->
+                Page(
+                    index = index,
+                    imageUrl = imageUrl,
+                )
             }
     }
 
@@ -243,31 +242,28 @@ class XAsiatAlbums : HttpSource() {
             )
         }
 
-    private fun parseImagePages(document: Document): List<String> = document.select("img[data-original], img[src], a.item[href]")
-        .mapNotNull { element ->
-            val url = element.attr("abs:data-original").ifBlank {
-                element.attr("abs:src").ifBlank {
-                    element.attr("abs:href")
-                }
+    private fun parseImagePages(document: Document): List<String> = document.select(
+        "a.item[href], a[href*='/get_image/'], img[data-original], img[src]",
+    ).mapNotNull { element ->
+        val url = element.attr("abs:data-original").ifBlank {
+            element.attr("abs:src").ifBlank {
+                element.attr("abs:href")
             }
+        }
 
-            if (url.isBlank()) {
-                null
-            } else {
-                url
-            }
+        if (url.isBlank()) {
+            null
+        } else {
+            url
         }
-        .filter { url ->
-            url.isNotBlank() && (
-                url.contains("/get_image/") ||
-                    url.contains("/contents/videos/") ||
-                    url.endsWith(".jpg") ||
-                    url.endsWith(".jpeg") ||
-                    url.endsWith(".png") ||
-                    url.endsWith(".webp")
-                )
-        }
-        .distinct()
+    }.filter { url ->
+        url.contains("/get_image/") ||
+            url.contains("/contents/videos/") ||
+            url.endsWith(".jpg") ||
+            url.endsWith(".jpeg") ||
+            url.endsWith(".png") ||
+            url.endsWith(".webp")
+    }.distinct()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -285,6 +281,6 @@ class XAsiatAlbums : HttpSource() {
     }
 
     companion object {
-        private const val ITEMS_PER_PAGE = 24
+        private const val ITEMS_PER_PAGE = 12
     }
 }
