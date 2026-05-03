@@ -61,9 +61,9 @@ android {
     signingConfigs {
         release {
             storeFile = rootProject.file("signingkey.jks")
-            storePassword = System.getenv("KEY_STORE_PASSWORD")
-            keyAlias = System.getenv("ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+            storePassword = providers.environmentVariable("KEY_STORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("ALIAS").orNull
+            keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
         }
     }
 
@@ -109,8 +109,8 @@ tasks.register("copyManifestFile", Copy) {
 
 tasks.register("writeManifestFile") {
     dependsOn(copyManifestFile)
+    File tempFile = android.sourceSets.getByName('main').manifest.srcFile
     doLast {
-        File tempFile = android.sourceSets.getByName('main').manifest.srcFile
         if (!tempFile.exists()) {
             tempFile.parentFile.mkdirs()
             tempFile.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
