@@ -9,15 +9,11 @@ open class UriPartFilter(
     displayName,
     vals.map { it.first }.toTypedArray(),
 ) {
-
-    fun toUriPart(): String {
-        return vals[state].second
-    }
+    fun toUriPart(): String = vals[state].second
 }
 
 val initialCategories = mapOf(
     "None" to "",
-
     "China & Taiwan" to "albums/categories/china-taiwan",
     "South Korea" to "albums/categories/korea",
     "JAV & AV Models" to "albums/categories/jav",
@@ -26,7 +22,6 @@ val initialCategories = mapOf(
     "Western Girls" to "albums/categories/western-girls",
     "Southeast Asia" to "albums/categories/southeast-asia",
     "JAV Amateur" to "albums/categories/jav-amateur",
-
     "Cosplay" to "albums/tags/cosplay",
     "Japanese" to "albums/tags/japanese",
     "Japan" to "albums/tags/japan",
