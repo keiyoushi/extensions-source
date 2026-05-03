@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
 import eu.kanade.tachiyomi.source.model.Filter
