@@ -16,6 +16,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -24,10 +28,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.add
 
 private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"
@@ -35,7 +35,9 @@ private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://dilar.tube", "https://go
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
-class Dilar : HttpSource(), ConfigurableSource {
+class Dilar :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Dilar"
     override val lang = "ar"
@@ -52,8 +54,7 @@ class Dilar : HttpSource(), ConfigurableSource {
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/api/series?page=$page&sort=views", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list = json.decodeFromString<DilarSeriesListDto>(response.body.string())
@@ -61,19 +62,21 @@ class Dilar : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, list.pagination?.hasNextPage ?: (mangas.size >= 20))
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/api/series?page=$page&sort=latest", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=latest", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val body = buildJsonObject {
             put("query", query)
-            put("includes", buildJsonArray {
-                add("Manga")
-                add("Team")
-                add("Member")
-            })
+            put(
+                "includes",
+                buildJsonArray {
+                    add("Manga")
+                    add("Team")
+                    add("Member")
+                },
+            )
         }.toString().toRequestBody("application/json".toMediaType())
         return POST("$baseUrl/api/search/quick_search", headers, body)
     }
@@ -87,8 +90,7 @@ class Dilar : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/api/series/${mangaId(manga)}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = json.decodeFromString<DilarSeriesDto>(response.body.string())
@@ -97,8 +99,7 @@ class Dilar : HttpSource(), ConfigurableSource {
 
     private fun mangaId(manga: SManga) = manga.url.split("/")[2]
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$baseUrl/api/series/${mangaId(manga)}/releases", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}/releases", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = json.decodeFromString<DilarReleasesDto>(response.body.string())
@@ -108,8 +109,7 @@ class Dilar : HttpSource(), ConfigurableSource {
             .sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$baseUrl/api/releases/${releaseId(chapter)}/pages", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/releases/${releaseId(chapter)}/pages", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = json.decodeFromString<DilarReleaseDetailDto>(response.body.string())

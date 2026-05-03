@@ -65,11 +65,11 @@ data class DilarSeriesDto(
             .ifBlank { author }
         genre = categories.joinToString { it.name }
         status = when (translationStatus) {
-            "ongoing"   -> SManga.ONGOING
+            "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
-            "dropped"   -> SManga.CANCELLED
-            "hiatus"    -> SManga.ON_HIATUS
-            else        -> SManga.UNKNOWN
+            "dropped" -> SManga.CANCELLED
+            "hiatus" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
         }
     }
 }
@@ -110,12 +110,14 @@ data class DilarReleaseDto(
         chapter_number = chapter?.chapter?.toFloatOrNull() ?: -1f
         name = buildString {
             chapter?.chapter?.toFloatOrNull()?.toInt()?.let { append("فصل $it") }
-            if (!chapter?.title.isNullOrBlank()) append(" - ${chapter?.title}")
+            if (!chapter.title.isNullOrBlank()) append(" - ${chapter.title}")
         }
         scanlator = teams.joinToString { it.name }
         date_upload = try {
             dateFormat.parse(createdAt ?: "")?.time ?: 0L
-        } catch (_: Exception) { 0L }
+        } catch (_: Exception) {
+            0L
+        }
     }
 }
 
