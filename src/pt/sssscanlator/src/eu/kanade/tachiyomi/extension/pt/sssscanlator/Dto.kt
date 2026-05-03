@@ -41,14 +41,14 @@ class SeriesPayloadDto(
     val artist: String? = null,
     val coverImage: String? = null,
     val chapters: List<SeriesChapterDto> = emptyList(),
-    val obraId: String,
+    val seriesId: String,
     val slug: String,
 )
 
 @Serializable
 class SeriesChapterDto(
     val number: Double,
-    val title: String,
+    val title: String? = null,
     val releaseDate: String? = null,
     @SerialName("id")
     val chapterId: String,
@@ -58,20 +58,20 @@ class SeriesChapterDto(
         val chapterNumberLabel = number.toChapterNumberString()
 
         url = "/ler/$mangaSlug/$chapterNumberLabel?chapterId=$chapterId"
-        name = title.ifBlank { "Capitulo $chapterNumberLabel" }
+        name = title?.takeUnless { it.isBlank() } ?: "Capítulo $chapterNumberLabel"
         chapter_number = number.toFloat()
         date_upload = parseChapterDate(releaseAt, releaseDate)
     }
 
     companion object {
         private val RELEASE_AT_MILLIS by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ROOT).apply {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
         }
 
         private val RELEASE_AT_SECONDS by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.ROOT).apply {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
         }
