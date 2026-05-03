@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +19,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.Exception
 import java.util.Calendar
 
 /*
@@ -29,7 +28,7 @@ abstract class FuzzyDoodle(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -41,8 +40,8 @@ abstract class FuzzyDoodle(
     // Popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?page=$page", headers)
 
-    override fun popularMangaSelector() = "div#card-real"
-    override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
+    open fun popularMangaSelector() = "div#card-real"
+    open fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -56,7 +55,7 @@ abstract class FuzzyDoodle(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    open fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst("h2.text-sm")!!.text()
         thumbnail_url = element.selectFirst("img")?.imgAttr()
@@ -75,20 +74,25 @@ abstract class FuzzyDoodle(
 
     protected open fun latestPageRequest(page: Int) = GET("$baseUrl/latest?page=$page", headers)
 
-    override fun latestUpdatesSelector() = if (latestFromHomePage) {
+    open fun latestUpdatesSelector() = if (latestFromHomePage) {
         "section:has(h2:containsOwn(Recent Chapters)) div#card-real," +
             " section:has(h2:containsOwn(Chapitres récents)) div#card-real"
     } else {
         popularMangaSelector()
     }
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    open fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         launchIO { fetchFilters() }
 
-        return super.latestUpdatesParse(response)
+        val document = response.asJsoup()
+        val entries = document.select(latestUpdatesSelector())
+            .map(::latestUpdatesFromElement)
+        val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
+
+        return MangasPage(entries, hasNextPage)
     }
 
     // search
@@ -107,9 +111,9 @@ abstract class FuzzyDoodle(
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    open fun searchMangaSelector() = popularMangaSelector()
+    open fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    open fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // filters
     protected var typeList = listOf<Pair<String, String>>()
@@ -175,34 +179,37 @@ abstract class FuzzyDoodle(
     protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     // details
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val genres = mutableListOf<String>()
-        with(document.selectFirst("main > section > div")!!) {
-            thumbnail_url = selectFirst("div.relative img")?.imgAttr()
-            title = selectFirst("div.flex > h1, div.flex > h2")!!.ownText()
-            genres.addAll(select("div.flex > a.inline-block").eachText())
-            description = buildString {
-                selectFirst("div:has(> p#description)")?.let {
-                    it.selectFirst("span.font-semibold")?.remove()
-                    it.select("#show-more").remove()
-                    append(it.text())
-                }
-                selectFirst("div.flex > h1 + div > span.text-sm, div.flex > h2 + div > span.text-sm")?.text()?.let {
-                    if (it.isNotEmpty()) {
-                        append("\n\n")
-                        append("Alternative Title: ")
-                        append(it.trim())
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            val genres = mutableListOf<String>()
+            with(document.selectFirst("main > section > div")!!) {
+                thumbnail_url = selectFirst("div.relative img")?.imgAttr()
+                title = selectFirst("div.flex > h1, div.flex > h2")!!.ownText()
+                genres.addAll(select("div.flex > a.inline-block").eachText())
+                description = buildString {
+                    selectFirst("div:has(> p#description)")?.let {
+                        it.selectFirst("span.font-semibold")?.remove()
+                        it.select("#show-more").remove()
+                        append(it.text())
                     }
-                }
-            }.trim()
+                    selectFirst("div.flex > h1 + div > span.text-sm, div.flex > h2 + div > span.text-sm")?.text()?.let {
+                        if (it.isNotEmpty()) {
+                            append("\n\n")
+                            append("Alternative Title: ")
+                            append(it)
+                        }
+                    }
+                }.trim()
+            }
+            document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
+                status = (getInfo("Status") ?: getInfo("Statut")).parseStatus()
+                artist = (getInfo("Artist") ?: getInfo("المؤلف") ?: getInfo("Artiste")).removePlaceHolder()
+                author = (getInfo("Author") ?: getInfo("الرسام") ?: getInfo("Auteur")).removePlaceHolder()
+                (getInfo("Type") ?: getInfo("النوع"))?.also { genres.add(0, it) }
+            }
+            genre = genres.joinToString()
         }
-        document.selectFirst("div#buttons + div.hidden, div:has(> div#buttons) + div.flex")?.run {
-            status = (getInfo("Status") ?: getInfo("Statut")).parseStatus()
-            artist = (getInfo("Artist") ?: getInfo("المؤلف") ?: getInfo("Artiste")).removePlaceHolder()
-            author = (getInfo("Author") ?: getInfo("الرسام") ?: getInfo("Auteur")).removePlaceHolder()
-            (getInfo("Type") ?: getInfo("النوع"))?.also { genres.add(0, it) }
-        }
-        genre = genres.joinToString()
     }
 
     protected open fun String?.parseStatus(): Int {
@@ -219,7 +226,6 @@ abstract class FuzzyDoodle(
 
     protected fun Element.getInfo(text: String): String? = selectFirst("p:has(span:containsOwn($text)) span.capitalize")
         ?.ownText()
-        ?.trim()
 
     protected fun String?.removePlaceHolder(): String? = takeUnless { it == "-" }
 
@@ -247,11 +253,11 @@ abstract class FuzzyDoodle(
         return chapterList
     }
 
-    override fun chapterListSelector() = "div#chapters-list > a[href]"
+    open fun chapterListSelector() = "div#chapters-list > a[href]"
     protected fun chapterListNextPageSelector() = latestUpdatesNextPageSelector()
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
+    open fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
         name = element.selectFirst("#item-title, span")!!.ownText()
         date_upload = element.selectFirst("span.text-gray-500")?.text().parseRelativeDate()
     }
@@ -260,7 +266,7 @@ abstract class FuzzyDoodle(
     protected open fun String?.parseRelativeDate(): Long {
         this ?: return 0L
 
-        val number = Regex("""(\d+)""").find(this)?.value?.toIntOrNull() ?: return 0L
+        val number = numberRegex.find(this)?.value?.toIntOrNull() ?: return 0L
         val cal = Calendar.getInstance()
 
         return when {
@@ -297,8 +303,11 @@ abstract class FuzzyDoodle(
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> = document.select("div#chapter-container > img").mapIndexed { idx, img ->
-        Page(idx, imageUrl = img.imgAttr())
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select("div#chapter-container > img").mapIndexed { idx, img ->
+            Page(idx, imageUrl = img.imgAttr())
+        }
     }
 
     private fun Element.imgAttr(): String = when {
@@ -309,5 +318,9 @@ abstract class FuzzyDoodle(
         else -> absUrl("src")
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val numberRegex = Regex("""(\d+)""")
+    }
 }
