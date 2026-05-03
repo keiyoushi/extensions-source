@@ -81,13 +81,17 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
     }
 
     @Serializable
-    class Balloon(
+    data class PageLayout(
+        val scale: Float,
+        val balloons: List<BalloonBox>,
+    )
+
+    @Serializable
+    data class BalloonBox(
         val text: String,
         val left: Float,
         val top: Float,
         val width: Float,
-        val height: Float,
-        val fontSize: Float,
     )
 
     override fun pageListParse(response: Response): List<Page> {
@@ -107,18 +111,23 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
         val balloons = element.select(".balloon").map { b ->
             val style = b.attr("style")
 
-            Balloon(
+            BalloonBox(
                 text = b.text(),
                 left = style.extractCssProp("left"),
                 top = style.extractCssProp("top"),
                 width = style.extractCssProp("width"),
-                height = style.extractCssProp("height", "1"),
-                fontSize = style.extractCssProp("font-size", "100") / 100f,
             )
         }
 
+        val pageData = PageLayout(
+            scale = element.attr("style").substringAfter("scale(", "")
+                .substringBefore(")", "")
+                .toFloatOrNull() ?: 1f,
+            balloons = balloons,
+        )
+
         val finalUrl = if (balloons.isNotEmpty()) {
-            "$rawImageUrl#${balloons.toJsonString()}"
+            "$rawImageUrl#${pageData.toJsonString()}"
         } else {
             rawImageUrl
         }
@@ -139,7 +148,7 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
             return response
         }
 
-        val balloons = request.url.fragment!!.parseAs<List<Balloon>>()
+        val page = request.url.fragment!!.parseAs<PageLayout>()
 
         val bitmap = response.body.byteStream().use { stream ->
             BitmapFactory.decodeStream(stream)
@@ -148,31 +157,32 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
         val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(mutableBitmap)
 
-        balloons.forEach { b ->
-            val textPaint = TextPaint().apply {
-                color = Color.BLACK
-                textSize = b.fontSize * 18f
-                typeface = Typeface.DEFAULT
-                isAntiAlias = true
-            }
+        val textPaint = TextPaint().apply {
+            color = Color.BLACK
+            textSize = 14f
+            typeface = Typeface.SANS_SERIF
+            isAntiAlias = true
+        }
 
-            val safeWidth = if (b.width > 0) b.width.toInt() else canvas.width
+        page.balloons.forEach { b ->
+            val x = b.left * page.scale
+            val y = b.top * page.scale
+            val w = (b.width * page.scale).toInt().coerceAtLeast(1)
 
-            val staticLayout = StaticLayout.Builder.obtain(b.text, 0, b.text.length, textPaint, safeWidth)
+            val layout = StaticLayout.Builder.obtain(b.text, 0, b.text.length, textPaint, w)
                 .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)
+                .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
                 .build()
 
-            val textHeight = staticLayout.height
-            val verticalOffset = if (b.height > textHeight) (b.height - textHeight) / 2f else 0f
-
             canvas.save()
-            canvas.translate(b.left, b.top + verticalOffset)
-            staticLayout.draw(canvas)
+            canvas.translate(x, y)
+            layout.draw(canvas)
             canvas.restore()
         }
 
         val buffer = Buffer().apply {
-            mutableBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream())
+            mutableBitmap.compress(Bitmap.CompressFormat.JPEG, 95, outputStream())
         }
 
         mutableBitmap.recycle()
