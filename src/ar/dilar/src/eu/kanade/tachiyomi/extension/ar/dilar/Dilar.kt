@@ -58,8 +58,8 @@ class Dilar :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list = json.decodeFromString<DilarSeriesListDto>(response.body.string())
-        val mangas = list.data.map { it.toSManga(cdnUrl) }
-        return MangasPage(mangas, list.pagination?.hasNextPage ?: (mangas.size >= 20))
+        val mangas = list.series.map { it.toSManga(cdnUrl) }
+        return MangasPage(mangas, list.hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=latest", headers)

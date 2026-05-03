@@ -31,12 +31,7 @@ data class DilarSearchItemDto(
 
 @Serializable
 data class DilarSeriesListDto(
-    val data: List<DilarSearchItemDto> = emptyList(),
-    val pagination: DilarPaginationDto? = null,
-)
-
-@Serializable
-data class DilarPaginationDto(
+    val series: List<DilarSearchItemDto> = emptyList(),
     val currentPage: Int = 1,
     val totalPages: Int = 1,
 ) {
@@ -110,7 +105,7 @@ data class DilarReleaseDto(
         chapter_number = chapter?.chapter?.toFloatOrNull() ?: -1f
         name = buildString {
             chapter?.chapter?.toFloatOrNull()?.toInt()?.let { append("فصل $it") }
-            if (!chapter.title.isNullOrBlank()) append(" - ${chapter.title}")
+            if (!chapter?.title.isNullOrBlank()) append(" - ${chapter?.title}")
         }
         scanlator = teams.joinToString { it.name }
         date_upload = try {
