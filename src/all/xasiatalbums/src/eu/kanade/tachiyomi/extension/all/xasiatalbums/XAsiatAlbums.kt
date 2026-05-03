@@ -42,7 +42,7 @@ class XAsiatAlbums : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val elements = document.select(".list-albums a, a:has(.thumb)")
-        
+
         val mangas = elements.distinctBy { it.attr("abs:href") }.map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
@@ -52,7 +52,7 @@ class XAsiatAlbums : HttpSource() {
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
-        
+
         val hasNextPage = document.selectFirst(".load-more") != null || mangas.size >= 12
         return MangasPage(mangas, hasNextPage)
     }
@@ -61,7 +61,7 @@ class XAsiatAlbums : HttpSource() {
 
     private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request {
         val offset = (page - 1) * 12 + 1
-        
+
         return GET(
             mainUrl.toHttpUrl().newBuilder().apply {
                 val cleanPath = path.removePrefix("/").removeSuffix("/")
@@ -82,7 +82,7 @@ class XAsiatAlbums : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val categoryFilter = filters.firstInstanceOrNull<UriPartFilter>()
-        
+
         return when {
             query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query))
             categoryFilter != null && categoryFilter.state > 0 -> {
@@ -114,7 +114,9 @@ class XAsiatAlbums : HttpSource() {
             val link = href.substringAfter("/albums/").removeSuffix("/")
             if (link.isNotEmpty()) categories[tag] = "$link/"
             tag
-        } else null
+        } else {
+            null
+        }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
