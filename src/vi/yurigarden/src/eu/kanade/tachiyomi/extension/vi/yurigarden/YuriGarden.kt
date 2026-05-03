@@ -267,9 +267,14 @@ class YuriGarden :
             response.close()
 
             if (allowRetry) {
-                // Solve via the reader page so Turnstile gets a real browser session;
-                // cf_clearance is scoped to the parent domain and covers the API host.
-                CloudflareResolver.resolve(getChapterUrl(chapter))
+                // Load the reader page so Turnstile gets a real browser session, but
+                // wait specifically for the API host's cf_clearance -- the reader page's
+                // JS triggers the API subrequest where the actual challenge for our
+                // OkHttp call lives.
+                CloudflareResolver.resolve(
+                    loadUrl = getChapterUrl(chapter),
+                    cookieUrl = request.url.toString(),
+                )
                 return executePageListRequest(chapter, allowRetry = false)
             }
             throw Exception(CLOUDFLARE_VERIFY_MESSAGE)

@@ -13,7 +13,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Solves a Cloudflare Turnstile / challenge page by loading the target URL in a
@@ -27,24 +26,20 @@ import java.util.concurrent.atomic.AtomicLong
 object CloudflareResolver {
 
     private const val TIMEOUT_SECONDS = 45L
-    private const val INITIAL_POLL_DELAY_MS = 2_000L
     private const val POLL_INTERVAL_MS = 500L
-
-    private const val POST_LOAD_GRACE_MS = 8_000L
     private const val WEBVIEW_WIDTH = 1080
     private const val WEBVIEW_HEIGHT = 1920
     private const val CLEARANCE_COOKIE = "cf_clearance"
 
     @Synchronized
     @SuppressLint("SetJavaScriptEnabled")
-    fun resolve(url: String, userAgent: String? = null): Boolean {
+    fun resolve(loadUrl: String, cookieUrl: String = loadUrl, userAgent: String? = null): Boolean {
         val cookieManager = CookieManager.getInstance()
-        if (hasClearance(cookieManager, url)) return true
+        if (hasClearance(cookieManager, cookieUrl)) return true
 
         val context = Injekt.get<Application>()
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val pageFinishedAt = AtomicLong(0L)
         var webView: WebView? = null
         lateinit var poll: Runnable
 
@@ -74,29 +69,19 @@ object CloudflareResolver {
             cookieManager.setAcceptCookie(true)
             cookieManager.setAcceptThirdPartyCookies(wv, true)
 
-            wv.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-                    pageFinishedAt.compareAndSet(0L, System.currentTimeMillis())
-                }
-            }
+            wv.webViewClient = WebViewClient()
 
             poll = Runnable {
                 if (latch.count == 0L) return@Runnable
-                if (hasClearance(cookieManager, url)) {
+                if (hasClearance(cookieManager, cookieUrl)) {
                     latch.countDown()
-                    return@Runnable
+                } else {
+                    handler.postDelayed(poll, POLL_INTERVAL_MS)
                 }
-                // Give up once the post-load grace window has elapsed.
-                val finishedAt = pageFinishedAt.get()
-                if (finishedAt != 0L && System.currentTimeMillis() - finishedAt > POST_LOAD_GRACE_MS) {
-                    latch.countDown()
-                    return@Runnable
-                }
-                handler.postDelayed(poll, POLL_INTERVAL_MS)
             }
 
-            wv.loadUrl(url)
-            handler.postDelayed(poll, INITIAL_POLL_DELAY_MS)
+            wv.loadUrl(loadUrl)
+            handler.postDelayed(poll, POLL_INTERVAL_MS)
         }
 
         latch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -107,7 +92,7 @@ object CloudflareResolver {
             webView?.destroy()
         }
 
-        return hasClearance(cookieManager, url)
+        return hasClearance(cookieManager, cookieUrl)
     }
 
     private fun hasClearance(cookieManager: CookieManager, url: String): Boolean {
