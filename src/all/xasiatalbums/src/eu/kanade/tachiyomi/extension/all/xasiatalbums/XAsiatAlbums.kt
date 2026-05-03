@@ -29,7 +29,7 @@ class XAsiatAlbums : HttpSource() {
     private val mainUrl = "https://www.xasiat.com"
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+        .add("Referer", "$mainUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
     private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
@@ -94,7 +94,7 @@ class XAsiatAlbums : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET(mainUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -122,14 +122,14 @@ class XAsiatAlbums : HttpSource() {
         val mangaUrl = response.request.url.encodedPath
         return listOf(
             SChapter.create().apply {
-                url = mainUrl + mangaUrl
+                url = mangaUrl
                 name = "Photobook"
                 date_upload = System.currentTimeMillis()
             },
         )
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(chapter.url, headers))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(mainUrl + chapter.url, headers))
         .asObservableSuccess()
         .flatMap { response ->
             val document = response.asJsoup()
@@ -141,7 +141,7 @@ class XAsiatAlbums : HttpSource() {
             if (pageLinks.isEmpty()) {
                 Observable.just(pageListParse(document))
             } else {
-                val allUrls = (listOf(chapter.url) + pageLinks).distinct()
+                val allUrls = (listOf(mainUrl + chapter.url) + pageLinks).distinct()
                 val observables = allUrls.map { url ->
                     client.newCall(GET(url, headers)).asObservableSuccess()
                 }
