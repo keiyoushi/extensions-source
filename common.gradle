@@ -130,12 +130,13 @@ tasks.register("writeManifestFile") {
 
 tasks.register("writeProguardRules") {
     File proguardFile = layout.buildDirectory.file('extension-proguard-rules.pro').get().asFile
+    String extClassPath = "${android.namespace}.${android.defaultConfig.applicationIdSuffix}${extClass}"
     doLast {
         proguardFile.parentFile.mkdirs()
         proguardFile.withWriter {
             it.writeLine("-dontobfuscate")
             it.writeLine("-dontoptimize")
-            it.writeLine("-keep class ${android.namespace}.${android.defaultConfig.applicationIdSuffix}${extClass} { *; }")
+            it.writeLine("-keep class $extClassPath { *; }")
         }
     }
 }
