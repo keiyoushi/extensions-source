@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -32,7 +32,7 @@ abstract class FMReader(
     override val baseUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH),
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -126,15 +126,15 @@ abstract class FMReader(
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun popularMangaSelector() = "div.media, .thumb-item-flow"
+    open fun popularMangaSelector() = "div.media, .thumb-item-flow"
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    open fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    open fun searchMangaSelector() = popularMangaSelector()
 
     open val headerSelector = "h3 a, .series-title a"
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    open fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.select(headerSelector).let {
             setUrlWithoutDomain(it.attr("abs:href"))
             title = it.text()
@@ -142,20 +142,20 @@ abstract class FMReader(
         thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").imgAttr()
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    open fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     /**
      * can select one of 2 different types of elements
      * one is an element with text "page x of y", must be the first element if it's part of a collection
      * the other choice is the standard "next page" element (but most FMReader sources don't have this one)
      */
-    override fun popularMangaNextPageSelector() = "div.col-lg-9 button.btn-info, .pagination a:contains(»):not(.disabled)"
+    open fun popularMangaNextPageSelector() = "div.col-lg-9 button.btn-info, .pagination a:contains(»):not(.disabled)"
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    open fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Manga Details Selector
     open val infoElementSelector = "div.row"
@@ -168,7 +168,8 @@ abstract class FMReader(
     open val altNameSelector = "li:contains(Other names)"
     open val altName = "Alternative Name" // the alt name already contains ": " eg. ": alt name1, alt name2"
 
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val infoElement = document.select(infoElementSelector).first()!!
 
         return SManga.create().apply {
@@ -220,9 +221,9 @@ abstract class FMReader(
         return document.select(chapterListSelector()).map { chapterFromElement(it, mangaTitle) }.distinctBy { it.url }
     }
 
-    override fun chapterFromElement(element: Element): SChapter = chapterFromElement(element, "")
+    open fun chapterFromElement(element: Element): SChapter = chapterFromElement(element, "")
 
-    override fun chapterListSelector() = "div#list-chapters p, table.table tr, .list-chapters > a"
+    open fun chapterListSelector() = "div#list-chapters p, table.table tr, .list-chapters > a"
 
     open val chapterUrlSelector = "a"
 
@@ -323,8 +324,11 @@ abstract class FMReader(
 
     open val pageListImageSelector = "img.chapter-img"
 
-    override fun pageListParse(document: Document): List<Page> = document.select(pageListImageSelector).mapIndexed { i, img ->
-        Page(i, document.location(), img.imgAttr())
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(pageListImageSelector).mapIndexed { i, img ->
+            Page(i, document.location(), img.imgAttr())
+        }
     }
 
     protected fun base64PageListParse(document: Document): List<Page> {
@@ -350,7 +354,7 @@ abstract class FMReader(
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private class TextField(name: String, val key: String) : Filter.Text(name)
     private class Status : Filter.Select<String>("Status", arrayOf("Any", "Completed", "Ongoing"))
