@@ -42,7 +42,6 @@ class XAsiatAlbums : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val elements = document.select(".list-albums a, a:has(.thumb)")
-
         val mangas = elements.distinctBy { it.attr("abs:href") }.map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
@@ -52,7 +51,6 @@ class XAsiatAlbums : HttpSource() {
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
-
         val hasNextPage = document.selectFirst(".load-more") != null || mangas.size >= 12
         return MangasPage(mangas, hasNextPage)
     }
@@ -61,7 +59,6 @@ class XAsiatAlbums : HttpSource() {
 
     private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request {
         val offset = (page - 1) * 12 + 1
-
         return GET(
             mainUrl.toHttpUrl().newBuilder().apply {
                 val cleanPath = path.removePrefix("/").removeSuffix("/")
@@ -82,7 +79,6 @@ class XAsiatAlbums : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val categoryFilter = filters.firstInstanceOrNull<UriPartFilter>()
-
         return when {
             query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query))
             categoryFilter != null && categoryFilter.state > 0 -> {
@@ -121,20 +117,15 @@ class XAsiatAlbums : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         val thumbUrl = manga.thumbnail_url.orEmpty().ifEmpty { baseUrl }
-        return Request.Builder()
-            .url("$thumbUrl#${manga.url}")
-            .head()
-            .headers(headers)
-            .build()
+        return Request.Builder().url("$thumbUrl#${manga.url}").head().headers(headers).build()
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val lastModified = response.headers["last-modified"]
         val mangaUrl = response.request.url.fragment ?: response.request.url.encodedPath
-
         return listOf(
             SChapter.create().apply {
-                url = mainUrl + mangaUrl
+                url = if (mangaUrl.startsWith("http")) mangaUrl else mainUrl + mangaUrl
                 name = "Photobook"
                 date_upload = dateFormat.tryParse(lastModified)
             },
@@ -149,19 +140,13 @@ class XAsiatAlbums : HttpSource() {
                 .map { it.attr("abs:href") }
                 .filter { it.isNotEmpty() && !it.contains("#") && it.startsWith("http") }
                 .distinct()
-
             if (pageLinks.isEmpty()) {
                 Observable.just(pageListParse(document))
             } else {
                 val allUrls = (listOf(chapter.url) + pageLinks).distinct()
-                val observables = allUrls.map { url ->
-                    client.newCall(GET(url, headers)).asObservableSuccess()
-                }
-
+                val observables = allUrls.map { url -> client.newCall(GET(url, headers)).asObservableSuccess() }
                 Observable.zip(observables) { responses ->
-                    responses.flatMap { res ->
-                        pageListParse((res as Response).asJsoup())
-                    }
+                    responses.flatMap { res -> pageListParse((res as Response).asJsoup()) }
                         .distinctBy { it.imageUrl }
                         .mapIndexed { index, page -> Page(index, "", page.imageUrl) }
                 }
@@ -177,11 +162,11 @@ class XAsiatAlbums : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList {
-        val options = arrayOf(Pair("None", "")) + categories.entries.map { Pair(it.key, it.value) }.toTypedArray()
+        val pairList = categories.map { Pair(it.key, it.value) }.toTypedArray()
         return FilterList(
             Filter.Header("NOTE: Multiple pages will be loaded automatically"),
             Filter.Separator(),
-            UriPartFilter("Category", options),
+            UriPartFilter("Category", pairList),
         )
     }
 
@@ -190,6 +175,7 @@ class XAsiatAlbums : HttpSource() {
     private fun UriPartFilter.toUriPart() = vals[state].second
 
     private val categories = mutableMapOf(
+        "None" to "",
         "Japanese" to "japanese/",
         "Chinese" to "chinese/",
         "Korean" to "korean/",
