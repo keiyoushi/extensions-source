@@ -29,8 +29,8 @@ class XAsiatAlbums : HttpSource() {
     private val mainUrl = "https://www.xasiat.com"
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "XMLHttpRequest")
+        .add("Referer", "$mainUrl/")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
     private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
 
@@ -160,6 +160,13 @@ class XAsiatAlbums : HttpSource() {
 
     private fun pageListParse(document: org.jsoup.nodes.Document): List<Page> = document.select("a.item").mapIndexed { i, element ->
         Page(i, imageUrl = element.attr("abs:href"))
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val imgHeaders = headersBuilder()
+            .set("Referer", "$mainUrl/")
+            .build()
+        return GET(page.imageUrl!!, imgHeaders)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
