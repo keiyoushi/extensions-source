@@ -185,8 +185,7 @@ class XAsiatAlbums : HttpSource() {
         )
     }
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray())
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray())
 
     private fun UriPartFilter.toUriPart() = vals[state].second
 
