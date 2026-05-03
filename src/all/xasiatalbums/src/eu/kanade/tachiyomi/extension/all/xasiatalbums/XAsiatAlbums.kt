@@ -21,8 +21,11 @@ import rx.Observable
 class XAsiatAlbums : HttpSource() {
 
     override val baseUrl = "https://www.xasiat.com"
+
     override val lang = "all"
+
     override val name = "XAsiat Albums"
+
     override val supportsLatest = true
 
     private val categories = initialCategories.toMutableMap()
@@ -31,25 +34,23 @@ class XAsiatAlbums : HttpSource() {
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchQuery(
-            path = "albums/",
-            blockId = "list_albums_common_albums_list",
-            page = page,
-            params = mapOf(
-                "sort_by" to "album_viewed_week",
-            ),
-        )
+    override fun popularMangaRequest(page: Int): Request = searchQuery(
+        path = "albums/",
+        blockId = "list_albums_common_albums_list",
+        page = page,
+        params = mapOf(
+            "sort_by" to "album_viewed_week",
+        ),
+    )
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchQuery(
-            path = "albums/",
-            blockId = "list_albums_common_albums_list",
-            page = page,
-            params = mapOf(
-                "sort_by" to "post_date",
-            ),
-        )
+    override fun latestUpdatesRequest(page: Int): Request = searchQuery(
+        path = "albums/",
+        blockId = "list_albums_common_albums_list",
+        page = page,
+        params = mapOf(
+            "sort_by" to "post_date",
+        ),
+    )
 
     private fun searchQuery(
         path: String,
@@ -89,9 +90,7 @@ class XAsiatAlbums : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(
-        response: Response,
-    ): MangasPage {
+    override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select(
@@ -128,8 +127,8 @@ class XAsiatAlbums : HttpSource() {
                     }
 
                 status = SManga.COMPLETED
-                update_strategy =
-                    UpdateStrategy.ONLY_FETCH_ONCE
+
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }.distinctBy { it.url }
 
@@ -143,9 +142,8 @@ class XAsiatAlbums : HttpSource() {
         )
     }
 
-    override fun latestUpdatesParse(
-        response: Response,
-    ): MangasPage = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        popularMangaParse(response)
 
     override fun searchMangaRequest(
         page: Int,
@@ -181,20 +179,16 @@ class XAsiatAlbums : HttpSource() {
         }
     }
 
-    override fun searchMangaParse(
-        response: Response,
-    ): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage =
+        popularMangaParse(response)
 
-    override fun mangaDetailsRequest(
-        manga: SManga,
-    ): Request = GET(
-        baseUrl + manga.url,
-        headers,
-    )
+    override fun mangaDetailsRequest(manga: SManga): Request =
+        GET(
+            baseUrl + manga.url,
+            headers,
+        )
 
-    override fun mangaDetailsParse(
-        response: Response,
-    ): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
 
         return SManga.create().apply {
@@ -215,18 +209,16 @@ class XAsiatAlbums : HttpSource() {
 
             status = SManga.COMPLETED
 
-            update_strategy =
-                UpdateStrategy.ONLY_FETCH_ONCE
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
-    private fun getTags(
-        document: Document,
-    ): List<String> {
+    private fun getTags(document: Document): List<String> {
         return document.select(
             ".info-content a",
         ).mapNotNull { a ->
             val tag = a.text().trim()
+
             val href = a.attr("abs:href")
 
             if (
@@ -248,16 +240,13 @@ class XAsiatAlbums : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(
-        manga: SManga,
-    ): Request = GET(
-        baseUrl + manga.url,
-        headers,
-    )
+    override fun chapterListRequest(manga: SManga): Request =
+        GET(
+            baseUrl + manga.url,
+            headers,
+        )
 
-    override fun chapterListParse(
-        response: Response,
-    ): List<SChapter> {
+    override fun chapterListParse(response: Response): List<SChapter> {
         val url = response.request.url.toString()
 
         return listOf(
@@ -266,8 +255,7 @@ class XAsiatAlbums : HttpSource() {
 
                 name = "Photobook"
 
-                date_upload =
-                    System.currentTimeMillis()
+                date_upload = System.currentTimeMillis()
             },
         )
     }
@@ -327,9 +315,7 @@ class XAsiatAlbums : HttpSource() {
             }
     }
 
-    override fun pageListParse(
-        response: Response,
-    ): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
         return parseImagePages(
             response.asJsoup(),
         ).distinct()
@@ -360,9 +346,7 @@ class XAsiatAlbums : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(
-        response: Response,
-    ): String {
+    override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
 
