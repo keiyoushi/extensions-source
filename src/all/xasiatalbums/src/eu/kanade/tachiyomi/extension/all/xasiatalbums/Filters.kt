@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.xasiatalbums
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-// 初始分类映射
 val categories = mutableMapOf(
     "All" to "albums",
     "Japanese" to "albums/japanese",

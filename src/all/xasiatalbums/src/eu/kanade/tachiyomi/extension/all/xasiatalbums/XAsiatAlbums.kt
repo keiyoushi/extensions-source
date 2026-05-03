@@ -35,7 +35,6 @@ class XAsiatAlbums : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
 
-    // --- 列表翻页修复：使用偏移量 (1, 13, 25...) ---
     override fun latestUpdatesRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf("sort_by" to "post_date"))
 
     override fun popularMangaRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf("sort_by" to "album_viewed_week"))
@@ -61,15 +60,12 @@ class XAsiatAlbums : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request {
-        // 核心修复：计算正确的起始偏移量
         val offset = (page - 1) * 12 + 1
         
         return GET(
             mainUrl.toHttpUrl().newBuilder().apply {
-                // 核心修复：清理路径，防止 albums/albums 重叠
                 val cleanPath = path.removePrefix("/").removeSuffix("/")
                 addPathSegments(cleanPath)
-                
                 addQueryParameter("mode", "async")
                 addQueryParameter("function", "get_block")
                 addQueryParameter("block_id", blockId)
@@ -84,7 +80,6 @@ class XAsiatAlbums : HttpSource() {
         )
     }
 
-    // --- 搜索与标签修复 ---
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val categoryFilter = filterList.firstInstanceOrNull<UriPartFilter>()
@@ -92,7 +87,6 @@ class XAsiatAlbums : HttpSource() {
         return when {
             query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query))
             categoryFilter != null && categoryFilter.state > 0 -> {
-                // 修复：Filters.kt 中的路径已含 albums/，此处需正确处理
                 searchQuery(categoryFilter.toUriPart(), "list_albums_common_albums_list", page, emptyMap())
             }
             else -> latestUpdatesRequest(page)
@@ -101,7 +95,6 @@ class XAsiatAlbums : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // --- 详情加载 ---
     override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -124,7 +117,6 @@ class XAsiatAlbums : HttpSource() {
         } else null
     }
 
-    // --- 画廊翻页修复：自动抓取所有页面的图片 ---
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url.encodedPath
         return listOf(
@@ -176,7 +168,7 @@ class XAsiatAlbums : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("注意：查看画廊详情后会发现更多标签"),
+        Filter.Header("NOTE: Multiple pages will be loaded automatically"),
         Filter.Separator(),
         UriPartFilter("Category", categories.entries.map { Pair(it.key, it.value) }.toTypedArray()),
     )
