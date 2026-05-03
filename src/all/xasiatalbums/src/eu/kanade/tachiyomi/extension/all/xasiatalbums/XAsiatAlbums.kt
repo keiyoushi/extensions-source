@@ -199,10 +199,10 @@ class XAsiatAlbums : HttpSource() {
                         responses.flatMap { res ->
                             parseImagePages(res.asJsoup())
                         }
-                        .distinct()
-                        .mapIndexed { index, imageUrl ->
-                            Page(index, imageUrl = imageUrl)
-                        }
+                            .distinct()
+                            .mapIndexed { index, imageUrl ->
+                                Page(index, imageUrl = imageUrl)
+                            }
                     }
             }
     }
@@ -219,7 +219,13 @@ class XAsiatAlbums : HttpSource() {
         return document.select("a.item[href]")
             .map { it.attr("abs:href") }
             .filter { url ->
-                url.isNotBlank() && (url.contains("/get_image/") || url.endsWith(".jpg") || url.endsWith(".jpeg") || url.endsWith(".png") || url.endsWith(".webp"))
+                url.isNotBlank() && (
+                    url.contains("/get_image/") ||
+                        url.endsWith(".jpg") ||
+                        url.endsWith(".jpeg") ||
+                        url.endsWith(".png") ||
+                        url.endsWith(".webp")
+                    )
             }
     }
 
