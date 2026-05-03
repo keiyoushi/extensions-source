@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
 
@@ -25,12 +24,13 @@ class UniversoHentai :
     override fun latestUpdatesSelector() = "div.meio div.videos div.video a[href^=$baseUrl]:not(:has(span.selo-hd))"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("span.video-titulo")!!.text().trim()
+        title = element.selectFirst("span.video-titulo")!!.text()
         thumbnail_url = element.selectFirst("img.wp-post-image")!!.attr("src")
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         val postBox = document.selectFirst(chapterListSelector())!!
 
         title = postBox.select("h1.post-titulo").first()!!.text()
