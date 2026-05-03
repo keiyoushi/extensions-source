@@ -215,14 +215,42 @@ class EveriaClub : HttpSource() {
     }
 
     // ========================= Pages =========================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        document.select("noscript").remove()
-        return document.select(".entry-content img").mapIndexed { i, element ->
-            val url = element.imgSrc
-            Page(i, imageUrl = url)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .flatMap { response ->
+            val document = response.asJsoup()
+            val pageLinks = document.select(".page-links a.post-page-numbers")
+                .map { it.attr("abs:href") }
+                .distinct()
+
+            if (pageLinks.isEmpty()) {
+                Observable.just(parseImages(document))
+            } else {
+                Observable.from(pageLinks)
+                    .flatMap({ url ->
+                        client.newCall(GET(url, headers)).asObservableSuccess()
+                            .map { it.asJsoup() }
+                            .onErrorReturn { null }
+                    }, 3)
+                    .toList()
+                    .map { docs ->
+                        val allDocs = listOf(document) + docs.filterNotNull()
+                        allDocs.flatMap { parseImages(it) }
+                    }
+            }
         }
+        .map { urls ->
+            urls.distinct()
+                .filter { it.isNotEmpty() && !it.startsWith("data:image") }
+                .mapIndexed { i, url -> Page(i, imageUrl = url) }
+        }
+
+    private fun parseImages(document: Element): List<String> {
+        document.select("noscript").remove()
+        return document.select(".entry-content img").map { it.imgSrc }
     }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
