@@ -67,15 +67,15 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
         initialized = true
     }.let { Observable.just(it) }
 
-    protected open val chapterListSelector: String = ".cadrelect.chapter p a[href*=-]"
+    protected open val chapterListSelector: String = ".cadrelect.chapter"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select(chapterListSelector).map {
             SChapter.create().apply {
-                val href = it.attr("href")
+                val href = it.selectFirst("a")!!.attr("href")
                 setUrlWithoutDomain("/$internalLang/$href")
-                name = "Page " + it.text()
+                name = it.selectFirst("h4")!!.text()
             }
         }.reversed()
     }
@@ -95,6 +95,14 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
     )
 
     override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".pageslist a").mapIndexed { index, a ->
+            val href = a.attr("href")
+            Page(index, url = baseUrl + "/$internalLang/$href")
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
         val element = document.selectFirst("#balloonsimg")!!
 
@@ -126,13 +134,11 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
             balloons = balloons,
         )
 
-        val finalUrl = if (balloons.isNotEmpty()) {
+        return if (balloons.isNotEmpty()) {
             "$rawImageUrl#${pageData.toJsonString()}"
         } else {
             rawImageUrl
         }
-
-        return listOf(Page(0, imageUrl = finalUrl))
     }
 
     fun String.extractCssProp(prop: String, default: String = "0"): Float = substringAfter("$prop:", default)
@@ -207,6 +213,4 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
