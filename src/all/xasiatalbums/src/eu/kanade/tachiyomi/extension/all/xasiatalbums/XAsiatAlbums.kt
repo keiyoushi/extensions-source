@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.xasiatalbums
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -29,60 +31,77 @@ class XAsiatAlbums : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("X-Requested-With", "XMLHttpRequest")
 
     private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
 
-    // Latest
+    // --- 列表翻页修复：使用偏移量 (1, 13, 25...) ---
     override fun latestUpdatesRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf("sort_by" to "post_date"))
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    // Popular
     override fun popularMangaRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf("sort_by" to "album_viewed_week"))
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".list-albums a").map { element ->
+        val elements = document.select(".list-albums a, a:has(.thumb)")
+        
+        val mangas = elements.distinctBy { it.attr("abs:href") }.map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
-                title = element.attr("title")
-                thumbnail_url = element.select(".thumb").attr("data-original")
+                title = element.attr("title").ifEmpty { element.select(".thumb").attr("alt") }
+                thumbnail_url = element.select(".thumb").attr("data-original").ifEmpty { element.select(".thumb").attr("src") }
                 status = SManga.COMPLETED
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
-        val hasNextPage = document.selectFirst(".load-more") != null
+        
+        val hasNextPage = document.selectFirst(".load-more") != null || mangas.size >= 12
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request = GET(
-        mainUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments(path)
-            addQueryParameter("mode", "async")
-            addQueryParameter("function", "get_block")
-            addQueryParameter("block_id", blockId)
-            addQueryParameter("from", page.toString())
-            others.forEach { addQueryParameter(it.key, it.value) }
-            addQueryParameter("_", System.currentTimeMillis().toString())
-        }.build(),
-        headers,
-    )
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // Search
+    private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request {
+        // 核心修复：计算正确的起始偏移量
+        val offset = (page - 1) * 12 + 1
+        
+        return GET(
+            mainUrl.toHttpUrl().newBuilder().apply {
+                // 核心修复：清理路径，防止 albums/albums 重叠
+                val cleanPath = path.removePrefix("/").removeSuffix("/")
+                addPathSegments(cleanPath)
+                
+                addQueryParameter("mode", "async")
+                addQueryParameter("function", "get_block")
+                addQueryParameter("block_id", blockId)
+                addQueryParameter("from", offset.toString())
+                if (blockId.contains("search")) {
+                    addQueryParameter("from_albums", offset.toString())
+                }
+                others.forEach { addQueryParameter(it.key, it.value) }
+                addQueryParameter("_", System.currentTimeMillis().toString())
+            }.build(),
+            headers,
+        )
+    }
+
+    // --- 搜索与标签修复 ---
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val categoryFilter = filterList.firstInstanceOrNull<UriPartFilter>()
 
         return when {
-            query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query, "from_albums" to page.toString()))
-            categoryFilter != null && categoryFilter.state != 0 -> searchQuery(categoryFilter.toUriPart(), "list_albums_common_albums_list", page, mapOf("q" to query))
+            query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query))
+            categoryFilter != null && categoryFilter.state > 0 -> {
+                // 修复：Filters.kt 中的路径已含 albums/，此处需正确处理
+                searchQuery(categoryFilter.toUriPart(), "list_albums_common_albums_list", page, emptyMap())
+            }
             else -> latestUpdatesRequest(page)
         }
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // Details
+    // --- 详情加载 ---
     override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -92,52 +111,63 @@ class XAsiatAlbums : HttpSource() {
             description = document.select("meta[og:description]").attr("og:description")
             genre = getTags(document).joinToString(", ")
             status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
     private fun getTags(document: Element): List<String> = document.select(".info-content a").mapNotNull { a ->
         val tag = a.text()
-        if (tag.isNotEmpty()) {
-            val href = a.attr("abs:href")
-            val link = href.substringAfter(".com/", "")
-            if (link.isNotEmpty()) {
-                categories[tag] = link
-            }
+        val href = a.attr("abs:href")
+        if (tag.isNotEmpty() && href.contains("/albums/")) {
+            val link = href.substringAfter(".com/").removeSuffix("/")
+            if (link.isNotEmpty()) categories[tag] = link
             tag
-        } else {
-            null
-        }
+        } else null
     }
 
-    // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        val thumbUrl = manga.thumbnail_url.orEmpty().ifEmpty { baseUrl }
-        return Request.Builder()
-            .url("$thumbUrl#${manga.url}")
-            .head()
-            .headers(headers)
-            .build()
-    }
-
+    // --- 画廊翻页修复：自动抓取所有页面的图片 ---
     override fun chapterListParse(response: Response): List<SChapter> {
-        val lastModified = response.headers["last-modified"]
-        val mangaUrl = response.request.url.fragment ?: response.request.url.encodedPath
-
+        val mangaUrl = response.request.url.encodedPath
         return listOf(
             SChapter.create().apply {
                 url = mainUrl + mangaUrl
                 name = "Photobook"
-                date_upload = dateFormat.tryParse(lastModified)
+                date_upload = System.currentTimeMillis()
             },
         )
     }
 
-    // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        return client.newCall(GET(chapter.url, headers))
+            .asObservableSuccess()
+            .flatMap { response ->
+                val document = response.asJsoup()
+                val pageLinks = document.select(".pagination a, .pages a")
+                    .map { it.attr("abs:href") }
+                    .filter { it.isNotEmpty() && !it.contains("#") && it.startsWith("http") }
+                    .distinct()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+                if (pageLinks.isEmpty()) {
+                    Observable.just(pageListParse(document))
+                } else {
+                    val allUrls = (listOf(chapter.url) + pageLinks).distinct()
+                    val observables = allUrls.map { url ->
+                        client.newCall(GET(url, headers)).asObservableSuccess()
+                    }
+
+                    Observable.zip(observables) { responses ->
+                        responses.flatMap { res ->
+                            pageListParse((res as Response).asJsoup())
+                        }
+                        .distinctBy { it.imageUrl }
+                        .mapIndexed { index, page -> Page(index, "", page.imageUrl) }
+                    }
+                }
+            }
+    }
+
+    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+
+    private fun pageListParse(document: org.jsoup.nodes.Document): List<Page> {
         return document.select("a.item").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:href"))
         }
@@ -145,9 +175,8 @@ class XAsiatAlbums : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Filters
     override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Only one filter will be applied!"),
+        Filter.Header("注意：查看画廊详情后会发现更多标签"),
         Filter.Separator(),
         UriPartFilter("Category", categories.entries.map { Pair(it.key, it.value) }.toTypedArray()),
     )

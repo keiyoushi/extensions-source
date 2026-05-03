@@ -2,12 +2,14 @@ package eu.kanade.tachiyomi.extension.all.xasiatalbums
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+// 初始分类映射
 val categories = mutableMapOf(
     "All" to "albums",
-    "Gravure Idols" to "albums/categories/gravure-idols",
-    "JAV & AV Models" to "albums/categories/jav",
+    "Japanese" to "albums/japanese",
+    "Chinese & Taiwan" to "albums/categories/china-taiwan",
     "South Korea" to "albums/categories/korea",
-    "China & Taiwan" to "albums/categories/china-taiwan",
+    "JAV & AV Models" to "albums/categories/jav",
+    "Gravure Idols" to "albums/categories/gravure-idols",
     "Amateur" to "albums/categories/amateur3",
     "Western Girls" to "albums/categories/western-girls",
 )
