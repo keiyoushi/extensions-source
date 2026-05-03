@@ -2,12 +2,20 @@ package eu.kanade.tachiyomi.extension.all.xasiatalbums
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+open class UriPartFilter(
+    displayName: String,
+    val vals: Array<Pair<String, String>>,
+) : Filter.Select<String>(
+    displayName,
+    vals.map { it.first }.toTypedArray(),
+) {
+
     fun toUriPart(): String = vals[state].second
 }
 
 val initialCategories = mapOf(
     "None" to "",
+
     "China & Taiwan" to "albums/categories/china-taiwan",
     "South Korea" to "albums/categories/korea",
     "JAV & AV Models" to "albums/categories/jav",
@@ -16,6 +24,7 @@ val initialCategories = mapOf(
     "Western Girls" to "albums/categories/western-girls",
     "Southeast Asia" to "albums/categories/southeast-asia",
     "JAV Amateur" to "albums/categories/jav-amateur",
+
     "Cosplay" to "albums/tags/cosplay",
     "Japanese" to "albums/tags/japanese",
     "Japan" to "albums/tags/japan",
