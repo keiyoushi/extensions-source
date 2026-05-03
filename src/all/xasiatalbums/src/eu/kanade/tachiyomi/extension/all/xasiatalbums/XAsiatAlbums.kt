@@ -15,18 +15,15 @@ import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
+import org.jsoup.nodes.Document
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class XAsiatAlbums : HttpSource() {
-    override val baseUrl = "https://www.xasiat.com/albums"
+
+    override val baseUrl = "https://www.xasiat.com"
     override val lang = "all"
     override val name = "XAsiat Albums"
     override val supportsLatest = true
-
-    private val mainUrl = "https://www.xasiat.com"
 
     private val categories = initialCategories.toMutableMap()
 
@@ -34,138 +31,359 @@ class XAsiatAlbums : HttpSource() {
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
-    private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
+    override fun popularMangaRequest(page: Int): Request =
+        searchQuery(
+            path = "albums/",
+            blockId = "list_albums_common_albums_list",
+            page = page,
+            params = mapOf(
+                "sort_by" to "album_viewed_week",
+            ),
+        )
 
-    override fun latestUpdatesRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf("sort_by" to "post_date"))
+    override fun latestUpdatesRequest(page: Int): Request =
+        searchQuery(
+            path = "albums/",
+            blockId = "list_albums_common_albums_list",
+            page = page,
+            params = mapOf(
+                "sort_by" to "post_date",
+            ),
+        )
 
-    override fun popularMangaRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf("sort_by" to "album_viewed_week"))
+    private fun searchQuery(
+        path: String,
+        blockId: String,
+        page: Int,
+        params: Map<String, String>,
+    ): Request {
+        val offset = ((page - 1) * 12) + 1
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val elements = document.select(".list-albums a, a:has(.thumb)")
-        val mangas = elements.distinctBy { it.attr("abs:href") }.map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.attr("abs:href"))
-                title = element.attr("title").ifEmpty { element.select(".thumb").attr("alt") }
-                thumbnail_url = element.select(".thumb").attr("data-original").ifEmpty { element.select(".thumb").attr("src") }
-                status = SManga.COMPLETED
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments(
+                path.removePrefix("/").removeSuffix("/"),
+            )
+
+            addQueryParameter("mode", "async")
+            addQueryParameter("function", "get_block")
+            addQueryParameter("block_id", blockId)
+            addQueryParameter("from", offset.toString())
+
+            if (blockId.contains("search")) {
+                addQueryParameter(
+                    "from_albums",
+                    offset.toString(),
+                )
             }
-        }
-        val hasNextPage = document.selectFirst(".load-more") != null || mangas.size >= 12
-        return MangasPage(mangas, hasNextPage)
+
+            params.forEach { (key, value) ->
+                addQueryParameter(key, value)
+            }
+
+            addQueryParameter(
+                "_",
+                System.currentTimeMillis().toString(),
+            )
+        }.build()
+
+        return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun popularMangaParse(
+        response: Response,
+    ): MangasPage {
+        val document = response.asJsoup()
 
-    private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request {
-        val offset = (page - 1) * 12 + 1
-        return GET(
-            mainUrl.toHttpUrl().newBuilder().apply {
-                val cleanPath = path.removePrefix("/").removeSuffix("/")
-                addPathSegments(cleanPath)
-                addQueryParameter("mode", "async")
-                addQueryParameter("function", "get_block")
-                addQueryParameter("block_id", blockId)
-                addQueryParameter("from", offset.toString())
-                if (blockId.contains("search")) {
-                    addQueryParameter("from_albums", offset.toString())
-                }
-                others.forEach { addQueryParameter(it.key, it.value) }
-                addQueryParameter("_", System.currentTimeMillis().toString())
-            }.build(),
-            headers,
+        val mangas = document.select(
+            ".list-albums .item",
+        ).mapNotNull { element ->
+            val link = element.selectFirst("a[href]")
+                ?: return@mapNotNull null
+
+            val url = link.attr("abs:href")
+
+            if (
+                url.isBlank() ||
+                !url.contains("/albums/")
+            ) {
+                return@mapNotNull null
+            }
+
+            SManga.create().apply {
+                setUrlWithoutDomain(url)
+
+                title = link.attr("title")
+                    .ifBlank {
+                        link.selectFirst("img")
+                            ?.attr("alt")
+                            .orEmpty()
+                    }
+
+                thumbnail_url = link.selectFirst("img")
+                    ?.let { img ->
+                        img.attr("abs:data-original")
+                            .ifBlank {
+                                img.attr("abs:src")
+                            }
+                    }
+
+                status = SManga.COMPLETED
+                update_strategy =
+                    UpdateStrategy.ONLY_FETCH_ONCE
+            }
+        }.distinctBy { it.url }
+
+        val hasNextPage =
+            document.selectFirst(".load-more") != null ||
+                mangas.size >= 12
+
+        return MangasPage(
+            mangas,
+            hasNextPage,
         )
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val categoryFilter = filters.firstInstanceOrNull<UriPartFilter>()
+    override fun latestUpdatesParse(
+        response: Response,
+    ): MangasPage = popularMangaParse(response)
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val categoryFilter =
+            filters.firstInstanceOrNull<UriPartFilter>()
+
         return when {
-            query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query))
-            categoryFilter != null && categoryFilter.state > 0 -> {
-                searchQuery(categoryFilter.toUriPart(), "list_albums_common_albums_list", page, emptyMap())
+            query.isNotBlank() -> {
+                searchQuery(
+                    path = "search/search/",
+                    blockId = "list_albums_albums_list_search_result",
+                    page = page,
+                    params = mapOf(
+                        "q" to query,
+                    ),
+                )
             }
+
+            categoryFilter != null &&
+                categoryFilter.state > 0 -> {
+                searchQuery(
+                    path = categoryFilter.toUriPart(),
+                    blockId = "list_albums_common_albums_list",
+                    page = page,
+                    params = emptyMap(),
+                )
+            }
+
             else -> latestUpdatesRequest(page)
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(
+        response: Response,
+    ): MangasPage = popularMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
+    override fun mangaDetailsRequest(
+        manga: SManga,
+    ): Request = GET(
+        baseUrl + manga.url,
+        headers,
+    )
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    override fun mangaDetailsParse(
+        response: Response,
+    ): SManga {
         val document = response.asJsoup()
+
         return SManga.create().apply {
-            title = document.select(".entry-title").text()
-            description = document.select("meta[og:description]").attr("og:description")
-            genre = getTags(document).joinToString(", ")
+            title = document.selectFirst(
+                ".entry-title",
+            )?.text().orEmpty()
+
+            description = document.selectFirst(
+                "meta[property=og:description]",
+            )?.attr("content").orEmpty()
+
+            thumbnail_url = document.selectFirst(
+                "meta[property=og:image]",
+            )?.attr("abs:content")
+
+            genre = getTags(document)
+                .joinToString(", ")
+
             status = SManga.COMPLETED
+
+            update_strategy =
+                UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
-    private fun getTags(document: Element): List<String> = document.select(".info-content a").mapNotNull { a ->
-        val tag = a.text()
-        val href = a.attr("abs:href")
-        if (tag.isNotEmpty() && href.contains("/albums/")) {
-            val link = href.substringAfter(".com/").removeSuffix("/")
-            if (link.isNotEmpty()) categories[tag] = link
-            tag
-        } else {
-            null
+    private fun getTags(
+        document: Document,
+    ): List<String> {
+        return document.select(
+            ".info-content a",
+        ).mapNotNull { a ->
+            val tag = a.text().trim()
+            val href = a.attr("abs:href")
+
+            if (
+                tag.isNotBlank() &&
+                href.contains("/albums/")
+            ) {
+                val link = href
+                    .substringAfter(".com/")
+                    .removeSuffix("/")
+
+                if (link.isNotBlank()) {
+                    categories[tag] = link
+                }
+
+                tag
+            } else {
+                null
+            }
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val thumbUrl = manga.thumbnail_url.orEmpty().ifEmpty { baseUrl }
-        return Request.Builder().url("$thumbUrl#${manga.url}").head().headers(headers).build()
-    }
+    override fun chapterListRequest(
+        manga: SManga,
+    ): Request = GET(
+        baseUrl + manga.url,
+        headers,
+    )
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaUrl = response.request.url.fragment ?: response.request.url.encodedPath
+    override fun chapterListParse(
+        response: Response,
+    ): List<SChapter> {
+        val url = response.request.url.toString()
+
         return listOf(
             SChapter.create().apply {
-                url = if (mangaUrl.startsWith("http")) mangaUrl else mainUrl + mangaUrl
+                this.url = url.removePrefix(baseUrl)
+
                 name = "Photobook"
-                date_upload = System.currentTimeMillis()
+
+                date_upload =
+                    System.currentTimeMillis()
             },
         )
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(chapter.url, headers))
-        .asObservableSuccess()
-        .flatMap { response ->
-            val document = response.asJsoup()
-            val pageLinks = document.select(".pagination a, .pages a")
-                .map { it.attr("abs:href") }
-                .filter { it.isNotEmpty() && !it.contains("#") && it.startsWith("http") }
-                .distinct()
-            if (pageLinks.isEmpty()) {
-                Observable.just(pageListParse(document))
-            } else {
-                val allUrls = (listOf(chapter.url) + pageLinks).distinct()
-                val observables = allUrls.map { url -> client.newCall(GET(url, headers)).asObservableSuccess() }
-                Observable.zip(observables) { responses ->
-                    responses.flatMap { res -> pageListParse((res as Response).asJsoup()) }
-                        .distinctBy { it.imageUrl }
-                        .mapIndexed { index, page -> Page(index, "", page.imageUrl) }
-                }
+    override fun fetchPageList(
+        chapter: SChapter,
+    ): Observable<List<Page>> {
+        val chapterUrl = baseUrl + chapter.url
+
+        return client.newCall(
+            GET(chapterUrl, headers),
+        ).asObservableSuccess()
+            .flatMap { response ->
+                val document = response.asJsoup()
+
+                val pageUrls = document.select(
+                    ".pagination a[href], .pages a[href]",
+                ).map {
+                    it.attr("abs:href")
+                }.filter {
+                    it.isNotBlank() &&
+                        it.startsWith("http")
+                }.distinct()
+
+                val allUrls = (
+                    listOf(chapterUrl) + pageUrls
+                    ).distinct()
+
+                Observable.from(allUrls)
+                    .concatMap { url ->
+                        client.newCall(
+                            GET(url, headers),
+                        ).asObservableSuccess()
+                    }
+                    .map { res ->
+                        parseImagePages(
+                            (res as Response).asJsoup(),
+                        )
+                    }
+                    .reduce(
+                        mutableListOf<String>(),
+                    ) { acc, list ->
+                        acc.apply {
+                            addAll(list)
+                        }
+                    }
+                    .map { imageUrls ->
+                        imageUrls
+                            .distinct()
+                            .mapIndexed { index, imageUrl ->
+                                Page(
+                                    index = index,
+                                    imageUrl = imageUrl,
+                                )
+                            }
+                    }
             }
-        }
-
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
-
-    private fun pageListParse(document: org.jsoup.nodes.Document): List<Page> = document.select("a.item").mapIndexed { i, element ->
-        Page(i, imageUrl = element.attr("abs:href"))
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun pageListParse(
+        response: Response,
+    ): List<Page> {
+        return parseImagePages(
+            response.asJsoup(),
+        ).distinct()
+            .mapIndexed { index, imageUrl ->
+                Page(
+                    index = index,
+                    imageUrl = imageUrl,
+                )
+            }
+    }
+
+    private fun parseImagePages(
+        document: Document,
+    ): List<String> {
+        return document.select(
+            "a.item[href]",
+        ).map {
+            it.attr("abs:href")
+        }.filter {
+            it.isNotBlank() &&
+                (
+                    it.contains("/get_image/") ||
+                        it.endsWith(".jpg") ||
+                        it.endsWith(".jpeg") ||
+                        it.endsWith(".png") ||
+                        it.endsWith(".webp")
+                    )
+        }
+    }
+
+    override fun imageUrlParse(
+        response: Response,
+    ): String {
+        throw UnsupportedOperationException()
+    }
 
     override fun getFilterList(): FilterList {
-        val pairList = categories.map { Pair(it.key, it.value) }.toTypedArray()
+        val pairList = categories
+            .map { Pair(it.key, it.value) }
+            .distinctBy { it.first }
+            .sortedBy {
+                it.first.lowercase()
+            }
+            .toTypedArray()
+
         return FilterList(
-            Filter.Header("More tags will be discovered after viewing album details"),
+            Filter.Header(
+                "Tags update dynamically after opening albums",
+            ),
             Filter.Separator(),
-            UriPartFilter("Category", pairList),
+            UriPartFilter(
+                "Category",
+                pairList,
+            ),
         )
     }
 }
