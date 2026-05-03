@@ -1,0 +1,23 @@
+[33m76eac98c1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{2026-05-04 03:23:46 +0800}: commit: Update logic and workflow
+[33m4a74883c5[m HEAD@{2026-05-04 03:18:20 +0800}: commit: Update logic and workflow
+[33m87d7da01e[m HEAD@{2026-05-04 03:12:11 +0800}: commit: Update logic and workflow
+[33md00d69d1e[m HEAD@{2026-05-04 02:57:32 +0800}: commit: Update logic and workflow
+[33m585c942f5[m HEAD@{2026-05-04 02:50:28 +0800}: commit: Update logic and workflow
+[33m254077093[m HEAD@{2026-05-04 02:47:54 +0800}: commit: Update logic and workflow
+[33m8a1312721[m HEAD@{2026-05-04 02:45:53 +0800}: commit: Update logic and workflow
+[33m6cb01b9c8[m HEAD@{2026-05-04 02:43:37 +0800}: commit: Update logic and workflow
+[33mb0016693a[m HEAD@{2026-05-04 02:28:37 +0800}: commit: Update logic and workflow
+[33mbff4c95fe[m HEAD@{2026-05-04 02:24:48 +0800}: commit: Update logic and workflow
+[33meea3b8b87[m[33m ([m[1;31mupstream/main[m[33m, [m[1;31mupstream/HEAD[m[33m)[m HEAD@{2026-05-04 02:14:30 +0800}: reset: moving to upstream/main
+[33m104992eb5[m HEAD@{2026-05-04 02:14:30 +0800}: checkout: moving from main to main
+[33m104992eb5[m HEAD@{2026-05-04 02:03:55 +0800}: commit: Update logic and workflow
+[33m70a2c8ec0[m HEAD@{2026-05-04 01:57:04 +0800}: commit: Update logic and workflow
+[33m6649ccc30[m HEAD@{2026-05-04 01:51:34 +0800}: commit: Update logic and workflow
+[33m7fe4411d6[m HEAD@{2026-05-04 01:40:37 +0800}: commit: Update logic and workflow
+[33m305561194[m HEAD@{2026-05-04 01:27:43 +0800}: commit: Auto fix code style and build
+[33m66ace8918[m HEAD@{2026-05-04 01:22:57 +0800}: commit: Update gradle path to src/all
+[33m185f3d538[m HEAD@{2026-05-04 01:13:47 +0800}: commit: Final fix for build workflow
+[33m56a8e4a37[m HEAD@{2026-05-04 00:54:54 +0800}: commit: Force build only xasiatalbums and enable artifacts
+[33m8661e574a[m HEAD@{2026-05-04 00:47:06 +0800}: commit: Fix: Add missing imports and RxJava logic
+[33ma538830fa[m HEAD@{2026-05-04 00:33:42 +0800}: commit: Optimize pagination using RxJava
+[33meea3b8b87[m[33m ([m[1;31mupstream/main[m[33m, [m[1;31mupstream/HEAD[m[33m)[m HEAD@{2026-05-04 00:22:57 +0800}: clone: from https://github.com/Ricardo-014/extensions-source-test.git
