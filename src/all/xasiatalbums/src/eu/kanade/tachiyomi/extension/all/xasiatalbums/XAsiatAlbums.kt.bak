@@ -176,20 +176,11 @@ class XAsiatAlbums : HttpSource() {
 
     private val categories = mutableMapOf(
         "None" to "",
-        "Cosplay" to "cosplay/",
         "Japanese" to "japanese/",
-        "Japan" to "japan/",
-        "Photobook" to "photobook/",
-        "Friday" to "friday/",
+        "Chinese" to "chinese/",
         "Korean" to "korean/",
-        "Graphis" to "graphis/",
-        "Lovepop" to "lovepop/",
-        "Fantia" to "fantia/",
-        "Gals" to "gals/",
-        "Xiuren" to "xiuren/",
-        "JVID" to "jvid/",
-        "Artgravia" to "artgravia/",
-        "Patreon" to "patreon/",
-        "Djawva" to "djawva/",
+        "Thai" to "thai/",
+        "Cosplay" to "cosplay/",
+        "Gravure" to "gravure/",
     )
 }
