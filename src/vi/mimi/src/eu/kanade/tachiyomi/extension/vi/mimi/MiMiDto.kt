@@ -5,45 +5,52 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
-class DataDto(
-    val data: List<MangaDto> = emptyList(),
-    val currentPage: Int = 0,
-    val totalPage: Int = 0,
+class PaginatedResponse(
+    val items: List<MangaDto> = emptyList(),
+    val page: Int = 1,
+    val total_pages: Int = 1,
+    val has_next: Boolean = false,
 )
 
 @Serializable
 class MangaDto(
     private val id: Int,
     private val title: String,
-    private val coverUrl: String?,
-    private val authors: List<AuthorDto>,
-    private val genres: List<GenreDto>,
-    private val description: String,
-    private val parody: List<String>,
-    private val characters: List<String>,
-    private val differentNames: List<String>,
+    private val cover_url: String? = null,
+    private val description: String? = null,
+    private val authors: List<AuthorDto> = emptyList(),
+    private val genres: List<GenreDto> = emptyList(),
+    private val alt_names: List<String> = emptyList(),
+    private val parodies: List<ParodyDto> = emptyList(),
+    private val characters: List<CharacterDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
-        thumbnail_url = coverUrl
-        url = "$id"
+        thumbnail_url = cover_url
+        url = "/manga/$id"
         description = buildString {
-            appendIfNotEmpty("Tên khác", differentNames)
-            appendIfNotEmpty("Parody", parody)
-            appendIfNotEmpty("Nhân vật", characters)
-            append("Code: $id\n\n")
-            append(this@MangaDto.description)
+            appendIfNotEmpty("Tên khác", alt_names)
+            appendIfNotEmpty("Parody", parodies.map { it.name })
+            appendIfNotEmpty("Nhân vật", characters.map { it.name })
+            if (this@MangaDto.description?.isNotEmpty() == true) {
+                append(this@MangaDto.description)
+            }
         }
-        author = authors.joinToString { it.name }
-        genre = genres.joinToString { it.name }
+        author = authors.joinToString { it.name }.ifEmpty { null }
+        genre = genres.joinToString { it.name }.ifEmpty { null }
         status = SManga.UNKNOWN
         initialized = true
+    }
+
+    fun toSMangaSimple() = SManga.create().apply {
+        title = this@MangaDto.title
+        thumbnail_url = cover_url
+        url = "/manga/$id"
     }
 }
 
@@ -55,7 +62,6 @@ private fun StringBuilder.appendIfNotEmpty(label: String, list: List<String>) {
 
 @Serializable
 class AuthorDto(
-    val id: Int? = null,
     val name: String,
 )
 
@@ -66,42 +72,45 @@ class GenreDto(
 )
 
 @Serializable
+class ParodyDto(
+    val name: String,
+)
+
+@Serializable
+class CharacterDto(
+    val name: String,
+)
+
+@Serializable
 class ChapterDto(
     private val id: Int,
     private val title: String? = null,
     private val order: Int = 0,
-    private val createdAt: String? = null,
+    private val created_at: String? = null,
+    private val manga_id: Int = 0,
 ) {
-    fun toSChapter(mangaId: String): SChapter = SChapter.create().apply {
-        url = "$mangaId/$id"
-        name = title?.takeIf { it.isNotBlank() } ?: "Chapter $order"
+    fun toSChapter(): SChapter = SChapter.create().apply {
+        url = "/manga/$manga_id/chapter/$id"
+        name = title?.takeIf { it.isNotEmpty() } ?: "Chapter $order"
         chapter_number = order.toFloat()
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = dateFormat.tryParse(created_at)
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh") }
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 @Serializable
-class PageDto(
-    private val pages: List<ListPages> = emptyList(),
+class ChapterPageDto(
+    val pages: List<PageImageDto> = emptyList(),
 ) {
-    fun toPage(): List<Page> = pages.mapIndexed { index, url ->
-        val imageUrl = url.drm
-            ?.takeIf { it.isNotBlank() }
-            ?.let {
-                url.imageUrl.toHttpUrl().newBuilder()
-                    .fragment("${MiMiImageInterceptor.FRAGMENT_PREFIX}$it")
-                    .build()
-                    .toString()
-            }
-            ?: url.imageUrl
-        Page(index, imageUrl = imageUrl)
+    fun toPageList(): List<Page> = pages.mapIndexed { index, page ->
+        Page(index, imageUrl = page.image_url)
     }
 }
 
 @Serializable
-class ListPages(
-    val imageUrl: String,
-    val drm: String? = null,
+class PageImageDto(
+    val image_url: String,
 )
