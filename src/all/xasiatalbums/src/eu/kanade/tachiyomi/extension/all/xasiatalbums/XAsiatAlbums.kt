@@ -30,7 +30,7 @@ class XAsiatAlbums : HttpSource() {
     private val mainUrl = "https://www.xasiat.com"
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$mainUrl/")
+        .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
     private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
@@ -82,8 +82,7 @@ class XAsiatAlbums : HttpSource() {
         return when {
             query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mapOf("q" to query))
             categoryFilter != null && categoryFilter.state > 0 -> {
-                val catPath = "albums/${categoryFilter.toUriPart()}"
-                searchQuery(catPath, "list_albums_common_albums_list", page, emptyMap())
+                searchQuery(categoryFilter.toUriPart(), "list_albums_common_albums_list", page, emptyMap())
             }
             else -> latestUpdatesRequest(page)
         }
@@ -107,12 +106,10 @@ class XAsiatAlbums : HttpSource() {
         val tag = a.text()
         val href = a.attr("abs:href")
         if (tag.isNotEmpty() && href.contains("/albums/")) {
-            val link = href.substringAfter("/albums/").removeSuffix("/")
-            if (link.isNotEmpty()) categories[tag] = "$link/"
+            val link = href.substringAfter(".com/").removeSuffix("/")
+            if (link.isNotEmpty()) categories[tag] = link
             tag
-        } else {
-            null
-        }
+        } else null
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -121,13 +118,12 @@ class XAsiatAlbums : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val lastModified = response.headers["last-modified"]
         val mangaUrl = response.request.url.fragment ?: response.request.url.encodedPath
         return listOf(
             SChapter.create().apply {
                 url = if (mangaUrl.startsWith("http")) mangaUrl else mainUrl + mangaUrl
                 name = "Photobook"
-                date_upload = dateFormat.tryParse(lastModified)
+                date_upload = System.currentTimeMillis()
             },
         )
     }
@@ -164,7 +160,7 @@ class XAsiatAlbums : HttpSource() {
     override fun getFilterList(): FilterList {
         val pairList = categories.map { Pair(it.key, it.value) }.toTypedArray()
         return FilterList(
-            Filter.Header("NOTE: Multiple pages will be loaded automatically"),
+            Filter.Header("More tags will be discovered after viewing album details"),
             Filter.Separator(),
             UriPartFilter("Category", pairList),
         )
@@ -176,20 +172,21 @@ class XAsiatAlbums : HttpSource() {
 
     private val categories = mutableMapOf(
         "None" to "",
-        "Cosplay" to "cosplay/",
-        "Japanese" to "japanese/",
-        "Japan" to "japan/",
-        "Photobook" to "photobook/",
-        "Friday" to "friday/",
-        "Korean" to "korean/",
-        "Graphis" to "graphis/",
-        "Lovepop" to "lovepop/",
-        "Fantia" to "fantia/",
-        "Gals" to "gals/",
-        "Xiuren" to "xiuren/",
-        "JVID" to "jvid/",
-        "Artgravia" to "artgravia/",
-        "Patreon" to "patreon/",
-        "Djawva" to "djawva/",
+        "Cosplay" to "albums/cosplay",
+        "Japanese" to "albums/japanese",
+        "Korean" to "albums/korean",
+        "Graphis" to "albums/graphis",
+        "Xiuren" to "albums/xiuren",
+        "Lovepop" to "albums/lovepop",
+        "JVID" to "albums/jvid",
+        "Artgravia" to "albums/artgravia",
+        "Patreon" to "albums/patreon",
+        "Djawva" to "albums/djawva",
+        "Fantia" to "albums/fantia",
+        "Gals" to "albums/gals",
+        "Photobook" to "albums/photobook",
+        "Chinese & Taiwan" to "albums/categories/china-taiwan",
+        "JAV & AV Models" to "albums/categories/jav",
+        "Gravure Idols" to "albums/categories/gravure-idols",
     )
 }
