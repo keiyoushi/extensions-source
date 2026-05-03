@@ -3,11 +3,14 @@ package eu.kanade.tachiyomi.extension.vi.mimi
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(genreList: List<Pair<String, Int>>): FilterList = FilterList(
+fun getFilters(
+    genreList: List<Pair<String, Int>>,
+): FilterList = FilterList(
     SortByList(),
-    TextField("Tác giả", "author"),
     TextField("Parody", "parody"),
     TextField("Nhân vật", "character"),
+    Filter.Header("ID Tác giả (chỉ nhập số)"),
+    TextField("ID Tác giả", "author"),
     if (genreList.isEmpty()) {
         Filter.Header("Nhấn 'Làm mới' để tải thể loại")
     } else {
@@ -31,6 +34,7 @@ class SortByList :
     Filter.Select<Genre>(
         "Sắp xếp",
         arrayOf(
+            Genre("Mặc định", ""),
             Genre("Mới", "updated_at"),
             Genre("Likes", "likes"),
             Genre("Views", "views"),
