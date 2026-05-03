@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.madtheme
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -262,7 +263,6 @@ abstract class MadTheme(
     override fun pageListParse(document: Document): List<Page> {
         val mangaId = MANGA_ID_REGEX.find(document.location())?.groupValues?.get(1)
         val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
-
         val html = if (mangaId != null && chapterId != null) {
             val url = GET("$baseUrl/service/backend/chapterServer/?server_id=1&chapter_id=$chapterId", headers)
             client.newCall(url).execute().body.string()
@@ -270,10 +270,8 @@ abstract class MadTheme(
             document.html()
         }
         val realDocument = Jsoup.parse(html, document.location())
-
         if (!html.contains("var mainServer = \"")) {
             val chapterImagesFromHtml = realDocument.select("#chapter-images img, .chapter-image[data-src]")
-
             // 17/03/2023: Certain hosts only embed two pages in their "#chapter-images" and leave
             // the rest to be lazily(?) loaded by javascript. Let's extract `chapImages` and compare
             // the count against our select query. If both counts are the same, extract the original
@@ -284,44 +282,63 @@ abstract class MadTheme(
                     .substringAfter("var chapImages = '")
                     .substringBefore("'")
                     .split(',')
-
                 // Make sure chapter images we've got from javascript all have a host, otherwise
                 // we've got no choice but to fallback to chapter images from HTML.
                 // TODO: This might need to be solved one day ^
-                if (chapterImagesFromJs.all { e ->
-                        e.startsWith("http://") || e.startsWith("https://")
-                    }
-                ) {
-                    // Great, we can use these.
+                if (chapterImagesFromJs.all { it.startsWith("http://") || it.startsWith("https://") }) {
                     if (chapterImagesFromHtml.count() < chapterImagesFromJs.count()) {
                         // Seems like we've hit such a host, let's use the images we've obtained
                         // from the javascript string.
-                        return chapterImagesFromJs.mapIndexed { index, path ->
-                            Page(index, imageUrl = path)
-                        }
+                        return chapterImagesFromJs.mapIndexed { index, path -> Page(index, imageUrl = path) }
                     }
                 }
             }
-
             // No fancy CDN, all images are available directly in <img> tags (hopefully)
             return chapterImagesFromHtml.mapIndexed { index, element ->
-                Page(index, imageUrl = element.attr("abs:data-src"))
+                Page(index, imageUrl = element.resolveImageUrl())
             }
         }
-
         // While the site may support multiple CDN hosts, we have opted to ignore those
         val mainServer = html
             .substringAfter("var mainServer = \"")
             .substringBefore("\"")
         val schemePrefix = if (mainServer.startsWith("//")) "https:" else ""
-
         val chapImages = html
             .substringAfter("var chapImages = '")
             .substringBefore("'")
             .split(',')
-
         return chapImages.mapIndexed { index, path ->
             Page(index, imageUrl = "$schemePrefix$mainServer$path")
+        }
+    }
+
+    /**
+     * Resolves the best available image URL from a chapter image element.
+     *
+     * Normally we use `data-src`, but certain CDN servers (currently s20 on BeeHentai) are
+     * broken. In those cases, the site itself defines
+     * an `onerror` fallback pointing to a stable backup CDN (sb.toonilycdnv2.xyz).
+     *
+     * Note: the fallback URL has a different path structure than `data-src`
+     * (it omits the /toonily/ path segment), so we cannot simply swap the domain —
+     * we must extract the fallback URL from the `onerror` attribute directly.
+     *
+     * Example:
+     *   data-src:  https://s20.toonilycdnv2.xyz/toonily/manga/.../page.jpg
+     *   onerror:   //sb.toonilycdnv2.xyz/manga/.../page.jpg?v=1   ← different path!
+     */
+    private fun Element.resolveImageUrl(): String {
+        val dataSrc = attr("abs:data-src")
+        if ("://s20." !in dataSrc) return dataSrc
+
+        val raw = attr("onerror")
+            .substringAfter("this.src='", "")
+            .substringBefore("'")
+
+        return when {
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            raw.startsWith("//") -> "https:$raw"
+            else -> dataSrc // onerror unparseable, fall through to original
         }
     }
 
