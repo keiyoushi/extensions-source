@@ -1,9 +1,7 @@
 ext {
     extName = 'Kappa Beast'
     extClass = '.KappaBeast'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://kappabeast.com'
-    overrideVersionCode = 1
+    extVersionCode = 32
     isNsfw = true
 }
 
