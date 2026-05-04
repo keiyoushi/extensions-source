@@ -21,8 +21,9 @@ data class DilarSearchItemDto(
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = "/series/$id/${title.orEmpty()}"
-        this.title = this@DilarSearchItemDto.title ?: "Unknown"
+        val safeTitle = this@DilarSearchItemDto.title ?: "Unknown"
+        url = "/series/$id/$safeTitle"
+        this.title = safeTitle
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
     }
 }
@@ -31,11 +32,25 @@ data class DilarSearchItemDto(
 
 @Serializable
 data class DilarSeriesListDto(
-    val series: List<DilarSearchItemDto> = emptyList(),
+    val series: List<DilarSeriesItemDto> = emptyList(),
     val currentPage: Int = 1,
     val totalPages: Int = 1,
 ) {
     val hasNextPage get() = currentPage < totalPages
+}
+
+@Serializable
+data class DilarSeriesItemDto(
+    val id: String,
+    val title: String? = null,
+    val cover: String? = null,
+) {
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
+        val safeTitle = this@DilarSeriesItemDto.title ?: "Unknown"
+        url = "/series/$id/$safeTitle"
+        this.title = safeTitle
+        thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
+    }
 }
 
 // ── Series detail ─────────────────────────────────────────────────────────
@@ -85,10 +100,18 @@ data class DilarCategoryDto(
     val name: String,
 )
 
-// ── Releases (chapter list) ───────────────────────────────────────────────
+// ── Chapter list ──────────────────────────────────────────────────────────
 
 @Serializable
-data class DilarReleasesDto(
+data class DilarChapterListDto(
+    val chapters: List<DilarChapterWithReleasesDto> = emptyList(),
+)
+
+@Serializable
+data class DilarChapterWithReleasesDto(
+    val id: String,
+    val chapter: String? = null,
+    val title: String? = null,
     val releases: List<DilarReleaseDto> = emptyList(),
 )
 
@@ -97,15 +120,14 @@ data class DilarReleaseDto(
     val id: String,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("link_control") val linkControl: Int = 0,
-    val chapter: DilarChapterDto? = null,
     val teams: List<DilarTeamDto> = emptyList(),
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(chapter: DilarChapterWithReleasesDto, dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = "/releases/$id"
-        chapter_number = chapter?.chapter?.toFloatOrNull() ?: -1f
+        chapter_number = chapter.chapter?.toFloatOrNull() ?: -1f
         name = buildString {
-            chapter?.chapter?.toFloatOrNull()?.toInt()?.let { append("فصل $it") }
-            if (!chapter?.title.isNullOrBlank()) append(" - ${chapter?.title}")
+            chapter.chapter?.toFloatOrNull()?.toInt()?.let { append("فصل $it") }
+            if (!chapter.title.isNullOrBlank()) append(" - ${chapter.title}")
         }
         scanlator = teams.joinToString { it.name }
         date_upload = try {
@@ -115,13 +137,6 @@ data class DilarReleaseDto(
         }
     }
 }
-
-@Serializable
-data class DilarChapterDto(
-    val id: String,
-    val chapter: String? = null,
-    val title: String? = null,
-)
 
 @Serializable
 data class DilarTeamDto(

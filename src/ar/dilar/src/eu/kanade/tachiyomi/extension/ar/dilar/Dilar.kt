@@ -54,17 +54,25 @@ class Dilar :
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
+    // ── Popular ───────────────────────────────────────────────────────────
+
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list = json.decodeFromString<DilarSeriesListDto>(response.body.string())
-        val mangas = list.series.map { it.toSManga(cdnUrl) }
+        val mangas = list.series
+            .filter { !it.title.isNullOrBlank() }
+            .map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, list.hasNextPage)
     }
+
+    // ── Latest ────────────────────────────────────────────────────────────
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=latest", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+
+    // ── Search ────────────────────────────────────────────────────────────
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val body = buildJsonObject {
@@ -86,9 +94,12 @@ class Dilar :
         val mangas = results
             .filter { it.clazz == "Manga" }
             .flatMap { it.data }
+            .filter { !it.title.isNullOrBlank() }
             .map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
+
+    // ── Manga details ─────────────────────────────────────────────────────
 
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}", headers)
 
@@ -97,19 +108,28 @@ class Dilar :
         return dto.toSManga(cdnUrl)
     }
 
-    private fun mangaId(manga: SManga) = manga.url.split("/")[2]
+    // ── Chapter list ──────────────────────────────────────────────────────
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}/releases", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = json.decodeFromString<DilarReleasesDto>(response.body.string())
-        return dto.releases
-            .filter { it.linkControl == 0 }
-            .map { it.toSChapter(dateFormat) }
+        val dto = json.decodeFromString<DilarChapterListDto>(response.body.string())
+        return dto.chapters
+            .flatMap { chapter ->
+                chapter.releases
+                    .filter { it.linkControl == 0 }
+                    .map { release ->
+                        release.toSChapter(chapter, dateFormat)
+                    }
+            }
             .sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/releases/${releaseId(chapter)}/pages", headers)
+    private fun mangaId(manga: SManga) = manga.url.split("/")[2]
+
+    // ── Page list ─────────────────────────────────────────────────────────
+
+    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/chapters/${releaseId(chapter)}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = json.decodeFromString<DilarReleaseDetailDto>(response.body.string())
@@ -123,6 +143,8 @@ class Dilar :
     private fun releaseId(chapter: SChapter) = chapter.url.substringAfterLast("/")
 
     override fun imageUrlParse(response: Response) = ""
+
+    // ── Settings ──────────────────────────────────────────────────────────
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {
