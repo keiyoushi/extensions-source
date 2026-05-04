@@ -24,7 +24,6 @@ class MgreadIo :
         "https://mgread.io",
         "en",
         mangaUrlDirectory = "manga",
-        dateFormatStr = "yyyy-MM-dd'T'HH:mm:ssXXX",
         popularUrlSlug = "manga-ranking",
         latestUrlSlug = "recently-updated",
         versionId = 2,
@@ -43,8 +42,6 @@ class MgreadIo :
     override fun popularMangaNextPageSelector() = NEXT_PAGE_SELECTOR
 
     // Latest
-
-    override fun latestUpdatesRequest(page: Int): Request = GET(pageUrl("recently-updated", page), headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = super.latestUpdatesParse(response).withoutAnimeEntries()
 
@@ -104,11 +101,7 @@ class MgreadIo :
 
     override fun searchMangaSelector() = "$MANGA_GRID_SELECTOR, .manga-item-details"
 
-    override fun searchMangaFromElement(element: Element): SManga = if (element.`is`(MANGA_GRID_SELECTOR)) {
-        mangaFromGridElement(element)
-    } else {
-        mangaFromSearchElement(element)
-    }
+    override fun searchMangaFromElement(element: Element): SManga = mangaFromGridElement(element)
 
     override fun searchMangaNextPageSelector() = NEXT_PAGE_SELECTOR
 
@@ -261,15 +254,6 @@ class MgreadIo :
         thumbnail_url = element.selectFirst("img")?.imageUrl()
     }
 
-    private fun mangaFromSearchElement(element: Element): SManga = SManga.create().apply {
-        val titleElement = element.selectFirst("h2 a[href*='/manga/']")
-            ?: element.selectFirst("a[href*='/manga/']:not([href*='/chapter-'])")!!
-
-        title = titleElement.text().trim()
-        setUrlWithoutDomain(titleElement.absUrl("href"))
-        thumbnail_url = element.selectFirst("img")?.imageUrl()
-    }
-
     private fun mangaFromSearchDto(dto: MgreadSearchDto): SManga? {
         val title = Jsoup.parse(dto.title).text().trim()
         val url = dto.url.trim().takeIf(String::isNotBlank) ?: return null
@@ -296,10 +280,4 @@ class MgreadIo :
         mangas.filterNot { it.isAnimeEntry() },
         hasNextPage,
     )
-
-    private fun pageUrl(path: String, page: Int): String = if (page == 1) {
-        "$baseUrl/$path/"
-    } else {
-        "$baseUrl/$path/page/$page/"
-    }
 }

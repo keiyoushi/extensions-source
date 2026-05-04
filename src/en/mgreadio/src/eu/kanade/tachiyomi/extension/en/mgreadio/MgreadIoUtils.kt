@@ -7,10 +7,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+// SimpleDateFormat 'X' requires API 24, so we use 'Z' and normalize "+07:00" -> "+0700".
+private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US)
 private val restChapterDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
     timeZone = TimeZone.getTimeZone("GMT+7")
 }
+private val isoTimeZoneRegex = Regex("""([+-]\d{2}):(\d{2})$""")
 
 internal fun Element.imageUrl(): String? = when (normalName()) {
     "meta" -> attr("content")
@@ -32,8 +34,11 @@ internal fun String?.parseStatus(): Int = when (this?.lowercase(Locale.US)?.trim
 internal fun String?.parseChapterDate(): Long {
     if (this.isNullOrBlank()) return 0L
 
+    val normalized = isoTimeZoneRegex.replace(this, "$1$2")
+        .replace(Regex("""Z$"""), "+0000")
+
     return try {
-        chapterDateFormat.parse(this)!!.time
+        chapterDateFormat.parse(normalized)!!.time
     } catch (_: ParseException) {
         0L
     }
