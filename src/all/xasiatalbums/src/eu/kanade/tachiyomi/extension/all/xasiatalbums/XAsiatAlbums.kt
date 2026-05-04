@@ -30,7 +30,10 @@ class XAsiatAlbums : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        )
 
     override fun popularMangaRequest(page: Int): Request = searchQuery(
         path = "albums/",
@@ -77,9 +80,7 @@ class XAsiatAlbums : HttpSource() {
             }
         }.distinctBy { it.url }
 
-        val hasNext = document.select(".pagination a[href], a.next[href], .pager a[href]")
-            .any { it.text().contains("Next", ignoreCase = true) }
-
+        val hasNext = document.select(".pagination a[href], a.next[href], .pager a[href]").isNotEmpty()
         return MangasPage(mangas, hasNext)
     }
 
@@ -162,34 +163,21 @@ class XAsiatAlbums : HttpSource() {
             }
     }
 
-    private fun parseImagePages(document: Document): List<String> = document.select("a[href*='/get_image/']")
-        .map { it.attr("abs:href") }
-        .filter { it.isNotBlank() && it.contains("/get_image/") }
-        .distinct()
+    private fun parseImagePages(document: Document): List<String> = document.select("a[href*='/get_image/']").map { it.attr("abs:href") }
+        .filter { it.contains("/get_image/") }.distinct()
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
-        val selectors = arrayOf(
-            ".image-holder img",
-            ".main-image img",
-            ".content img",
-            "img[data-original]",
-            "img[data-src]",
-        )
+        val selectors = arrayOf(".image-holder img", ".main-image img", ".content img", "img[data-original]", "img[data-src]", "img[src]")
 
         for (selector in selectors) {
-            val element = document.selectFirst(selector) ?: continue
-            val url = element.attr("abs:data-original")
-                .ifBlank { element.attr("abs:data-src") }
-                .ifBlank { element.attr("abs:src") }
-
-            if (url.isNotBlank() && !url.contains("base64") && !url.contains("logo")) {
-                return url
-            }
+            val img = document.selectFirst(selector) ?: continue
+            val url = img.attr("abs:data-original").ifBlank { img.attr("abs:data-src") }.ifBlank { img.attr("abs:src") }
+            if (url.isNotBlank() && !url.contains("base64") && !url.contains("logo")) return url
         }
-        throw IllegalStateException("Failed to parse image URL")
+        throw IllegalStateException("Failed to parse image URL from $response")
     }
 
     override fun imageRequest(page: Page): Request {
@@ -198,10 +186,8 @@ class XAsiatAlbums : HttpSource() {
     }
 
     override fun getFilterList(): FilterList {
-        val pairList = categories.map { Pair(it.key, it.value) }
-            .distinctBy { it.first }
-            .sortedBy { it.first.lowercase() }
-            .toTypedArray()
+        val pairList = categories.map { Pair(it.key, it.value) }.distinctBy { it.first }
+            .sortedBy { it.first.lowercase() }.toTypedArray()
 
         return FilterList(
             Filter.Header("Tags update dynamically after opening albums"),
