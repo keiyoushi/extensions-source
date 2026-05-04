@@ -5,10 +5,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.text.SimpleDateFormat
@@ -54,7 +56,8 @@ class MangaDto(
     private val imagePath: JsonElement,
 
     // Details
-    private val authors: List<AuthorDto>? = null,
+    @SerialName("authors")
+    private val authorsElement: JsonElement? = null,
     private val synopsis: String? = null,
     private val genres: List<TagDto>? = null,
     private val status: String? = null,
@@ -76,6 +79,22 @@ class MangaDto(
             else -> null
         }
         return url?.removePrefix("/")?.removePrefix("static/")
+    }
+
+    private fun parseAuthors(): List<AuthorDto> {
+        if (authorsElement == null || authorsElement !is JsonArray) return emptyList()
+
+        return authorsElement.jsonArray.mapNotNull { element ->
+            when (element) {
+                is JsonObject -> {
+                    val name = element["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                    val type = element["type"]?.jsonPrimitive?.content
+                    AuthorDto(name, type)
+                }
+                is JsonPrimitive -> AuthorDto(element.content)
+                else -> null
+            }
+        }
     }
 
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
@@ -112,10 +131,11 @@ class MangaDto(
             genres?.forEach { add(it.name) }
         }.joinToString()
 
-        authors?.let { list ->
-            author = list.filter { it.type == null || it.type == "Author" }
+        val parsedAuthors = parseAuthors()
+        if (parsedAuthors.isNotEmpty()) {
+            author = parsedAuthors.filter { it.type == null || it.type == "Author" }
                 .joinToString { it.name }
-            artist = list.filter { it.type == "Artist" }
+            artist = parsedAuthors.filter { it.type == "Artist" }
                 .joinToString { it.name }
         }
 
