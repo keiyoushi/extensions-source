@@ -73,14 +73,20 @@ abstract class Japscan :
         private val HIDDEN_STYLE_TOKENS = listOf(
             "display:none",
             "visibility:hidden",
+            "visibility:collapse",
+            "content-visibility:hidden",
             "opacity:0",
+            "filter:opacity(0",
             "width:0",
             "height:0",
             "pointer-events:none",
             "clip-path:inset(100%",
-            "clip-path:circle(0)",
+            "clip-path:circle(0",
+            "clip-path:ellipse(0",
+            "clip-path:polygon(0,0,0,0",
             "clip:rect(0,0,0,0",
             "font-size:0",
+            "line-height:0",
             "text-indent:-",
         )
 
@@ -95,7 +101,7 @@ abstract class Japscan :
         private val OFFSCREEN_OFFSET_REGEX = Regex(
             """(?:top|bottom|left|right|inset):-?\d{3,}""" +
                 """|transform:translate(?:3d|x|y)?\([^)]*-?\d{3,}""" +
-                """|transform:scale(?:3d)?\(0[,)]""" +
+                """|transform:scale(?:3d|x|y)?\(0[,)]""" +
                 """|transform:matrix\(0,0,0,0""" +
                 """|max-(?:width|height):0""",
         )
@@ -259,8 +265,11 @@ abstract class Japscan :
     }
 
     // Defense in depth: if a honeypot ever slips past the per-row hidden-style
-    // heuristics, its URL number is wildly out of range (e.g. 483181 vs. real 1181).
-    // Drop the upper cluster when consecutive chapter numbers jump by more than 1000.
+    // heuristics, its URL number tends to be wildly out of range (e.g. 483181 vs.
+    // real 1181, or 000001..000008 vs. real 1174..1181). Real chapter URL ids are
+    // near-consecutive, so split sorted ids on gaps that are much larger than the
+    // typical spacing and keep only the largest cluster — agnostic to whether the
+    // honeypots sit above or below the real range.
     private fun filterOutlierChapters(chapters: List<SChapter>): List<SChapter> {
         val withNum = chapters.mapNotNull { ch ->
             val n = ch.url.trimEnd('/').substringAfterLast('/').toLongOrNull() ?: return@mapNotNull null
@@ -268,17 +277,22 @@ abstract class Japscan :
         }
         if (withNum.size < 2) return chapters
         val sorted = withNum.sortedBy { it.second }
-        var gapIdx = -1
-        var gapSize = 0L
+        val gaps = (1 until sorted.size).map { sorted[it].second - sorted[it - 1].second }
+        val medianGap = gaps.sorted()[gaps.size / 2].coerceAtLeast(1L)
+        // Treat a gap as a cluster boundary when it dwarfs the typical spacing.
+        // The absolute floor (100) keeps short lists with tiny medians from
+        // splitting on noise; the 50x ratio handles dense lists where the
+        // median is already large.
+        val threshold = maxOf(medianGap * 50, 100L)
+        val clusters = mutableListOf<MutableList<Pair<SChapter, Long>>>(mutableListOf(sorted[0]))
         for (i in 1 until sorted.size) {
-            val g = sorted[i].second - sorted[i - 1].second
-            if (g > gapSize) {
-                gapSize = g
-                gapIdx = i
+            if (sorted[i].second - sorted[i - 1].second > threshold) {
+                clusters.add(mutableListOf())
             }
+            clusters.last().add(sorted[i])
         }
-        if (gapSize <= 1000) return chapters
-        val keep = sorted.take(gapIdx).map { it.first }.toSet()
+        if (clusters.size == 1) return chapters
+        val keep = clusters.maxBy { it.size }.map { it.first }.toSet()
         return chapters.filter { it in keep }
     }
 
