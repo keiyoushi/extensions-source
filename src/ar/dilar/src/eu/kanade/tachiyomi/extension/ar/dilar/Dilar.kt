@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.dilar
 
-import android.app.Application
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -14,8 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.util.lang.getPreferencesLazy
+import eu.kanade.tachiyomi.util.lang.parseAs
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -24,8 +22,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -43,8 +39,6 @@ class Dilar :
     override val lang = "ar"
     override val supportsLatest = true
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
     override val baseUrl by lazy { mirrorPref() }
@@ -59,9 +53,9 @@ class Dilar :
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val list = json.decodeFromString<DilarSeriesListDto>(response.body.string())
+        val list = response.parseAs<DilarSeriesListDto>()
         val mangas = list.series
-            .filter { !it.title.isNullOrBlank() }
+            .filter { it.title.isNotBlank() }
             .map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, list.hasNextPage)
     }
@@ -90,11 +84,10 @@ class Dilar :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val results = json.decodeFromString<List<DilarSearchGroupDto>>(response.body.string())
+        val results = response.parseAs<List<DilarSearchGroupDto>>()
         val mangas = results
             .filter { it.clazz == "Manga" }
             .flatMap { it.data }
-            .filter { !it.title.isNullOrBlank() }
             .map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
@@ -104,8 +97,7 @@ class Dilar :
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val dto = json.decodeFromString<DilarSeriesDto>(response.body.string())
-        return dto.toSManga(cdnUrl)
+        return response.parseAs<DilarSeriesDto>().toSManga(cdnUrl)
     }
 
     // ── Chapter list ──────────────────────────────────────────────────────
@@ -113,7 +105,7 @@ class Dilar :
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = json.decodeFromString<DilarChapterListDto>(response.body.string())
+        val dto = response.parseAs<DilarChapterListDto>()
         return dto.chapters
             .flatMap { chapter ->
                 chapter.releases
@@ -132,7 +124,7 @@ class Dilar :
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/chapters/${releaseId(chapter)}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val dto = json.decodeFromString<DilarReleaseDetailDto>(response.body.string())
+        val dto = response.parseAs<DilarReleaseDetailDto>()
         return dto.pages
             .sortedBy { it.order }
             .mapIndexed { index, page ->
@@ -167,7 +159,6 @@ class Dilar :
         else -> preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)!!
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 }
+

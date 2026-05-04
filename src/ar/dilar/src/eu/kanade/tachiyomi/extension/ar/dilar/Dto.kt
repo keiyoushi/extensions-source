@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.dilar
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.lang.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
@@ -10,20 +11,19 @@ import java.text.SimpleDateFormat
 
 @Serializable
 data class DilarSearchGroupDto(
-    @SerialName("class") val clazz: String,
+    val clazz: String,
     val data: List<DilarSearchItemDto> = emptyList(),
 )
 
 @Serializable
 data class DilarSearchItemDto(
     val id: String,
-    val title: String? = null,
+    val title: String,
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        val safeTitle = this@DilarSearchItemDto.title ?: "Unknown"
-        url = "/series/$id/$safeTitle"
-        this.title = safeTitle
+        url = "/series/$id/$title"
+        this.title = title
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
     }
 }
@@ -42,13 +42,12 @@ data class DilarSeriesListDto(
 @Serializable
 data class DilarSeriesItemDto(
     val id: String,
-    val title: String? = null,
+    val title: String,
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        val safeTitle = this@DilarSeriesItemDto.title ?: "Unknown"
-        url = "/series/$id/$safeTitle"
-        this.title = safeTitle
+        url = "/series/$id/$title"
+        this.title = title
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
     }
 }
@@ -66,7 +65,7 @@ data class DilarSeriesDto(
     @SerialName("translation_status") val translationStatus: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        val safeTitle = this@DilarSeriesDto.title.ifBlank { "Unknown" }
+        val safeTitle = title.ifBlank { "Unknown" }
         url = "/series/$id/$safeTitle"
         this.title = safeTitle
         description = summary
@@ -131,11 +130,7 @@ data class DilarReleaseDto(
             if (!chapter.title.isNullOrBlank()) append(" - ${chapter.title}")
         }
         scanlator = teams.joinToString { it.name }
-        date_upload = try {
-            dateFormat.parse(createdAt ?: "")?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        date_upload = dateFormat.tryParse(createdAt)
     }
 }
 
@@ -158,3 +153,4 @@ data class DilarPageDto(
     val url: String,
     val order: Int,
 )
+
