@@ -39,6 +39,25 @@ abstract class MadTheme(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)
+        // Intercepts chapter image requests that have a fallback URL encoded in the fragment.
+        // If the primary CDN (e.g. s20) returns a failure, we retry with the fallback URL.
+        // The fallback is encoded as a fragment so the parser doesn't need to pre-decide
+        // which URL to use — the network layer handles it transparently.
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val fragment = request.url.fragment
+
+            if (fragment != null && (fragment.startsWith("https://") || fragment.startsWith("http://"))) {
+                val cleanUrl = request.url.newBuilder().fragment(null).build()
+                val response = chain.proceed(request.newBuilder().url(cleanUrl).build())
+                if (!response.isSuccessful) {
+                    response.close()
+                    return@addInterceptor chain.proceed(request.newBuilder().url(fragment).build())
+                }
+                return@addInterceptor response
+            }
+            chain.proceed(request)
+        }
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
@@ -262,6 +281,7 @@ abstract class MadTheme(
     override fun pageListParse(document: Document): List<Page> {
         val mangaId = MANGA_ID_REGEX.find(document.location())?.groupValues?.get(1)
         val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
+
         val html = if (mangaId != null && chapterId != null) {
             val url = GET("$baseUrl/service/backend/chapterServer/?server_id=1&chapter_id=$chapterId", headers)
             client.newCall(url).execute().body.string()
@@ -269,8 +289,10 @@ abstract class MadTheme(
             document.html()
         }
         val realDocument = Jsoup.parse(html, document.location())
+
         if (!html.contains("var mainServer = \"")) {
             val chapterImagesFromHtml = realDocument.select("#chapter-images img, .chapter-image[data-src]")
+
             // 17/03/2023: Certain hosts only embed two pages in their "#chapter-images" and leave
             // the rest to be lazily(?) loaded by javascript. Let's extract `chapImages` and compare
             // the count against our select query. If both counts are the same, extract the original
@@ -281,31 +303,42 @@ abstract class MadTheme(
                     .substringAfter("var chapImages = '")
                     .substringBefore("'")
                     .split(',')
+
                 // Make sure chapter images we've got from javascript all have a host, otherwise
                 // we've got no choice but to fallback to chapter images from HTML.
                 // TODO: This might need to be solved one day ^
-                if (chapterImagesFromJs.all { it.startsWith("http://") || it.startsWith("https://") }) {
+                if (chapterImagesFromJs.all { e ->
+                        e.startsWith("http://") || e.startsWith("https://")
+                    }
+                ) {
+                    // Great, we can use these.
                     if (chapterImagesFromHtml.count() < chapterImagesFromJs.count()) {
                         // Seems like we've hit such a host, let's use the images we've obtained
                         // from the javascript string.
-                        return chapterImagesFromJs.mapIndexed { index, path -> Page(index, imageUrl = path) }
+                        return chapterImagesFromJs.mapIndexed { index, path ->
+                            Page(index, imageUrl = path)
+                        }
                     }
                 }
             }
+
             // No fancy CDN, all images are available directly in <img> tags (hopefully)
             return chapterImagesFromHtml.mapIndexed { index, element ->
                 Page(index, imageUrl = element.resolveImageUrl())
             }
         }
+
         // While the site may support multiple CDN hosts, we have opted to ignore those
         val mainServer = html
             .substringAfter("var mainServer = \"")
             .substringBefore("\"")
         val schemePrefix = if (mainServer.startsWith("//")) "https:" else ""
+
         val chapImages = html
             .substringAfter("var chapImages = '")
             .substringBefore("'")
             .split(',')
+
         return chapImages.mapIndexed { index, path ->
             Page(index, imageUrl = "$schemePrefix$mainServer$path")
         }
@@ -314,17 +347,20 @@ abstract class MadTheme(
     /**
      * Resolves the best available image URL from a chapter image element.
      *
-     * Normally we use `data-src`, but certain CDN servers (currently s20 on BeeHentai) are
-     * broken. In those cases, the site itself defines
-     * an `onerror` fallback pointing to a stable backup CDN (sb.toonilycdnv2.xyz).
+     * For reliable CDN servers, `data-src` is returned as-is.
+     *
+     * For known broken CDN servers (currently s20), the `onerror` fallback URL is encoded
+     * as the fragment of the primary URL (e.g. "https://s20...jpg#https://sb...jpg?v=1").
+     * The OkHttp interceptor will attempt the primary URL first, then transparently retry
+     * with the fallback if the primary request fails.
      *
      * Note: the fallback URL has a different path structure than `data-src`
      * (it omits the /toonily/ path segment), so we cannot simply swap the domain —
-     * we must extract the fallback URL from the `onerror` attribute directly.
+     * we must extract it from the `onerror` attribute directly.
      *
      * Example:
-     *   data-src:  https://s20.toonilycdnv2.xyz/toonily/manga/.../page.jpg
-     *   onerror:   //sb.toonilycdnv2.xyz/manga/.../page.jpg?v=1   ← different path!
+     *   data-src → https://s20.toonilycdnv2.xyz/toonily/manga/.../page.jpg
+     *   onerror  → //sb.toonilycdnv2.xyz/manga/.../page.jpg?v=1  (different path!)
      */
     private fun Element.resolveImageUrl(): String {
         val dataSrc = attr("abs:data-src")
@@ -334,11 +370,13 @@ abstract class MadTheme(
             .substringAfter("this.src='", "")
             .substringBefore("'")
 
-        return when {
-            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+        val fallback = when {
+            raw.startsWith("https://") || raw.startsWith("http://") -> raw
             raw.startsWith("//") -> "https:$raw"
-            else -> dataSrc // onerror unparseable, fall through to original
+            else -> return dataSrc // onerror unparseable, use data-src as-is
         }
+
+        return "$dataSrc#$fallback"
     }
 
     // Image
@@ -349,7 +387,15 @@ abstract class MadTheme(
         super.pageListRequest(chapter)
     }
 
-    override fun imageRequest(page: Page): Request = GET("${page.imageUrl}#image-request", headers)
+    // If the image URL already has a CDN fallback encoded in its fragment (added by resolveImageUrl),
+    // skip the standard #image-request suffix — the fallback interceptor handles retry instead.
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl!!
+        val hasFallbackFragment = imageUrl.substringAfter("#", "").let {
+            it.startsWith("https://") || it.startsWith("http://")
+        }
+        return GET(if (hasFallbackFragment) imageUrl else "$imageUrl#image-request", headers)
+    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
