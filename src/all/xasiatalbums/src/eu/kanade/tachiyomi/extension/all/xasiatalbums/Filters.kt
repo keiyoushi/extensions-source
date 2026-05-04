@@ -12,9 +12,7 @@ open class UriPartFilter(
     }.toTypedArray(),
 ) {
 
-    fun toUriPart(): String {
-        return values[state].second
-    }
+    fun toUriPart(): String = values[state].second
 }
 
 val initialCategories = mapOf(

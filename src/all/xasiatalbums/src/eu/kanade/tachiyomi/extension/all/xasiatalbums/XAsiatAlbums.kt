@@ -162,12 +162,10 @@ class XAsiatAlbums : HttpSource() {
             }
     }
 
-    private fun parseImagePages(document: Document): List<String> {
-        return document.select("a[href*='/get_image/']")
-            .map { it.attr("abs:href") }
-            .filter { it.isNotBlank() && it.contains("/get_image/") }
-            .distinct()
-    }
+    private fun parseImagePages(document: Document): List<String> = document.select("a[href*='/get_image/']")
+        .map { it.attr("abs:href") }
+        .filter { it.isNotBlank() && it.contains("/get_image/") }
+        .distinct()
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
