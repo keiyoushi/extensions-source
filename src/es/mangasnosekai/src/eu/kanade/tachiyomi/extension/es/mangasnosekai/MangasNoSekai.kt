@@ -196,8 +196,10 @@ class MangasNoSekai :
         name = this@toSChapter.name
         val cleanDate = Jsoup.parseBodyFragment(this@toSChapter.date).wholeText()
         date_upload = parseChapterDate(cleanDate)
-        setUrlWithoutDomain(this@toSChapter.url)
+        setUrlWithoutDomain(this@toSChapter.url.removeSuffix("/"))
     }
+
+    override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter.apply { url = "$url/" })
 
     companion object {
         val ACTION_REGEX = """function\s+.*?[\s\S]*?\.ajax;?[\s\S]*?(?:'?url'?:\s*'([^']*)')(?:[\s\S]*?'?data'?:\s*\{([^}]*)\})?""".toRegex()
