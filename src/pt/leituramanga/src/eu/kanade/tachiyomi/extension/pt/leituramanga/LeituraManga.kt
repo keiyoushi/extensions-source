@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.leituramanga
 
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,15 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 class LeituraManga : HttpSource() {
 
@@ -35,32 +33,37 @@ class LeituraManga : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            if (response.code == 403) {
-                throw IOException("Abra primeiramente algum mangá ou qualquer capítulo na WebiView")
+            when (response.code) {
+                403 -> {
+                    response.close()
+                    throw IOException("Abra primeiramente algum mangá ou qualquer capítulo na WebiView")
+                }
+                429 -> {
+                    val retryAfter = response.header("Retry-After") ?: "alguns"
+                    response.close()
+                    throw IOException("Limite do site atingido. Aguarde $retryAfter segundos.")
+                }
             }
             response
         }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
+        .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
     // ================= Popular ==================
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/api/manga/get-tops?limit=200", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/api/manga/?sort=view&limit=24&page=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaResponseDto<PopularDataDto>>()
-        val mangas = result.data.topView.map { it.toSManga(cdnUrl) }
-        return MangasPage(mangas, false)
-    }
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
     // ================= Latest ==================
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/api/manga/?sort=time&limit=24&isHome=true&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/api/manga/?sort=time&limit=24&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<MangaResponseDto<MangaListDto>>()
@@ -138,11 +141,22 @@ class LeituraManga : HttpSource() {
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.extractNextJs<MangaInfoDto>() ?: return emptyList()
-        val request = GET("$apiUrl/api/chapter/get-by-manga-id?mangaId=${dto.mangaId}&page=1&limit=9999", headers)
+        val document = response.asJsoup()
+
+        val mangaId = document.extractNextJs<NextJsMangaIdDto> {
+            (it as? JsonObject)?.containsKey("mangaId") == true
+        }?.mangaId ?: document.extractNextJs<MangaPagePropsDto> {
+            val manga = (it as? JsonObject)?.get("manga") as? JsonObject
+            manga?.containsKey("_id") == true
+        }?.manga?.id ?: throw IOException("ID do mangá não encontrado")
+
+        val slug = response.request.url.pathSegments.last { it.isNotEmpty() }
+
+        // Using the exact limit from the frontend so we get the 80/min limit instead of the default 3/min limit
+        val request = GET("$apiUrl/api/chapter/get-by-manga-id?mangaId=$mangaId&page=1&limit=9007199254740991", headers)
         val result = client.newCall(request).execute().parseAs<MangaResponseDto<ChapterListDto>>()
 
-        return result.data.data.map { it.toSChapter(dto.mangaSlug) }
+        return result.data.data.map { it.toSChapter(slug) }
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
@@ -150,44 +164,15 @@ class LeituraManga : HttpSource() {
     // ================= Pages ==================
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val password = document.getAESPassword()
-        val content = document.decryptPayload(password).takeUnless(String::isBlank)
-            ?: throw IOException("Páginas encontradas")
+        val dto = response.extractNextJs<ChapterPageDto> {
+            val chapter = (it as? JsonObject)?.get("chapter") as? JsonObject
+            chapter?.containsKey("images") == true
+        } ?: throw IOException("Páginas não encontradas")
 
-        return content.parseAs<List<ImageDto>>().mapIndexed { index, image ->
+        return dto.chapter.images.mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl(cdnUrl))
         }
     }
 
-    private fun Document.getAESPassword(): String = extractNextJs<AESPassword>()?.variant?.joinToString("") ?: throw IOException("Senha não encontrada")
-
-    private fun Document.decryptPayload(password: String): String {
-        val script = QuickJs.create().use {
-            it.evaluate(
-                """
-                globalThis.self = globalThis;
-                ${select("script:containsData(self.__next_f)").joinToString("\n", transform = Element::data)}
-                self.__next_f.map(it => it[it.length - 1]).join('')
-                """.trimIndent(),
-            ) as String
-        }
-
-        val encryptedContent = extractNextJs<EncryptedContent>()
-
-        val payload = when {
-            encryptedContent != null && encryptedContent.payload.startsWith(PREFIX_SALT) -> encryptedContent.payload
-            else -> ENCRYPTED_CONTENT_REGEX.find(script)?.groupValues?.last()
-        }
-        return CryptoAES.decrypt(payload!!, password)
-    }
-
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    companion object {
-        // 'U2FsdGVkX1' is the Base64 representation of the 'Salted__' prefix.
-        // It indicates the data was encrypted using CryptoJS
-        private const val PREFIX_SALT = "U2FsdGVkX1"
-        private val ENCRYPTED_CONTENT_REGEX = """$PREFIX_SALT[^=]+=+|$PREFIX_SALT[^:]+""".toRegex()
-    }
 }
