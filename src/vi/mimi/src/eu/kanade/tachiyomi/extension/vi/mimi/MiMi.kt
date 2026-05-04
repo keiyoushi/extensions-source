@@ -209,7 +209,7 @@ class MiMi : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val segments = response.request.url.pathSegments
-        val mangaId = segments.last()
+        val mangaId = segments[segments.size - 2]
         val result = response.parseAs<List<ChapterDto>>()
         return result.map { it.toSChapter(mangaId) }
     }
