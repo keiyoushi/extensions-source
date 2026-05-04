@@ -90,6 +90,7 @@ class PaginationDto(
 @Serializable
 class ChapterResponse(
     val data: List<ChapterDto>,
+    val meta: MetaDto? = null,
 )
 
 @Serializable
@@ -107,15 +108,16 @@ class ChapterDto(
     private val publishedAt: String? = null,
     val htmlContent: String? = null,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
-        url = documentId ?: id?.toString() ?: ""
+    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
+        val numStr = number?.toString()?.removeSuffix(".0") ?: ""
+        val docId = documentId ?: id?.toString() ?: ""
+        url = "$mangaSlug/$numStr#$docId"
 
-        var chapterName = title ?: "Chapter ${number?.toString()?.removeSuffix(".0")}"
-        if (number != null && !chapterName.contains("Chapter", ignoreCase = true)) {
-            chapterName = "Chapter ${number.toString().removeSuffix(".0")} - $chapterName"
+        var chapterName = title ?: if (numStr.isNotEmpty()) "Chapter $numStr" else "Chapter"
+        if (numStr.isNotEmpty() && !chapterName.contains("Chapter", ignoreCase = true)) {
+            chapterName = "Chapter $numStr - $chapterName"
         }
         this.name = chapterName
-
         this.chapter_number = number ?: -1f
     }
 
