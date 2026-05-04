@@ -7,8 +7,12 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
+import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.ListPreference
@@ -35,9 +39,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -64,6 +72,27 @@ abstract class Japscan :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 2.seconds)
+        // Pages from fetchPageList are decoded blobs cached on disk; their imageUrl is
+        // `https://japscan-cache.local/<absolute-cache-path>`. We can't override
+        // fetchImage (final), so an interceptor catches that sentinel host and serves
+        // the file bytes synthetically.
+        .addInterceptor { chain ->
+            val req = chain.request()
+            if (req.url.host != JAPSCAN_CACHE_HOST) return@addInterceptor chain.proceed(req)
+            val path = "/" + req.url.pathSegments.joinToString("/")
+            val file = File(path)
+            val bytes = file.readBytes()
+            try {
+                file.delete()
+            } catch (_: Exception) {}
+            Response.Builder()
+                .request(req)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(bytes.toResponseBody("image/jpeg".toMediaType()))
+                .build()
+        }
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
@@ -109,6 +138,10 @@ abstract class Japscan :
 
         private const val SHOW_SPOILER_CHAPTERS_TITLE = "Les chapitres en Anglais ou non traduit sont upload en tant que \" Spoilers \" sur Japscan"
         private const val SHOW_SPOILER_CHAPTERS = "JAPSCAN_SPOILER_CHAPTERS"
+
+        // Sentinel host used to route page-image requests to a local cache file via
+        // an OkHttp interceptor (see `client` builder).
+        private const val JAPSCAN_CACHE_HOST = "japscan-cache.local"
         private val prefsEntries = arrayOf("Montrer uniquement les chapitres traduit en Français", "Montrer les chapitres spoiler")
         private val prefsEntryValues = arrayOf("hide", "show")
     }
@@ -399,7 +432,7 @@ abstract class Japscan :
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch)
+        val jsInterface = JsInterface(latch, context.cacheDir)
         var webView: WebView? = null
         var request: Response = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
         var pageContent = request.body.string()
@@ -453,161 +486,68 @@ abstract class Japscan :
             webView = innerWv
             innerWv.settings.domStorageEnabled = true
             innerWv.settings.javaScriptEnabled = true
-            innerWv.settings.blockNetworkImage = true
+            // The reader fetches scrambled tiles and reassembles them onto canvases;
+            // images must be allowed to load for the descrambling to run.
+            innerWv.settings.blockNetworkImage = false
             innerWv.settings.userAgentString = headers["User-Agent"]
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
+            // Forward in-page console.log calls to Logcat (tag "Japscan") so the JS
+            // pagination driver's progress is visible during debugging.
+            innerWv.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
+                    Log.d("Japscan", "[wv] ${msg.message()}")
+                    return true
+                }
+            }
+
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    // Install the createObjectURL hook as early as possible. Each chapter page is
+                    // descrambled onto canvases by the page's own JS and surfaced as a `blob:` URL
+                    // via URL.createObjectURL — capturing those gives us the final rendered images.
+                    // We deliberately avoid overriding String.prototype.replace / atob / fetch:
+                    // the new bot detection checks `replace.toString().includes('[native code]')`
+                    // and trips `__poisoned = true` if any built-in is monkey-patched, which
+                    // makes the page refuse to deliver the payload.
+                    //
+                    // We stream the conversion (blob -> base64 data URI) as soon as each blob is
+                    // created and revoke the original blob right after, so memory doesn't grow
+                    // unboundedly across the 13+ pages we drive through (otherwise the renderer
+                    // OOMs with all the page canvases held simultaneously).
                     view?.evaluateJavascript(
                         $$"""
-                            function waitForRC(callback) {
-                                if (window.__rc) {
-                                    callback();
-                                } else {
-                                    setTimeout(() => waitForRC(callback), 100);
-                                }
-                            }
-
-                            // Hook atob — Japscan delivers the chapter payload as a base64-encoded
-                            // JSON whose `cc` array contains the c4.japscan.foo image URLs. The
-                            // payload no longer goes through String.replace, so atob is the only
-                            // reliable interception point.
-                            const originalAtob = window.atob;
-                            window.atob = function(str) {
-                                const result = originalAtob.call(this, str);
-                                try {
-                                    let utf8 = result;
+                            (function(){
+                                if (window.__japscanHooked) return;
+                                window.__japscanHooked = true;
+                                // Single slot tracking the most-recent image blob. Used by the
+                                // paginated-reader driver, which harvests one blob per page
+                                // navigation. The webtoon driver ignores this slot and instead
+                                // iterates `<img id="img-N">.src` in DOM order. We do NOT
+                                // auto-revoke the previous blob here: in webtoon mode all
+                                // blobs are pinned to <img> elements, and revoking them
+                                // before we fetch their bytes makes the URL unfetchable.
+                                window.__japscanLastBlob = null;
+                                var _orig = URL.createObjectURL.bind(URL);
+                                URL.createObjectURL = function(obj){
+                                    var u = _orig(obj);
                                     try {
-                                        utf8 = decodeURIComponent(
-                                            Array.from(result, c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-                                        );
-                                    } catch (e) { return result; }
-                                    if (utf8.indexOf('c4.japscan.foo') !== -1 && !window.__createCalled) {
-                                        try {
-                                            const parsed = JSON.parse(utf8);
-                                            waitForRC(() => create(parsed));
-                                        } catch (e) { /* not JSON */ }
-                                    }
-                                } catch (e) { /* swallow */ }
-                                return result;
-                            };
-
-                            const originalReplace = String.prototype.replace;
-
-                            function tryDecodeBase64ToJsonKeysOnly(str) {
-                              const s = String(str).trim();
-                              if (!/^[A-Za-z0-9+/]+={0,2}$/.test(s) || s.length % 4 === 1) return null;
-                              try {
-                                const bin = atob(s);
-                                const utf8 = decodeURIComponent(
-                                  Array.from(bin, c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-                                );
-                                if(!utf8.includes(location.pathname.replaceAll("/", "\\/"))) return null;
-                                const parsed = JSON.parse(utf8);
-                                return parsed
-                              } catch (e) {
-                                return null;
-                              }
-                              return null;
-                            }
-
-                            String.prototype.replace = function(searchValue, replaceValue) {
-                              const receiver = this;
-
-                              const effectiveReplace = (typeof replaceValue === 'function')
-                                ? function(...args) { return replaceValue.apply(this, args); }
-                                : replaceValue;
-
-                              const rawResult = originalReplace.call(receiver, searchValue, effectiveReplace);
-
-                              if (typeof rawResult === 'string') {
-                                const parsed = tryDecodeBase64ToJsonKeysOnly(rawResult);
-                                if (parsed) {
-                                  waitForRC(() => create(parsed))
-                                }
-                              }
-
-                              return rawResult;
-                            };
-
-                            function findFirstArray(obj) {
-                              let found = null;
-                              (function visit(value) {
-                                if (found) return;
-                                if (value && typeof value === 'object') {
-                                  if (Array.isArray(value)) {
-                                    found = value;
-                                    return;
-                                  }
-                                  for (const k in value) {
-                                    if (Object.prototype.hasOwnProperty.call(value, k)) {
-                                      visit(value[k]);
-                                      if (found) return;
-                                    }
-                                  }
-                                }
-                              })(obj);
-                              return found;
-                            }
-
-                            // Pick the array whose elements look like CDN image URLs.
-                            // Japscan's payload also embeds a path-segments array (e.g.
-                            // ["manga","one-piece","1181"]) that findFirstArray would otherwise grab.
-                            function findImageArray(obj) {
-                              let found = null;
-                              (function visit(value) {
-                                if (found) return;
-                                if (Array.isArray(value) && value.length > 0 &&
-                                    value.every(v => typeof v === 'string' && v.indexOf('c4.japscan.foo') !== -1)) {
-                                  found = value;
-                                  return;
-                                }
-                                if (value && typeof value === 'object') {
-                                  for (const k in value) {
-                                    if (Object.prototype.hasOwnProperty.call(value, k)) {
-                                      visit(value[k]);
-                                      if (found) return;
-                                    }
-                                  }
-                                }
-                              })(obj);
-                              return found;
-                            }
-
-                            function create(parsed) {
-                                if (window.__createCalled) return;
-                                let arr = findImageArray(parsed) || findFirstArray(parsed);
-                                const arrLen = arr ? arr.length : -1;
-                                if (!arr || arr.length === 0) return;
-                                window.__createCalled = true;
-                                const chapterMatch = location.pathname.match(/\/(\d+)(?:\/|$)/);
-                                const chapterNum = chapterMatch ? Number(chapterMatch[1]) : null;
-                                let candidate = null;
-                                (function visit(obj) {
-                                    if (candidate) return;
-                                        if (obj && typeof obj === 'object') {
-                                            for (const k in obj) {
-                                                if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
-                                                const v = obj[k];
-                                                if (typeof v === 'number' && Number.isFinite(v) && Math.floor(v) === v) {
-                                                const n = v;
-                                                if (n > 0 && n <= arrLen && n !== chapterNum) { candidate = n; return; }
-                                            }
-                                            if (typeof v === 'string' && /^[0-9]+$/.test(v)) {
-                                                const n = Number(v);
-                                                if (n > 0 && n <= arrLen && n !== chapterNum) { candidate = n; return; }
-                                            }
-                                            if (typeof v === 'object') visit(v);
-                                            if (candidate) return;
+                                        if (obj && obj.type && /^image\//.test(obj.type)) {
+                                            window.__japscanLastBlob = u;
                                         }
-                                    }
-                                })(parsed);
-                                const finalNum = candidate || chapterNum || 0;
-                                window.$$interfaceName.passPayload(JSON.stringify(arr), window.__rc.p, window.__rc.v, finalNum.toString());
-                            }
+                                    } catch(e) {}
+                                    return u;
+                                };
+                                // Make our hook look like a native function in case the site ever
+                                // adds the same `[native code]` tripwire to createObjectURL.
+                                try {
+                                    URL.createObjectURL.toString = function(){
+                                        return 'function createObjectURL() { [native code] }';
+                                    };
+                                } catch(e) {}
+                            })();
                         """.trimIndent(),
                     ) {}
                 }
@@ -618,6 +558,211 @@ abstract class Japscan :
                     // we're detached. resumeTimers is global to all WebViews in the process.
                     view?.onResume()
                     view?.resumeTimers()
+                    // Drive the reader through every chapter page (the `<select id="pages">`
+                    // element drives navigation). The createObjectURL hook installed in
+                    // onPageStarted converts each blob to a data URI as soon as it's produced,
+                    // so we just drive the UI and wait for window.__japscanImages to stabilize.
+                    view?.evaluateJavascript(
+                        $$"""
+                            (async function(){
+                                var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+
+                                // Convert a blob URL to a base64 data URI and save it via the
+                                // JS interface. Returns true on success.
+                                async function saveBlobUrl(u){
+                                    if (!u) return false;
+                                    try {
+                                        var r = await fetch(u);
+                                        var b = await r.blob();
+                                        var d = await new Promise(function(res, rej){
+                                            var fr = new FileReader();
+                                            fr.onload = function(){ res(fr.result); };
+                                            fr.onerror = rej;
+                                            fr.readAsDataURL(b);
+                                        });
+                                        if (typeof d === 'string' && d.indexOf('data:image/') === 0) {
+                                            window.$$interfaceName.savePage(d);
+                                            return true;
+                                        }
+                                    } catch(e) {
+                                        console.log('[japscan] saveBlobUrl failed: ' + e);
+                                    } finally {
+                                        try { URL.revokeObjectURL(u); } catch(e) {}
+                                    }
+                                    return false;
+                                }
+
+                                // Paginated mode: harvest the latest blob from the slot.
+                                async function harvest(){
+                                    var u = window.__japscanLastBlob;
+                                    if (!u) return false;
+                                    window.__japscanLastBlob = null;
+                                    return await saveBlobUrl(u);
+                                }
+
+                                // Wait for a fresh blob to appear (slot starts null after each
+                                // harvest). After it appears, settle for a bit so any later
+                                // re-render of the same page replaces the slot with the final
+                                // composited image.
+                                async function waitForBlob(timeoutMs){
+                                    var w = 0;
+                                    while (!window.__japscanLastBlob && w < timeoutMs) {
+                                        await sleep(100); w += 100;
+                                    }
+                                    if (!window.__japscanLastBlob) return -1;
+                                    var lastUrl = window.__japscanLastBlob;
+                                    var stable = 0;
+                                    while (stable < 400) {
+                                        await sleep(100);
+                                        if (window.__japscanLastBlob !== lastUrl) {
+                                            lastUrl = window.__japscanLastBlob;
+                                            stable = 0;
+                                        } else {
+                                            stable += 100;
+                                        }
+                                    }
+                                    return w;
+                                }
+
+                                // Detect reader mode. Webtoon (long-strip) puts everything in
+                                // `#full-reader` with one `<img id="img-N">` per page and hides
+                                // `#single-reader` (class `d-none`); paginated mode is the
+                                // opposite. We use a different driver per mode.
+                                var fullReader = document.getElementById('full-reader');
+                                var singleReader = document.querySelector('[id^="single-reader"]');
+                                var webtoonImgs = fullReader
+                                    ? Array.from(fullReader.querySelectorAll('img[id^="img-"]'))
+                                          .sort(function(a, b){
+                                              return parseInt(a.id.replace('img-', ''), 10)
+                                                   - parseInt(b.id.replace('img-', ''), 10);
+                                          })
+                                    : [];
+                                var singleHidden = singleReader && singleReader.classList.contains('d-none');
+                                var isWebtoon = webtoonImgs.length > 0 && (singleHidden || !singleReader);
+
+                                if (isWebtoon) {
+                                    var total = webtoonImgs.length;
+                                    console.log('[japscan] webtoon mode, total = ' + total);
+                                    var saved = 0;
+                                    // Each webtoon page is rendered into ~8 layered canvases
+                                    // inside a closed shadow root and then composited to a
+                                    // pinned `<img>.src` blob. Holding all 14 pages worth of
+                                    // canvases and bitmaps in the DOM concurrently OOMs the
+                                    // renderer (≈ 14 × 8 × 940 × 2100 × 4 ≈ 880 MB), so we
+                                    // tear down each `#d-img-N` container as soon as we've
+                                    // grabbed the bytes for that page.
+                                    //
+                                    // We also remove the (hidden) single-reader subtree up
+                                    // front to drop its stale layer-canvases; in webtoon mode
+                                    // it's `d-none` and only adds memory pressure.
+                                    if (singleReader && singleReader.parentNode) {
+                                        try { singleReader.parentNode.removeChild(singleReader); } catch(e) {}
+                                    }
+                                    for (var i = 0; i < total; i++) {
+                                        var img = webtoonImgs[i];
+                                        var container = document.getElementById('d-img-' + i);
+                                        try { img.scrollIntoView({ block: 'start' }); } catch(e) {}
+                                        // Wait for the descrambler to set img.src to a blob URL.
+                                        var w = 0;
+                                        while ((!img.src || img.src.indexOf('blob:') !== 0) && w < 20000) {
+                                            await sleep(250); w += 250;
+                                        }
+                                        if (img.src && img.src.indexOf('blob:') === 0) {
+                                            var ok = await saveBlobUrl(img.src);
+                                            if (ok) saved++;
+                                        }
+                                        // Free the page's DOM/bitmap memory before moving on.
+                                        try {
+                                            img.src = '';
+                                            img.removeAttribute('src');
+                                            if (container && container.parentNode) {
+                                                container.parentNode.removeChild(container);
+                                            }
+                                        } catch(e) {}
+                                        webtoonImgs[i] = null;
+                                        // Drop the slot ref too — the hook will overwrite it
+                                        // for the next page; nulling here lets any earlier
+                                        // (already-saved) blob be GCed promptly.
+                                        window.__japscanLastBlob = null;
+                                        console.log('[japscan] webtoon page ' + (i + 1) + ' / ' + total + ' after ' + w + 'ms (saved=' + saved + ')');
+                                    }
+                                    console.log('[japscan] webtoon done, ' + saved + ' / ' + total + ' pages saved');
+                                    try { window.$$interfaceName.passDone(); } catch(e) {}
+                                    return;
+                                }
+
+                                // ---- Paginated mode ----
+                                // Total page count from the (hidden) <select>. Navigation goes
+                                // through the reader's click-zones (`#block-left` / `#block-right`).
+                                // Slimselect option clicks don't work because `.ss-content` is
+                                // hidden until the dropdown is opened; click-zones are what real
+                                // users tap and reliably trigger a per-page render.
+                                var sel = document.getElementById('pages');
+                                var total = sel ? sel.options.length : 1;
+                                var nextBtn = document.getElementById('block-right');
+                                var prevBtn = document.getElementById('block-left');
+                                console.log('[japscan] paginated mode, total = ' + total + ', next=' + !!nextBtn + ', prev=' + !!prevBtn);
+
+                                function nav(btn, fallbackKey){
+                                    try {
+                                        if (btn) { btn.click(); return; }
+                                        document.dispatchEvent(new KeyboardEvent('keydown', {
+                                            key: fallbackKey, code: fallbackKey,
+                                            which: fallbackKey === 'ArrowRight' ? 39 : 37,
+                                            keyCode: fallbackKey === 'ArrowRight' ? 39 : 37,
+                                            bubbles: true,
+                                        }));
+                                    } catch(e) {
+                                        console.log('[japscan] nav failed: ' + e);
+                                    }
+                                }
+
+                                // The reader pre-renders pages on load (the final pre-render is
+                                // the *last* page, not page 1), so the very first blob the hook
+                                // sees is unreliable. Wait for things to settle, discard whatever
+                                // was captured, then bounce next->prev to force a clean page-1
+                                // render before we start harvesting.
+                                await sleep(5000);
+                                window.__japscanLastBlob = null;
+
+                                nav(nextBtn, 'ArrowRight');
+                                await waitForBlob(8000);
+                                window.__japscanLastBlob = null;
+
+                                nav(prevBtn, 'ArrowLeft');
+                                var t0 = await waitForBlob(8000);
+                                // Capture page 1's blob synchronously, then kick off page 2 BEFORE
+                                // we start encoding+saving page 1. The descrambler's per-page
+                                // pipeline (tile fetch + decode + composite) overlaps with our
+                                // blob → base64 → disk-write, shaving roughly one save-latency
+                                // off every page.
+                                var u0 = window.__japscanLastBlob;
+                                window.__japscanLastBlob = null;
+                                if (total > 1) nav(nextBtn, 'ArrowRight');
+                                var saved = u0 ? ((await saveBlobUrl(u0)) ? 1 : 0) : 0;
+                                console.log('[japscan] page 1 captured after ' + t0 + 'ms (saved=' + saved + ')');
+
+                                for (var i = 1; i < total; i++) {
+                                    var t = await waitForBlob(8000);
+                                    var u = window.__japscanLastBlob;
+                                    window.__japscanLastBlob = null;
+                                    // Pre-click the next page so its render starts now; we'll
+                                    // encode + save the current page concurrently below.
+                                    if (i < total - 1) nav(nextBtn, 'ArrowRight');
+                                    var ok = u ? await saveBlobUrl(u) : false;
+                                    if (ok) saved++;
+                                    console.log('[japscan] page ' + (i + 1) + ' captured after ' + t + 'ms (saved=' + saved + ')');
+                                }
+
+                                console.log('[japscan] done, ' + saved + ' / ' + total + ' pages saved');
+                                try {
+                                    window.$$interfaceName.passDone();
+                                } catch(e) {
+                                    console.log('[japscan] passDone failed: ' + e);
+                                }
+                            })();
+                        """.trimIndent(),
+                    ) {}
                 }
             }
 
@@ -627,23 +772,20 @@ abstract class Japscan :
             )
         }
 
-        latch.await(30, TimeUnit.SECONDS)
+        // Generous timeout: the JS sequentially drives every page through the
+        // reader's pagination and waits for each blob, which can easily exceed
+        // a minute on long chapters.
+        latch.await(3, TimeUnit.MINUTES)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
             throw Exception("Erreur lors de la récupération des pages")
         }
-        val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
+        // Wrap each absolute cache path in the sentinel host so OkHttp accepts it
+        // and our interceptor serves the file. Paths under /data/data/... are
+        // already URL-safe (alphanumerics, dots, slashes, hyphens).
         val images = jsInterface.images
-            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) }
-            .mapIndexed { i, url ->
-                if (i != jsInterface.pi) {
-                    Page(i, imageUrl = "$url&${jsInterface.p}=${jsInterface.v}")
-                } else {
-                    null
-                }
-            }
-            .filterNotNull()
+            .mapIndexed { i, path -> Page(i, imageUrl = "https://$JAPSCAN_CACHE_HOST$path") }
         return Observable.just(images)
     }
 
@@ -674,29 +816,39 @@ abstract class Japscan :
         return List(length) { charPool.random() }.joinToString("")
     }
 
-    internal class JsInterface(private val latch: CountDownLatch) {
+    internal class JsInterface(
+        private val latch: CountDownLatch,
+        private val cacheDir: File,
+    ) {
+        // Absolute file paths in the app's cache dir, in capture order.
         var images: List<String> = listOf()
             private set
-        var p: String = ""
-            private set
-        var v: String = ""
-            private set
-        var pi: Int = -1
-            private set
+        private val savedPaths = mutableListOf<String>()
+        private val sessionTag = "japscan-${System.currentTimeMillis()}"
 
         @JavascriptInterface
         @Suppress("UNUSED")
-        fun passPayload(rawData: String, p: String, v: String, pi: String) {
+        fun savePage(dataUri: String) {
             try {
-                images = rawData.parseAs<List<String>>()
-                    .map { "$it?y=1" }
-                this.p = p
-                this.v = v
-                this.pi = pi.toInt()
-                latch.countDown()
+                val commaIdx = dataUri.indexOf(',')
+                if (commaIdx <= 0) return
+                val base64 = dataUri.substring(commaIdx + 1)
+                val bytes = Base64.decode(base64, Base64.DEFAULT)
+                synchronized(savedPaths) {
+                    val file = File(cacheDir, "$sessionTag-${savedPaths.size}.bin")
+                    file.writeBytes(bytes)
+                    savedPaths.add(file.absolutePath)
+                }
             } catch (_: Exception) {
-                return
+                // best effort — page just won't be in the list
             }
+        }
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passDone() {
+            images = synchronized(savedPaths) { savedPaths.toList() }
+            latch.countDown()
         }
     }
 }
