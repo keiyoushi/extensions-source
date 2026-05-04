@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.xasiatalbums
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +16,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import rx.Observable
 
 class XAsiatAlbums : HttpSource() {
 
@@ -27,6 +29,7 @@ class XAsiatAlbums : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("X-Requested-With", "XMLHttpRequest")
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     override fun popularMangaRequest(page: Int): Request = searchQuery(
@@ -43,22 +46,15 @@ class XAsiatAlbums : HttpSource() {
         params = mapOf("sort_by" to "post_date"),
     )
 
-    private fun searchQuery(
-        path: String,
-        blockId: String,
-        page: Int,
-        params: Map<String, String>,
-    ): Request {
-        val offset = ((page - 1) * ITEMS_PER_PAGE) + 1
+    private fun searchQuery(path: String, blockId: String, page: Int, params: Map<String, String>): Request {
+        val offset = (page - 1) * ITEMS_PER_PAGE
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments(path.removePrefix("/").removeSuffix("/"))
             addQueryParameter("mode", "async")
             addQueryParameter("function", "get_block")
             addQueryParameter("block_id", blockId)
             addQueryParameter("from", offset.toString())
-            if (blockId.contains("search")) {
-                addQueryParameter("from_albums", offset.toString())
-            }
+            if (blockId.contains("search")) addQueryParameter("from_albums", offset.toString())
             params.forEach { (key, value) -> addQueryParameter(key, value) }
             addQueryParameter("_", System.currentTimeMillis().toString())
         }.build()
@@ -72,9 +68,7 @@ class XAsiatAlbums : HttpSource() {
             if (url.isBlank() || !url.contains("/albums/")) return@mapNotNull null
             SManga.create().apply {
                 setUrlWithoutDomain(url)
-                title = link.attr("title").ifBlank {
-                    link.selectFirst("img")?.attr("alt").orEmpty()
-                }
+                title = link.attr("title").ifBlank { link.selectFirst("img")?.attr("alt").orEmpty() }
                 thumbnail_url = link.selectFirst("img")?.let { img ->
                     img.attr("abs:data-original").ifBlank { img.attr("abs:src") }
                 }
@@ -82,9 +76,11 @@ class XAsiatAlbums : HttpSource() {
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }.distinctBy { it.url }
-        val hasNextPage = document.select(".pagination a[href], .pages a[href], .pager a[href]")
+
+        val hasNext = document.select(".pagination a[href], a.next[href], .pager a[href]")
             .any { it.text().contains("Next", ignoreCase = true) }
-        return MangasPage(mangas, hasNextPage)
+
+        return MangasPage(mangas, hasNext)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -132,77 +128,91 @@ class XAsiatAlbums : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = listOf(
-        SChapter.create().apply {
-            url = response.request.url.encodedPath
-            name = "Photobook"
-            date_upload = System.currentTimeMillis()
-        },
-    )
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val pages = mutableListOf<Page>()
-
-        // Add current page as page 0
-        pages.add(Page(0, "", response.request.url.toString()))
-
-        // Select only valid image viewer pages
-        document.select(".pagination a[href*=get_image], .pager a[href*=get_image]")
-            .distinctBy { it.attr("abs:href") }
-            .forEachIndexed { index, element ->
-                pages.add(Page(index + 1, "", element.attr("abs:href")))
-            }
-        return pages
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val requestUrl = response.request.url.toString()
+        return listOf(
+            SChapter.create().apply {
+                url = if (requestUrl.startsWith(baseUrl)) requestUrl.removePrefix(baseUrl) else requestUrl
+                name = "Photobook"
+                date_upload = System.currentTimeMillis()
+            },
+        )
     }
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val chapterUrl = resolveUrl(chapter.url)
+        return client.newCall(GET(chapterUrl, headers)).asObservableSuccess()
+            .flatMap { response ->
+                val doc = response.asJsoup()
+                val pageUrls = doc.select(".pagination a[href], .pager a[href], a.next[href]")
+                    .map { it.attr("abs:href") }
+                    .filter { it.isNotBlank() && it.startsWith("http") }
+                    .distinct()
+
+                val allUrls = (listOf(chapterUrl) + pageUrls).distinct()
+
+                Observable.from(allUrls)
+                    .concatMap { url -> client.newCall(GET(url, headers)).asObservableSuccess() }
+                    .toList()
+                    .map { responses ->
+                        responses.flatMap { res -> parseImagePages(res.asJsoup()) }
+                            .distinct()
+                            .mapIndexed { idx, link -> Page(idx, url = link) }
+                    }
+            }
+    }
+
+    private fun parseImagePages(document: Document): List<String> {
+        return document.select("a[href*='/get_image/']")
+            .map { it.attr("abs:href") }
+            .filter { it.isNotBlank() && it.contains("/get_image/") }
+            .distinct()
+    }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
-
-        // Optimization: Priority selectors based on source code analysis
         val selectors = arrayOf(
             ".image-holder img",
             ".main-image img",
             ".content img",
-            "img#main-image",
+            "img[data-original]",
+            "img[data-src]",
         )
 
         for (selector in selectors) {
             val element = document.selectFirst(selector) ?: continue
-
-            // Check original attributes first to bypass lazy-loading
             val url = element.attr("abs:data-original")
                 .ifBlank { element.attr("abs:data-src") }
                 .ifBlank { element.attr("abs:src") }
 
-            if (isValidImage(url)) return url
+            if (url.isNotBlank() && !url.contains("base64") && !url.contains("logo")) {
+                return url
+            }
         }
-
-        // Final sanity check: if it's not an image URL, throw to retry
-        throw Exception("Failed to resolve image. Server might have returned HTML instead.")
+        throw IllegalStateException("Failed to parse image URL")
     }
 
-    private fun isValidImage(url: String): Boolean {
-        val u = url.lowercase()
-        return u.isNotBlank() &&
-            !u.contains("data:image/") &&
-            !u.contains("logo") &&
-            (u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".webp") || u.contains(".jpg?"))
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl.orEmpty().ifBlank { page.url }
+        return GET(imageUrl, headersBuilder().set("Referer", page.url).build())
     }
-
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
 
     override fun getFilterList(): FilterList {
         val pairList = categories.map { Pair(it.key, it.value) }
             .distinctBy { it.first }
             .sortedBy { it.first.lowercase() }
             .toTypedArray()
+
         return FilterList(
             Filter.Header("Tags update dynamically after opening albums"),
             Filter.Separator(),
             UriPartFilter("Category", pairList),
         )
     }
+
+    private fun resolveUrl(path: String): String = if (path.startsWith("http")) path else baseUrl + path
 
     companion object {
         private const val ITEMS_PER_PAGE = 12
