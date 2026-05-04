@@ -66,8 +66,9 @@ data class DilarSeriesDto(
     @SerialName("translation_status") val translationStatus: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = "/series/$id/$title"
-        this.title = this@DilarSeriesDto.title.ifBlank { "Unknown" }
+        val safeTitle = this@DilarSeriesDto.title.ifBlank { "Unknown" }
+        url = "/series/$id/$safeTitle"
+        this.title = safeTitle
         description = summary
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
         author = staff.filter { it.staffRole?.role == "Author" }.joinToString { it.name }
