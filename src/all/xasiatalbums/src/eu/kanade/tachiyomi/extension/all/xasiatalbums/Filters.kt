@@ -4,15 +4,12 @@ import eu.kanade.tachiyomi.source.model.Filter
 
 open class UriPartFilter(
     displayName: String,
-    private val values: Array<Pair<String, String>>,
+    private val vals: Array<Pair<String, String>>,
 ) : Filter.Select<String>(
     displayName,
-    values.map {
-        it.first
-    }.toTypedArray(),
+    vals.map { it.first }.toTypedArray(),
 ) {
-
-    fun toUriPart(): String = values[state].second
+    fun toUriPart(): String = vals[state].second
 }
 
 val initialCategories = mapOf(
