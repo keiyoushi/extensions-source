@@ -136,7 +136,7 @@ class KappaBeast : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterResponse>().data.first().htmlContent ?: throw Exception("This chapter contains no pages.")
-        return Jsoup.parse(result).select("div.separator > a").mapIndexed { i, url ->
+        return Jsoup.parseBodyFragment(result).select("div.separator > a").mapIndexed { i, url ->
             Page(i, imageUrl = url.absUrl("href").replace(Regex("/s\\d+/"), "/s0/"))
         }
     }
