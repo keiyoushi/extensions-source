@@ -5,12 +5,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.text.SimpleDateFormat
@@ -56,17 +54,14 @@ class MangaDto(
     private val imagePath: JsonElement,
 
     // Details
-    @JsonNames("authors")
-    private val authorsElement: JsonElement? = null,
-    private val artists: List<ScanlatorDto>? = null,
-    private val otherNames: List<String>? = null,
-    @JsonNames("mbRating", "avgRating")
-    private val ratingElement: JsonElement? = null,
+    private val authors: List<AuthorDto>? = null,
     private val synopsis: String? = null,
-    @JsonNames("genres", "tags")
-    private val genresElement: JsonElement? = null,
+    private val genres: List<TagDto>? = null,
     private val status: String? = null,
     private val type: String? = null,
+    private val avgRating: Double? = null,
+    private val mbRating: Double? = null,
+    private val otherNames: List<String>? = null,
     val scanlators: List<ScanlatorDto>? = null,
 
     // Chapters
@@ -94,34 +89,36 @@ class MangaDto(
             }
             url.replaceFirst(Regex("^https?:?//"), "https://")
         }
+
+        val ratingValue = mbRating ?: avgRating
         description = buildString {
-            ratingElement?.jsonPrimitive?.floatOrNull?.let { append("Rating: %.2f/10\n\n".format(it)) }
-            synopsis?.takeIf { it.trim().isNotEmpty() }?.let { append("${it.trim()}\n\n") }
-            otherNames?.takeIf { it.isNotEmpty() }?.let {
-                append("Alternative Names: ${it.joinToString()}")
+            ratingValue?.let {
+                append("Rating: %.2f/10\n\n".format(it))
+            }
+
+            synopsis?.let {
+                append(it.trim())
+                append("\n\n")
+            }
+
+            if (!otherNames.isNullOrEmpty()) {
+                append("Alternative Names: ")
+                append(otherNames.joinToString())
             }
         }.trim()
+
         genre = buildList {
             type?.let { add(it) }
-            genresElement?.let { addAll(parseJsonList(it)) }
+            genres?.forEach { add(it.name) }
         }.joinToString()
-        authorsElement?.let { element ->
-            val all = when (element) {
-                is JsonArray -> element.mapNotNull {
-                    when (it) {
-                        is JsonPrimitive -> it.content to null
-                        is JsonObject -> it["name"]?.jsonPrimitive?.content to it["type"]?.jsonPrimitive?.content
-                        else -> null
-                    }
-                }
-                else -> emptyList()
-            }
-            author = all.filter { it.second == null || it.second == "Author" }.joinToString { it.first ?: "" }
-            artist = all.filter { it.second == "Artist" }.joinToString { it.first ?: "" }
+
+        authors?.let { list ->
+            author = list.filter { it.type == null || it.type == "Author" }
+                .joinToString { it.name }
+            artist = list.filter { it.type == "Artist" }
+                .joinToString { it.name }
         }
-        if (artist.isNullOrEmpty()) {
-            artist = artists?.joinToString { it.name }
-        }
+
         this@MangaDto.status?.let {
             status = when (it.lowercase().trim()) {
                 "ongoing" -> SManga.ONGOING
@@ -136,21 +133,21 @@ class MangaDto(
     fun recommendations(baseUrl: String) = recommendations?.map { it.toSManga(baseUrl) } ?: emptyList()
 
     @Serializable
+    class TagDto(
+        val name: String,
+    )
+
+    @Serializable
+    class AuthorDto(
+        val name: String,
+        val type: String? = null,
+    )
+
+    @Serializable
     class ScanlatorDto(
         val id: String,
         val name: String,
     )
-
-    private fun parseJsonList(element: JsonElement): List<String> = when (element) {
-        is JsonArray -> element.mapNotNull {
-            when (it) {
-                is JsonPrimitive -> it.content
-                is JsonObject -> it["name"]?.jsonPrimitive?.content
-                else -> null
-            }
-        }
-        else -> emptyList()
-    }
 }
 
 @Serializable

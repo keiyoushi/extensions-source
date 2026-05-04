@@ -74,7 +74,7 @@ class Atsumaru : HttpSource() {
             addQueryParameter("query_by", "title,englishTitle,otherNames,authors")
             addQueryParameter("query_by_weights", "4,3,2,1")
             addQueryParameter("num_typos", "4,3,2,1")
-            addQueryParameter("include_fields", "id,title,englishTitle,poster,posterSmall,posterMedium,type,isAdult,status,year,synopsis,otherNames,mbRating,authors,tags,avgRating")
+            addQueryParameter("include_fields", "id,title,englishTitle,poster,posterSmall,posterMedium,type,isAdult,status,year,synopsis,otherNames,mbRating,avgRating,authors")
             addQueryParameter("page", page.toString())
             addQueryParameter("per_page", "40")
 
@@ -84,9 +84,7 @@ class Atsumaru : HttpSource() {
             var showAdult = false
             filters.forEach { if (it is AdultFilter) showAdult = it.state }
 
-            if (showAdult) {
-                filterBy.add("isAdult:=[true,false]")
-            } else {
+            if (!showAdult) {
                 filterBy.add("isAdult:=false")
                 filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
             }
@@ -94,16 +92,18 @@ class Atsumaru : HttpSource() {
             filters.forEach { filter ->
                 when (filter) {
                     is GenreFilter -> {
+                        val included = mutableListOf<String>()
                         val excluded = mutableListOf<String>()
-                        filter.state.forEachIndexed { index, triState ->
-                            val id = filter.genreIds[index]
-                            when (triState.state) {
-                                Filter.TriState.STATE_INCLUDE -> filterBy.add("genreIds:=`$id`")
-                                Filter.TriState.STATE_EXCLUDE -> excluded.add("`$id`")
+                        filter.state.forEachIndexed { index, state ->
+                            val genreId = filter.genreIds[index]
+                            when (state.state) {
+                                Filter.TriState.STATE_INCLUDE -> included.add(genreId)
+                                Filter.TriState.STATE_EXCLUDE -> excluded.add(genreId)
                             }
                         }
+                        included.forEach { filterBy.add("genreIds:=`$it`") }
                         if (excluded.isNotEmpty()) {
-                            filterBy.add("genreIds:!=[${excluded.joinToString(",")}]")
+                            filterBy.add("genreIds:!=[${excluded.joinToString(",") { "`$it`" }}]")
                         }
                     }
 
@@ -137,11 +137,7 @@ class Atsumaru : HttpSource() {
                     }
 
                     is SortFilter -> {
-                        filter.state?.let {
-                            val field = SortFilter.VALUES[it.index]
-                            val order = if (it.ascending) "asc" else "desc"
-                            addQueryParameter("sort_by", "$field:$order")
-                        }
+                        addQueryParameter("sort_by", filter.getSortBy())
                     }
 
                     is OfficialFilter -> {
@@ -157,9 +153,9 @@ class Atsumaru : HttpSource() {
             filterBy.add("views:>0")
 
             addQueryParameter("filter_by", filterBy.joinToString(" && "))
-        }
+        }.build()
 
-        return GET(url.build(), apiHeaders)
+        return GET(url, apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
