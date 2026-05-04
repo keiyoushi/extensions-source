@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.kappabeast
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -26,6 +28,10 @@ class KappaBeast : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
     override val versionId = 2
+
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
@@ -145,34 +151,55 @@ class KappaBeast : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val slug = manga.url.substringAfterLast("/")
-        val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
-            .addQueryParameter($$"filters[manga][slug][$eq]", slug)
-            .addQueryParameter("sort[0]", "number:desc")
-            .addQueryParameter("pagination[pageSize]", "1000")
-            .addQueryParameter("fields[0]", "title")
-            .addQueryParameter("fields[1]", "number")
-            .addQueryParameter("fields[2]", "publishedAt")
-            .addQueryParameter("fields[3]", "createdAt")
-            .build()
-        return GET(url, headers)
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
+        var hasNext: Boolean
+
+        do {
+            val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter($$"filters[manga][slug][$eq]", slug)
+                .addQueryParameter("sort[0]", "number:desc")
+                .addQueryParameter("pagination[page]", page.toString())
+                .addQueryParameter("pagination[pageSize]", "100")
+                .addQueryParameter("fields[0]", "title")
+                .addQueryParameter("fields[1]", "number")
+                .addQueryParameter("fields[2]", "publishedAt")
+                .addQueryParameter("fields[3]", "createdAt")
+                .build()
+
+            val request = GET(url, headers)
+            val response = client.newCall(request).execute()
+            val result = response.parseAs<ChapterResponse>()
+
+            chapters += result.data.map { dto ->
+                dto.toSChapter(slug).apply {
+                    date_upload = dateFormat.tryParse(dto.getDateString())
+                }
+            }
+
+            hasNext = result.meta?.pagination?.let { it.page < it.pageCount } == true
+            page++
+        } while (hasNext)
+
+        chapters
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ChapterResponse>()
-        return result.data.map { dto ->
-            dto.toSChapter().apply {
-                date_upload = dateFormat.tryParse(dto.getDateString())
-            }
-        }
-    }
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // ============================== Pages =================================
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl
+    override fun getChapterUrl(chapter: SChapter): String {
+        val path = chapter.url.substringBefore("#")
+        return "$baseUrl/reader/$path"
+    }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val docId = chapter.url.substringAfterLast("#")
+        return GET("$apiUrl/chapters/$docId", headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<SingleChapterResponse>()
