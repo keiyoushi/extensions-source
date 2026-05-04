@@ -96,7 +96,7 @@ class MangaDto(
         }
         description = buildString {
             ratingElement?.jsonPrimitive?.floatOrNull?.let { append("Rating: %.2f/10\n\n".format(it)) }
-            synopsis?.takeIf { it.isNotEmpty() }?.let { append("$it\n\n") }
+            synopsis?.takeIf { it.trim().isNotEmpty() }?.let { append("${it.trim()}\n\n") }
             otherNames?.takeIf { it.isNotEmpty() }?.let {
                 append("Alternative Names: ${it.joinToString()}")
             }

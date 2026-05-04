@@ -74,14 +74,22 @@ class Atsumaru : HttpSource() {
             addQueryParameter("query_by", "title,englishTitle,otherNames,authors")
             addQueryParameter("query_by_weights", "4,3,2,1")
             addQueryParameter("num_typos", "4,3,2,1")
-            addQueryParameter("include_fields", "id,title,englishTitle,poster,posterSmall,posterMedium,type,isAdult,status,year")
+            addQueryParameter("include_fields", "id,title,englishTitle,poster,posterSmall,posterMedium,type,isAdult,status,year,synopsis,otherNames,mbRating,authors,tags,avgRating")
             addQueryParameter("page", page.toString())
             addQueryParameter("per_page", "40")
 
             val filterBy = mutableListOf<String>()
             filterBy.add("hidden:!=true")
 
-            var hasAdultFilter = false
+            var showAdult = false
+            filters.forEach { if (it is AdultFilter) showAdult = it.state }
+
+            if (showAdult) {
+                filterBy.add("isAdult:=[true,false]")
+            } else {
+                filterBy.add("isAdult:=false")
+                filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
+            }
 
             filters.forEach { filter ->
                 when (filter) {
@@ -136,14 +144,6 @@ class Atsumaru : HttpSource() {
                         }
                     }
 
-                    is AdultFilter -> {
-                        hasAdultFilter = true
-                        if (!filter.state) {
-                            filterBy.add("isAdult:=false")
-                            filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
-                        }
-                    }
-
                     is OfficialFilter -> {
                         if (filter.state) {
                             filterBy.add("officialTranslation:=true")
@@ -152,11 +152,6 @@ class Atsumaru : HttpSource() {
 
                     else -> {}
                 }
-            }
-
-            if (!hasAdultFilter) {
-                filterBy.add("isAdult:=false")
-                filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
             }
 
             filterBy.add("views:>0")
