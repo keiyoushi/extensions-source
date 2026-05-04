@@ -95,6 +95,9 @@ class KappaBeast : HttpSource() {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val documentId = "$baseUrl/${manga.url}".toHttpUrl().fragment
+        if (documentId.isNullOrBlank()) {
+            throw Exception("Migrate from $name to $name.")
+        }
         val chapters = mutableListOf<SChapter>()
         var page = 1
         var result: ChapterResponse
@@ -137,11 +140,15 @@ class KappaBeast : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterResponse>().data.first().htmlContent ?: throw Exception("This chapter contains no pages.")
         return Jsoup.parseBodyFragment(result).select("div.separator > a").mapIndexed { i, url ->
-            Page(i, imageUrl = url.absUrl("href").replace(Regex("/s\\d+/"), "/s0/"))
+            Page(i, imageUrl = url.absUrl("href").replace(QUALITY_REGEX, "/s0/"))
         }
     }
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val QUALITY_REGEX = Regex("/s\\d+/")
+    }
 }
