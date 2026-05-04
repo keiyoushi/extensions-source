@@ -26,7 +26,7 @@ class WNACG :
 
     override val name = "紳士漫畫"
     override val lang = "zh"
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     private val preferences = getPreferences { preferenceMigration() }
 
