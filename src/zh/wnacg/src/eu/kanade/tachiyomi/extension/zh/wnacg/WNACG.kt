@@ -49,7 +49,7 @@ class WNACG :
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums-favorite_ranking-$page-type-week.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums-favorite_ranking-page-$page-type-week.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
