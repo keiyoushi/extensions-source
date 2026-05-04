@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.i18n.Intl
@@ -39,7 +39,7 @@ abstract class Madara(
     override val baseUrl: String,
     final override val lang: String,
     protected val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -162,12 +162,12 @@ abstract class Madara(
     }
 
     // exclude/filter bilibili manga from list
-    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector , .manga__item"
+    protected open fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector , .manga__item"
 
     open val popularMangaUrlSelector = "div.post-title a"
     open val popularMangaUrlSelectorImg = "img"
 
-    override fun popularMangaFromElement(element: Element): SManga {
+    protected open fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
         with(element) {
@@ -190,7 +190,7 @@ abstract class Madara(
         GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=views", headers)
     }
 
-    override fun popularMangaNextPageSelector(): String? = if (useLoadMoreRequest()) {
+    protected open fun popularMangaNextPageSelector(): String? = if (useLoadMoreRequest()) {
         "body:not(:has(.no-posts))"
     } else {
         "div.nav-previous, nav.navigation-ajax, a.nextpostslink"
@@ -217,9 +217,9 @@ abstract class Madara(
 
     // Latest Updates
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    protected open fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
+    protected open fun latestUpdatesFromElement(element: Element): SManga {
         // Even if it's different from the popular manga's list, the relevant classes are the same
         return popularMangaFromElement(element)
     }
@@ -230,7 +230,7 @@ abstract class Madara(
         GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
     }
 
-    override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
+    protected open fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mp = popularMangaParse(response)
@@ -623,11 +623,11 @@ abstract class Madara(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun searchMangaSelector() = "div.c-tabs-item__content , .manga__item"
+    protected open fun searchMangaSelector() = "div.c-tabs-item__content , .manga__item"
 
     protected open val searchMangaUrlSelector = "div.post-title a"
 
-    override fun searchMangaFromElement(element: Element): SManga {
+    protected open fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
         with(element) {
@@ -643,7 +643,7 @@ abstract class Madara(
         return manga
     }
 
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    protected open fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Manga Details Parse
 
@@ -700,7 +700,9 @@ abstract class Madara(
         "Annulé",
     )
 
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+
+    protected open fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         with(document) {
             manga.title = selectFirst(mangaDetailsSelectorTitle)!!.ownText()
@@ -880,7 +882,7 @@ abstract class Madara(
         return chapterElements.map(::chapterFromElement)
     }
 
-    override fun chapterListSelector() = "li.wp-manga-chapter"
+    protected open fun chapterListSelector() = "li.wp-manga-chapter"
 
     protected open fun chapterDateSelector() = "span.chapter-release-date"
 
@@ -889,7 +891,7 @@ abstract class Madara(
     // can cause some issue for some site. blocked by cloudflare when opening the chapter pages
     open val chapterUrlSuffix = "?style=list"
 
-    override fun chapterFromElement(element: Element): SChapter {
+    protected open fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
 
         with(element) {
@@ -1009,7 +1011,9 @@ abstract class Madara(
     open val chapterProtectorPasswordPrefix = "wpmangaprotectornonce='"
     open val chapterProtectorDataPrefix = "chapter_data='"
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+
+    protected open fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
         val chapterProtector = document.selectFirst(chapterProtectorSelector)
@@ -1047,7 +1051,7 @@ abstract class Madara(
 
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers.newBuilder().set("Referer", page.url).build())
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     /**
      * Set it to false if you want to disable the extension reporting the view count
