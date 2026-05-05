@@ -44,7 +44,7 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
         .addNetworkInterceptor(::drawBalloonsOnImage)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$internalLang/read.html")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$internalLang/read.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
