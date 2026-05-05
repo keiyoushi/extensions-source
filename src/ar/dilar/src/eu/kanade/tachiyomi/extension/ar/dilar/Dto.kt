@@ -6,6 +6,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
+
 // ── Search ────────────────────────────────────────────────────────────────
 
 @Serializable
@@ -21,7 +22,7 @@ class DilarSearchItemDto(
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        val safeTitle = this@DilarSearchItemDto.title?.trim()?.takeIf { it.isNotEmpty() } ?: return@apply
+        val safeTitle = this@DilarSearchItemDto.title?.trim()?.ifBlank { null } ?: "Unknown"
         this.title = safeTitle
         url = "/series/$id/$safeTitle"
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
@@ -46,7 +47,7 @@ class DilarSeriesItemDto(
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        val safeTitle = this@DilarSeriesItemDto.title?.trim()?.takeIf { it.isNotEmpty() } ?: return@apply
+        val safeTitle = this@DilarSeriesItemDto.title?.trim()?.ifBlank { null } ?: "Unknown"
         this.title = safeTitle
         url = "/series/$id/$safeTitle"
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
@@ -139,7 +140,7 @@ class DilarReleaseDto(
             if (!chapter.title.isNullOrBlank()) append(" - ${chapter.title}")
         }.ifEmpty { "فصل ${chapter.id}" }
         scanlator = teams.joinToString { it.name }
-        date_upload = createdAt?.let { dateFormat.tryParse(it) } ?: 0L
+        date_upload = dateFormat.tryParse(createdAt)
     }
 }
 

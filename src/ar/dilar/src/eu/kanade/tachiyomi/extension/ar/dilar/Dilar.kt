@@ -25,11 +25,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+
 private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"
 private val MIRROR_PREF_ENTRIES = arrayOf("Dilar (dilar.tube)", "Golden (golden.rest)")
 private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://dilar.tube", "https://golden.rest")
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
 class Dilar :
