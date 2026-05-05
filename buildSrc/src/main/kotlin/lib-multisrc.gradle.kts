@@ -9,6 +9,11 @@ android {
 
     defaultConfig {
         minSdk = AndroidConfig.minSdk
+
+        val proguardFile = file("proguard-rules.pro")
+        if (proguardFile.exists()) {
+            consumerProguardFiles(proguardFile)
+        }
     }
 
     namespace = "eu.kanade.tachiyomi.multisrc.${project.name}"

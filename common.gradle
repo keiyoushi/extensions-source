@@ -75,11 +75,11 @@ android {
             minifyEnabled = true
             proguardFiles(
                 rootProject.file("proguard-rules.pro"),
-                layout.buildDirectory.file('extension-proguard-rules.pro').get().asFile
+                layout.buildDirectory.file("generated-proguard-rules.pro").get().asFile
             )
-            File extensionProguardFile = file('proguard-rules.pro')
-            if (extensionProguardFile.exists()) {
-                proguardFile(extensionProguardFile)
+            File proguardFile = file("proguard-rules.pro")
+            if (proguardFile.exists()) {
+                proguardFiles(proguardFile)
             }
             vcsInfo.include = false
         }
@@ -128,8 +128,8 @@ tasks.register("writeManifestFile") {
     }
 }
 
-tasks.register("writeProguardRules") {
-    File proguardFile = layout.buildDirectory.file('extension-proguard-rules.pro').get().asFile
+tasks.register("writeProguardFile") {
+    File proguardFile = layout.buildDirectory.file("generated-proguard-rules.pro").get().asFile
     String extClassPath = "${android.namespace}.${android.defaultConfig.applicationIdSuffix}${extClass}"
     doLast {
         proguardFile.parentFile.mkdirs()
@@ -148,4 +148,4 @@ afterEvaluate {
     }
 }
 
-preBuild.dependsOn(writeManifestFile, writeProguardRules)
+preBuild.dependsOn(writeManifestFile, writeProguardFile)
