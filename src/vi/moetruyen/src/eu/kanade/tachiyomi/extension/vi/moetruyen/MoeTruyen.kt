@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
+import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,11 +26,15 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class MoeTruyen : HttpSource() {
+class MoeTruyen :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "MoeTruyen"
     override val lang = "vi"
-    override val baseUrl = "https://moetruyen.net"
+    override val baseUrl get() = getPrefBaseUrl()
     override val supportsLatest = true
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
@@ -286,7 +296,47 @@ class MoeTruyen : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // ============================== Preferences ===========================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_DOMAIN
+            title = "Tên miền chính"
+            entries = arrayOf("MoeTruyen.net (Trong nước)", "Truyen.moe (Quốc tế)", "Tùy chỉnh")
+            entryValues = arrayOf("https://moetruyen.net", "https://truyen.moe", "custom")
+            summary = "%s"
+            setDefaultValue(DEFAULT_DOMAIN)
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_CUSTOM_DOMAIN
+            title = "Tên miền tùy chỉnh"
+            summary = "Nhập tên miền bạn muốn sử dụng (ví dụ: https://moetruyen.xyz)"
+            setDefaultValue(DEFAULT_DOMAIN)
+            dialogTitle = "Tên miền tùy chỉnh"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val newDomain = (newValue as String).removeSuffix("/")
+                preferences.edit().putString(PREF_CUSTOM_DOMAIN, newDomain).apply()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    private fun getPrefBaseUrl(): String {
+        val domain = preferences.getString(PREF_DOMAIN, DEFAULT_DOMAIN)!!
+        return if (domain == "custom") {
+            preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
+        } else {
+            domain
+        }.removeSuffix("/")
+    }
+
     companion object {
+        private const val PREF_DOMAIN = "pref_domain"
+        private const val DEFAULT_DOMAIN = "https://moetruyen.net"
+        private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
+
         private val NUMBER_REGEX = Regex("""\d+""")
         private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
