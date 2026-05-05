@@ -20,7 +20,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
 class MgreadIo :
     InitManga(
@@ -30,7 +29,7 @@ class MgreadIo :
         mangaUrlDirectory = "manga",
         popularUrlSlug = "manga-ranking",
         latestUrlSlug = "recently-updated",
-        versionId = 2,
+        versionId = 1,
     ) {
 
     override val client = network.cloudflareClient
@@ -112,9 +111,9 @@ class MgreadIo :
     // Details
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("#manga-title")?.ownText()?.trim()
+        title = document.selectFirst("#manga-title")?.ownText()
             ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.substringBefore(" [Ch.")?.trim()
-            ?: ""
+            ?: error("Title not found")
 
         thumbnail_url = document.selectFirst(".story-cover img, meta[property=og:image]")?.imageUrl()
 
@@ -122,38 +121,41 @@ class MgreadIo :
             ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
 
         genre = document.select("#genre-tags a[href*='/genre/']")
-            .joinToString { it.ownText().ifBlank { it.text() }.trim() }
+            .joinToString { it.ownText().ifBlank { it.text() } }
 
         status = document.selectFirst("#manga-status")?.text().parseStatus()
 
         val metadata = buildList {
-            document.selectFirst("#manga-title + div")?.ownText()?.trim()
+            document.selectFirst("#manga-title + div")?.ownText()
                 ?.substringBefore("Chapters")
                 ?.trim()
-                ?.takeIf(String::isNotBlank)
+                ?.takeIf(String::isNotEmpty)
                 ?.let { add("Chapters: $it") }
 
-            document.selectFirst("#comic-othername")?.text()?.trim()
-                ?.takeIf(String::isNotBlank)
+            document.selectFirst("#comic-othername")?.text()
+                ?.takeIf(String::isNotEmpty)
                 ?.let { add("Alternative title: $it") }
 
-            document.selectFirst(".init-review-info")?.text()?.trim()
-                ?.takeIf(String::isNotBlank)
+            document.selectFirst(".init-review-info")?.text()
+                ?.takeIf(String::isNotEmpty)
                 ?.let { add("Rating: $it") }
 
-            document.selectFirst("#manga-title + div .init-plugin-suite-view-count-number")?.text()?.trim()
-                ?.takeIf(String::isNotBlank)
+            document.selectFirst("#manga-title + div .init-plugin-suite-view-count-number")?.text()
+                ?.takeIf(String::isNotEmpty)
                 ?.let { add("Views: $it") }
 
-            document.selectFirst("#last-updated")?.text()?.trim()
-                ?.takeIf(String::isNotBlank)
+            document.selectFirst("#last-updated")?.text()
+                ?.takeIf(String::isNotEmpty)
                 ?.let { add("Last updated: $it") }
         }
 
-        description = listOfNotNull(
-            descriptionText,
-            metadata.takeIf { it.isNotEmpty() }?.joinToString("\n"),
-        ).joinToString("\n\n")
+        description = buildString {
+            if (descriptionText != null) append(descriptionText)
+            if (metadata.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                metadata.joinTo(this, separator = "\n")
+            }
+        }
 
         setUrlWithoutDomain(document.location())
     }
@@ -205,28 +207,16 @@ class MgreadIo :
         val chapterUrl = urlElement.absUrl("href")
 
         setUrlWithoutDomain(chapterUrl)
-        name = element.selectFirst("h3")?.text()?.trim()
+        name = element.selectFirst("h3")?.text()
             ?: chapterUrl.substringBeforeLast('/').substringAfterLast('/').replace('-', ' ').replaceFirstChar(Char::uppercase)
 
-        chapter_number = Regex("""/chapter-(\d+(?:\.\d+)?)/""").find(chapterUrl)
+        chapter_number = CHAPTER_NUMBER_REGEX.find(chapterUrl)
             ?.groupValues
             ?.get(1)
             ?.toFloatOrNull()
             ?: -1f
 
         date_upload = element.selectFirst("time[datetime]")?.attr("datetime").parseChapterDate()
-    }
-
-    private fun ChapterDto.toSChapter(mangaPath: String): SChapter = SChapter.create().apply {
-        val chapterName = number.toChapterNamePart()
-        val cleanMangaPath = mangaPath.substringBefore("/chapter/").trimEnd('/')
-
-        setUrlWithoutDomain("$cleanMangaPath/$slug/")
-        name = title.takeIf(String::isNotBlank)
-            ?.let { "Chapter $chapterName - $it" }
-            ?: "Chapter $chapterName"
-        chapter_number = number
-        date_upload = restChapterDateFormat.tryParse(createdAt)
     }
 
     // Pages
@@ -253,14 +243,14 @@ class MgreadIo :
         val titleElement = element.selectFirst("h2 a[href*='/manga/']")
             ?: element.selectFirst("a[href*='/manga/']:not([href*='/chapter-'])")!!
 
-        title = titleElement.text().trim()
+        title = titleElement.text()
         setUrlWithoutDomain(titleElement.absUrl("href"))
         thumbnail_url = element.selectFirst("img")?.imageUrl()
     }
 
     private fun mangaFromSearchDto(dto: MgreadSearchDto): SManga? {
-        val parsedTitle = Jsoup.parse(dto.title).text().trim()
-        val cleanUrl = dto.url.trim().takeIf(String::isNotBlank) ?: return null
+        val parsedTitle = Jsoup.parse(dto.title).text()
+        val cleanUrl = dto.url.trim().takeIf(String::isNotEmpty) ?: return null
 
         return SManga.create().apply {
             title = parsedTitle
@@ -285,10 +275,10 @@ class MgreadIo :
 
     private fun Element.imageUrl(): String? = when (normalName()) {
         "meta" -> attr("content")
-        else -> attr("abs:data-src").ifBlank {
-            attr("abs:data-lazy-src").ifBlank { attr("abs:src") }
+        else -> attr("abs:data-src").ifEmpty {
+            attr("abs:data-lazy-src").ifEmpty { attr("abs:src") }
         }
-    }.takeIf(String::isNotBlank)
+    }.takeIf(String::isNotEmpty)
 
     private fun String?.parseStatus(): Int = when (this?.lowercase(Locale.US)?.trim()) {
         "ongoing" -> SManga.ONGOING
@@ -303,20 +293,19 @@ class MgreadIo :
     private fun String?.parseChapterDate(): Long {
         if (isNullOrBlank()) return 0L
         val normalized = this
-            .replace(Regex("""([+-]\d{2}):(\d{2})$"""), "$1$2")
-            .replace(Regex("""Z$"""), "+0000")
+            .replace(ISO_TZ_REGEX, "$1$2")
+            .replace(ZULU_SUFFIX_REGEX, "+0000")
         return chapterDateFormat.tryParse(normalized)
     }
-
-    private fun Float.toChapterNamePart(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
     companion object {
         private const val MANGA_GRID_SELECTOR = ".manga-item-grid"
         private const val NEXT_PAGE_SELECTOR = "li:not(.uk-disabled) > a[aria-label='Next page']"
 
+        private val CHAPTER_NUMBER_REGEX = Regex("""/chapter-(\d+(?:\.\d+)?)/""")
+        private val ISO_TZ_REGEX = Regex("""([+-]\d{2}):(\d{2})$""")
+        private val ZULU_SUFFIX_REGEX = Regex("""Z$""")
+
         private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US)
-        private val restChapterDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("GMT+7")
-        }
     }
 }
