@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -17,6 +18,9 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class MgreadIo :
     InitManga(
@@ -180,7 +184,7 @@ class MgreadIo :
             val url = "$baseUrl/wp-json/initmanga/v1/chapters".toHttpUrl().newBuilder()
                 .addQueryParameter("manga_id", mangaId.toString())
                 .addQueryParameter("paged", page.toString())
-                .addQueryParameter("per_page", CHAPTER_REST_PAGE_SIZE.toString())
+                .addQueryParameter("per_page", "50")
                 .build()
 
             val chapterList = client.newCall(GET(url, headers)).execute().use { restResponse ->
@@ -204,7 +208,7 @@ class MgreadIo :
         name = element.selectFirst("h3")?.text()?.trim()
             ?: chapterUrl.substringBeforeLast('/').substringAfterLast('/').replace('-', ' ').replaceFirstChar(Char::uppercase)
 
-        chapter_number = CHAPTER_NUMBER_REGEX.find(chapterUrl)
+        chapter_number = Regex("""/chapter-(\d+(?:\.\d+)?)/""").find(chapterUrl)
             ?.groupValues
             ?.get(1)
             ?.toFloatOrNull()
@@ -222,7 +226,7 @@ class MgreadIo :
             ?.let { "Chapter $chapterName - $it" }
             ?: "Chapter $chapterName"
         chapter_number = number
-        date_upload = createdAt.parseRestChapterDate()
+        date_upload = restChapterDateFormat.tryParse(createdAt)
     }
 
     // Pages
@@ -255,16 +259,14 @@ class MgreadIo :
     }
 
     private fun mangaFromSearchDto(dto: MgreadSearchDto): SManga? {
-        val title = Jsoup.parse(dto.title).text().trim()
-        val url = dto.url.trim().takeIf(String::isNotBlank) ?: return null
+        val parsedTitle = Jsoup.parse(dto.title).text().trim()
+        val cleanUrl = dto.url.trim().takeIf(String::isNotBlank) ?: return null
 
         return SManga.create().apply {
-            this.title = title
+            title = parsedTitle
             thumbnail_url = dto.thumb
             setUrlWithoutDomain(
-                url.toHttpUrlOrNull()
-                    ?.encodedPath
-                    ?: url,
+                cleanUrl.toHttpUrlOrNull()?.encodedPath ?: cleanUrl,
             )
         }
     }
@@ -280,4 +282,41 @@ class MgreadIo :
         mangas.filterNot { it.isAnimeEntry() },
         hasNextPage,
     )
+
+    private fun Element.imageUrl(): String? = when (normalName()) {
+        "meta" -> attr("content")
+        else -> attr("abs:data-src").ifBlank {
+            attr("abs:data-lazy-src").ifBlank { attr("abs:src") }
+        }
+    }.takeIf(String::isNotBlank)
+
+    private fun String?.parseStatus(): Int = when (this?.lowercase(Locale.US)?.trim()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "season end", "source hiatus", "caught up" -> SManga.ON_HIATUS
+        "dropped" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
+
+    // Site emits HTML5 datetime "+07:00"; the 'X' format requires API 24,
+    // so normalize to "+0700" / "+0000" for the API 21-compatible 'Z' pattern.
+    private fun String?.parseChapterDate(): Long {
+        if (isNullOrBlank()) return 0L
+        val normalized = this
+            .replace(Regex("""([+-]\d{2}):(\d{2})$"""), "$1$2")
+            .replace(Regex("""Z$"""), "+0000")
+        return chapterDateFormat.tryParse(normalized)
+    }
+
+    private fun Float.toChapterNamePart(): String = if (this % 1f == 0f) toInt().toString() else toString()
+
+    companion object {
+        private const val MANGA_GRID_SELECTOR = ".manga-item-grid"
+        private const val NEXT_PAGE_SELECTOR = "li:not(.uk-disabled) > a[aria-label='Next page']"
+
+        private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US)
+        private val restChapterDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("GMT+7")
+        }
+    }
 }

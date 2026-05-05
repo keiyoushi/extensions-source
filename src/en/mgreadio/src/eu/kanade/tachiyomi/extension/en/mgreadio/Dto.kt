@@ -21,7 +21,7 @@ internal data class ChapterDto(
 
 @Serializable
 internal data class MgreadSearchDto(
-    val title: String = "",
-    val url: String = "",
+    val title: String,
+    val url: String,
     val thumb: String? = null,
 )
