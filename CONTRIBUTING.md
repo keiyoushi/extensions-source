@@ -769,6 +769,7 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 - **Separate custom headers:** When adding custom headers to a request (e.g., for AJAX endpoints), avoid building them inline within the `GET()` or `POST()` call. Instead, assign the modified headers to a separate variable or define them as a class-level property. This improves readability and allows for reuse across multiple requests.
 - **Do not override default `HttpSource` methods:** Avoid overriding methods like `mangaDetailsRequest` or `chapterListRequest` if they only replicate the default behavior (`GET(baseUrl + manga.url, headers`). Only override them if the source requires a different URL structure or custom headers for those specific requests.
 - **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
+- **Code sectioning:** For readability, organize the methods in your extension class using section comments (e.g., `// Popular`, `// Latest`, `// Search`, `// Details`, `// Chapters`, `// Pages`, `// Filters`, `// Utilities`). The exact formatting or length of the divider is up to you, but keeping a consistent order helps maintainability.
 
 ### Advanced Extension features
 
