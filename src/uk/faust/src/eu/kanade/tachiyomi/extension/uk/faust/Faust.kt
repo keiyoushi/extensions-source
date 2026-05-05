@@ -16,6 +16,9 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -57,7 +60,7 @@ class Faust :
 
         val mangas = data.titles.map { dto ->
             SManga.create().apply {
-                setUrlWithoutDomain("/api/titles/${dto.slug}")
+                url = dto.slug
                 title = dto.name
                 thumbnail_url = dto.coverImageUrl
             }
@@ -143,17 +146,21 @@ class Faust :
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // ============================== Manga / Manga ===============================
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url.substringAfter("titles/")}"
+    // WebView url
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
+
+    // API request
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/titles/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val dto = response.parseAs<SMangaDto>()
         title = dto.name
         thumbnail_url = dto.coverImageUrl
-        setUrlWithoutDomain("/api/titles/${dto.slug}")
-        description = "${dto.description}" +
-            "\n\nАльтернативні назви: ${dto.englishName}" +
-            "\nРейтинг: ${"%.2f".format(dto.averageRating)}/5 (${dto.votesCount}), " +
-            "В закладках: ${dto.bookmarksCount}"
+        description = buildString {
+            append(dto.description)
+            append("\n\nАльтернативні назви: ${dto.englishName}")
+            append("\nРейтинг: ${"%.2f".format(dto.averageRating)}/5 (${dto.votesCount}), В закладках: ${dto.bookmarksCount}")
+        }
         artist = dto.artists?.joinToString { "${it.firstName} ${it.lastName}".trim() }?.takeIf { it.isNotBlank() }
         author = dto.authors?.joinToString { "${it.firstName} ${it.lastName}".trim() }?.takeIf { it.isNotBlank() }
         genre = buildList {
@@ -170,10 +177,15 @@ class Faust :
     }
 
     // ============================== Manga / Chapters ===============================
+    // WebView url
     override fun getChapterUrl(chapter: SChapter): String {
-        val pieces = chapter.url.substringAfter("chapters/").substringBefore("?titleSlug").split("-")
-        return "$baseUrl/manga/${chapter.url.substringAfter("titleSlug=")}/${pieces[0]}-${pieces[1]}/${pieces[2]}-${pieces[3]}"
+        val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
+        val pieces = chapterSlug.split("-")
+        return "$baseUrl/manga/$chapterSlug/${pieces[0]}-${pieces[1]}/${pieces[2]}-${pieces[3]}"
     }
+
+    // API request
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/titles/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterResponseDto>()
@@ -187,7 +199,7 @@ class Faust :
                         chapter.name.contains("Розділ") -> "Том $vol ${chapter.name}"
                         else -> "Том $vol Розділ $chp ${chapter.name}"
                     }
-                    setUrlWithoutDomain("/api/chapters/${chapter.slug}?titleSlug=${dto.slug}")
+                    url = "${chapter.slug}/${dto.slug}"
                     date_upload = parseDate(chapter.updatedDate)
                     chapter_number = chapter.number
                     scanlator = chapter.translationTeams?.joinToString { it.name }
@@ -197,6 +209,10 @@ class Faust :
     }
 
     // ============================== Images ===============================
+    override fun pageListRequest(chapter: SChapter): Request {
+        val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
+        return GET("$apiUrl/chapters/$chapterSlug?titleSlug=$seriesSlug", headers)
+    }
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterResponseList>()
         return dto.pages.map { page ->
@@ -207,13 +223,17 @@ class Faust :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Utilities ===============================
+    private val scope = CoroutineScope(Dispatchers.IO)
     override fun getFilterList(): FilterList {
-        if (!genresFetched) {
-            fetchGenres()
+        scope.launch {
+            if (!genresFetched) {
+                fetchGenres()
+            }
+            if (!tagsFetched) {
+                fetchTags()
+            }
         }
-        if (!tagsFetched) {
-            fetchTags()
-        }
+
         val filters = mutableListOf<Filter<*>>(
             OrderBy(),
             Filter.Separator(),
@@ -263,6 +283,8 @@ class Faust :
             }
         }
     }
+
+    // ============================== Utilities ===============================
     private fun checkMinRange(input: String?, min: Int, max: Int): String {
         val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return min.toString()
         if (value !in min..max) return min.toString()
