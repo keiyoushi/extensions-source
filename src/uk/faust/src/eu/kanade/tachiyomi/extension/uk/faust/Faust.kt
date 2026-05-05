@@ -181,7 +181,7 @@ class Faust :
     override fun getChapterUrl(chapter: SChapter): String {
         val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
         val pieces = chapterSlug.split("-")
-        return "$baseUrl/manga/$chapterSlug/${pieces[0]}-${pieces[1]}/${pieces[2]}-${pieces[3]}"
+        return "$baseUrl/manga/$seriesSlug/${pieces[0]}-${pieces[1]}/${pieces[2]}-${pieces[3]}"
     }
 
     // API request
