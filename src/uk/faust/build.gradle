@@ -1,0 +1,8 @@
+ext {
+    extName = 'Faust'
+    extClass = '.Faust'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
