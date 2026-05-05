@@ -94,14 +94,12 @@ class MangaDto(
         authors?.let {
             author = it.joinToString { author -> author.name }
         }
-        this@MangaDto.status?.let {
-            status = when (it.lowercase().trim()) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "hiatus" -> SManga.ON_HIATUS
-                "canceled" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+        status = when (this@MangaDto.status?.lowercase()?.trim()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
+            "canceled" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
         }
     }
 
@@ -177,23 +175,4 @@ class PageDto(
 @Serializable
 class PageDataDto(
     val image: String,
-)
-
-@Serializable
-internal class SearchRequest(
-    val page: Int,
-    val filter: SearchFilter,
-)
-
-@Serializable
-internal class SearchFilter(
-    val search: String? = null,
-    val types: List<String>,
-    val status: List<String>? = null,
-    val includedTags: List<String>? = null,
-    val year: Int? = null,
-    val minChapters: Int? = null,
-    val showAdult: Boolean = false,
-    val officialTranslation: Boolean = false,
-    val sortBy: String? = null,
 )
