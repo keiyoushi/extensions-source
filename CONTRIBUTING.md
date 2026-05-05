@@ -773,8 +773,8 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 
 #### Extension logic and app features
 
-- **Mandatory SManga fields:** A manga's `title` and `url` are **mandatory**. Do not provide generic fallbacks like `"Untitled"` or `"Unknown"` if the site fails to provide a title, as this breaks downloads and library management.
-  Prefer failing loudly (e.g., throwing an exception) so broken selectors are detected early. Silent fallbacks or empty values can hide issues and make debugging harder. If the title or url is missing, it is better to throw or skip the entry entirely.
+- **Mandatory fields:** A manga's `title` and `url`, and a chapter's `name` are **mandatory**. Do not provide generic fallbacks like `"Untitled"`, `"Unknown"`, or empty strings if the site fails to provide these values, as this breaks downloads and library management.
+  Prefer failing loudly (e.g., throwing an exception) so broken selectors are detected early. Silent fallbacks or empty values can hide issues and make debugging harder. If a mandatory field is missing, it is better to throw or skip the entry entirely.
 - **Optional fields:** For all other fields, prefer safe calls (`?.`) and avoid using the non-null assertion (`!!`). Missing data like thumbnails or descriptions should not crash the entire parsing process. Consider using Kotlin's `mapNotNull` when parsing lists of elements so that if a single item fails, the rest of the list can still be loaded successfully.
 - **When to bump `versionId`:** The `versionId` property dictates how the app tracks the source. **Only override and bump `versionId` if the source's URL structure fundamentally changes** (e.g., old manga URLs no longer work and there is no way to create a redirect). Bumping this forces all users to re-migrate their bookmarks.
 - **Self-hosted sources:** If you are adding a source for a self-hosted server (e.g., StashApp, Komga, Suwayomi), make your class implement the `UnmeteredSource` interface. This tells the app not to apply standard rate-limiting to the user's own local server.
