@@ -25,16 +25,25 @@ class YaoiToon : HttpSource() {
 
     override val supportsLatest = true
 
+    override val versionId = 1
+
+    private val ajaxHeaders by lazy {
+        headers.newBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+    }
+
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/filter/$page/?sort=most-viewd&sex=All&chapter_count=0", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select(".manga_list-sbs .mls-wrap .item").map { element ->
+        val mangas = document.select(".manga_list-sbs .mls-wrap .item").mapNotNull { element ->
+            val titleElement = element.selectFirst(".manga-name a") ?: return@mapNotNull null
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst(".manga-name a")!!.attr("abs:href"))
-                title = element.selectFirst(".manga-name a")!!.text()
+                setUrlWithoutDomain(titleElement.attr("abs:href"))
+                title = titleElement.text()
                 thumbnail_url = element.selectFirst(".manga-poster img")?.let {
                     val dataSrc = it.attr("data-src")
                     if (dataSrc.isNotEmpty()) {
@@ -90,7 +99,7 @@ class YaoiToon : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".anisc-detail .manga-name")?.text() ?: "Unknown"
+            title = document.selectFirst(".anisc-detail .manga-name")!!.text()
             thumbnail_url = document.selectFirst(".anisc-poster img")?.let {
                 val dataSrc = it.attr("data-src")
                 if (dataSrc.isNotEmpty()) {
@@ -121,7 +130,7 @@ class YaoiToon : HttpSource() {
             val link = element.selectFirst("a.item-link") ?: return@mapNotNull null
             SChapter.create().apply {
                 setUrlWithoutDomain(link.attr("abs:href"))
-                name = element.selectFirst(".name")?.text() ?: "Chapter"
+                name = element.selectFirst(".name")!!.text()
                 date_upload = parseRelativeDate(element.selectFirst(".release-time")?.text())
             }
         }
@@ -150,12 +159,7 @@ class YaoiToon : HttpSource() {
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
-        return GET(
-            "$baseUrl/ajax/image/list/chap/$chapterId",
-            headers.newBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build(),
-        )
+        return GET("$baseUrl/ajax/image/list/chap/$chapterId", ajaxHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
