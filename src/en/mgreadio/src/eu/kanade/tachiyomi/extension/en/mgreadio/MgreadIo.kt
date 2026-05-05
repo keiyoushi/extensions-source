@@ -29,7 +29,6 @@ class MgreadIo :
         mangaUrlDirectory = "manga",
         popularUrlSlug = "manga-ranking",
         latestUrlSlug = "recently-updated",
-        versionId = 1,
     ) {
 
     override val client = network.cloudflareClient
