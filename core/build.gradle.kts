@@ -8,8 +8,6 @@ android {
 
     defaultConfig {
         minSdk = AndroidConfig.minSdk
-
-        consumerProguardFiles("proguard-rules.pro")
     }
 
     namespace = "keiyoushi.core"

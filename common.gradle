@@ -74,7 +74,7 @@ android {
                     : signingConfigs.debug
             minifyEnabled = true
             proguardFiles(
-                getDefaultProguardFile('proguard-android-optimize.txt'),
+                rootProject.file("proguard-rules.pro"),
                 layout.buildDirectory.file('extension-proguard-rules.pro').get().asFile
             )
             File extensionProguardFile = file('proguard-rules.pro')
@@ -134,8 +134,6 @@ tasks.register("writeProguardRules") {
     doLast {
         proguardFile.parentFile.mkdirs()
         proguardFile.withWriter {
-            it.writeLine("-dontobfuscate")
-            it.writeLine("-dontoptimize")
             it.writeLine("-keep class $extClassPath { *; }")
         }
     }
