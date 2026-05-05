@@ -134,7 +134,7 @@ tasks.register("writeProguardRules") {
     doLast {
         proguardFile.parentFile.mkdirs()
         proguardFile.withWriter {
-            it.writeLine("-keep class $extClassPath { *; }")
+            it.writeLine("-keep class $extClassPath { <init>(); }")
         }
     }
 }
