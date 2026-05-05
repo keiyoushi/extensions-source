@@ -2,28 +2,28 @@ package eu.kanade.tachiyomi.extension.ar.dilar
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.lang.tryParse
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
-
 // ── Search ────────────────────────────────────────────────────────────────
 
 @Serializable
-data class DilarSearchGroupDto(
-    val clazz: String,
+class DilarSearchGroupDto(
+    @SerialName("class") val clazz: String,
     val data: List<DilarSearchItemDto> = emptyList(),
 )
 
 @Serializable
-data class DilarSearchItemDto(
+class DilarSearchItemDto(
     val id: String,
-    val title: String,
+    val title: String? = null,
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = "/series/$id/$title"
-        this.title = title
+        val safeTitle = this@DilarSearchItemDto.title?.trim()?.takeIf { it.isNotEmpty() } ?: return@apply
+        this.title = safeTitle
+        url = "/series/$id/$safeTitle"
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
     }
 }
@@ -31,7 +31,7 @@ data class DilarSearchItemDto(
 // ── Series list ───────────────────────────────────────────────────────────
 
 @Serializable
-data class DilarSeriesListDto(
+class DilarSeriesListDto(
     val series: List<DilarSeriesItemDto> = emptyList(),
     val currentPage: Int = 1,
     val totalPages: Int = 1,
@@ -40,14 +40,15 @@ data class DilarSeriesListDto(
 }
 
 @Serializable
-data class DilarSeriesItemDto(
+class DilarSeriesItemDto(
     val id: String,
-    val title: String,
+    val title: String? = null,
     val cover: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = "/series/$id/$title"
-        this.title = title
+        val safeTitle = this@DilarSeriesItemDto.title?.trim()?.takeIf { it.isNotEmpty() } ?: return@apply
+        this.title = safeTitle
+        url = "/series/$id/$safeTitle"
         thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
     }
 }
@@ -55,9 +56,9 @@ data class DilarSeriesItemDto(
 // ── Series detail ─────────────────────────────────────────────────────────
 
 @Serializable
-data class DilarSeriesDto(
+class DilarSeriesDto(
     val id: String,
-    val title: String,
+    val title: String = "",
     val summary: String? = null,
     val cover: String? = null,
     val staff: List<DilarStaffDto> = emptyList(),
@@ -65,11 +66,10 @@ data class DilarSeriesDto(
     @SerialName("translation_status") val translationStatus: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        val safeTitle = title.ifBlank { "Unknown" }
-        url = "/series/$id/$safeTitle"
-        this.title = safeTitle
+        this.title = this@DilarSeriesDto.title.ifBlank { "Unknown" }
+        url = "/series/${this@DilarSeriesDto.id}/${this.title}"
         description = summary
-        thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/$id/large_$it" }
+        thumbnail_url = cover?.let { "$cdnUrl/uploads/manga/cover/${this@DilarSeriesDto.id}/large_$it" }
         author = staff.filter { it.staffRole?.role == "Author" }.joinToString { it.name }
         artist = staff.filter { it.staffRole?.role == "Artist" }.joinToString { it.name }
             .ifBlank { author }
@@ -85,30 +85,39 @@ data class DilarSeriesDto(
 }
 
 @Serializable
-data class DilarStaffDto(
+class DilarStaffDto(
     val name: String,
     @SerialName("Staff") val staffRole: DilarStaffRoleDto? = null,
 )
 
 @Serializable
-data class DilarStaffRoleDto(
+class DilarStaffRoleDto(
     val role: String? = null,
+    @SerialName("series_id") val seriesId: String? = null,
+    @SerialName("mangaka_id") val mangakaId: String? = null,
 )
 
 @Serializable
-data class DilarCategoryDto(
+class DilarCategoryDto(
     val name: String,
+    @SerialName("Categorization") val categorization: DilarCategorizationDto? = null,
+)
+
+@Serializable
+class DilarCategorizationDto(
+    @SerialName("series_id") val seriesId: String? = null,
+    @SerialName("category_id") val categoryId: String? = null,
 )
 
 // ── Chapter list ──────────────────────────────────────────────────────────
 
 @Serializable
-data class DilarChapterListDto(
+class DilarChapterListDto(
     val chapters: List<DilarChapterWithReleasesDto> = emptyList(),
 )
 
 @Serializable
-data class DilarChapterWithReleasesDto(
+class DilarChapterWithReleasesDto(
     val id: String,
     val chapter: String? = null,
     val title: String? = null,
@@ -116,7 +125,7 @@ data class DilarChapterWithReleasesDto(
 )
 
 @Serializable
-data class DilarReleaseDto(
+class DilarReleaseDto(
     val id: String,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("link_control") val linkControl: Int = 0,
@@ -128,29 +137,28 @@ data class DilarReleaseDto(
         name = buildString {
             chapter.chapter?.toFloatOrNull()?.toInt()?.let { append("فصل $it") }
             if (!chapter.title.isNullOrBlank()) append(" - ${chapter.title}")
-        }
+        }.ifEmpty { "فصل ${chapter.id}" }
         scanlator = teams.joinToString { it.name }
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = createdAt?.let { dateFormat.tryParse(it) } ?: 0L
     }
 }
 
 @Serializable
-data class DilarTeamDto(
+class DilarTeamDto(
     val name: String,
 )
 
 // ── Pages ─────────────────────────────────────────────────────────────────
 
 @Serializable
-data class DilarReleaseDetailDto(
+class DilarReleaseDetailDto(
     val id: String,
     @SerialName("storage_key") val storageKey: String,
     val pages: List<DilarPageDto> = emptyList(),
 )
 
 @Serializable
-data class DilarPageDto(
+class DilarPageDto(
     val url: String,
     val order: Int,
 )
-
