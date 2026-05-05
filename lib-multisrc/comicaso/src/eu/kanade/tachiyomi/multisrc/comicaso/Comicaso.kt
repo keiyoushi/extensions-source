@@ -11,7 +11,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
@@ -173,6 +176,35 @@ abstract class Comicaso(
 
     // =============================== Pages ================================
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
+        val cleanUrl = chapterUrl.newBuilder().query(null).build().toString()
+
+        val body = "{\"urls\":[\"$cleanUrl\"]}".toRequestBody(JSON_MEDIA_TYPE)
+        val tokenHeaders = headersBuilder()
+            .set("Referer", "$baseUrl${chapter.url.substringBeforeLast("/", "").substringBeforeLast("/")}/")
+            .build()
+
+        val tokenRequest = Request.Builder()
+            .url("$baseUrl/wp-json/mp/v1/chapter")
+            .post(body)
+            .headers(tokenHeaders)
+            .build()
+
+        return client.newCall(tokenRequest).asObservableSuccess().flatMap { response ->
+            val result = response.parseAs<TokenDto>()
+            val token = result.tokens[cleanUrl]
+                ?: throw Exception("Failed to get token for $cleanUrl")
+
+            val pageUrl = chapterUrl.newBuilder()
+                .addQueryParameter("t", token)
+                .addQueryParameter("e", result.expire.toString())
+                .build()
+
+            client.newCall(GET(pageUrl, headers)).asObservableSuccess().map(::pageListParse)
+        }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         return document.select("img.mjv2-page-image")
@@ -212,5 +244,7 @@ abstract class Comicaso(
 
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
+
+        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
