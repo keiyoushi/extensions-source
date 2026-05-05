@@ -90,7 +90,7 @@ class YaoiHot : HttpSource() {
             SManga.create().apply {
                 val link = element.selectFirst(".manga-card-link")!!
                 setUrlWithoutDomain(link.attr("abs:href"))
-                title = element.selectFirst(".manga-card-title")?.text() ?: ""
+                title = element.selectFirst(".manga-card-title")!!.text()
                 thumbnail_url = element.selectFirst(".manga-cover-img")?.attr("abs:src")
             }
         }
@@ -105,7 +105,7 @@ class YaoiHot : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst(".manga-title")?.text() ?: ""
+            title = document.selectFirst(".manga-title")!!.text()
             author = document.selectFirst(".author-line")?.text()?.substringAfter("Author:")?.trim()
             description = document.selectFirst(".summary-content")?.text()
             genre = document.select(".genre-tag").joinToString { it.text() }
@@ -120,7 +120,7 @@ class YaoiHot : HttpSource() {
         return document.select(".chapters-list .chapter-item").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
-                name = element.selectFirst(".chapter-title")?.text() ?: ""
+                name = element.selectFirst(".chapter-title")!!.text()
                 date_upload = element.selectFirst(".chapter-date")?.text()?.let { parseRelativeDate(it) } ?: 0L
             }
         }
