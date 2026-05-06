@@ -193,7 +193,7 @@ class MangaDash :
 
         // 1. Get CSRF Token. Using Use block for safety.
         val getRequest = GET(loginUrl, headers)
-        val document = baseClient.newCall(getRequest).execute().use { it.asJsoup() }
+        val document = baseClient.newCall(getRequest).execute().asJsoup()
         val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content")
             ?: document.selectFirst("input[name=csrf_token]")?.attr("value")
 
