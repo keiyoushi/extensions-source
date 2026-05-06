@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.leituramanga
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -10,11 +11,6 @@ import java.util.Locale
 @Serializable
 class MangaResponseDto<T>(
     val data: T,
-)
-
-@Serializable
-class PopularDataDto(
-    val topView: List<MangaDto>,
 )
 
 @Serializable
@@ -90,6 +86,16 @@ class ChapterDto(
 }
 
 @Serializable
+class ChapterPageDto(
+    val chapter: ChapterImagesDto,
+)
+
+@Serializable
+class ChapterImagesDto(
+    val images: List<ImageDto>,
+)
+
+@Serializable
 class ImageDto(
     private val url: String,
 ) {
@@ -97,17 +103,16 @@ class ImageDto(
 }
 
 @Serializable
-class MangaInfoDto(
-    val mangaSlug: String,
+class MangaPagePropsDto(
+    val manga: MangaIdOnlyDto,
+)
+
+@Serializable
+class MangaIdOnlyDto(
+    @SerialName("_id") val id: String,
+)
+
+@Serializable
+class NextJsMangaIdDto(
     val mangaId: String,
-)
-
-@Serializable
-class AESPassword(
-    val variant: List<String>,
-)
-
-@Serializable
-class EncryptedContent(
-    val payload: String,
 )

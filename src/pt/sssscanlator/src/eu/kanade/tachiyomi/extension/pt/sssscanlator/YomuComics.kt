@@ -112,34 +112,62 @@ class YomuComics : HttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = resolveChapterId(chapter)
+        val chapterPageUrl = getChapterUrl(chapter)
+
         val requestHeaders = headers.newBuilder()
-            .set("Referer", getChapterUrl(chapter))
+            .set("Referer", chapterPageUrl)
             .build()
 
-        return GET("$baseUrl/api/chapters?id=$chapterId", requestHeaders)
+        val cleanUrl = when {
+            chapterPageUrl.startsWith("http") -> chapterPageUrl.toHttpUrl()
+            else -> "$baseUrl$chapterPageUrl".toHttpUrl()
+        }
+
+        return GET(cleanUrl.toString(), requestHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseAs<ChapterPagesResponseDto>()
-            .chapter
-            .content
+        val document = response.asJsoup()
+
+        val preloadPages = document
+            .select("head > link[rel=preload][as=image][href]")
+            .map { it.attr("href") }
             .filter(String::isNotBlank)
 
-        if (pages.isEmpty()) {
-            throw IllegalStateException("Nenhuma pagina encontrada para este capitulo")
+        if (preloadPages.isNotEmpty()) {
+            return preloadPages.mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
         }
 
-        return pages.mapIndexed { index, imageUrl ->
-            val proxyUrl = "$baseUrl/api/proxy-image".toHttpUrl().newBuilder()
-                .addQueryParameter("url", imageUrl)
-                .toString()
+        val body = document.html()
+        val contentBlock = CONTENT_ARRAY_REGEX.find(body)?.groupValues?.get(1)
 
-            Page(index, imageUrl = proxyUrl)
+        val rscPages = if (contentBlock != null) {
+            CDN_URL_REGEX.findAll(contentBlock)
+                .map { it.groupValues[1] }
+                .toList()
+        } else {
+            emptyList()
         }
+
+        if (rscPages.isNotEmpty()) {
+            return rscPages.mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
+        }
+
+        throw IllegalStateException("Nenhuma pagina encontrada para este capitulo")
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val requestHeaders = headers.newBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, requestHeaders)
+    }
 
     // Filters
 
@@ -193,34 +221,6 @@ class YomuComics : HttpSource() {
         else -> "$baseUrl$chapterUrl".toHttpUrl()
     }
 
-    private fun resolveChapterId(chapter: SChapter): String {
-        val chapterUrl = buildChapterHttpUrl(chapter.url)
-        chapterUrl.queryParameter("chapterId")?.let { return it }
-
-        val pathSegments = chapterUrl.pathSegments
-        val readerSegmentIndex = pathSegments.indexOf("ler")
-        if (readerSegmentIndex == -1 || pathSegments.size <= readerSegmentIndex + 2) {
-            throw IllegalStateException("chapterId nao encontrado na URL do capitulo")
-        }
-
-        val mangaSlug = pathSegments[readerSegmentIndex + 1]
-        val chapterNumberLabel = pathSegments[readerSegmentIndex + 2]
-        val request = GET("$baseUrl/obra/$mangaSlug", headers)
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Falha ao recarregar a obra para resolver chapterId")
-            }
-
-            val payload = extractSeriesPayload(response.asJsoup(), mangaSlug)
-
-            return payload.chapters
-                .firstOrNull { it.number.toChapterNumberString() == chapterNumberLabel }
-                ?.chapterId
-                ?: throw IllegalStateException("chapterId nao encontrado para $mangaSlug/$chapterNumberLabel")
-        }
-    }
-
     private data class SeriesPageData(
         val manga: SManga,
         val chapters: List<SChapter>,
@@ -231,6 +231,12 @@ class YomuComics : HttpSource() {
         const val DEFAULT_TYPE = "all"
         const val DEFAULT_STATUS = "all"
         const val DEFAULT_SORT = "popular"
+
+        /** Matches the flat string array assigned to the "content" key in the RSC payload. */
+        val CONTENT_ARRAY_REGEX = Regex(""""content":\[([^\]]+)\]""")
+
+        /** Matches a single CDN image URL inside the content array. */
+        val CDN_URL_REGEX = Regex(""""(https://cdn\.yomu\.com\.br/[^"]+)"""")
     }
 
     private val bibliotecaHeaders

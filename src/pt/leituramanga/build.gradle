@@ -1,12 +1,8 @@
 ext {
     extName = 'Leitura Manga'
     extClass = '.LeituraManga'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(':lib:cryptoaes'))
-}

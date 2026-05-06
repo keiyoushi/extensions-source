@@ -42,7 +42,7 @@ class PlotTwistNoFansub : HttpSource() {
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("biblioteca2")
+            addPathSegment("biblioteca3")
             if (page > 1) {
                 addPathSegment("page")
                 addPathSegment(page.toString())
@@ -58,7 +58,7 @@ class PlotTwistNoFansub : HttpSource() {
         val mangas = document.select("div.page-listing-item figure").map { element ->
             SManga.create().apply {
                 val a = element.selectFirst("a")!!
-                setUrlWithoutDomain(a.attr("href"))
+                setUrlWithoutDomain(a.attr("abs:href").ifEmpty { a.attr("href") })
                 title = a.attr("title").takeIf { it.isNotEmpty() }
                     ?: element.selectFirst("figcaption")?.text()
                     ?: throw Exception("Missing title for manga at ${a.attr("href")}")
@@ -73,7 +73,7 @@ class PlotTwistNoFansub : HttpSource() {
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("biblioteca2")
+            addPathSegment("biblioteca3")
             if (page > 1) {
                 addPathSegment("page")
                 addPathSegment(page.toString())
@@ -97,7 +97,7 @@ class PlotTwistNoFansub : HttpSource() {
             url.addQueryParameter("s", query)
             url.addQueryParameter("post_type", "wp-manga")
         } else {
-            url.addPathSegment("biblioteca2")
+            url.addPathSegment("biblioteca3")
             if (page > 1) {
                 url.addPathSegment("page")
                 url.addPathSegment(page.toString())
@@ -117,7 +117,7 @@ class PlotTwistNoFansub : HttpSource() {
         val mangas = document.select("div.c-tabs-item__content").map { element ->
             SManga.create().apply {
                 val a = element.selectFirst(".post-title a") ?: element.selectFirst("a")!!
-                setUrlWithoutDomain(a.attr("href"))
+                setUrlWithoutDomain(a.attr("abs:href").ifEmpty { a.attr("href") })
                 title = a.text().takeIf { it.isNotEmpty() }
                     ?: element.selectFirst("a")?.attr("title")
                     ?: throw Exception("Missing title for manga at ${a.attr("href")}")
@@ -137,26 +137,32 @@ class PlotTwistNoFansub : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("p.titleMangaSingle")?.text()
-                ?: document.selectFirst(".post-title h1, .post-title h3")?.text() ?: ""
-            thumbnail_url = document.selectFirst(".thumble-container img")?.imgAttr()
+            title = document.selectFirst("p.mn-title-block")?.text()
+                ?: document.selectFirst("p.titleMangaSingle")?.text()
+                ?: document.selectFirst(".post-title h1, .post-title h3")?.text()
+                ?: throw Exception("Manga title not found")
+
+            thumbnail_url = document.selectFirst(".mn-cover-frame img")?.imgAttr()
+                ?: document.selectFirst(".thumble-container img")?.imgAttr()
                 ?: document.selectFirst(".summary_image img")?.imgAttr()
 
-            description = document.selectFirst("#section-sinopsis p.font-light.text-white")?.text()
+            description = document.selectFirst("h2:contains(Sinopsis) + div")?.text()
+                ?: document.selectFirst("#section-sinopsis p.font-light.text-white")?.text()
                 ?: document.selectFirst(".summary__content")?.text()
 
-            val genresList = document.select("#section-sinopsis div:contains(Generos:) + div a").map { it.text() }
+            val genresList = document.select("div.text-white:contains(Gé:) + div a, #section-sinopsis div:contains(Generos:) + div a").map { it.text() }
             genre = if (genresList.isNotEmpty()) {
                 genresList.joinToString()
             } else {
                 document.select(".genres-content a").joinToString { it.text() }
             }
 
-            author = document.selectFirst("#section-sinopsis div:contains(Autor:) + div a")?.text()
+            author = document.selectFirst("div.text-white:contains(Creación:) + div a, #section-sinopsis div:contains(Autor:) + div a")?.text()
                 ?: document.selectFirst(".author-content a")?.text()
 
             val statusText = (
-                document.selectFirst(".btn-completed")?.text()
+                document.selectFirst("button.mn-chip")?.text()
+                    ?: document.selectFirst(".btn-completed")?.text()
                     ?: document.selectFirst(".btn-ongoing")?.text()
                     ?: document.selectFirst("button:contains(Finalizado), button:contains(En curso)")?.text()
                     ?: document.selectFirst(".post-status .summary-content")?.text()
@@ -164,10 +170,8 @@ class PlotTwistNoFansub : HttpSource() {
                 ).lowercase()
 
             status = when {
-                statusText.contains("en curso") -> SManga.ONGOING
-                statusText.contains("finalizado") -> SManga.COMPLETED
-                statusText.contains("ongoing") -> SManga.ONGOING
-                statusText.contains("completed") -> SManga.COMPLETED
+                statusText.contains("en emisión") || statusText.contains("en curso") || statusText.contains("ongoing") -> SManga.ONGOING
+                statusText.contains("finalizado") || statusText.contains("completed") -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
         }
@@ -177,57 +181,135 @@ class PlotTwistNoFansub : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val mangaId = document.selectFirst("script:containsData(manga_id)")
+        val mangaId = document.selectFirst("script:containsData(mnWpMangaId)")
             ?.data()
             ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
+            ?: document.selectFirst("script:containsData(manga_id)")
+                ?.data()
+                ?.let { OLD_MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
             ?: throw Exception("No se pudo encontrar el ID del manga")
 
-        val getcapsJson = document.selectFirst("script:containsData(plotGetcaps)")
-            ?.data()
-            ?: throw Exception("No se pudo encontrar la configuración de capítulos")
-
-        val secret = SECRET_REGEX.find(getcapsJson)?.groupValues?.get(1)
-            ?: throw Exception("No se pudo encontrar el secreto")
-
-        val apiUrl = REST_URL_REGEX.find(getcapsJson)?.groupValues?.get(1)?.replace("\\/", "/")
-            ?: throw Exception("No se pudo encontrar la URL de la API")
+        val scriptData = document.selectFirst("script:containsData(mnSeriesNavBundle)")?.data()
 
         val chapters = mutableListOf<SChapter>()
-        var page = 1
-        var hasNextPage = true
 
-        while (hasNextPage) {
-            val form = FormBody.Builder()
-                .add("action", "plot_anti_hack")
-                .add("page", page.toString())
-                .add("mangaid", mangaId)
-                .add("secret", secret)
-                .build()
+        // Fallback for new theme HTML chapters
+        document.select(".contenedor-capitulo-miniatura a").forEach { a ->
+            val url = a.attr("abs:href").ifEmpty { a.attr("href") }
+            if (url.isNotEmpty()) {
+                chapters.add(
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(url)
+                        val divs = a.select("div.text-sm")
+                        val num = divs.getOrNull(0)?.text() ?: ""
+                        val title = divs.getOrNull(1)?.text() ?: ""
+                        name = buildString {
+                            append("Capítulo $num")
+                            if (title.isNotEmpty()) append(" - $title")
+                        }
+                        date_upload = dateFormat.tryParse(a.selectFirst("time")?.text()?.replace(HTML_TAG_REGEX, ""))
+                    },
+                )
+            }
+        }
 
-            val apiResponse = client.newCall(
-                POST(apiUrl, headers, form),
-            ).execute()
+        if (scriptData != null) {
+            val navCsrf = CSRF_REGEX.find(scriptData)?.groupValues?.get(1)
+                ?: throw Exception("No se pudo encontrar el token")
 
-            val apiData = apiResponse.parseAs<ChapterApiResponse>()
+            val batchUrl = BATCH_URL_REGEX.find(scriptData)?.groupValues?.get(1)?.replace("\\/", "/")
+                ?: throw Exception("No se pudo encontrar la URL de la API")
 
-            if (apiData.chapters.isEmpty()) {
-                hasNextPage = false
-            } else {
-                apiData.chapters.forEach { chapter ->
-                    chapters.add(
-                        SChapter.create().apply {
-                            setUrlWithoutDomain(chapter.link)
-                            name = buildString {
-                                append("Capítulo ${chapter.name}")
-                                if (chapter.nameExtend.isNotEmpty()) {
-                                    append(" - ${chapter.nameExtend}")
+            val totalPagesText = document.selectFirst("script:containsData(totalPageCount)")?.data()
+            val totalPages = totalPagesText?.let { TOTAL_PAGES_REGEX.find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: 1
+
+            // First page is already fetched in HTML, begin on Page 2 if needed
+            var page = if (chapters.isEmpty()) 1 else 2
+            var hasNextPage = page <= totalPages
+
+            while (hasNextPage) {
+                val form = FormBody.Builder()
+                    .add("page", page.toString())
+                    .add("seriesPost", mangaId)
+                    .add("navCsrf", navCsrf)
+                    .build()
+
+                val apiResponse = client.newCall(
+                    POST(batchUrl, headers, form),
+                ).execute()
+
+                val apiData = apiResponse.parseAs<ChapterApiResponse>()
+
+                if (apiData.chapters.isEmpty()) {
+                    hasNextPage = false
+                } else {
+                    apiData.chapters.forEach { chapter ->
+                        chapters.add(
+                            SChapter.create().apply {
+                                setUrlWithoutDomain(chapter.link)
+                                name = buildString {
+                                    append("Capítulo ${chapter.name}")
+                                    if (chapter.nameExtend.isNotEmpty()) {
+                                        append(" - ${chapter.nameExtend}")
+                                    }
                                 }
-                            }
-                            date_upload = dateFormat.tryParse(chapter.date.replace(HTML_TAG_REGEX, ""))
-                        },
-                    )
+                                date_upload = dateFormat.tryParse(chapter.date.replace(HTML_TAG_REGEX, ""))
+                            },
+                        )
+                    }
+                    page++
+                    if (page > totalPages) {
+                        hasNextPage = false
+                    }
                 }
-                page++
+            }
+        } else {
+            // Old API method (fallback)
+            val getcapsJson = document.selectFirst("script:containsData(plotGetcaps)")?.data()
+            if (getcapsJson != null) {
+                val secret = SECRET_REGEX.find(getcapsJson)?.groupValues?.get(1)
+                    ?: throw Exception("No se pudo encontrar el secreto")
+
+                val apiUrl = REST_URL_REGEX.find(getcapsJson)?.groupValues?.get(1)?.replace("\\/", "/")
+                    ?: throw Exception("No se pudo encontrar la URL de la API")
+
+                var page = 1
+                var hasNextPage = true
+
+                while (hasNextPage) {
+                    val form = FormBody.Builder()
+                        .add("action", "plot_anti_hack")
+                        .add("page", page.toString())
+                        .add("mangaid", mangaId)
+                        .add("secret", secret)
+                        .build()
+
+                    val apiResponse = client.newCall(
+                        POST(apiUrl, headers, form),
+                    ).execute()
+
+                    val apiData = apiResponse.parseAs<ChapterApiResponse>()
+
+                    if (apiData.chapters.isEmpty()) {
+                        hasNextPage = false
+                    } else {
+                        apiData.chapters.forEach { chapter ->
+                            chapters.add(
+                                SChapter.create().apply {
+                                    setUrlWithoutDomain(chapter.link)
+                                    name = buildString {
+                                        append("Capítulo ${chapter.name}")
+                                        if (chapter.nameExtend.isNotEmpty()) {
+                                            append(" - ${chapter.nameExtend}")
+                                        }
+                                    }
+                                    date_upload = dateFormat.tryParse(chapter.date.replace(HTML_TAG_REGEX, ""))
+                                },
+                            )
+                        }
+                        page++
+                    }
+                }
             }
         }
 
@@ -237,7 +319,7 @@ class PlotTwistNoFansub : HttpSource() {
     // =============================== Pages ================================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div.page-break img").mapIndexed { i, img ->
+        return document.select("div.pg-box img, div.page-break img").mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr())
         }
     }
@@ -245,11 +327,14 @@ class PlotTwistNoFansub : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-src") -> absUrl("data-src")
-        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
-        else -> absUrl("src")
+    private fun Element.imgAttr(): String {
+        val url = when {
+            hasAttr("data-src") -> attr("abs:data-src").ifEmpty { attr("data-src") }
+            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src").ifEmpty { attr("data-lazy-src") }
+            hasAttr("srcset") -> attr("abs:srcset").ifEmpty { attr("srcset") }.substringBefore(" ")
+            else -> attr("abs:src").ifEmpty { attr("src") }
+        }
+        return url.trim()
     }
 
     private val dateFormat by lazy {
@@ -257,9 +342,13 @@ class PlotTwistNoFansub : HttpSource() {
     }
 
     companion object {
-        private val MANGA_ID_REGEX = Regex(""""manga_id"\s*:\s*"(\d+)"""")
+        private val MANGA_ID_REGEX = Regex("""mnWpMangaId\s*=\s*(\d+)""")
+        private val OLD_MANGA_ID_REGEX = Regex(""""manga_id"\s*:\s*"(\d+)"""")
+        private val TOTAL_PAGES_REGEX = Regex("""totalPageCount\s*=\s*(\d+)""")
         private val SECRET_REGEX = Regex(""""secret"\s*:\s*"([^"]+)"""")
         private val REST_URL_REGEX = Regex(""""restUrl"\s*:\s*"([^"]+)"""")
+        private val CSRF_REGEX = Regex(""""navCsrf"\s*:\s*"([^"]+)"""")
+        private val BATCH_URL_REGEX = Regex(""""batchUrl"\s*:\s*"([^"]+)"""")
         private val HTML_TAG_REGEX = Regex("<[^>]*>")
     }
 }

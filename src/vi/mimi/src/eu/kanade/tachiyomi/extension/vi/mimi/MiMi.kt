@@ -26,11 +26,9 @@ class MiMi : HttpSource() {
 
     override val name = "MiMi"
 
-    private val domain = "mimimoe.moe"
+    override val baseUrl: String = "https://mimimoe.moe"
 
-    override val baseUrl: String = "https://$domain"
-
-    private val apiUrl: String = "https://api.$domain/api/v2/manga"
+    private val apiUrl: String = "$baseUrl/api"
 
     override val lang = "vi"
 
@@ -38,11 +36,10 @@ class MiMi : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
-        .addInterceptor(MiMiImageInterceptor())
         .build()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var genreList: List<Pair<String, Int>> = emptyList()
+    private var genreList: List<GenreDto> = emptyList()
     private var fetchGenresAttempts: Int = 0
 
     override fun headersBuilder() = super.headersBuilder()
@@ -51,15 +48,15 @@ class MiMi : HttpSource() {
     // ============================== Common ======================================
 
     private fun HttpUrl.Builder.addCommonParams(page: Int) = apply {
-        addQueryParameter("page", (page - 1).toString())
-        addQueryParameter("ex", "196")
-        addQueryParameter("reup", "true")
+        addQueryParameter("exclude_genre", "196")
+        addQueryParameter("page", page.toString())
+        addQueryParameter("page_size", "45")
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
         val result = response.parseAs<DataDto>()
-        val mangas = result.data.map { it.toSManga() }
-        val hasNextPage = result.currentPage < result.totalPage - 1
+        val mangas = result.items.map { it.toSMangaBasic() }
+        val hasNextPage = result.hasNext
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -69,7 +66,7 @@ class MiMi : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("tatcatruyen")
+            .addPathSegments("manga")
             .addQueryParameter("sort", "views")
             .addCommonParams(page)
             .build()
@@ -82,7 +79,7 @@ class MiMi : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("tatcatruyen")
+            .addPathSegments("manga")
             .addQueryParameter("sort", "updated_at")
             .addCommonParams(page)
             .build()
@@ -99,7 +96,7 @@ class MiMi : HttpSource() {
 
         if (isIdSearch) {
             val id = query.removePrefix(PREFIX_ID_SEARCH)
-            return client.newCall(GET("$apiUrl/info/$id", headers))
+            return client.newCall(GET("$apiUrl/manga/$id", headers))
                 .asObservableSuccess()
                 .map { MangasPage(listOf(it.parseAs<MangaDto>().toSManga()), false) }
         }
@@ -107,26 +104,49 @@ class MiMi : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("advance-search")
-            (filters.ifEmpty { getFilterList() }).forEach { filter ->
-                when (filter) {
-                    is SortByList -> addQueryParameter("sort", filter.values[filter.state].id)
+        val filterList = filters.ifEmpty { getFilterList() }
+        val isAdvanced = filterList.any {
+            (it is GenresFilter && it.state.any { g -> g.state != Filter.TriState.STATE_IGNORE }) ||
+                (it is TextField && it.state.isNotEmpty())
+        }
+        val sortId = filterList.filterIsInstance<SortByFilter>().firstOrNull()?.selectedSort ?: ""
 
-                    is GenresFilter -> filter.state.forEach {
-                        when (it.state) {
-                            Filter.TriState.STATE_INCLUDE -> addQueryParameter("genre", it.id)
-                            Filter.TriState.STATE_EXCLUDE -> addQueryParameter("ex", it.id)
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("manga")
+            when {
+                isAdvanced -> addPathSegments("advanced-search")
+                sortId.isEmpty() -> addPathSegments("search")
+                else -> {}
+            }
+
+            filterList.forEach { filter ->
+                when (filter) {
+                    is SortByFilter -> {
+                        if (!isAdvanced && sortId.isNotEmpty()) addQueryParameter("sort", sortId)
+                    }
+
+                    is GenresFilter -> if (isAdvanced) {
+                        filter.state.forEach {
+                            when (it.state) {
+                                Filter.TriState.STATE_INCLUDE -> addQueryParameter("genre", it.id.toString())
+                                Filter.TriState.STATE_EXCLUDE -> addQueryParameter("exclude_genre", it.id.toString())
+                            }
                         }
                     }
 
-                    is TextField -> if (filter.state.isNotEmpty()) setQueryParameter(filter.key, filter.state)
+                    is TextField -> if (isAdvanced && filter.state.isNotEmpty()) {
+                        if (filter.key == "author") {
+                            filter.state.toIntOrNull()?.let { setQueryParameter(filter.key, it.toString()) }
+                        } else {
+                            setQueryParameter(filter.key, filter.state)
+                        }
+                    }
                     else -> {}
                 }
             }
-            addQueryParameter("max", "18")
-            addQueryParameter("page", (page - 1).toString())
-            if (query.isNotBlank()) addQueryParameter("name", query)
+            addQueryParameter("page", page.toString())
+            addQueryParameter("page_size", "24")
+            if (query.isNotBlank()) addQueryParameter("title", query)
         }.build()
 
         return GET(url, headers)
@@ -141,7 +161,7 @@ class MiMi : HttpSource() {
                     client.newCall(GET("$apiUrl/genres", headers)).await()
                         .use { response ->
                             response.parseAs<List<GenreDto>>()
-                                .map { Pair(it.name, it.id) }
+                                .sortedBy { it.name }
                                 .takeIf { it.isNotEmpty() }
                                 ?.let { genreList = it }
                         }
@@ -162,19 +182,34 @@ class MiMi : HttpSource() {
 
     // ============================== Details ======================================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/info/${manga.pureUrl()}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val id = manga.pureUrl()
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("manga")
+            addPathSegments(id)
+        }.build()
+        return GET(url, headers)
+    }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga()
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/g/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     // ============================== Chapters ======================================
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/gallery/${manga.pureUrl()}", headers)
+    override fun chapterListRequest(manga: SManga): Request {
+        val id = manga.pureUrl()
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("manga")
+            addPathSegments(id)
+            addPathSegments("chapters")
+        }.build()
+        return GET(url, headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val segments = response.request.url.pathSegments
-        val mangaId = segments.last()
+        val mangaId = segments[segments.size - 2]
         val result = response.parseAs<List<ChapterDto>>()
         return result.map { it.toSChapter(mangaId) }
     }
@@ -182,14 +217,18 @@ class MiMi : HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String {
         val mangaId = chapter.url.substringBefore('/')
         val chapterId = chapter.url.substringAfter('/')
-        return "$baseUrl/g/$mangaId/chapter/$chapterId"
+        return "$baseUrl/manga/$mangaId/chapter/$chapterId"
     }
 
     // ============================== Pages ======================================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfter("/")
-        return GET("$apiUrl/chapter?id=$chapterId", headers)
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("chapters")
+            addPathSegments(chapterId)
+        }.build()
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageDto>().toPage()
