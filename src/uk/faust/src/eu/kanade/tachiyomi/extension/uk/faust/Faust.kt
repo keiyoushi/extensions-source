@@ -209,6 +209,7 @@ class Faust :
     }
 
     // ============================== Images ===============================
+    // API request
     override fun pageListRequest(chapter: SChapter): Request {
         val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
         return GET("$apiUrl/chapters/$chapterSlug?titleSlug=$seriesSlug", headers)
@@ -222,7 +223,7 @@ class Faust :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================== Utilities ===============================
+    // ============================== Utilities/Filter ===============================
     private val scope = CoroutineScope(Dispatchers.IO)
     override fun getFilterList(): FilterList {
         scope.launch {
@@ -348,7 +349,6 @@ class Faust :
         private const val SITE_GENRES_PREF = "site_hidden_genres"
         private const val SITE_GENRES_PREF_TITLES = "site_hidden_genres_titles"
         private const val SITE_GENRES_PREF_TITLE = "Приховані категорії"
-        private const val SITE_GENRES_PREF_SUM = "\n\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'." +
-            "\n\nⓘЯкщо список категорій порожній, зайдіть 'Огляд' -> 'Джерела' -> Faust -> 'Фільтр' та натисніть 'Скинути'"
+        private const val SITE_GENRES_PREF_SUM = "\n\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'.\n\nⓘЯкщо список категорій порожній, зайдіть 'Огляд' -> 'Джерела' -> Faust -> 'Фільтр' та натисніть 'Скинути'"
     }
 }
