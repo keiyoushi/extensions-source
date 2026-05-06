@@ -208,10 +208,11 @@ class MangaDraft : HttpSource() {
     private fun chapterFromElement(element: Element, index: Int, isNotOneShot: Boolean): SChapter = SChapter.create().apply {
         chapter_number = index.toFloat() + 1
 
-        val titleText = element.selectFirst(".group-hover\\:text-secondary")?.ownText()?.trim() ?: ""
+        var titleText = element.selectFirst(".group-hover\\:text-secondary")?.ownText()?.trim() ?: ""
+        titleText = titleText.replace("""^\d+[.\s]+""".toRegex(), "").trim()
 
         name = if (isNotOneShot) {
-            "Ch. ${index + 1}: $titleText"
+            if (titleText.isNotEmpty()) "Ch. $index: $titleText" else "Ch. $index"
         } else {
             titleText.ifEmpty { "Oneshot" }
         }
