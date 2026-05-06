@@ -136,7 +136,7 @@ class MangaDraft : HttpSource() {
         return parseMangaList(response, isSearch = isTextSearch)
     }
 
-    // filters
+    // Filters
     override fun getFilterList() = FilterList(
         SortFilter(),
         TypeFilter(),
