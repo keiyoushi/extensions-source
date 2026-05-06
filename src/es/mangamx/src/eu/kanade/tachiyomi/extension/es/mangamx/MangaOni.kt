@@ -122,8 +122,9 @@ class MangaOni :
             document.select("#article-div > div").map { element ->
                 SManga.create().apply {
                     thumbnail_url = element.select("img").attr("abs:src")
-                    element.selectFirst("div a")?.also {
-                        title = it.text()
+                    title = element.select("a").firstOrNull { it.text().isNotBlank() }?.text()
+                        ?: throw Exception("Title not found")
+                    element.selectFirst("a")?.also {
                         setUrlWithoutDomain(it.attr("abs:href"))
                     }
                 }
@@ -139,6 +140,7 @@ class MangaOni :
         val document = response.asJsoup()
 
         return SManga.create().apply {
+            title = document.selectFirst("h1")?.text() ?: throw Exception("Title not found")
             thumbnail_url = document.select("img[src*=cover]").attr("abs:src")
             description = document.select("div#sinopsis").lastOrNull()?.ownText()
             author = document.select("div#info-i").text().let {
