@@ -19,23 +19,6 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# Understand the @Keep support annotation.
--keep class android.support.annotation.Keep
-
--keep @android.support.annotation.Keep class * {*;}
-
--keepclasseswithmembers class * {
-    @android.support.annotation.Keep <methods>;
-}
-
--keepclasseswithmembers class * {
-    @android.support.annotation.Keep <fields>;
-}
-
--keepclasseswithmembers class * {
-    @android.support.annotation.Keep <init>(...);
-}
-
 ## Below are some of the custom rules for this repo
 
 # Injekt — generic type tokens are captured via subclasses of FullTypeReference and
