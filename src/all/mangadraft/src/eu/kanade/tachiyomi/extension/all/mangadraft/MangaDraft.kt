@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftPageDTO
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftProjectDto
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.PagesByCategory
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -138,6 +139,8 @@ class MangaDraft : HttpSource() {
 
     // Filters
     override fun getFilterList() = FilterList(
+        Filter.Header("Ignored when using text search"),
+        Filter.Separator(),
         SortFilter(),
         TypeFilter(),
         OrderFilter(),
