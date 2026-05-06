@@ -11,10 +11,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
@@ -180,7 +179,7 @@ abstract class Comicaso(
         val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
         val cleanUrl = chapterUrl.newBuilder().query(null).build().toString()
 
-        val body = "{\"urls\":[\"$cleanUrl\"]}".toRequestBody(JSON_MEDIA_TYPE)
+        val body = TokenRequestDto(listOf(cleanUrl)).toJsonRequestBody()
         val tokenHeaders = headersBuilder()
             .set("Referer", "$baseUrl${chapter.url.substringBeforeLast("/", "").substringBeforeLast("/")}/")
             .build()
@@ -191,7 +190,7 @@ abstract class Comicaso(
             .headers(tokenHeaders)
             .build()
 
-        return client.newCall(tokenRequest).asObservableSuccess().flatMap { response ->
+        return client.newCall(tokenRequest).asObservableSuccess().switchMap { response ->
             val result = response.parseAs<TokenDto>()
             val token = result.tokens[cleanUrl]
                 ?: throw Exception("Failed to get token for $cleanUrl")
@@ -244,7 +243,5 @@ abstract class Comicaso(
 
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
-
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
