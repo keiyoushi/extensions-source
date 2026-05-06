@@ -324,14 +324,13 @@ class Faust :
 
             setOnPreferenceChangeListener { _, values ->
                 val selected = values as Set<*>
-                try {
+                scope.launch {
                     preferences.edit().putString(
                         SITE_GENRES_PREF_TITLES,
                         tags.filter { it.second in selected }
                             .joinToString { it.first }
                             .ifEmpty { "Не вибрано" },
                     ).apply()
-                } catch (_: Exception) {
                 }
                 this.summary = tags.filter { it.second in selected }
                     .joinToString { it.first }
