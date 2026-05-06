@@ -18,6 +18,7 @@ import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -165,8 +166,8 @@ class Faust :
         author = dto.authors?.joinToString { "${it.firstName} ${it.lastName}".trim() }?.takeIf { it.isNotBlank() }
         genre = buildList {
             add(mangaType(dto.mangaType))
-            addAll(dto.tags?.map { it.name }.orEmpty())
             addAll(dto.genres?.map { it.name }.orEmpty())
+            addAll(dto.tags?.map { it.name }.orEmpty())
         }.joinToString()
         status = when (dto.translationStatus) {
             "Inactive" -> SManga.CANCELLED
@@ -227,14 +228,12 @@ class Faust :
     private val scope = CoroutineScope(Dispatchers.IO)
     override fun getFilterList(): FilterList {
         scope.launch {
-            if (!genresFetched) {
-                fetchGenres()
-            }
-            if (!tagsFetched) {
-                fetchTags()
-            }
-        }
+            val genresDeferred = if (!genresFetched) async { fetchGenres() } else null
+            val tagsDeferred = if (!tagsFetched) async { fetchTags() } else null
 
+            genresDeferred?.await()
+            tagsDeferred?.await()
+        }
         val filters = mutableListOf<Filter<*>>(
             OrderBy(),
             Filter.Separator(),
@@ -255,8 +254,8 @@ class Faust :
         return FilterList(filters)
     }
     private fun fetchGenres() {
-        var fetchGenresAttempts = 0
-        if (!genresFetched && fetchGenresAttempts < 3) {
+        var currentAttempts = 0
+        while (!genresFetched && currentAttempts < 3) {
             try {
                 client.newCall(GET("$apiUrl/genres/paged?page=1&pageSize=100", headers)).execute().use { response ->
                     val list = response.parseAs<GenreListPageDto>().items
@@ -264,14 +263,15 @@ class Faust :
                     genresFetched = true
                 }
             } catch (_: Exception) {
+                // Log exception if needed, but don't rethrow to allow retry
             } finally {
-                fetchGenresAttempts++
+                currentAttempts++
             }
         }
     }
     private fun fetchTags() {
-        var fetchTagsAttempts = 0
-        if (!tagsFetched && fetchTagsAttempts < 3) {
+        var currentAttempts = 0
+        while (!tagsFetched && currentAttempts < 3) {
             try {
                 client.newCall(GET("$apiUrl/tags/paged?page=1&pageSize=150", headers)).execute().use { response ->
                     val list = response.parseAs<GenreListPageDto>().items
@@ -279,8 +279,9 @@ class Faust :
                     tagsFetched = true
                 }
             } catch (_: Exception) {
+                // Log exception if needed, but don't rethrow to allow retry
             } finally {
-                fetchTagsAttempts++
+                currentAttempts++
             }
         }
     }
