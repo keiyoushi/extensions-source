@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -84,6 +83,7 @@ class MangaDraft : HttpSource() {
         }.build(),
         headers,
     )
+
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
@@ -192,32 +192,36 @@ class MangaDraft : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
         val chapterElements = document.select(chapterListSelector())
 
         val isNotOneShot = chapterElements[0].attr("href").contains("c.")
-        var chapterList: List<SChapter>
-        if (isNotOneShot) {
-            chapterList = chapterElements.mapIndexed { i, it ->
-                chapterFromElement(it, i)
+
+        return if (isNotOneShot) {
+            chapterElements.mapIndexed { i, it ->
+                chapterFromElement(it, i, true)
             }.reversed()
         } else {
-            chapterList = listOf<SChapter>(chapterFromElement(chapterElements[0], 0))
+            listOf(chapterFromElement(chapterElements[0], 0, false))
         }
-
-        return chapterList
     }
 
-    private fun chapterFromElement(element: Element, index: Int): SChapter = SChapter.create().apply {
-        chapter_number = index.toFloat()
-        name = "$chapter_number. ${element.selectFirst(".group-hover\\:text-secondary")?.text() ?: ""}"
+    private fun chapterFromElement(element: Element, index: Int, isNotOneShot: Boolean): SChapter = SChapter.create().apply {
+        chapter_number = index.toFloat() + 1
 
-        url = "${element.absUrl("href")}"
+        val titleText = element.selectFirst(".group-hover\\:text-secondary")?.ownText()?.trim() ?: ""
 
-        val dateText = element.selectFirst("div>span")?.text()
+        name = if (isNotOneShot) {
+            "Ch. ${index + 1}: $titleText"
+        } else {
+            titleText
+        }
+
+        url = element.absUrl("href")
+
+        val dateText = element.selectFirst("div.flex.items-center span.md\\:inline")?.text()?.trim()
+
         if (!dateText.isNullOrBlank()) {
-            name = name.substringBefore(dateText)
-            date_upload = dateFormat.tryParse(dateText)
+            date_upload = parseDate(dateText)
         }
     }
 
@@ -249,12 +253,27 @@ class MangaDraft : HttpSource() {
             Page(it.number, "${it.url}?size=full", "${it.url}?size=full")
         }
     }
+
     fun findCategoryByPageId(pagesByCategory: PagesByCategory, pageId: Long): List<MangaDraftPageDTO> = pagesByCategory.values
         .first { pageList -> pageList.any { it.id == pageId } }
 
     companion object {
-        private fun getApiDateFormat() = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
+        private val dateFormats = listOf(
+            // Pattern for English: "June 25, 2022"
+            SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH),
+            // Pattern for French: "25 juin 2022"
+            SimpleDateFormat("d MMMM yyyy", Locale.FRENCH),
+        )
 
-        val dateFormat by lazy { getApiDateFormat() }
+        fun parseDate(dateText: String): Long {
+            for (format in dateFormats) {
+                try {
+                    return format.parse(dateText)?.time ?: 0L
+                } catch (e: Exception) {
+                    // Try the next format in the list
+                }
+            }
+            return 0L
+        }
     }
 }
