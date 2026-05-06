@@ -1,9 +1,7 @@
 ext {
     extName = 'Mgread.io'
     extClass = '.MgreadIo'
-    themePkg = 'initmanga'
-    baseUrl = 'https://mgread.io'
-    overrideVersionCode = 0
+    extVersionCode = 1
     isNsfw = true
 }
 

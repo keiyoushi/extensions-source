@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mgreadio
 
-import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,50 +7,46 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MgreadIo :
-    InitManga(
-        "Mgread.io",
-        "https://mgread.io",
-        "en",
-        mangaUrlDirectory = "manga",
-        popularUrlSlug = "manga-ranking",
-        latestUrlSlug = "recently-updated",
-    ) {
+class MgreadIo : HttpSource() {
+
+    override val name = "Mgread.io"
+
+    override val baseUrl = "https://mgread.io"
+
+    override val lang = "en"
+
+    override val supportsLatest = true
 
     override val client = network.cloudflareClient
 
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // Popular
 
-    override fun popularMangaSelector() = MANGA_GRID_SELECTOR
+    override fun popularMangaRequest(page: Int): Request = GET(pageUrl("manga-ranking", page), headers)
 
-    override fun popularMangaParse(response: Response): MangasPage = super.popularMangaParse(response).withoutAnimeEntries()
-
-    override fun popularMangaFromElement(element: Element): SManga = mangaFromGridElement(element)
-
-    override fun popularMangaNextPageSelector() = NEXT_PAGE_SELECTOR
+    override fun popularMangaParse(response: Response): MangasPage = mangasPageFromHtml(response)
 
     // Latest
 
-    override fun latestUpdatesParse(response: Response): MangasPage = super.latestUpdatesParse(response).withoutAnimeEntries()
+    override fun latestUpdatesRequest(page: Int): Request = GET(pageUrl("recently-updated", page), headers)
 
-    override fun latestUpdatesSelector() = MANGA_GRID_SELECTOR
-
-    override fun latestUpdatesFromElement(element: Element): SManga = mangaFromGridElement(element)
-
-    override fun latestUpdatesNextPageSelector() = NEXT_PAGE_SELECTOR
+    override fun latestUpdatesParse(response: Response): MangasPage = mangasPageFromHtml(response)
 
     // Search
 
@@ -85,11 +80,11 @@ class MgreadIo :
 
         val mangasPage = if (trimmedBody.startsWith("<") || trimmedBody.startsWith("<!")) {
             val document = Jsoup.parse(bodyText, baseUrl)
-            val mangas = document.select(searchMangaSelector())
-                .map(::searchMangaFromElement)
+            val mangas = document.select("$MANGA_GRID_SELECTOR, .manga-item-details")
+                .map(::mangaFromGridElement)
                 .distinctBy { it.url }
 
-            MangasPage(mangas, document.selectFirst(searchMangaNextPageSelector()) != null)
+            MangasPage(mangas, document.selectFirst(NEXT_PAGE_SELECTOR) != null)
         } else {
             val mangas = bodyText.parseAs<List<MgreadSearchDto>>()
                 .mapNotNull(::mangaFromSearchDto)
@@ -101,86 +96,85 @@ class MgreadIo :
         return mangasPage.withoutAnimeEntries()
     }
 
-    override fun searchMangaSelector() = "$MANGA_GRID_SELECTOR, .manga-item-details"
-
-    override fun searchMangaFromElement(element: Element): SManga = mangaFromGridElement(element)
-
-    override fun searchMangaNextPageSelector() = NEXT_PAGE_SELECTOR
-
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("#manga-title")?.ownText()
-            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.substringBefore(" [Ch.")?.trim()
-            ?: error("Title not found")
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
 
-        thumbnail_url = document.selectFirst(".story-cover img, meta[property=og:image]")?.imageUrl()
+        return SManga.create().apply {
+            title = document.selectFirst("#manga-title")?.ownText()
+                ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.substringBefore(" [Ch.")?.trim()
+                ?: error("Title not found")
 
-        val descriptionText = document.selectFirst("#manga-description")?.wholeText()?.trim()
-            ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
+            thumbnail_url = document.selectFirst(".story-cover img, meta[property=og:image]")?.imageUrl()
 
-        genre = document.select("#genre-tags a[href*='/genre/']")
-            .joinToString { it.ownText().ifBlank { it.text() } }
+            val descriptionText = document.selectFirst("#manga-description")?.wholeText()?.trim()
+                ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
 
-        status = document.selectFirst("#manga-status")?.text().parseStatus()
+            genre = document.select("#genre-tags a[href*='/genre/']")
+                .joinToString { it.ownText().ifEmpty { it.text() } }
 
-        val metadata = buildList {
-            document.selectFirst("#manga-title + div")?.ownText()
-                ?.substringBefore("Chapters")
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?.let { add("Chapters: $it") }
+            status = document.selectFirst("#manga-status")?.text().parseStatus()
 
-            document.selectFirst("#comic-othername")?.text()
-                ?.takeIf(String::isNotEmpty)
-                ?.let { add("Alternative title: $it") }
+            val metaRow = document.selectFirst("#manga-title + div")
+            val metadata = buildList {
+                metaRow?.ownText()
+                    ?.substringBefore("Chapters")
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { add("Chapters: $it") }
 
-            document.selectFirst(".init-review-info")?.text()
-                ?.takeIf(String::isNotEmpty)
-                ?.let { add("Rating: $it") }
+                document.selectFirst("#comic-othername")?.text()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { add("Alternative title: $it") }
 
-            document.selectFirst("#manga-title + div .init-plugin-suite-view-count-number")?.text()
-                ?.takeIf(String::isNotEmpty)
-                ?.let { add("Views: $it") }
+                document.selectFirst(".init-review-info")?.text()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { add("Rating: $it") }
 
-            document.selectFirst("#last-updated")?.text()
-                ?.takeIf(String::isNotEmpty)
-                ?.let { add("Last updated: $it") }
-        }
+                metaRow?.selectFirst(".init-plugin-suite-view-count-number")?.text()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { add("Views: $it") }
 
-        description = buildString {
-            if (descriptionText != null) append(descriptionText)
-            if (metadata.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                metadata.joinTo(this, separator = "\n")
+                document.selectFirst("#last-updated")?.text()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { add("Last updated: $it") }
             }
-        }
 
-        setUrlWithoutDomain(document.location())
+            description = buildString {
+                if (descriptionText != null) append(descriptionText)
+                if (metadata.isNotEmpty()) {
+                    if (isNotEmpty()) append("\n\n")
+                    metadata.joinTo(this, separator = "\n")
+                }
+            }
+
+            url = document.location().toHttpUrl().encodedPath
+        }
     }
 
     // Chapters
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
+        val mangaPath = response.request.url.encodedPath
+
         val mangaId = document.select("#manga-title[data-id], #chapter-search-input[data-manga-id]")
             .firstOrNull()
-            ?.let { element -> element.attr("data-id").ifBlank { element.attr("data-manga-id") } }
+            ?.let { element -> element.attr("data-id").ifEmpty { element.attr("data-manga-id") } }
             ?.toIntOrNull()
 
         val restChapters = mangaId
-            ?.let { runCatching { fetchChapterList(it, response.request.url.encodedPath) }.getOrElse { emptyList() } }
+            ?.let { runCatching { fetchChapterList(it, mangaPath) }.getOrElse { emptyList() } }
             .orEmpty()
 
         return restChapters.ifEmpty {
-            document.select(chapterListSelector()).map(::chapterFromElement)
+            document.select(".chapter-list .chapter-item").map(::chapterFromElement)
         }
     }
 
-    private fun fetchChapterList(mangaId: Int, mangaPath: String): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
+    private fun fetchChapterList(mangaId: Int, mangaPath: String): List<SChapter> = buildList {
         var page = 1
-
         do {
             val url = "$baseUrl/wp-json/initmanga/v1/chapters".toHttpUrl().newBuilder()
                 .addQueryParameter("manga_id", mangaId.toString())
@@ -192,20 +186,17 @@ class MgreadIo :
                 restResponse.parseAs<ChapterListDto>()
             }
 
-            chapters += chapterList.items.map { it.toSChapter(mangaPath) }
+            chapterList.items.forEach { add(it.toSChapter(mangaPath)) }
             page++
         } while (page <= chapterList.totalPages)
-
-        return chapters
     }
 
-    override fun chapterListSelector() = ".chapter-list .chapter-item"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val urlElement = element.selectFirst("a[href*='/chapter-']")!!
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val urlElement = element.selectFirst("a[href*='/chapter-']")
+            ?: error("Chapter link not found")
         val chapterUrl = urlElement.absUrl("href")
 
-        setUrlWithoutDomain(chapterUrl)
+        url = chapterUrl.toHttpUrl().encodedPath
         name = element.selectFirst("h3")?.text()
             ?: chapterUrl.substringBeforeLast('/').substringAfterLast('/').replace('-', ' ').replaceFirstChar(Char::uppercase)
 
@@ -220,9 +211,15 @@ class MgreadIo :
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> = document.select("#chapter-content img[src]").mapIndexed { index, element ->
-        Page(index, document.location(), element.absUrl("src"))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val chapterUrl = document.location()
+        return document.select("#chapter-content img[src]").mapIndexed { index, element ->
+            Page(index, url = chapterUrl, imageUrl = element.absUrl("src"))
+        }
     }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
 
@@ -238,12 +235,28 @@ class MgreadIo :
         GenreFilter(),
     )
 
+    // Helpers
+
+    private fun pageUrl(slug: String, page: Int): String = if (page == 1) {
+        "$baseUrl/$slug/"
+    } else {
+        "$baseUrl/$slug/page/$page/"
+    }
+
+    private fun mangasPageFromHtml(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(MANGA_GRID_SELECTOR).map(::mangaFromGridElement)
+        val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
+        return MangasPage(mangas, hasNextPage).withoutAnimeEntries()
+    }
+
     private fun mangaFromGridElement(element: Element): SManga = SManga.create().apply {
         val titleElement = element.selectFirst("h2 a[href*='/manga/']")
-            ?: element.selectFirst("a[href*='/manga/']:not([href*='/chapter-'])")!!
+            ?: element.selectFirst("a[href*='/manga/']:not([href*='/chapter-'])")
+            ?: error("Manga link not found in grid item")
 
         title = titleElement.text()
-        setUrlWithoutDomain(titleElement.absUrl("href"))
+        url = titleElement.absUrl("href").toHttpUrl().encodedPath
         thumbnail_url = element.selectFirst("img")?.imageUrl()
     }
 
@@ -254,9 +267,7 @@ class MgreadIo :
         return SManga.create().apply {
             title = parsedTitle
             thumbnail_url = dto.thumb
-            setUrlWithoutDomain(
-                cleanUrl.toHttpUrlOrNull()?.encodedPath ?: cleanUrl,
-            )
+            url = cleanUrl.toHttpUrlOrNull()?.encodedPath ?: cleanUrl
         }
     }
 
