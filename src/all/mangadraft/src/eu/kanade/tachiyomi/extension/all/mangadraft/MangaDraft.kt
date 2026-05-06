@@ -60,8 +60,8 @@ class MangaDraft : HttpSource() {
                     genre = it.genres
                 }
             },
-            // if there is less than 20 received there won't be a next page
-            mangas.count() >= 20,
+            // if there is less than 16 received there won't be a next page
+            mangas.count() >= 16,
         )
     }
 
@@ -74,7 +74,7 @@ class MangaDraft : HttpSource() {
             addQueryParameter("order", "news")
             addQueryParameter("type", "all")
             addQueryParameter("page", page.toString())
-            addQueryParameter("number", "20")
+            addQueryParameter("number", "16")
         }.build(),
         headers,
     )
@@ -119,7 +119,7 @@ class MangaDraft : HttpSource() {
                 addQueryParameter("status", statusFilter.toUriPart())
                 addQueryParameter("order_all", sortFilter.toUriPart())
                 addQueryParameter("page", page.toString())
-                addQueryParameter("number", "20")
+                addQueryParameter("number", "16")
             }.build(),
             headers,
         )
