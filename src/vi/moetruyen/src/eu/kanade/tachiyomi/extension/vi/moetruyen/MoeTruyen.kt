@@ -306,6 +306,12 @@ class MoeTruyen :
             entryValues = arrayOf("0", "1", "2")
             summary = "%s"
             setDefaultValue("0")
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val index = entryValues.indexOf(newValue as String)
+                summary = entries[index]
+                true
+            }
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
