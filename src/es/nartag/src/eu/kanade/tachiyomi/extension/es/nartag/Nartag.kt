@@ -51,7 +51,7 @@ class Nartag :
                     .post(formBody)
                     .headers(response.request.headers)
                     .build()
-                
+
                 client.newCall(postRequest).execute().use { newResponse ->
                     return pageListParse(newResponse.asJsoup())
                 }
