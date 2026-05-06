@@ -1,0 +1,8 @@
+ext {
+    extName = 'Ero Sect'
+    extClass = '.EroSect'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
