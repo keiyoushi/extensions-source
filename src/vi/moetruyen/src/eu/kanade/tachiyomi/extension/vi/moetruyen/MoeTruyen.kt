@@ -303,9 +303,9 @@ class MoeTruyen :
             key = PREF_DOMAIN
             title = "Tên miền chính"
             entries = arrayOf("MoeTruyen.net (Trong nước)", "Truyen.moe (Quốc tế)", "Tùy chỉnh")
-            entryValues = arrayOf("https://moetruyen.net", "https://truyen.moe", "custom")
+            entryValues = arrayOf("0", "1", "2")
             summary = "%s"
-            setDefaultValue(DEFAULT_DOMAIN)
+            setDefaultValue("0")
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
@@ -324,17 +324,19 @@ class MoeTruyen :
     }
 
     private fun getPrefBaseUrl(): String {
-        val domain = preferences.getString(PREF_DOMAIN, DEFAULT_DOMAIN)!!
-        return if (domain == "custom") {
-            preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
-        } else {
-            domain
+        val index = preferences.getString(PREF_DOMAIN, "0")!!
+        return when (index) {
+            "0" -> DEFAULT_DOMAIN
+            "1" -> DOMAIN_GLOBAL
+            "2" -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
+            else -> DEFAULT_DOMAIN
         }.removeSuffix("/")
     }
 
     companion object {
         private const val PREF_DOMAIN = "pref_domain"
         private const val DEFAULT_DOMAIN = "https://moetruyen.net"
+        private const val DOMAIN_GLOBAL = "https://truyen.moe"
         private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
 
         private val NUMBER_REGEX = Regex("""\d+""")
