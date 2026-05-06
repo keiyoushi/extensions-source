@@ -17,9 +17,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class LuzDelManhwa : HttpSource() {
+class MangoLibreria : HttpSource() {
 
-    override val name = "Luz del Manhwa"
+    override val name = "MangoLibreria"
     override val baseUrl = "https://mangolibreria.com"
     override val lang = "es"
     override val supportsLatest = true
