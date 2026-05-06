@@ -25,7 +25,7 @@ class YaoiToon : HttpSource() {
 
     override val supportsLatest = true
 
-    override val versionId = 1
+    override val versionId = 2
 
     private val ajaxHeaders by lazy {
         headers.newBuilder()
