@@ -26,7 +26,7 @@ import kotlin.getValue
 
 class MangaDraft : HttpSource() {
     override val name = "MangaDraft"
-    override val baseUrl = "https://mangadraft.com"
+    override val baseUrl = "https://www.mangadraft.com"
     override val lang = "all"
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
