@@ -117,20 +117,22 @@ class MangaDto(
             url.replaceFirst(PROTOCOL_REGEX, "https://")
         }
 
-        description = buildString {
-            avgRating?.let {
-                if (it > 0) {
-                    append("%.2f/10".format(Locale.ENGLISH, it)).append("\n\n")
+        description = buildList {
+            avgRating?.takeIf { it > 0 }?.let {
+                add("Rating: %.2f/10".format(Locale.ENGLISH, it))
+            }
+
+            synopsis?.takeIf { it.isNotBlank() }?.let {
+                add("Synopsis: $it")
+            }
+
+            otherNames?.filter { it != this@MangaDto.title }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { names ->
+                    val namesDesc = names.joinToString("\n") { "- $it" }
+                    add("Alternative Names:\n$namesDesc")
                 }
-            }
-
-            synopsis?.let { append(it).append("\n\n") }
-
-            if (!otherNames.isNullOrEmpty()) {
-                append("\nAlternative Names:\n")
-                otherNames.forEach { append("- $it\n") }
-            }
-        }.trim()
+        }.joinToString("\n\n")
 
         genre = buildList {
             type?.let { add(it) }
@@ -151,17 +153,6 @@ class MangaDto(
     }
 
     fun recommendations(baseUrl: String) = recommendations?.map { it.toSManga(baseUrl) } ?: emptyList()
-
-    @Serializable
-    class TagDto(
-        val name: String,
-    )
-
-    @Serializable
-    class AuthorDto(
-        val name: String,
-        val type: String? = null,
-    )
 
     @Serializable
     class ScanlatorDto(
