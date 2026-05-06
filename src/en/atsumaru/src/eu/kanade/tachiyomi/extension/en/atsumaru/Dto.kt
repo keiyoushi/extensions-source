@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
@@ -54,9 +55,10 @@ class MangaDto(
     private val imagePath: JsonElement,
 
     // Details
-    private val authors: List<AuthorDto>? = null,
+    private val authors: JsonElement? = null,
     private val synopsis: String? = null,
-    private val genres: List<TagDto>? = null,
+    @JsonNames("genres", "tags")
+    private val genres: JsonElement? = null,
     private val status: String? = null,
     private val type: String? = null,
     val scanlators: List<ScanlatorDto>? = null,
@@ -75,6 +77,17 @@ class MangaDto(
         return url?.removePrefix("/")?.removePrefix("static/")
     }
 
+    private fun parseNames(element: JsonElement?): List<String> = when (element) {
+        is JsonArray -> element.mapNotNull { item ->
+            when (item) {
+                is JsonPrimitive -> item.content
+                is JsonObject -> item["name"]?.jsonPrimitive?.content
+                else -> null
+            }
+        }
+        else -> emptyList()
+    }
+
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = id
         title = this@MangaDto.title
@@ -89,11 +102,9 @@ class MangaDto(
         description = synopsis
         genre = buildList {
             type?.let { add(it) }
-            genres?.forEach { add(it.name) }
+            addAll(parseNames(genres))
         }.joinToString()
-        authors?.let {
-            author = it.joinToString { author -> author.name }
-        }
+        author = parseNames(authors).joinToString()
         status = when (this@MangaDto.status?.lowercase()?.trim()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
