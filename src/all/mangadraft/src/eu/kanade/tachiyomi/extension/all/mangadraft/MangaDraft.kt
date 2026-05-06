@@ -213,7 +213,7 @@ class MangaDraft : HttpSource() {
         name = if (isNotOneShot) {
             "Ch. ${index + 1}: $titleText"
         } else {
-            titleText
+            titleText.ifEmpty { "Oneshot" }
         }
 
         url = element.absUrl("href")
