@@ -23,7 +23,6 @@ class MangoLibreria : HttpSource() {
     override val baseUrl = "https://mangolibreria.com"
     override val lang = "es"
     override val supportsLatest = true
-    override val id: Long = 7470188862319655999
     override val versionId = 2
 
     override fun headersBuilder() = super.headersBuilder()
