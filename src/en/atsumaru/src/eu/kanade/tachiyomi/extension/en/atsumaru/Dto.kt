@@ -61,6 +61,8 @@ class MangaDto(
     private val genres: JsonElement? = null,
     private val status: String? = null,
     private val type: String? = null,
+    private val otherNames: List<String>? = null,
+    private val avgRating: Float? = null,
     val scanlators: List<ScanlatorDto>? = null,
 
     // Chapters
@@ -88,6 +90,21 @@ class MangaDto(
         else -> emptyList()
     }
 
+    private fun parseAuthorsWithType(element: JsonElement?): List<Pair<String, String?>> = when (element) {
+        is JsonArray -> element.mapNotNull { item ->
+            when (item) {
+                is JsonPrimitive -> Pair(item.content, null)
+                is JsonObject -> {
+                    val name = item["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                    val type = item["type"]?.jsonPrimitive?.content
+                    Pair(name, type)
+                }
+                else -> null
+            }
+        }
+        else -> emptyList()
+    }
+
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = id
         title = this@MangaDto.title
@@ -97,14 +114,33 @@ class MangaDto(
                 it.startsWith("//") -> "https:$it"
                 else -> "$baseUrl/static/$it"
             }
-            url.replaceFirst(Regex("^https?:?//"), "https://")
+            url.replaceFirst(PROTOCOL_REGEX, "https://")
         }
-        description = synopsis
+
+        description = buildString {
+            avgRating?.let {
+                if (it > 0) {
+                    append("%.2f/10".format(Locale.ENGLISH, it)).append("\n\n")
+                }
+            }
+
+            synopsis?.let { append(it).append("\n\n") }
+
+            if (!otherNames.isNullOrEmpty()) {
+                append("\nAlternative Names:\n")
+                otherNames.forEach { append("- $it\n") }
+            }
+        }.trim()
+
         genre = buildList {
             type?.let { add(it) }
             addAll(parseNames(genres))
         }.joinToString()
-        author = parseNames(authors).joinToString()
+
+        val authorsList = parseAuthorsWithType(authors)
+        author = authorsList.filter { it.second == "Author" || it.second == null }.joinToString { it.first }
+        artist = authorsList.filter { it.second == "Artist" }.joinToString { it.first }
+
         status = when (this@MangaDto.status?.lowercase()?.trim()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -124,6 +160,7 @@ class MangaDto(
     @Serializable
     class AuthorDto(
         val name: String,
+        val type: String? = null,
     )
 
     @Serializable
@@ -131,6 +168,10 @@ class MangaDto(
         val id: String,
         val name: String,
     )
+
+    companion object {
+        private val PROTOCOL_REGEX = Regex("^https?:?//")
+    }
 }
 
 @Serializable

@@ -258,7 +258,7 @@ class Atsumaru : HttpSource() {
             page.image.startsWith("//") -> "https:${page.image}"
             else -> "$baseUrl/static/${page.image.removePrefix("/").removePrefix("static/")}"
         }
-        Page(index, imageUrl = imageUrl.replaceFirst(Regex("^https?:?//"), "https://"))
+        Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://"))
     }
 
     override fun imageRequest(page: Page): Request {
@@ -271,4 +271,8 @@ class Atsumaru : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val PROTOCOL_REGEX = Regex("^https?:?//")
+    }
 }
