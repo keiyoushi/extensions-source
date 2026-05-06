@@ -46,26 +46,31 @@ class MangaDraft : HttpSource() {
         }.build(),
         headers,
     )
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaDraftCatalogResponseDto>()
 
+    private fun parseMangaList(response: Response, isSearch: Boolean): MangasPage {
+        val result = response.parseAs<MangaDraftCatalogResponseDto>()
         val mangas = result.data
+
+        val mangaList = mangas.map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.url)
+                title = it.name
+                thumbnail_url = it.avatar
+                description = it.description
+                genre = it.genres
+            }
+        }
+
         return MangasPage(
-            mangas.map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.url)
-                    title = it.name
-                    thumbnail_url = it.avatar
-                    description = it.description
-                    genre = it.genres
-                }
-            },
-            // if there is less than 16 received there won't be a next page
-            mangas.count() >= 16,
+            mangaList,
+            // No next page if text-search or less/equal to 16 results
+            hasNextPage = if (isSearch) false else mangas.size >= 16,
         )
     }
 
-    // latest
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response, isSearch = false)
+
+    // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET(
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("api")
@@ -89,7 +94,7 @@ class MangaDraft : HttpSource() {
                 addPathSegment("search")
                 addPathSegment("autocomplete")
                 addQueryParameter("value", query)
-            }.build(),
+            }.fragment("search").build().toString(),
             headers,
         )
     } else {
@@ -125,7 +130,11 @@ class MangaDraft : HttpSource() {
         )
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val isTextSearch = response.request.url.queryParameter("value") != null
+
+        return parseMangaList(response, isSearch = isTextSearch)
+    }
 
     // filters
     override fun getFilterList() = FilterList(
