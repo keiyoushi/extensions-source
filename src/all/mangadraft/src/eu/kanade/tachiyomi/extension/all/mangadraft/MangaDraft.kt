@@ -81,7 +81,19 @@ class MangaDraft : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
+        // Text-only Search
+        GET(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("api")
+                addPathSegment("search")
+                addPathSegment("autocomplete")
+                addQueryParameter("value", query)
+            }.build(),
+            headers,
+        )
+    } else {
+        // Filter-only Search
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
         val typeFilter = filterList.firstInstance<TypeFilter>()
@@ -93,7 +105,7 @@ class MangaDraft : HttpSource() {
         val statusFilter = filterList.firstInstance<StatusFilter>()
         val sortFilter = filterList.firstInstance<SortFilter>()
 
-        return GET(
+        GET(
             baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("api")
                 addPathSegment("catalog")
