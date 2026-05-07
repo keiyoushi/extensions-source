@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
 import android.util.Base64
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
@@ -49,8 +50,8 @@ object ImageDecryptor {
         val passphrase = KEY_PART_1 + KEY_PART_2 + KEY_PART_3
 
         val ciphertext = Base64.decode(encryptedData.ciphertext, Base64.DEFAULT)
-        val ivBytes = hexStringToByteArray(encryptedData.iv)
-        val saltBytes = hexStringToByteArray(encryptedData.salt)
+        val ivBytes = encryptedData.iv.decodeHex()
+        val saltBytes = encryptedData.salt.decodeHex()
 
         val keySpec = PBEKeySpec(
             passphrase.toCharArray(),
@@ -100,14 +101,5 @@ object ImageDecryptor {
             val imageUrl = element.attr("abs:data-src").ifEmpty { element.attr("abs:src") }
             imageUrl.takeIf { it.isNotBlank() }
         }
-    }
-
-    private fun hexStringToByteArray(hex: String): ByteArray {
-        val len = hex.length
-        val data = ByteArray(len / 2)
-        for (i in 0 until len step 2) {
-            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
-        }
-        return data
     }
 }
