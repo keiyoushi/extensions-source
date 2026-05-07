@@ -1,7 +1,7 @@
 ext {
     extName = 'Webtoons.com'
     extClass = '.WebtoonsFactory'
-    extVersionCode = 52
+    extVersionCode = 53
     isNsfw = false
 }
 
