@@ -3,7 +3,7 @@ ext {
     extClass = '.HanamiHeaven'
     themePkg = 'madara'
     baseUrl = 'https://hanamiheaven.org'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 

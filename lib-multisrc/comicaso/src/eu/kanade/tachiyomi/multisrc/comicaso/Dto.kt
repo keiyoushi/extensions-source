@@ -97,3 +97,14 @@ class ChapterDto(
         date_upload = date?.let { it * 1000L } ?: 0L
     }
 }
+
+@Serializable
+class TokenDto(
+    val tokens: Map<String, String>,
+    val expire: Long,
+)
+
+@Serializable
+class TokenRequestDto(
+    val urls: List<String>,
+)

@@ -69,8 +69,18 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.release
-            minifyEnabled = false
+            signingConfig = rootProject.file("signingkey.jks").exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
+            minifyEnabled = true
+            proguardFiles(
+                rootProject.file("proguard-rules.pro"),
+                layout.buildDirectory.file("generated-proguard-rules.pro").get().asFile
+            )
+            File proguardFile = file("proguard-rules.pro")
+            if (proguardFile.exists()) {
+                proguardFiles(proguardFile)
+            }
             vcsInfo.include = false
         }
     }
@@ -118,6 +128,17 @@ tasks.register("writeManifestFile") {
     }
 }
 
+tasks.register("writeProguardFile") {
+    File proguardFile = layout.buildDirectory.file("generated-proguard-rules.pro").get().asFile
+    String extClassPath = "${android.namespace}.${android.defaultConfig.applicationIdSuffix}${extClass}"
+    doLast {
+        proguardFile.parentFile.mkdirs()
+        proguardFile.withWriter {
+            it.writeLine("-keep class $extClassPath { <init>(); }")
+        }
+    }
+}
+
 afterEvaluate {
     tasks.withType(PackageAndroidArtifact).configureEach {
         // need to be in afterEvaluate to overwrite default value
@@ -127,4 +148,4 @@ afterEvaluate {
     }
 }
 
-preBuild.dependsOn(writeManifestFile)
+preBuild.dependsOn(writeManifestFile, writeProguardFile)

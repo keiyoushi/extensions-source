@@ -39,6 +39,25 @@ abstract class MadTheme(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)
+        // Intercepts chapter image requests that have a fallback URL encoded in the fragment.
+        // If the primary CDN returns a failure, we retry with the fallback URL.
+        // The fallback is encoded as a fragment so the parser doesn't need to pre-decide
+        // which URL to use — the network layer handles it transparently.
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val fragment = request.url.fragment
+
+            if (fragment != null && (fragment.startsWith("https://") || fragment.startsWith("http://"))) {
+                val cleanUrl = request.url.newBuilder().fragment(null).build()
+                val response = chain.proceed(request.newBuilder().url(cleanUrl).build())
+                if (!response.isSuccessful) {
+                    response.close()
+                    return@addInterceptor chain.proceed(request.newBuilder().url(fragment).build())
+                }
+                return@addInterceptor response
+            }
+            chain.proceed(request)
+        }
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
@@ -305,7 +324,7 @@ abstract class MadTheme(
 
             // No fancy CDN, all images are available directly in <img> tags (hopefully)
             return chapterImagesFromHtml.mapIndexed { index, element ->
-                Page(index, imageUrl = element.attr("abs:data-src"))
+                Page(index, imageUrl = element.resolveImageUrl())
             }
         }
 
@@ -323,6 +342,39 @@ abstract class MadTheme(
         return chapImages.mapIndexed { index, path ->
             Page(index, imageUrl = "$schemePrefix$mainServer$path")
         }
+    }
+
+    /**
+     * Resolves the best available image URL from a chapter image element.
+     *
+     * For all images, we attempt to extract the site's own onerror fallback URL and
+     * encode it as the fragment (mainUrl#fallbackUrl). The OkHttp interceptor will
+     * then transparently retry with the fallback if the primary request fails.
+     *
+     * For known broken CDN servers (currently s20), the onerror fallback is returned
+     * as the primary URL directly — no point trying s20 at all.
+     *
+     * Note: the fallback URL has a different path structure than data-src
+     * (it omits the /toonily/ path segment), so we cannot simply swap the domain —
+     * we must extract it from the onerror attribute directly.
+     *
+     * Example:
+     *   data-src → https://s20.toonilycdnv2.xyz/toonily/manga/.../page.jpg
+     *   onerror  → //sb.toonilycdnv2.xyz/manga/.../page.jpg?v=1  (different path!)
+     */
+    private fun Element.resolveImageUrl(): String {
+        val dataSrc = attr("abs:data-src")
+        val raw = attr("onerror")
+            .substringAfter("this.src='", "")
+            .substringBefore("'")
+        val fallback = when {
+            raw.startsWith("https://") || raw.startsWith("http://") -> raw
+            raw.startsWith("//") -> "https:$raw"
+            else -> return dataSrc // no onerror available, use data-src as-is
+        }
+        // For known broken servers, use the fallback as the primary URL directly.
+        // For everything else, encode fallback as fragment for the interceptor to retry with on failure.
+        return if ("://s20." in dataSrc) fallback else "$dataSrc#$fallback"
     }
 
     // Image

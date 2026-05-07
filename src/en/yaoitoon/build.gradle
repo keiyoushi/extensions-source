@@ -1,9 +1,7 @@
 ext {
     extName = 'YaoiToon'
     extClass = '.YaoiToon'
-    themePkg = 'madara'
-    baseUrl = 'https://yaoitoon.com'
-    overrideVersionCode = 0
+    extVersionCode = 48
     isNsfw = true
 }
 

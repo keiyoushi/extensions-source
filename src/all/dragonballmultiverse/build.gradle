@@ -1,7 +1,7 @@
 ext {
     extName = 'Dragon Ball Multiverse'
     extClass = '.DbMFactory'
-    extVersionCode = 7
+    extVersionCode = 8
 }
 
 apply from: "$rootDir/common.gradle"

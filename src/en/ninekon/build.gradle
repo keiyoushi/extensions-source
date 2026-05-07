@@ -1,0 +1,8 @@
+ext {
+    extName = 'Ninekon'
+    extClass = '.Ninekon'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
