@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
 import android.content.SharedPreferences
+import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -299,52 +300,75 @@ class MoeTruyen :
     // ============================== Preferences ===========================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_DOMAIN
-            title = "Tên miền chính"
-            entries = arrayOf("MoeTruyen.net (Trong nước)", "Truyen.moe (Quốc tế)", "Tùy chỉnh")
-            entryValues = arrayOf("0", "1", "2")
-            summary = "%s"
-            setDefaultValue("0")
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val index = entryValues.indexOf(newValue as String)
-                summary = entries[index]
-                true
-            }
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
+        val customUrlPref = EditTextPreference(screen.context).apply {
             key = PREF_CUSTOM_DOMAIN
             title = "Tên miền tùy chỉnh"
             summary = "Nhập tên miền bạn muốn sử dụng (ví dụ: https://moetruyen.xyz)"
-            setDefaultValue(DEFAULT_DOMAIN)
+            setEnabled(preferences.getPrefUrl() == UrlMode.CUSTOM)
             dialogTitle = "Tên miền tùy chỉnh"
+            setOnPreferenceChangeListener { _, _ ->
+                try {
+                    Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_SHORT).show()
+                    true
+                } catch (e: IllegalArgumentException) {
+                    Toast.makeText(screen.context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    false
+                }
+            }
+        }
 
+        ListPreference(screen.context).apply {
+            key = PREF_DOMAIN
+            title = "Tên miền chính"
+            entries = LIST_DOMAIN_ENTRIES
+            entryValues = LIST_DOMAIN_VALUES
+            summary = "%s"
+            setDefaultValue("default")
             setOnPreferenceChangeListener { _, newValue ->
-                val newDomain = (newValue as String).removeSuffix("/")
-                preferences.edit().putString(PREF_CUSTOM_DOMAIN, newDomain).apply()
+                val index = entryValues.indexOf(newValue as String)
+                summary = entries[index]
+                customUrlPref.setEnabled(newValue == "custom")
                 true
             }
         }.let(screen::addPreference)
+        customUrlPref.let(screen::addPreference)
     }
 
     private fun getPrefBaseUrl(): String {
-        val index = preferences.getString(PREF_DOMAIN, "0")!!
+        val index = preferences.getString(PREF_DOMAIN, DEFAULT_DOMAIN)!!
         return when (index) {
-            "0" -> DEFAULT_DOMAIN
-            "1" -> DOMAIN_GLOBAL
-            "2" -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
+            "default" -> DEFAULT_DOMAIN
+            "global" -> DOMAIN_GLOBAL
+            "custom" -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
             else -> DEFAULT_DOMAIN
-        }.removeSuffix("/")
+        }.removePrefix("/")
     }
-
+    enum class UrlMode {
+        DEFAULT,
+        GLOBAL,
+        CUSTOM,
+    }
+    private fun SharedPreferences.getPrefUrl(): UrlMode = when (getString(PREF_DOMAIN, "default")) {
+        "default" -> UrlMode.DEFAULT
+        "global" -> UrlMode.GLOBAL
+        else -> UrlMode.CUSTOM
+    }
     companion object {
         private const val PREF_DOMAIN = "pref_domain"
         private const val DEFAULT_DOMAIN = "https://moetruyen.net"
         private const val DOMAIN_GLOBAL = "https://truyen.moe"
+        private val LIST_DOMAIN_ENTRIES = arrayOf(
+            "MoeTruyen.net (Trong nước)",
+            "Truyen.moe (Quốc tế)",
+            "Tùy chỉnh",
+        )
+        private val LIST_DOMAIN_VALUES = arrayOf(
+            "default",
+            "global",
+            "custom",
+        )
         private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
-
+        private const val NOTIFICATION_SHOW = "Tên miền đã được thay đổi."
         private val NUMBER_REGEX = Regex("""\d+""")
         private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
