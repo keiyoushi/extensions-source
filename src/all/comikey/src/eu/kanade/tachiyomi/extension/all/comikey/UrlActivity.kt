@@ -11,22 +11,16 @@ class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val pathSegments = intent?.data?.pathSegments
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-        if (pathSegments != null && pathSegments.size > 2) {
-            val intent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Comikey.PREFIX_SLUG_SEARCH}${pathSegments[1]}/${pathSegments[2]}")
-                putExtra("filter", packageName)
-            }
-
-            try {
-                startActivity(intent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("UrlActivity", "Could not start activity", e)
-            }
-        } else {
-            Log.e("UrlActivity", "Could not parse URI from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("UrlActivity", "Could not start activity", e)
         }
 
         finish()
