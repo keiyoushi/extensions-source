@@ -55,6 +55,14 @@ class LikeManga : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments[0]
+            return fetchSearchManga(page, "$URL_SEARCH_PREFIX$id", filters)
+        }
         if (query.startsWith(URL_SEARCH_PREFIX)) {
             val url = "$baseUrl/${query.substringAfter(URL_SEARCH_PREFIX)}"
             return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
