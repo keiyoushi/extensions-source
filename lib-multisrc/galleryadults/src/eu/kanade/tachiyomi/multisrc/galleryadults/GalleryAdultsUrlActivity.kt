@@ -13,22 +13,16 @@ import kotlin.system.exitProcess
 class GalleryAdultsUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val id = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${GalleryAdults.PREFIX_ID_SEARCH}$id")
-                putExtra("filter", packageName)
-            }
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("GalleryAdultsUrl", e.toString())
-            }
-        } else {
-            Log.e("GalleryAdultsUrl", "could not parse uri from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("GalleryAdultsUrl", "Unable to launch activity", e)
         }
 
         finish()
