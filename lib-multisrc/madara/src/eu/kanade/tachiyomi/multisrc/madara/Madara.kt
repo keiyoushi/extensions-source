@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.utils.decodeHex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1158,15 +1159,6 @@ abstract class Madara(
                 li.selectFirst("input[type=checkbox]")!!.`val`(),
             )
         }
-
-    // https://stackoverflow.com/a/66614516
-    protected fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
-    }
 
     protected val salted = "Salted__".toByteArray(Charsets.UTF_8)
 
