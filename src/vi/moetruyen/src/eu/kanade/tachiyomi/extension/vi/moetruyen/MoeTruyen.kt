@@ -335,7 +335,7 @@ class MoeTruyen :
     }
 
     private fun getPrefBaseUrl(): String {
-        val index = preferences.getString(PREF_DOMAIN, DEFAULT_DOMAIN)!!
+        val index = preferences.getString(PREF_DOMAIN, "default")!!
         return when (index) {
             "default" -> DEFAULT_DOMAIN
             "global" -> DOMAIN_GLOBAL
