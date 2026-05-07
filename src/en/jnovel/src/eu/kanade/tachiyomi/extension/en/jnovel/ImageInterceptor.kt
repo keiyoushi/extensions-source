@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
-import eu.kanade.tachiyomi.extension.en.jnovel.XebpDecoder.decodeHex
+import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol

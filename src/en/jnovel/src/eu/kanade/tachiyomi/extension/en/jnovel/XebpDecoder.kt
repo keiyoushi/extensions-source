@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Bitmap.createBitmap
 import android.graphics.BitmapFactory.decodeByteArray
 import android.graphics.Canvas
+import keiyoushi.utils.decodeHex
 import okio.Buffer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -293,13 +294,5 @@ object XebpDecoder {
         val sb = StringBuilder(b.size * 2)
         for (x in b) sb.append(String.format("%02x", x.toInt() and 0xFF))
         return sb.toString()
-    }
-
-    internal fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 }
