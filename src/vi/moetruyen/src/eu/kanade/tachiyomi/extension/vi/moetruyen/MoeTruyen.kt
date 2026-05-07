@@ -306,12 +306,16 @@ class MoeTruyen :
             summary = "Nhập tên miền bạn muốn sử dụng (ví dụ: https://moetruyen.xyz)"
             setEnabled(preferences.getPrefUrl() == UrlMode.CUSTOM)
             dialogTitle = "Tên miền tùy chỉnh"
-            setOnPreferenceChangeListener { _, _ ->
+            setOnPreferenceChangeListener { _, newValue ->
                 try {
+                    val inputUrl = newValue as String
+                    if (inputUrl.isNotBlank()) {
+                        inputUrl.toHttpUrl()
+                    }
                     Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_SHORT).show()
                     true
-                } catch (e: IllegalArgumentException) {
-                    Toast.makeText(screen.context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message} ", Toast.LENGTH_LONG).show()
                     false
                 }
             }
