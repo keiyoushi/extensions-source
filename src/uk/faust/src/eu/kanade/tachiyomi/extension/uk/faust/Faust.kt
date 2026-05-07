@@ -101,23 +101,23 @@ class Faust :
                 }
                 is GenresFilter -> {
                     filter.included?.let {
-                        requestBodyData.genreIds = JsonArray(it.map { genreId -> kotlinx.serialization.json.JsonPrimitive(genreId) })
+                        requestBodyData.genreIds = JsonArray(it.map { genreId -> JsonPrimitive(genreId) })
                     }
                     filter.excluded?.let {
                         val allExcluded = it.plus(ignoreGenres()).distinct()
                         requestBodyData.excludeGenreIds = JsonArray(allExcluded.map { genreId -> JsonPrimitive(genreId) })
                     } ?: run {
                         if (ignoreGenres().isNotEmpty()) {
-                            requestBodyData.excludeGenreIds = JsonArray(ignoreGenres().map { genreId -> kotlinx.serialization.json.JsonPrimitive(genreId) })
+                            requestBodyData.excludeGenreIds = JsonArray(ignoreGenres().map { genreId -> JsonPrimitive(genreId) })
                         }
                     }
                 }
                 is TagsFilter -> {
                     filter.included?.let {
-                        requestBodyData.tagIds = JsonArray(it.map { tagId -> kotlinx.serialization.json.JsonPrimitive(tagId) })
+                        requestBodyData.tagIds = JsonArray(it.map { tagId -> JsonPrimitive(tagId) })
                     }
                     filter.excluded?.let {
-                        requestBodyData.excludeTagIds = JsonArray(it.map { tagId -> kotlinx.serialization.json.JsonPrimitive(tagId) })
+                        requestBodyData.excludeTagIds = JsonArray(it.map { tagId -> JsonPrimitive(tagId) })
                     }
                 }
                 else -> {}
