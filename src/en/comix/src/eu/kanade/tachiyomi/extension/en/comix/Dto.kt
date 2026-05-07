@@ -30,7 +30,7 @@ class Manga(
     private val altTitles: List<String> = emptyList(),
     private val synopsis: String?,
     private val type: String,
-    private val poster: Poster,
+    private val poster: Poster? = null,
     private val status: String,
     @SerialName("is_nsfw")
     private val isNsfw: Boolean = false,
@@ -124,14 +124,14 @@ class Manga(
             "discontinued" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = this@Manga.poster.from(posterQuality)
+        thumbnail_url = poster?.from(posterQuality).orEmpty()
         genre = getGenres()
     }
 
     fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
         url = "/$hashId"
         title = this@Manga.title
-        thumbnail_url = this@Manga.poster.from(posterQuality)
+        thumbnail_url = poster?.from(posterQuality).orEmpty()
     }
 
     fun getGenres() = buildList {
