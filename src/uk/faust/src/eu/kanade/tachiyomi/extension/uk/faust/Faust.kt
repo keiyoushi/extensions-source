@@ -20,10 +20,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -73,65 +72,60 @@ class Faust :
     // ============================== Search/Utility ===============================
     private fun makeSearchRequest(sort: String? = null, page: Int, query: String? = "", filters: FilterList = getFilterList()): Request {
         val url = "$apiUrl/titles/search/library"
-        val body = buildJsonObject {
-            put("searchQuery", query)
-            put("page", page)
-            put("pageSize", 30)
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-                when (filter) {
-                    is OrderBy -> {
-                        val state = filter.state
-                        val orderBy = state?.let { arrayOf("rating", "popularity", "alphabet", "updated", "newest")[it.index] } ?: "rating"
-                        val asc = if (state?.ascending == true) "+" else "-"
-                        put("sortBy", sort ?: "$asc$orderBy")
-                    }
-                    is CategoriesFilter -> filter.selected?.let { put("mangaType", it) }
-                    is TranslationStatusFilter -> filter.selected?.let { put("translationStatus", it) }
-                    is PublicationStatusFilter -> filter.selected?.let { put("publicationStatus", it) }
-                    is AgeStatusFilter -> filter.selected?.let { put("ageBracket", it) }
-                    is YearRangeFilter -> {
-                        filter.minValue?.let { put("yearFrom", checkMinRange(it, 1970, Year.now().value + 1)) }
-                        filter.maxValue?.let { put("yearTo", checkMaxRange(it, 1970, Year.now().value + 1)) }
-                    }
-                    is ChaptersRangeFilter -> {
-                        filter.minValue?.let { put("minChapters", checkMinRange(it, 0, 3000)) }
-                        filter.maxValue?.let { put("maxChapters", checkMaxRange(it, 0, 3000)) }
-                    }
-                    is GenresFilter -> {
-                        filter.included?.let {
-                            putJsonArray("genreIds") {
-                                it.forEach { add(it) }
-                            }
-                        }
-                        filter.excluded?.let {
-                            val allExcluded = it.plus(ignoreGenres()).distinct()
-                            putJsonArray("excludeGenreIds") {
-                                allExcluded.forEach { add(it) }
-                            }
-                        } ?: run {
-                            if (ignoreGenres().isNotEmpty()) {
-                                putJsonArray("excludeGenreIds") {
-                                    ignoreGenres().forEach { add(it) }
-                                }
-                            }
-                        }
-                    }
-                    is TagsFilter -> {
-                        filter.included?.let {
-                            putJsonArray("tagIds") {
-                                it.forEach { add(it) }
-                            }
-                        }
-                        filter.excluded?.let {
-                            putJsonArray("excludeTagIds") {
-                                it.forEach { add(it) }
-                            }
-                        }
-                    }
-                    else -> {}
+
+        // Prepare the data for serialization
+        val requestBodyData = SearchRequestBody(
+            searchQuery = query,
+            page = page,
+            pageSize = 30,
+        )
+
+        // Apply filters to the requestBodyData
+        filters.forEach { filter ->
+            when (filter) {
+                is OrderBy -> {
+                    val asc = if (filter.state?.ascending == true) "-" else "+"
+                    requestBodyData.sortBy = sort ?: "$asc${filter.selected}"
                 }
+                is CategoriesFilter -> filter.selected?.let { requestBodyData.mangaType = it }
+                is TranslationStatusFilter -> filter.selected?.let { requestBodyData.translationStatus = it }
+                is PublicationStatusFilter -> filter.selected?.let { requestBodyData.publicationStatus = it }
+                is AgeStatusFilter -> filter.selected?.let { requestBodyData.ageBracket = it }
+                is YearRangeFilter -> {
+                    filter.minValue?.let { requestBodyData.yearFrom = checkMinRange(it, 1970, Year.now().value + 1) }
+                    filter.maxValue?.let { requestBodyData.yearTo = checkMaxRange(it, 1970, Year.now().value + 1) }
+                }
+                is ChaptersRangeFilter -> {
+                    filter.minValue?.let { requestBodyData.minChapters = checkMinRange(it, 0, 3000) }
+                    filter.maxValue?.let { requestBodyData.maxChapters = checkMaxRange(it, 0, 3000) }
+                }
+                is GenresFilter -> {
+                    filter.included?.let {
+                        requestBodyData.genreIds = JsonArray(it.map { genreId -> kotlinx.serialization.json.JsonPrimitive(genreId) })
+                    }
+                    filter.excluded?.let {
+                        val allExcluded = it.plus(ignoreGenres()).distinct()
+                        requestBodyData.excludeGenreIds = JsonArray(allExcluded.map { genreId -> JsonPrimitive(genreId) })
+                    } ?: run {
+                        if (ignoreGenres().isNotEmpty()) {
+                            requestBodyData.excludeGenreIds = JsonArray(ignoreGenres().map { genreId -> kotlinx.serialization.json.JsonPrimitive(genreId) })
+                        }
+                    }
+                }
+                is TagsFilter -> {
+                    filter.included?.let {
+                        requestBodyData.tagIds = JsonArray(it.map { tagId -> kotlinx.serialization.json.JsonPrimitive(tagId) })
+                    }
+                    filter.excluded?.let {
+                        requestBodyData.excludeTagIds = JsonArray(it.map { tagId -> kotlinx.serialization.json.JsonPrimitive(tagId) })
+                    }
+                }
+                else -> {}
             }
-        }.toJsonRequestBody()
+        }
+
+        // Convert the data class to JSON request body
+        val body = requestBodyData.toJsonRequestBody() // Assuming toJsonRequestBody() handles serialization
 
         return POST(url, headers, body)
     }
@@ -326,14 +320,12 @@ class Faust :
 
             setOnPreferenceChangeListener { _, values ->
                 val selected = values as Set<*>
-                scope.launch {
-                    preferences.edit().putString(
-                        SITE_GENRES_PREF_TITLES,
-                        tags.filter { it.second in selected }
-                            .joinToString { it.first }
-                            .ifEmpty { "Не вибрано" },
-                    ).apply()
-                }
+                preferences.edit().putString(
+                    SITE_GENRES_PREF_TITLES,
+                    tags.filter { it.second in selected }
+                        .joinToString { it.first }
+                        .ifEmpty { "Не вибрано" },
+                ).apply()
                 this.summary = tags.filter { it.second in selected }
                     .joinToString { it.first }
                     .ifEmpty { "Не вибрано" } + SITE_GENRES_PREF_SUM
