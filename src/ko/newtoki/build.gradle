@@ -1,6 +1,6 @@
 ext {
     extName = 'NewToki'
-    extClass = '.NewToki'
+    extClass = '.NewTokiFactory'
     extVersionCode = 1
 }
 
