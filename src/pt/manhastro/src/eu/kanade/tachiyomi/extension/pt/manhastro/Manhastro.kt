@@ -277,7 +277,7 @@ class Manhastro :
         SwitchPreferenceCompat(screen.context).apply {
             key = ENGLISH_TITLE_PREF
             title = "Títulos em inglês"
-            summary = "Use títulos em inglês como principal quando disponível."
+            summary = "Use títulos em inglês como principal quando disponível. (Requer ativar \"Atualizar os títulos dos mangás da biblioteca para corresponder à fonte\" em \"Avançado\")"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
