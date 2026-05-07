@@ -30,6 +30,7 @@ import kotlinx.serialization.modules.polymorphic
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -115,6 +116,18 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
                 false,
             )
         }
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val titleId = url.pathSegments[1]
+            return super.fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleId", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
