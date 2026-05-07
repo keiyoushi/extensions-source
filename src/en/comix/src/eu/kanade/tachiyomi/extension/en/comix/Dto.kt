@@ -203,8 +203,8 @@ class Chapter(
         val name: String,
     )
 
-    fun toSChapter(mangaId: String) = SChapter.create().apply {
-        url = "title/$mangaId/$id"
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        url = "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
