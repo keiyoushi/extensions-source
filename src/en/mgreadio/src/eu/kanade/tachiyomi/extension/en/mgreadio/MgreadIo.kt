@@ -13,7 +13,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -75,18 +74,17 @@ class MgreadIo : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val bodyText = response.body.string()
-        val trimmedBody = bodyText.trimStart()
+        val isFilterRequest = response.request.url.encodedPath.contains("advanced-filter")
 
-        val mangasPage = if (trimmedBody.startsWith("<") || trimmedBody.startsWith("<!")) {
-            val document = Jsoup.parse(bodyText, baseUrl)
+        val mangasPage = if (isFilterRequest) {
+            val document = response.asJsoup()
             val mangas = document.select("$MANGA_GRID_SELECTOR, .manga-item-details")
                 .map(::mangaFromGridElement)
                 .distinctBy { it.url }
 
             MangasPage(mangas, document.selectFirst(NEXT_PAGE_SELECTOR) != null)
         } else {
-            val mangas = bodyText.parseAs<List<MgreadSearchDto>>()
+            val mangas = response.parseAs<List<MgreadSearchDto>>()
                 .mapNotNull(::mangaFromSearchDto)
                 .distinctBy { it.url }
 
@@ -267,7 +265,7 @@ class MgreadIo : HttpSource() {
         return SManga.create().apply {
             title = parsedTitle
             thumbnail_url = dto.thumb
-            url = cleanUrl.toHttpUrlOrNull()?.encodedPath ?: cleanUrl
+            url = cleanUrl.toHttpUrl().encodedPath
         }
     }
 
