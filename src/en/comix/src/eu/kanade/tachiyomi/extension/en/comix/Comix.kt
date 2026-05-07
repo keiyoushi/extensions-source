@@ -27,7 +27,7 @@ class Comix :
 
     override val name = "Comix"
     override val baseUrl = "https://comix.to"
-    private val apiUrl = "https://comix.to/api/v2"
+    private val apiUrl = "https://comix.to/api/v1"
     override val lang = "en"
     override val supportsLatest = true
 
@@ -132,7 +132,7 @@ class Comix :
         } else {
             val res: SearchResponse = response.parseAs()
             val manga = res.result.items.map { it.toBasicSManga(posterQuality) }
-            return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
+            return MangasPage(manga, res.result.hasNextPage())
         }
     }
 
@@ -143,7 +143,7 @@ class Comix :
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")
-            .addPathSegment(manga.url)
+            .addPathSegment(manga.url.removePrefix("/"))
             .addQueryParameter("includes[]", "demographic")
             .addQueryParameter("includes[]", "genre")
             .addQueryParameter("includes[]", "theme")

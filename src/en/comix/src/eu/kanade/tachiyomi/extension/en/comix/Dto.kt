@@ -11,6 +11,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
@@ -19,47 +20,57 @@ import java.math.RoundingMode
 
 @Serializable
 class Term(
+    val id: Int? = null,
     @SerialName("term_id")
-    private val termId: Int,
-    private val type: String,
+    private val termId: Int? = null,
+    private val type: String = "",
     val title: String,
-    private val slug: String,
-    private val count: Int?,
+    private val slug: String = "",
+    private val count: Int? = null,
 )
 
 @Serializable
 class Manga(
-    @SerialName("hash_id")
+    @SerialName("hid")
+    @JsonNames("hash_id")
     private val hashId: String,
     private val title: String,
-    @SerialName("alt_titles")
-    private val altTitles: List<String>,
+    @JsonNames("alt_titles")
+    @SerialName("altTitles")
+    private val altTitles: List<String> = emptyList(),
     private val synopsis: String?,
     private val type: String,
     private val poster: Poster,
     private val status: String,
     @SerialName("is_nsfw")
-    private val isNsfw: Boolean,
+    private val isNsfw: Boolean = false,
+    private val contentRating: String? = null,
     private val author: List<Term>?,
     private val artist: List<Term>?,
     private val genre: List<Term>?,
     private val theme: List<Term>?,
     private val demographic: List<Term>?,
-    @SerialName("rated_avg")
+    @JsonNames("rated_avg", "ratedAvg")
     private val ratedAvg: Double = 0.0,
 ) {
     @Serializable
     class Poster(
-        private val small: String,
+        private val small: String = "",
         private val medium: String,
         private val large: String,
     ) {
         fun from(quality: String?) = when (quality) {
             "large" -> large
-            "small" -> small
+            "small" -> small.ifEmpty { medium }
             else -> medium
         }
     }
+
+    private val isNsfwTagged: Boolean
+        get() = isNsfw || when (contentRating) {
+            "pornographic", "erotica", "suggestive" -> true
+            else -> false
+        }
 
     private val fancyScore: String
         get() {
@@ -146,7 +157,7 @@ class Manga(
             .let { addAll(it ?: emptyList()) }
         demographic.takeUnless { it.isNullOrEmpty() }?.map { it.title }
             .let { addAll(it ?: emptyList()) }
-        if (isNsfw) add("NSFW")
+        if (isNsfwTagged) add("NSFW")
     }.distinct().joinToString()
 }
 
@@ -162,14 +173,27 @@ class Pagination(
 )
 
 @Serializable
+class SearchResultMeta(
+    val page: Int,
+    @SerialName("lastPage") val lastPage: Int,
+)
+
+@Serializable
 class SearchResponse(
     val result: Items,
 ) {
     @Serializable
     class Items(
         val items: List<Manga>,
-        val pagination: Pagination,
-    )
+        val pagination: Pagination? = null,
+        val meta: SearchResultMeta? = null,
+    ) {
+        fun hasNextPage(): Boolean = when {
+            meta != null -> meta.page < meta.lastPage
+            pagination != null -> pagination.page < pagination.lastPage
+            else -> false
+        }
+    }
 }
 
 @Serializable
