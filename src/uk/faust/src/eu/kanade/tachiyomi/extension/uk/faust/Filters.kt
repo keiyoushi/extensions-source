@@ -39,17 +39,29 @@ class TagsFilter : TriStateGroup("Теги", options) {
     }
 }
 
+abstract class OrderByFilter(
+    displayName: String,
+    val options: List<Pair<String, String>>,
+    state: Selection,
+) : Filter.Sort(
+    displayName,
+    options.map { it.first }.toTypedArray(),
+    state,
+) {
+    val selected get() = options[state!!.index].second
+}
+
 internal class OrderBy :
-    Filter.Sort(
+    OrderByFilter(
         "Сортувати за",
-        arrayOf(
-            "Оцінками",
-            "Популярністю",
-            "Алфавітом",
-            "Останні оновлення",
-            "Нові тайтли",
+        listOf(
+            "Оцінками" to "rating",
+            "Популярністю" to "popularity",
+            "Алфавітом" to "alphabet",
+            "Останні оновлення" to "updated",
+            "Нові тайтли" to "newest",
         ),
-        Selection(0, false),
+        Selection(0, true),
     )
 internal class CategoriesFilter :
     SelectFilter(
