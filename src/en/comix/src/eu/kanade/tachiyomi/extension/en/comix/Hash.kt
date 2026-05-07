@@ -190,15 +190,8 @@ object Hash {
         return out.toIntArray()
     }
 
-    /**
-     * @param path     API path, e.g. "/manga/some-hash/chapters"
-     * @param bodySize `encodeURIComponent(body).length` for POST, or 0 for GET
-     * @param time     1 for GET manga requests, `System.currentTimeMillis()` for POST
-     */
-    fun generateHash(path: String, bodySize: Int = 0, time: Long = 1): String {
-        val baseString = "$path:$bodySize:$time"
-
-        val encoded = URLEncoder.encode(baseString, "UTF-8")
+    fun generateHash(path: String): String {
+        val encoded = URLEncoder.encode(path, "UTF-8")
             .replace("+", "%20")
             .replace("*", "%2A")
             .replace("%7E", "~")
