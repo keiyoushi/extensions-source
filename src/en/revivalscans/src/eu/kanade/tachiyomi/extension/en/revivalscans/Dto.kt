@@ -31,10 +31,10 @@ class SeriesDto(
     private val coverImage: String? = null,
     private val status: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@SeriesDto.title
-        this.url = "/series/$id"
-        this.thumbnail_url = coverImage?.let { "https://www.revivalscans.com$it" }
+        url = id
+        thumbnail_url = coverImage?.let { "$baseUrl$it" }
         this.status = parseStatus(this@SeriesDto.status)
     }
 }
@@ -46,7 +46,7 @@ class ManhwaResponseDto(
 
 @Serializable
 class ManhwaDto(
-    val id: String,
+    private val id: String,
     private val title: String,
     private val coverImage: String? = null,
     private val description: String? = null,
@@ -54,19 +54,25 @@ class ManhwaDto(
     private val artist: String? = null,
     private val genres: List<String>? = null,
     private val status: String? = null,
-    val chapters: List<ChapterDto>? = null,
+    private val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@ManhwaDto.title
-        this.url = "/series/$id"
-        this.thumbnail_url = coverImage?.let { "https://www.revivalscans.com$it" }
+        url = id
+        thumbnail_url = coverImage?.let { "$baseUrl$it" }
         this.description = this@ManhwaDto.description
         this.author = this@ManhwaDto.author
         this.artist = this@ManhwaDto.artist
         this.genre = genres?.joinToString(", ")
         this.status = parseStatus(this@ManhwaDto.status)
-        this.initialized = true
+        initialized = true
     }
+
+    fun toSChapterList(showPremium: Boolean): List<SChapter> = chapters
+        ?.filter { showPremium || !it.isPremium }
+        ?.map { it.toSChapter(id) }
+        ?.sortedByDescending { it.chapter_number }
+        ?: emptyList()
 }
 
 @Serializable
@@ -81,13 +87,11 @@ class ChapterDto(
         get() = accessRoles != null && "reader" !in accessRoles
 
     fun toSChapter(seriesId: String) = SChapter.create().apply {
-        this.url = "/read/$seriesId/$id"
-
+        url = "/read/$seriesId/$id"
         val chapterName = title ?: "Chapter ${number.toString().removeSuffix(".0")}"
-        this.name = if (isPremium) "🔒 $chapterName" else chapterName
-
-        this.chapter_number = number
-        this.date_upload = dateFormat.tryParse(releaseDate)
+        name = if (isPremium) "🔒 $chapterName" else chapterName
+        chapter_number = number
+        date_upload = dateFormat.tryParse(releaseDate)
     }
 }
 
