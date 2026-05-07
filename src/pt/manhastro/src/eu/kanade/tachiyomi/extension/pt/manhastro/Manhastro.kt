@@ -15,8 +15,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
@@ -24,7 +22,6 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -43,8 +40,6 @@ class Manhastro :
     override val lang = "pt-BR"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     private val preferences by getPreferencesLazy()
 
@@ -160,7 +155,7 @@ class Manhastro :
         if (generos.isNullOrBlank()) return emptyList()
 
         return try {
-            json.decodeFromString<List<String>>(generos)
+            generos.parseAs<List<String>>()
         } catch (_: Exception) {
             if (generos.contains(",")) {
                 generos.split(",").map { it.trim() }.filter { it.isNotEmpty() }
