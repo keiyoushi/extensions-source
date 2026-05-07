@@ -219,7 +219,7 @@ class MangaDraft : HttpSource() {
 
         url = element.absUrl("href")
 
-        val dateText = element.selectFirst("div.flex.items-center span.md\\:inline")?.text()?.trim()
+        val dateText = element.selectFirst("div.flex.items-center span.md\\:inline")?.text()
 
         if (!dateText.isNullOrBlank()) {
             date_upload = parseDate(dateText)
