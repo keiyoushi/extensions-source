@@ -2,19 +2,9 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNames
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.intOrNull
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -203,88 +193,75 @@ class ChapterDetailsResponse(
     @Serializable
     class Items(
         val items: List<Chapter>,
-        val pagination: Pagination,
-    )
+        val pagination: Pagination? = null,
+        val meta: SearchResultMeta? = null,
+    ) {
+        fun hasNextPage(): Boolean = when {
+            meta != null -> meta.page < meta.lastPage
+            pagination != null -> pagination.page < pagination.lastPage
+            else -> false
+        }
+    }
 }
 
 @Serializable
 class Chapter(
-    @SerialName("chapter_id")
-    private val chapterId: Int,
-    @SerialName("scanlation_group_id") val scanlationGroupId: Int,
+    @SerialName("id")
+    private val id: Long,
     val number: Double,
-    private val name: String,
-    val votes: Int,
-    @SerialName("updated_at")
-    val updatedAt: Long,
-    @SerialName("scanlation_group")
-    private val scanlationGroup: ScanlationGroup?,
-    @SerialName("is_official")
-    @Serializable(with = SafeIntBooleanDeserializer::class)
-    val isOfficial: Int,
+    private val name: String = "",
+    val votes: Int = 0,
+    @SerialName("createdAtFormatted")
+    private val createdAtFormatted: String? = null,
+    val isOfficial: Boolean = false,
+    private val group: Group? = null,
 ) {
     @Serializable
-    class ScanlationGroup(
-        val name: String,
+    class Group(
+        val id: Int = 0,
+        val name: String = "",
     )
 
+    val scanlationGroupId: Int get() = group?.id ?: 0
+
+    /** Approximate upload time in epoch ms, parsed from the relative [createdAtFormatted] string. */
+    val uploadDateMs: Long get() = parseRelativeTimeToEpochMs(createdAtFormatted)
+
     fun toSChapter(mangaId: String) = SChapter.create().apply {
-        url = "title/$mangaId/$chapterId"
+        url = "title/$mangaId/${this@Chapter.id}"
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
             this@Chapter.name.takeUnless { it.isEmpty() }?.let { append(": $it") }
         }
-        date_upload = this@Chapter.updatedAt * 1000
+        date_upload = uploadDateMs
         chapter_number = this@Chapter.number.toFloat()
-        scanlator = if (this@Chapter.scanlationGroup != null) {
-            this@Chapter.scanlationGroup.name
-        } else if (this@Chapter.isOfficial == 1) {
-            "Official"
-        } else {
-            "Unknown"
-        }
+        scanlator = group?.name
+            ?: if (isOfficial) "Official" else "Unknown"
     }
 }
 
-object SafeIntBooleanDeserializer : KSerializer<Int> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("SafeIntBoolean", PrimitiveKind.INT)
-
-    override fun serialize(encoder: Encoder, value: Int) {
-        encoder.encodeInt(value)
+/**
+ * Parses strings like "3h", "1d", "1w", "3mos", "2y" into an approximate epoch-ms timestamp
+ * relative to "now". Returns 0 when the input is missing or cannot be parsed.
+ */
+private fun parseRelativeTimeToEpochMs(formatted: String?): Long {
+    if (formatted.isNullOrBlank()) return 0L
+    val match = Regex("""(\d+(?:\.\d+)?)\s*(mos|y|w|d|h|m|s)""", RegexOption.IGNORE_CASE).find(formatted)
+        ?: return 0L
+    val amount = match.groupValues[1].toDoubleOrNull() ?: return 0L
+    val unitMs = when (match.groupValues[2].lowercase()) {
+        "s" -> 1_000L
+        "m" -> 60_000L
+        "h" -> 3_600_000L
+        "d" -> 86_400_000L
+        "w" -> 604_800_000L
+        "mos" -> 2_592_000_000L
+        "y" -> 31_536_000_000L
+        else -> return 0L
     }
-
-    override fun deserialize(decoder: Decoder): Int {
-        val jsonDecoder = decoder as? JsonDecoder ?: return try {
-            decoder.decodeInt()
-        } catch (_: Exception) {
-            try {
-                if (decoder.decodeBoolean()) 1 else 0
-            } catch (_: Exception) {
-                0
-            }
-        }
-
-        return try {
-            val element = jsonDecoder.decodeJsonElement()
-            when (element) {
-                is JsonPrimitive -> when {
-                    element.booleanOrNull != null ->
-                        if (element.booleanOrNull == true) 1 else 0
-
-                    element.intOrNull != null -> element.intOrNull ?: 0
-
-                    else -> element.content.toIntOrNull()
-                        ?: if (element.content.equals("true", ignoreCase = true)) 1 else 0
-                }
-
-                else -> 0
-            }
-        } catch (_: Exception) {
-            0
-        }
-    }
+    val deltaMs = (amount * unitMs).toLong()
+    return System.currentTimeMillis() - deltaMs
 }
 
 @Serializable
@@ -293,13 +270,13 @@ class ChapterResponse(
 ) {
     @Serializable
     class Items(
-        @SerialName("chapter_id")
-        val chapterId: Int,
-        val images: List<Images>,
+        @SerialName("id")
+        val chapterId: Long,
+        val pages: List<PageImage> = emptyList(),
     )
 
     @Serializable
-    class Images(
+    class PageImage(
         val url: String,
     )
 }

@@ -162,8 +162,6 @@ class Comix :
 
     private fun chapterListRequest(mangaHash: String, page: Int): Request {
         val path = "/manga/$mangaHash/chapters"
-        val time = 1L
-        val hashToken = generateHash(path, 0, time)
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")
             .addPathSegment(mangaHash)
@@ -171,8 +169,7 @@ class Comix :
             .addQueryParameter("order[number]", "desc")
             .addQueryParameter("limit", "100")
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("time", time.toString())
-            .addQueryParameter("_", hashToken)
+            .addQueryParameter("_", generateHash(path))
             .build()
 
         return GET(url, headers)
@@ -205,7 +202,7 @@ class Comix :
                 .parseAs()
 
             val items = resp.result.items
-            hasNext = resp.result.pagination.lastPage > resp.result.pagination.page
+            hasNext = resp.result.hasNextPage()
 
             if (deduplicate) {
                 deduplicateChapters(chapterMap!!, items)
@@ -236,26 +233,23 @@ class Comix :
             if (current == null) {
                 chapterMap[key] = ch
             } else {
-                // Prefer official flag first, then "Official?" group, then votes/updatedAt
-                val newIsOfficial = ch.isOfficial == 1
-                val currentIsOfficial = current.isOfficial == 1
                 val newIsGroup10702 = ch.scanlationGroupId == 10702
                 val currentIsGroup10702 = current.scanlationGroupId == 10702
 
                 val better = when {
                     // Prefer official-marked chapters
-                    newIsOfficial && !currentIsOfficial -> true
-                    !newIsOfficial && currentIsOfficial -> false
+                    ch.isOfficial && !current.isOfficial -> true
+                    !ch.isOfficial && current.isOfficial -> false
 
                     // If neither official, prefer group "Official?"
                     newIsGroup10702 && !currentIsGroup10702 -> true
                     !newIsGroup10702 && currentIsGroup10702 -> false
 
-                    // compare votes then updatedAt
+                    // compare votes then upload time (newer wins)
                     else -> when {
                         ch.votes > current.votes -> true
                         ch.votes < current.votes -> false
-                        else -> ch.updatedAt > current.updatedAt
+                        else -> ch.uploadDateMs > current.uploadDateMs
                     }
                 }
                 if (better) chapterMap[key] = ch
@@ -266,9 +260,11 @@ class Comix :
     // ========================= Pages =========================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
+        val path = "/chapters/$chapterId"
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("chapters")
             .addPathSegment(chapterId)
+            .addQueryParameter("_", generateHash(path))
             .build()
         return GET(url, headers)
     }
@@ -277,11 +273,11 @@ class Comix :
         val res: ChapterResponse = response.parseAs()
         val result = res.result ?: throw Exception("Chapter not found")
 
-        if (result.images.isEmpty()) {
+        if (result.pages.isEmpty()) {
             throw Exception("No images found for chapter ${result.chapterId}")
         }
 
-        return result.images.mapIndexed { index, img ->
+        return result.pages.mapIndexed { index, img ->
             Page(index, imageUrl = img.url)
         }
     }
