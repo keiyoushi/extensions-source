@@ -8,7 +8,7 @@ import java.util.Locale
 class Apkomik :
     MangaThemesia(
         "APKOMIK",
-        "https://apkomik.cc",
+        "https://01.apkomik.com",
         "id",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.forLanguageTag("id")),
     ) {
