@@ -15,8 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Interceptor
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -36,11 +36,6 @@ class NewToki :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    // baseUrl MUST be the root domain only.
-    // setUrlWithoutDomain() strips this prefix from absolute hrefs to produce
-    // the stored relative path. If baseUrl contained "/manhwa", it would only
-    // strip that prefix from hrefs that start with it, silently leaving
-    // "/manhwa/..." paths un-stripped — causing the /manhwa/manhwa/ double-path.
     private val rootUrl: String
         get() {
             val domainNumber = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
@@ -48,8 +43,6 @@ class NewToki :
         }
 
     override val baseUrl: String get() = rootUrl
-
-    // --- INTERCEPTORS ---
 
     private val headerCleanerInterceptor = Interceptor { chain ->
         val request = chain.request().newBuilder()
@@ -91,26 +84,24 @@ class NewToki :
             url.endsWith(".png") ||
             url.endsWith(".webp")
 
-        if (isImage) {
+        val isDownload = request.header("X-Download") != null
+
+        if (isImage && isDownload) {
             val rateLimitSeconds = preferences.getString(PREF_RATELIMIT_KEY, PREF_RATELIMIT_DEFAULT)!!.toLong()
-            val delayMillis = rateLimitSeconds * 1000L
-            synchronized(this) {
-                val now = System.currentTimeMillis()
-                val timeToWait = delayMillis - (now - lastImageRequestTime)
-                if (timeToWait > 0) Thread.sleep(timeToWait)
-                lastImageRequestTime = System.currentTimeMillis()
+            if (rateLimitSeconds > 0) {
+                val delayMillis = rateLimitSeconds * 1000L
+                synchronized(this) {
+                    val now = System.currentTimeMillis()
+                    val timeToWait = delayMillis - (now - lastImageRequestTime)
+                    if (timeToWait > 0) Thread.sleep(timeToWait)
+                    lastImageRequestTime = System.currentTimeMillis()
+                }
             }
         }
 
         chain.proceed(request)
     }
 
-    // FIX (WebView): Mihon's HttpSource has no hook to override the WebView start URL —
-    // it always opens baseUrl. We work around this by intercepting the bare root request
-    // at the OkHttp level and rewriting it to /manhwa before it goes out. The WebView
-    // then follows the rewritten URL and lands on the manhwa list.
-    // Guard is strict: only the exact root (with or without trailing slash) is redirected.
-    // All other requests pass through untouched.
     private val webViewRedirectInterceptor = Interceptor { chain ->
         val request = chain.request()
         val url = request.url.toString()
@@ -131,15 +122,7 @@ class NewToki :
             .build()
     }
 
-    // --- POPULAR (BROWSE) ---
-    // NOTE on pagination: the site is a Next.js app that server-renders ALL manga into
-    // the initial HTML response. Client-side JS (component `function d({allCards})`)
-    // then slices the full array into groups of 49, revealing more via IntersectionObserver
-    // scroll triggers. There is NO server-side ?page=N endpoint — requesting one returns
-    // a 404 or duplicate content. We scrape every card from the single response and return
-    // hasNextPage = false.
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manhwa", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manhwa", headers)
 
     override fun popularMangaSelector() = "div.card-grid > a.card"
 
@@ -155,28 +138,19 @@ class NewToki :
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    // --- LATEST UPDATES ---
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/manhwa/updates", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manhwa/updates", headers)
 
     override fun latestUpdatesSelector() = "ul.upd-grid > li.upd-card"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        // FIX (double path): The update card has TWO links:
-        //   - a.upd-card-main → /manhwa/{workId}/{firstEpisodeId}  (episode, NOT series)
-        //   - a.upd-allbtn    → /manhwa/{workId}                   (series page, correct)
-        // We must use upd-allbtn. data-manhwa-sid is the most reliable fallback.
         val sid = element.attr("data-manhwa-sid")
         if (sid.isNotEmpty()) {
-            // setUrlWithoutDomain on an abs URL strips "https://ntkXXX.com" correctly.
             setUrlWithoutDomain("$rootUrl/manhwa/$sid")
         } else {
             val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
             if (allBtnHref.isNotEmpty()) {
                 setUrlWithoutDomain(allBtnHref)
             } else {
-                // Last resort: strip episode segment from main card href.
-                // /manhwa/{workId}/{epId}  →  /manhwa/{workId}
                 val epHref = element.select("a.upd-card-main").attr("href")
                 url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
             }
@@ -191,39 +165,33 @@ class NewToki :
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    // --- SEARCH ---
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotEmpty()) {
-            // Text search
-            "$baseUrl/search?q=$query".toHttpUrl().newBuilder()
-        } else {
-            // Browse with filters
-            "$baseUrl/manhwa".toHttpUrl().newBuilder()
+        if (query.isNotEmpty()) {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+                addQueryParameter("q", query)
+                addQueryParameter("kind", "manhwa") // Fix 1: Added kind=manhwa to search
+            }.build()
+            return GET(url, headers)
         }
 
-        // Apply genre filters
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    val genres = filter.state
-                        .mapIndexed { index, state ->
-                            when (state) {
-                                Filter.TriState.STATE_INCLUDE -> genreList[index]
-                                Filter.TriState.STATE_EXCLUDE -> "-${genreList[index]}"
-                                else -> null
-                            }
-                        }
-                        .filterNotNull()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 
-                    if (genres.isNotEmpty()) {
-                        url.addQueryParameter("g", genres.joinToString(","))
-                    }
-                }
-                else -> {}
+        val sortParam = sortFilter?.let { sortList[it.state].value } ?: sortList[0].value
+        val statusParam = statusFilter?.let { statusList[it.state].value } ?: statusList[0].value
+        val genreParam = buildGenreParam(genreFilter)
+
+        val url = "$baseUrl/manhwa$statusParam".toHttpUrl().newBuilder().apply {
+            // Add sort parameter if not default
+            if (sortParam != "new") {
+                addQueryParameter("sort", sortParam)
             }
-        }
 
-        return GET(url.build(), headers)
+            genreParam?.let { addQueryParameter("g", it) }
+        }.build()
+
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -235,14 +203,16 @@ class NewToki :
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    // Required stubs — we override the *Parse methods so these are never called.
     override fun popularMangaNextPageSelector() = null
     override fun latestUpdatesNextPageSelector() = null
     override fun searchMangaNextPageSelector() = null
 
     // --- FILTERS ---
     override fun getFilterList() = FilterList(
-        Filter.Header("장르 필터 (검색 시만 적용)"),
+        Filter.Header("필터는 검색창이 비어있을 때만 적용됩니다"),
+        Filter.Separator(),
+        SortFilter(),
+        StatusFilter(),
         Filter.Separator(),
         GenreFilter(),
     )
@@ -275,13 +245,11 @@ class NewToki :
     }
 
     // --- PAGES ---
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.vw-imgs img").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src"))
-        }
+    override fun pageListParse(document: Document): List<Page> = document.select("div.vw-imgs img").mapIndexed { i, img ->
+        Page(i, "", img.attr("abs:src"))
+    }
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException("Not used")
 
     // --- SETTINGS ---
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -300,13 +268,24 @@ class NewToki :
 
         val rateLimitPref = ListPreference(screen.context).apply {
             key = PREF_RATELIMIT_KEY
-            title = "이미지 다운로드 제한 (Rate Limit)"
-            summary = "현재 설정: ${preferences.getString(PREF_RATELIMIT_KEY, PREF_RATELIMIT_DEFAULT)}초마다 1장 다운로드\n(설정 변경 시 앱 재시작 필요)"
-            entries = (0..9).map { "${it}초마다 다운로드" }.toTypedArray()
-            entryValues = (0..9).map { it.toString() }.toTypedArray()
+            title = "다운로드 속도 제한"
+            summary = "현재 설정: ${preferences.getString(PREF_RATELIMIT_KEY, PREF_RATELIMIT_DEFAULT)}초마다 1장\n" +
+                "※ 다운로드할 때만 적용 (읽기 중에는 영향 없음)\n" +
+                "(설정 변경 시 앱 재시작 필요)"
+            entries = arrayOf(
+                "제한 없음 (최고속)",
+                "1초마다 다운로드",
+                "2초마다 다운로드",
+                "3초마다 다운로드",
+            )
+            entryValues = arrayOf("0", "1", "2", "3")
             setDefaultValue(PREF_RATELIMIT_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                summary = "현재 설정: ${newValue}초마다 1장 다운로드\n(설정 변경 시 앱 재시작 필요)"
+                val display = when (newValue.toString()) {
+                    "0" -> "제한 없음 (최고속)"
+                    else -> "${newValue}초마다 1장"
+                }
+                summary = "현재 설정: $display\n※ 다운로드할 때만 적용 (읽기 중에는 영향 없음)\n(설정 변경 시 앱 재시작 필요)"
                 true
             }
         }
@@ -321,44 +300,3 @@ class NewToki :
         private const val PREF_RATELIMIT_DEFAULT = "0"
     }
 }
-
-// --- FILTERS ---
-
-private class GenreFilter : Filter.Group<GenreTriState>(
-    "장르",
-    genreList.map { GenreTriState(it) },
-)
-
-private class GenreTriState(val genre: String) : Filter.TriState(genre)
-
-private val genreList = listOf(
-    "순정",
-    "판타지",
-    "러브코미디",
-    "드라마",
-    "17",
-    "학원",
-    "라노벨",
-    "개그",
-    "액션",
-    "백합",
-    "SF",
-    "일상",
-    "이세계",
-    "스릴러",
-    "애니화",
-    "전생",
-    "스포츠",
-    "TS",
-    "소년",
-    "먹방",
-    "붕탁",
-    "게임",
-    "호러",
-    "시대",
-    "로맨스",
-    "추리",
-    "무협",
-    "음악",
-    "BL",
-)
