@@ -1,364 +1,202 @@
-package eu.kanade.tachiyomi.extension.ko.newtoki
+package eu.kanade.tachiyomi.extension.ko.toon11
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Interceptor
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.ArrayList
+import java.util.Locale
 
-class NewToki :
-    ParsedHttpSource(),
-    ConfigurableSource {
-    override val name = "NewToki"
+class Toon11 : HttpSource() {
+
+    override val name = "11toon"
+
+    override val baseUrl = "https://www.11toon.com"
+
     override val lang = "ko"
+
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    override val client: OkHttpClient = network.cloudflareClient
 
-    // baseUrl MUST be the root domain only.
-    // setUrlWithoutDomain() strips this prefix from absolute hrefs to produce
-    // the stored relative path. If baseUrl contained "/manhwa", it would only
-    // strip that prefix from hrefs that start with it, silently leaving
-    // "/manhwa/..." paths un-stripped — causing the /manhwa/manhwa/ double-path.
-    private val rootUrl: String
-        get() {
-            val domainNumber = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
-            return "https://ntk$domainNumber.com"
-        }
-
-    override val baseUrl: String get() = rootUrl
-
-    // --- INTERCEPTORS ---
-
-    private val headerCleanerInterceptor = Interceptor { chain ->
-        val request = chain.request().newBuilder()
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-            .removeHeader("rsc")
-            .removeHeader("next-router-state-tree")
-            .removeHeader("next-url")
-            .build()
-        chain.proceed(request)
-    }
-
-    private val domainUpdateInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val response = chain.proceed(request)
-
-        val finalUrl = response.request.url.toString()
-        val regex = """ntk(\d+)\.com""".toRegex()
-        val matchResult = regex.find(finalUrl)
-
-        if (matchResult != null) {
-            val newDomainNumber = matchResult.groupValues[1]
-            val currentDomainNumber = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)
-            if (newDomainNumber != currentDomainNumber) {
-                preferences.edit().putString(PREF_DOMAIN_KEY, newDomainNumber).apply()
-            }
-        }
-
-        response
-    }
-
-    private var lastImageRequestTime = 0L
-    private val smartRateLimitInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val url = request.url.toString()
-
-        val isImage = url.contains("toonflix.app") ||
-            url.contains("11toon8.com") ||
-            url.endsWith(".jpg") ||
-            url.endsWith(".png") ||
-            url.endsWith(".webp")
-
-        if (isImage) {
-            val rateLimitSeconds = preferences.getString(PREF_RATELIMIT_KEY, PREF_RATELIMIT_DEFAULT)!!.toLong()
-            val delayMillis = rateLimitSeconds * 1000L
-            synchronized(this) {
-                val now = System.currentTimeMillis()
-                val timeToWait = delayMillis - (now - lastImageRequestTime)
-                if (timeToWait > 0) Thread.sleep(timeToWait)
-                lastImageRequestTime = System.currentTimeMillis()
-            }
-        }
-
-        chain.proceed(request)
-    }
-
-    // FIX (WebView): Mihon's HttpSource has no hook to override the WebView start URL —
-    // it always opens baseUrl. We work around this by intercepting the bare root request
-    // at the OkHttp level and rewriting it to /manhwa before it goes out. The WebView
-    // then follows the rewritten URL and lands on the manhwa list.
-    // Guard is strict: only the exact root (with or without trailing slash) is redirected.
-    // All other requests pass through untouched.
-    private val webViewRedirectInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val url = request.url.toString()
-        val isExactRoot = url == rootUrl || url == "$rootUrl/"
-        if (isExactRoot) {
-            chain.proceed(request.newBuilder().url("$rootUrl/manhwa").build())
-        } else {
-            chain.proceed(request)
-        }
-    }
-
-    override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
-            .addInterceptor(headerCleanerInterceptor)
-            .addInterceptor(domainUpdateInterceptor)
-            .addInterceptor(smartRateLimitInterceptor)
-            .addInterceptor(webViewRedirectInterceptor)
-            .build()
-    }
-
-    // --- POPULAR (BROWSE) ---
-    // NOTE on pagination: the site is a Next.js app that server-renders ALL manga into
-    // the initial HTML response. Client-side JS (component `function d({allCards})`)
-    // then slices the full array into groups of 49, revealing more via IntersectionObserver
-    // scroll triggers. There is NO server-side ?page=N endpoint — requesting one returns
-    // a 404 or duplicate content. We scrape every card from the single response and return
-    // hasNextPage = false.
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/manhwa", headers)
-
-    override fun popularMangaSelector() = "div.card-grid > a.card"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.select("p.subject").text().trim()
-        thumbnail_url = element.select("img").attr("abs:src")
-    }
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        return MangasPage(mangas, hasNextPage = false)
-    }
-
-    // --- LATEST UPDATES ---
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/manhwa/updates", headers)
-
-    override fun latestUpdatesSelector() = "ul.upd-grid > li.upd-card"
-
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        // FIX (double path): The update card has TWO links:
-        //   - a.upd-card-main → /manhwa/{workId}/{firstEpisodeId}  (episode, NOT series)
-        //   - a.upd-allbtn    → /manhwa/{workId}                   (series page, correct)
-        // We must use upd-allbtn. data-manhwa-sid is the most reliable fallback.
-        val sid = element.attr("data-manhwa-sid")
-        if (sid.isNotEmpty()) {
-            // setUrlWithoutDomain on an abs URL strips "https://ntkXXX.com" correctly.
-            setUrlWithoutDomain("$rootUrl/manhwa/$sid")
-        } else {
-            val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
-            if (allBtnHref.isNotEmpty()) {
-                setUrlWithoutDomain(allBtnHref)
-            } else {
-                // Last resort: strip episode segment from main card href.
-                // /manhwa/{workId}/{epId}  →  /manhwa/{workId}
-                val epHref = element.select("a.upd-card-main").attr("href")
-                url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
+        val mangas = document.select("li[data-id]").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                title = element.selectFirst(".homelist-title")!!.text()
+                thumbnail_url = element.selectFirst(".homelist-thumb")?.absUrl("data-mobile-image")
             }
         }
-        title = element.select("div.upd-title").text().trim()
-        thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
+        val hasNextPage = document.selectFirst(".pg_end") != null
+        return MangasPage(mangas, hasNextPage)
     }
+
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
-        return MangasPage(mangas, hasNextPage = false)
-    }
-
-    // --- SEARCH ---
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotEmpty()) {
-            // Text search
-            "$baseUrl/search?q=$query".toHttpUrl().newBuilder()
-        } else {
-            // Browse with filters
-            "$baseUrl/manhwa".toHttpUrl().newBuilder()
-        }
-
-        // Apply genre filters
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    val genres = filter.state
-                        .mapIndexed { index, state ->
-                            when (state) {
-                                Filter.TriState.STATE_INCLUDE -> genreList[index]
-                                Filter.TriState.STATE_EXCLUDE -> "-${genreList[index]}"
-                                else -> null
-                            }
-                        }
-                        .filterNotNull()
-
-                    if (genres.isNotEmpty()) {
-                        url.addQueryParameter("g", genres.joinToString(","))
-                    }
+        val mangas = document.select("li[data-id]").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                title = element.selectFirst(".homelist-title")!!.text()
+                element.selectFirst(".homelist-thumb")?.also {
+                    thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
                 }
-                else -> {}
             }
         }
-
-        return GET(url.build(), headers)
+        val hasNextPage = document.selectFirst(".pg_end") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
+        val url = "$baseUrl/bbs/search_stx.php".toHttpUrl().newBuilder().apply {
+            addQueryParameter("stx", query)
+        }.build()
+        GET(url, headers)
+    } else {
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+
+        val urlString = sortFilter?.selected ?: sortList[0].value
+        val isOver = statusFilter?.selected ?: ""
+        val genre = genreFilter?.selected ?: ""
+
+        val url = (baseUrl + urlString).toHttpUrl().newBuilder().apply {
+            addQueryParameter("is_over", isOver)
+            if (page > 1) addQueryParameter("page", page.toString())
+            if (genre.isNotEmpty()) addQueryParameter("sca", genre)
+        }.build()
+
+        GET(url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
-        return MangasPage(mangas, hasNextPage = false)
+        val mangas = document.select("li[data-id]").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst(".homelist-title")!!.text()
+                val dataId = element.attr("data-id")
+                url = "/bbs/board.php?bo_table=toons&stx=${URLEncoder.encode(title, "UTF-8")}&is=$dataId"
+                element.selectFirst(".homelist-thumb")?.also {
+                    thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
+                }
+            }
+        }
+        val hasNextPage = document.selectFirst(".pg_end") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    // Required stubs — we override the *Parse methods so these are never called.
-    override fun popularMangaNextPageSelector() = null
-    override fun latestUpdatesNextPageSelector() = null
-    override fun searchMangaNextPageSelector() = null
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h2.title")!!.text()
+            thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
+            document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
+            document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
+            document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
+            document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString { s -> s.trim() } }
+        }
+    }
 
-    // --- FILTERS ---
+    private fun parseStatus(element: String): Int = when {
+        "완결" in element -> SManga.COMPLETED
+        "주간" in element || "월간" in element || "연재" in element || "격주" in element -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val nav = document.selectFirst("span.pg")
+        val chapters = ArrayList<SChapter>()
+
+        document.select("#comic-episode-list > li").forEach {
+            chapters.add(parseChapter(it))
+        }
+
+        if (nav == null) {
+            return chapters
+        }
+
+        val pg2url = nav.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
+
+        if (pg2url != null) {
+            parseChapters(pg2url, chapters)
+        }
+
+        return chapters
+    }
+
+    private tailrec fun parseChapters(nextURL: String, chapters: ArrayList<SChapter>) {
+        val newpage = client.newCall(GET(nextURL, headers)).execute().asJsoup()
+        newpage.select("#comic-episode-list > li").forEach {
+            chapters.add(parseChapter(it))
+        }
+        val newURL = newpage.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
+        if (!newURL.isNullOrBlank()) parseChapters(newURL, chapters)
+    }
+
+    private fun parseChapter(element: Element): SChapter {
+        val urlEl = element.selectFirst("button")
+        val dateEl = element.selectFirst(".free-date")
+
+        return SChapter.create().apply {
+            urlEl?.also {
+                url = it.attr("onclick").substringAfter("location.href='.").substringBefore("'")
+                name = it.selectFirst(".episode-title")!!.text()
+            }
+            dateEl?.also { date_upload = dateFormat.tryParse(it.text()) }
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "/bbs" + chapter.url, headers)
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val rawImageLinks = document.selectFirst("script + script[type^=text/javascript]:not([src])")!!.data()
+        val imgList = extractList(rawImageLinks)
+
+        return imgList.mapIndexed { i, img ->
+            Page(i, imageUrl = "https:$img")
+        }
+    }
+
+    private fun extractList(jsString: String): List<String> {
+        val matchResult = imgListRegex.find(jsString)
+        val listString = matchResult?.groupValues?.get(1) ?: return emptyList()
+        return listString.parseAs<List<String>>()
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
     override fun getFilterList() = FilterList(
-        Filter.Header("장르 필터 (검색 시만 적용)"),
+        Filter.Header("Note: can't combine search query with filters, status filter only has effect in 인기만화"),
         Filter.Separator(),
-        GenreFilter(),
+        SortFilter(sortList, 0),
+        StatusFilter(statusList, 0),
+        GenreFilter(genreList, 0),
     )
 
-    // --- MANGA DETAILS ---
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("h1.hero-v2-title").text().trim()
-        author = document.select("div.hero-v2-author a").text().trim()
-        description = document.select("p.hero-v2-desc").text().trim()
-        thumbnail_url = document.select("div.hero-v2-thumb img").attr("abs:src")
-
-        val statusText = document.select("span.pill-status").text()
-        status = when {
-            statusText.contains("연재중") -> SManga.ONGOING
-            statusText.contains("완결") -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-
-        genre = document.select("a.hero-v2-tag").joinToString(", ") {
-            it.text().replace("#", "").trim()
-        }
-    }
-
-    // --- CHAPTER LIST ---
-    override fun chapterListSelector() = "ul.ep-list-v2 > li.ep-row-v2"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.select("a.ep-row-v2-link").attr("href"))
-        name = element.select("div.ep-row-v2-title strong").text().trim()
-    }
-
-    // --- PAGES ---
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.vw-imgs img").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src"))
-        }
-
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException("Not used")
-
-    // --- SETTINGS ---
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val domainPref = EditTextPreference(screen.context).apply {
-            key = PREF_DOMAIN_KEY
-            title = "도메인 번호 (ntkOOO.com)"
-            summary = "현재 도메인 번호: ${preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)}\n숫자만 입력하세요 (예: 01, 02, 300)"
-            setDefaultValue(PREF_DOMAIN_DEFAULT)
-            dialogTitle = "도메인 번호를 입력하세요"
-            setOnPreferenceChangeListener { _, newValue ->
-                summary = "현재 도메인 번호: $newValue\n숫자만 입력하세요 (예: 01, 02, 300)"
-                true
-            }
-        }
-        screen.addPreference(domainPref)
-
-        val rateLimitPref = ListPreference(screen.context).apply {
-            key = PREF_RATELIMIT_KEY
-            title = "이미지 다운로드 제한 (Rate Limit)"
-            summary = "현재 설정: ${preferences.getString(PREF_RATELIMIT_KEY, PREF_RATELIMIT_DEFAULT)}초마다 1장 다운로드\n(설정 변경 시 앱 재시작 필요)"
-            entries = (0..9).map { "${it}초마다 다운로드" }.toTypedArray()
-            entryValues = (0..9).map { it.toString() }.toTypedArray()
-            setDefaultValue(PREF_RATELIMIT_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                summary = "현재 설정: ${newValue}초마다 1장 다운로드\n(설정 변경 시 앱 재시작 필요)"
-                true
-            }
-        }
-        screen.addPreference(rateLimitPref)
-    }
-
     companion object {
-        private const val PREF_DOMAIN_KEY = "pref_domain_key"
-        private const val PREF_DOMAIN_DEFAULT = "01"
-
-        private const val PREF_RATELIMIT_KEY = "pref_ratelimit_key"
-        private const val PREF_RATELIMIT_DEFAULT = "0"
+        private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.ENGLISH)
+        private val imgListRegex = """img_list\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
     }
 }
-
-// --- FILTERS ---
-
-private class GenreFilter : Filter.Group<GenreTriState>(
-    "장르",
-    genreList.map { GenreTriState(it) },
-)
-
-private class GenreTriState(val genre: String) : Filter.TriState(genre)
-
-private val genreList = listOf(
-    "순정",
-    "판타지",
-    "러브코미디",
-    "드라마",
-    "17",
-    "학원",
-    "라노벨",
-    "개그",
-    "액션",
-    "백합",
-    "SF",
-    "일상",
-    "이세계",
-    "스릴러",
-    "애니화",
-    "전생",
-    "스포츠",
-    "TS",
-    "소년",
-    "먹방",
-    "붕탁",
-    "게임",
-    "호러",
-    "시대",
-    "로맨스",
-    "추리",
-    "무협",
-    "음악",
-    "BL",
-)
