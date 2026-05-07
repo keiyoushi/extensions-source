@@ -76,6 +76,14 @@ class BrasilHentai : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val item = url.pathSegments.last { it.isNotBlank() }
+            return fetchSearchManga(page, "$SEARCH_PREFIX$item", filters)
+        }
         if (query.startsWith(SEARCH_PREFIX)) {
             val url = "$baseUrl/${query.substringAfter(SEARCH_PREFIX)}/"
             return client.newCall(GET(url, headers))
