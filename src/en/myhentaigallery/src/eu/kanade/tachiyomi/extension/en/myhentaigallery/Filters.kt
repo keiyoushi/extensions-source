@@ -130,3 +130,9 @@ internal class GenreFilter :
             Pair("Weight Gain", "66"),
         ),
     )
+
+internal open class TagLookupFilter(displayName: String, val uriPart: String) : Filter.Text(displayName)
+
+internal class ArtistFilter : TagLookupFilter("Artists", "artist")
+
+internal class ParodyFilter : TagLookupFilter("Parodies", "parody")

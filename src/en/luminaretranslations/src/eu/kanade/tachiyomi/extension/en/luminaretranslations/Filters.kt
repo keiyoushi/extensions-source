@@ -26,6 +26,4 @@ abstract class TypeStatusSortFilter(name: String, entries: List<Filters>, withAn
 
 class SortFilter(sorts: List<Filters>) : TypeStatusSortFilter("Sort", sorts)
 
-class TypeFilter(types: List<Filters>) : TypeStatusSortFilter("Type", types, true)
-
 class StatusFilter(statuses: List<Filters>) : TypeStatusSortFilter("Status", statuses, true)

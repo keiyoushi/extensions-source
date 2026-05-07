@@ -1,0 +1,10 @@
+ext {
+    extName = 'DailySuka'
+    extClass = '.DailySuka'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://dailysuka.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

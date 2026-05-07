@@ -61,7 +61,7 @@ private fun JsonElement.matchesSeriesPayload(expectedSlug: String): Boolean {
         "id" in chapterObject && "number" in chapterObject
     }
 
-    return "seriesId" in payload &&
+    return ("seriesId" in payload || "contentRef" in payload) &&
         hasValidChapterShape &&
         (
             "totalChapters" in payload ||

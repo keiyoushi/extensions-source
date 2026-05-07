@@ -2,7 +2,7 @@ ext {
     extName = 'Medusascans'
     extClass = '.Medusascans'
     themePkg = 'comicaso'
-    baseUrl = 'https://medusascans.com'
+    baseUrl = 'https://medusascans.pro'
     overrideVersionCode = 1
     isNsfw = true
 }

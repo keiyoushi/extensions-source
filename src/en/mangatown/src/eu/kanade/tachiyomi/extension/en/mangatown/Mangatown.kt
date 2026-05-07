@@ -131,10 +131,12 @@ class Mangatown : HttpSource() {
         val elements = document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))")
         return if (elements.isNotEmpty()) {
             elements.mapIndexed { i, e ->
-                Page(i, e.attr("value"))
+                val path = e.attr("value")
+                val pageUrl = if (path.startsWith("http")) path else baseUrl + path
+                Page(i, url = pageUrl)
             }
         } else {
-            document.select("#viewer .image").mapIndexed { i, e ->
+            document.select("div#viewer img").mapIndexed { i, e ->
                 Page(i, imageUrl = e.attr("abs:src"))
             }
         }

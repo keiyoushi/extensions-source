@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
 import kotlinx.serialization.json.Json
@@ -38,7 +38,7 @@ abstract class MangaThemesia(
     final override val lang: String,
     val mangaUrlDirectory: String = "/manga",
     val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     protected open val json: Json by injectLazy()
 
@@ -140,22 +140,32 @@ abstract class MangaThemesia(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
         if (genrelist == null) {
-            genrelist = parseGenres(response.asJsoup(response.peekBody(Long.MAX_VALUE).string()))
+            genrelist = parseGenres(document)
         }
 
-        return super.searchMangaParse(response)
+        val mangas = document.select(searchMangaSelector()).map { element ->
+            searchMangaFromElement(element)
+        }
+
+        val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx"
+    protected open fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx"
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+    protected open fun searchMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.select("img").imgAttr()
         title = element.select("a").attr("title")
         setUrlWithoutDomain(element.select("a").attr("href"))
     }
 
-    override fun searchMangaNextPageSelector() = "div.pagination .next, div.hpage .r"
+    protected open fun searchMangaNextPageSelector(): String? = "div.pagination .next, div.hpage .r"
 
     // Manga details
     private fun selector(selector: String, contains: List<String>): String = contains.joinToString(", ") { selector.replace("%s", it) }
@@ -244,7 +254,9 @@ abstract class MangaThemesia(
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+
+    protected open fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
             title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
@@ -303,7 +315,7 @@ abstract class MangaThemesia(
     }
 
     // Chapter list
-    override fun chapterListSelector() = "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num)"
+    protected open fun chapterListSelector() = "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num)"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -326,7 +338,7 @@ abstract class MangaThemesia(
 
     private fun parseUpdatedOnDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).parse(date)?.time ?: 0L
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+    protected open fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
         name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
@@ -345,7 +357,9 @@ abstract class MangaThemesia(
     // Pages
     open val pageSelector = "div#readerarea img"
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+
+    protected open fun pageListParse(document: Document): List<Page> {
         countViews(document)
 
         val chapterUrl = document.location()
@@ -621,15 +635,7 @@ abstract class MangaThemesia(
     protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
 
     // Unused
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
