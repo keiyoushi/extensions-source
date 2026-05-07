@@ -10,20 +10,17 @@ import kotlin.system.exitProcess
 class PeachScanUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val path = intent?.data?.path
-        if (path != null) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${PeachScan.URL_SEARCH_PREFIX}$path")
-                putExtra("filter", packageName)
-            }
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("PeachScanUrlActivity", e.toString())
-            }
-        } else {
-            Log.e("PeachScanUrlActivity", "could not parse uri from intent $intent")
+
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
+
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("PeachScanUrlActivity", "Unable to launch activity", e)
         }
 
         finish()

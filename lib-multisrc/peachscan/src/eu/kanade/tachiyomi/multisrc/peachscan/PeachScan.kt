@@ -73,6 +73,14 @@ abstract class PeachScan(
     override fun latestUpdatesNextPageSelector() = null
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val path = url.encodedPath
+            return fetchSearchManga(page, "$URL_SEARCH_PREFIX$path", filters)
+        }
         if (query.startsWith(URL_SEARCH_PREFIX)) {
             val manga = SManga.create().apply { url = query.substringAfter(URL_SEARCH_PREFIX) }
             return client.newCall(mangaDetailsRequest(manga))
