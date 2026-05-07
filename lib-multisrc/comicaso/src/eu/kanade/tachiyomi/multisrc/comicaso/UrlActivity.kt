@@ -13,21 +13,16 @@ class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val data = intent?.data
-        if (data != null) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Comicaso.URL_SEARCH_PREFIX}$data")
-                putExtra("filter", packageName)
-            }
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e(tag, e.toString())
-            }
-        } else {
-            Log.e(tag, "Could not parse URI from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e(tag, "Unable to launch activity", e)
         }
 
         finish()

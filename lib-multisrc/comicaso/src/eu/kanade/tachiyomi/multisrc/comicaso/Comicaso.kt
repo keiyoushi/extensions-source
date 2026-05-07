@@ -79,6 +79,8 @@ abstract class Comicaso(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.isNotEmpty()) {
             val url = when {
+                query.startsWith("https://") ->
+                    query.trim()
                 query.startsWith(URL_SEARCH_PREFIX) ->
                     query.removePrefix(URL_SEARCH_PREFIX).trim()
                 query.contains("://") ->
@@ -87,6 +89,10 @@ abstract class Comicaso(
             }
 
             if (url != null) {
+                val httpUrl = url.toHttpUrl()
+                if (httpUrl.host != baseUrl.toHttpUrl().host) {
+                    throw Exception("Unsupported url")
+                }
                 val mangaSlug = url.substringAfter("/komik/").substringBefore("/")
                 return fetchMangaDetails(SManga.create().apply { this.url = mangaSlug })
                     .map { MangasPage(listOf(it), false) }
