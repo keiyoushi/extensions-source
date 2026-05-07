@@ -584,21 +584,30 @@ abstract class GroupLe(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-        client.newCall(searchMangaByIdRequest(realQuery))
-            .asObservableSuccess()
-            .map { response ->
-                val details = mangaDetailsParse(response)
-                details.url = "/$realQuery"
-                MangasPage(listOf(details), false)
-            }
-    } else {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response)
-            }
+    ): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val titleId = url.pathSegments.firstOrNull()?.takeIf { it.isNotEmpty() }
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
+        }
+
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+            client.newCall(searchMangaByIdRequest(realQuery))
+                .asObservableSuccess()
+                .map { response ->
+                    val details = mangaDetailsParse(response)
+                    details.url = "/$realQuery"
+                    MangasPage(listOf(details), false)
+                }
+        } else {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response)
+                }
+        }
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
