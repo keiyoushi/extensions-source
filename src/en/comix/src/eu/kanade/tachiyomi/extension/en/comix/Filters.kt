@@ -136,7 +136,7 @@ class Filters {
     private open class UriMultiSelectFilter(
         name: String,
         private val param: String,
-        private val vals: Array<Pair<String, String>>,
+        vals: Array<Pair<String, String>>,
     ) : Filter.Group<UriMultiSelectOption>(
         name,
         vals.map { UriMultiSelectOption(it.first, it.second) },
@@ -155,7 +155,7 @@ class Filters {
     private open class UriTriSelectFilter(
         name: String,
         private val param: String,
-        private val vals: Array<Pair<String, String>>,
+        vals: Array<Pair<String, String>>,
     ) : Filter.Group<UriTriSelectOption>(
         name,
         vals.map { UriTriSelectOption(it.first, it.second) },
@@ -171,7 +171,7 @@ class Filters {
         }
     }
 
-    private class DemographicFilter(val demographics: Array<Pair<String, String>>) :
+    private class DemographicFilter(demographics: Array<Pair<String, String>>) :
         UriTriSelectFilter(
             "Demographic",
             "demographics[]",
@@ -191,11 +191,19 @@ class Filters {
         )
 
     private class GenreFilter(genres: Array<Pair<String, String>>) :
-        UriTriSelectFilter(
-            "Genres",
-            "genres[]",
-            genres,
-        )
+        Filter.Group<UriTriSelectOption>("Genres", genres.map { UriTriSelectOption(it.first, it.second) }),
+        UriFilter {
+        override fun addToUri(builder: HttpUrl.Builder) {
+            val included = state.filter { it.state == TriState.STATE_INCLUDE }
+            val excluded = state.filter { it.state == TriState.STATE_EXCLUDE }
+
+            if (included.isNotEmpty() || excluded.isNotEmpty()) {
+                builder.addQueryParameter("genres_mode", "and")
+            }
+            included.forEach { builder.addQueryParameter("genres_in[]", it.value) }
+            excluded.forEach { builder.addQueryParameter("genres_ex[]", it.value) }
+        }
+    }
 
     private class StatusFilter :
         UriMultiSelectFilter(
@@ -245,13 +253,16 @@ class Filters {
 
     private fun getSortables() = arrayOf(
         Sortable("Best Match", "relevance"),
-        Sortable("Popular", "views_30d"),
-        Sortable("Updated Date", "chapter_updated_at"),
-        Sortable("Created Date", "created_at"),
+        Sortable("Latest update", "chapter_updated_at"),
+        Sortable("Recently added", "created_at"),
         Sortable("Title", "title"),
         Sortable("Year", "year"),
-        Sortable("Total Views", "views_total"),
-        Sortable("Most Follows", "follows_total"),
+        Sortable("Highest rated", "score"),
+        Sortable("Most viewed · 7 days", "views_7d"),
+        Sortable("Most viewed · 30 days", "views_30d"),
+        Sortable("Most viewed · 90 days", "views_90d"),
+        Sortable("Most viewed · all time", "views_total"),
+        Sortable("Most followed", "follows_total"),
     )
 
     private class SortFilter(private val sortables: Array<Sortable>) :
