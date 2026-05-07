@@ -41,16 +41,26 @@ class MyHentaiGallery : HttpSource() {
 
     // =============================== Search =================================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
-        val id = query.removePrefix(PREFIX_ID_SEARCH)
-        client.newCall(GET("$baseUrl/g/$id", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val details = mangaDetailsParse(response).apply { url = "/g/$id" }
-                MangasPage(listOf(details), false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
             }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+            val id = url.pathSegments[2]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
+        }
+        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val id = query.removePrefix(PREFIX_ID_SEARCH)
+            client.newCall(GET("$baseUrl/g/$id", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val details = mangaDetailsParse(response).apply { url = "/g/$id" }
+                    MangasPage(listOf(details), false)
+                }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
