@@ -68,6 +68,9 @@ abstract class MangaThemesia(
 
     // Search
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            return fetchSearchManga(page, "$URL_SEARCH_PREFIX$query", filters)
+        }
         if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
 
         val mangaPath = try {
