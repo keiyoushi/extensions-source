@@ -48,11 +48,7 @@ class Comix :
             addQueryParameter("limit", "50")
             addQueryParameter("page", page.toString())
 
-            if (preferences.hideNsfw()) {
-                NSFW_GENRE_IDS.forEach {
-                    addQueryParameter("genres[]", "-$it")
-                }
-            }
+            addQueryParameter("content_rating", preferences.contentRatingMode())
         }.build()
 
         return GET(url, headers)
@@ -68,11 +64,7 @@ class Comix :
             addQueryParameter("limit", "50")
             addQueryParameter("page", page.toString())
 
-            if (preferences.hideNsfw()) {
-                NSFW_GENRE_IDS.forEach {
-                    addQueryParameter("genres[]", "-$it")
-                }
-            }
+            addQueryParameter("content_rating", preferences.contentRatingMode())
         }.build()
 
         return GET(url, headers)
@@ -106,11 +98,9 @@ class Comix :
                 setQueryParameter("order[relevance]", "desc")
             }
 
-            if (preferences.hideNsfw()) {
-                NSFW_GENRE_IDS.forEach {
-                    addQueryParameter("genres[]", "-$it")
-                }
-            }
+            val contentRating = filters.filterIsInstance<ContentRatingFilter>().firstOrNull()?.apiValue()
+                ?: preferences.contentRatingMode()
+            addQueryParameter("content_rating", contentRating)
 
             addQueryParameter("limit", "50")
             addQueryParameter("page", page.toString())
@@ -137,7 +127,7 @@ class Comix :
     }
 
     // ========================= Filters =========================
-    override fun getFilterList() = Filters().getFilterList()
+    override fun getFilterList() = Filters(contentRatingDefault = preferences.contentRatingMode()).getFilterList()
 
     // ========================= Details =========================
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -307,11 +297,14 @@ class Comix :
             setDefaultValue("large")
         }.let(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = NSFW_PREF
-            title = "Hide NSFW content"
-            summary = "Hides NSFW content from popular, latest, and search lists."
-            setDefaultValue(true)
+        ListPreference(screen.context).apply {
+            key = PREF_CONTENT_RATING
+            title = "Content rating"
+            summary = "Acts as a maximum: each option also includes everything below it. " +
+                "Search filter overrides this per-search. Current: %s."
+            entries = arrayOf("Safe", "Suggestive", "Erotica", "Pornographic")
+            entryValues = ContentRatingFilter.API_VALUES
+            setDefaultValue("suggestive")
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -349,15 +342,14 @@ class Comix :
 
     private fun SharedPreferences.scorePosition() = getString(PREF_SCORE_POSITION, "top") ?: "top"
 
-    private fun SharedPreferences.hideNsfw() = getBoolean(NSFW_PREF, true)
+    /** Site API `content_rating` cap: safe | suggestive | erotica | pornographic. Each value includes everything below it. */
+    private fun SharedPreferences.contentRatingMode(): String = getString(PREF_CONTENT_RATING, "suggestive") ?: "suggestive"
 
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
-        private const val NSFW_PREF = "nsfw_pref"
+        private const val PREF_CONTENT_RATING = "pref_content_rating"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
         private const val PREF_SCORE_POSITION = "pref_score_position"
-
-        private val NSFW_GENRE_IDS = listOf("87264", "8", "87265", "13", "87266", "87268")
     }
 }

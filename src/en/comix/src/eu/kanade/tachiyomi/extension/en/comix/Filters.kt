@@ -5,7 +5,25 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 import java.util.Calendar
 
-class Filters {
+/**
+ * Maps to the v1 API `content_rating` query parameter (acts as a max cap — picking [pornographic]
+ * still returns everything below it). Defaults to the user's saved preference value.
+ */
+class ContentRatingFilter(defaultValue: String) :
+    Filter.Select<String>(
+        "Content rating",
+        DISPLAY_NAMES,
+        API_VALUES.indexOf(defaultValue).takeIf { it >= 0 } ?: API_VALUES.indexOf("suggestive"),
+    ) {
+    fun apiValue(): String = API_VALUES[state]
+
+    companion object {
+        val API_VALUES = arrayOf("safe", "suggestive", "erotica", "pornographic")
+        private val DISPLAY_NAMES = arrayOf("Safe", "Suggestive", "Erotica", "Pornographic")
+    }
+}
+
+class Filters(private val contentRatingDefault: String = "suggestive") {
     interface UriFilter {
         fun addToUri(builder: HttpUrl.Builder)
     }
@@ -104,6 +122,7 @@ class Filters {
 
     fun getFilterList() = FilterList(
         SortFilter(getSortables()),
+        ContentRatingFilter(contentRatingDefault),
         StatusFilter(),
         GenreFilter(getGenres()),
         TypeFilter(),
