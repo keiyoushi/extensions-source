@@ -32,7 +32,7 @@ or fixing it directly by submitting a Pull Request.
         - [JSON parsing - `parseAs`](#json-parsing---parseas)
         - [JSON serialization - `toJsonString` / `toJsonRequestBody`](#json-serialization---tojsonstring--tojsonrequestbody)
         - [JSON models (DTOs) and serialization](#json-models-dtos-and-serialization)
-        - [Protobuf parsing and serialization — `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization--parseasproto--torequestbodyproto)
+        - [Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization---parseasproto--torequestbodyproto)
         - [Date parsing - `tryParse`](#date-parsing---tryparse)
         - [Filter helpers - `firstInstance` / `firstInstanceOrNull`](#filter-helpers---firstinstance--firstinstanceornull)
         - [Next.js data extraction - `extractNextJs` / `extractNextJsRsc`](#nextjs-data-extraction---extractnextjs--extractnextjsrsc)
@@ -112,7 +112,7 @@ navigate and build. This will also reduce disk usage and network traffic.
 
 2. Configure sparse checkout.
 
-    There are two modes of pattern matching. The default is cone (🔺) mode.
+    There are two modes of pattern matching. The default is cone mode.
     Cone mode enables significantly faster pattern matching for big monorepos
     and the sparse index feature to make Git commands more responsive.
     In this mode, you can only filter by file path, which is less flexible
@@ -466,7 +466,7 @@ class MyDto(
 }
 ```
 
-##### Protobuf parsing and serialization — `parseAsProto` / `toRequestBodyProto`
+##### Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`
 
 If a source's API uses Protocol Buffers (Protobuf) instead of JSON, use the `keiyoushi.utils` helpers to decode and encode the data. These extensions use a shared `protoInstance` and automatically handle resource management.
 
