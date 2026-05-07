@@ -70,6 +70,14 @@ class ExHentaiNetBR : HttpSource() {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val item = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
+        }
         if (!query.startsWith(PREFIX_SEARCH)) {
             return super.fetchSearchManga(page, query, filters)
         }
