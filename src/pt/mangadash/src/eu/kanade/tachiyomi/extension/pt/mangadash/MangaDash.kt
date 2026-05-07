@@ -252,7 +252,7 @@ class MangaDash :
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".neon-title")?.text() ?: "Unknown"
+            title = document.selectFirst(".neon-title")?.text()!!
             author = document.selectFirst(".tag-author")?.text()
             genre = document.select(".manga-tags a.tag:not(.tag-author)").joinToString { it.text() }
             description = document.selectFirst(".manga-description")?.text()
@@ -273,7 +273,7 @@ class MangaDash :
         val chapters = document.select(".chapters-scroll-container .chapter-row").map { element ->
             SChapter.create().apply {
                 url = element.attr("href")
-                name = element.selectFirst(".chapter-title-group h4")?.text() ?: "Capítulo"
+                name = element.selectFirst(".chapter-title-group h4")?.text()!!
                 val dateStr = element.selectFirst(".chapter-meta-info:has(.fa-calendar)")?.text()
                 date_upload = dateStr?.let { dateFormat.tryParse(it) } ?: 0L
 
