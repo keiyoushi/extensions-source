@@ -174,10 +174,11 @@ class Comix :
 
     override fun chapterListRequest(manga: SManga): Request {
         val hid = manga.url.removePrefix("/").substringBefore("-")
-        return chapterListRequest(hid, 1)
+        val fullSlug = manga.url.removePrefix("/")
+        return chapterListRequest(hid, fullSlug, 1)
     }
 
-    private fun chapterListRequest(mangaHash: String, page: Int): Request {
+    private fun chapterListRequest(mangaHash: String, mangaSlug: String, page: Int): Request {
         val path = "/manga/$mangaHash/chapters"
         val hashToken = generateHash(path)
         val url = apiUrl.toHttpUrl().newBuilder()
@@ -188,6 +189,7 @@ class Comix :
             .addQueryParameter("limit", "100")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("_", hashToken)
+            .addQueryParameter("mangaSlug", mangaSlug) // Add slug as query parameter
             .build()
 
         return GET(url, headers)
@@ -196,6 +198,7 @@ class Comix :
     override fun chapterListParse(response: Response): List<SChapter> {
         val deduplicate = preferences.deduplicateChapters()
         val mangaHash = response.request.url.pathSegments[3]
+        val mangaSlug = response.request.url.queryParameter("mangaSlug") ?: mangaHash // Extract slug
         var resp: ChapterDetailsResponse = response.parseAs()
 
         var chapterMap: LinkedHashMap<Number, Chapter>? = null
@@ -213,7 +216,7 @@ class Comix :
 
         while (hasNext) {
             resp = client
-                .newCall(chapterListRequest(mangaHash, page++))
+                .newCall(chapterListRequest(mangaHash, mangaSlug, page++))
                 .execute()
                 .parseAs()
 
@@ -234,7 +237,7 @@ class Comix :
                 chapterList!!
             }
 
-        return finalChapters.map { it.toSChapter(mangaHash) }
+        return finalChapters.map { it.toSChapter(mangaSlug) }
     }
 
     private fun deduplicateChapters(
