@@ -7,4 +7,5 @@ class DailySuka :
         "DailySuka ",
         "https://dailysuka.com",
         "id",
+        mangaUrlDirectory = "/komik",
     )

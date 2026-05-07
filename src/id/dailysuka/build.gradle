@@ -3,7 +3,7 @@ ext {
     extClass = '.DailySuka'
     themePkg = 'mangathemesia'
     baseUrl = 'https://dailysuka.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
