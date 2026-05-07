@@ -2,6 +2,7 @@ ext {
     extName = 'NewToki'
     extClass = '.NewTokiFactory'
     extVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
