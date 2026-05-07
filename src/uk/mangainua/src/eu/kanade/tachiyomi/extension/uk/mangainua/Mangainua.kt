@@ -184,8 +184,7 @@ class Mangainua :
             val chapterNumber = element.attr("manga-chappter")
             val volumeNumber = element.attr("manga-tom")
 
-            // Skip creating SChapter if both chapterNumber and volumeNumber are empty. 
-            //That's indication of deleted chapter, that site still (for some reason) shows. Like deleted mangas in search, look mangaFromElement
+            // Skip creating SChapter if both chapterNumber and volumeNumber are empty
             if (chapterNumber.isEmpty() && volumeNumber.isEmpty()) {
                 return@mapNotNull null
             }
