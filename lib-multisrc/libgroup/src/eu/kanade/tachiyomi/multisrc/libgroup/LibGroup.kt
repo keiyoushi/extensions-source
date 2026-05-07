@@ -418,20 +418,29 @@ abstract class LibGroup(
 
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeader())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-        client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
-                MangasPage(listOf(details), false)
-            }
-    } else {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response)
-            }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val titleId = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() }
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
+        }
+
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
+            client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
+                    MangasPage(listOf(details), false)
+                }
+        } else {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response)
+                }
+        }
     }
 
     // Search
