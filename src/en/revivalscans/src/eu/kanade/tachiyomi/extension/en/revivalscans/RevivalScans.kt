@@ -28,9 +28,7 @@ class RevivalScans :
 
     private val preferences by getPreferencesLazy()
 
-    private val apiHeaders by lazy {
-        headersBuilder().add("RSC", "1").build()
-    }
+    private val apiHeaders = headersBuilder().add("RSC", "1").build()
 
     // ============================== Popular ==============================
 
@@ -40,7 +38,7 @@ class RevivalScans :
         val dto = response.body.string().extractNextJsRsc<SeriesResponseDto>()
             ?: throw Exception("Failed to extract popular manga")
 
-        val mangas = dto.series.map { it.toSManga() }
+        val mangas = dto.series.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
 
@@ -68,30 +66,25 @@ class RevivalScans :
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, apiHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.body.string().extractNextJsRsc<ManhwaResponseDto>()
             ?: throw Exception("Failed to extract manga details")
 
-        return dto.manhwa.toSManga()
+        return dto.manhwa.toSManga(baseUrl)
     }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, apiHeaders)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", apiHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.body.string().extractNextJsRsc<ManhwaResponseDto>()
             ?: throw Exception("Failed to extract chapter list")
 
         val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, PREF_SHOW_PREMIUM_DEFAULT)
-
-        return dto.manhwa.chapters
-            ?.filter { showPremium || !it.isPremium }
-            ?.map { it.toSChapter(dto.manhwa.id) }
-            ?.sortedByDescending { it.chapter_number }
-            ?: emptyList()
+        return dto.manhwa.toSChapterList(showPremium)
     }
 
     // =============================== Pages ===============================
@@ -114,7 +107,7 @@ class RevivalScans :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
-    // ============================== Settings ==============================
+    // ============================= Utilities =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
