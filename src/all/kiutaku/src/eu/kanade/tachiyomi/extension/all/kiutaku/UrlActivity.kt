@@ -17,22 +17,17 @@ class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.isNotEmpty()) {
-            val id = pathSegments.first()
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Kiutaku.PREFIX_SEARCH}$id")
-                putExtra("filter", packageName)
-            }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e(tag, e.toString())
-            }
-        } else {
-            Log.e(tag, "could not parse uri from intent $intent")
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
+
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e(tag, "Unable to launch activity", e)
         }
 
         finish()
