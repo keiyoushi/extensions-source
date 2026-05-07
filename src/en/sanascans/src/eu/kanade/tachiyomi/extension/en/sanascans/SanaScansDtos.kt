@@ -76,6 +76,16 @@ class MangaPostDto(
     val chapters: List<ChapterDto>? = null,
 )
 
+@Serializable
+class AstroSeriesPropsDto(
+    val postTitle: String? = null,
+    val postContent: String? = null,
+    val featuredImage: String? = null,
+    val seriesStatus: String? = null,
+    val alternativeTitles: String? = null,
+    val genres: List<GenreDto> = emptyList(),
+)
+
 class SitemapSeries(
     val slug: String,
     val title: String,

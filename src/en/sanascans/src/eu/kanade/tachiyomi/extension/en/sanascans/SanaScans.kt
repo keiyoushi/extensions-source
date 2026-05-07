@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
@@ -39,7 +38,6 @@ class SanaScans :
     override val name = "Sana Scans"
     override val lang = "en"
     override val baseUrl = "https://sanascans.com"
-    private val apiUrl = "https://api.sanascans.com"
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
@@ -77,42 +75,18 @@ class SanaScans :
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("api/posts")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("perPage", "30")
-            .addQueryParameter("tag", "latestUpdate")
-            .addQueryParameter("isNovel", "false")
-            .build()
-
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val json = response.parseAs<JsonObject>()
-        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-
-        val posts = (json["posts"] as? JsonArray)
-            ?.mapNotNull { it as? JsonObject }
-            .orEmpty()
-
-        val entries = posts.mapNotNull { post ->
-            val slug = post["slug"]?.asString() ?: return@mapNotNull null
-            val title = post["postTitle"]?.asString() ?: slugToTitle(slug)
-            val thumbnail = post["featuredImage"]?.asString()
-
-            SManga.create().apply {
-                url = slug
-                this.title = title
-                thumbnail_url = thumbnail
+        val document = response.asJsoup()
+        val entries = document.select("figure:has(a[href*=\"/series/\"][href*=\"/chapter-\"])")
+            .mapNotNull { figure ->
+                figure.selectFirst("a[href*=\"/series/\"]:not([href*=\"/chapter-\"])")
+                    ?.let(::parseSeriesAnchor)
             }
-        }
+            .distinctBy { it.url }
 
-        val totalCount = json["totalCount"]?.asInt() ?: 0
-        val hasNextPage = page * LATEST_PAGE_SIZE < totalCount
-
-        return MangasPage(entries, hasNextPage)
+        return MangasPage(entries, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -171,18 +145,19 @@ class SanaScans :
 
     private fun parseMangaDetails(response: Response): SManga {
         val document = response.asJsoup()
-        val seriesJson = document.extractNextJs<SeriesDto>(
-            predicate = { it is JsonObject && "post" in it },
-        )?.post
+        val seriesProps = runCatching {
+            document.extractAstroProp<AstroSeriesPropsDto>("postTitle")
+        }.getOrNull()
 
-        val title = seriesJson?.postTitle
+        val title = seriesProps?.postTitle?.takeIf(String::isNotBlank)
             ?: document.selectFirst("h1[itemprop=name]")?.text()
                 ?.takeIf(String::isNotEmpty)
             ?: document.selectFirst("meta[property=og:title]")?.attr("content")
                 ?.substringBefore(" Manga - Sana scans")
             ?: document.title()
 
-        val description = seriesJson?.postContent?.let { Jsoup.parse(it).text() }
+        val description = seriesProps?.postContent
+            ?.let { Jsoup.parse(it).text().trim() }
             ?.takeIf(String::isNotEmpty)
             ?: document.selectFirst("[itemprop=description]")?.text()
                 ?.takeIf(String::isNotEmpty)
@@ -205,27 +180,25 @@ class SanaScans :
                 extractPostContent(document.html())
             }
 
-        val altTitles = seriesJson?.alternativeTitles
-            ?.takeIf { it.isNotBlank() }
+        val altTitles = seriesProps?.alternativeTitles
+            ?.takeIf(String::isNotBlank)
             ?.let { "\n\nAlternative Titles: $it" }
             ?: ""
 
-        val thumbnailUrl = document.selectFirst("meta[property=og:image]")?.attr("content")
+        val thumbnailUrl = realCoverUrl(document, seriesProps?.featuredImage)
 
-        val genres = seriesJson?.genres?.joinToString { it.name }
-            ?: runCatching { extractJsonArray(document.html(), "genres").parseAs<List<GenreDto>>() }
-                .getOrNull()
-                ?.joinToString { it.name }
+        val genres = seriesProps?.genres
+            ?.joinToString { it.name.trim() }
+            ?.takeIf(String::isNotBlank)
 
-        val status = seriesJson?.seriesStatus?.let(::parseStatusText)
+        val status = seriesProps?.seriesStatus
+            ?.let(::parseStatusText)
             ?: parseStatus(document)
 
         return SManga.create().apply {
             this.title = title
             this.description = (description ?: "") + altTitles
             this.thumbnail_url = thumbnailUrl
-            this.author = seriesJson?.author
-            this.artist = seriesJson?.artist
             this.genre = genres
             this.status = status
         }
@@ -235,28 +208,18 @@ class SanaScans :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val seriesJson = document.extractNextJs<SeriesDto>(
-            predicate = { it is JsonObject && "post" in it },
-        )?.post
         val seriesSlug = seriesSlug(response.request.url) ?: ""
 
-        val chapters = seriesJson?.chapters
-            ?: run {
-                val chaptersJson = extractJsonArray(document.html(), "chapters")
-                chaptersJson.parseAs<List<ChapterDto>>()
+        return document.select("a[href^=\"/series/$seriesSlug/chapter-\"]")
+            .distinctBy { it.attr("href") }
+            .mapNotNull { anchor ->
+                val isLocked = anchor.selectFirst("svg") != null
+                if (isLocked && !preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false)) {
+                    return@mapNotNull null
+                }
+
+                anchor.toSChapter(isLocked)
             }
-
-        return chapters.mapNotNull { chapter ->
-            val isLocked = chapter.isPermanentlyLocked == true ||
-                (chapter.price ?: 0) > 0 ||
-                chapter.unlockAt != null
-
-            if (isLocked && !preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false)) {
-                return@mapNotNull null
-            }
-
-            chapter.toSChapter(seriesSlug, isLocked)
-        }
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -266,15 +229,17 @@ class SanaScans :
             throw Exception("Unlock chapter in webview")
         }
 
-        val pages = document.extractNextJs<SeriesDto>(
-            predicate = { it is JsonObject && "chapter" in it },
-        )?.chapter?.images
-            ?: document.getNextJson("images").parseAs<List<PageParseDto>>()
+        val pages = document.select("img[data-reader-page-image][src]")
+            .map { image -> image.attr("abs:src").ifBlank { image.attr("src") } }
+
+        if (pages.isEmpty()) {
+            throw Exception("Unable to find chapter pages")
+        }
 
         val sortedPages = if (sortPagesByFilename) {
             pages.sortedWith(
                 compareBy { page ->
-                    val filename = page.url.substringAfterLast('/')
+                    val filename = page.substringAfterLast('/')
                     val number = Regex("\\d+").find(filename)?.value?.toIntOrNull() ?: Int.MAX_VALUE
                     number
                 },
@@ -284,7 +249,7 @@ class SanaScans :
         }
 
         return sortedPages.mapIndexed { idx, p ->
-            Page(idx, imageUrl = p.url.replace(" ", "%20"))
+            Page(idx, imageUrl = p.replace(" ", "%20"))
         }
     }
 
@@ -311,9 +276,7 @@ class SanaScans :
             ?: element.text().takeIf(String::isNotEmpty)
             ?: slugToTitle(slug)
 
-        val thumbnailUrl = element.selectFirst("img[src]")?.let { img ->
-            img.attr("abs:src")
-        }
+        val thumbnailUrl = element.selectFirst("img[src]")?.attr("abs:src")
 
         return SManga.create().apply {
             this.url = slug
@@ -357,24 +320,6 @@ class SanaScans :
         "dropped" -> SManga.CANCELLED
         "onhold", "hiatus" -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
-    }
-
-    private fun extractJsonArray(body: String, key: String): String {
-        val patterns = listOf(
-            Regex(""""$key"\s*:\s*(\[[\s\S]*?])""", RegexOption.DOT_MATCHES_ALL),
-            Regex("""\\\"$key\\\"\s*:\s*(\[[\s\S]*?])""", RegexOption.DOT_MATCHES_ALL),
-        )
-
-        val match = patterns.firstNotNullOfOrNull { pattern ->
-            pattern.find(body)?.groupValues?.getOrNull(1)
-        }
-
-        val raw = match ?: throw Exception("Unable to find $key data")
-        return if (raw.contains("\\\"")) {
-            "\"$raw\"".parseAs<String>()
-        } else {
-            raw
-        }
     }
 
     private fun extractPostContent(body: String): String? {
@@ -445,6 +390,82 @@ class SanaScans :
     }
 }
 
+private fun org.jsoup.nodes.Element.toSChapter(locked: Boolean): SChapter {
+    val href = attr("href")
+    val chapterSlug = href.substringAfterLast('/')
+    val numberText = Regex("""chapter-([^/?#]+)""")
+        .find(chapterSlug)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.replace('-', '.')
+        ?: text().substringAfter("Chapter").trim()
+
+    val cleanedTitle = selectFirst("span")?.text()
+        ?.substringAfter("Chapter $numberText")
+        ?.trim()
+        .orEmpty()
+    val chapterTitle = cleanedTitle
+        .takeIf { it.isNotEmpty() && it.any { char -> char.isLetterOrDigit() } }
+        ?.let { ": $it" }
+        ?: ""
+    val prefix = if (locked) "🔒 " else ""
+
+    return SChapter.create().apply {
+        url = href
+        name = "${prefix}Chapter $numberText$chapterTitle"
+    }
+}
+
+private fun realCoverUrl(document: Document, fallback: String?): String? = document.selectFirst("img[alt^=\"Cover of \"][src]")?.attr("abs:src")
+    ?: extractJsonLdImageUrls(document).firstOrNull { it.contains("storage.sanascans.com") }
+    ?: fallback
+    ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+        ?.takeUnless { it.contains("/api/og-image/") }
+
+private fun extractJsonLdImageUrls(document: Document): List<String> {
+    val scripts = document.select("script[type=\"application/ld+json\"]")
+    if (scripts.isEmpty()) return emptyList()
+
+    return scripts.flatMap { script ->
+        val raw = script.data().takeIf(String::isNotEmpty) ?: return@flatMap emptyList()
+        val element = runCatching { raw.parseAs<JsonElement>() }.getOrNull() ?: return@flatMap emptyList()
+        collectJsonLdImageUrls(element)
+    }.distinct()
+}
+
+private fun collectJsonLdImageUrls(element: JsonElement): List<String> = when (element) {
+    is JsonObject -> {
+        val current = listOfNotNull(element["url"]?.asString(), element["@id"]?.asString())
+            .filter { it.startsWith("http") && looksLikeImageUrl(it) }
+        current + element.values.flatMap(::collectJsonLdImageUrls)
+    }
+
+    is JsonArray -> element.flatMap(::collectJsonLdImageUrls)
+
+    else -> emptyList()
+}
+
+private inline fun <reified T> Document.extractAstroProp(key: String): T {
+    val prop = selectFirst("[props*=$key]")?.attr("props")
+        ?: throw Exception("Unable to find prop with $key")
+    val json = prop.parseAs<JsonElement>()
+    val unwrapped = json.unwrapAstro()
+
+    return unwrapped.parseAs()
+}
+
+private inline fun <reified T> Response.extractAstroProp(key: String): T = asJsoup().extractAstroProp(key)
+
+private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
+    is JsonArray -> when {
+        size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+        else -> JsonArray(map { it.unwrapAstro() })
+    }
+
+    is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
+    else -> this
+}
+
 private fun extractJsonLdDescriptions(document: Document): List<String> {
     val scripts = document.select("script[type=\"application/ld+json\"]")
     if (scripts.isEmpty()) return emptyList()
@@ -473,11 +494,6 @@ private fun JsonElement.asString(): String? {
     return if (primitive.isString) primitive.content else null
 }
 
-private fun JsonElement.asInt(): Int? {
-    val primitive = this as? JsonPrimitive ?: return null
-    return primitive.content.toIntOrNull()
-}
-
 private fun looksLikeDescription(text: String): Boolean {
     val trimmed = text.trim()
     if (trimmed.length < 20) return false
@@ -496,33 +512,16 @@ private fun looksLikeDescription(text: String): Boolean {
 
     return ratio <= 0.12
 }
+
+private fun looksLikeImageUrl(url: String): Boolean = url.endsWith(".jpg", ignoreCase = true) ||
+    url.endsWith(".jpeg", ignoreCase = true) ||
+    url.endsWith(".png", ignoreCase = true) ||
+    url.endsWith(".webp", ignoreCase = true)
 private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
 private fun String.toFragmentQueryParameter(name: String): String? {
     val url = "https://localhost/?$this".toHttpUrlOrNull() ?: return null
     return url.queryParameter(name)
-}
-
-private fun Document.getNextJson(key: String): String {
-    val data = selectFirst("script:containsData($key)")
-        ?.data()
-        ?: throw Exception("Unable to retrieve NEXT data")
-
-    val keyIndex = data.indexOf(key)
-    val start = data.indexOf('[', keyIndex)
-
-    var depth = 1
-    var i = start + 1
-
-    while (i < data.length && depth > 0) {
-        when (data[i]) {
-            '[' -> depth++
-            ']' -> depth--
-        }
-        i++
-    }
-
-    return "\"${data.substring(start, i)}\"".parseAs<String>()
 }
 
 private fun seriesSlug(url: HttpUrl): String? {
@@ -532,5 +531,4 @@ private fun seriesSlug(url: HttpUrl): String? {
     return segments[seriesIndex + 1]
 }
 
-private const val LATEST_PAGE_SIZE = 30
 private const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
