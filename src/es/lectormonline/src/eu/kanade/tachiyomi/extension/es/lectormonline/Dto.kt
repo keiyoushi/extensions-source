@@ -30,7 +30,7 @@ class ComicDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        url = urlPath ?: comicPath ?: ""
+        url = (urlPath ?: comicPath)!!
         thumbnail_url = urlCover ?: coverImage
         this.description = this@ComicDto.description
         genre = genres?.joinToString()
@@ -56,7 +56,7 @@ class ComicDetailsDto(
     @SerialName("url_pages") val urlPages: List<String>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
-        this.title = this@ComicDetailsDto.title ?: this@ComicDetailsDto.name ?: ""
+        this.title = (this@ComicDetailsDto.title ?: this@ComicDetailsDto.name)!!
         this.description = this@ComicDetailsDto.description
         thumbnail_url = urlCover ?: coverImage
         genre = genres?.joinToString { it.name }
@@ -85,7 +85,7 @@ class ChapterDto(
 ) {
     fun toSChapter(groupName: String?) = SChapter.create().apply {
         name = this@ChapterDto.title ?: "Capítulo ${chapterNumber.removeSuffix(".0")}"
-        url = chapterPath ?: ""
+        url = chapterPath!!
         scanlator = groupName
         chapter_number = chapterNumber.toFloatOrNull() ?: -1f
     }
