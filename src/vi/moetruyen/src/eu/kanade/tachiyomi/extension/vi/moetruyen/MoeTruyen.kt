@@ -334,15 +334,11 @@ class MoeTruyen :
         customUrlPref.let(screen::addPreference)
     }
 
-    private fun getPrefBaseUrl(): String {
-        val index = preferences.getString(PREF_DOMAIN, "default")!!
-        return when (index) {
-            "default" -> DEFAULT_DOMAIN
-            "global" -> DOMAIN_GLOBAL
-            "custom" -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
-            else -> DEFAULT_DOMAIN
-        }.removePrefix("/")
-    }
+    private fun getPrefBaseUrl(): String = when (preferences.getPrefUrl()) {
+        UrlMode.DEFAULT -> DEFAULT_DOMAIN
+        UrlMode.GLOBAL -> DOMAIN_GLOBAL
+        UrlMode.CUSTOM -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
+    }.removeSuffix("/")
     enum class UrlMode {
         DEFAULT,
         GLOBAL,
