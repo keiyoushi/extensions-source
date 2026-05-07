@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -174,7 +175,14 @@ class Akuma(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID)) {
+    ): Observable<MangasPage> = if (query.startsWith("https://")) {
+        val url = query.toHttpUrl()
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported url")
+        }
+        val id = url.pathSegments[1]
+        fetchSearchManga(page, "$PREFIX_ID$id", filters)
+    } else if (query.startsWith(PREFIX_ID)) {
         val url = "/g/${query.substringAfter(PREFIX_ID)}"
         val manga = SManga.create().apply { this.url = url }
         fetchMangaDetails(manga).map {
