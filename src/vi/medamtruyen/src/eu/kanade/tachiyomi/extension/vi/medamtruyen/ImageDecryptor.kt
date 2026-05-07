@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.medamtruyen
 
 import android.util.Base64
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import org.jsoup.Jsoup
 import javax.crypto.Cipher
@@ -72,8 +73,8 @@ object ImageDecryptor {
         val saltString = encryptedData.salt ?: error("Missing salt")
 
         val ciphertext = Base64.decode(ciphertextString, Base64.DEFAULT)
-        val ivBytes = hexStringToByteArray(ivString)
-        val saltBytes = hexStringToByteArray(saltString)
+        val ivBytes = ivString.decodeHex()
+        val saltBytes = saltString.decodeHex()
 
         val keySpec = PBEKeySpec(
             passphrase.toCharArray(),
@@ -134,15 +135,5 @@ object ImageDecryptor {
                 .ifEmpty { imageElement.absUrl("src") }
                 .takeIf { it.isNotBlank() }
         }.distinct()
-    }
-
-    private fun hexStringToByteArray(hex: String): ByteArray {
-        val bytes = ByteArray(hex.length / 2)
-        var index = 0
-        while (index < hex.length) {
-            bytes[index / 2] = ((Character.digit(hex[index], 16) shl 4) + Character.digit(hex[index + 1], 16)).toByte()
-            index += 2
-        }
-        return bytes
     }
 }
