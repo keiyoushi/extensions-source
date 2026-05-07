@@ -36,7 +36,7 @@ jobs:
       - id: generate-matrices
         name: Generate build matrices
         run: |
-          python ./.github/scripts/generate-build-matrices.py origin/main Debug
+          python ./.github/scripts/generate-build-matrices.py origin/main Release
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
