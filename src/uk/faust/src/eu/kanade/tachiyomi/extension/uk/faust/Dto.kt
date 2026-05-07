@@ -1,6 +1,27 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+
+@Serializable
+class SearchRequestBody(
+    var searchQuery: String? = null,
+    var page: Int? = null,
+    var pageSize: Int = 30,
+    var sortBy: String? = null,
+    var mangaType: String? = null,
+    var translationStatus: String? = null,
+    var publicationStatus: String? = null,
+    var ageBracket: String? = null,
+    var yearFrom: String? = null,
+    var yearTo: String? = null,
+    var minChapters: String? = null,
+    var maxChapters: String? = null,
+    var genreIds: JsonArray? = null,
+    var excludeGenreIds: JsonArray? = null,
+    var tagIds: JsonArray? = null,
+    var excludeTagIds: JsonArray? = null,
+)
 
 @Serializable
 class SearchResponseDto(
