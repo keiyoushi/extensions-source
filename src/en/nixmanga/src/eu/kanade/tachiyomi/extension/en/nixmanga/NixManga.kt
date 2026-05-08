@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.nixmanga
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -46,10 +47,7 @@ class NixManga : HttpSource() {
             .build()
     }
 
-    private fun apiRequest(endpoint: String, url: String): Request = Request.Builder()
-        .url(url)
-        .headers(getApiHeaders(endpoint))
-        .build()
+    private fun apiRequest(endpoint: String, url: String): Request = GET(url, getApiHeaders(endpoint))
 
     // ============================== Popular ==============================
 
@@ -61,7 +59,7 @@ class NixManga : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<PaginatedComicsDto>()
-        return MangasPage(dto.comicList.map { it.toSManga() }, dto.hasNextPage)
+        return MangasPage(dto.comics.map { it.toSManga() }, dto.hasNextPage)
     }
 
     // ============================== Latest ===============================
@@ -122,10 +120,10 @@ class NixManga : HttpSource() {
 
     // ============================== Details ==============================
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/")
+        val slug = manga.url
         val endpoint = "/api/v1/comics/slug/$slug"
         val url = "$apiUrl/comics/slug/$slug"
         return apiRequest(endpoint, url)
@@ -138,7 +136,7 @@ class NixManga : HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#")
 
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/")
+        val slug = manga.url
         return chapterListRequestPaginated(slug, 1)
     }
 
