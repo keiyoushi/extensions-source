@@ -1,10 +1,12 @@
 ext {
     extName = 'Holotoon'
     extClass = '.Holotoon'
-    themePkg = 'madara'
-    baseUrl = 'https://01.holotoon.site'
-    overrideVersionCode = 0
+    extVersionCode = 50
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:randomua'))
+}
