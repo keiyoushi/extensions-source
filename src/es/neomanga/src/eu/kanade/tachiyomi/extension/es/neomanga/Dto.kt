@@ -18,11 +18,10 @@ class MangaDto(
     val status: String? = null,
     val genres: List<String> = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@MangaDto.title
-        this.url = "/manga/$slug"
-        // Wrap external URLs through the Next.js image proxy
-        this.thumbnail_url = wrapCoverUrl(coverImageUrl)
+        this.url = slug
+        this.thumbnail_url = wrapCoverUrl(coverImageUrl, baseUrl)
         this.description = synopsis
         this.genre = genres.joinToString(", ")
         this.status = when (this@MangaDto.status) {
@@ -61,15 +60,10 @@ class MangadexPagesDto(
     val pages: List<String> = emptyList(),
 )
 
-/**
- * Wrap external cover URLs through the Next.js image proxy.
- * The site uses /_next/image?url=...&w=640&q=75 to serve covers,
- * which fetches them server-side (bypassing MangaDex's Referer check).
- */
-private fun wrapCoverUrl(url: String?): String? {
+private fun wrapCoverUrl(url: String?, baseUrl: String): String? {
     if (url == null) return null
     if (url.contains("/_next/image")) return url
     if (url.startsWith("/")) return url
     val encoded = java.net.URLEncoder.encode(url, "UTF-8").replace("+", "%20")
-    return "https://www.neomanga.online/_next/image?url=$encoded&w=640&q=75"
+    return "$baseUrl/_next/image?url=$encoded&w=640&q=75"
 }
