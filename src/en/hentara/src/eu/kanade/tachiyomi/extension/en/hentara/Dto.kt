@@ -11,7 +11,7 @@ class HentaraIndexDto(
 
 @Serializable
 class HentaraComicDto(
-    val title: String? = null,
+    val title: String,
     private val slug: String,
     @SerialName("thumbnail_url") private val thumbnailUrl: String? = null,
     @SerialName("view_count") val viewCount: Int = 0,
@@ -20,7 +20,7 @@ class HentaraComicDto(
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/manhwa/$slug"
-        this.title = this@HentaraComicDto.title!!
+        title = this@HentaraComicDto.title
         thumbnail_url = thumbnailUrl
         genre = genres.joinToString { it.name }
     }
@@ -39,7 +39,7 @@ class HentaraMangaDto(
 
 @Serializable
 class HentaraComicFullDto(
-    private val title: String? = null,
+    private val title: String,
     val slug: String,
     private val description: String? = null,
     @SerialName("thumbnail_url") private val thumbnailUrl: String? = null,
@@ -47,9 +47,9 @@ class HentaraComicFullDto(
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/manhwa/$slug"
-        this.title = this@HentaraComicFullDto.title!!
+        title = this@HentaraComicFullDto.title
         thumbnail_url = thumbnailUrl
-        this.description = this@HentaraComicFullDto.description
+        description = this@HentaraComicFullDto.description
         genre = genres.joinToString { it.name }
     }
 }
