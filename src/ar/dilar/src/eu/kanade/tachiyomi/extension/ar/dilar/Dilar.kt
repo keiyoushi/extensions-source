@@ -13,12 +13,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -31,7 +28,6 @@ private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"
 private val MIRROR_PREF_ENTRIES = arrayOf("Dilar (dilar.tube)", "Golden (golden.rest)")
 private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://dilar.tube", "https://golden.rest")
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
-
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
 class Dilar :
@@ -41,9 +37,10 @@ class Dilar :
     override val name = "Dilar"
     override val lang = "ar"
     override val supportsLatest = true
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
+    override val versionId = 2
     private val json = Json { ignoreUnknownKeys = true }
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
+
     override val baseUrl by lazy { mirrorPref() }
     private val cdnUrl by lazy { baseUrl }
 
@@ -56,12 +53,10 @@ class Dilar :
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/series?page=$page&sort=views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val list = json.decodeFromString<DilarSeriesListDto>(response.body.string())
-        val mangas = list.series.mapNotNull { item ->
-            runCatching { item.toSManga(cdnUrl) }.getOrNull()?.takeIf {
-                runCatching { it.title.isNotBlank() }.getOrElse { false }
-            }
-        }
+        val list = response.parseAs<DilarSeriesListDto>(json)
+        val mangas = list.series
+            .filter { !it.title.isNullOrBlank() }
+            .map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, list.hasNextPage)
     }
 
@@ -74,25 +69,18 @@ class Dilar :
     // ── Search ────────────────────────────────────────────────────────────
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = buildJsonObject {
-            put("query", query)
-            put(
-                "includes",
-                buildJsonArray {
-                    add("Manga")
-                    add("Team")
-                    add("Member")
-                },
-            )
-        }.toString().toRequestBody("application/json".toMediaType())
+        val body = """{"query":"$query","includes":["Manga","Team","Member"]}"""
+            .toRequestBody("application/json".toMediaType())
         return POST("$baseUrl/api/search/quick_search", headers, body)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val results = json.decodeFromString<List<DilarSearchGroupDto>>(response.body.string())
+        val body = response.body.string()
+        val results = json.decodeFromString<List<DilarSearchGroupDto>>(body)
         val mangas = results
             .filter { it.clazz == "Manga" }
             .flatMap { it.data }
+            .filter { !it.title.isNullOrBlank() }
             .map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
@@ -101,14 +89,14 @@ class Dilar :
 
     override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = json.decodeFromString<DilarSeriesDto>(response.body.string()).toSManga(cdnUrl)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DilarSeriesDto>(json).toSManga(cdnUrl)
 
     // ── Chapter list ──────────────────────────────────────────────────────
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/series/${mangaId(manga)}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = json.decodeFromString<DilarChapterListDto>(response.body.string())
+        val dto = response.parseAs<DilarChapterListDto>(json)
         return dto.chapters
             .flatMap { chapter ->
                 chapter.releases
@@ -124,7 +112,7 @@ class Dilar :
     override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/chapters/${releaseId(chapter)}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val dto = json.decodeFromString<DilarReleaseDetailDto>(response.body.string())
+        val dto = response.parseAs<DilarReleaseDetailDto>(json)
         return dto.pages
             .sortedBy { it.order }
             .mapIndexed { index, page ->

@@ -1,8 +1,7 @@
 ext {
     extName = 'Dilar'
     extClass = '.Dilar'
-    themePkg = 'gmanga'
-    overrideVersionCode = 4
+    extVersionCode = 7
 }
 
 apply from: "$rootDir/common.gradle"

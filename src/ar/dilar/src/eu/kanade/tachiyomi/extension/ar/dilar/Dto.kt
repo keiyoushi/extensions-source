@@ -10,6 +10,12 @@ import java.text.SimpleDateFormat
 // ── Search ────────────────────────────────────────────────────────────────
 
 @Serializable
+class DilarSearchPayload(
+    val query: String,
+    val includes: List<String> = listOf("Manga", "Team", "Member"),
+)
+
+@Serializable
 class DilarSearchGroupDto(
     @SerialName("class") val clazz: String,
     val data: List<DilarSearchItemDto> = emptyList(),
