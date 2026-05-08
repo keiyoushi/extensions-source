@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ko.newtoki
+package eu.kanade.tachiyomi.extension.ko.ntk
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

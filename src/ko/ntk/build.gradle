@@ -1,6 +1,6 @@
 ext {
-    extName = 'NewToki'
-    extClass = '.NewTokiFactory'
+    extName = 'NTK'
+    extClass = '.NTKFactory'
     extVersionCode = 1
     isNsfw = true
 }

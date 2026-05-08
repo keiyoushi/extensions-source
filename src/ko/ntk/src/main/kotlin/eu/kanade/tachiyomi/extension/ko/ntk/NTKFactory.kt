@@ -1,8 +1,9 @@
-package eu.kanade.tachiyomi.extension.ko.newtoki
+package eu.kanade.tachiyomi.extension.ko.ntk
 
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,14 +17,14 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 
-class NewTokiFactory : SourceFactory {
+class NTKFactory : SourceFactory {
     override fun createSources() = listOf(
-        NewTokiManga(),
-        NewTokiWebtoon(),
+        NTKManga(),
+        NTKWebtoon(),
     )
 }
 
-abstract class NewTokiBase(
+abstract class NTKBase(
     override val name: String,
     protected val contentKind: String,
 ) : HttpSource(),
@@ -39,7 +40,14 @@ abstract class NewTokiBase(
             return "https://ntk$domainNumber.com"
         }
 
-    override val baseUrl: String get() = rootUrl
+    // override val baseUrl: String get() = rootUrl
+    protected open val webViewPath: String get() = contentKind
+    override val baseUrl: String get() = "$rootUrl/$webViewPath"
+
+    // Add these overrides to NTKBase — breaks the baseUrl dependency for detail/chapter/page fetching
+    override fun mangaDetailsRequest(manga: SManga) = GET(rootUrl + manga.url, headers)
+    override fun chapterListRequest(manga: SManga) = GET(rootUrl + manga.url, headers)
+    override fun pageListRequest(chapter: SChapter) = GET(rootUrl + chapter.url, headers)
 
     private val headerCleanerInterceptor = Interceptor { chain ->
         val request = chain.request().newBuilder()

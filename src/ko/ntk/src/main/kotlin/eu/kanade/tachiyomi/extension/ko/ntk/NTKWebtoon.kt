@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ko.newtoki
+package eu.kanade.tachiyomi.extension.ko.ntk
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
@@ -8,19 +8,23 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class NewTokiWebtoon : NewTokiBase("NewToki Webtoon", "webtoon") {
+class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
+    override val webViewPath = "ing"
 
     // TODO: Pagination relies on infinite scrolling API calls.
     // The `page` parameter is ignored until the AJAX request payload is implemented.
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ing?sort=views", headers)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ing", headers)
+    // override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ing?sort=views", headers)
+    // override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ing", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$rootUrl/ing?sort=views", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/ing", headers)
 
     // Webtoons use the standard card grid for latest updates, not the upd-grid
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            // val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            val url = "$rootUrl/search".toHttpUrl().newBuilder().apply {
                 addQueryParameter("q", query)
                 addQueryParameter("kind", "webtoon")
             }.build()
@@ -39,7 +43,8 @@ class NewTokiWebtoon : NewTokiBase("NewToki Webtoon", "webtoon") {
         val dayParam = dayFilter?.let { wtDayList[it.state].value } ?: ""
         val tagParam = buildWtGenreParam(genreFilter)
 
-        val url = "$baseUrl/$statusParam".toHttpUrl().newBuilder().apply {
+        // val url = "$baseUrl/$statusParam".toHttpUrl().newBuilder().apply {
+        val url = "$rootUrl/$statusParam".toHttpUrl().newBuilder().apply {
             if (sortParam != "new") addQueryParameter("sort", sortParam)
 
             // Site ignores Category and Day filters on the /end page
