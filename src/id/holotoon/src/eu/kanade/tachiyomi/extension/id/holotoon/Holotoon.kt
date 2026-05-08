@@ -137,20 +137,65 @@ class Holotoon :
     }
 
     // =============================== Pages ===============================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun imageRequest(page: Page): Request {
+        val isEncrypted = page.imageUrl!!.contains("#")
 
-        return document.select("#reader-pages > div[data-page-idx]").mapIndexed { index, div ->
-            val secSrc = div.attr("data-sec-src")
-            val xorKey = div.attr("data-xor-key")
-
-            val url = if (secSrc.isNotEmpty() && xorKey.isNotEmpty()) {
-                div.absUrl("data-sec-src") + "#" + xorKey
-            } else {
-                div.selectFirst("img")?.absUrl("src") ?: ""
+        val newHeaders = headers.newBuilder().apply {
+            removeAll("Upgrade-Insecure-Requests")
+            removeAll("Sec-Fetch-User")
+            if (page.url.isNotEmpty()) {
+                set("Referer", page.url)
             }
 
-            Page(index, imageUrl = url)
+            // Replicate correct fetch metadata to prevent 403 blocks
+            if (isEncrypted) {
+                set("Accept", "*/*")
+                set("Sec-Fetch-Dest", "empty")
+                set("Sec-Fetch-Mode", "cors")
+                set("Sec-Fetch-Site", "same-origin")
+            } else {
+                set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                set("Sec-Fetch-Dest", "image")
+                set("Sec-Fetch-Mode", "no-cors")
+                set("Sec-Fetch-Site", "same-origin")
+            }
+        }.build()
+
+        return GET(page.imageUrl!!, newHeaders)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val referer = response.request.url.toString()
+
+        val pageElements = document.select("#reader-pages [data-sec-src], #reader-pages img[src]:not([src='']), #reader-pages img[data-src]")
+
+        if (pageElements.isEmpty()) {
+            val title = document.title()
+            if (title.contains("Just a moment", true) || title.contains("Cloudflare", true)) {
+                throw Exception("Tolong selesaikan Captcha di WebView")
+            }
+
+            val text = document.text()
+            if (text.contains("Login required", true) || text.contains("Premium", true) || document.select("script:containsData(open-login-modal)").isNotEmpty()) {
+                throw Exception("Chapter ini membutuhkan Login atau Koin. Silakan buka di WebView.")
+            }
+
+            throw Exception("Tidak ada halaman ditemukan. Kemungkinan chapter kosong atau dikunci.")
+        }
+
+        return pageElements.mapNotNull { element ->
+            val secSrc = element.attr("data-sec-src").trim()
+            val xorKey = element.attr("data-xor-key").trim()
+
+            if (secSrc.isNotEmpty() && xorKey.isNotEmpty()) {
+                element.absUrl("data-sec-src") + "#" + xorKey
+            } else {
+                val src = element.attr("abs:data-src").takeIf { it.isNotEmpty() } ?: element.absUrl("src")
+                src.takeIf { it.isNotEmpty() }
+            }
+        }.distinct().mapIndexed { index, url ->
+            Page(index, url = referer, imageUrl = url)
         }
     }
 
@@ -213,16 +258,27 @@ class Holotoon :
         val xorKey = url.fragment
 
         val response = chain.proceed(request)
-        if (xorKey.isNullOrEmpty()) return response
+        if (xorKey.isNullOrEmpty() || !response.isSuccessful) return response
 
         val decodedKey = try {
-            Base64.decode(xorKey, Base64.URL_SAFE).takeIf { it.isNotEmpty() } ?: xorKey.toByteArray()
+            // Replicate JS url-safe base64 logic to safely handle missing padding
+            val b64 = xorKey.replace("-", "+").replace("_", "/").let {
+                it.padEnd(it.length + (4 - it.length % 4) % 4, '=')
+            }
+            Base64.decode(b64, Base64.DEFAULT).takeIf { it.isNotEmpty() } ?: xorKey.toByteArray()
         } catch (_: Exception) {
             xorKey.toByteArray()
         }
 
         val body = response.body
         val contentType = body.contentType()
+        val keyLen = decodedKey.size
+
+        if (keyLen == 0) return response
+
+        val shiftArray = ByteArray(keyLen) { i ->
+            (decodedKey[(i + 3) % keyLen].toInt() and 7).toByte()
+        }
 
         // Decrypt the image using streaming avoiding out-of-memory errors
         val xorSource = object : ForwardingSource(body.source()) {
@@ -241,7 +297,13 @@ class Holotoon :
                         val end = cursor.end
 
                         for (i in start until end) {
-                            data[i] = (data[i].toInt() xor decodedKey[keyPos % decodedKey.size].toInt()).toByte()
+                            val k = keyPos % keyLen
+                            val w = shiftArray[k].toInt()
+                            val b = data[i].toInt() and 0xFF
+
+                            // Rotate right then XOR identically to JS
+                            val rotated = ((b ushr w) or (b shl (8 - w))) and 0xFF
+                            data[i] = (rotated xor (decodedKey[k].toInt() and 0xFF)).toByte()
                             keyPos++
                         }
                     }
