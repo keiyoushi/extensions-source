@@ -21,8 +21,7 @@ class NTKManga : NTKBase("NTK Manga", "manhwa") {
     }
 
     // Latest: fetches /manhwa/updates — all 200 entries are embedded in the RSC payload, parsed in NTKBase
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$rootUrl/manhwa/updates", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/manhwa/updates", headers)
 
     // Search: text query uses HTML search endpoint; filters use JSON API with status/sort/genre params
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

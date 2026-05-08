@@ -98,4 +98,3 @@ fun buildWtGenreParam(genreFilter: WtGenreFilter?): String? {
     // OkHttp will automatically url-encode the commas into "%2C" safely
     return if (tags.isNotEmpty()) tags.joinToString(",") else null
 }
-
