@@ -43,32 +43,19 @@ class ProjectSukiReadUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if ((intent?.data?.pathSegments?.size ?: 0) >= 2) {
-            // Project Suki Url Activity Read
-            Log.e("PSUARead", "could not handle URI ${intent?.data} from intent $intent")
-        }
-
-        val intent = Intent().apply {
-            // tell tachiyomi we want to search for something
+        val mainIntent = Intent().apply {
             action = "eu.kanade.tachiyomi.SEARCH"
-            // "filter" for our own extension instead of doing a global search
             putExtra("filter", packageName)
-            // value that will be passed onto the "query" parameter in fetchSearchManga
-            putExtra("query", "$INTENT_READ_QUERY_PREFIX${intent?.data?.pathSegments?.get(1)}")
+            putExtra("query", intent.data.toString())
         }
 
         try {
-            // actually do the thing
-            startActivity(intent)
+            startActivity(mainIntent)
         } catch (e: ActivityNotFoundException) {
-            // tachiyomi isn't installed (?)
-            // Project Suki Url Activity Read
             Log.e("PSUARead", e.toString())
         }
 
-        // we're done
         finish()
-        // just for safety
         exitProcess(0)
     }
 }

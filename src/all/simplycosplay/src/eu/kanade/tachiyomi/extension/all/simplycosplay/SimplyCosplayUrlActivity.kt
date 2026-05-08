@@ -10,21 +10,17 @@ import kotlin.system.exitProcess
 class SimplyCosplayUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size >= 3) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${SimplyCosplay.SEARCH_PREFIX}/${pathSegments[0]}/new/${pathSegments[2]}")
-                putExtra("filter", packageName)
-            }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("SimplyCosplayUrlActivit", e.toString())
-            }
-        } else {
-            Log.e("SimplyCosplayUrlActivit", "could not parse uri from intent $intent")
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
+
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("SimplyCosplayUrlActivit", e.toString())
         }
 
         finish()

@@ -75,13 +75,23 @@ class Taiyo : HttpSource() {
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) {
-        val id = query.removePrefix(PREFIX_SEARCH)
-        client.newCall(GET("$baseUrl/media/$id"))
-            .asObservableSuccess()
-            .map(::searchMangaByIdParse)
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val item = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
+        }
+        return if (query.startsWith(PREFIX_SEARCH)) {
+            val id = query.removePrefix(PREFIX_SEARCH)
+            client.newCall(GET("$baseUrl/media/$id"))
+                .asObservableSuccess()
+                .map(::searchMangaByIdParse)
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {

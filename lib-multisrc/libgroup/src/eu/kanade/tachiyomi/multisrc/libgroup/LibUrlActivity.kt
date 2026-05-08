@@ -17,22 +17,16 @@ class LibUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 0) {
-            val titleid = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${LibGroup.PREFIX_SLUG_SEARCH}$titleid")
-                putExtra("filter", packageName)
-            }
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("LibUrlActivity", e.toString())
-            }
-        } else {
-            Log.e("LibUrlActivity", "could not parse uri from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("LibUrlActivity", "Unable to launch activity", e)
         }
 
         finish()

@@ -25,7 +25,7 @@ class FourKHD : HttpSource() {
     override val supportsLatest = true
     override val baseUrl = "https://www.4khd.com"
 
-    private val postsApi = "$baseUrl/wp-json/wp/v2/posts".toHttpUrl()
+    private val apiUrl = "$baseUrl/index.php".toHttpUrl()
     private val pageSize = 20
 
     override fun headersBuilder() = super.headersBuilder()
@@ -34,7 +34,8 @@ class FourKHD : HttpSource() {
     // ========================= Popular =========================
 
     override fun popularMangaRequest(page: Int): Request = GET(
-        postsApi.newBuilder()
+        apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
             .addQueryParameter("_embed", "1")
@@ -48,7 +49,8 @@ class FourKHD : HttpSource() {
     // ========================= Latest =========================
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
-        postsApi.newBuilder()
+        apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
             .addQueryParameter("_embed", "1")
@@ -64,7 +66,8 @@ class FourKHD : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         deeplinkSlugFromQuery(query)?.let { slug ->
             return GET(
-                postsApi.newBuilder()
+                apiUrl.newBuilder()
+                    .addQueryParameter("rest_route", "/wp/v2/posts")
                     .addQueryParameter("slug", slug)
                     .addQueryParameter("_embed", "1")
                     .build(),
@@ -72,7 +75,8 @@ class FourKHD : HttpSource() {
             )
         }
 
-        val builder = postsApi.newBuilder()
+        val builder = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
             .addQueryParameter("_embed", "1")
@@ -159,20 +163,22 @@ class FourKHD : HttpSource() {
         val postId = fullUrl.queryParameter(POST_ID_QUERY)?.toIntOrNull()
         val slug = slugFromPath(fullUrl.encodedPath)
 
-        val builder = if (postId != null) {
-            postsApi.newBuilder().addPathSegment(postId.toString())
-        } else {
-            postsApi.newBuilder().apply {
-                if (slug.isNotBlank()) {
-                    addQueryParameter("slug", slug)
-                } else {
-                    val fallbackQuery = fullUrl.encodedPath.trim('/').substringAfterLast('/').ifBlank { fullUrl.encodedPath }
-                    if (fallbackQuery.isNotBlank()) {
-                        addQueryParameter("search", fallbackQuery)
-                    }
+        val route = if (postId != null) "/wp/v2/posts/$postId" else "/wp/v2/posts"
+
+        val builder = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", route)
+            .addQueryParameter("_embed", "1")
+
+        if (postId == null) {
+            if (slug.isNotBlank()) {
+                builder.addQueryParameter("slug", slug)
+            } else {
+                val fallbackQuery = fullUrl.encodedPath.trim('/').substringAfterLast('/').ifBlank { fullUrl.encodedPath }
+                if (fallbackQuery.isNotBlank()) {
+                    builder.addQueryParameter("search", fallbackQuery)
                 }
             }
-        }.addQueryParameter("_embed", "1")
+        }
 
         return GET(
             builder.build(),

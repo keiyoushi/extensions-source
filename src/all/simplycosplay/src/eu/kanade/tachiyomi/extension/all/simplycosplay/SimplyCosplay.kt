@@ -139,14 +139,27 @@ class SimplyCosplay :
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(SEARCH_PREFIX)) {
-        val url = query.substringAfter(SEARCH_PREFIX)
-        val manga = SManga.create().apply { this.url = url }
-        fetchMangaDetails(manga).map {
-            MangasPage(listOf(it), false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host !in listOf("simply-cosplay.com", "www.simply-cosplay.com")) {
+                throw Exception("Unsupported url")
+            }
+            if (url.pathSegments.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            val newQuery = "$SEARCH_PREFIX/${url.pathSegments[0]}/new/${url.pathSegments[2]}"
+            return fetchSearchManga(page, newQuery, filters)
         }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+        return if (query.startsWith(SEARCH_PREFIX)) {
+            val url = query.substringAfter(SEARCH_PREFIX)
+            val manga = SManga.create().apply { this.url = url }
+            fetchMangaDetails(manga).map {
+                MangasPage(listOf(it), false)
+            }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

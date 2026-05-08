@@ -8,7 +8,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class Ngomik : MangaThemesia("Ngomik (unoriginal)", "https://ngomik.mom", "id", "/manga") {
+class Ngomik : MangaThemesia("Ngomik (unoriginal)", "https://id.ngomik.cloud", "id", "/manga") {
 
     override val id = 5360960267485387879
 

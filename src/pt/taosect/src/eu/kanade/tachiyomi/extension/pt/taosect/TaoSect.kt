@@ -137,6 +137,18 @@ class TaoSect : HttpSource() {
         return MangasPage(projectList, hasNextPage)
     }
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val projectSlug = url.pathSegments[1]
+            return fetchSearchManga(page, "$SLUG_PREFIX_SEARCH$projectSlug", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.startsWith(SLUG_PREFIX_SEARCH) && query.removePrefix(SLUG_PREFIX_SEARCH).isNotBlank()) {
             return mangaDetailsRequest(query.removePrefix(SLUG_PREFIX_SEARCH))

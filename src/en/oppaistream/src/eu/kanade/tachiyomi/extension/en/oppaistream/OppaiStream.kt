@@ -46,6 +46,15 @@ class OppaiStream : HttpSource() {
 
     // search
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.queryParameter("m")
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$SLUG_SEARCH_PREFIX$slug", filters)
+        }
         if (!query.startsWith(SLUG_SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }

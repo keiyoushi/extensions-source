@@ -124,6 +124,22 @@ open class Webtoons(
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val titleNo = url.queryParameter("title_no")
+                ?: throw Exception("Unsupported url")
+            val path = url.pathSegments
+            if (path.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            val urlLang = path[0]
+            val type = path[1]
+            return fetchSearchManga(page, "$ID_SEARCH_PREFIX$type:$urlLang:$titleNo", filters)
+        }
+
         if (query.startsWith(ID_SEARCH_PREFIX)) {
             val (_, type, lang, titleNo) = query.split(":", limit = 4)
             val tmpManga = SManga.create().apply {

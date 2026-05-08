@@ -262,21 +262,31 @@ class Desu :
 
     private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl$API_URL/$id", headers)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-        client.newCall(searchMangaByIdRequest(realQuery))
-            .asObservableSuccess()
-            .map { response ->
-                val details = mangaDetailsParse(response)
-                details.url = "/$realQuery"
-                MangasPage(listOf(details), false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
             }
-    } else {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response)
-            }
+            val titleid = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleid", filters)
+        }
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+            client.newCall(searchMangaByIdRequest(realQuery))
+                .asObservableSuccess()
+                .map { response ->
+                    val details = mangaDetailsParse(response)
+                    details.url = "/$realQuery"
+                    MangasPage(listOf(details), false)
+                }
+        } else {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response)
+                }
+        }
     }
 
     private class OrderBy :

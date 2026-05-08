@@ -68,12 +68,24 @@ class HentaiNexus : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
-        val id = query.removePrefix(PREFIX_ID_SEARCH)
-        client.newCall(GET("$baseUrl/view/$id", headers)).asObservableSuccess()
-            .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/view/$id" }), false) }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments.getOrNull(1)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
+        }
+
+        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val id = query.removePrefix(PREFIX_ID_SEARCH)
+            client.newCall(GET("$baseUrl/view/$id", headers)).asObservableSuccess()
+                .map { MangasPage(listOf(mangaDetailsParse(it).apply { url = "/view/$id" }), false) }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

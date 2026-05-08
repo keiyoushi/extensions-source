@@ -88,6 +88,22 @@ open class Viz(
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val pathSegments = url.pathSegments
+            if (pathSegments.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            val seriesSlug = if (pathSegments[2] == "chapter" && pathSegments[1].contains("-chapter-")) {
+                pathSegments[1].substringBeforeLast("-chapter-")
+            } else {
+                pathSegments[2]
+            }
+            return fetchSearchManga(page, "$PREFIX_URL_SEARCH/${pathSegments[0]}/chapters/$seriesSlug", filters)
+        }
         if (query.startsWith(PREFIX_URL_SEARCH)) {
             val url = query.substringAfter(PREFIX_URL_SEARCH)
             val service = url.split("/")[1]

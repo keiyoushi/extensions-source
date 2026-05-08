@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import java.security.KeyPair
 
 @Serializable
 class Version(
@@ -88,18 +87,32 @@ class MangaResponse(
     }
 }
 
+/**
+ * Inertia response for `GET /serie/{slug}/chapter/{slug}`. The handshake
+ * material (chapter_token, server_pubkey, page_count) sits on `props`
+ * directly; `props.data` only carries the chapter/serie identity.
+ */
 @Serializable
 class PageListResponse(
     val props: Props,
 ) {
     @Serializable
     class Props(
-        @SerialName("signed_urls")
-        val signedUrls: List<String>,
-    )
+        @SerialName("page_count")
+        val pageCount: Int,
+        @SerialName("chapter_token")
+        val chapterToken: String,
+        @SerialName("server_pubkey")
+        val serverPubkey: String,
+        val data: Data,
+    ) {
+        @Serializable
+        class Data(
+            val slug: String,
+            val serie: Serie,
+        )
+
+        @Serializable
+        class Serie(val slug: String)
+    }
 }
-
-class KeyPairResult(val keyPair: KeyPair, val publicKeyBase64: String)
-
-@Serializable
-class SessionResponse(val sid: String)

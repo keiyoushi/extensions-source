@@ -369,6 +369,7 @@ class ProjectSuki :
         val queryAsURL: HttpUrl? by unexpectedErrorCatchingLazy { query.toHttpUrlOrNull() ?: """${homepageUri}$query""".toHttpUrlOrNull() }
         val bookUrlMatch by unexpectedErrorCatchingLazy { queryAsURL?.matchAgainst(bookUrlPattern) }
         val readUrlMatch by unexpectedErrorCatchingLazy { queryAsURL?.matchAgainst(chapterUrlPattern) }
+        val isSearchUrl = queryAsURL?.host == homepageUrl.host && queryAsURL?.pathSegments?.firstOrNull() == "search"
 
         return when {
             // sent by the url activity, might also be because the user entered a query via $ps-search:
@@ -413,6 +414,19 @@ class ProjectSuki :
                 if (bookid.isBlank()) error("Empty bookid!")
 
                 bookid.toMangasPageObservable()
+            }
+
+            // raw search url e.g. https://projectsuki.com/search?q=...
+            isSearchUrl -> {
+                val urlQuery = queryAsURL!!.query ?: error("Empty search query!")
+                if (urlQuery.isBlank()) error("Empty search query!")
+
+                val rawUrl = """${homepageUri.toASCIIString()}/search?$urlQuery"""
+                val url = rawUrl.toHttpUrlOrNull() ?: reportErrorToUser { "Invalid search url: $rawUrl" }
+
+                client.newCall(GET(url, headers))
+                    .asObservableSuccess()
+                    .map { response -> searchMangaParse(response, overrideHasNextPage = false) }
             }
 
             // use result from https://projectsuki.com/api/book/search

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Crow Scans'
+    extClass = '.CrowScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://crowscans.xyz'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
