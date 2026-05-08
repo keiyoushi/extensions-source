@@ -1,21 +1,15 @@
 plugins {
-    id("com.android.library")
-    id("kotlinx-serialization")
-    id("keiyoushi.lint")
+    alias(libs.plugins.android.library)
+
+    alias(kei.plugins.android.base)
+    alias(kei.plugins.spotless)
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
-    }
-
     namespace = "keiyoushi.core"
 
     buildFeatures {
         resValues = false
-        shaders = false
     }
 
     testOptions {
@@ -23,16 +17,9 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
-        freeCompilerArgs.add("-Xcontext-parameters")
-    }
-}
-
 dependencies {
-    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    compileOnly(libs.bundles.common)
 
-    testImplementation(versionCatalogs.named("libs").findBundle("common").get())
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.bundles.common)
+    testImplementation(libs.junit)
 }

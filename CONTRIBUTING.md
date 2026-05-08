@@ -127,7 +127,7 @@ navigate and build. This will also reduce disk usage and network traffic.
     ```bash
     git sparse-checkout set --cone --sparse-index
     # add project folders
-    git sparse-checkout add buildSrc core gradle lib lib-multisrc utils
+    git sparse-checkout add common core gradle lib lib-multisrc utils
     # add a single source
     git sparse-checkout add src/<lang>/<source>
     ```
@@ -293,7 +293,7 @@ ext {
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 ```
 
 | Field            | Description                                                                                                                                                                                                          |
@@ -374,11 +374,11 @@ lib/<mylibname>/
                 └── MyLib.kt
 ```
 
-The `build.gradle.kts` must apply the `lib-android` plugin:
+The `build.gradle.kts` must apply the `kei.plugins.library` plugin:
 
 ```kotlin
 plugins {
-    id("lib-android")
+    alias(kei.plugins.library)
 }
 ```
 
@@ -386,7 +386,7 @@ If your lib depends on another lib, declare it in the same file:
 
 ```kotlin
 plugins {
-    id("lib-android")
+    alias(kei.plugins.library)
 }
 
 dependencies {
@@ -1039,7 +1039,7 @@ Make sure that your new theme's `build.gradle.kts` file follows this structure:
 
 ```kotlin
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
 
 baseVersionCode = 1
@@ -1082,7 +1082,7 @@ ext {
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 ```
 
 Notice that instead of `extVersionCode`, extensions using a theme must use `overrideVersionCode`. The final extension version code (`extVersionCode`) is automatically calculated during the build process as `theme.baseVersionCode + ext.overrideVersionCode`.
