@@ -123,12 +123,26 @@ abstract class NTKBase(
         }
     }
 
+    private val viewModeCookieInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        if ("/updates" in request.url.encodedPath) {
+            val existing = request.header("Cookie") ?: ""
+            val updated = request.newBuilder()
+                .header("Cookie", if (existing.isEmpty()) "ntk_view_mode=page" else "$existing; ntk_view_mode=page")
+                .build()
+            chain.proceed(updated)
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
             .addInterceptor(headerCleanerInterceptor)
             .addInterceptor(domainUpdateInterceptor)
             .addInterceptor(smartRateLimitInterceptor)
             .addInterceptor(webViewRedirectInterceptor)
+            .addNetworkInterceptor(viewModeCookieInterceptor)
             .build()
     }
 
@@ -171,26 +185,136 @@ abstract class NTKBase(
         return MangasPage(mangas, data["hasMore"]!!.jsonPrimitive.boolean)
     }
 
+//    override fun latestUpdatesParse(response: Response): MangasPage {
+//        val document = response.asJsoup()
+//        val mangas = document.select("ul.upd-grid > li.upd-card").map { element ->
+//            SManga.create().apply {
+//                val sid = element.attr("data-manhwa-sid")
+//                if (sid.isNotEmpty()) {
+//                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
+//                } else {
+//                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
+//                    if (allBtnHref.isNotEmpty()) {
+//                        setUrlWithoutDomain(allBtnHref)
+//                    } else {
+//                        val epHref = element.select("a.upd-card-main").attr("href")
+//                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
+//                    }
+//                }
+//                title = element.select("div.upd-title").text()
+//                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
+//            }
+//        }
+//        return MangasPage(mangas, hasNextPage = false)
+//    }
+
+//    override fun latestUpdatesParse(response: Response): MangasPage {
+//        val document = response.asJsoup()
+//        val items = document.select("ul.upd-grid > li.upd-card")
+//        val mangas = items.map { element ->
+//            SManga.create().apply {
+//                val sid = element.attr("data-manhwa-sid")
+//                if (sid.isNotEmpty()) {
+//                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
+//                } else {
+//                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
+//                    if (allBtnHref.isNotEmpty()) {
+//                        setUrlWithoutDomain(allBtnHref)
+//                    } else {
+//                        val epHref = element.select("a.upd-card-main").attr("href")
+//                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
+//                    }
+//                }
+//                title = element.select("div.upd-title").text()
+//                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
+//            }
+//        }
+//        return MangasPage(mangas, hasNextPage = items.size >= PAGE_SIZE)
+//    }
+
+//    override fun latestUpdatesParse(response: Response): MangasPage {
+//        val document = response.asJsoup()
+//        val items = document.select("ul.upd-grid > li.upd-card")
+//        val mangas = items.map { element ->
+//            SManga.create().apply {
+//                val sid = element.attr("data-manhwa-sid")
+//                if (sid.isNotEmpty()) {
+//                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
+//                } else {
+//                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
+//                    if (allBtnHref.isNotEmpty()) {
+//                        setUrlWithoutDomain(allBtnHref)
+//                    } else {
+//                        val epHref = element.select("a.upd-card-main").attr("href")
+//                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
+//                    }
+//                }
+//                title = element.select("div.upd-title").text()
+//                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
+//            }
+//        }
+
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("ul.upd-grid > li.upd-card").map { element ->
-            SManga.create().apply {
-                val sid = element.attr("data-manhwa-sid")
-                if (sid.isNotEmpty()) {
-                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
-                } else {
-                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
-                    if (allBtnHref.isNotEmpty()) {
-                        setUrlWithoutDomain(allBtnHref)
-                    } else {
-                        val epHref = element.select("a.upd-card-main").attr("href")
-                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
+
+        // All 200 update entries are embedded in the RSC payload on initial load
+        val rscData = document.select("script")
+            .map { it.data() }
+            .firstOrNull { "allCards" in it }
+            ?: return MangasPage(emptyList(), false)
+
+        // Extract JSON string content between push([1," and "])
+        val rawContent = rscData
+            .substringAfter("[1,\"")
+            .substringBeforeLast("\"])")
+
+        // Unescape JavaScript string encoding — \\ must come before \"
+        val unescaped = rawContent
+            .replace("\\\\", "\\")
+            .replace("\\\"", "\"")
+            .replace("\\/", "/")
+
+        // Extract the allCards JSON array
+        val marker = "\"allCards\":"
+        val markerIdx = unescaped.indexOf(marker)
+        if (markerIdx < 0) return MangasPage(emptyList(), false)
+
+        val arrayStart = markerIdx + marker.length
+        var depth = 0
+        var arrayEnd = arrayStart
+        for (i in arrayStart until unescaped.length) {
+            when (unescaped[i]) {
+                '[' -> depth++
+                ']' -> {
+                    depth--
+                    if (depth == 0) {
+                        arrayEnd = i + 1
+                        break
                     }
                 }
-                title = element.select("div.upd-title").text()
-                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
             }
         }
+
+        val cards = json.parseToJsonElement(unescaped.substring(arrayStart, arrayEnd)).jsonArray
+
+        // Deduplicate by sourceWorkId — same series can appear multiple times
+        val seen = mutableSetOf<String>()
+        val mangas = cards.mapNotNull {
+            val card = it.jsonObject
+            val sid = card["sourceWorkId"]!!.jsonPrimitive.content
+            if (seen.add(sid)) {
+                SManga.create().apply {
+                    url = "/$contentKind/$sid"
+                    title = card["workTitle"]!!.jsonPrimitive.content
+                    thumbnail_url = card["thumbnailUrl"]?.jsonPrimitive?.content
+                    genre = card["genre"]?.jsonPrimitive?.content
+                    author = card["author"]?.jsonPrimitive?.content
+                }
+            } else {
+                null
+            }
+        }
+
         return MangasPage(mangas, hasNextPage = false)
     }
 
@@ -267,7 +391,7 @@ abstract class NTKBase(
         private const val PREF_DOMAIN_KEY = "pref_domain_key"
         private const val PREF_DOMAIN_DEFAULT = "01"
         private const val PREF_RATELIMIT_KEY = "pref_ratelimit_key"
-        private const val PREF_RATELIMIT_DEFAULT = "0"
+        private const val PREF_RATELIMIT_DEFAULT = "3"
 
         const val PAGE_SIZE = 49
     }

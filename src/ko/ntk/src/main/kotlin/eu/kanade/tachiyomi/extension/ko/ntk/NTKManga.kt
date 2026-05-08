@@ -60,6 +60,7 @@ class NTKManga : NTKBase("NTK Manga", "manhwa") {
         return GET(url, apiHeaders)
     }
 
+    // override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/manhwa/updates", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/manhwa/updates", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
