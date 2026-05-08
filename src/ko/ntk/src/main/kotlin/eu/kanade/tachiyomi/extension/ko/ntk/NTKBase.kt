@@ -20,6 +20,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 abstract class NTKBase(
     override val name: String,
@@ -269,12 +271,26 @@ abstract class NTKBase(
         }
     }
 
+//    override fun chapterListParse(response: Response): List<SChapter> {
+//        val document = response.asJsoup()
+//        return document.select("ul.ep-list-v2 > li.ep-row-v2").map { element ->
+//            SChapter.create().apply {
+//                setUrlWithoutDomain(element.select("a.ep-row-v2-link").attr("href"))
+//                name = element.select("div.ep-row-v2-title strong").text()
+//            }
+//        }
+//    }
+
+    private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.KOREA)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select("ul.ep-list-v2 > li.ep-row-v2").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.select("a.ep-row-v2-link").attr("href"))
                 name = element.select("div.ep-row-v2-title strong").text()
+                date_upload = element.select("span.ep-row-v2-date").text()
+                    .let { runCatching { dateFormat.parse(it)?.time ?: 0L }.getOrDefault(0L) }
             }
         }
     }
