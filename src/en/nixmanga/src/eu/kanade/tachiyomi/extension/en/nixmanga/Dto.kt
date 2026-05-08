@@ -6,27 +6,20 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
 class PaginatedComicsDto(
-    private val comics: List<ComicDto> = emptyList(),
-    private val results: List<ComicDto> = emptyList(), // Used dynamically by the search endpoint
+    @JsonNames("results") val comics: List<ComicDto> = emptyList(),
     private val page: Int = 1,
     @SerialName("total_pages") private val totalPages: Int = 1,
     private val total: Int = 0,
 ) {
-    val comicList: List<ComicDto>
-        get() = results.ifEmpty { comics }
-
     val hasNextPage: Boolean
-        get() = if (results.isNotEmpty()) {
-            (page * 24) < total
-        } else {
-            page < totalPages
-        }
+        get() = page < totalPages || (page * 24) < total
 }
 
 @Serializable
@@ -39,7 +32,7 @@ class ComicDto(
     private val genres: List<GenreDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/manga/$slug"
+        url = slug
         title = this@ComicDto.title
         thumbnail_url = cover
         status = parseStatus(this@ComicDto.status)
