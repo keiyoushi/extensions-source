@@ -6,21 +6,21 @@ import java.net.URLEncoder
 object Hash {
     // [RC4 key, mutKey, prefKey] × 5 rounds
     private val KEYS = arrayOf(
-        "13YDu67uDgFczo3DnuTIURqas4lfMEPADY6Jaeqky+w=", // 0  RC4 key  round 1
-        "yEy7wBfBc+gsYPiQL/4Dfd0pIBZFzMwrtlRQGwMXy3Q=", // 1  mutKey   round 1
-        "yrP+EVA1Dw==", // 2  prefKey  round 1
-        "vZ23RT7pbSlxwiygkHd1dhToIku8SNHPC6V36L4cnwM=", // 3  RC4 key  round 2
-        "QX0sLahOByWLcWGnv6l98vQudWqdRI3DOXBdit9bxCE=", // 4  mutKey   round 2
-        "WJwgqCmf", // 5  prefKey  round 2
-        "BkWI8feqSlDZKMq6awfzWlUypl88nz65KVRmpH0RWIc=", // 6  RC4 key  round 3
-        "v7EIpiQQjd2BGuJzMbBA0qPWDSS+wTJRQ7uGzZ6rJKs=", // 7  mutKey   round 3
-        "1SUReYlCRA==", // 8  prefKey  round 3
-        "RougjiFHkSKs20DZ6BWXiWwQUGZXtseZIyQWKz5eG34=", // 9  RC4 key  round 4
-        "LL97cwoDoG5cw8QmhI+KSWzfW+8VehIh+inTxnVJ2ps=", // 10 mutKey   round 4
-        "52iDqjzlqe8=", // 11 prefKey  round 4
-        "U9LRYFL2zXU4TtALIYDj+lCATRk/EJtH7/y7qYYNlh8=", // 12 RC4 key  round 5
-        "e/GtffFDTvnw7LBRixAD+iGixjqTq9kIZ1m0Hj+s6fY=", // 13 mutKey   round 5
-        "xb2XwHNB", // 14 prefKey  round 5
+        "JxTcdyiA5GZxnbrmthXBQfU2IMTKcY1+3nNhbq98Sgo=", // 0  RC4 key  round 1
+        "3PordjODbhqla382Cxapmo/1JiABJQcjiJj1+48gTJ4=", // 1  mutKey   round 1
+        "OaKvnI5ARA==", // 2  prefKey  round 1
+        "MHNBHYWA7lvy867fXgvGcJwWDk79KqUJUVFsh3RwnnI=", // 3  RC4 key  round 2
+        "8i0Cru/VJBSVB2Y1GcMDVpzx2WepOcfnWdd81yxICl4=", // 4  mutKey   round 2
+        "Fyskubz8VvA=", // 5  prefKey  round 2
+        "B46L1x+UeWP+19cRpQ+OZvdLAK9EHID8g3mSgn57tew=", // 6  RC4 key  round 3
+        "DTSTmUt6LpDUw9r1lSQqyb3YlFTzruT8tk8wUGkwehQ=", // 7  mutKey   round 3
+        "vY/meeI=", // 8  prefKey  round 3
+        "7xWfIF5THL5LAnRgAARg+4mjWHPU9n3PQwvzbaMNi+Q=", // 9  RC4 key  round 4
+        "bewtiTuV+HJk56xxkf2iCljLgruCpBmN9BgE8i6gc9M=", // 10 mutKey   round 4
+        "/Xcb2zAu8AU=", // 11 prefKey  round 4
+        "WgeCQ3T8R51uTwVSiVa7Zy0dN6JOg6Z5JleMS+HV8Aw=", // 12 RC4 key  round 5
+        "yXayUVFrrcW56jQCEfZzuCidjpnWKjTDUNT7XeX9i7k=", // 13 mutKey   round 5
+        "tSLco2w=", // 14 prefKey  round 5
     )
 
     private fun getKeyBytes(index: Int): IntArray {
@@ -58,136 +58,105 @@ object Hash {
         return out
     }
 
-    private fun mutS(e: Int): Int = (e + 143) % 256
-    private fun mutL(e: Int): Int = ((e ushr 1) or (e shl 7)) and 255
-    private fun mutC(e: Int): Int = (e + 115) % 256
-    private fun mutM(e: Int): Int = e xor 177
-    private fun mutF(e: Int): Int = (e - 188 + 256) % 256
-    private fun mutG(e: Int): Int = ((e shl 2) or (e ushr 6)) and 255
-    private fun mutH(e: Int): Int = (e - 42 + 256) % 256
-    private fun mutDollar(e: Int): Int = ((e shl 4) or (e ushr 4)) and 255
-    private fun mutB(e: Int): Int = (e - 12 + 256) % 256
-    private fun mutUnderscore(e: Int): Int = (e - 20 + 256) % 256
-    private fun mutY(e: Int): Int = ((e ushr 1) or (e shl 7)) and 255
-    private fun mutK(e: Int): Int = (e - 241 + 256) % 256
     private fun getMutKey(mk: IntArray, idx: Int): Int = if (mk.isNotEmpty() && (idx % 32) < mk.size) mk[idx % 32] else 0
 
-    private fun round1(data: IntArray): IntArray {
-        val enc = rc4(getKeyBytes(0), data)
-        val mutKey = getKeyBytes(1)
-        val prefKey = getKeyBytes(2)
+    private fun opShiftRight7Left1(e: Int): Int = ((e ushr 7) or (e shl 1)) and 255
+    private fun opShiftLeft1Right7(e: Int): Int = ((e shl 1) or (e ushr 7)) and 255
+    private fun opShiftRight2Left6(e: Int): Int = ((e ushr 2) or (e shl 6)) and 255
+    private fun opShiftLeft4Right4(e: Int): Int = ((e shl 4) or (e ushr 4)) and 255
+    private fun opShiftRight4Left4(e: Int): Int = ((e ushr 4) or (e shl 4)) and 255
+
+    private fun mutate(data: IntArray, mutKey: IntArray, prefKey: IntArray, prefKeyLimit: Int, round: Int): IntArray {
         val out = mutableListOf<Int>()
-        for (i in enc.indices) {
-            if (i < 7 && i < prefKey.size) out.add(prefKey[i])
-            var v = enc[i] xor getMutKey(mutKey, i)
-            v = when (i % 10) {
-                0, 9 -> mutC(v)
-                1 -> mutB(v)
-                2 -> mutY(v)
-                3 -> mutDollar(v)
-                4, 6 -> mutH(v)
-                5 -> mutS(v)
-                7 -> mutK(v)
-                8 -> mutL(v)
-                else -> v
+        for (o in data.indices) {
+            if (o < prefKeyLimit && o < prefKey.size) out.add(prefKey[o])
+            var n = data[o] xor getMutKey(mutKey, o)
+            n = when (round) {
+                1 -> when (o % 10) {
+                    0 -> opShiftRight7Left1(n)
+                    1 -> n xor 37
+                    2 -> n xor 81
+                    3 -> n xor 147
+                    4 -> opShiftRight2Left6(n)
+                    5, 8 -> opShiftRight4Left4(n)
+                    6 -> n xor 218
+                    7 -> (n + 159) and 255
+                    9 -> n xor 180
+                    else -> n
+                }
+                2 -> when (o % 10) {
+                    0, 9 -> n xor 180
+                    1 -> opShiftLeft1Right7(n)
+                    2 -> n xor 147
+                    3 -> opShiftRight7Left1(n)
+                    4 -> opShiftRight2Left6(n)
+                    5 -> opShiftRight4Left4(n)
+                    6, 8 -> (n + 159) and 255
+                    7 -> (n + 34) and 255
+                    else -> n
+                }
+                3 -> when (o % 10) {
+                    0 -> n xor 81
+                    1 -> opShiftRight4Left4(n)
+                    2, 9 -> opShiftLeft4Right4(n)
+                    3 -> n xor 37
+                    4 -> (n + 159) and 255
+                    5 -> opShiftLeft1Right7(n)
+                    6 -> n xor 180
+                    7 -> (n + 34) and 255
+                    8 -> opShiftRight2Left6(n)
+                    else -> n
+                }
+                4 -> when (o % 10) {
+                    0, 7 -> n xor 218
+                    1, 4 -> opShiftLeft1Right7(n)
+                    2 -> opShiftRight7Left1(n)
+                    3 -> (n + 159) and 255
+                    5, 8 -> n xor 180
+                    6 -> n xor 147
+                    9 -> n xor 37
+                    else -> n
+                }
+                5 -> when (o % 10) {
+                    0 -> opShiftLeft4Right4(n)
+                    1, 3 -> n xor 147
+                    2 -> (n + 34) and 255
+                    4, 9 -> n xor 218
+                    5, 7 -> opShiftLeft1Right7(n)
+                    6 -> n xor 180
+                    8 -> opShiftRight2Left6(n)
+                    else -> n
+                }
+                else -> n
             }
-            out.add(v and 255)
+            out.add(n and 255)
         }
         return out.toIntArray()
+    }
+
+    private fun round1(data: IntArray): IntArray {
+        val mut = mutate(data, getKeyBytes(1), getKeyBytes(2), 7, 1)
+        return rc4(getKeyBytes(0), mut)
     }
 
     private fun round2(data: IntArray): IntArray {
-        val enc = rc4(getKeyBytes(3), data)
-        val mutKey = getKeyBytes(4)
-        val prefKey = getKeyBytes(5)
-        val out = mutableListOf<Int>()
-        for (i in enc.indices) {
-            if (i < 6 && i < prefKey.size) out.add(prefKey[i])
-            var v = enc[i] xor getMutKey(mutKey, i)
-            v = when (i % 10) {
-                0, 8 -> mutC(v)
-                1 -> mutB(v)
-                2, 6 -> mutDollar(v)
-                3 -> mutH(v)
-                4, 9 -> mutS(v)
-                5 -> mutK(v)
-                7 -> mutUnderscore(v)
-                else -> v
-            }
-            out.add(v and 255)
-        }
-        return out.toIntArray()
+        val mut = mutate(data, getKeyBytes(4), getKeyBytes(5), 8, 2)
+        return rc4(getKeyBytes(3), mut)
     }
 
     private fun round3(data: IntArray): IntArray {
-        val enc = rc4(getKeyBytes(6), data)
-        val mutKey = getKeyBytes(7)
-        val prefKey = getKeyBytes(8)
-        val out = mutableListOf<Int>()
-        for (i in enc.indices) {
-            if (i < 7 && i < prefKey.size) out.add(prefKey[i])
-            var v = enc[i] xor getMutKey(mutKey, i)
-            v = when (i % 10) {
-                0 -> mutC(v)
-                1 -> mutF(v)
-                2, 8 -> mutS(v)
-                3 -> mutG(v)
-                4 -> mutY(v)
-                5 -> mutM(v)
-                6 -> mutDollar(v)
-                7 -> mutK(v)
-                9 -> mutB(v)
-                else -> v
-            }
-            out.add(v and 255)
-        }
-        return out.toIntArray()
+        val mut = mutate(data, getKeyBytes(7), getKeyBytes(8), 5, 3)
+        return rc4(getKeyBytes(6), mut)
     }
 
     private fun round4(data: IntArray): IntArray {
-        val enc = rc4(getKeyBytes(9), data)
-        val mutKey = getKeyBytes(10)
-        val prefKey = getKeyBytes(11)
-        val out = mutableListOf<Int>()
-        for (i in enc.indices) {
-            if (i < 8 && i < prefKey.size) out.add(prefKey[i])
-            var v = enc[i] xor getMutKey(mutKey, i)
-            v = when (i % 10) {
-                0 -> mutB(v)
-                1, 9 -> mutM(v)
-                2, 7 -> mutL(v)
-                3, 5 -> mutS(v)
-                4, 6 -> mutUnderscore(v)
-                8 -> mutY(v)
-                else -> v
-            }
-            out.add(v and 255)
-        }
-        return out.toIntArray()
+        val mut = mutate(data, getKeyBytes(10), getKeyBytes(11), 8, 4)
+        return rc4(getKeyBytes(9), mut)
     }
 
     private fun round5(data: IntArray): IntArray {
-        val enc = rc4(getKeyBytes(12), data)
-        val mutKey = getKeyBytes(13)
-        val prefKey = getKeyBytes(14)
-        val out = mutableListOf<Int>()
-        for (i in enc.indices) {
-            if (i < 6 && i < prefKey.size) out.add(prefKey[i])
-            var v = enc[i] xor getMutKey(mutKey, i)
-            v = when (i % 10) {
-                0 -> mutUnderscore(v)
-                1, 7 -> mutS(v)
-                2 -> mutC(v)
-                3, 5 -> mutM(v)
-                4 -> mutB(v)
-                6 -> mutF(v)
-                8 -> mutDollar(v)
-                9 -> mutG(v)
-                else -> v
-            }
-            out.add(v and 255)
-        }
-        return out.toIntArray()
+        val mut = mutate(data, getKeyBytes(13), getKeyBytes(14), 5, 5)
+        return rc4(getKeyBytes(12), mut)
     }
 
     fun generateHash(path: String): String {
