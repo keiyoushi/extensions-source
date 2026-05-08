@@ -47,7 +47,6 @@ class MangaCloud : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Key", generateKey())
 
     override fun popularMangaRequest(page: Int): Request {
         return if (page > 3) {
@@ -59,7 +58,7 @@ class MangaCloud : HttpSource() {
                 else -> "month"
             }
 
-            return GET("$API_URL/comic-popular-view/$time", headersBuilder().build())
+            return GET("$API_URL/comic-popular-view/$time", headers)
         }
     }
 
@@ -79,7 +78,7 @@ class MangaCloud : HttpSource() {
             .toJsonString()
             .toRequestBody(jsonMediaType)
 
-        return POST(url, headersBuilder().build(), payload)
+        return POST(url, headers, payload)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -120,7 +119,7 @@ class MangaCloud : HttpSource() {
     private fun fetchOnlineTags(tagsFile: File) {
         if (!fetchingOnlineTags.compareAndSet(false, true)) return
 
-        val request = GET("$API_URL/tag/list", headersBuilder().build())
+        val request = GET("$API_URL/tag/list", headers)
 
         client.newCall(request).enqueue(
             object : Callback {
@@ -206,7 +205,7 @@ class MangaCloud : HttpSource() {
             .toJsonString()
             .toRequestBody(jsonMediaType)
 
-        return POST(url, headersBuilder().build(), payload)
+        return POST(url, headers, payload)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -240,7 +239,7 @@ class MangaCloud : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga) = mangaDetailsRequest(manga.url)
 
-    private fun mangaDetailsRequest(comicId: String) = GET("$API_URL/comic/$comicId", headersBuilder().build())
+    private fun mangaDetailsRequest(comicId: String) = GET("$API_URL/comic/$comicId", headers)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
 
@@ -271,7 +270,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter/$chapterId", headersBuilder().build())
+        return GET("$API_URL/chapters/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
