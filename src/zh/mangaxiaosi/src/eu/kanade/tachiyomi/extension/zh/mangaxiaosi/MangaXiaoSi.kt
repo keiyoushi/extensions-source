@@ -17,6 +17,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class MangaXiaoSi : HttpSource() {
 
@@ -40,9 +41,7 @@ class MangaXiaoSi : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val popularSection = document.select(".mh-list.col3.top-cat > li").firstOrNull {
-            it.selectFirst(".title")?.text()?.contains("人气榜") == true
-        }
+        val popularSection = document.selectFirst(".mh-list.col3.top-cat > li:has(.title:contains(人气榜))")
 
         val mangas = popularSection?.select(".mh-item, .mh-itme-top")?.mapNotNull { element ->
             parseMangaFromElement(element, "h2.title a")
@@ -103,7 +102,7 @@ class MangaXiaoSi : HttpSource() {
             title = info.selectFirst("h1")?.text() ?: ""
             author = info.selectFirst(".subtitle:contains(作者)")?.text()?.substringAfter("：")?.trim()
             status = parseStatus(info.selectFirst(".tip span.block:contains(状态) span")?.text())
-            genre = info.select(".tip span.block:contains(标签) a").joinToString(", ") { it.text() }
+            genre = info.select(".tip span.block:contains(标签) a").joinToString { it.text() }
             description = info.selectFirst(".content")?.text()
             thumbnail_url = document.selectFirst(".banner_detail_form .cover img")?.absUrl("src")
         }
@@ -122,7 +121,7 @@ class MangaXiaoSi : HttpSource() {
         val document = response.asJsoup()
 
         val updateDateText = document.selectFirst(".tip span.block:contains(更新时间)")?.text()?.substringAfter("：")?.trim()
-        val updateDate = updateDateText?.let { dateFormat.tryParse(it) } ?: 0L
+        val updateDate = dateFormat.tryParse(updateDateText)
 
         val chapters = document.select("#detail-list-select li a").map { element ->
             SChapter.create().apply {
@@ -180,7 +179,9 @@ class MangaXiaoSi : HttpSource() {
 
     companion object {
         private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+            }
         }
     }
 }
