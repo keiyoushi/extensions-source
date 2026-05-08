@@ -80,7 +80,7 @@ class Hentara : HttpSource() {
         val mangas = data.comics
             .asSequence()
             .filter { comic ->
-                (query.isNullOrBlank() || comic.title?.contains(query, ignoreCase = true) == true) &&
+                (query.isNullOrBlank() || comic.title.contains(query, ignoreCase = true)) &&
                     (genre == "Any" || comic.genres.any { it.name.equals(genre, ignoreCase = true) })
             }
             .let { filtered ->
