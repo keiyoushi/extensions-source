@@ -35,8 +35,6 @@ class Holotoon :
 
     override val supportsLatest = true
 
-    override val versionId = 2
-
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()
@@ -101,7 +99,9 @@ class Holotoon :
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ============================== Details ==============================
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga): String = baseUrl + fixMangaUrl(manga.url)
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + fixMangaUrl(manga.url), headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -123,6 +123,8 @@ class Holotoon :
     }
 
     // ============================= Chapters ==============================
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + fixMangaUrl(manga.url), headers)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select("#chapter-list-scroll a.chapter-row").map { element ->
@@ -165,6 +167,10 @@ class Holotoon :
     )
 
     // ============================= Utilities =============================
+
+    /** Converts old `/komik/` URL paths to the current `/comic/` path. */
+    private fun fixMangaUrl(url: String): String = url.replace("/komik/", "/comic/")
+
     private fun parseDate(dateStr: String): Long {
         val trimmed = dateStr.trim().lowercase()
         return when {
