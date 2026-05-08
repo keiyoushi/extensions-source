@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -31,11 +31,9 @@ class NeoManga : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val rscHeaders by lazy {
-        headersBuilder()
-            .add("RSC", "1")
-            .build()
-    }
+    private val rscHeaders = headersBuilder()
+        .add("RSC", "1")
+        .build()
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -45,10 +43,10 @@ class NeoManga : HttpSource() {
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", rscHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.body.string().extractNextJsRsc<InitialMangasDto> {
+        val data = response.extractNextJs<InitialMangasDto> {
             it is JsonObject && "initialMangas" in it
         }
-        val mangas = data?.initialMangas?.map { it.toSManga() } ?: emptyList()
+        val mangas = data?.initialMangas?.map { it.toSManga(baseUrl) } ?: emptyList()
 
         return MangasPage(mangas, false)
     }
@@ -62,7 +60,7 @@ class NeoManga : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(popularMangaRequest(page))
         .asObservableSuccess()
         .map { response ->
-            val data = response.body.string().extractNextJsRsc<InitialMangasDto> {
+            val data = response.extractNextJs<InitialMangasDto> {
                 it is JsonObject && "initialMangas" in it
             }
             var mangas = data?.initialMangas ?: emptyList()
@@ -82,7 +80,7 @@ class NeoManga : HttpSource() {
                 mangas = mangas.filter { it.genres.contains(selectedGenre) }
             }
 
-            MangasPage(mangas.map { it.toSManga() }, false)
+            MangasPage(mangas.map { it.toSManga(baseUrl) }, false)
         }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
@@ -90,6 +88,8 @@ class NeoManga : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Details ==============================
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}", headers)
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
 
@@ -114,10 +114,10 @@ class NeoManga : HttpSource() {
     }
 
     // ============================= Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}", rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.body.string().extractNextJsRsc<MangaDetailsDataDto> {
+        val data = response.extractNextJs<MangaDetailsDataDto> {
             it is JsonObject && "chapters" in it
         }
 
@@ -138,7 +138,7 @@ class NeoManga : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.body.string().extractNextJsRsc<ChapterPageDataDto> {
+        val data = response.extractNextJs<ChapterPageDataDto> {
             it is JsonObject && "chapter" in it
         }
 
