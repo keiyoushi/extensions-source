@@ -30,7 +30,7 @@ class MangaXiaoSi : HttpSource() {
 
     // Set a desktop User-Agent to prevent the site from serving the mobile layout
     override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ==============================
