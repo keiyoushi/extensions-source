@@ -32,6 +32,7 @@ internal val genreList = listOf(
     "호러", "시대", "로맨스", "추리", "무협", "음악", "BL",
 )
 
+// Builds the genre query param for the manga API — includes/excludes genres as comma-separated list
 fun buildGenreParam(genreFilter: GenreFilter?): String? {
     if (genreFilter == null) return null
     val genres = genreFilter.state
@@ -82,6 +83,7 @@ internal val wtGenreList = listOf(
     "호러", "시대", "로맨스", "추리", "무협", "음악", "BL",
 )
 
+// Builds the genre query param for the webtoon API — uses index numbers, not genre names
 fun buildWtGenreParam(genreFilter: WtGenreFilter?): String? {
     if (genreFilter == null) return null
     val tags = genreFilter.state
@@ -96,3 +98,4 @@ fun buildWtGenreParam(genreFilter: WtGenreFilter?): String? {
     // OkHttp will automatically url-encode the commas into "%2C" safely
     return if (tags.isNotEmpty()) tags.joinToString(",") else null
 }
+

@@ -23,12 +23,13 @@ import okhttp3.Response
 
 abstract class NTKBase(
     override val name: String,
-    protected val contentKind: String,
+    protected val contentKind: String, // "manhwa" or "webtoon" — used for URL path construction
 ) : HttpSource(),
     ConfigurableSource {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Used for JSON API requests — sets Accept: application/json so headerCleanerInterceptor leaves it alone
     protected val apiHeaders by lazy {
         headers.newBuilder()
             .set("Accept", "application/json")
@@ -39,19 +40,27 @@ abstract class NTKBase(
     override val supportsLatest = true
     protected val preferences by lazy { getPreferences() }
 
+    // Domain number is user-configurable and auto-updated when the site redirects (e.g. ntk01 → ntk02)
     protected val rootUrl: String
         get() {
             val domainNumber = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
             return "https://ntk$domainNumber.com"
         }
 
+    // baseUrl is set to the content-specific path so "Open in WebView" lands on the right section
+    // Subclasses can override webViewPath when the WebView path differs from contentKind (e.g. NTKWebtoon uses "ing")
     protected open val webViewPath: String get() = contentKind
     override val baseUrl: String get() = "$rootUrl/$webViewPath"
 
+    // Detail/chapter/page requests use rootUrl directly to avoid baseUrl's content-path prefix doubling the path
     override fun mangaDetailsRequest(manga: SManga) = GET(rootUrl + manga.url, headers)
     override fun chapterListRequest(manga: SManga) = GET(rootUrl + manga.url, headers)
     override fun pageListRequest(chapter: SChapter) = GET(rootUrl + chapter.url, headers)
 
+    // --- INTERCEPTORS ---
+
+    // Strips Next.js RSC headers that would confuse the server into returning partial JSON instead of full HTML.
+    // Only adds the HTML Accept header if one isn't already set (preserves Accept: application/json on API calls).
     private val headerCleanerInterceptor = Interceptor { chain ->
         val originalRequest = chain.request()
         val requestBuilder = originalRequest.newBuilder()
@@ -66,13 +75,13 @@ abstract class NTKBase(
         chain.proceed(requestBuilder.build())
     }
 
+    // Detects if the site has migrated to a new domain number after a redirect and saves it to preferences
     private val domainUpdateInterceptor = Interceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)
 
         val finalUrl = response.request.url.toString()
-        val regex = """ntk(\d+)\.com""".toRegex()
-        val matchResult = regex.find(finalUrl)
+        val matchResult = """ntk(\d+)\.com""".toRegex().find(finalUrl)
 
         if (matchResult != null) {
             val newDomainNumber = matchResult.groupValues[1]
@@ -84,6 +93,7 @@ abstract class NTKBase(
         response
     }
 
+    // Applies per-image rate limiting during downloads only — has no effect while reading
     private var lastImageRequestTime = 0L
     private val smartRateLimitInterceptor = Interceptor { chain ->
         val request = chain.request()
@@ -112,6 +122,7 @@ abstract class NTKBase(
         chain.proceed(request)
     }
 
+    // Redirects bare root URL requests to the correct content section for WebView
     private val webViewRedirectInterceptor = Interceptor { chain ->
         val request = chain.request()
         val url = request.url.toString()
@@ -123,41 +134,18 @@ abstract class NTKBase(
         }
     }
 
-    private val viewModeCookieInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        if ("/updates" in request.url.encodedPath) {
-            val existing = request.header("Cookie") ?: ""
-            val updated = request.newBuilder()
-                .header("Cookie", if (existing.isEmpty()) "ntk_view_mode=page" else "$existing; ntk_view_mode=page")
-                .build()
-            chain.proceed(updated)
-        } else {
-            chain.proceed(request)
-        }
-    }
-
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
             .addInterceptor(headerCleanerInterceptor)
             .addInterceptor(domainUpdateInterceptor)
             .addInterceptor(smartRateLimitInterceptor)
             .addInterceptor(webViewRedirectInterceptor)
-            .addNetworkInterceptor(viewModeCookieInterceptor)
             .build()
     }
 
-//    override fun popularMangaParse(response: Response): MangasPage {
-//        val document = response.asJsoup()
-//        val mangas = document.select("div.card-grid > a.card").map { element ->
-//            SManga.create().apply {
-//                setUrlWithoutDomain(element.attr("href"))
-//                title = element.select("p.subject").text()
-//                thumbnail_url = element.select("div.thumb img:not(.platform-icon)").attr("abs:src")
-//            }
-//        }
-//        return MangasPage(mangas, hasNextPage = false)
-//    }
+    // --- PARSE LOGIC ---
 
+    // Parses the card grid HTML used by text search results
     protected fun htmlCardParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("div.card-grid > a.card").map { element ->
@@ -170,7 +158,7 @@ abstract class NTKBase(
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    // New — replaces the old popularMangaParse
+    // Parses the JSON API response used by popular and filter-based search for both manga and webtoon
     override fun popularMangaParse(response: Response): MangasPage {
         val data = json.parseToJsonElement(response.body.string()).jsonObject
         val mangas = data["works"]!!.jsonArray.map {
@@ -185,79 +173,12 @@ abstract class NTKBase(
         return MangasPage(mangas, data["hasMore"]!!.jsonPrimitive.boolean)
     }
 
-//    override fun latestUpdatesParse(response: Response): MangasPage {
-//        val document = response.asJsoup()
-//        val mangas = document.select("ul.upd-grid > li.upd-card").map { element ->
-//            SManga.create().apply {
-//                val sid = element.attr("data-manhwa-sid")
-//                if (sid.isNotEmpty()) {
-//                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
-//                } else {
-//                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
-//                    if (allBtnHref.isNotEmpty()) {
-//                        setUrlWithoutDomain(allBtnHref)
-//                    } else {
-//                        val epHref = element.select("a.upd-card-main").attr("href")
-//                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
-//                    }
-//                }
-//                title = element.select("div.upd-title").text()
-//                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
-//            }
-//        }
-//        return MangasPage(mangas, hasNextPage = false)
-//    }
-
-//    override fun latestUpdatesParse(response: Response): MangasPage {
-//        val document = response.asJsoup()
-//        val items = document.select("ul.upd-grid > li.upd-card")
-//        val mangas = items.map { element ->
-//            SManga.create().apply {
-//                val sid = element.attr("data-manhwa-sid")
-//                if (sid.isNotEmpty()) {
-//                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
-//                } else {
-//                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
-//                    if (allBtnHref.isNotEmpty()) {
-//                        setUrlWithoutDomain(allBtnHref)
-//                    } else {
-//                        val epHref = element.select("a.upd-card-main").attr("href")
-//                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
-//                    }
-//                }
-//                title = element.select("div.upd-title").text()
-//                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
-//            }
-//        }
-//        return MangasPage(mangas, hasNextPage = items.size >= PAGE_SIZE)
-//    }
-
-//    override fun latestUpdatesParse(response: Response): MangasPage {
-//        val document = response.asJsoup()
-//        val items = document.select("ul.upd-grid > li.upd-card")
-//        val mangas = items.map { element ->
-//            SManga.create().apply {
-//                val sid = element.attr("data-manhwa-sid")
-//                if (sid.isNotEmpty()) {
-//                    setUrlWithoutDomain("$rootUrl/$contentKind/$sid")
-//                } else {
-//                    val allBtnHref = element.select("a.upd-allbtn").attr("abs:href")
-//                    if (allBtnHref.isNotEmpty()) {
-//                        setUrlWithoutDomain(allBtnHref)
-//                    } else {
-//                        val epHref = element.select("a.upd-card-main").attr("href")
-//                        url = "/" + epHref.trim('/').split("/").take(2).joinToString("/")
-//                    }
-//                }
-//                title = element.select("div.upd-title").text()
-//                thumbnail_url = element.select("div.upd-thumb img").attr("abs:src")
-//            }
-//        }
-
+    // Parses the manga latest updates page by extracting all 200 entries from the embedded RSC payload.
+    // The server pre-loads all entries in a Next.js RSC script tag on initial load — no pagination needed.
+    // Deduplicates by sourceWorkId since the same series can appear multiple times across recent episodes.
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        // All 200 update entries are embedded in the RSC payload on initial load
         val rscData = document.select("script")
             .map { it.data() }
             .firstOrNull { "allCards" in it }
@@ -274,11 +195,11 @@ abstract class NTKBase(
             .replace("\\\"", "\"")
             .replace("\\/", "/")
 
-        // Extract the allCards JSON array
         val marker = "\"allCards\":"
         val markerIdx = unescaped.indexOf(marker)
         if (markerIdx < 0) return MangasPage(emptyList(), false)
 
+        // Walk brackets to find the end of the allCards array
         val arrayStart = markerIdx + marker.length
         var depth = 0
         var arrayEnd = arrayStart
@@ -297,7 +218,6 @@ abstract class NTKBase(
 
         val cards = json.parseToJsonElement(unescaped.substring(arrayStart, arrayEnd)).jsonArray
 
-        // Deduplicate by sourceWorkId — same series can appear multiple times
         val seen = mutableSetOf<String>()
         val mangas = cards.mapNotNull {
             val card = it.jsonObject
@@ -318,8 +238,7 @@ abstract class NTKBase(
         return MangasPage(mangas, hasNextPage = false)
     }
 
-//    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
+    // Routes to JSON parser for API results, HTML card parser for text search results
     override fun searchMangaParse(response: Response): MangasPage {
         val contentType = response.header("Content-Type") ?: ""
         return if (contentType.contains("application/json")) {
@@ -369,6 +288,8 @@ abstract class NTKBase(
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used")
 
+    // --- SETTINGS ---
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = PREF_DOMAIN_KEY
@@ -391,7 +312,7 @@ abstract class NTKBase(
         private const val PREF_DOMAIN_KEY = "pref_domain_key"
         private const val PREF_DOMAIN_DEFAULT = "01"
         private const val PREF_RATELIMIT_KEY = "pref_ratelimit_key"
-        private const val PREF_RATELIMIT_DEFAULT = "3"
+        private const val PREF_RATELIMIT_DEFAULT = "0"
 
         const val PAGE_SIZE = 49
     }

@@ -6,49 +6,9 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-// class NTKManga : NTKBase("NTK Manga", "manhwa") {
-//
-//    // TODO: Pagination relies on infinite scrolling API calls.
-//    // The `page` parameter is ignored until the AJAX request payload is implemented.
-//    override fun popularMangaRequest(page: Int): Request = GET("$rootUrl/manhwa", headers)
-//    override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/manhwa/updates", headers)
-//
-//    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-//        if (query.isNotEmpty()) {
-//            val url = "$rootUrl/search".toHttpUrl().newBuilder().apply {
-//                addQueryParameter("q", query)
-//                addQueryParameter("kind", "manhwa")
-//            }.build()
-//            return GET(url, headers)
-//        }
-//
-//        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
-//        val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
-//        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
-//
-//        val sortParam = sortFilter?.let { sortList[it.state].value } ?: sortList[0].value
-//        val statusParam = statusFilter?.let { statusList[it.state].value } ?: statusList[0].value
-//        val genreParam = buildGenreParam(genreFilter)
-//
-//        val url = "$rootUrl/manhwa$statusParam".toHttpUrl().newBuilder().apply {
-//            if (sortParam != "new") addQueryParameter("sort", sortParam)
-//            genreParam?.let { addQueryParameter("g", it) }
-//        }.build()
-//
-//        return GET(url, headers)
-//    }
-//
-//    override fun getFilterList() = FilterList(
-//        SortFilter(),
-//        StatusFilter(),
-//        GenreFilter(),
-//        Filter.Header(""),
-//    )
-// }
-
 class NTKManga : NTKBase("NTK Manga", "manhwa") {
 
-    // TODO: Pagination relies on the JSON API.
+    // Popular: sorted by views via JSON API — supports infinite pagination via hasMore
     override fun popularMangaRequest(page: Int): Request {
         val url = "$rootUrl/api/manhwa-list".toHttpUrl().newBuilder().apply {
             addQueryParameter("status", "ongoing")
@@ -60,9 +20,11 @@ class NTKManga : NTKBase("NTK Manga", "manhwa") {
         return GET(url, apiHeaders)
     }
 
-    // override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/manhwa/updates", headers)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/manhwa/updates", headers)
+    // Latest: fetches /manhwa/updates — all 200 entries are embedded in the RSC payload, parsed in NTKBase
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$rootUrl/manhwa/updates", headers)
 
+    // Search: text query uses HTML search endpoint; filters use JSON API with status/sort/genre params
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
             val url = "$rootUrl/search".toHttpUrl().newBuilder().apply {
@@ -80,7 +42,7 @@ class NTKManga : NTKBase("NTK Manga", "manhwa") {
         val statusParam = statusFilter?.let { statusList[it.state].value } ?: statusList[0].value
         val genreParam = buildGenreParam(genreFilter)
 
-        // "-end" is the HTML URL suffix; the API uses "end" directly
+        // HTML URL uses "-end" suffix; API uses "end" as a direct param value
         val apiStatus = if (statusParam == "-end") "end" else "ongoing"
 
         val url = "$rootUrl/api/manhwa-list".toHttpUrl().newBuilder().apply {
