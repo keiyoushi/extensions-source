@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +13,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -25,7 +27,15 @@ class OnfMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
+    // Adds a rate limiter to prevent Cloudflare from returning 403 upon concurrent requests
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
+
+    // Adds standard headers to look less suspicious to Cloudflare's WAF
     override fun headersBuilder() = super.headersBuilder()
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+        .add("Accept-Language", "es-419,es;q=0.9,en;q=0.8")
         .add("Referer", "$baseUrl/")
 
     private val dateFormat by lazy {
@@ -86,7 +96,12 @@ class OnfMangas : HttpSource() {
         val genero = filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "0"
 
         url.addQueryParameter("tab", tab)
-        url.addQueryParameter("genero", genero)
+
+        // The website expects "generos[0]" instead of "genero"
+        // Also skip adding it entirely if the default "Todas las categorías" (0) is selected
+        if (genero != "0") {
+            url.addQueryParameter("generos[0]", genero)
+        }
 
         return GET(url.build(), headers)
     }
@@ -106,7 +121,7 @@ class OnfMangas : HttpSource() {
             title = document.selectFirst(".manga-title")?.text()
                 ?.takeIf { it.isNotEmpty() }
                 ?: throw Exception("Could not parse manga title")
-            author = document.selectFirst("div:contains(Autor:) b")?.text()
+            author = document.selectFirst(".author-link")?.text()
             description = document.selectFirst(".manga-description")?.text()
             genre = document.select(".genre-tag").joinToString { it.text() }
             thumbnail_url = document.selectFirst(".manga-poster")?.attr("abs:src")
