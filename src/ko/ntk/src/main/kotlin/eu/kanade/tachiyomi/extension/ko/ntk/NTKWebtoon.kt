@@ -11,19 +11,31 @@ import okhttp3.Response
 class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
     override val webViewPath = "ing"
 
-    // TODO: Pagination relies on infinite scrolling API calls.
-    // The `page` parameter is ignored until the AJAX request payload is implemented.
-    // override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ing?sort=views", headers)
-    // override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/ing", headers)
-    override fun popularMangaRequest(page: Int): Request = GET("$rootUrl/ing?sort=views", headers)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$rootUrl/ing", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$rootUrl/api/works".toHttpUrl().newBuilder().apply {
+            addQueryParameter("status", "ongoing")
+            addQueryParameter("sort", "views")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("pageSize", PAGE_SIZE.toString())
+            addQueryParameter("withTotal", "1")
+        }.build()
+        return GET(url, apiHeaders)
+    }
 
-    // Webtoons use the standard card grid for latest updates, not the upd-grid
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$rootUrl/api/works".toHttpUrl().newBuilder().apply {
+            addQueryParameter("status", "ongoing")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("pageSize", PAGE_SIZE.toString())
+            addQueryParameter("withTotal", "1")
+        }.build()
+        return GET(url, apiHeaders)
+    }
+
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            // val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             val url = "$rootUrl/search".toHttpUrl().newBuilder().apply {
                 addQueryParameter("q", query)
                 addQueryParameter("kind", "webtoon")
@@ -43,20 +55,21 @@ class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
         val dayParam = dayFilter?.let { wtDayList[it.state].value } ?: ""
         val tagParam = buildWtGenreParam(genreFilter)
 
-        // val url = "$baseUrl/$statusParam".toHttpUrl().newBuilder().apply {
-        val url = "$rootUrl/$statusParam".toHttpUrl().newBuilder().apply {
-            if (sortParam != "new") addQueryParameter("sort", sortParam)
+        val apiStatus = if (statusParam == "end") "end" else "ongoing"
 
-            // Site ignores Category and Day filters on the /end page
+        val url = "$rootUrl/api/works".toHttpUrl().newBuilder().apply {
+            addQueryParameter("status", apiStatus)
+            if (sortParam != "new") addQueryParameter("sort", sortParam)
             if (statusParam != "end") {
                 if (catParam.isNotEmpty()) addQueryParameter("cat", catParam)
                 if (dayParam.isNotEmpty()) addQueryParameter("day", dayParam)
             }
-
             if (!tagParam.isNullOrEmpty()) addQueryParameter("tag", tagParam)
+            addQueryParameter("page", page.toString())
+            addQueryParameter("pageSize", PAGE_SIZE.toString())
+            addQueryParameter("withTotal", "1")
         }.build()
-
-        return GET(url, headers)
+        return GET(url, apiHeaders)
     }
 
     override fun getFilterList() = FilterList(
@@ -65,6 +78,6 @@ class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
         WtCategoryFilter(),
         WtDayFilter(),
         WtGenreFilter(),
-        Filter.Header(""), // added as a padding
+        Filter.Header(""),
     )
 }
