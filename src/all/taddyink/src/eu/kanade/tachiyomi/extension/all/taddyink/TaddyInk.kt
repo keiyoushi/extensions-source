@@ -18,6 +18,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 open class TaddyInk(
@@ -63,6 +64,24 @@ open class TaddyInk(
     }
 
     override fun popularMangaParse(response: Response) = parseManga(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            // pathSegments[1] is the slug used to identify the comic
+            url.pathSegments.getOrNull(1) ?: throw Exception("Unsupported url")
+
+            val manga = SManga.create().apply { this.url = query }
+            return fetchMangaDetails(manga).map {
+                MangasPage(listOf(it.apply { this.url = query }), false)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters

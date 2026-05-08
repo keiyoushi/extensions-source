@@ -66,6 +66,14 @@ class Mangabz :
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (MIRRORS.none { it.domain == url.host }) {
+                throw Exception("Unsupported url")
+            }
+            val titleId = url.pathSegments[0]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleId", filters)
+        }
         if (query.isEmpty()) {
             val ids = parseFilterList(filters)
             if (ids.isEmpty()) return fetchPopularManga(page)

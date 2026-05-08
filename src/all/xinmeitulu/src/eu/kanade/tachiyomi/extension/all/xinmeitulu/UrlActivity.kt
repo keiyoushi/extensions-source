@@ -11,39 +11,20 @@ class UrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val host = intent?.data?.host
-        val pathSegments = intent?.data?.pathSegments
 
-        if (host != null && pathSegments != null) {
-            val query = fromUrl(pathSegments)
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            if (query == null) {
-                Log.e("UrlActivity", "Unable to parse URI from intent $intent")
-                finish()
-                exitProcess(1)
-            }
-
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
-                putExtra("filter", packageName)
-            }
-
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("UrlActivity", e.toString())
-            }
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("UrlActivity", "Unable to launch activity", e)
         }
 
         finish()
         exitProcess(0)
-    }
-
-    private fun fromUrl(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 2) {
-        val slug = pathSegments[1]
-        "SLUG:$slug"
-    } else {
-        null
     }
 }

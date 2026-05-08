@@ -102,6 +102,14 @@ class MangaBuff : HttpSource() {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments[1]
+            return fetchSearchManga(page, "$SEARCH_PREFIX$slug", filters)
+        }
         if (!query.startsWith(SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }

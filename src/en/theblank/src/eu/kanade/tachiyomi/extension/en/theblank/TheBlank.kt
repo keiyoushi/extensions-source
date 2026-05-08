@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.en.theblank.decryption.SecretStream
 import eu.kanade.tachiyomi.extension.en.theblank.decryption.State
+import eu.kanade.tachiyomi.extension.en.theblank.decryption.X25519
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -21,34 +22,26 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.Timeout
 import okio.buffer
 import java.io.IOException
-import java.nio.charset.StandardCharsets
-import java.security.KeyPairGenerator
 import java.security.MessageDigest
-import java.security.PrivateKey
 import java.security.SecureRandom
-import java.security.spec.MGF1ParameterSpec
 import java.text.SimpleDateFormat
 import java.util.Locale
-import javax.crypto.Cipher
-import javax.crypto.spec.OAEPParameterSpec
-import javax.crypto.spec.PSource
+import java.util.concurrent.ConcurrentHashMap
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 class TheBlank :
     HttpSource(),
@@ -316,7 +309,7 @@ class TheBlank :
                     }.build().encodedPath
                     name = buildString {
                         if (it.isPremium) {
-                            append("\uD83D\uDD12 ") // lock emoji
+                            append("\uD83D\uDD12 ")
                         }
                         append(it.title)
                     }
@@ -346,121 +339,165 @@ class TheBlank :
         )
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val signedUrls = response.parseAs<PageListResponse>().props.signedUrls
-
-        val keyPair = generateKeyPair()
-        val sid = decodeUrlSafeBase64(
-            fetchSessionId(keyPair.publicKeyBase64),
-        )
-        val key = rsaDecrypt(keyPair.keyPair.private, sid)
-
-        return signedUrls.mapIndexed { idx, img ->
-            val httpUrl = img.toHttpUrl()
-
-            val fileName = httpUrl.queryParameter("path")
-                ?.substringAfterLast('/')
-                ?: throw IllegalStateException("Image URL missing 'path' parameter: $img")
-
-            Page(
-                index = idx,
-                imageUrl = httpUrl.newBuilder()
-                    .fragment(key + fileName)
-                    .build()
-                    .toString(),
-            )
-        }
-    }
-
-    private fun fetchSessionId(publicKeyBase64: String): String {
-        val url = "$baseUrl/checksum".toHttpUrl()
-        val body = buildJsonObject {
-            put("checksum", publicKeyBase64)
-            put("timestamp", generateNonce())
-        }.toJsonString().toRequestBody("application/json".toMediaType())
-
-        val request = apiRequest(
-            url,
-            body,
-            includeXSRFToken = false,
-            includeCSRFToken = true,
-            includeVersion = false,
-        )
-
-        return client.newCall(request).execute()
-            .parseAs<SessionResponse>().sid
-    }
-
-    private fun generateKeyPair(): KeyPairResult {
-        val generator = KeyPairGenerator.getInstance("RSA").apply {
-            initialize(2048)
-        }
-
-        val keyPair = generator.generateKeyPair()
-        val publicKeyBase64 = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP)
-
-        return KeyPairResult(keyPair, publicKeyBase64)
-    }
-
     private val secureRandom = SecureRandom()
 
-    private fun generateNonce(): String {
-        val timestampHex = (System.currentTimeMillis() / 1000)
-            .toString(16)
-            .padStart(16, '0')
+    private class ChapterSession(
+        val chapterToken: String,
+        val sharedSecret: ByteArray,
+        val clientPubkeyB64: String,
+    )
 
-        val randomHex = ByteArray(24).apply {
-            secureRandom.nextBytes(this)
-        }.joinToString("") { "%02x".format(it) }
+    private val sessions = ConcurrentHashMap<String, ChapterSession>()
+    private val sessionLocks = ConcurrentHashMap<String, Any>()
 
-        return timestampHex + randomHex
+    private fun sessionKey(serieSlug: String, chapterSlug: String) = "tb-$serieSlug--$chapterSlug"
+
+    private fun handshakeFrom(props: PageListResponse.Props): ChapterSession {
+        val serverPub = Base64.decode(props.serverPubkey, Base64.DEFAULT)
+        require(serverPub.size == 32) { "server pubkey must be 32 bytes" }
+
+        val priv = ByteArray(32).also(secureRandom::nextBytes)
+        val clientPub = X25519.publicKey(priv)
+        val shared = X25519.scalarMult(priv, serverPub)
+        priv.fill(0)
+
+        return ChapterSession(
+            chapterToken = props.chapterToken,
+            sharedSecret = shared,
+            clientPubkeyB64 = Base64.encodeToString(clientPub, Base64.NO_WRAP),
+        )
     }
 
-    private fun rsaDecrypt(privateKey: PrivateKey, encryptedData: ByteArray): String {
-        val cipher = Cipher.getInstance("RSA/ECB/OAEPPadding").apply {
-            val oaepSpec = OAEPParameterSpec(
-                "SHA-256",
-                "MGF1",
-                MGF1ParameterSpec.SHA256,
-                PSource.PSpecified.DEFAULT,
-            )
+    // Refetches the chapter page to rebuild the handshake on cache miss —
+    // hit after a process restart when Tachiyomi rehydrates Page objects
+    // from disk but the in-memory session map is empty.
+    private fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
+        val id = sessionKey(serieSlug, chapterSlug)
+        sessions[id]?.let { return it }
 
-            init(Cipher.DECRYPT_MODE, privateKey, oaepSpec)
+        val lock = sessionLocks[id] ?: Any().let { fresh ->
+            sessionLocks.putIfAbsent(id, fresh) ?: fresh
         }
+        synchronized(lock) {
+            sessions[id]?.let { return it }
 
-        val decryptedBytes = cipher.doFinal(encryptedData)
+            val url = baseHttpUrl.newBuilder()
+                .addPathSegment("serie").addPathSegment(serieSlug)
+                .addPathSegment("chapter").addPathSegment(chapterSlug)
+                .build()
+            val req = apiRequest(
+                url,
+                includeXSRFToken = true,
+                includeCSRFToken = false,
+                includeVersion = true,
+            )
+            val props = client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    throw IOException("Could not rebuild chapter session: HTTP ${resp.code}")
+                }
+                resp.parseAs<PageListResponse>().props
+            }
 
-        return String(decryptedBytes, StandardCharsets.UTF_8)
+            val sess = handshakeFrom(props)
+            sessions[id] = sess
+            return sess
+        }
     }
 
-    private fun decodeUrlSafeBase64(data: String): ByteArray {
-        val normalized = data
-            .replace('-', '+')
-            .replace('_', '/')
-            .let { it + "=".repeat((4 - it.length % 4) % 4) }
+    override fun pageListParse(response: Response): List<Page> {
+        val props = response.parseAs<PageListResponse>().props
+        val sess = handshakeFrom(props)
+        val id = sessionKey(props.data.serie.slug, props.data.slug)
+        sessions[id] = sess
 
-        return Base64.decode(normalized, Base64.DEFAULT)
+        return (1..props.pageCount).map { idx ->
+            Page(
+                index = idx - 1,
+                url = "$id#$idx",
+                imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+            )
+        }
+    }
+
+    private fun hexNonce(byteCount: Int = 16): String {
+        val b = ByteArray(byteCount).also(secureRandom::nextBytes)
+        return b.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun hmacSha256Hex(key: String, msg: String): String {
+        val mac = Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(key.toByteArray(Charsets.US_ASCII), "HmacSHA256"))
+        }
+        return mac.doFinal(msg.toByteArray(Charsets.US_ASCII))
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val parsed = page.imageUrl!!.toHttpUrl()
+        val seg = parsed.pathSegments
+        require(seg.size >= 6 && seg[0] == "serie" && seg[2] == "chapter" && seg[4] == "page") {
+            "unexpected page URL shape: ${parsed.encodedPath}"
+        }
+        val serieSlug = seg[1]
+        val chapterSlug = seg[3]
+        val pageIndex = seg[5].toInt()
+
+        val session = ensureSession(serieSlug, chapterSlug)
+        val sessionId = sessionKey(serieSlug, chapterSlug)
+
+        val ts = (System.currentTimeMillis() / 1000).toString()
+        val nonce = hexNonce()
+        val sig = hmacSha256Hex(session.chapterToken, "$pageIndex$ts$nonce")
+
+        val url = baseHttpUrl.newBuilder()
+            .addPathSegment("serie").addPathSegment(serieSlug)
+            .addPathSegment("chapter").addPathSegment(chapterSlug)
+            .addPathSegment("page").addPathSegment(pageIndex.toString())
+            .addQueryParameter("token", session.chapterToken)
+            .addQueryParameter("ts", ts)
+            .addQueryParameter("nonce", nonce)
+            .addQueryParameter("sig", sig)
+            .fragment(sessionId)
+            .build()
+
+        val h = headersBuilder()
+            .set("X-Client-Pubkey", session.clientPubkeyB64)
+            .build()
+
+        return GET(url, h)
     }
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        val fragment = request.url.fragment
-            ?.takeIf { it != THUMBNAIL_FRAGMENT }
-            ?: return response
+        val sessionId = request.url.fragment ?: return response
+        val session = sessions[sessionId] ?: return response
+
+        val pageNameRaw = response.header("X-Page-Name") ?: return response
+        val keyHintB64 = response.header("X-Key-Hint") ?: return response
+        val keyHint = Base64.decode(keyHintB64, Base64.DEFAULT)
+        require(keyHint.size >= 32) { "X-Key-Hint must decode to >= 32 bytes" }
+
+        // streamKey = SHA-256(sharedSecret || filename) XOR keyHint[:32]
+        // — KDF recovered from pam.wasm; not a documented derivation.
+        val streamKey = run {
+            val sha = MessageDigest.getInstance("SHA-256").run {
+                update(session.sharedSecret)
+                update(pageNameRaw.toByteArray(Charsets.UTF_8))
+                digest()
+            }
+            ByteArray(32) { i -> (sha[i].toInt() xor keyHint[i].toInt()).toByte() }
+        }
 
         val networkSource = response.body.source()
         networkSource.skip(PREFIX_LENGTH.toLong())
-
-        val nonce = networkSource.readByteArray(IMAGE_HEADER_LENGTH.toLong())
-        val key = MessageDigest.getInstance("SHA-256")
-            .digest(fragment.toByteArray(Charsets.UTF_8))
+        val ssHeader = networkSource.readByteArray(STREAM_HEADER_LENGTH.toLong())
 
         val decryptedSource = object : okio.Source {
             private val secretStream = SecretStream()
             private val state = State().apply {
-                secretStream.initPull(this, nonce, key)
+                secretStream.initPull(this, ssHeader, streamKey)
             }
             private val decryptedBuffer = Buffer()
             private var isFinished = false
@@ -510,6 +547,6 @@ class TheBlank :
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
-private const val CHUNK_SIZE = 65536 + 17 // Data size + ABYTES
+private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
 private const val PREFIX_LENGTH = 128
-private const val IMAGE_HEADER_LENGTH = 24
+private const val STREAM_HEADER_LENGTH = 24

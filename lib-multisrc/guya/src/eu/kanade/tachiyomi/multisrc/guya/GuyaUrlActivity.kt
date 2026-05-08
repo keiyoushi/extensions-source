@@ -17,39 +17,19 @@ class GuyaUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val host = intent?.data?.host
-        val pathSegments = intent?.data?.pathSegments
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-        if (host != null && pathSegments != null) {
-            val query = fromGuya(pathSegments)
-
-            if (query == null) {
-                Log.e("GuyaUrlActivity", "Unable to parse URI from intent $intent")
-                finish()
-                exitProcess(1)
-            }
-
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
-                putExtra("filter", packageName)
-            }
-
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("GuyaUrlActivity", e.toString())
-            }
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("GuyaUrlActivity", "Unable to launch activity", e)
         }
 
         finish()
         exitProcess(0)
-    }
-
-    private fun fromGuya(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 3) {
-        val slug = pathSegments[2]
-        "${Guya.SLUG_PREFIX}$slug"
-    } else {
-        null
     }
 }

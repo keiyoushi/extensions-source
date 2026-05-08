@@ -15,6 +15,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -228,6 +229,15 @@ class Twi4 : HttpSource() {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments[2]
+            return fetchSearchManga(page, "$SEARCH_PREFIX_SLUG$slug", filters)
+        }
+
         if (query.startsWith(SEARCH_PREFIX_SLUG)) {
             val slug = query.drop(SEARCH_PREFIX_SLUG.length)
             // Explicitly ignore anything that ends with .html or starts with zadankai

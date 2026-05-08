@@ -210,6 +210,15 @@ class HattoriManga : HttpSource() {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val item = url.pathSegments[1]
+            return fetchSearchManga(page, "$SEARCH_PREFIX$item", filters)
+        }
+
         if (query.startsWith(SEARCH_PREFIX)) {
             val slug = query.removePrefix(SEARCH_PREFIX)
             return client.newCall(GET("$baseUrl/manga/$slug", headers))

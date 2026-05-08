@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -77,6 +79,8 @@ abstract class Comicaso(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.isNotEmpty()) {
             val url = when {
+                query.startsWith("https://") ->
+                    query.trim()
                 query.startsWith(URL_SEARCH_PREFIX) ->
                     query.removePrefix(URL_SEARCH_PREFIX).trim()
                 query.contains("://") ->
@@ -85,6 +89,10 @@ abstract class Comicaso(
             }
 
             if (url != null) {
+                val httpUrl = url.toHttpUrl()
+                if (httpUrl.host != baseUrl.toHttpUrl().host) {
+                    throw Exception("Unsupported url")
+                }
                 val mangaSlug = url.substringAfter("/komik/").substringBefore("/")
                 return fetchMangaDetails(SManga.create().apply { this.url = mangaSlug })
                     .map { MangasPage(listOf(it), false) }
@@ -172,6 +180,35 @@ abstract class Comicaso(
     }
 
     // =============================== Pages ================================
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
+        val cleanUrl = chapterUrl.newBuilder().query(null).build().toString()
+
+        val body = TokenRequestDto(listOf(cleanUrl)).toJsonRequestBody()
+        val tokenHeaders = headersBuilder()
+            .set("Referer", "$baseUrl${chapter.url.substringBeforeLast("/", "").substringBeforeLast("/")}/")
+            .build()
+
+        val tokenRequest = Request.Builder()
+            .url("$baseUrl/wp-json/mp/v1/chapter")
+            .post(body)
+            .headers(tokenHeaders)
+            .build()
+
+        return client.newCall(tokenRequest).asObservableSuccess().switchMap { response ->
+            val result = response.parseAs<TokenDto>()
+            val token = result.tokens[cleanUrl]
+                ?: throw Exception("Failed to get token for $cleanUrl")
+
+            val pageUrl = chapterUrl.newBuilder()
+                .addQueryParameter("t", token)
+                .addQueryParameter("e", result.expire.toString())
+                .build()
+
+            client.newCall(GET(pageUrl, headers)).asObservableSuccess().map(::pageListParse)
+        }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()

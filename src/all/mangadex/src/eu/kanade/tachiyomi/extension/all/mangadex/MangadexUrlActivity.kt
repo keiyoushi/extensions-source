@@ -21,44 +21,19 @@ class MangadexUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val data = intent?.data
-        if (data != null && data.pathSegments != null && data.pathSegments.size > 1) {
-            val path = data.pathSegments[0]
-            val id = data.pathSegments[1]
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
 
-            var query = "id:$id"
-            when (path) {
-                "chapter" -> {
-                    query = "ch:$id"
-                }
-                "group" -> {
-                    query = "grp:$id"
-                }
-                "user" -> {
-                    query = "usr:$id"
-                }
-                "author" -> {
-                    query = "author:$id"
-                }
-                "list" -> {
-                    query = "list:$id"
-                }
-            }
-
-            val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH")
-            mainIntent.putExtra("query", query)
-            mainIntent.putExtra("filter", packageName)
-            mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("MangadexUrlActivity", "Activity not found: " + e.message)
-            } catch (e: Throwable) {
-                Log.e("MangadexUrlActivity", "Unexpected throwable: " + e.message)
-            }
-        } else {
-            Log.e("MangadexUrlActivity", "Unable to parse URI: $data")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("MangadexUrlActivity", "Activity not found: " + e.message)
+        } catch (e: Throwable) {
+            Log.e("MangadexUrlActivity", "Unexpected throwable: " + e.message)
         }
 
         finish()

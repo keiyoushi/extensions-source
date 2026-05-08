@@ -10,25 +10,17 @@ import kotlin.system.exitProcess
 class DeviantArtUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
 
-        if (pathSegments != null && pathSegments.size >= 3) {
-            val username = pathSegments[0]
-            val folderId = pathSegments[2]
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "gallery:$username/$folderId")
-                putExtra("filter", packageName)
-            }
-
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("DeviantArtUrlActivity", e.toString())
-            }
-        } else {
-            Log.e("DeviantArtUrlActivity", "Could not parse URI from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("DeviantArtUrlActivity", "Unable to launch activity", e)
         }
 
         finish()

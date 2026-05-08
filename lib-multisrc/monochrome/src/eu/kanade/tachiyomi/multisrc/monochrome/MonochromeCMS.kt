@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -43,6 +44,16 @@ open class MonochromeCMS(
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            if (url.pathSegments.size < 2) {
+                throw Exception("Unsupported url")
+            }
+            return fetchSearchManga(page, UUID_QUERY + url.pathSegments[1], filters)
+        }
         if (!query.startsWith(UUID_QUERY)) {
             return super.fetchSearchManga(page, query, filters)
         }

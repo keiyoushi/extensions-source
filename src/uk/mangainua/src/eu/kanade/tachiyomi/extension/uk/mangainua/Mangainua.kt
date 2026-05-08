@@ -178,17 +178,22 @@ class Mangainua :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val newResponse = getAjaxChapters(response)
-        return newResponse.asJsoup().select("div.ltcitems").asReversed().map { element ->
-            SChapter.create().apply {
-                val urlElement = element.selectFirst("a")!!
-                val chapterName = urlElement.ownText().trim()
-                val chapterNumber = element.attr("manga-chappter")
-                val volumeNumber = element.attr("manga-tom")
+        return newResponse.asJsoup().select("div.ltcitems").asReversed().mapNotNull { element ->
+            val urlElement = element.selectFirst("a") ?: return@mapNotNull null // Skip if no URL element
+            val chapterName = urlElement.ownText().trim()
+            val chapterNumber = element.attr("manga-chappter")
+            val volumeNumber = element.attr("manga-tom")
 
+            // Skip creating SChapter if both chapterNumber and volumeNumber are empty
+            if (chapterNumber.isEmpty() && volumeNumber.isEmpty()) {
+                return@mapNotNull null
+            }
+
+            SChapter.create().apply {
                 setUrlWithoutDomain(urlElement.attr("abs:href"))
                 scanlator = element.attr("translate").takeUnless(String::isBlank) ?: urlElement.text().substringAfter("від:").trim()
                 date_upload = parseDate(element.child(0).ownText())
-                chapter_number = chapterNumber.toFloat()
+                chapter_number = chapterNumber.toFloatOrNull() ?: 0f
                 name = when {
                     chapterName.contains("Альтернативний") -> "Том $volumeNumber. Розділ $chapterNumber"
                     else -> chapterName

@@ -138,6 +138,7 @@ class MangaCloud : HttpSource() {
                         fetchingOnlineTags.set(false)
                     }
                 }
+
                 override fun onFailure(call: Call, e: IOException) {
                     Log.e(name, "Failed to fetch tags", e)
                     fetchingOnlineTags.set(false)
@@ -247,11 +248,11 @@ class MangaCloud : HttpSource() {
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<Data<Manga>>()
+        val data = response.parseAs<Data<Manga>>().data
 
-        return data.data.chapters.map { chapter ->
+        return data.chapters.map { chapter ->
             SChapter.create().apply {
-                url = ChapterUrl(data.data.id, chapter.id).toJsonString()
+                url = ChapterUrl(data.id, chapter.id).toJsonString()
                 name = buildString {
                     append("Chapter ")
                     append(chapter.number.toString().substringBefore(".0"))
@@ -269,7 +270,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter/$chapterId", headers)
+        return GET("$API_URL/chapters/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -287,6 +288,11 @@ class MangaCloud : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    private fun generateKey(): String {
+        val timestamp = (System.currentTimeMillis() / 1000).toString().reversed()
+        return timestamp.map { "${(0..9).random()}$it" }.joinToString("")
+    }
 }
 
 private val jsonMediaType = "application/json".toMediaType()

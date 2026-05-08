@@ -182,13 +182,27 @@ class Baozi :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(ID_SEARCH_PREFIX)) {
-        val id = query.removePrefix(ID_SEARCH_PREFIX)
-        client.newCall(searchMangaByIdRequest(id))
-            .asObservableSuccess()
-            .map { response -> searchMangaByIdParse(response, id) }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host !in MIRRORS) {
+                throw Exception("Unsupported url")
+            }
+            val id = if (url.pathSegments[1] == "chapter") {
+                url.pathSegments[2]
+            } else {
+                url.pathSegments[1]
+            }
+            return fetchSearchManga(page, "$ID_SEARCH_PREFIX$id", filters)
+        }
+        return if (query.startsWith(ID_SEARCH_PREFIX)) {
+            val id = query.removePrefix(ID_SEARCH_PREFIX)
+            client.newCall(searchMangaByIdRequest(id))
+                .asObservableSuccess()
+                .map { response -> searchMangaByIdParse(response, id) }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/$id", headers)

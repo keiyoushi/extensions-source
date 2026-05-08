@@ -271,16 +271,6 @@ abstract class NTKBase(
         }
     }
 
-//    override fun chapterListParse(response: Response): List<SChapter> {
-//        val document = response.asJsoup()
-//        return document.select("ul.ep-list-v2 > li.ep-row-v2").map { element ->
-//            SChapter.create().apply {
-//                setUrlWithoutDomain(element.select("a.ep-row-v2-link").attr("href"))
-//                name = element.select("div.ep-row-v2-title strong").text()
-//            }
-//        }
-//    }
-
     private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.KOREA)
 
     override fun chapterListParse(response: Response): List<SChapter> {

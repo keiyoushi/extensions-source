@@ -65,6 +65,17 @@ class WeebCentral : HttpSource() {
     // =============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val pathSegments = url.pathSegments
+            if (pathSegments.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            return fetchSearchManga(page, "$URL_SEARCH_PREFIX${pathSegments[1]}/${pathSegments[2]}", filters)
+        }
         val pathSegment = query.takeIf { it.startsWith(URL_SEARCH_PREFIX) }
             ?.removePrefix(URL_SEARCH_PREFIX)
             ?: return super.fetchSearchManga(page, query, filters)

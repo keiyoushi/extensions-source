@@ -25,7 +25,7 @@ class RavenManga : HttpSource() {
 
     override val name = "RavenManga"
 
-    override val baseUrl = "https://ravensword.lat"
+    override val baseUrl = "https://raventard.xyz"
 
     override val lang = "es"
 

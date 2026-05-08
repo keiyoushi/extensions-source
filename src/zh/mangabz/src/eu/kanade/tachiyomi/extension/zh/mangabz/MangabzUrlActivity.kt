@@ -17,23 +17,17 @@ class MangabzUrlActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 0) {
-            val titleId = pathSegments[0]
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Mangabz.PREFIX_ID_SEARCH}$titleId")
-                putExtra("filter", packageName)
-            }
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("MangabzUrlActivity", e.toString())
-            }
-        } else {
-            Log.e("MangabzUrlActivity", "could not parse uri from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("MangabzUrlActivity", "Unable to launch activity", e)
         }
 
         finish()

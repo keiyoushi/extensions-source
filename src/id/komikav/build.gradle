@@ -2,8 +2,8 @@ ext {
     extName = 'APKOMIK'
     extClass = '.Apkomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://apkomik.cc'
-    overrideVersionCode = 3
+    baseUrl = 'https://01.apkomik.com'
+    overrideVersionCode = 4
     isNsfw = false
 }
 

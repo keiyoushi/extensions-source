@@ -36,18 +36,16 @@ class StarlightScan :
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangaList = response.asJsoup()
-            .select(latestUpdatesSelector())
-            .map(::latestUpdatesFromElement)
+            .select("div.mostRecentMangaCard__listContainer article.mostRecentMangaCard")
+            .map { element ->
+                SManga.create().apply {
+                    title = element.selectFirst("a.mostRecentMangaCard__title")!!.text()
+                    thumbnail_url = element.selectFirst("img.mostRecentMangaCard__cover")!!.imgAttr()
+                    setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+                }
+            }
 
         return MangasPage(mangaList, hasNextPage = false)
-    }
-
-    override fun latestUpdatesSelector() = "div.mostRecentMangaCard__listContainer article.mostRecentMangaCard"
-
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("a.mostRecentMangaCard__title")!!.text()
-        thumbnail_url = element.selectFirst("img.mostRecentMangaCard__cover")!!.imgAttr()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
