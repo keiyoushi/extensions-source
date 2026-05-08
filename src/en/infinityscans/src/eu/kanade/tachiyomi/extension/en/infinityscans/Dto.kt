@@ -2,13 +2,14 @@ package eu.kanade.tachiyomi.extension.en.infinityscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
 class ResponseDto<T>(val result: T)
 
 @Serializable
-data class SearchResultDto(
+class SearchResultDto(
     val titles: List<SearchEntryDto>,
     val genres: List<FilterDto>? = null,
     val authors: List<FilterDto>? = null,
@@ -16,21 +17,21 @@ data class SearchResultDto(
 )
 
 @Serializable
-data class RankingResultDto(
+class RankingResultDto(
     val weekly: List<SearchEntryDto>,
     val monthly: List<SearchEntryDto>,
     val all: List<SearchEntryDto>,
 )
 
 @Serializable
-data class SearchEntryDto(
-    val id: Int,
+class SearchEntryDto(
+    private val id: Int,
     val title: String,
-    val slug: String,
-    val cover: String,
+    private val slug: String,
+    private val cover: String,
     val authors: String?,
     val genres: String?,
-    val all_views: Int? = null,
+    @SerialName("all_views") val allViews: Int? = null,
     val status: String?,
     val updated: Int? = null,
 ) {
@@ -44,14 +45,14 @@ data class SearchEntryDto(
 }
 
 @Serializable
-data class FilterDto(val id: Int, val title: String)
+class FilterDto(val id: Int, val title: String)
 
 @Serializable
-data class ChapterEntryDto(
-    val id: Int,
-    val title: String,
-    val sequence: Int,
-    val date: Int,
+class ChapterEntryDto(
+    private val id: Int,
+    private val title: String,
+    private val sequence: Int,
+    private val date: Int,
 ) {
     fun toSChapter(slug: String) = SChapter.create().apply {
         name = title
@@ -64,6 +65,6 @@ data class ChapterEntryDto(
 }
 
 @Serializable
-data class PageEntryDto(
+class PageEntryDto(
     val link: String,
 )
