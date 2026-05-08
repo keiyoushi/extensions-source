@@ -325,7 +325,7 @@ open class NovelCool(
         val script = document.selectFirst("script:containsData(window.location.href)")?.html()
             ?: return response
 
-        val jsRedirect = Regex("""window\.location\.href\s*=\s*["']([^"']+)["']""").find(script)?.groupValues?.get(1)
+        val jsRedirect = JS_REDIRECT_REGEX.find(script)?.groupValues?.get(1)
             ?: return response
 
         val requestUrl = response.request.url
@@ -384,6 +384,8 @@ open class NovelCool(
         // Matches any http/https URL inside single or double quotes within the all_imgs_url array.
         // Using the same approach as NineAnime which shares the same image-serving infrastructure.
         private val imageUrlRegex = Regex("""["'](https?://[^"']+)["']""")
+
+        private val JS_REDIRECT_REGEX = Regex("""window\.location\.href\s*=\s*["']([^"']+)["']""")
 
         private const val PREF_API_SEARCH = "pref_use_search_api"
 
