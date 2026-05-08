@@ -38,6 +38,12 @@ class Manga(
     private val ratedAvg: Double = 0.0,
     private val url: String? = null,
 ) {
+    val slug: String
+        get() = url
+            ?.substringAfter("/title/", missingDelimiterValue = "")
+            ?.takeIf(String::isNotBlank)
+            ?: hid
+
     @Serializable
     class Poster(
         private val small: String? = null,

@@ -32,6 +32,7 @@ class Comix :
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+    private val mangaSlugCache = mutableMapOf<String, String>()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(5)
@@ -161,10 +162,13 @@ class Comix :
         )
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/title${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val mangaSlug = manga.url.removePrefix("/").toFullMangaSlug()
+        return "$baseUrl/title/$mangaSlug"
+    }
 
     // ============================= Chapters ==============================
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.toFullChapterUrl()}"
 
     override fun chapterListRequest(manga: SManga): Request {
         val hid = manga.url.removePrefix("/").substringBefore("-")
@@ -288,6 +292,43 @@ class Comix :
 
         return result.pages.mapIndexed { index, img ->
             Page(index, imageUrl = img.url)
+        }
+    }
+
+    private fun SChapter.toFullChapterUrl(): String {
+        val chapterUrl = url.removePrefix("/")
+        val segments = chapterUrl.split("/")
+        if (segments.size != 3 || segments[0] != "title" || "-" in segments[1]) return chapterUrl
+
+        val mangaSlug = segments[1].toFullMangaSlug()
+        val chapterSlug = segments[2].toFullChapterSlug(chapter_number)
+        return "title/$mangaSlug/$chapterSlug"
+    }
+
+    private fun String.toFullChapterSlug(chapterNumber: Float): String {
+        if ("-" in this) return this
+
+        val number = when {
+            chapterNumber % 1 == 0f -> chapterNumber.toInt().toString()
+            else -> chapterNumber.toString()
+        }
+        return "$this-chapter-$number"
+    }
+
+    private fun String.toFullMangaSlug(): String {
+        if ("-" in this) return this
+
+        return mangaSlugCache.getOrPut(this) {
+            val url = apiUrl.toHttpUrl().newBuilder()
+                .addPathSegment("manga")
+                .addPathSegment(this)
+                .build()
+
+            client.newCall(GET(url, headers))
+                .execute()
+                .parseAs<SingleMangaResponse>()
+                .result
+                .slug
         }
     }
 
