@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import android.util.Base64
 import java.net.URLEncoder
-import keiyoushi.utils.rc4 as rc4Bytes
 
 object Hash {
     // [RC4 key, mutKey, prefKey] × 5 rounds
@@ -36,11 +35,27 @@ object Hash {
     }
 
     private fun rc4(key: IntArray, data: IntArray): IntArray {
-        val result = rc4Bytes(
-            key = ByteArray(key.size) { key[it].toByte() },
-            data = ByteArray(data.size) { data[it].toByte() },
-        )
-        return IntArray(result.size) { result[it].toInt() and 0xFF }
+        if (key.isEmpty()) return data
+        val s = IntArray(256) { it }
+        var j = 0
+        for (i in 0 until 256) {
+            j = (j + s[i] + key[i % key.size]) % 256
+            val temp = s[i]
+            s[i] = s[j]
+            s[j] = temp
+        }
+        var i = 0
+        j = 0
+        val out = IntArray(data.size)
+        for (k in data.indices) {
+            i = (i + 1) % 256
+            j = (j + s[i]) % 256
+            val temp = s[i]
+            s[i] = s[j]
+            s[j] = temp
+            out[k] = data[k] xor s[(s[i] + s[j]) % 256]
+        }
+        return out
     }
 
     private fun getMutKey(mk: IntArray, idx: Int): Int = if (mk.isNotEmpty() && (idx % 32) < mk.size) mk[idx % 32] else 0
