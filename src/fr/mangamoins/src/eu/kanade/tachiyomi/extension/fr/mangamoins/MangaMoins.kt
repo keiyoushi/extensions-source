@@ -158,7 +158,8 @@ class MangaMoins : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ScanResponse>()
-        val baseUrl = data.pagesBaseUrl.removeSuffix("/")
+        // Remove the hardcoded salt prefix from the last path segment
+        val baseUrl = data.pagesBaseUrl.removeSuffix("/").replace("/$SALT", "/")
         return (1..data.pageNumbers).map { i ->
             val pageNum = i.toString().padStart(2, '0')
             Page(i - 1, imageUrl = "$baseUrl/$pageNum.webp")
@@ -169,5 +170,6 @@ class MangaMoins : HttpSource() {
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
+        private const val SALT = "4445xcPlop"
     }
 }
