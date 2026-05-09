@@ -13,6 +13,9 @@
                 <data
                     android:host="newmanhwa.com"
                     android:scheme="https" />
+                <data
+                    android:host="fullmanhwa.com"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>

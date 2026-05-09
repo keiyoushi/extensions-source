@@ -41,8 +41,7 @@ class NewManhwa : HttpSource() {
         val mangas = document.select("a.series-card").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
-                title = element.selectFirst("strong")?.text()?.removeTitleRank()
-                    ?: throw Exception("Title not found")
+                title = element.selectFirst("strong")!!.text().removeTitleRank()
                 thumbnail_url = element.selectFirst("img")?.let {
                     it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
                 }
@@ -59,16 +58,17 @@ class NewManhwa : HttpSource() {
 
     // ========================= Search =========================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val baseHttpUrl = baseUrl.toHttpUrl()
         val queryUrl = query.toHttpUrlOrNull()
-        if (queryUrl != null && queryUrl.host == "newmanhwa.com") {
-            val newUrl = baseUrl.toHttpUrl().newBuilder()
+        if (queryUrl != null && queryUrl.host == baseHttpUrl.host) {
+            val newUrl = baseHttpUrl.newBuilder()
                 .encodedPath(queryUrl.encodedPath)
                 .encodedQuery(queryUrl.encodedQuery)
                 .build()
             return GET(newUrl, headers)
         }
 
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
+        val url = baseHttpUrl.newBuilder().apply {
             addPathSegment("search")
             addQueryParameter("q", query)
             filters.forEach { filter ->
@@ -124,7 +124,7 @@ class NewManhwa : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")?.text() ?: throw Exception("Title not found")
+        title = document.selectFirst("h1")!!.text()
         description = document.selectFirst("section.summary-inline p")?.text()
         author = document.selectFirst("dt:contains(Author) + dd a span")?.text()
         artist = document.selectFirst("dt:contains(Artist) + dd a span")?.text()
@@ -154,9 +154,7 @@ class NewManhwa : HttpSource() {
         return document.select(".chapter-list a.chapter-row").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
-                val nameElement = element.selectFirst(".chapter-name")?.clone()
-                nameElement?.select("em")?.remove()
-                name = nameElement?.text() ?: ""
+                name = element.selectFirst(".chapter-name strong")!!.text()
                 date_upload = element.selectFirst(".chapter-age")?.text()?.let {
                     DATE_FORMAT.tryParse(it)
                 } ?: 0L
