@@ -4,6 +4,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.ByteString.Companion.decodeBase64
+import okio.IOException
 import okio.buffer
 import okio.cipherSource
 import javax.crypto.Cipher
@@ -16,7 +17,11 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.contains(":")) return response
+        if (!response.isSuccessful && request.url.host == "cdn.drecomi-plus.jp") {
+            throw IOException("This service can only be used from Japan.")
+        }
+
+        if (fragment.isNullOrEmpty() || !fragment.contains(":")) return response
 
         val (keyHex, ivHex) = fragment.split(":")
         val secretKey = SecretKeySpec(keyHex.decodeBase64()!!.toByteArray(), "AES")
