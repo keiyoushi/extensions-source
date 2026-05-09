@@ -39,11 +39,12 @@ internal class UpdateStatusFilter :
         ),
     )
 
-internal class UtifaSortFilter : Filter.Sort(
-    "Sort",
-    arrayOf("Latest update", "Most viewed", "Most liked", "Created", "Title"),
-    Selection(0, false),
-)
+internal class UtifaSortFilter :
+    Filter.Sort(
+        "Sort",
+        arrayOf("Latest update", "Most viewed", "Most liked", "Created", "Title"),
+        Selection(0, false),
+    )
 
 internal open class SelectFilter(
     name: String,
