@@ -34,6 +34,7 @@ class DGManga :
     private val apiUrl = "https://dgmanga.app/api"
     override val lang = "uk"
     override val supportsLatest = true
+    override val versionId = 2
     private val preferences by getPreferencesLazy()
     override val client = network.cloudflareClient.newBuilder()
         .build()
