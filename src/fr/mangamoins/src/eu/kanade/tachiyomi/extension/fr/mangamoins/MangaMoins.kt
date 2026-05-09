@@ -156,10 +156,29 @@ class MangaMoins : HttpSource() {
         return GET(url, headers)
     }
 
+    private var cachedSalt: String? = null
+
+    private fun getSalt(): String {
+        cachedSalt?.let { return it }
+
+        return try {
+            val scriptUrl = "$baseUrl/includes/components/js/reader.js"
+            val response = client.newCall(GET(scriptUrl, headers)).execute()
+            val script = response.body.string()
+            val saltRegex = """\d+[a-zA-Z]{2,}Plop""".toRegex()
+            val salt = saltRegex.find(script)?.value ?: SALT
+            cachedSalt = salt
+            salt
+        } catch (e: Exception) {
+            SALT // Fallback to hardcoded salt on error
+        }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ScanResponse>()
-        // Remove the hardcoded salt prefix from the last path segment
-        val baseUrl = data.pagesBaseUrl.removeSuffix("/").replace("/$SALT", "/")
+        val salt = getSalt()
+        // Remove the dynamic salt prefix from the last path segment
+        val baseUrl = data.pagesBaseUrl.removeSuffix("/").replace("/$salt", "/")
         return (1..data.pageNumbers).map { i ->
             val pageNum = i.toString().padStart(2, '0')
             Page(i - 1, imageUrl = "$baseUrl/$pageNum.webp")
