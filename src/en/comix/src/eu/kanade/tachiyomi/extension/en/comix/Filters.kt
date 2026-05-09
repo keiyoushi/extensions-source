@@ -170,8 +170,11 @@ class Filters {
         }
     }
 
+    // The site's API silently ignores `-id` / `demographics_ex[]` for this
+    // field, so a TriState exclusion would never actually exclude anything.
+    // Match the website which only offers include / off.
     private class DemographicFilter(demographics: Array<Pair<String, String>>) :
-        UriTriSelectFilter(
+        UriMultiSelectFilter(
             "Demographic",
             "demographics[]",
             demographics,
