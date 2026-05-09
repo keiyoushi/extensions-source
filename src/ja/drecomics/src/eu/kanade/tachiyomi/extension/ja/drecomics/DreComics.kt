@@ -109,7 +109,7 @@ class DreComics :
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
