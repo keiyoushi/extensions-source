@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -35,7 +36,18 @@ class Comix :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(WebViewProxyInterceptor)
+        .apply {
+            // Insert at position 0 so requests carrying PROXY_HEADER reach
+            // our interceptor BEFORE any other application interceptor.
+            // Critical for Komu (iOS): its `CallNativeHttpInterceptor`
+            // re-routes comix.to traffic through Foundation NSURLSession
+            // to match Safari's TLS fingerprint and short-circuits the
+            // chain — adding our interceptor at the END would mean it
+            // never sees the request. Placing it first is harmless on
+            // Mihon Android too (no interceptor before us cares about
+            // PROXY_HEADER, and we always pass-through unsigned reqs).
+            interceptors().add(0, WebViewProxyInterceptor)
+        }
         .rateLimit(5)
         .build()
 
@@ -50,7 +62,7 @@ class Comix :
             addQueryParameter("order[score]", "desc")
             addQueryParameter("limit", "28")
             addQueryParameter("page", page.toString())
-            applyContentRatingPreference()
+            applyContentPreferences()
         }.build()
 
         return GET(url, headers)
@@ -65,7 +77,7 @@ class Comix :
             addQueryParameter("order[chapter_updated_at]", "desc")
             addQueryParameter("limit", "28")
             addQueryParameter("page", page.toString())
-            applyContentRatingPreference()
+            applyContentPreferences()
         }.build()
 
         return GET(url, headers)
@@ -108,17 +120,28 @@ class Comix :
             .build()
 
         val url = withFilters.newBuilder().apply {
-            // Manual content rating filter wins over the preference; otherwise
-            // fall back to the user's source-level setting.
+            // Manual filters in the search sheet override the corresponding
+            // source-level preference; otherwise fall back to the preference.
             if (withFilters.queryParameter("content_rating") == null) {
                 applyContentRatingPreference()
             }
+            if (withFilters.queryParameterValues("types[]").isEmpty()) {
+                applyTypesPreference()
+            }
+            if (withFilters.queryParameterValues("demographics[]").isEmpty()) {
+                applyDemographicsPreference()
+            }
+            // Blocked genres are ALWAYS applied (even alongside manual genre
+            // include/exclude) — the helper itself skips any genre the user
+            // explicitly INCLUDED in the search filter, so a one-off lookup
+            // for a normally-blocked genre still works.
+            applyBlockedGenresPreference()
 
-            // The Match filter contributes `genres_mode`. If the user never
-            // touched it but selected Genres/Formats/Tags, drop the parameter
-            // so the site can pick its own default.
-            val hasTermSelection = withFilters.queryParameterValues("genres_in[]").isNotEmpty() ||
-                withFilters.queryParameterValues("genres_ex[]").isNotEmpty()
+            // The Match filter contributes `genres_mode`. If neither the
+            // search filter nor the blocked-genres preference put any term
+            // on the URL, drop the param so the site picks its own default.
+            val hasTermSelection = build().queryParameterValues("genres_in[]").isNotEmpty() ||
+                build().queryParameterValues("genres_ex[]").isNotEmpty()
             if (!hasTermSelection) {
                 removeAllQueryParameters("genres_mode")
             }
@@ -137,10 +160,63 @@ class Comix :
         return GET(url, headers)
     }
 
+    /**
+     * Apply every content-related source-level preference (rating, types,
+     * demographics, blocked genres) in one go. Used by popular/latest
+     * where there's no search filter sheet to override anything.
+     * `searchMangaRequest` calls each helper individually so the search
+     * filter can short-circuit per-field.
+     */
+    private fun HttpUrl.Builder.applyContentPreferences() {
+        applyContentRatingPreference()
+        applyTypesPreference()
+        applyDemographicsPreference()
+        applyBlockedGenresPreference()
+    }
+
     private fun HttpUrl.Builder.applyContentRatingPreference() {
         preferences.contentRating().takeIf { it.isNotEmpty() }?.let {
             addQueryParameter("content_rating", it)
         }
+    }
+
+    /**
+     * Apply the source-level Default Types preference. The site treats no
+     * `types[]` param as "show all", so we omit the filter when the user
+     * has every type selected (the only state that would be a no-op
+     * otherwise). An empty selection — meaning the user explicitly
+     * unchecked everything — would hide every result; treat that as
+     * "no preference" and skip too, since the alternative is a confusing
+     * empty browse.
+     */
+    private fun HttpUrl.Builder.applyTypesPreference() {
+        val selected = preferences.defaultTypes()
+        val all = Filters.getTypes().map { it.second }.toSet()
+        if (selected.isEmpty() || selected == all) return
+        selected.forEach { addQueryParameter("types[]", it) }
+    }
+
+    /** Same shape as [applyTypesPreference] for Demographics. */
+    private fun HttpUrl.Builder.applyDemographicsPreference() {
+        val selected = preferences.defaultDemographics()
+        val all = Filters.getDemographics().map { it.second }.toSet()
+        if (selected.isEmpty() || selected == all) return
+        selected.forEach { addQueryParameter("demographics[]", it) }
+    }
+
+    /**
+     * Add a `genres_ex[]` for every genre the user listed in their Blocked
+     * Genres preference, except those the search filter explicitly
+     * INCLUDED (so a manual search for a normally-blocked genre still
+     * works as a one-off escape hatch).
+     */
+    private fun HttpUrl.Builder.applyBlockedGenresPreference() {
+        val blocked = preferences.blockedGenres()
+        if (blocked.isEmpty()) return
+        val explicitlyIncluded = build().queryParameterValues("genres_in[]").toSet()
+        blocked.asSequence()
+            .filter { it !in explicitlyIncluded }
+            .forEach { addQueryParameter("genres_ex[]", it) }
     }
 
     /**
@@ -209,6 +285,7 @@ class Comix :
             preferences.alternativeNamesInDescription(),
             preferences.scorePosition(),
             preferences.showExtraInfo(),
+            preferences.showTagsInGenres(),
         )
     }
 
@@ -370,6 +447,47 @@ class Comix :
             setDefaultValue(DEFAULT_CONTENT_RATING)
         }.let(screen::addPreference)
 
+        // Content preferences (mirrors comix.to's "Content preferences" modal):
+        //   - Default Types       — checkbox per type, all checked by default
+        //   - Default Demographics — same, all checked by default
+        //   - Blocked Genres      — opt-in list of genres to always exclude
+        //
+        // The first two omit the corresponding query param when ALL are checked
+        // (= "no filter"). Any narrower selection sends `types[]` /
+        // `demographics[]`. The Blocked Genres set adds `genres_ex[]` for each
+        // entry. All three are overridable per-search via the existing filter
+        // sheet, except blocked genres which always apply unless the search
+        // filter explicitly INCLUDED the same genre.
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_DEFAULT_TYPES
+            title = "Default types"
+            summary = "Types to include in popular, latest, and search results. " +
+                "The Type filter in search overrides this."
+            entries = Filters.getTypes().map { it.first }.toTypedArray()
+            entryValues = Filters.getTypes().map { it.second }.toTypedArray()
+            setDefaultValue(Filters.getTypes().map { it.second }.toSet())
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_DEFAULT_DEMOGRAPHICS
+            title = "Default demographics"
+            summary = "Demographics to include in popular, latest, and search " +
+                "results. The Demographic filter in search overrides this."
+            entries = Filters.getDemographics().map { it.first }.toTypedArray()
+            entryValues = Filters.getDemographics().map { it.second }.toTypedArray()
+            setDefaultValue(Filters.getDemographics().map { it.second }.toSet())
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_BLOCKED_GENRES
+            title = "Blocked genres"
+            summary = "Genres always excluded from results. The search filter " +
+                "can still include a blocked genre as a one-off override."
+            entries = Filters.getGenres().map { it.first }.toTypedArray()
+            entryValues = Filters.getGenres().map { it.second }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS
             title = "Deduplicate Chapters"
@@ -393,6 +511,16 @@ class Comix :
             setDefaultValue(true)
         }.let(screen::addPreference)
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_TAGS_IN_GENRES
+            title = "Show tags in genre chips"
+            summary = "Include the site's narrative tag list (e.g. Demons, " +
+                "Vampires, Time Travel) alongside the curated genres in the " +
+                "manga details. Off by default — the curated set matches what " +
+                "comix.to itself shows on the page."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
         ListPreference(screen.context).apply {
             key = PREF_SCORE_POSITION
             title = "Score display position"
@@ -413,6 +541,20 @@ class Comix :
 
     private fun SharedPreferences.showExtraInfo() = getBoolean(PREF_SHOW_EXTRA_INFO, true)
 
+    private fun SharedPreferences.showTagsInGenres() = getBoolean(PREF_SHOW_TAGS_IN_GENRES, false)
+
+    private fun SharedPreferences.defaultTypes(): Set<String> {
+        val all = Filters.getTypes().map { it.second }.toSet()
+        return getStringSet(PREF_DEFAULT_TYPES, all) ?: all
+    }
+
+    private fun SharedPreferences.defaultDemographics(): Set<String> {
+        val all = Filters.getDemographics().map { it.second }.toSet()
+        return getStringSet(PREF_DEFAULT_DEMOGRAPHICS, all) ?: all
+    }
+
+    private fun SharedPreferences.blockedGenres(): Set<String> = getStringSet(PREF_BLOCKED_GENRES, emptySet()) ?: emptySet()
+
     // The legacy "Hide NSFW" boolean still exists in some users' preferences;
     // map it to a sensible default until they pick a value explicitly.
     private fun SharedPreferences.contentRating(): String {
@@ -428,10 +570,14 @@ class Comix :
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
         private const val PREF_CONTENT_RATING = "pref_content_rating"
+        private const val PREF_DEFAULT_TYPES = "pref_default_types"
+        private const val PREF_DEFAULT_DEMOGRAPHICS = "pref_default_demographics"
+        private const val PREF_BLOCKED_GENRES = "pref_blocked_genres"
         private const val LEGACY_HIDE_NSFW_PREF = "nsfw_pref"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
         private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
+        private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
         private const val PREF_SCORE_POSITION = "pref_score_position"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
