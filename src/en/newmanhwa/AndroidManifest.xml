@@ -12,9 +12,11 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="newmanhwa.com"
+                    android:pathPattern="/..*"
                     android:scheme="https" />
                 <data
                     android:host="fullmanhwa.com"
+                    android:pathPattern="/..*"
                     android:scheme="https" />
             </intent-filter>
         </activity>
