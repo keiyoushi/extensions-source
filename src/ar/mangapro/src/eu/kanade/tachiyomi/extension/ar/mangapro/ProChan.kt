@@ -53,11 +53,27 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
-    override val baseUrl = "https://$domain"
+    import uy.kohesive.injekt.Injekt
+import android.app.Application
+import android.content.SharedPreferences
+
+private val prefs: SharedPreferences by lazy {
+    Injekt.get<Application>()
+        .getSharedPreferences("procomic_prefs", 0)
+}
+    private val defaultDomain = "procomic.net"
+
+private var domain: String
+    get() = prefs.getString("domain", defaultDomain) ?: defaultDomain
+    set(value) = prefs.edit().putString("domain", value).apply()
+
+override val baseUrl: String
+    get() = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
-
+fun setCustomDomain(newDomain: String) {
+    domain = newDomain
+}
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .addNetworkInterceptor(
