@@ -53,7 +53,7 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
+    private val domain = "procomic.net/"
     override val baseUrl = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
@@ -303,7 +303,7 @@ class ProChan : HttpSource() {
                 .also {
                     if (!it.isSuccessful) {
                         it.close()
-                        throw Exception("HTTP ${it.code}")
+                        
                     }
                 }
                 .parseAs<Data<List<Chapter>>>()
@@ -319,7 +319,7 @@ class ProChan : HttpSource() {
                 SChapter.create().apply {
                     url = "/series/$type/$id/$slug/${chapter.id}/${chapter.number}"
                     name = buildString {
-                        append("\u200F") // rtl marker
+                        append("\u200F"
 
                         if (chapter.coins != null && chapter.coins > 0) {
                             append("🔒 ")
@@ -470,8 +470,7 @@ class ProChan : HttpSource() {
                     }
                     val pieceRequest = request.newBuilder().url(imgUrl).build()
                     val response = client.newCall(pieceRequest).await()
-                    response.body.use { body ->
-                        // use Tachiyomi ImageDecoder because android.graphics.BitmapFactory doesn't handle avif
+                    response.body.use
                         val decoder = ImageDecoder.newInstance(body.byteStream())
                             ?: throw Exception("Failed to create decoder")
                         try {
@@ -548,12 +547,11 @@ class ProChan : HttpSource() {
             "browser" if value.v == 2 -> {
                 val hash = MessageDigest.getInstance("SHA-256")
                     .digest(
-                        "prochan-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
+                        "procomic-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
                             .toByteArray(Charsets.UTF_8),
                     )
                 SecretKeySpec(hash, "AES")
             }
-            // Untested, couldn't find a chapter which uses this, possibly for paid chapters?
             "browser_session" if value.v == 3 -> synchronized(sessionKeyLock) {
                 val time = System.currentTimeMillis()
                 val key = sessionKey[value.cid]?.takeIf { it.second > time }?.first ?: run {
@@ -584,8 +582,7 @@ class ProChan : HttpSource() {
         .withPadding(Base64.PaddingOption.PRESENT_OPTIONAL)
         .decode(data)
 
-    private fun countViews(seriesId: String, chapterId: String? = null) {
-        val userAgent = headers["User-Agent"]!!
+    private fun countViews(seriesId: String, chapterId: String? = null) 
         val payload = ViewsDto(
             chapterId = chapterId?.toInt(),
             contentId = seriesId.toInt(),
