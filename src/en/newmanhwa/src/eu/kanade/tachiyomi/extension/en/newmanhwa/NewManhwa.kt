@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.newmanhwa
 
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -17,17 +21,23 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NewManhwa : HttpSource() {
+class NewManhwa :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "New Manhwa"
 
-    override val baseUrl = "https://newmanhwa.com"
+    override val baseUrl by lazy {
+        preferences.getString(PREF_BASE_URL, DEFAULT_BASE_URL)!!
+    }
 
     override val lang = "en"
 
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
+
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -60,7 +70,7 @@ class NewManhwa : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val baseHttpUrl = baseUrl.toHttpUrl()
         val queryUrl = query.toHttpUrlOrNull()
-        if (queryUrl != null && queryUrl.host == baseHttpUrl.host) {
+        if (queryUrl != null && MIRROR_HOSTS.contains(queryUrl.host)) {
             val newUrl = baseHttpUrl.newBuilder()
                 .encodedPath(queryUrl.encodedPath)
                 .encodedQuery(queryUrl.encodedQuery)
@@ -182,10 +192,30 @@ class NewManhwa : HttpSource() {
         SortFilter(),
     )
 
+    // ========================= Preferences =========================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_BASE_URL
+            title = "Mirror"
+            entries = MIRRORS
+            entryValues = MIRRORS
+            summary = "%s"
+            setDefaultValue(DEFAULT_BASE_URL)
+        }.also(screen::addPreference)
+    }
+
     // ========================= Helpers =========================
     private fun String.removeTitleRank(): String = replace(TITLE_RANK_REGEX, "").trim()
 
     companion object {
+        private const val PREF_BASE_URL = "pref_base_url"
+        private const val DEFAULT_BASE_URL = "https://newmanhwa.com"
+        private val MIRRORS = arrayOf(
+            "https://newmanhwa.com",
+            "https://fullmanhwa.com",
+        )
+        private val MIRROR_HOSTS = MIRRORS.map { it.toHttpUrl().host }
+
         private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)
         private val GENRE_REGEX = "\"genre\":\\s*\\[(.*?)\\]".toRegex()
         private val TITLE_RANK_REGEX = "^#\\d+\\s+".toRegex()
