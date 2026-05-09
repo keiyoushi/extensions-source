@@ -157,21 +157,27 @@ class MangaMoins : HttpSource() {
     }
 
     private var cachedSalt: String? = null
+    private var lastSaltFetch: Long = 0
 
     private fun getSalt(): String {
-        cachedSalt?.let { return it }
+        val now = System.currentTimeMillis()
+        if (cachedSalt != null && now - lastSaltFetch < SALT_EXPIRY) {
+            return cachedSalt!!
+        }
 
-        return try {
+        val salt = try {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
             val response = client.newCall(GET(scriptUrl, headers)).execute()
             val script = response.body.string()
             val saltRegex = """\d+[a-zA-Z]{2,}Plop""".toRegex()
-            val salt = saltRegex.find(script)?.value ?: SALT
-            cachedSalt = salt
-            salt
+            saltRegex.find(script)?.value ?: SALT
         } catch (e: Exception) {
             SALT // Fallback to hardcoded salt on error
         }
+
+        cachedSalt = salt
+        lastSaltFetch = now
+        return salt
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -190,5 +196,6 @@ class MangaMoins : HttpSource() {
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
         private const val SALT = "4445xcPlop"
+        private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
     }
 }
