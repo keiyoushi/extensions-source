@@ -33,6 +33,7 @@ class DreComics :
     override val versionId = 2
 
     private val apiUrl = "https://api.$domain/api/v1/app"
+    private val authUrl = "$baseUrl/api/auth"
     private val preferences by getPreferencesLazy()
 
     private var bearerToken: String? = null
@@ -249,7 +250,7 @@ class DreComics :
             .add("redirect", "false")
             .build()
 
-        val loginRequest = POST("$baseUrl/api/auth/callback/credentials", headers, body)
+        val loginRequest = POST("$authUrl/callback/credentials", headers, body)
         val loginResponse = client.newCall(loginRequest).execute()
 
         val result = loginResponse.parseAs<NextAuthSignInResponse>()
@@ -266,12 +267,12 @@ class DreComics :
     }
 
     private fun fetchCsrfToken(): String {
-        val request = GET("$baseUrl/api/auth/csrf", headers)
+        val request = GET("$authUrl/csrf", headers)
         return client.newCall(request).execute().parseAs<CsrfResponse>().csrfToken
     }
 
     private fun fetchSession(): SessionResponse {
-        val request = GET("$baseUrl/api/auth/session", headers)
+        val request = GET("$authUrl/session", headers)
         return client.newCall(request).execute().parseAs<SessionResponse>()
     }
 
