@@ -304,7 +304,13 @@ class ChapterResponse(
     @Serializable
     class ChapterResult(
         val id: Int,
-        val pages: List<PageDto> = emptyList(),
+        val pages: Pages = Pages(),
+    )
+
+    @Serializable
+    class Pages(
+        val baseUrl: String = "",
+        val items: List<PageDto> = emptyList(),
     )
 
     @Serializable

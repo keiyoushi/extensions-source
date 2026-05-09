@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.en.comix.Hash.generateHash
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -36,6 +35,7 @@ class Comix :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(WebViewProxyInterceptor)
         .rateLimit(5)
         .build()
 
@@ -224,8 +224,9 @@ class Comix :
     }
 
     private fun chapterListRequest(mangaHash: String, mangaSlug: String, page: Int): Request {
-        val path = "/manga/$mangaHash/chapters"
-        val hashToken = generateHash(path)
+        // Routed through WebViewProxyInterceptor: signing + cookies live inside
+        // a hidden WebView so the request is indistinguishable from one the
+        // site's own JS would issue. The token is computed there too.
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")
             .addPathSegment(mangaHash)
@@ -233,11 +234,13 @@ class Comix :
             .addQueryParameter("order[number]", "desc")
             .addQueryParameter("limit", "100")
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("_", hashToken)
-            .addQueryParameter("mangaSlug", mangaSlug) // Add slug as query parameter
+            .addQueryParameter("mangaSlug", mangaSlug) // carried for chapterListParse
             .build()
 
-        return GET(url, headers)
+        val proxyHeaders = headers.newBuilder()
+            .add(Signer.PROXY_HEADER, "1")
+            .build()
+        return GET(url, proxyHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -319,26 +322,29 @@ class Comix :
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
-        val path = "/chapters/$chapterId"
-        val hashToken = generateHash(path)
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("chapters")
             .addPathSegment(chapterId)
-            .addQueryParameter("_", hashToken)
             .build()
-        return GET(url, headers)
+        val proxyHeaders = headers.newBuilder()
+            .add(Signer.PROXY_HEADER, "1")
+            .build()
+        return GET(url, proxyHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val res: ChapterResponse = response.parseAs()
         val result = res.result ?: throw Exception("Chapter not found")
-
-        if (result.pages.isEmpty()) {
+        val pages = result.pages
+        if (pages.items.isEmpty()) {
             throw Exception("No images found for chapter ${result.id}")
         }
-
-        return result.pages.mapIndexed { index, img ->
-            Page(index, imageUrl = img.url)
+        // Page urls are relative to `pages.baseUrl`. Joining manually keeps
+        // existing absolute URLs intact (in case the API switches back).
+        val base = pages.baseUrl.trimEnd('/')
+        return pages.items.mapIndexed { index, img ->
+            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            Page(index, imageUrl = full)
         }
     }
 
