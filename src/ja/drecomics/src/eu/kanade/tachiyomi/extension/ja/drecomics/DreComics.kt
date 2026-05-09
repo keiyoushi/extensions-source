@@ -174,7 +174,7 @@ class DreComics :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_LOCKED_PREF_KEY
-            title = "Hide Paid Chapters"
+            title = "Hide Locked Chapters"
             setDefaultValue(false)
         }.also(screen::addPreference)
 
