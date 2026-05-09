@@ -281,6 +281,6 @@ class InfinityScans : HttpSource() {
     private fun Element.getInfo(name: String): String? = selectFirst("div:has(>span:matches($name:))")?.ownText()
 
     private fun Element.getLinks(name: String): String? = select("div:has(>span:matches($name:)) a")
-        .joinToString(", ", transform = Element::text)
+        .joinToString(transform = Element::text)
         .takeIf { it.isNotEmpty() }
 }
