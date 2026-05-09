@@ -143,3 +143,19 @@ class Page(
     val iv: String,
     @SerialName("page_number") val pageNumber: Int,
 )
+
+@Serializable
+class CsrfResponse(
+    val csrfToken: String,
+)
+
+@Serializable
+class NextAuthSignInResponse(
+    val url: String?,
+    val ok: Boolean?,
+)
+
+@Serializable
+class SessionResponse(
+    val accessToken: String?,
+)
