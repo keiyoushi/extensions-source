@@ -117,6 +117,9 @@ class DreComics :
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().toSManga()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        if (manga.url.contains("/")) {
+            throw Exception("Migrate from $name to $name")
+        }
         val chapters = mutableListOf<SChapter>()
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         var page = 1
