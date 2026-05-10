@@ -19,6 +19,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -28,7 +29,8 @@ import java.util.concurrent.TimeUnit
  * (`/manga/{hid}/chapters`, `/chapters/{cid}`, …).
  *
  * The site ships a Jscrambler-style obfuscated VM bundle (`secure-*.js`)
- * that exposes two pieces of glue on `globalThis.vmf_<id>`:
+ * that exposes two pieces of glue on a single `globalThis` namespace
+ * whose name rotates per deploy (`vmf_4366f8`, `vmC_13cf2c`, …):
  *
  *  - a **signer** `fn(path) -> token` used to compute the `_=<token>`
  *    query parameter every protected endpoint requires;
@@ -36,18 +38,31 @@ import java.util.concurrent.TimeUnit
  *    interceptor (signing) *and* the response interceptor that decrypts
  *    the `{e:"<blob>"}` envelope the server returns.
  *
- * Both the namespace name (`vmf_<id>`) and the function names rotate on
- * every site deploy, and the VM's anti-tamper protection refuses to run
- * outside a real browser context — which is why hard-coding either is
- * fragile (issues #15643, #15703 — same bug, twice).
+ * The namespace name, the prefix, and the function names all rotate on
+ * every site deploy (`vmf_<id>` → `vmC_<id>` was just #15729), and the
+ * VM's anti-tamper protection refuses to run outside a real browser
+ * context — which is why hard-coding any of those is fragile
+ * (issues #15643, #15703, #15729 — same bug, three times).
+ *
+ * The probe therefore identifies the namespace **purely by behaviour**:
+ * it walks every top-level object on `window`, keeps only those whose
+ * own keys look like obfuscator output (≥5 keys with ≥3 short alpha
+ * identifiers à la `Qi`, `Xi`), and then on each surviving candidate
+ * tries every member function for one that signs a known path or one
+ * that registers a response interceptor on a fake axios. No name match
+ * is required — future name rotations no longer need an extension
+ * update.
  *
  * Instead, we host a hidden [WebView], load `comix.to/`, and let the
  * site's own bundle bootstrap. We then:
  *
- *   1. Probe each member of every `vmf_*` namespace by behaviour: a
- *      function returning a base64url token for a known path is the
- *      signer; a function that registers a response interceptor on a
- *      fake axios is the installer.
+ *   1. Pre-filter top-level objects on `window` by structural fingerprint
+ *      (≥5 own keys, ≥3 short alpha names) so we never accidentally
+ *      invoke nominally-named browser globals like `alert` / `confirm`.
+ *      On surviving candidates, probe each member function: one
+ *      returning a base64url token for a known path is the signer; one
+ *      that registers a response interceptor on a fake axios is the
+ *      installer.
  *   2. For every protected request, sign + fetch + run the response
  *      through the captured response interceptor, then re-wrap as
  *      `{result: <decoded>}` to match the DTOs in [Dto.kt].
@@ -116,7 +131,7 @@ object Signer {
         ensureReady()
         val signer = signerExpr ?: throw IOException("Comix: signer not initialized")
         val installer = installerExpr ?: throw IOException("Comix: response decryptor not initialized")
-        val token = "t_" + System.nanoTime()
+        val token = UUID.randomUUID().toString()
         val slot = FetchSlot()
         pending[token] = slot
 
@@ -221,6 +236,9 @@ object Signer {
             webView = null
             signerExpr = null
             installerExpr = null
+            // Release any thread already waiting on the old latch before
+            // swapping in a fresh one — otherwise they'd block until timeout.
+            ready.countDown()
             ready = CountDownLatch(1)
             pending.values.forEach { it.latch.countDown() }
             pending.clear()
@@ -240,7 +258,9 @@ object Signer {
         if (signerExpr != null && installerExpr != null) return
         synchronized(initLock) {
             if (signerExpr != null && installerExpr != null) return
-            initWebView()
+            // Don't spawn a second WebView while one is still loading /
+            // probing — fall through to the latch await below.
+            if (webView == null) initWebView()
         }
         if (!ready.await(LOAD_TIMEOUT_S, TimeUnit.SECONDS)) {
             invalidate()
@@ -293,6 +313,10 @@ object Signer {
     private fun schedulePoll(wv: WebView) {
         val poll = object : Runnable {
             override fun run() {
+                // If invalidate() ran between scheduling and firing, the
+                // captured WebView is no longer the active one (or was
+                // destroyed) — drop the poll silently.
+                if (wv !== webView) return
                 if (signerExpr != null && installerExpr != null) return
                 wv.evaluateJavascript(PROBE_JS) { raw ->
                     // Returns either '' (not ready) or 'sig=<expr>;inst=<expr>'.
@@ -329,38 +353,53 @@ object Signer {
     private fun extractSignablePath(apiPath: String): String = apiPath.substringBefore('?').removePrefix("/api/v1")
 
     /**
-     * Walks `window.vmf_*` namespaces and identifies two functions:
+     * Identifies, by behaviour, two functions on the obfuscated namespace:
      *  - `sig`:  signer — `fn(path) -> ≥40-char base64url token`
      *  - `inst`: axios installer — `fn(axiosInstance)` registers a request
      *            interceptor that signs URLs *and* a response interceptor
-     *            that decrypts `{e:"..."}` bodies. Probed by feeding a fake
-     *            axios and checking whether `interceptors.response.use` was
-     *            called.
+     *            that decrypts `{e:"..."}` bodies. Probed by feeding a
+     *            fake axios and checking whether
+     *            `interceptors.response.use` was called.
      *
-     * Returns `'sig=window.<ns>.<a>;inst=window.<ns>.<b>'` once both are
-     * found, otherwise `''` so the polling loop tries again.
+     * Two-tier candidate selection so the common case is cheap:
+     *  1. **Fast path** — names matching `^vm[A-Za-z]_` (every observed
+     *     deploy so far: `vmf_<id>`, `vmC_<id>`). Hits with one regex
+     *     test per top-level key; nearly free.
+     *  2. **Slow fallback** — only if the fast path finds nothing, walk
+     *     remaining top-level objects and keep those with the structural
+     *     fingerprint of obfuscator output: ≥5 own keys, ≥3 of them 1-
+     *     to 3-character alphabetic identifiers (`Qi`, `Xi`, `Gi`, …).
+     *     This excludes every nominally-named browser global, so we
+     *     never invoke `alert`, `confirm`, `open`, etc. as a side
+     *     effect.
+     *
+     * If the site ever rotates the namespace beyond `vm[A-Za-z]_*` —
+     * something that hasn't happened yet — the fallback catches it
+     * without an extension update.
+     *
+     * Returns `'sig=window[<ns>].<a>;inst=window[<ns>].<b>'` once both
+     * are found, otherwise `''` so the polling loop tries again.
      */
     private val PROBE_JS = """
         (function() {
             try {
                 var probe = '$PROBE_PATH';
-                var re = /^[A-Za-z0-9_-]{40,200}${'$'}/;
-                var sig = '', inst = '';
-                var keys = Object.keys(window);
-                for (var i = 0; i < keys.length; i++) {
-                    var topName = keys[i];
-                    if (topName.indexOf('vmf_') !== 0) continue;
-                    var ns = window[topName];
-                    if (!ns || typeof ns !== 'object') continue;
-                    var fnames = Object.keys(ns);
+                var tokenRe = /^[A-Za-z0-9_-]{40,200}${'$'}/;
+                var shortRe = /^[A-Za-z]{1,3}${'$'}/;
+                var nameRe  = /^vm[A-Za-z]_/;
+
+                function tryProbe(ns, topName) {
+                    var sig = '', inst = '';
+                    var fnames;
+                    try { fnames = Object.keys(ns); } catch (e) { return null; }
                     for (var j = 0; j < fnames.length; j++) {
                         var fn = ns[fnames[j]];
                         if (typeof fn !== 'function') continue;
-                        var ref = 'window.' + topName + '.' + fnames[j];
+                        var ref = 'window[' + JSON.stringify(topName) + '].' + fnames[j];
                         if (!sig) {
                             try {
                                 var out = fn(probe);
-                                if (typeof out === 'string' && out !== probe && re.test(out)) {
+                                if (typeof out === 'string' && out !== probe && tokenRe.test(out)) {
                                     sig = ref;
                                 }
                             } catch (e) {}
@@ -368,20 +407,50 @@ object Signer {
                         if (!inst) {
                             try {
                                 var got = false;
-                                var fakeAxios = {
+                                fn({
                                     interceptors: {
                                         request:  { use: function() {} },
                                         response: { use: function() { got = true; } }
                                     },
                                     defaults: { headers: { common: {} }, transformRequest: [], transformResponse: [] }
-                                };
-                                fn(fakeAxios);
+                                });
                                 if (got) inst = ref;
                             } catch (e) {}
                         }
+                        if (sig && inst) return { sig: sig, inst: inst };
                     }
+                    return null;
                 }
-                if (sig && inst) return 'sig=' + sig + ';inst=' + inst;
+
+                var keys = Object.keys(window);
+
+                // Fast path: matches every observed deploy.
+                for (var i = 0; i < keys.length; i++) {
+                    var topName = keys[i];
+                    if (!nameRe.test(topName)) continue;
+                    var ns = window[topName];
+                    if (!ns || typeof ns !== 'object' || ns === window) continue;
+                    var hit = tryProbe(ns, topName);
+                    if (hit) return 'sig=' + hit.sig + ';inst=' + hit.inst;
+                }
+
+                // Fallback: structural fingerprint, no name constraint.
+                for (var i = 0; i < keys.length; i++) {
+                    var topName = keys[i];
+                    if (nameRe.test(topName)) continue; // already tried
+                    var ns = window[topName];
+                    if (!ns || typeof ns !== 'object' || ns === window) continue;
+                    var fnames;
+                    try { fnames = Object.keys(ns); } catch (e) { continue; }
+                    if (fnames.length < 5) continue;
+                    var shortAlpha = 0;
+                    for (var s = 0; s < fnames.length; s++) {
+                        if (shortRe.test(fnames[s])) shortAlpha++;
+                    }
+                    if (shortAlpha < 3) continue;
+                    var hit = tryProbe(ns, topName);
+                    if (hit) return 'sig=' + hit.sig + ';inst=' + hit.inst;
+                }
             } catch (e) {}
             return '';
         })()

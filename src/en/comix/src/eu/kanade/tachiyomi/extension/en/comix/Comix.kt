@@ -34,8 +34,16 @@ class Comix :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    // `WebViewProxyInterceptor` must run *first* in the chain so it
+    // short-circuits the request to the WebView before any other
+    // interceptor (rate-limit, forks' native-HTTP routers, etc.) can
+    // touch it — otherwise signed requests reach `comix.to` without the
+    // `_=token` parameter and the server replies "Missing token".
+    // Please keep `interceptors().add(0, …)` here even if it looks
+    // unusual; switching to `.addInterceptor(...)` reintroduces that
+    // failure mode on downstream forks that share this code.
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(WebViewProxyInterceptor)
+        .apply { interceptors().add(0, WebViewProxyInterceptor) }
         .rateLimit(5)
         .build()
 
