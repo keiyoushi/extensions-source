@@ -24,18 +24,18 @@ class Luvyaa :
 
     private val preferences: SharedPreferences = getPreferences()
 
-    private val lockedChapterSelector = "img[alt='🔒']"
+    private val paidChapterHelper = MangaThemesiaPaidChapterHelper(
+        lockedChapterSelector = "img[alt='🔒']",
+    )
 
-    private val paidChapterHelper = MangaThemesiaPaidChapterHelper(lockedChapterSelector = lockedChapterSelector)
-
-    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+    override fun chapterListSelector() = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
         super.chapterListSelector(),
         preferences,
     )
 
     override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
-        if (element.selectFirst(lockedChapterSelector) != null) {
-            name = "🔒 ${name.removePrefix(" ").trim()}"
+        if (element.selectFirst("img[alt='🔒']") != null) {
+            name = "🔒 $name"
         }
     }
 
