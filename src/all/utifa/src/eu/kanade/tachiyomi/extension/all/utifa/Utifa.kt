@@ -228,7 +228,9 @@ class Utifa :
             key = PREF_PASSWORD
             title = "Password"
             summary = preferences.getString(PREF_PASSWORD, "").orEmpty().maskSecret("Optional")
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setOnBindEditTextListener { editText ->
+                editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
             setDefaultValue("")
         }.also(screen::addPreference)
 
@@ -245,7 +247,9 @@ class Utifa :
             key = PREF_TOKEN
             title = "UTifaToken"
             summary = preferences.getString(PREF_TOKEN, "").orEmpty().maskSecret("Optional; auto-filled after username/password login")
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setOnBindEditTextListener { editText ->
+                editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
             setDefaultValue("")
         }.also(screen::addPreference)
     }
