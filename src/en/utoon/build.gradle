@@ -3,7 +3,7 @@ ext {
     extClass = '.Utoon'
     themePkg = 'madara'
     baseUrl = 'https://utoon.net'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
