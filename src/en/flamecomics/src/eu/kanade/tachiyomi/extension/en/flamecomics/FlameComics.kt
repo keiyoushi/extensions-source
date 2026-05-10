@@ -38,7 +38,7 @@ class FlameComics : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2, 7)
+        .rateLimit(2, 2)
         .addInterceptor(::buildIdOutdatedInterceptor)
         .addInterceptor(::composedImageIntercept)
         .build()
