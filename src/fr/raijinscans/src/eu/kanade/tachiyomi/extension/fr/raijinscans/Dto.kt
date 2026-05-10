@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.raijinscans
+package eu.kanade.tachiyomi.extension.fr.raijinscans
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

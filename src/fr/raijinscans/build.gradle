@@ -1,9 +1,7 @@
 ext {
     extName = 'Raijin Scans'
     extClass = '.RaijinScans'
-    themePkg = 'raijinscans'
-    baseUrl = 'https://raijin-scans.fr'
-    overrideVersionCode = 57
+    extVersionCode = 59
     isNsfw = false
 }
 
