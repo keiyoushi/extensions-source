@@ -184,12 +184,17 @@ class Mangahub :
             summary = "$baseUrl\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().matches(URL_REGEX)) {
+                val url = newValue.toString()
+                if (!url.matches(URL_REGEX)) {
                     Toast.makeText(screen.context, DOMAIN_MISMATCH_1, Toast.LENGTH_LONG).show()
                     return@setOnPreferenceChangeListener false
                 }
-                if (newValue.toString().endsWith("/")) {
+                if (url.endsWith("/")) {
                     Toast.makeText(screen.context, DOMAIN_MISMATCH_2, Toast.LENGTH_LONG).show()
+                    return@setOnPreferenceChangeListener false
+                }
+                if (url.length !in 12..255) {
+                    Toast.makeText(screen.context, DOMAIN_MISMATCH_3, Toast.LENGTH_LONG).show()
                     return@setOnPreferenceChangeListener false
                 }
                 Toast.makeText(screen.context, DOMAIN_RESTART_MESSAGE, Toast.LENGTH_LONG).show()
@@ -209,6 +214,7 @@ class Mangahub :
         private const val DOMAIN_RESTART_MESSAGE = "Для смены домена необходимо перезапустить приложение с полной остановкой."
         private const val DOMAIN_MISMATCH_1 = "Домен должен начинаться с https:// или http://."
         private const val DOMAIN_MISMATCH_2 = "Домен не должен заканчиваться символом /."
+        private const val DOMAIN_MISMATCH_3 = "Домен не может быть меньше 12 символов. И не больше 255."
         private val URL_REGEX = Regex("^https?://.+")
     }
 }
