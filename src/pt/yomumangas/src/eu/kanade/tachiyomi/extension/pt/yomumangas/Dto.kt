@@ -7,6 +7,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 
+internal fun String.replaceB2Uri(): String = replace("b2://", "https://b2.yomumangas.com/")
+
 @Serializable
 class SearchResponse(
     val mangas: List<SearchMangaDto> = emptyList(),
@@ -23,7 +25,7 @@ class SearchMangaDto(
     fun toSManga() = SManga.create().apply {
         url = "$id#$slug"
         title = this@SearchMangaDto.title
-        thumbnail_url = cover.replace("b2://", "https://b2.yomumangas.com/")
+        thumbnail_url = cover.replaceB2Uri()
     }
 }
 
@@ -48,11 +50,11 @@ class MangaDto(
     fun toSManga() = SManga.create().apply {
         url = "$id#$slug"
         title = this@MangaDto.title
-        thumbnail_url = cover.replace("b2://", "https://b2.yomumangas.com/")
-        author = authors.joinToString(", ")
-        artist = artists.joinToString(", ")
+        thumbnail_url = cover.replaceB2Uri()
+        author = authors.joinToString()
+        artist = artists.joinToString()
         description = this@MangaDto.description
-        genre = (genres + tags).map { it.name }.distinct().joinToString(", ")
+        genre = (genres + tags).map { it.name }.distinct().joinToString()
         status = when (this@MangaDto.status) {
             "ONGOING" -> SManga.ONGOING
             "COMPLETE" -> SManga.COMPLETED
@@ -60,7 +62,6 @@ class MangaDto(
             "CANCELLED" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        initialized = true
     }
 }
 
@@ -88,6 +89,6 @@ class ChapterDto(
         } else {
             "Capítulo $chapterNumber"
         }
-        date_upload = uploadedAt?.let { dateFormat.tryParse(it) } ?: 0L
+        date_upload = dateFormat.tryParse(uploadedAt)
     }
 }
