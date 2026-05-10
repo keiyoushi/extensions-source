@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.raijinscans
 
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -237,7 +236,6 @@ abstract class RaijinScans(
         val html = document.outerHtml()
         val regex = Regex("""window\.raijinFreeReaderManifests\.push\s*\(\s*([\s\S]*?)\s*\)\s*;?""", RegexOption.DOT_MATCHES_ALL)
         val content = regex.find(html)?.groups?.get(1)?.value ?: throw Exception("Can't get chapter images.")
-        Log.e("Raijin", content)
         val data = content.parseAs<ReaderManifest>()
 
         val ajaxResponse = client.newCall(POST(data.ajaxUrl, headers, data.toFormBody())).execute().parseAs<ManifestResponse>()
