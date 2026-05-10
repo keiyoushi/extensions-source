@@ -15,6 +15,7 @@ import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -49,14 +50,21 @@ class MangaCrab :
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page/", headers)
-    override fun searchMangaRequest(page: Int, query: String, filters: eu.kanade.tachiyomi.source.model.FilterList) = GET("$baseUrl/page/$page/?s=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: eu.kanade.tachiyomi.source.model.FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("page")
+            .addPathSegment(page.toString())
+            .addQueryParameter("s", query)
+            .build()
+        return GET(url, headers)
+    }
 
     override fun popularMangaNextPageSelector(): String? = null
     override fun latestUpdatesNextPageSelector() = "a.next.page-numbers, .mv-page-link a.next"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("href"))
+        setUrlWithoutDomain(link.absUrl("href"))
         title = element.selectFirst(".mv-rank-title")?.text() ?: link.text()
         element.selectFirst("img")?.let {
             thumbnail_url = imageFromElement(it)
@@ -65,7 +73,7 @@ class MangaCrab :
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a.manga-row-cover")!!
-        setUrlWithoutDomain(link.attr("href"))
+        setUrlWithoutDomain(link.absUrl("href"))
         title = element.selectFirst("h5")?.text() ?: link.text()
         element.selectFirst("img")?.let {
             thumbnail_url = imageFromElement(it)
@@ -74,7 +82,7 @@ class MangaCrab :
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a.mv-recent-link, a.manga-row-cover, a")!!
-        setUrlWithoutDomain(link.attr("href"))
+        setUrlWithoutDomain(link.absUrl("href"))
         title = element.selectFirst("strong.mv-recent-name, h5, h2")?.text() ?: link.text()
         element.selectFirst("img")?.let {
             thumbnail_url = imageFromElement(it)
