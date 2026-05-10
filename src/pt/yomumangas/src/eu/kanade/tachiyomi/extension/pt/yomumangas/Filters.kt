@@ -1,5 +1,3 @@
-@file:Suppress("SpellCheckingInspection")
-
 package eu.kanade.tachiyomi.extension.pt.yomumangas
 
 import eu.kanade.tachiyomi.source.model.Filter
