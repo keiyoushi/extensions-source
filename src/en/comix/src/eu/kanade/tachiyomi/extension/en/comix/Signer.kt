@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -313,7 +312,7 @@ object Signer {
         val poll = object : Runnable {
             override fun run() {
                 if (signerExpr != null && installerExpr != null) return
-                wv.evaluateJavascript(PROBE_JS)
+                wv.evaluateJavascript(PROBE_JS, null)
                 handler.postDelayed(this, PROBE_INTERVAL_MS)
             }
         }
