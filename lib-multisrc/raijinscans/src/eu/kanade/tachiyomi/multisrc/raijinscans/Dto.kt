@@ -51,7 +51,6 @@ class ManifestResponseData(
 class Image(
     val number: String,
     val url: String,
-    val alt: String,
 )
 
 @Serializable
