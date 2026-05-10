@@ -45,24 +45,21 @@ class YomuMangas : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        // Selects the "Novos capítulos" section on the homepage
-        val mangas = document.select("main.page_Container__dFHb5 > div.styles_Container__7PC4t:nth-child(2) div.styles_Card__jN8og").mapNotNull {
+        val mangas = document.select("main[class*=page_Container] > div[class*=styles_Container]:nth-child(2) [class*=styles_Card]").mapNotNull {
             val a = it.selectFirst("a[href^=/mangas/]") ?: return@mapNotNull null
-            val href = a.attr("href")
-            val parts = href.trim('/').split("/")
-            val id = parts.getOrNull(1) ?: return@mapNotNull null
-            val slug = parts.getOrNull(2) ?: return@mapNotNull null
-            val title = it.selectFirst("h3.styles_Text__Lyxq9")?.text()
+            val url = a.attr("abs:href").toHttpUrl()
+            val id = url.pathSegments.getOrNull(1) ?: return@mapNotNull null
+            val slug = url.pathSegments.getOrNull(2) ?: return@mapNotNull null
+            val title = it.selectFirst("h3")?.text()
             if (title.isNullOrEmpty()) return@mapNotNull null
 
             SManga.create().apply {
-                url = "$id#$slug"
+                this.url = "$id#$slug"
                 this.title = title
-                thumbnail_url = it.selectFirst("img.styles_Cover__A3yb5")?.attr("abs:src")
-                    ?.replace("b2://", "https://b2.yomumangas.com/")
+                thumbnail_url = a.selectFirst("img")?.attr("abs:src")?.replaceB2Uri()
             }
         }
-        return MangasPage(mangas, false) // The homepage does not have pagination
+        return MangasPage(mangas, false)
     }
 
     // ============================== Search ===============================
@@ -108,13 +105,12 @@ class YomuMangas : HttpSource() {
 
     // ============================== Details ==============================
     override fun getMangaUrl(manga: SManga): String {
-        val id = manga.url.substringBefore("#")
-        val slug = manga.url.substringAfter("#")
+        val (id, slug) = manga.url.split("#", limit = 2)
         return "$baseUrl/mangas/$id/$slug"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringBefore("#")
+        val (id, _) = manga.url.split("#", limit = 2)
         return GET("$apiUrl/mangas/$id", headers)
     }
 
@@ -122,8 +118,7 @@ class YomuMangas : HttpSource() {
 
     // ============================= Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringBefore("#")
-        val slug = manga.url.substringAfter("#")
+        val (id, slug) = manga.url.split("#", limit = 2)
         return GET("$apiUrl/mangas/$id/chapters#$slug", headers)
     }
 
@@ -131,7 +126,6 @@ class YomuMangas : HttpSource() {
         val slug = response.request.url.fragment ?: throw Exception("Slug not found")
         val mangaId = response.request.url.pathSegments.dropLast(1).last()
         val dto = response.parseAs<ChaptersResponse>()
-        // API returns oldest chapters first, so we reverse it to respect source order
         return dto.chapters.map { it.toSChapter(mangaId, slug, dateFormat) }.reversed()
     }
 
@@ -140,8 +134,7 @@ class YomuMangas : HttpSource() {
         val html = response.body.string()
 
         val pages = URI_REGEX.findAll(html).mapIndexed { index, matchResult ->
-            val uri = matchResult.groupValues[1]
-            Page(index, imageUrl = uri.replace("b2://", "https://b2.yomumangas.com/"))
+            Page(index, imageUrl = matchResult.value.replaceB2Uri())
         }.toList()
 
         if (pages.isEmpty()) {
@@ -166,8 +159,6 @@ class YomuMangas : HttpSource() {
 
     // ============================= Utilities =============================
     companion object {
-        // Matches internal backblaze chapter payloads directly without relying on JSON key structure
-        // e.g., b2://chapters/6/326-18540/78d058b2.avif
-        private val URI_REGEX = """(b2://chapters/[^"\\]+)""".toRegex()
+        private val URI_REGEX = """b2://chapters/[^"\\]+""".toRegex()
     }
 }
