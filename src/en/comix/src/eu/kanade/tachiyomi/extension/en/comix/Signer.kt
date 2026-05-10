@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -62,6 +63,7 @@ import java.util.concurrent.TimeUnit
  * Requests carrying [PROXY_HEADER]` : 1` are intercepted here; everything
  * else flows through plain OkHttp.
  */
+@SuppressLint("StaticFieldLeak")
 object Signer {
     private const val BASE_URL = "https://comix.to/"
     private const val PROBE_PATH = "/manga/g2rk/chapters"
@@ -101,12 +103,21 @@ object Signer {
     /** JS calls into this from inside the WebView to deliver fetch results. */
     private class JsBridge {
         @JavascriptInterface
-        fun deliver(token: String, status: Int, body: String, error: String) {
+        fun deliver(token: String, status: String, body: String, error: String) {
             pending[token]?.let {
-                it.status = status
+                it.status = status.toIntOrNull() ?: 0
                 it.body = body
                 it.error = error
                 it.latch.countDown()
+            }
+        }
+
+        @JavascriptInterface
+        fun probeResult(sigExpr: String, instExpr: String) {
+            if (sigExpr.isNotEmpty() && instExpr.isNotEmpty()) {
+                signerExpr = sigExpr
+                installerExpr = instExpr
+                ready.countDown()
             }
         }
     }
@@ -144,6 +155,10 @@ object Signer {
                     $installer(fakeAxios);
 
                     var sig = $signer($signerArg);
+                    if (!sig) {
+                        $BRIDGE_NAME.deliver(__t, '0', '', 'signer returned empty token');
+                        return;
+                    }
                     var p = $pathLiteral;
                     var sep = p.indexOf('?') === -1 ? '?' : '&';
                     var url = p + sep + '_=' + encodeURIComponent(sig);
@@ -153,14 +168,14 @@ object Signer {
                     });
                     var text = await resp.text();
                     if (resp.status < 200 || resp.status >= 300) {
-                        $BRIDGE_NAME.deliver(__t, resp.status, text, '');
+                        $BRIDGE_NAME.deliver(__t, String(resp.status), text, '');
                         return;
                     }
 
                     var raw;
                     try { raw = JSON.parse(text); }
                     catch (e) {
-                        $BRIDGE_NAME.deliver(__t, resp.status, text, 'response is not JSON');
+                        $BRIDGE_NAME.deliver(__t, String(resp.status), text, 'response is not JSON');
                         return;
                     }
 
@@ -181,9 +196,9 @@ object Signer {
                     } else {
                         bodyOut = JSON.stringify({ result: raw });
                     }
-                    $BRIDGE_NAME.deliver(__t, resp.status, bodyOut, '');
+                    $BRIDGE_NAME.deliver(__t, String(resp.status), bodyOut, '');
                 } catch (e) {
-                    $BRIDGE_NAME.deliver(__t, 0, '', String((e && e.message) || e));
+                    $BRIDGE_NAME.deliver(__t, '0', '', String((e && e.message) || e));
                 }
             })();
         """.trimIndent()
@@ -228,7 +243,9 @@ object Signer {
                 handler.post {
                     runCatching {
                         wv.stopLoading()
-                        wv.clearCache(true)
+                        try {
+                            wv.clearCache(true)
+                        } catch (_: RuntimeException) { /* Unsupported by Suwayomi */ }
                         wv.destroy()
                     }
                 }
@@ -257,12 +274,15 @@ object Signer {
         val started = CountDownLatch(1)
         handler.post {
             val wv = WebView(context)
-            wv.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
-            wv.measure(
-                View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
-            )
-            wv.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+            try {
+                wv.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+                wv.measure(
+                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
+                )
+                wv.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+                wv.clearCache(true)
+            } catch (_: RuntimeException) { /* Unsupported by Suwayomi */ }
 
             with(wv.settings) {
                 javaScriptEnabled = true
@@ -271,7 +291,6 @@ object Signer {
                 blockNetworkImage = true
                 cacheMode = WebSettings.LOAD_NO_CACHE
             }
-            wv.clearCache(true)
 
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
@@ -280,7 +299,7 @@ object Signer {
 
             wv.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
-                    schedulePoll(view)
+                    if (url != "about:blank") schedulePoll(view)
                 }
             }
             webView = wv
@@ -294,25 +313,8 @@ object Signer {
         val poll = object : Runnable {
             override fun run() {
                 if (signerExpr != null && installerExpr != null) return
-                wv.evaluateJavascript(PROBE_JS) { raw ->
-                    // Returns either '' (not ready) or 'sig=<expr>;inst=<expr>'.
-                    val unwrapped = raw?.trim()?.removeSurrounding("\"")
-                        .orEmpty()
-                        .replace("\\\"", "\"")
-                    val parts = unwrapped.takeIf { it.isNotEmpty() && it != "null" }
-                        ?.split(';')
-                        ?.mapNotNull { it.trim().split('=', limit = 2).takeIf { p -> p.size == 2 }?.let { (k, v) -> k to v } }
-                        ?.toMap()
-                    val sig = parts?.get("sig")
-                    val inst = parts?.get("inst")
-                    if (!sig.isNullOrEmpty() && !inst.isNullOrEmpty()) {
-                        signerExpr = sig
-                        installerExpr = inst
-                        ready.countDown()
-                    } else {
-                        handler.postDelayed(this, PROBE_INTERVAL_MS)
-                    }
-                }
+                wv.evaluateJavascript(PROBE_JS)
+                handler.postDelayed(this, PROBE_INTERVAL_MS)
             }
         }
         handler.postDelayed(poll, PROBE_INTERVAL_MS)
@@ -344,12 +346,12 @@ object Signer {
         (function() {
             try {
                 var probe = '$PROBE_PATH';
-                var re = /^[A-Za-z0-9_-]{40,200}${'$'}/;
+                var re = /^[A-Za-z0-9_-]{40,200}$/;
                 var sig = '', inst = '';
                 var keys = Object.keys(window);
                 for (var i = 0; i < keys.length; i++) {
                     var topName = keys[i];
-                    if (topName.indexOf('vmf_') !== 0) continue;
+                    if (!/^vm[A-Za-z]_\w+$/.test(topName)) continue;
                     var ns = window[topName];
                     if (!ns || typeof ns !== 'object') continue;
                     var fnames = Object.keys(ns);
@@ -381,9 +383,8 @@ object Signer {
                         }
                     }
                 }
-                if (sig && inst) return 'sig=' + sig + ';inst=' + inst;
+                if (sig && inst) $BRIDGE_NAME.probeResult(sig, inst);
             } catch (e) {}
-            return '';
         })()
     """.trimIndent()
 }
