@@ -2,14 +2,44 @@
 
 package eu.kanade.tachiyomi.extension.id.Luvyaa
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.getPreferences
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Luvyaa :
     MangaThemesia(
         "Luvyaa",
-        "https://v1.luvyaa.co",
+        "https://v4.luvyaa.co",
         "id",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US),
+    ),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences = getPreferences()
+
+    private val lockedChapterSelector = "img[alt='🔒']"
+
+    private val paidChapterHelper = MangaThemesiaPaidChapterHelper(lockedChapterSelector = lockedChapterSelector)
+
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        super.chapterListSelector(),
+        preferences,
     )
+
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        if (element.selectFirst(lockedChapterSelector) != null) {
+            name = "🔒 ${name.removePrefix(" ").trim()}"
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
+    }
+}
