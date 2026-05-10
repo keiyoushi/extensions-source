@@ -7,7 +7,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-object BakamhPreferences {
+object Preferences {
 
     private const val PS_KEY_ROOT = "BAKAMH"
     private const val PS_KEY_DOMAIN = "$PS_KEY_ROOT::DOMAIN"
