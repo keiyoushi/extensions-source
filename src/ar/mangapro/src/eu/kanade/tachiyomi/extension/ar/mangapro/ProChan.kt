@@ -53,7 +53,7 @@ import kotlin.io.encoding.Base64
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
+    private val domain = "procomic.net/series"
     override val baseUrl = "https://$domain"
     override val supportsLatest = true
     override val versionId = 5
@@ -548,7 +548,7 @@ class ProChan : HttpSource() {
             "browser" if value.v == 2 -> {
                 val hash = MessageDigest.getInstance("SHA-256")
                     .digest(
-                        "prochan-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
+                        "procomic-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
                             .toByteArray(Charsets.UTF_8),
                     )
                 SecretKeySpec(hash, "AES")
