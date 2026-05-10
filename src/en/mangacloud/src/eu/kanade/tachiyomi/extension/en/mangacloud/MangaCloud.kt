@@ -50,8 +50,6 @@ class MangaCloud : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
-        .set("X-Key", generateKey())
 
     override fun popularMangaRequest(page: Int): Request {
         return if (page > 3) {
@@ -275,7 +273,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapters/$chapterId", headers)
+        return GET("$API_URL/chapter2/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
