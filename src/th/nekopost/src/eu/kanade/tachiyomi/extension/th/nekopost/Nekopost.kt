@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.PopularRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawLatestChapterList
-import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
 import eu.kanade.tachiyomi.network.GET
@@ -21,6 +20,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -37,7 +43,6 @@ class Nekopost : HttpSource() {
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val projectDataEndpoint = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
     private val fileHost = "https://www.osemocphoto.com"
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
@@ -88,23 +93,15 @@ class Nekopost : HttpSource() {
         return when {
             projectMatch != null -> {
                 val projectId = projectMatch.groupValues[1]
-                client.newCall(GET("$projectDataEndpoint/$projectId", headers))
+                client.newCall(mangaDetailsRequest(SManga.create().apply { url = projectId }))
                     .asObservableSuccess()
                     .map { response ->
-                        if (response.peekBody(1024)
-                                .string()
-                                .contains("\"projectInfo\":null")
-                        ) {
+                        val detail = extractProjectDetail(response)
+                        if (detail == null) {
                             MangasPage(emptyList(), false)
                         } else {
-                            val projectInfo =
-                                response.parseAs<RawProjectInfo>()
                             MangasPage(
-                                listOf(
-                                    mangaFromProjectInfo(
-                                        projectInfo,
-                                    ),
-                                ),
+                                listOf(mangaFromProjectDetail(detail)),
                                 false,
                             )
                         }
@@ -128,18 +125,19 @@ class Nekopost : HttpSource() {
         }
     }
 
-    private fun mangaFromProjectInfo(info: RawProjectInfo): SManga = SManga.create().apply {
-        val p = info.projectInfo
-        url = p.projectId
-        title = p.projectName
-        artist = p.artistName
-        author = p.authorName
-        description = p.info
-        status = getStatus(p.status)
-        thumbnail_url = buildCoverUrl(p.projectId)
+    private fun mangaFromProjectDetail(detail: JsonObject): SManga = SManga.create().apply {
+        val project = detail["Project"]!!.jsonObject
+        val pid = project["pid"]!!.jsonPrimitive.int.toString()
+        url = pid
+        title = project["projectName"]!!.jsonPrimitive.content
+        artist = project["artistName"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        author = project["authorName"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        description = project["info"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        status = getStatus(project["status"]?.jsonPrimitive?.intOrNull?.toString() ?: "")
+        thumbnail_url = buildCoverUrl(pid)
         genre =
-            info.projectCategoryUsed
-                ?.joinToString(", ") { it.categoryName }
+            detail["ListCate"]?.jsonArray
+                ?.joinToString(", ") { it.jsonObject["CateName"]!!.jsonPrimitive.content }
                 .orEmpty()
         initialized = true
     }
@@ -235,30 +233,51 @@ class Nekopost : HttpSource() {
         return if (coverVersion != null) "$base?ver=$coverVersion" else base
     }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/manga/${manga.url}", headers)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaFromProjectInfo(response.parseAs())
+    override fun mangaDetailsParse(response: Response): SManga {
+        val detail = extractProjectDetail(response)
+            ?: throw Exception("Failed to parse project detail from HTML")
+        return mangaFromProjectDetail(detail)
+    }
 
-    override fun chapterListRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/manga/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val projectInfo = response.parseAs<RawProjectInfo>()
+        val detail = extractProjectDetail(response)
+            ?: throw Exception("Failed to parse chapter list from HTML")
+        val project = detail["Project"]!!.jsonObject
+        val statusVal = project["status"]?.jsonPrimitive?.intOrNull?.toString() ?: ""
 
-        if (getStatus(projectInfo.projectInfo.status) == SManga.LICENSED) {
+        if (getStatus(statusVal) == SManga.LICENSED) {
             throw Exception("Licensed")
         }
 
-        val projectId = projectInfo.projectInfo.projectId.toInt()
+        val projectId = project["pid"]!!.jsonPrimitive.int
 
-        return projectInfo.projectChapterList.orEmpty().map {
+        val chapters = detail["ListChapter"]?.jsonArray ?: return emptyList()
+
+        return chapters.map { elem ->
+            val ch = elem.jsonObject
+            val chapterId = ch["ChapterID"]!!.jsonPrimitive.int
+            val chapterNo = ch["ChapterNo"]!!.jsonPrimitive.content
+            val chapterName = ch["ChapterName"]!!.jsonPrimitive.content
+            val createDateStr = ch["CreateDate"]?.jsonObject
+                ?.get("String")?.jsonPrimitive?.contentOrNull.orEmpty()
+            val providerName = ch["ProviderName"]?.jsonPrimitive?.contentOrNull.orEmpty()
+
             SChapter.create().apply {
-                url = "$projectId/${it.chapterId}/${projectId}_${it.chapterId}.json"
-                name = it.chapterName
-                chapter_number = it.chapterNo.toFloat()
-                date_upload = dateFormat.parse(it.createDate)?.time ?: 0L
-                scanlator = it.providerName
+                url = "$projectId/$chapterId/${projectId}_$chapterId.json"
+                name = chapterName
+                chapter_number = chapterNo.toFloat()
+                date_upload = try {
+                    dateFormat.parse(createDateStr)?.time ?: 0L
+                } catch (_: Exception) {
+                    0L
+                }
+                scanlator = providerName
             }
         }
     }
@@ -301,6 +320,56 @@ class Nekopost : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
+
+    private fun extractProjectDetail(response: Response): JsonObject? {
+        val html = response.body.string()
+        val marker = "projectDetail:{"
+        val startIdx = html.indexOf(marker)
+        if (startIdx == -1) return null
+
+        val objStart = startIdx + marker.length - 1
+        var depth = 0
+        var objEnd = objStart
+        var inString = false
+        var escaped = false
+        for (i in objStart until html.length) {
+            val c = html[i]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (c == '\\') {
+                escaped = true
+                continue
+            }
+            if (c == '"') {
+                inString = !inString
+                continue
+            }
+            if (inString) continue
+            when (c) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) {
+                        objEnd = i
+                        break
+                    }
+                }
+            }
+        }
+        if (depth != 0) return null
+
+        val raw = html.substring(objStart, objEnd + 1)
+        val jsonStr = raw.replace(Regex("""(?<=[\{,\[])([A-Za-z_][A-Za-z0-9_]*)(?=\s*:)"""), """"$1"""")
+        val wrappedJson = """{"projectDetail":$jsonStr}"""
+        return try {
+            Json { ignoreUnknownKeys = true }.parseToJsonElement(wrappedJson)
+                .jsonObject["projectDetail"]?.jsonObject
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     companion object {
         private const val POPULAR_PAGE_SIZE = 15
