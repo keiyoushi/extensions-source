@@ -200,7 +200,7 @@ class Kaixinman : HttpSource() {
     )
 
     companion object {
-        private val PARAMS_REGEX = Regex("""params\\s*=\\s*'([A-Za-z0-9+/=]+)'""")
+        private val PARAMS_REGEX = Regex("""params\s*=\s*['\"]([^'\"]+)['\"]""")
         private const val AES_KEY = "5V&RoR%Jf@pJPydF"
         private const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
     }
