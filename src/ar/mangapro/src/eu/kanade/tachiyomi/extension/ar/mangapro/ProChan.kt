@@ -49,15 +49,45 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
+import android.app.Application
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import uy.kohesive.injekt.Injekt
 
 class ProChan : HttpSource() {
     override val name = "ProChan"
     override val lang = "ar"
-    private val domain = "prochan.net"
-    override val baseUrl = "https://$domain"
-    override val supportsLatest = true
-    override val versionId = 5
+    override val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0)
 
+private val defaultDomain = "procomic.net"
+
+private val domain: String
+    get() = preferences.getString("override_domain", defaultDomain)!!
+
+override val baseUrl: String
+    get() = "https://$domain"
+    override val versionId = 2
+override fun setupPreferenceScreen(screen: PreferenceScreen) {
+    val domainPref = EditTextPreference(screen.context).apply {
+        key = "override_domain"
+        title = "Custom Domain"
+        summary = "تغيير رابط الموقع"
+        setDefaultValue(defaultDomain)
+        dialogTitle = "أدخل الدومين"
+
+        setOnPreferenceChangeListener { _, newValue ->
+            val value = newValue.toString()
+                .removePrefix("https://")
+                .removePrefix("http://")
+                .trim('/')
+
+            preferences.edit().putString(key, value).apply()
+            true
+        }
+    }
+
+    screen.addPreference(domainPref)
+}
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .addNetworkInterceptor(
@@ -548,7 +578,7 @@ class ProChan : HttpSource() {
             "browser" if value.v == 2 -> {
                 val hash = MessageDigest.getInstance("SHA-256")
                     .digest(
-                        "prochan-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
+                        "procomic-browser-map:2e6f9a1c4d8b7e3f0a5c9d2b6e1f4a8c7d3b0e6a9f2c5d8b1e4a7c0d3f6b9e2:${value.cid}"
                             .toByteArray(Charsets.UTF_8),
                     )
                 SecretKeySpec(hash, "AES")
