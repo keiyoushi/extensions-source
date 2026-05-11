@@ -20,6 +20,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -136,15 +138,29 @@ class Kaixinman : HttpSource() {
     // Chapters
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup()
-        .select("ul.chapter-list li a")
-        .map {
-            SChapter.create().apply {
-                name = it.text().trim()
-                setUrlWithoutDomain(it.absUrl("href"))
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val updateDate = parseUpdateDate(document)
+        return document.select("ul.chapter-list li a")
+            .map {
+                SChapter.create().apply {
+                    name = it.text().trim()
+                    setUrlWithoutDomain(it.absUrl("href"))
+                    date_upload = updateDate
+                }
             }
-        }
-        .reversed()
+            .reversed()
+    }
+
+    private fun parseUpdateDate(document: Document): Long {
+        val updateText = document.select("p.data span.text-muted")
+            .firstOrNull { it.text().contains("更新：") }
+            ?.text()
+            ?.substringAfter("更新：")
+            ?.trim()
+            ?: return 0L
+        return runCatching { DATE_FORMAT.parse(updateText)?.time ?: 0L }.getOrDefault(0L)
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
@@ -201,6 +217,7 @@ class Kaixinman : HttpSource() {
 
     companion object {
         private val PARAMS_REGEX = Regex("""params\s*=\s*['\"]([^'\"]+)['\"]""")
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT)
         private const val AES_KEY = "5V&RoR%Jf@pJPydF"
         private const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
     }
