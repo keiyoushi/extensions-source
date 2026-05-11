@@ -188,6 +188,7 @@ abstract class Comicaso(
         val body = TokenRequestDto(listOf(cleanUrl)).toJsonRequestBody()
         val tokenHeaders = headersBuilder()
             .set("Referer", "$baseUrl${chapter.url.substringBeforeLast("/", "").substringBeforeLast("/")}/")
+            .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
         val tokenRequest = Request.Builder()

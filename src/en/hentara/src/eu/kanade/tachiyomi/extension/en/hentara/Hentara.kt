@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,41 +26,38 @@ class Hentara : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
+    override val client = network.client.newBuilder()
+        .rateLimit(2)
+        .build()
+
     private object Api {
-        const val BASE = "https://cdn.hentara.com/data"
+        const val BASE = "https://hentara.com/r2-data"
 
         fun index() = "$BASE/index.json"
         fun comic(slug: String) = "$BASE/comics/$slug.json"
         fun episode(slug: String, ep: Int) = "$BASE/episodes/$slug/$ep.json"
     }
 
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    // ===============================
-    // Popular
-    // ===============================
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList().apply { firstInstance<SortFilter>().state = 1 })
+    // ============================== Popular ==============================
+
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList().apply { firstInstanceOrNull<SortFilter>()?.state = 1 })
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    // ===============================
-    // Latest
-    // ===============================
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList().apply { firstInstance<SortFilter>().state = 0 })
+    // ============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList().apply { firstInstanceOrNull<SortFilter>()?.state = 0 })
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    // ===============================
-    // Search
-    // ===============================
+    // ============================== Search ===============================
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val sortIdx = filters.firstInstance<SortFilter>().state
-        val genreIdx = filters.firstInstance<GenreFilter>().state
+        val sortIdx = filters.firstInstanceOrNull<SortFilter>()?.state ?: 0
+        val genreIdx = filters.firstInstanceOrNull<GenreFilter>()?.state ?: 0
 
         val url = Api.index().toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
@@ -88,8 +85,8 @@ class Hentara : HttpSource() {
             }
             .let { filtered ->
                 when (sortIdx) {
-                    0 -> filtered.sortedByDescending { dateFormat.tryParse(it.latest_episode_date?.substringBefore(".")) }
-                    1 -> filtered.sortedByDescending { it.view_count }
+                    0 -> filtered.sortedByDescending { dateFormat.tryParse(it.latestEpisodeDate) }
+                    1 -> filtered.sortedByDescending { it.viewCount }
                     2 -> filtered.sortedBy { it.title }
                     else -> filtered
                 }
@@ -100,25 +97,8 @@ class Hentara : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
-        SortFilter(),
-        GenreFilter(),
-    )
+    // ============================== Details ==============================
 
-    // ===============================
-    // Filters
-    // ===============================
-    private class GenreFilter : Filter.Select<String>("Genre", GENRES)
-
-    private class SortFilter :
-        Filter.Select<String>(
-            "Sort",
-            arrayOf("Latest", "Popular", "Alphabetical"),
-        )
-
-    // ===============================
-    // Details
-    // ===============================
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/")
         return GET(Api.comic(slug), headers)
@@ -126,28 +106,26 @@ class Hentara : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<HentaraMangaDto>().comic.toSManga()
 
-    // ===============================
-    // Chapters
-    // ===============================
+    // ============================= Chapters ==============================
+
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<HentaraMangaDto>()
         val slug = data.comic.slug
 
-        return data.episodes.map {
+        return data.episodes.map { ep ->
             SChapter.create().apply {
-                url = "/manhwa/$slug/chapter-${it.episode_number}"
-                name = it.chapterName()
-                chapter_number = it.episode_number.toFloat()
-                date_upload = dateFormat.tryParse(it.created_at.substringBefore("."))
+                url = "/manhwa/$slug/chapter-${ep.episodeNumber}"
+                name = ep.chapterName()
+                chapter_number = ep.episodeNumber.toFloat()
+                date_upload = dateFormat.tryParse(ep.createdAt)
             }
         }.sortedByDescending { it.chapter_number }
     }
 
-    // ===============================
-    // Pages
-    // ===============================
+    // =============================== Pages ===============================
+
     override fun pageListRequest(chapter: SChapter): Request {
         val pathSegments = chapter.url.trim('/').split("/")
         if (pathSegments.size < 3) {
@@ -164,34 +142,24 @@ class Hentara : HttpSource() {
         val data = response.parseAs<HentaraEpisodeDto>()
 
         return data.pages.map {
-            Page(it.page_number - 1, "", it.image_url)
+            Page(it.pageNumber - 1, imageUrl = it.imageUrl)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ===============================
-    // Helpers
-    // ===============================
-    private fun HentaraEpisodeShortDto.chapterName() = buildString {
-        append("Chapter $episode_number")
-        if (title.isNotBlank()) append(" - $title")
-    }
+    // ============================== Filters ==============================
 
-    private fun HentaraComicDto.toSManga(): SManga = SManga.create().apply {
-        url = "/manhwa/$slug"
-        title = this@toSManga.title
-        thumbnail_url = this@toSManga.thumbnail_url
-        genre = genres.joinToString { it.name }
-    }
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        GenreFilter(),
+    )
 
-    private fun HentaraComicFullDto.toSManga(): SManga = SManga.create().apply {
-        url = "/manhwa/$slug"
-        title = this@toSManga.title
-        thumbnail_url = this@toSManga.thumbnail_url
-        description = this@toSManga.description
-        genre = genres.joinToString { it.name }
-    }
+    private class GenreFilter : Filter.Select<String>("Genre", GENRES)
+
+    private class SortFilter : Filter.Select<String>("Sort", arrayOf("Latest", "Popular", "Alphabetical"))
+
+    // ============================= Utilities =============================
 
     companion object {
         private val GENRES = arrayOf(
@@ -200,7 +168,7 @@ class Hentara : HttpSource() {
             "Thriller", "University", "College", "Nerd",
         )
 
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }

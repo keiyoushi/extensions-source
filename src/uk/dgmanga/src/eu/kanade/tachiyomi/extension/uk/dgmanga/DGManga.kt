@@ -34,6 +34,7 @@ class DGManga :
     private val apiUrl = "https://dgmanga.app/api"
     override val lang = "uk"
     override val supportsLatest = true
+    override val versionId = 2
     private val preferences by getPreferencesLazy()
     override val client = network.cloudflareClient.newBuilder()
         .build()
@@ -154,6 +155,12 @@ class DGManga :
     }
 
     // ============================== Manga/Chapters ===============================
+    // WebView url
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (chapterId, chapterNumber, chapterTitle) = chapter.url.split("/", limit = 3)
+        return "$baseUrl/read/$chapterTitle/$chapterNumber?chapterId=$chapterId"
+    }
+
     // API request
     override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/chapters/title/${manga.url}", headers)
 
@@ -161,8 +168,10 @@ class DGManga :
         val dto = response.parseAs<List<ChapterResponseDto>>()
         return dto.map { dto ->
             SChapter.create().apply {
-                name = "Том ${dto.volumeNumber} Розділ ${dto.chapterNumber.toString().removeSuffix(".0")} ${dto.chapterName ?: ""}"
-                url = "/read/${dto.title}/${dto.chapterNumber.toString().removeSuffix(".0")}?chapterId=${dto.id}"
+                val vol = dto.volumeNumber.toString().removeSuffix(".0")
+                val num = dto.chapterNumber.toString().removeSuffix(".0")
+                name = "Том $vol Розділ $num ${dto.chapterName ?: ""}"
+                url = "${dto.id}/$num/${dto.title}"
                 date_upload = parseDate(dto.createdAt)
                 chapter_number = dto.chapterNumber
                 scanlator = dto.teams.firstOrNull()?.name
@@ -171,6 +180,12 @@ class DGManga :
     }
 
     // ============================== Images ===============================
+    // request URL
+    override fun pageListRequest(chapter: SChapter): Request {
+        val (chapterId, chapterNumber, chapterTitle) = chapter.url.split("/", limit = 3)
+        return GET("$baseUrl/read/$chapterTitle/$chapterNumber?chapterId=$chapterId", headers)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         // They either load images via JS on the page. Or load it in the API one by one with $apiUrl/image-proxy/chapter/{chapterId}/{imageIndex}
         // With no information about number (index) of images to load anywhere. Page body also loaded by JS.

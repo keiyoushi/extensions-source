@@ -1,9 +1,8 @@
 ext {
     extName = 'New Manhwa'
     extClass = '.NewManhwa'
-    themePkg = 'mangathemesia'
     baseUrl = 'https://newmanhwa.com'
-    overrideVersionCode = 0
+    extVersionCode = 33
     isNsfw = true
 }
 
