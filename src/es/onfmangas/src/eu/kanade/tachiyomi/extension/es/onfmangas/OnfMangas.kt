@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,7 +12,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -27,16 +25,16 @@ class OnfMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
-    // Adds a rate limiter to prevent Cloudflare from returning 403 upon concurrent requests
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    // Adds standard headers to look less suspicious to Cloudflare's WAF
+    // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
     override fun headersBuilder() = super.headersBuilder()
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-        .add("Accept-Language", "es-419,es;q=0.9,en;q=0.8")
-        .add("Referer", "$baseUrl/")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        .add("Accept-Language", "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7")
+        .add("DNT", "1")
+        .add("Upgrade-Insecure-Requests", "1")
+        .add("Sec-Fetch-Dest", "document")
+        .add("Sec-Fetch-Mode", "navigate")
+        .add("Sec-Fetch-Site", "same-origin")
+        .add("Sec-Fetch-User", "?1")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
@@ -50,15 +48,17 @@ class OnfMangas : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".manga-grid .manga-card").mapNotNull { element ->
+        val mangas = document.select("a.pop-podium-card, a.pop-card").mapNotNull { element ->
             SManga.create().apply {
-                title = element.selectFirst(".manga-title")?.text()
+                title = element.selectFirst(".pop-podium-name, .pop-name")?.text()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
                 setUrlWithoutDomain(
-                    element.selectFirst("a")?.attr("abs:href")
-                        ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
+                    element.attr("abs:href")
+                        .takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
                 )
-                thumbnail_url = element.selectFirst(".card-cover img")?.attr("abs:src")
+
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
         return MangasPage(mangas, false)
@@ -162,7 +162,6 @@ class OnfMangas : HttpSource() {
             }
             chapters.add(parentChapter)
 
-            // Inject joint/alternative scanlator versions if they exist
             dto.getOtherVersions()?.forEach { otherVersion ->
                 chapters.add(
                     otherVersion.toSChapter(dto).apply {

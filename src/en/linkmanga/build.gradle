@@ -1,0 +1,10 @@
+ext {
+    extName = 'LinkManga'
+    extClass = '.LinkManga'
+    themePkg = 'madara'
+    baseUrl = 'https://linkmanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

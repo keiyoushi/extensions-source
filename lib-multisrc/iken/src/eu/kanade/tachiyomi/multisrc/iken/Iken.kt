@@ -86,6 +86,11 @@ abstract class Iken(
      */
     protected open val sendUpdateViews: Boolean = true
 
+    /**
+     * The number of items to fetch per page in search/popular/latest requests.
+     */
+    protected open val perPage: Int = 18
+
     // Popular (Search with popular order and nothing else)
     protected open val popularFilter by lazy {
         FilterList(SortFilter("", sortFilterKey, sortOptions, sortOptions[1].second))
@@ -130,7 +135,7 @@ abstract class Iken(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", PER_PAGE.toString())
+            addQueryParameter("perPage", perPage.toString())
             addQueryParameter("searchTerm", query.trim())
             filters.filterIsInstance<UrlPartFilter>().forEach {
                 it.addUrlParameter(this)
@@ -158,7 +163,7 @@ abstract class Iken(
             .filterNot { it.isNovel }
             .map { it.toSManga() }
 
-        val hasNextPage = data.totalCount > (page * PER_PAGE)
+        val hasNextPage = data.totalCount > (page * perPage)
 
         val key = keyFromUrl(response.request.url)
         if (page == 1) pageNumber[key] = 1
@@ -424,7 +429,6 @@ abstract class Iken(
     protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     companion object {
-        const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val numberRegex = Regex("\\d+")

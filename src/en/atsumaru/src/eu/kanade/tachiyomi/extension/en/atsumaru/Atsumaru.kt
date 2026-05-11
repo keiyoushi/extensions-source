@@ -222,8 +222,8 @@ class Atsumaru : HttpSource() {
 
         val scanlatorMap = try {
             val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
-            client.newCall(detailsRequest).execute().use { response ->
-                response.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
+            client.newCall(detailsRequest).execute().use { detailResponse ->
+                detailResponse.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
             }.orEmpty()
         } catch (_: Exception) {
             emptyMap()
@@ -233,7 +233,11 @@ class Atsumaru : HttpSource() {
 
         return data.chapters.map {
             it.toSChapter(mangaId, it.scanlationMangaId?.let { id -> scanlatorMap[id] })
-        }
+        }.sortedWith(
+            compareByDescending<SChapter> { it.chapter_number }
+                .thenBy { it.scanlator }
+                .thenByDescending { it.date_upload },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

@@ -27,7 +27,7 @@ class EternalMangas :
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/posts?page=$page&perPage=$PER_PAGE&isNovel=false&tag=latestUpdate", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/posts?page=$page&perPage=$perPage&isNovel=false&tag=latestUpdate", headers)
 
     @Serializable
     class PopularPosts(

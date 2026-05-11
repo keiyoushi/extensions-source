@@ -5,6 +5,7 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -43,7 +44,9 @@ class MangaCloud : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(1)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -270,7 +273,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapters/$chapterId", headers)
+        return GET("$API_URL/chapter2/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
