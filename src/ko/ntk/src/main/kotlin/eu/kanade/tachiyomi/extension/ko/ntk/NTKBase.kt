@@ -42,11 +42,22 @@ abstract class NTKBase(
     override val supportsLatest = true
     protected val preferences by lazy { getPreferences() }
 
+    // leaving the below codeblock in case they change the naming scheme again
     // Domain number is user-configurable and auto-updated when the site redirects (e.g. ntk01 → ntk02)
+//    protected val rootUrl: String
+//        get() {
+//            val domainNumber = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
+//              return "https://sbxh$domainNumber.com"
+// //            return "https://ntk$domainNumber.com"
+//        }
     protected val rootUrl: String
         get() {
-            val domainNumber = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
-            return "https://ntk$domainNumber.com"
+            val stored = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
+            val domainNumber = stored.trimStart('0').ifEmpty { "0" }
+            if (domainNumber != stored) {
+                preferences.edit().putString(PREF_DOMAIN_KEY, domainNumber).apply()
+            }
+            return "https://sbxh$domainNumber.com"
         }
 
     // baseUrl is set to the content-specific path so "Open in WebView" lands on the right section
@@ -83,7 +94,7 @@ abstract class NTKBase(
         val response = chain.proceed(request)
 
         val finalUrl = response.request.url.toString()
-        val matchResult = """ntk(\d+)\.com""".toRegex().find(finalUrl)
+        val matchResult = """sbxh(\d+)\.com""".toRegex().find(finalUrl)
 
         if (matchResult != null) {
             val newDomainNumber = matchResult.groupValues[1]
@@ -300,7 +311,7 @@ abstract class NTKBase(
         EditTextPreference(screen.context).apply {
             key = PREF_DOMAIN_KEY
             title = "도메인 번호 (ntkOOO.com)"
-            summary = "현재 도메인 번호: ${preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)}\n숫자만 입력하세요 (예: 01, 02, 300)"
+            summary = "현재 도메인 번호: ${preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)}\n숫자만 입력하세요 (예: 1, 2, 300)"
             setDefaultValue(PREF_DOMAIN_DEFAULT)
         }.also(screen::addPreference)
 
@@ -308,17 +319,28 @@ abstract class NTKBase(
             key = PREF_RATELIMIT_KEY
             title = "다운로드 속도 제한"
             summary = "현재 설정: ${preferences.getString(PREF_RATELIMIT_KEY, PREF_RATELIMIT_DEFAULT)}초마다 1장\n※ 다운로드할 때만 적용 (읽기 중에는 영향 없음)"
-            entries = arrayOf("제한 없음 (최고속)", "1초마다 다운로드", "2초마다 다운로드", "3초마다 다운로드")
-            entryValues = arrayOf("0", "1", "2", "3")
+            entries = arrayOf(
+                "제한 없음 (최고속)",
+                "1초마다 다운로드",
+                "2초마다 다운로드",
+                "3초마다 다운로드",
+                "4초마다 다운로드",
+                "5초마다 다운로드",
+                "6초마다 다운로드",
+                "7초마다 다운로드",
+                "8초마다 다운로드",
+                "9초마다 다운로드",
+            )
+            entryValues = arrayOf("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
             setDefaultValue(PREF_RATELIMIT_DEFAULT)
         }.also(screen::addPreference)
     }
 
     companion object {
         private const val PREF_DOMAIN_KEY = "pref_domain_key"
-        private const val PREF_DOMAIN_DEFAULT = "01"
+        private const val PREF_DOMAIN_DEFAULT = "1"
         private const val PREF_RATELIMIT_KEY = "pref_ratelimit_key"
-        private const val PREF_RATELIMIT_DEFAULT = "0"
+        private const val PREF_RATELIMIT_DEFAULT = "5"
 
         const val PAGE_SIZE = 49
     }
