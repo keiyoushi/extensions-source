@@ -27,6 +27,7 @@ data class Post(
     val sample: ImageData = ImageData(),
     val file: ImageData = ImageData(),
     val tags: Tags = Tags(),
+    @SerialName("pools") val poolIds: List<Int> = emptyList(),
 )
 
 @Serializable

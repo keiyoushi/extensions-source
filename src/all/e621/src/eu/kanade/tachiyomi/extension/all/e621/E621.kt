@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.e621
 
 import android.content.SharedPreferences
+import android.util.Log // TODO: Delete this
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
@@ -73,41 +74,101 @@ class E621 :
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl/pools.json?limit=24&page=$page&search[order]=updated_at".toHttpUrl().newBuilder()
+        // var poolurl = "$baseUrl/pools.json?limit=24&page=$page&search[order]=updated_at".toHttpUrl().newBuilder()
+        // var postsurl = "$baseUrl/posts.json?limit=24&page=$page&tags=$tags"
+
+        var url = baseUrl.toHttpUrl().newBuilder()
+            // .addPathSegment("pools.json")
+            // .addQueryParameter("limit", "24")
+            .addQueryParameter("page", "$page")
+
+        var mode = "pools.json"
         var category = ""
         var order = "updated_at"
         var activeOnly = false
         var description = ""
+        var tagsMandatory = "inpool:true -video"
+        var tags = "$tagsMandatory"
 
         filters.forEach { filter ->
             when (filter) {
+                is ModeFilter -> mode = filter.toUriPart()
                 is OrderFilter -> order = filter.toUriPart()
                 is CategoryFilter -> category = filter.toUriPart()
                 is ActiveOnlyFilter -> activeOnly = filter.state
                 is DescriptionFilter -> description = filter.state.trim()
+                is TagsFilter -> tags = filter.state.trim()
                 else -> {}
             }
         }
 
-        url.addQueryParameter("search[order]", order)
-        if (category.isNotEmpty()) url.addQueryParameter("search[category]", category)
-        if (activeOnly) url.addQueryParameter("search[is_active]", "true")
-        if (query.isNotEmpty()) {
-            val search = "*${query.replace(" ", "_")}*"
-            url.addQueryParameter("search[name_matches]", search)
+        url.addPathSegment(mode)
+
+        if (mode == "pools.json") {
+            // Pools
+            url.addQueryParameter("search[order]", order).addQueryParameter("limit", "24")
+            if (category.isNotEmpty()) url.addQueryParameter("search[category]", category)
+            if (activeOnly) url.addQueryParameter("search[is_active]", "true")
+            if (query.isNotEmpty()) {
+                val search = "*${query.replace(" ", "_")}*"
+                url.addQueryParameter("search[name_matches]", search)
+            }
+            if (description.isNotEmpty()) {
+                url.addQueryParameter("search[description_matches]", description)
+            }
+        } else {
+            // Posts
+            // Since two requests are made in this mode, and duplicates are culled, I've quadrupled
+            // the limit to help reduce requests-per-second.
+            url.addQueryParameter("limit", "96")
+            if (query.isNotEmpty()) {
+                // Glob tag search
+                val search = "*${query.replace(" ", "_")}*"
+                url.addQueryParameter("tags", "$tagsMandatory $tags $search")
+            } else {
+                url.addQueryParameter("tags", "$tagsMandatory $tags")
+            }
         }
-        if (description.isNotEmpty()) {
-            url.addQueryParameter("search[description_matches]", description)
-        }
+
+        // TODO: Delete me
+        Log.d("MIHON:E621", url.toString())
 
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parsePoolList(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        var mode = response.request.url.encodedPath
+
+        if (mode == "/pools.json") {
+            return parsePoolList(response)
+        } else if (mode == "/posts.json") {
+            return parsePostsList(response)
+        }
+        return MangasPage(emptyList(), false)
+    }
 
     private fun parsePoolList(response: Response): MangasPage {
         val pools = response.parseAs<List<Pool>>()
+        return parsePoolListDirect(pools, pools.size >= 24)
+    }
 
+    private fun parsePostsList(response: Response): MangasPage {
+        val posts = response.parseAs<PostsResponse>().posts
+        val poolIds = posts.flatMap { it.poolIds }
+        val pools = batchFetchPools(poolIds)
+        // Log.d("MIHON:E621", "RAW:\n" + posts.toString())
+        // var testlog = "TEST:\n" + posts.joinToString(separator = "\n") { it.poolIds.toString() }
+        // Log.d("MIHON:E621", testlog)
+        // due to shared pools between posts, we cant assume there isn't a next page until empty
+        var test = parsePoolListDirect(pools, posts.size >= 96)
+        Log.d("MIHON:E621", "SIZES: ${posts.size} ${poolIds.size} ${pools.size}")
+        return test
+        // return parsePoolListDirect(pools)
+        // return MangasPage(emptyList(), false)
+    }
+
+    // private fun parsePoolListDirect(pools: List<Pool>, hasNextPageThreshold: Int = 24): MangasPage {
+    private fun parsePoolListDirect(pools: List<Pool>, hasNextPage: Boolean): MangasPage {
         val thumbnailMap = batchFetchPostSamples(
             pools.mapNotNull { it.postIds.firstOrNull() },
         ).takeIf { it.isNotEmpty() } ?: emptyMap()
@@ -121,7 +182,7 @@ class E621 :
             }
         }
 
-        return MangasPage(poolList, poolList.size >= 24)
+        return MangasPage(poolList, hasNextPage)
     }
 
     // Details
@@ -292,6 +353,26 @@ class E621 :
                     .parseAs<PostsResponse>()
 
                 data.posts
+            }.getOrDefault(emptyList())
+        }
+    }
+
+    private fun batchFetchPools(poolIds: List<Int>): List<Pool> {
+        if (poolIds.isEmpty()) return emptyList()
+
+        return poolIds.distinct().chunked(100).flatMap { chunk ->
+            runCatching {
+                val url = "$baseUrl/pools.json".toHttpUrl().newBuilder()
+                    .addQueryParameter("search[order]", "id_desc")
+                    .addQueryParameter("search[id]", chunk.joinToString(","))
+                    .addQueryParameter("limit", chunk.size.toString())
+                    .build()
+
+                val data = client.newCall(GET(url, headers)).execute()
+                    .parseAs<List<Pool>>()
+
+                // Maybe not the most efficient way to sort this?
+                data.sortedBy { chunk.indexOf(it.id) }
             }.getOrDefault(emptyList())
         }
     }
