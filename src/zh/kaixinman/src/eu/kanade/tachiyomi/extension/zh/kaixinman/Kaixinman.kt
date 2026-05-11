@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.kaixinman
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,13 +13,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -58,15 +59,32 @@ class Kaixinman : HttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = buildString {
-            append(baseUrl).append("/search?keyword=")
-            append(URLEncoder.encode(query, "UTF-8"))
-            if (page > 1) append("&page=").append(page)
-        }
-        return GET(url, pcHeaders("$baseUrl/search"))
+        val token = fetchSearchToken()
+        val formBody = FormBody.Builder()
+            .add("q", query)
+            .apply {
+                if (!token.isNullOrBlank()) add("__searchtoken__", token)
+                if (page > 1) add("page", page.toString())
+            }
+            .build()
+        return POST(
+            "$baseUrl/search",
+            pcHeaders(baseUrl),
+            formBody,
+        )
     }
 
     override fun searchMangaParse(response: Response): MangasPage = parseMangaGrid(response.asJsoup())
+
+    private fun fetchSearchToken(): String? = runCatching {
+        client.newCall(GET(baseUrl, pcHeaders(baseUrl))).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            response.asJsoup()
+                .selectFirst("form#search input[name=__searchtoken__]")
+                ?.attr("value")
+                ?.ifBlank { null }
+        }
+    }.getOrNull()
 
     private fun parseMangaGrid(document: Document): MangasPage {
         val mangas = document.select("div.comic-item").mapNotNull(::mangaFromElement)
