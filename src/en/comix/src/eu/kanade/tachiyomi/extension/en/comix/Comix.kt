@@ -55,8 +55,24 @@ class Comix :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    /**
+     * The first time the user opens the source we know they intend to
+     * browse, so warm up the signer in the background. Doing it here
+     * (and not in `init {}`) keeps idle sources that Mihon eagerly
+     * instantiates on the source list from paying the WebView cost.
+     */
+    private fun maybeWarmUpSigner() {
+        if (!signerWarmedUp) {
+            signerWarmedUp = true
+            Signer.warmUp()
+        }
+    }
+
+    @Volatile private var signerWarmedUp = false
+
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
+        maybeWarmUpSigner()
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             addQueryParameter("order[score]", "desc")
