@@ -37,15 +37,12 @@ class Comix :
 
     override val client = network.cloudflareClient.newBuilder()
         .apply {
-            // Insert at position 0 so requests carrying PROXY_HEADER reach
-            // our interceptor BEFORE any other application interceptor.
-            // Critical for Komu (iOS): its `CallNativeHttpInterceptor`
-            // re-routes comix.to traffic through Foundation NSURLSession
-            // to match Safari's TLS fingerprint and short-circuits the
-            // chain — adding our interceptor at the END would mean it
-            // never sees the request. Placing it first is harmless on
-            // Mihon Android too (no interceptor before us cares about
-            // PROXY_HEADER, and we always pass-through unsigned reqs).
+            // Prepended so requests carrying PROXY_HEADER reach our
+            // interceptor before any other application interceptor. Harmless
+            // on Mihon (no interceptor before us cares about PROXY_HEADER,
+            // and we pass through unsigned requests unchanged), but matters
+            // for downstream forks that wrap the chain with their own
+            // short-circuit on `comix.to`.
             interceptors().add(0, WebViewProxyInterceptor)
         }
         .rateLimit(5)

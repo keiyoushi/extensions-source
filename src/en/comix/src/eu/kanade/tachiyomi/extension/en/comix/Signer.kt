@@ -344,8 +344,8 @@ object Signer {
                 wv.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
                 wv.clearCache(true)
             } catch (_: RuntimeException) {
-                // Suwayomi's `WebView` shim throws "Stub!" on these. Mihon's
-                // real WebView and Komu's WKWebView shim handle them fine.
+                // Suwayomi's `WebView` shim throws "Stub!" on these; Mihon's
+                // real WebView handles them fine.
             }
 
             with(wv.settings) {
