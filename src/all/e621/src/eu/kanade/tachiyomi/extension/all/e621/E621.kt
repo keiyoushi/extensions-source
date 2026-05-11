@@ -211,6 +211,8 @@ class E621 :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/pools/${manga.url}"
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
         val poolId = manga.url
@@ -232,9 +234,11 @@ class E621 :
                 }
             }.reversed()
         } else {
+            val title = pool.name.replace("_", " ")
             listOf(
                 SChapter.create().apply {
-                    name = "Pool (${postIds.size} pages)"
+                    // name = "$title (${postIds.size} pages)"
+                    name = "$title$title" // WHY??? Zero clue.
                     url = "/pools/${pool.id}"
                     date_upload = parseDate(updatedAt)
                 },
