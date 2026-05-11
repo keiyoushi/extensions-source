@@ -3,7 +3,7 @@ ext {
     extClass = '.WitchScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://witchscans.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 0
     isNsfw = false
 }
 
