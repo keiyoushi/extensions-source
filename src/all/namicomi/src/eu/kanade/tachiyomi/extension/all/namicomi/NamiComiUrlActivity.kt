@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import kotlin.system.exitProcess
 
 /**
@@ -18,25 +17,16 @@ class NamiComiUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val pathSegments = intent?.data?.pathSegments
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-        // Supported path: /en/title/12345
-        if (pathSegments != null && pathSegments.size > 2) {
-            val titleId = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", NamiComiConstants.PREFIX_ID_SEARCH + titleId)
-                putExtra("filter", packageName)
-            }
-
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("NamiComiUrlActivity", e.toString())
-            }
-        } else {
-            Toast.makeText(this, "This URL cannot be handled by the Namicomi extension.", Toast.LENGTH_SHORT).show()
-            Log.e("NamiComiUrlActivity", "Could not parse URI from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("NamiComiUrlActivity", "Unable to launch activity", e)
         }
 
         finish()

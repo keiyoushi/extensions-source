@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.yomumangas
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,129 +10,155 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class YomuMangas : HttpSource() {
 
     override val name = "Yomu Mangás"
-
     override val baseUrl = "https://yomumangas.com"
-
+    private val apiUrl = "https://api.yomumangas.com"
     override val lang = "pt-BR"
-
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
-        .rateLimitHost(API_URL.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
-        .rateLimitHost(CDN_URL.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client = network.cloudflareClient
 
-    private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
-
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
 
-    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
-        .add("Accept", ACCEPT_JSON)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
-    // ================================ Popular =======================================
+    // ============================== Popular ==============================
+    override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
+    override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    // ================================ Latest =======================================
-
+    // ============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("[class*=styles_Container]:has(h1:contains(capítulos)) [class*=styles_Card]").map { element ->
+        val mangas = document.select("main[class*=page_Container] > div[class*=styles_Container]:nth-child(2) [class*=styles_Card]").mapNotNull {
+            val a = it.selectFirst("a[href^=/mangas/]") ?: return@mapNotNull null
+            val url = a.attr("abs:href").toHttpUrl()
+            val id = url.pathSegments.getOrNull(1) ?: return@mapNotNull null
+            val slug = url.pathSegments.getOrNull(2) ?: return@mapNotNull null
+            val title = it.selectFirst("h3")?.text()
+            if (title.isNullOrEmpty()) return@mapNotNull null
+
             SManga.create().apply {
-                with(element.selectFirst("a[class*=styles_Title]")!!) {
-                    title = text()
-                    setUrlWithoutDomain(absUrl("href"))
-                }
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                this.url = "$id#$slug"
+                this.title = title
+                thumbnail_url = a.selectFirst("img")?.attr("abs:src")?.replaceB2Uri()
             }
         }
-        return MangasPage(mangas, hasNextPage = false)
+        return MangasPage(mangas, false)
     }
 
-    // ================================ Search =======================================
-
+    // ============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val apiUrl = "$API_URL/mangas".toHttpUrl().newBuilder()
-            .addQueryParameter("query", query)
+        val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
-        filters.filterIsInstance<UrlQueryFilter>()
-            .forEach { it.addQueryParameter(apiUrl) }
+        if (query.isNotEmpty()) {
+            url.addQueryParameter("query", query)
+        }
 
-        return GET(apiUrl.build(), apiHeaders)
+        filters.forEach { filter ->
+            when (filter) {
+                is TypeFilter -> if (filter.toUriPart().isNotEmpty()) url.addQueryParameter("type", filter.toUriPart())
+                is StatusFilter -> if (filter.toUriPart().isNotEmpty()) url.addQueryParameter("status", filter.toUriPart())
+                is NsfwFilter -> if (filter.toUriPart().isNotEmpty()) url.addQueryParameter("nsfw", filter.toUriPart())
+                is GenreFilter -> {
+                    val selected = filter.state.filter { it.state }.map { it.id }
+                    if (selected.isNotEmpty()) {
+                        url.addQueryParameter("genres", selected.joinToString(","))
+                    }
+                }
+                is TagFilter -> {
+                    val selected = filter.state.filter { it.state }.map { it.id }
+                    if (selected.isNotEmpty()) {
+                        url.addQueryParameter("tags", selected.joinToString(","))
+                    }
+                }
+                else -> {}
+            }
+        }
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<YomuMangasSearchDto>()
-        val seriesList = result.mangas.map(YomuMangasSeriesDto::toSManga)
-        return MangasPage(seriesList, result.hasNextPage)
+        val dto = response.parseAs<SearchResponse>()
+        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        return MangasPage(
+            dto.mangas.map { it.toSManga() },
+            page < dto.pages,
+        )
     }
 
-    // ================================ Details =======================================
+    // ============================== Details ==============================
+    override fun getMangaUrl(manga: SManga): String {
+        val (id, slug) = manga.url.split("#", limit = 2)
+        return "$baseUrl/mangas/$id/$slug"
+    }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val (id, _) = manga.url.split("#", limit = 2)
+        return GET("$apiUrl/mangas/$id", headers)
+    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$API_URL${manga.url.substringBeforeLast("/")}", apiHeaders)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsResponse>().manga.toSManga()
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<YomuMangasDetailsDto>().manga.toSManga()
-
-    // ================================ Chapters =======================================
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    private fun chapterListApiRequest(mangaId: Int): Request = GET("$API_URL/mangas/$mangaId/chapters", apiHeaders)
+    // ============================= Chapters ==============================
+    override fun chapterListRequest(manga: SManga): Request {
+        val (id, slug) = manga.url.split("#", limit = 2)
+        return GET("$apiUrl/mangas/$id/chapters#$slug", headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val series = response.parseAs<YomuMangasDetailsDto>().manga
-
-        return client.newCall(chapterListApiRequest(series.id)).execute()
-            .parseAs<YomuMangasChaptersDto>().chapters
-            .sortedByDescending(YomuMangasChapterDto::chapter)
-            .map { it.toSChapter(series) }
+        val slug = response.request.url.fragment ?: throw Exception("Slug not found")
+        val mangaId = response.request.url.pathSegments.dropLast(1).last()
+        val dto = response.parseAs<ChaptersResponse>()
+        return dto.chapters.map { it.toSChapter(mangaId, slug, dateFormat) }.reversed()
     }
 
-    // ================================ Pages =======================================
-
+    // =============================== Pages ===============================
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("[class*=reader_Pages] img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
+        val html = response.body.string()
+
+        val pages = URI_REGEX.findAll(html).mapIndexed { index, matchResult ->
+            Page(index, imageUrl = matchResult.value.replaceB2Uri())
+        }.toList()
+
+        if (pages.isEmpty()) {
+            throw Exception("Nenhuma página encontrada. O layout do site pode ter mudado.")
         }
+
+        return pages
     }
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ================================ Filters =======================================
-
-    override fun getFilterList(): FilterList = FilterList(
-        StatusFilter(statusList),
-        TypeFilter(typesList),
-        NsfwContentFilter(),
-        AdultContentFilter(),
-        GenreFilter(genresList),
+    // ============================== Filters ==============================
+    override fun getFilterList() = FilterList(
+        TypeFilter(),
+        StatusFilter(),
+        NsfwFilter(),
+        Filter.Separator(),
+        GenreFilter(getGenresList()),
+        Filter.Separator(),
+        TagFilter(getTagsList()),
     )
 
+    // ============================= Utilities =============================
     companion object {
-        private const val ACCEPT_JSON = "application/json"
-
-        private const val API_URL = "https://api.yomumangas.com"
-        const val CDN_URL = "https://s3.yomumangas.com"
+        private val URI_REGEX = """b2://chapters/[^"\\]+""".toRegex()
     }
 }

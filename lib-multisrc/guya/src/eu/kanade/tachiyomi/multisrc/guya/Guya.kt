@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONArray
@@ -135,22 +136,34 @@ abstract class Guya(
         return parsePageFromJson(pages, metadata)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith(SLUG_PREFIX) -> {
-            val slug = query.removePrefix(SLUG_PREFIX)
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParseWithSlug(response, slug)
-                }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments.getOrNull(2)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$SLUG_PREFIX$slug", filters)
         }
 
-        else -> {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response, query)
-                }
+        return when {
+            query.startsWith(SLUG_PREFIX) -> {
+                val slug = query.removePrefix(SLUG_PREFIX)
+                client.newCall(searchMangaRequest(page, query, filters))
+                    .asObservableSuccess()
+                    .map { response ->
+                        searchMangaParseWithSlug(response, slug)
+                    }
+            }
+
+            else -> {
+                client.newCall(searchMangaRequest(page, query, filters))
+                    .asObservableSuccess()
+                    .map { response ->
+                        searchMangaParse(response, query)
+                    }
+            }
         }
     }
 

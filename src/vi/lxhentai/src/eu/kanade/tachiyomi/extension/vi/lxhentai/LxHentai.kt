@@ -75,18 +75,29 @@ class LxHentai :
 
     // ============================== Search ================================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith(PREFIX_ID_SEARCH) -> {
-            val slug = query.substringAfter(PREFIX_ID_SEARCH)
-            val mangaUrl = "/truyen/$slug"
-            fetchMangaDetails(SManga.create().apply { url = mangaUrl })
-                .map {
-                    it.url = mangaUrl
-                    it.initialized = true
-                    MangasPage(listOf(it), false)
-                }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
         }
-        else -> super.fetchSearchManga(page, query, filters)
+
+        return when {
+            query.startsWith(PREFIX_ID_SEARCH) -> {
+                val slug = query.substringAfter(PREFIX_ID_SEARCH)
+                val mangaUrl = "/truyen/$slug"
+                fetchMangaDetails(SManga.create().apply { url = mangaUrl })
+                    .map {
+                        it.url = mangaUrl
+                        it.initialized = true
+                        MangasPage(listOf(it), false)
+                    }
+            }
+            else -> super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

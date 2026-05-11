@@ -16,22 +16,17 @@ class DesuActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val titleid = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Desu.PREFIX_SLUG_SEARCH}$titleid")
-                putExtra("filter", packageName)
-            }
 
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("DesuActivity", e.toString())
-            }
-        } else {
-            Log.e("DesuActivity", "could not parse uri from intent $intent")
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
+
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("DesuActivity", "Unable to launch activity", e)
         }
 
         finish()

@@ -30,6 +30,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
+import rx.Observable
 
 abstract class NamiComi(final override val lang: String, private val extLang: String = lang) :
     HttpSource(),
@@ -104,6 +105,18 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     }
 
     // Search manga section
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments[2]
+            return fetchSearchManga(page, "${NamiComiConstants.PREFIX_ID_SEARCH}$id", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.startsWith(NamiComiConstants.PREFIX_ID_SEARCH)) {

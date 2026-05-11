@@ -3,7 +3,7 @@ ext {
     extClass = '.RagnarokScanlation'
     themePkg = 'madara'
     baseUrl = 'https://ragnarokscanlation.org'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 

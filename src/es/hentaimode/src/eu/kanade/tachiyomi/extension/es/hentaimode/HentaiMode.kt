@@ -56,13 +56,23 @@ class HentaiMode : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-        val id = query.removePrefix(PREFIX_SEARCH)
-        client.newCall(GET("$baseUrl/g/$id", headers))
-            .asObservableSuccess()
-            .map(::searchMangaByIdParse)
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val item = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
+        }
+        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+            val id = query.removePrefix(PREFIX_SEARCH)
+            client.newCall(GET("$baseUrl/g/$id", headers))
+                .asObservableSuccess()
+                .map(::searchMangaByIdParse)
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {

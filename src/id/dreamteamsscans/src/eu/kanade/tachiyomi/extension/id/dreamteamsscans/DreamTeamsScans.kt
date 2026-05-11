@@ -75,13 +75,17 @@ class DreamTeamsScans : HttpSource() {
     // =============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val slug = when {
-            query.startsWith(PREFIX_ID_SEARCH) -> query.removePrefix(PREFIX_ID_SEARCH)
-            query.startsWith("$baseUrl/comic/") -> query.substringAfter("/comic/").substringBefore("/")
-            else -> null
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
         }
 
-        return if (slug != null) {
+        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val slug = query.removePrefix(PREFIX_ID_SEARCH)
             client.newCall(GET("$apiBaseUrl/series/comic/$slug", headers))
                 .asObservableSuccess()
                 .map { response ->

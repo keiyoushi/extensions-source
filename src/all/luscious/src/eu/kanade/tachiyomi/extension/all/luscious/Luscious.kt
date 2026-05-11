@@ -468,7 +468,11 @@ abstract class Luscious(
         query,
     )
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("ID:")) {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
+        val url = query.toHttpUrl()
+        val album = url.pathSegments[1]
+        fetchSearchManga(page, "ALBUM:$album", filters)
+    } else if (query.startsWith("ID:")) {
         val id = query.substringAfterLast("ID:")
         client.newCall(buildAlbumInfoRequest(id))
             .asObservableSuccess()

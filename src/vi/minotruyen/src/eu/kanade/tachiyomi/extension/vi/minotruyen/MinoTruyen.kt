@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.extension.vi.minotruyen
 
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,12 +14,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -24,25 +30,41 @@ import java.util.TimeZone
 class MinoTruyen(
     override val name: String,
     private val category: String,
-) : HttpSource() {
-
-    override val baseUrl = "https://minotruyenv5.xyz"
-
-    private val apiUrl = "https://api.cloudkk.art/api"
+) : HttpSource(),
+    ConfigurableSource {
 
     override val lang = "vi"
 
     override val supportsLatest = true
+
+    private val defaultBaseUrl = "https://minotruyenv5.xyz"
+
+    override val baseUrl get() = getPrefBaseUrl()
+
+    private val preferences: SharedPreferences = getPreferences {
+        getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    private val apiUrl by lazy { resolveApiUrl() }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val apiHeaders by lazy { headersBuilder().add("Origin", baseUrl).build() }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 3)
-        .addInterceptor(MinoImageInterceptor())
-        .build()
+    override val client by lazy {
+        network.cloudflareClient.newBuilder()
+            .rateLimitHost(apiUrl.toHttpUrl(), 3)
+            .addInterceptor(MinoImageInterceptor())
+            .build()
+    }
 
     // ============================== Popular ===============================
 
@@ -271,7 +293,54 @@ class MinoTruyen(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+        }.let(screen::addPreference)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
+    private fun resolveApiUrl(): String {
+        val baseClient = network.cloudflareClient
+
+        try {
+            val request = Request.Builder()
+                .url("$API_URL_DEFAULT/books?take=1&category=$category")
+                .head()
+                .headers(headers)
+                .build()
+            baseClient.newCall(request).execute().close()
+            return API_URL_DEFAULT
+        } catch (_: Exception) {}
+
+        try {
+            val html = baseClient.newCall(GET(baseUrl, headers)).execute().body.string()
+            val doc = Jsoup.parse(html, baseUrl)
+
+            for (script in doc.select("script[src*=chunks]")) {
+                try {
+                    val text = baseClient.newCall(GET(script.absUrl("src"), headers)).execute().body.string()
+                    API_URL_REGEX.find(text)?.groupValues?.get(1)?.let {
+                        return "$it/api"
+                    }
+                } catch (_: Exception) {
+                    continue
+                }
+            }
+        } catch (_: Exception) {}
+
+        return API_URL_DEFAULT
+    }
+
     companion object {
+        private val API_URL_REGEX = Regex("""NEXT_PUBLIC_API_URL\W+"(https?://[^"]+)"""")
+        private const val API_URL_DEFAULT = "https://api.cloudkk-v1.xyz/api"
         private const val AES_KEY = "GCERKSmf28E6nWwrnR8Lz4f7TacKpzMy7aK0rxSB"
         private val ENCRYPTED_DATA_REGEX = Regex("""([a-f0-9]{32}:U2FsdGVk[A-Za-z0-9+/=]+)""")
         private const val DRM_XOR_KEY = "3141592653589793"
@@ -280,6 +349,11 @@ class MinoTruyen(
         private const val IBYTE_AD_MARKER = "-ad-"
         private const val IBYTE_LP_MARKER = "-lp-"
         private const val IBYTE_THUMBNAIL_SUFFIX = "~tplv-375lmtcpo0-resize:200:200.webp"
+
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
 
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("UTC")

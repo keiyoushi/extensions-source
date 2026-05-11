@@ -37,13 +37,25 @@ class HentaiHere : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
-        val id = query.removePrefix(PREFIX_ID_SEARCH)
-        client.newCall(searchMangaByIdRequest(id))
-            .asObservableSuccess()
-            .map { response -> searchMangaByIdParse(response, id) }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    ): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments.getOrNull(1)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
+        }
+
+        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val id = query.removePrefix(PREFIX_ID_SEARCH)
+            client.newCall(searchMangaByIdRequest(id))
+                .asObservableSuccess()
+                .map { response -> searchMangaByIdParse(response, id) }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/m/$id")

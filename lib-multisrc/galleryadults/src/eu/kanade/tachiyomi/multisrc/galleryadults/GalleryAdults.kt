@@ -161,6 +161,16 @@ abstract class GalleryAdults(
 
     /* Search */
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments.getOrNull(1)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
+        }
+
         val randomEntryFilter = filters.firstInstanceOrNull<RandomEntryFilter>()
 
         return when {

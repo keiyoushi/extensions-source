@@ -1,7 +1,7 @@
 ext {
     extName = 'DreamTeams Scans'
     extClass = '.DreamTeamsScans'
-    extVersionCode = 31
+    extVersionCode = 32
     baseUrl = 'https://dreamteams.space'
     isNsfw = true
 }
