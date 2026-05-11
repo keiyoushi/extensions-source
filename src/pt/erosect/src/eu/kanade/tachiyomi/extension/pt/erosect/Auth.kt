@@ -8,6 +8,7 @@ import android.widget.Toast
 import eu.kanade.tachiyomi.network.POST
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.Interceptor
@@ -147,7 +148,7 @@ internal class AuthTokenProvider(
         val body = LoginRequest(
             email = email,
             password = password,
-        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+        ).toRequestBody(JSON_MEDIA_TYPE)
 
         client.newCall(POST("$apiUrl/auth/login", loginHeaders, body)).execute().use { response ->
             if (!response.isSuccessful) return@use ""
