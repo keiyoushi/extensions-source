@@ -1,53 +1,65 @@
-# Keiyoushi Extensions
+# Violin Extensions Source
 
-### Please give the repo a :star:
+Private Mihon/Tachiyomi/Suwayomi extension source workspace.
 
-| Build                                                                                                                                                                               | Need Help?                                                                                                                                              |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [![CI](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml/badge.svg)](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
+This repository is a fork/worktree based on `keiyoushi/extensions-source` and contains the source code for custom extensions.
 
-## Usage
-**If you are new to repository/extensions, please read the [Keiyoushi Getting Started guide](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo) first.**
+## Repositories
 
-* You can add our repo by visiting the [Keiyoushi Website](https://keiyoushi.github.io/add-repo)
-* Otherwise, copy & paste the following URL: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
+- Source repository: https://github.com/violin321/extensions-source
+- Published extension repository: https://github.com/violin321/extensions
+- Suwayomi/Mihon repo URL:
 
-## Requests
+```text
+https://raw.githubusercontent.com/violin321/extensions/repo/index.min.json
+```
 
-To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
+## Current custom extensions
 
-Please note that creating an issue does not mean that the source will be added or fixed in a timely
-fashion, because the work is volunteer-based. Some sources may also be impossible to do or prohibitively
-difficult to maintain.
+### Kaixinman
 
-If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
-Issues are up-for-grabs for any developer if there is no assigned user already.
+- Source path: `src/zh/kaixinman/`
+- Package: `eu.kanade.tachiyomi.extension.zh.kaixinman`
+- Current version: `1.4.3`
+- Current version code: `3`
+- Base URL: `https://www.kaixinman.com`
 
-## Contributing
+Implemented:
+- Popular manga
+- Latest updates
+- Search with `q + __searchtoken__`
+- Manga details
+- Chapter list
+- Chapter page image decryption
 
-Contributions are welcome!
+## Build
 
-Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
+```bash
+ANDROID_HOME=/opt/android-sdk ./gradlew --no-daemon :src:zh:kaixinman:assembleDebug
+```
 
-## License
+Expected APK output:
 
-    Copyright 2015 Javier Tomás
+```text
+src/zh/kaixinman/build/outputs/apk/debug/tachiyomi-zh.kaixinman-v1.4.3-debug.apk
+```
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+## Publish flow
 
-    http://www.apache.org/licenses/LICENSE-2.0
+When changing an extension:
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+1. Update source under `src/<lang>/<source>/`.
+2. Increment `extVersionCode` in the extension `build.gradle`.
+3. Build the APK.
+4. Copy the APK to the publish repository `repo` branch under `apk/`.
+5. Update `index.json` and `index.min.json`:
+   - `apk`
+   - `code`
+   - `version`
+6. Push the source branch to `violin321/extensions-source`.
+7. Push the publish branch to `violin321/extensions`.
+8. Refresh extension repositories in Suwayomi/Mihon.
 
-## Disclaimer
+## Notes
 
-This project does not have any affiliation with the content providers available.
-
-This project is not affiliated with Mihon/Tachiyomi. Don't ask for help about these extensions at the
-official support means of Mihon/Tachiyomi. All credits to the codebase goes to the original contributors.
+This is a private/custom extension setup. It is not affiliated with Mihon, Tachiyomi, Suwayomi, Keiyoushi, or the content providers.
