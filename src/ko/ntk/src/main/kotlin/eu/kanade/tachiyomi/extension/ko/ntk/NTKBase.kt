@@ -50,7 +50,6 @@ abstract class NTKBase(
 //              return "https://sbxh$domainNumber.com"
 // //            return "https://ntk$domainNumber.com"
 //        }
-
     protected val rootUrl: String
         get() {
             val stored = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
