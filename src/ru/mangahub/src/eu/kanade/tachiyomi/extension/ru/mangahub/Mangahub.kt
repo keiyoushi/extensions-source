@@ -35,12 +35,7 @@ class Mangahub :
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy {
-        val domain = this.getString(DOMAIN_PREF, DOMAIN_DEFAULT)
-        if (domain == null || !domain.matches(URL_REGEX) || domain.endsWith("/")) {
-            this.edit().putString(DOMAIN_PREF, DOMAIN_DEFAULT).apply()
-        }
-    }
+    private val preferences by getPreferencesLazy()
 
     override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
