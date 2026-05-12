@@ -142,6 +142,24 @@ abstract class Japscan :
         // Sentinel host used to route page-image requests to a local cache file via
         // an OkHttp interceptor (see `client` builder).
         private const val JAPSCAN_CACHE_HOST = "japscan-cache.local"
+
+        // Synthetic viewport used to force-layout the detached WebView. We use a
+        // desktop-class width because the reader picks a "mobile" rendering path
+        // for viewports under ~1280 px wide that only materializes one tile-host
+        // per long page (then lazy-loads more on scroll, which our detached WebView
+        // can't reliably trigger). With a desktop-class width the reader pre-creates
+        // every tile-host upfront, exactly like it does in a real Chrome window —
+        // see live-Chrome inspection: innerWidth=5468 yields 7-8 hosts per long
+        // page; innerWidth=1080 yields 1.
+        private const val WEBVIEW_VIEWPORT_WIDTH = 1920
+        private const val WEBVIEW_VIEWPORT_HEIGHT = 16384
+
+        // Desktop Chrome UA matching what the descrambler's working code path
+        // expects (the source's own headersBuilder UA is Android-mobile flavored,
+        // which makes the descrambler take a one-tile-per-page mobile path).
+        private const val DESKTOP_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
         private val prefsEntries = arrayOf("Montrer uniquement les chapitres traduit en Français", "Montrer les chapitres spoiler")
         private val prefsEntryValues = arrayOf("hide", "show")
     }
@@ -489,8 +507,27 @@ abstract class Japscan :
             // The reader fetches scrambled tiles and reassembles them onto canvases;
             // images must be allowed to load for the descrambling to run.
             innerWv.settings.blockNetworkImage = false
+            // Keep the WebSettings UA matched to the rest of mihon's traffic so
+            // Cloudflare doesn't issue a fresh challenge for this request.
+            // The "desktop" appearance the descrambler needs is faked at the
+            // JS layer (navigator.userAgent / innerWidth / matchMedia / etc.)
+            // in the page-started hook below.
             innerWv.settings.userAgentString = headers["User-Agent"]
+            // Use wide viewport so window.innerWidth reflects the layout width
+            // we force on the WebView (instead of the device's mobile width).
+            innerWv.settings.useWideViewPort = true
+            innerWv.settings.loadWithOverviewMode = false
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            // Force a real viewport size on the detached WebView so the page actually
+            // gets a non-zero layout. Without this, `document.documentElement.clientWidth`
+            // is 0, no element gets bounding-rect dimensions, and the descrambler only
+            // renders the top tile of each page (everything past the first viewport
+            // height stays unmaterialized).
+            innerWv.measure(
+                View.MeasureSpec.makeMeasureSpec(WEBVIEW_VIEWPORT_WIDTH, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(WEBVIEW_VIEWPORT_HEIGHT, View.MeasureSpec.EXACTLY),
+            )
+            innerWv.layout(0, 0, WEBVIEW_VIEWPORT_WIDTH, WEBVIEW_VIEWPORT_HEIGHT)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
             // Forward in-page console.log calls to Logcat (tag "Japscan") so the JS
@@ -505,48 +542,274 @@ abstract class Japscan :
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    // Install the createObjectURL hook as early as possible. Each chapter page is
-                    // descrambled onto canvases by the page's own JS and surfaced as a `blob:` URL
-                    // via URL.createObjectURL — capturing those gives us the final rendered images.
-                    // We deliberately avoid overriding String.prototype.replace / atob / fetch:
-                    // the new bot detection checks `replace.toString().includes('[native code]')`
-                    // and trips `__poisoned = true` if any built-in is monkey-patched, which
-                    // makes the page refuse to deliver the payload.
+                    Log.d("Japscan", "[wv-kt] onPageStarted url=$url")
+                    // Pierce closed shadow roots BEFORE any reader script runs: the descrambler
+                    // composites each chapter page into canvases hosted by `<w-f1db5>` elements
+                    // whose shadow root is `attachShadow({ mode: 'closed' })`. Forcing every
+                    // attachShadow call to `open` lets us read `.shadowRoot` from outside and
+                    // grab the painted canvases.
                     //
-                    // We stream the conversion (blob -> base64 data URI) as soon as each blob is
-                    // created and revoke the original blob right after, so memory doesn't grow
-                    // unboundedly across the 13+ pages we drive through (otherwise the renderer
-                    // OOMs with all the page canvases held simultaneously).
+                    // We must not mutate behavior of any other built-in. The site's bot
+                    // detection trips on `String.prototype.replace.toString().includes('[native code]')`
+                    // and sets `__poisoned = true`, which makes the reader refuse to render.
+                    // We therefore (a) override attachShadow only, (b) mask its `.toString` so it
+                    // still reads as native, and (c) leave atob/replace/fetch/drawImage alone.
                     view?.evaluateJavascript(
                         $$"""
                             (function(){
+                                // Pin a logging channel through the Java bridge BEFORE the
+                                // site has a chance to silence `console.log` (some pages do
+                                // `console.log = function(){}` once their reader scripts run,
+                                // which would swallow every diagnostic the rest of the driver
+                                // emits via `console.log`).
+                                try {
+                                    var jl = window.$$interfaceName && window.$$interfaceName.log;
+                                    if (jl) {
+                                        window.__jlog = function(){
+                                            try {
+                                                var parts = [];
+                                                for (var i = 0; i < arguments.length; i++) parts.push(String(arguments[i]));
+                                                window.$$interfaceName.log(parts.join(' '));
+                                            } catch(e) {}
+                                        };
+                                    } else {
+                                        window.__jlog = function(){ try { console.log.apply(console, arguments); } catch(e) {} };
+                                    }
+                                } catch(e) {
+                                    window.__jlog = function(){};
+                                }
+                                window.__jlog('[japscan] onPageStarted JS entered, alreadyHooked=' + (window.__japscanHooked === true) + ' url=' + location.href);
                                 if (window.__japscanHooked) return;
                                 window.__japscanHooked = true;
-                                // Single slot tracking the most-recent image blob. Used by the
-                                // paginated-reader driver, which harvests one blob per page
-                                // navigation. The webtoon driver ignores this slot and instead
-                                // iterates `<img id="img-N">.src` in DOM order. We do NOT
-                                // auto-revoke the previous blob here: in webtoon mode all
-                                // blobs are pinned to <img> elements, and revoking them
-                                // before we fetch their bytes makes the URL unfetchable.
-                                window.__japscanLastBlob = null;
-                                var _orig = URL.createObjectURL.bind(URL);
-                                URL.createObjectURL = function(obj){
-                                    var u = _orig(obj);
-                                    try {
-                                        if (obj && obj.type && /^image\//.test(obj.type)) {
-                                            window.__japscanLastBlob = u;
-                                        }
-                                    } catch(e) {}
-                                    return u;
+
+                                // Patch table: maps each patched function to the canonical
+                                // native-code string for its name. We override
+                                // Function.prototype.toString so the site sees the original
+                                // native source whenever it stringifies one of our hooks —
+                                // the reader trips `__poisoned = true` if it spots a
+                                // tampered built-in (it explicitly checks `replace`,
+                                // `atob` and friends, and likely checks `attachShadow`
+                                // and the `shadowRoot` getter as well).
+                                var masked = new WeakMap();
+                                var origFnToString = Function.prototype.toString;
+                                function mask(fn, name){
+                                    try { masked.set(fn, 'function ' + name + '() { [native code] }'); } catch(e) {}
+                                    return fn;
+                                }
+                                var patchedToString = function toString(){
+                                    var m = masked.get(this);
+                                    if (m !== undefined) return m;
+                                    return origFnToString.call(this);
                                 };
-                                // Make our hook look like a native function in case the site ever
-                                // adds the same `[native code]` tripwire to createObjectURL.
+                                Function.prototype.toString = patchedToString;
+                                mask(patchedToString, 'toString');
+
+                                // Force every shadow root open at attach time so we can
+                                // read its canvases later — but track which ones the
+                                // caller *requested* be closed, and hide those from the
+                                // public `Element.prototype.shadowRoot` getter. The site
+                                // sees `el.shadowRoot === null` for its `<w-f1db5>` hosts
+                                // (matching the unpatched behavior); only our compositor,
+                                // via `window.__japscanShadowRootFor(el)`, can reach them.
                                 try {
-                                    URL.createObjectURL.toString = function(){
-                                        return 'function createObjectURL() { [native code] }';
+                                    var closedRoots = new WeakMap();
+                                    var _attach = Element.prototype.attachShadow;
+                                    var newAttach = function attachShadow(init){
+                                        var requested = (init && init.mode) || 'open';
+                                        var opts = {};
+                                        if (init) { for (var k in init) opts[k] = init[k]; }
+                                        opts.mode = 'open';
+                                        var sr = _attach.call(this, opts);
+                                        if (requested === 'closed') {
+                                            try { closedRoots.set(this, sr); } catch(e) {}
+                                        }
+                                        return sr;
                                     };
-                                } catch(e) {}
+                                    Element.prototype.attachShadow = newAttach;
+                                    mask(newAttach, 'attachShadow');
+
+                                    var origDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'shadowRoot');
+                                    var origGetter = origDesc && origDesc.get;
+                                    var newGetter = function get(){
+                                        if (closedRoots.has(this)) return null;
+                                        return origGetter ? origGetter.call(this) : null;
+                                    };
+                                    Object.defineProperty(Element.prototype, 'shadowRoot', {
+                                        get: newGetter,
+                                        configurable: true,
+                                    });
+                                    mask(newGetter, 'get shadowRoot');
+
+                                    window.__japscanShadowRootFor = function(el){
+                                        try {
+                                            if (closedRoots.has(el)) return closedRoots.get(el);
+                                            return origGetter ? origGetter.call(el) : el.shadowRoot;
+                                        } catch(e) { return null; }
+                                    };
+                                } catch(e) {
+                                    window.__jlog('[japscan] shadow hook failed: ' + e);
+                                }
+
+                                // Android throttles requestAnimationFrame for non-visible WebViews
+                                // (our WebView is detached, so it's never visible). The reader
+                                // drives its tile-creation loop on RAF; without ticks it renders
+                                // only the first tile per page and stalls. Force RAF to fire via
+                                // setTimeout so the loop keeps progressing.
+                                try {
+                                    var _rAF = window.requestAnimationFrame;
+                                    var newRAF = function requestAnimationFrame(cb){
+                                        return setTimeout(function(){
+                                            try { cb(performance.now()); } catch(e) {}
+                                        }, 16);
+                                    };
+                                    window.requestAnimationFrame = newRAF;
+                                    mask(newRAF, 'requestAnimationFrame');
+                                } catch(e) {
+                                    window.__jlog('[japscan] rAF hook failed: ' + e);
+                                }
+
+                                // Track canvas drawing activity so the compositor can wait for
+                                // descrambling to settle before reading pixels. Wrapping
+                                // drawImage is detectable via .toString — masked above.
+                                try {
+                                    window.__japscanLastDraw = 0;
+                                    window.__japscanDrawCount = 0;
+                                    var _drawImage = CanvasRenderingContext2D.prototype.drawImage;
+                                    var newDrawImage = function drawImage(){
+                                        try {
+                                            window.__japscanLastDraw = Date.now();
+                                            window.__japscanDrawCount++;
+                                        } catch(e) {}
+                                        return _drawImage.apply(this, arguments);
+                                    };
+                                    CanvasRenderingContext2D.prototype.drawImage = newDrawImage;
+                                    mask(newDrawImage, 'drawImage');
+                                } catch(e) {
+                                    window.__jlog('[japscan] draw hook failed: ' + e);
+                                }
+
+                                // Spoof JS-side environment to match a desktop Chrome on this
+                                // chapter. The WebView's native viewport/screen/touch signals
+                                // tell the descrambler "you're a phone" and it takes the
+                                // single-tile-per-page mobile path. Override the values that
+                                // the differential probe identified:
+                                //   innerWidth/innerHeight, devicePixelRatio,
+                                //   screen.width/height, navigator.platform/maxTouchPoints,
+                                //   matchMedia for (pointer: fine), (hover: hover),
+                                //   and (min-width: <N>px). UA is already set at the
+                                //   WebSettings level.
+                                try {
+                                    var defineGetter = function(obj, name, val){
+                                        try {
+                                            Object.defineProperty(obj, name, {
+                                                get: function(){ return val; },
+                                                configurable: true,
+                                            });
+                                        } catch(e) { window.__jlog('[japscan] defineGetter ' + name + ' failed: ' + e); }
+                                    };
+                                    defineGetter(window, 'innerWidth', 2560);
+                                    defineGetter(window, 'innerHeight', 1214);
+                                    defineGetter(window, 'devicePixelRatio', 0.75);
+                                    defineGetter(window.screen, 'width', 1920);
+                                    defineGetter(window.screen, 'height', 1080);
+                                    defineGetter(window.screen, 'availWidth', 1920);
+                                    defineGetter(window.screen, 'availHeight', 1040);
+                                    defineGetter(navigator, 'userAgent', '$$DESKTOP_USER_AGENT');
+                                    defineGetter(navigator, 'appVersion', '$$DESKTOP_USER_AGENT'.substring(8));
+                                    defineGetter(navigator, 'platform', 'Win32');
+                                    defineGetter(navigator, 'maxTouchPoints', 0);
+                                    defineGetter(navigator, 'hardwareConcurrency', 12);
+                                    // Remove ontouchstart so feature-detect-based mobile
+                                    // branches see a non-touch device.
+                                    try { delete window.ontouchstart; } catch(e) {}
+
+                                    // Stub window.chrome with the shape a real desktop Chrome has.
+                                    // The descrambler's anti-bot path checks for window.chrome and
+                                    // treats its absence as "this is a headless/automated browser",
+                                    // then renders only 1 tile per page as a defense.
+                                    try {
+                                        if (typeof window.chrome === 'undefined' || !window.chrome.loadTimes) {
+                                            var chromeStub = {
+                                                loadTimes: function loadTimes(){ return {}; },
+                                                csi: function csi(){ return {}; },
+                                                app: { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } },
+                                            };
+                                            mask(chromeStub.loadTimes, 'loadTimes');
+                                            mask(chromeStub.csi, 'csi');
+                                            Object.defineProperty(window, 'chrome', { get: function(){ return chromeStub; }, configurable: true });
+                                        }
+                                    } catch(e) { window.__jlog('[japscan] chrome stub failed: ' + e); }
+
+                                    // Fake plugins/mimeTypes — WebView reports 0 for both, real
+                                    // Chrome reports 5/2. Bot-detection scripts flag length=0.
+                                    try {
+                                        var fakeMime = function(type, suffixes, desc){
+                                            return { type: type, suffixes: suffixes, description: desc, enabledPlugin: null };
+                                        };
+                                        var fakePlugin = function(name, filename, desc, mimes){
+                                            var p = { name: name, filename: filename, description: desc, length: mimes.length };
+                                            for (var i = 0; i < mimes.length; i++) { p[i] = mimes[i]; mimes[i].enabledPlugin = p; }
+                                            return p;
+                                        };
+                                        var pdfMime = fakeMime('application/pdf', 'pdf', 'Portable Document Format');
+                                        var pdfViewerMime = fakeMime('text/pdf', 'pdf', 'Portable Document Format');
+                                        var plugins = [
+                                            fakePlugin('PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
+                                            fakePlugin('Chrome PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
+                                            fakePlugin('Chromium PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
+                                            fakePlugin('Microsoft Edge PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
+                                            fakePlugin('WebKit built-in PDF', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
+                                        ];
+                                        plugins.length = 5;
+                                        plugins.item = function(i){ return plugins[i] || null; };
+                                        plugins.namedItem = function(n){ for (var i=0;i<plugins.length;i++) if (plugins[i].name===n) return plugins[i]; return null; };
+                                        plugins.refresh = function(){};
+                                        Object.defineProperty(navigator, 'plugins', { get: function(){ return plugins; }, configurable: true });
+
+                                        var mimeTypes = [pdfMime, pdfViewerMime];
+                                        mimeTypes.length = 2;
+                                        mimeTypes.item = function(i){ return mimeTypes[i] || null; };
+                                        mimeTypes.namedItem = function(n){ for (var i=0;i<mimeTypes.length;i++) if (mimeTypes[i].type===n) return mimeTypes[i]; return null; };
+                                        Object.defineProperty(navigator, 'mimeTypes', { get: function(){ return mimeTypes; }, configurable: true });
+                                    } catch(e) { window.__jlog('[japscan] plugins stub failed: ' + e); }
+
+                                    // languages: real Chrome has multiple, WebView has 1.
+                                    try {
+                                        Object.defineProperty(navigator, 'languages', { get: function(){ return ['fr', 'fr-FR', 'en', 'en-US']; }, configurable: true });
+                                        Object.defineProperty(navigator, 'language', { get: function(){ return 'fr'; }, configurable: true });
+                                    } catch(e) {}
+
+                                    // Some bot-detection scripts check navigator.webdriver explicitly;
+                                    // ensure it reads as undefined (default, but defensive).
+                                    try {
+                                        Object.defineProperty(navigator, 'webdriver', { get: function(){ return undefined; }, configurable: true });
+                                    } catch(e) {}
+
+                                    var _mm = window.matchMedia.bind(window);
+                                    var newMM = function matchMedia(q){
+                                        var orig = _mm(q);
+                                        var shouldForceTrue = (
+                                            q === '(pointer: fine)' ||
+                                            q === '(hover: hover)' ||
+                                            /\(min-width:\s*\d+px\)/.test(q) ||
+                                            /\(min-device-width:\s*\d+px\)/.test(q)
+                                        );
+                                        if (!shouldForceTrue) return orig;
+                                        return new Proxy(orig, {
+                                            get: function(t, k){
+                                                if (k === 'matches') return true;
+                                                var v = t[k];
+                                                return typeof v === 'function' ? v.bind(t) : v;
+                                            },
+                                        });
+                                    };
+                                    window.matchMedia = newMM;
+                                    mask(newMM, 'matchMedia');
+                                } catch(e) {
+                                    window.__jlog('[japscan] env spoof failed: ' + e);
+                                }
+
+                                window.__jlog('[japscan] hooks installed');
                             })();
                         """.trimIndent(),
                     ) {}
@@ -554,154 +817,413 @@ abstract class Japscan :
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    Log.d("Japscan", "[wv-kt] onPageFinished url=$url")
                     // Force-keep the WebView "alive" so its JS timers don't get suspended while
                     // we're detached. resumeTimers is global to all WebViews in the process.
                     view?.onResume()
                     view?.resumeTimers()
-                    // Drive the reader through every chapter page (the `<select id="pages">`
-                    // element drives navigation). The createObjectURL hook installed in
-                    // onPageStarted converts each blob to a data URI as soon as it's produced,
-                    // so we just drive the UI and wait for window.__japscanImages to stabilize.
+                    // Drive the reader through every chapter page and composite each page out
+                    // of the shadow-DOM canvases. The page is rendered as a stack of <canvas>
+                    // tiles inside `<w-f1db5>` elements with a (formerly closed, now forced
+                    // open by the attachShadow hook) shadow root. We walk every canvas in the
+                    // page container, project each onto a fresh master canvas at the natural
+                    // tile resolution using bounding-rect coordinates, and ship the result
+                    // through the JS interface as a data: URI.
                     view?.evaluateJavascript(
                         $$"""
                             (async function(){
                                 var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+                                window.__jlog('[japscan] driver start');
 
-                                // Convert a blob URL to a base64 data URI and save it via the
-                                // JS interface. Returns true on success.
-                                async function saveBlobUrl(u){
-                                    if (!u) return false;
+                                // Collect every <canvas> reachable from `root`, descending
+                                // through shadow roots (including the formerly-closed ones
+                                // the attachShadow hook stashed in __japscanShadowRootFor).
+                                var shadowFor = window.__japscanShadowRootFor || function(){ return null; };
+                                function gatherCanvases(root, out) {
+                                    if (!root) return;
+                                    if (root.nodeType === 1 && root.tagName === 'CANVAS') {
+                                        out.push(root);
+                                    }
+                                    var sr = null;
+                                    try { sr = shadowFor(root); } catch(e) {}
+                                    if (sr) {
+                                        var sk = sr.children;
+                                        if (sk) {
+                                            for (var i = 0; i < sk.length; i++) gatherCanvases(sk[i], out);
+                                        }
+                                    }
+                                    var ch = root.children;
+                                    if (ch) {
+                                        for (var j = 0; j < ch.length; j++) gatherCanvases(ch[j], out);
+                                    }
+                                }
+
+                                // Discover the tile hosts that make up `#d-img-N`. The reader uses
+                                // a custom element (e.g. <b-123e6>, <w-f1db5> — the tag name is
+                                // randomized per series) that exposes the composited tile bitmap
+                                // as `tile.canvas` (an own-property set in the custom element's
+                                // constructor when it has actually rendered).
+                                //
+                                // STRUCTURAL discovery, not readiness: we identify a tile by its
+                                // tag (any hyphenated custom-element tag) that is a direct child
+                                // either of #d-img-N or of #d-img-N > div.cc80466. We deliberately
+                                // do NOT require `.canvas` to exist yet, because the descrambler
+                                // is lazy and only renders tiles after they are scrolled into the
+                                // viewport — chicken-and-egg if we filter on `.canvas` here.
+                                // Walk every node reachable from `root` (including across open and
+                                // recovered-closed shadow roots) and return the unique hyphenated-
+                                // tag custom elements that have a `.canvas` HTMLCanvasElement own-
+                                // property — or, structurally, ANY hyphenated-tag element if no
+                                // `.canvas`-bearing one exists yet (the constructor sets `.canvas`
+                                // only after the descrambler renders).
+                                // Discover tile groups in `#d-img-N`'s subtree. Canvases-first
+                                // approach: walk canvases (works regardless of whether the host
+                                // custom element is exposed in light DOM), group them by their
+                                // shadow-root host, and treat each unique host as one tile.
+                                //
+                                // Returns an array of `{ host, canvases }` records in stable order
+                                // of first appearance. The host is the custom element (whose
+                                // `.canvas` own-property, when set, gives the descrambled bitmap);
+                                // `canvases` is the layered set inside its shadow root.
+                                function discoverTiles(container){
+                                    if (!container) return [];
+                                    // Long-page WebView layout: container has a `cc...`-class
+                                    // wrapper holding 7-8 direct <canvas> children (one per
+                                    // descrambled vertical slice). Emit each canvas as a
+                                    // standalone tile so toDataURL is called per slice and
+                                    // the webtoon reader stitches them.
+                                    var wrap = null;
+                                    for (var ci = 0; ci < container.children.length; ci++) {
+                                        var ch = container.children[ci];
+                                        if (ch.tagName === 'DIV' && ('' + ch.className).indexOf('cc') === 0) {
+                                            wrap = ch; break;
+                                        }
+                                    }
+                                    if (wrap) {
+                                        var direct = [];
+                                        for (var di = 0; di < wrap.children.length; di++) {
+                                            var w = wrap.children[di];
+                                            if (w.tagName === 'CANVAS' && w.width > 0 && w.height > 0) {
+                                                direct.push(w);
+                                            }
+                                        }
+                                        if (direct.length > 0) {
+                                            var outArr = [];
+                                            for (var di2 = 0; di2 < direct.length; di2++) {
+                                                outArr.push({ host: direct[di2], canvases: [direct[di2]] });
+                                            }
+                                            return outArr;
+                                        }
+                                    }
+                                    // Short-page / single-tile layout: canvases live inside a
+                                    // custom-element host (e.g. <t-b8432>). Group them by
+                                    // shadow-root host so each host yields one tile.
+                                    var canvases = [];
+                                    gatherCanvases(container, canvases);
+                                    if (canvases.length === 0) return [];
+                                    var map = new Map();
+                                    var order = [];
+                                    for (var i = 0; i < canvases.length; i++) {
+                                        var c = canvases[i];
+                                        if (c.width <= 0 || c.height <= 0) continue;
+                                        var rn = c.getRootNode && c.getRootNode();
+                                        var host = (rn && rn.host) ? rn.host : container;
+                                        if (!map.has(host)) {
+                                            map.set(host, []);
+                                            order.push(host);
+                                        }
+                                        map.get(host).push(c);
+                                    }
+                                    var out = [];
+                                    for (var k = 0; k < order.length; k++) {
+                                        out.push({ host: order[k], canvases: map.get(order[k]) });
+                                    }
+                                    return out;
+                                }
+
+                                // Resolve a tile to a single canvas for export. Preference order:
+                                //   1. `host.canvas` own-property — the descrambler's explicit
+                                //      pointer to the final composited bitmap.
+                                //   2. The lone canvas with `position: relative` in the layered
+                                //      set — it establishes the visible tile and on inspection
+                                //      consistently holds the real bitmap; siblings are decoys.
+                                //   3. The first non-empty canvas — last-resort.
+                                function pickTileCanvas(tile){
                                     try {
-                                        var r = await fetch(u);
-                                        var b = await r.blob();
-                                        var d = await new Promise(function(res, rej){
-                                            var fr = new FileReader();
-                                            fr.onload = function(){ res(fr.result); };
-                                            fr.onerror = rej;
-                                            fr.readAsDataURL(b);
-                                        });
-                                        if (typeof d === 'string' && d.indexOf('data:image/') === 0) {
-                                            window.$$interfaceName.savePage(d);
-                                            return true;
+                                        if (tile.host && tile.host.canvas instanceof HTMLCanvasElement) {
+                                            return tile.host.canvas;
                                         }
-                                    } catch(e) {
-                                        console.log('[japscan] saveBlobUrl failed: ' + e);
-                                    } finally {
-                                        try { URL.revokeObjectURL(u); } catch(e) {}
+                                    } catch(e) {}
+                                    var arr = tile.canvases || [];
+                                    for (var i = 0; i < arr.length; i++) {
+                                        var s = null;
+                                        try { s = window.getComputedStyle(arr[i]); } catch(e) {}
+                                        if (s && s.position === 'relative') return arr[i];
                                     }
-                                    return false;
+                                    return arr[0] || null;
                                 }
 
-                                // Paginated mode: harvest the latest blob from the slot.
-                                async function harvest(){
-                                    var u = window.__japscanLastBlob;
-                                    if (!u) return false;
-                                    window.__japscanLastBlob = null;
-                                    return await saveBlobUrl(u);
-                                }
-
-                                // Wait for a fresh blob to appear (slot starts null after each
-                                // harvest). After it appears, settle for a bit so any later
-                                // re-render of the same page replaces the slot with the final
-                                // composited image.
-                                async function waitForBlob(timeoutMs){
+                                // Wait until at least one of the tile's canvases (or its
+                                // host.canvas) has non-zero dimensions and the descrambler has
+                                // gone quiet (no drawImage calls for ≥ quietMs).
+                                async function waitForTileReady(tile, timeoutMs){
                                     var w = 0;
-                                    while (!window.__japscanLastBlob && w < timeoutMs) {
-                                        await sleep(100); w += 100;
-                                    }
-                                    if (!window.__japscanLastBlob) return -1;
-                                    var lastUrl = window.__japscanLastBlob;
-                                    var stable = 0;
-                                    while (stable < 400) {
-                                        await sleep(100);
-                                        if (window.__japscanLastBlob !== lastUrl) {
-                                            lastUrl = window.__japscanLastBlob;
-                                            stable = 0;
-                                        } else {
-                                            stable += 100;
+                                    var quietMs = 600;
+                                    while (w < timeoutMs) {
+                                        var anySized = false;
+                                        try {
+                                            if (tile.host && tile.host.canvas && tile.host.canvas.width > 0) anySized = true;
+                                        } catch(e) {}
+                                        if (!anySized) {
+                                            var arr = tile.canvases || [];
+                                            for (var i = 0; i < arr.length; i++) {
+                                                if (arr[i].width > 0 && arr[i].height > 0) { anySized = true; break; }
+                                            }
                                         }
+                                        if (anySized) {
+                                            // Honor the host's own ready flags if present.
+                                            var hostReady = true;
+                                            try {
+                                                if (tile.host && ('cw' in tile.host)) {
+                                                    hostReady = !!(tile.host.cw && tile.host.ch);
+                                                }
+                                            } catch(e) {}
+                                            var sinceDraw = Date.now() - (window.__japscanLastDraw || 0);
+                                            if (hostReady && sinceDraw >= quietMs) return w;
+                                        }
+                                        await sleep(150);
+                                        w += 150;
                                     }
-                                    return w;
+                                    return -1;
+                                }
+
+                                function tileToDataUri(tile){
+                                    try {
+                                        var c = pickTileCanvas(tile);
+                                        if (!c || !c.width || !c.height) return null;
+                                        return c.toDataURL('image/jpeg', 0.92);
+                                    } catch(e) { return null; }
+                                }
+
+                                // Paginated mode only: composite the (#single-reader-XXX) container's
+                                // direct canvas children. Layered canvases at the same position, so
+                                // we draw them all at (0, 0) in DOM order. No shadow roots, no
+                                // custom-element tiles in this layout — it's the simple legacy form.
+                                function paginatedComposite(container, label) {
+                                    if (!container) return null;
+                                    var canvases = container.querySelectorAll(':scope > canvas');
+                                    if (canvases.length === 0) {
+                                        window.__jlog('[japscan] ' + label + ' compose: no direct canvas children');
+                                        return null;
+                                    }
+                                    var W = 0, H = 0;
+                                    for (var i = 0; i < canvases.length; i++) {
+                                        if (canvases[i].width  > W) W = canvases[i].width;
+                                        if (canvases[i].height > H) H = canvases[i].height;
+                                    }
+                                    if (W === 0 || H === 0) return null;
+                                    var master = document.createElement('canvas');
+                                    master.width = W; master.height = H;
+                                    var mctx = master.getContext('2d');
+                                    if (!mctx) return null;
+                                    var drawn = 0;
+                                    for (var k = 0; k < canvases.length; k++) {
+                                        try { mctx.drawImage(canvases[k], 0, 0); drawn++; } catch(e) {}
+                                    }
+                                    window.__jlog('[japscan] ' + label + ' compose: ' + W + 'x' + H + ' canvases=' + canvases.length + ' drawn=' + drawn);
+                                    var uri = null;
+                                    try { uri = master.toDataURL('image/jpeg', 0.92); } catch(e) {}
+                                    master.width = 0; master.height = 0;
+                                    return uri;
+                                }
+
+                                // Wait for the descrambler to populate the container's shadow-DOM
+                                // canvases, then settle until the canvas count is stable for a bit.
+                                // Settle on TWO independent signals:
+                                //  - canvas count is non-zero and stable (DOM structure done),
+                                //  - no drawImage calls for `quietMs` (descrambler done painting).
+                                // Without the second signal we capture mid-paint and only the
+                                // first few layered passes have been drawn, so the rendered page
+                                // is incomplete.
+                                async function waitForRender(container, timeoutMs, label) {
+                                    var quietMs = 800;
+                                    var minTotal = 1500;
+                                    var pollMs = 150;
+                                    var w = 0;
+                                    var prevCount = -1;
+                                    var structuralStable = 0;
+                                    var lastLogN = -1;
+                                    while (w < timeoutMs) {
+                                        var arr = [];
+                                        gatherCanvases(container, arr);
+                                        var n = arr.length;
+                                        var hasContent = false;
+                                        var maxW = 0, maxH = 0;
+                                        for (var i = 0; i < arr.length; i++) {
+                                            if (arr[i].width > maxW) maxW = arr[i].width;
+                                            if (arr[i].height > maxH) maxH = arr[i].height;
+                                            if (arr[i].width > 0 && arr[i].height > 0) hasContent = true;
+                                        }
+                                        var now = Date.now();
+                                        var sinceDraw = now - (window.__japscanLastDraw || 0);
+                                        if (label && (n !== lastLogN) && (w === 0 || w >= 500)) {
+                                            window.__jlog('[japscan] ' + label + ' poll @' + w + 'ms canvases=' + n + ' hasContent=' + hasContent + ' max=' + maxW + 'x' + maxH + ' sinceDraw=' + sinceDraw + 'ms drawCount=' + (window.__japscanDrawCount || 0));
+                                            lastLogN = n;
+                                        }
+                                        if (hasContent && n === prevCount) {
+                                            structuralStable += pollMs;
+                                        } else {
+                                            structuralStable = 0;
+                                            prevCount = n;
+                                        }
+                                        if (structuralStable >= 600 && sinceDraw >= quietMs && w >= minTotal) {
+                                            if (label) window.__jlog('[japscan] ' + label + ' settled @' + w + 'ms (sinceDraw=' + sinceDraw + 'ms drawCount=' + (window.__japscanDrawCount || 0) + ')');
+                                            return w;
+                                        }
+                                        await sleep(pollMs);
+                                        w += pollMs;
+                                    }
+                                    if (label) window.__jlog('[japscan] ' + label + ' settle timed out @' + w + 'ms');
+                                    return -1;
+                                }
+
+                                async function savePaginated(container, label) {
+                                    var t = await waitForRender(container, 20000, label);
+                                    if (t < 0) {
+                                        window.__jlog('[japscan] ' + label + ' render timed out');
+                                        return false;
+                                    }
+                                    var uri = paginatedComposite(container, label);
+                                    if (!uri || uri.indexOf('data:image/') !== 0) {
+                                        window.__jlog('[japscan] ' + label + ' composite failed');
+                                        return false;
+                                    }
+                                    try {
+                                        window.$$interfaceName.savePage(uri);
+                                        window.__jlog('[japscan] ' + label + ' saved after ' + t + 'ms (' + uri.length + ' chars)');
+                                        return true;
+                                    } catch(e) {
+                                        window.__jlog('[japscan] savePage failed: ' + e);
+                                        return false;
+                                    }
                                 }
 
                                 // Detect reader mode. Webtoon (long-strip) puts everything in
-                                // `#full-reader` with one `<img id="img-N">` per page and hides
-                                // `#single-reader` (class `d-none`); paginated mode is the
-                                // opposite. We use a different driver per mode.
+                                // `#full-reader` with one `<img id="img-N">` per page (each in
+                                // its `<div id="d-img-N">` container) and hides `#single-reader`
+                                // (class `d-none`); paginated mode is the opposite.
                                 var fullReader = document.getElementById('full-reader');
                                 var singleReader = document.querySelector('[id^="single-reader"]');
-                                var webtoonImgs = fullReader
-                                    ? Array.from(fullReader.querySelectorAll('img[id^="img-"]'))
+                                var dImgContainers = fullReader
+                                    ? Array.from(fullReader.querySelectorAll('div[id^="d-img-"]'))
                                           .sort(function(a, b){
-                                              return parseInt(a.id.replace('img-', ''), 10)
-                                                   - parseInt(b.id.replace('img-', ''), 10);
+                                              return parseInt(a.id.replace('d-img-', ''), 10)
+                                                   - parseInt(b.id.replace('d-img-', ''), 10);
                                           })
                                     : [];
                                 var singleHidden = singleReader && singleReader.classList.contains('d-none');
-                                var isWebtoon = webtoonImgs.length > 0 && (singleHidden || !singleReader);
+                                var isWebtoon = dImgContainers.length > 0 && (singleHidden || !singleReader);
+                                window.__jlog('[japscan] mode: webtoon=' + isWebtoon + ' pages=' + dImgContainers.length);
+
+
 
                                 if (isWebtoon) {
-                                    var total = webtoonImgs.length;
-                                    console.log('[japscan] webtoon mode, total = ' + total);
-                                    var saved = 0;
-                                    // Each webtoon page is rendered into ~8 layered canvases
-                                    // inside a closed shadow root and then composited to a
-                                    // pinned `<img>.src` blob. Holding all 14 pages worth of
-                                    // canvases and bitmaps in the DOM concurrently OOMs the
-                                    // renderer (≈ 14 × 8 × 940 × 2100 × 4 ≈ 880 MB), so we
-                                    // tear down each `#d-img-N` container as soon as we've
-                                    // grabbed the bytes for that page.
-                                    //
-                                    // We also remove the (hidden) single-reader subtree up
-                                    // front to drop its stale layer-canvases; in webtoon mode
-                                    // it's `d-none` and only adds memory pressure.
+                                    var total = dImgContainers.length;
+                                    // Drop the hidden single-reader subtree to keep its stale
+                                    // layer-canvases from adding memory pressure.
                                     if (singleReader && singleReader.parentNode) {
                                         try { singleReader.parentNode.removeChild(singleReader); } catch(e) {}
                                     }
-                                    for (var i = 0; i < total; i++) {
-                                        var img = webtoonImgs[i];
-                                        var container = document.getElementById('d-img-' + i);
-                                        try { img.scrollIntoView({ block: 'start' }); } catch(e) {}
-                                        // Wait for the descrambler to set img.src to a blob URL.
-                                        var w = 0;
-                                        while ((!img.src || img.src.indexOf('blob:') !== 0) && w < 20000) {
-                                            await sleep(250); w += 250;
-                                        }
-                                        if (img.src && img.src.indexOf('blob:') === 0) {
-                                            var ok = await saveBlobUrl(img.src);
-                                            if (ok) saved++;
-                                        }
-                                        // Free the page's DOM/bitmap memory before moving on.
-                                        try {
-                                            img.src = '';
-                                            img.removeAttribute('src');
-                                            if (container && container.parentNode) {
-                                                container.parentNode.removeChild(container);
+                                    // For each `#d-img-N`: determine the expected tile count up
+                                    // front (number of direct <canvas> children of the cc...
+                                    // wrapper for long pages, else 1 for single-tile pages).
+                                    // Try a one-pass capture first; if all expected tiles are
+                                    // already drawn, we're done in <1s. Only fall back to the
+                                    // slow scroll-and-discover loop if a tile is still missing.
+                                    var tilesEmitted = 0;
+                                    function expectedTileCount(container){
+                                        for (var ci = 0; ci < container.children.length; ci++) {
+                                            var ch = container.children[ci];
+                                            if (ch.tagName === 'DIV' && ('' + ch.className).indexOf('cc') === 0) {
+                                                var n = 0;
+                                                for (var ki = 0; ki < ch.children.length; ki++) {
+                                                    if (ch.children[ki].tagName === 'CANVAS') n++;
+                                                }
+                                                return n > 0 ? n : 1;
                                             }
-                                        } catch(e) {}
-                                        webtoonImgs[i] = null;
-                                        // Drop the slot ref too — the hook will overwrite it
-                                        // for the next page; nulling here lets any earlier
-                                        // (already-saved) blob be GCed promptly.
-                                        window.__japscanLastBlob = null;
-                                        console.log('[japscan] webtoon page ' + (i + 1) + ' / ' + total + ' after ' + w + 'ms (saved=' + saved + ')');
+                                        }
+                                        return 1;
                                     }
-                                    console.log('[japscan] webtoon done, ' + saved + ' / ' + total + ' pages saved');
+                                    async function captureOnce(container, pageLabel, savedHosts){
+                                        var saved = 0;
+                                        var tiles = discoverTiles(container);
+                                        for (var ti = 0; ti < tiles.length; ti++) {
+                                            var tile = tiles[ti];
+                                            if (!tile.host || savedHosts.has(tile.host)) continue;
+                                            var ready = await waitForTileReady(tile, 6000);
+                                            if (ready < 0) continue;
+                                            var picked = pickTileCanvas(tile);
+                                            if (!picked || !picked.width || !picked.height) continue;
+                                            var uri = tileToDataUri(tile);
+                                            if (!uri) continue;
+                                            try {
+                                                window.$$interfaceName.savePage(uri);
+                                                savedHosts.add(tile.host);
+                                                saved++;
+                                                tilesEmitted++;
+                                                window.__jlog('[japscan] ' + pageLabel + ' tile #' + savedHosts.size + ' saved (' + picked.width + 'x' + picked.height + ', ' + uri.length + ' chars)');
+                                            } catch(e) {
+                                                window.__jlog('[japscan] ' + pageLabel + ' savePage failed: ' + e);
+                                            }
+                                        }
+                                        return saved;
+                                    }
+                                    for (var i = 0; i < total; i++) {
+                                        var container = dImgContainers[i];
+                                        var pageLabel = 'd-img-' + i;
+                                        var expected = expectedTileCount(container);
+                                        // Bring the container into view so any layout-dependent
+                                        // measurements settle, then attempt a one-pass capture.
+                                        try { container.scrollIntoView({ block: 'start' }); } catch(e) {}
+                                        await sleep(100);
+                                        var savedHosts = new Set();
+                                        await captureOnce(container, pageLabel, savedHosts);
+                                        // If something is still missing (rare — only the lazy
+                                        // single-tile path), fall back to the scroll loop with
+                                        // a short total budget.
+                                        if (savedHosts.size < expected) {
+                                            var contRect = container.getBoundingClientRect();
+                                            var baseY = (window.scrollY || 0) + contRect.top;
+                                            var contH = container.offsetHeight || contRect.height || 2100;
+                                            var step = Math.max(400, Math.floor((window.innerHeight || 4096) * 0.5));
+                                            for (var sy = 0; sy <= contH + step && savedHosts.size < expected; sy += step) {
+                                                window.scrollTo(0, baseY + sy - 100);
+                                                await sleep(400);
+                                                await captureOnce(container, pageLabel, savedHosts);
+                                            }
+                                        }
+                                        window.__jlog('[japscan] ' + pageLabel + ' completed: ' + savedHosts.size + '/' + expected + ' tile(s)');
+                                        try {
+                                            if (container.parentNode) container.parentNode.removeChild(container);
+                                        } catch(e) {}
+                                        dImgContainers[i] = null;
+                                    }
+                                    window.__jlog('[japscan] webtoon done, ' + tilesEmitted + ' tile(s) saved across ' + total + ' d-img containers');
                                     try { window.$$interfaceName.passDone(); } catch(e) {}
                                     return;
                                 }
 
                                 // ---- Paginated mode ----
-                                // Total page count from the (hidden) <select>. Navigation goes
-                                // through the reader's click-zones (`#block-left` / `#block-right`).
-                                // Slimselect option clicks don't work because `.ss-content` is
-                                // hidden until the dropdown is opened; click-zones are what real
-                                // users tap and reliably trigger a per-page render.
+                                // The currently-displayed page lives inside the single-reader
+                                // container. Total page count comes from the (hidden) <select>;
+                                // navigation uses the reader's click-zones (#block-left/right) —
+                                // slimselect option clicks don't work because `.ss-content`
+                                // is hidden until the dropdown opens.
                                 var sel = document.getElementById('pages');
                                 var total = sel ? sel.options.length : 1;
                                 var nextBtn = document.getElementById('block-right');
                                 var prevBtn = document.getElementById('block-left');
-                                console.log('[japscan] paginated mode, total = ' + total + ', next=' + !!nextBtn + ', prev=' + !!prevBtn);
+                                window.__jlog('[japscan] paginated mode, total = ' + total + ', next=' + !!nextBtn + ', prev=' + !!prevBtn);
 
                                 function nav(btn, fallbackKey){
                                     try {
@@ -713,56 +1235,106 @@ abstract class Japscan :
                                             bubbles: true,
                                         }));
                                     } catch(e) {
-                                        console.log('[japscan] nav failed: ' + e);
+                                        window.__jlog('[japscan] nav failed: ' + e);
                                     }
                                 }
 
+                                // Wait until the canvas content inside the single-reader container
+                                // changes compared to the previous page (compared via a tiny pixel
+                                // fingerprint of the widest canvas).
+                                function fingerprint(container) {
+                                    var arr = [];
+                                    gatherCanvases(container, arr);
+                                    if (arr.length === 0) return '';
+                                    var ref = arr[0];
+                                    for (var i = 1; i < arr.length; i++) {
+                                        if (arr[i].width > ref.width) ref = arr[i];
+                                    }
+                                    try {
+                                        var ctx = ref.getContext('2d');
+                                        if (!ctx) return '';
+                                        var pts = [
+                                            [0, 0],
+                                            [Math.max(0, ref.width - 1), 0],
+                                            [Math.floor(ref.width / 2), Math.floor(ref.height / 2)],
+                                            [0, Math.max(0, ref.height - 1)],
+                                            [Math.max(0, ref.width - 1), Math.max(0, ref.height - 1)],
+                                        ];
+                                        var s = '';
+                                        for (var i = 0; i < pts.length; i++) {
+                                            var d = ctx.getImageData(pts[i][0], pts[i][1], 1, 1).data;
+                                            s += d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ';';
+                                        }
+                                        return s;
+                                    } catch(e) { return ''; }
+                                }
+
+                                async function waitForPageChange(container, prevFp, timeoutMs) {
+                                    var w = 0;
+                                    while (w < timeoutMs) {
+                                        var fp = fingerprint(container);
+                                        if (fp && fp !== prevFp) {
+                                            // Settle: keep checking until fp stops changing.
+                                            var lastFp = fp;
+                                            var stable = 0;
+                                            while (stable < 600 && w < timeoutMs) {
+                                                await sleep(200); w += 200;
+                                                var nfp = fingerprint(container);
+                                                if (nfp !== lastFp) { lastFp = nfp; stable = 0; }
+                                                else { stable += 200; }
+                                            }
+                                            return w;
+                                        }
+                                        await sleep(200); w += 200;
+                                    }
+                                    return -1;
+                                }
+
+                                var paginatedContainer = singleReader;
+                                if (!paginatedContainer) {
+                                    window.__jlog('[japscan] no single-reader container found');
+                                    try { window.$$interfaceName.passDone(); } catch(e) {}
+                                    return;
+                                }
+
                                 // The reader pre-renders pages on load (the final pre-render is
-                                // the *last* page, not page 1), so the very first blob the hook
-                                // sees is unreliable. Wait for things to settle, discard whatever
-                                // was captured, then bounce next->prev to force a clean page-1
-                                // render before we start harvesting.
-                                await sleep(5000);
-                                window.__japscanLastBlob = null;
-
-                                nav(nextBtn, 'ArrowRight');
-                                await waitForBlob(8000);
-                                window.__japscanLastBlob = null;
-
-                                nav(prevBtn, 'ArrowLeft');
-                                var t0 = await waitForBlob(8000);
-                                // Capture page 1's blob synchronously, then kick off page 2 BEFORE
-                                // we start encoding+saving page 1. The descrambler's per-page
-                                // pipeline (tile fetch + decode + composite) overlaps with our
-                                // blob → base64 → disk-write, shaving roughly one save-latency
-                                // off every page.
-                                var u0 = window.__japscanLastBlob;
-                                window.__japscanLastBlob = null;
-                                if (total > 1) nav(nextBtn, 'ArrowRight');
-                                var saved = u0 ? ((await saveBlobUrl(u0)) ? 1 : 0) : 0;
-                                console.log('[japscan] page 1 captured after ' + t0 + 'ms (saved=' + saved + ')');
-
-                                for (var i = 1; i < total; i++) {
-                                    var t = await waitForBlob(8000);
-                                    var u = window.__japscanLastBlob;
-                                    window.__japscanLastBlob = null;
-                                    // Pre-click the next page so its render starts now; we'll
-                                    // encode + save the current page concurrently below.
-                                    if (i < total - 1) nav(nextBtn, 'ArrowRight');
-                                    var ok = u ? await saveBlobUrl(u) : false;
-                                    if (ok) saved++;
-                                    console.log('[japscan] page ' + (i + 1) + ' captured after ' + t + 'ms (saved=' + saved + ')');
+                                // the *last* page, not page 1). Give it time to settle, then
+                                // bounce next->prev to force a clean page-1 render.
+                                await sleep(3000);
+                                if (total > 1) {
+                                    nav(nextBtn, 'ArrowRight');
+                                    await sleep(1500);
+                                    nav(prevBtn, 'ArrowLeft');
+                                    await sleep(1500);
                                 }
 
-                                console.log('[japscan] done, ' + saved + ' / ' + total + ' pages saved');
-                                try {
-                                    window.$$interfaceName.passDone();
-                                } catch(e) {
-                                    console.log('[japscan] passDone failed: ' + e);
+                                var savedP = 0;
+                                var prevFp = '';
+                                for (var p = 0; p < total; p++) {
+                                    var t = await waitForRender(paginatedContainer, 15000);
+                                    if (t < 0) {
+                                        window.__jlog('[japscan] paginated page ' + (p + 1) + ' render timed out');
+                                    } else {
+                                        var uri = paginatedComposite(paginatedContainer, 'paginated page ' + (p + 1));
+                                        if (uri && uri.indexOf('data:image/') === 0) {
+                                            try { window.$$interfaceName.savePage(uri); savedP++; } catch(e) {}
+                                            window.__jlog('[japscan] paginated page ' + (p + 1) + '/' + total + ' saved after ' + t + 'ms');
+                                        } else {
+                                            window.__jlog('[japscan] paginated page ' + (p + 1) + ' composite failed');
+                                        }
+                                    }
+                                    prevFp = fingerprint(paginatedContainer);
+                                    if (p < total - 1) {
+                                        nav(nextBtn, 'ArrowRight');
+                                        await waitForPageChange(paginatedContainer, prevFp, 15000);
+                                    }
                                 }
+
+                                window.__jlog('[japscan] paginated done, ' + savedP + ' / ' + total + ' pages saved');
+                                try { window.$$interfaceName.passDone(); } catch(e) {}
                             })();
                         """.trimIndent(),
-                    ) {}
+                    ) { result -> Log.d("Japscan", "[wv-kt] driver eval result=$result") }
                 }
             }
 
@@ -842,6 +1414,12 @@ abstract class Japscan :
             } catch (_: Exception) {
                 // best effort — page just won't be in the list
             }
+        }
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun log(message: String) {
+            Log.d("Japscan", "[js] $message")
         }
 
         @JavascriptInterface
