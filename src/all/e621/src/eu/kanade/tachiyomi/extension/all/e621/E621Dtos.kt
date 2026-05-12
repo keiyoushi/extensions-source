@@ -28,6 +28,7 @@ data class Post(
     val file: ImageData = ImageData(),
     val tags: Tags = Tags(),
     @SerialName("pools") val poolIds: List<Int> = emptyList(),
+    val rating: String = "e",
 )
 
 @Serializable
@@ -42,5 +43,10 @@ data class ImageData(
 
 @Serializable
 data class Tags(
+    val general: List<String> = emptyList(),
     val artist: List<String> = emptyList(),
+    val copyright: List<String> = emptyList(),
+    val character: List<String> = emptyList(),
+    val species: List<String> = emptyList(),
+    val lore: List<String> = emptyList(),
 )

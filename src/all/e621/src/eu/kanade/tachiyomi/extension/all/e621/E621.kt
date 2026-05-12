@@ -57,6 +57,7 @@ class E621 :
         if (category.isNotEmpty()) {
             url.addQueryParameter("search[category]", category)
         }
+        Log.d("MIHON:E621", "GET1 ${url.build()}")
         return GET(url.build(), headers)
     }
     override fun popularMangaParse(response: Response): MangasPage = parsePoolList(response)
@@ -68,6 +69,7 @@ class E621 :
         if (category.isNotEmpty()) {
             url.addQueryParameter("search[category]", category)
         }
+        Log.d("MIHON:E621", "GET2 ${url.build()}")
         return GET(url.build(), headers)
     }
     override fun latestUpdatesParse(response: Response): MangasPage = parsePoolList(response)
@@ -130,9 +132,7 @@ class E621 :
             }
         }
 
-        // TODO: Delete me
-        Log.d("MIHON:E621", url.toString())
-
+        Log.d("MIHON:E621", "GET3 ${url}")
         return GET(url.build(), headers)
     }
 
@@ -188,11 +188,35 @@ class E621 :
     // Details
     override fun mangaDetailsRequest(manga: SManga): Request {
         val poolId = manga.url
+        Log.d("MIHON:E621", "GET4 $baseUrl/pools/$poolId.json")
         return GET("$baseUrl/pools/$poolId.json", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val pool = response.parseAs<Pool>()
+
+        // fetch first 40 posts for common tags and artist
+        val posts = batchFetchPosts(pool.postIds.take(40))
+        val artists = posts[0].tags.artist
+        val rating = when {
+            posts.any { it.rating == "e" } -> "rating:Explicit"
+            posts.any { it.rating == "q" } -> "rating:Questionable"
+            else -> "rating:Safe"
+        }
+        val tags = posts.flatMap { 
+            it.tags.general + 
+            // it.tags.artist + 
+            it.tags.copyright + 
+            it.tags.character + 
+            it.tags.species + 
+            it.tags.lore
+        }.groupingBy { it }.eachCount()
+        .filter { it.value >= posts.size / 2 }.toList() // >50% of posts have tag
+        .sortedByDescending { it.second }               // sort by count
+        // .sortedBy { it.first }                          // sort alphabetically
+        .map { it.first }
+
+        // Log.d("MIHON:E621", tags.toString())
 
         return SManga.create().apply {
             url = pool.id.toString()
@@ -205,17 +229,19 @@ class E621 :
                 else -> SManga.UNKNOWN
             }
 
-            genre = pool.category
+            genre = "$rating, " + tags.joinToString(", ")
+            author = artists.joinToString(", ")
         }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/pools/${manga.url}"
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    
+    override fun getChapterUrl(chapter: SChapter): String ="$baseUrl${chapter.url}"
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
         val poolId = manga.url
+        Log.d("MIHON:E621", "GET5 $baseUrl/pools/$poolId.json")
         return GET("$baseUrl/pools/$poolId.json", headers)
     }
 
@@ -223,6 +249,7 @@ class E621 :
         val pool = response.parseAs<Pool>()
         val postIds = pool.postIds
         val updatedAt = pool.updatedAt
+
 
         return if (preferences.splitChaptersPref && postIds.isNotEmpty()) {
             postIds.mapIndexed { index, postId ->
@@ -241,7 +268,7 @@ class E621 :
                     name = "$title$title" // WHY??? Zero clue.
                     url = "/pools/${pool.id}"
                     date_upload = parseDate(updatedAt)
-                },
+                }
             )
         }
     }
@@ -259,9 +286,11 @@ class E621 :
                     addQueryParameter("limit", "1")
                 }
             }.build()
+            Log.d("MIHON:E621", "GET6 $url")
             GET(url, headers)
         } else {
             val poolId = chapterUrl.pathSegments.last()
+            Log.d("MIHON:E621", "GET7 $baseUrl/pools/$poolId.json")
             GET("$baseUrl/pools/$poolId.json", headers)
         }
     }
@@ -353,6 +382,7 @@ class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
+                Log.d("MIHON:E621", "GET9 $url")
                 val data = client.newCall(GET(url, headers)).execute()
                     .parseAs<PostsResponse>()
 
@@ -372,6 +402,7 @@ class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
+                Log.d("MIHON:E621", "GET10 $url")
                 val data = client.newCall(GET(url, headers)).execute()
                     .parseAs<List<Pool>>()
 
