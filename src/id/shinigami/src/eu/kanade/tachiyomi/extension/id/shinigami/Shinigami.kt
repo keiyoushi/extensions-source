@@ -23,7 +23,7 @@ class Shinigami : HttpSource() {
 
     override val name = "Shinigami"
 
-    override val baseUrl = "https://c.shinigami.asia"
+    override val baseUrl = "https://g.shinigami.asia"
 
     private val apiUrl = "https://api.shngm.io"
 
@@ -135,6 +135,7 @@ class Shinigami : HttpSource() {
         Pair("Crime", "crime"),
         Pair("Demon", "demon"),
         Pair("Demons", "demons"),
+        Pair("Dra", "dra-genre"),
         Pair("Drama", "drama"),
         Pair("Ecchi", "ecchi"),
         Pair("Fantasy", "fantasy"),
@@ -145,6 +146,9 @@ class Shinigami : HttpSource() {
         Pair("Historical", "historical"),
         Pair("Horror", "horror"),
         Pair("Isekai", "isekai"),
+        Pair("Josei", "josei-genre"),
+        Pair("Latest", "latest"),
+        Pair("Love", "love"),
         Pair("Magic", "magic"),
         Pair("Martial Arts", "martial-arts"),
         Pair("Mature", "mature"),
@@ -166,8 +170,11 @@ class Shinigami : HttpSource() {
         Pair("Smut", "smut"),
         Pair("Sports", "sports"),
         Pair("Supernatural", "supernatural"),
+        Pair("Supranatural", "supranatural"),
         Pair("Thriller", "thriller"),
         Pair("Tragedy", "tragedy"),
+        Pair("Violence", "violence"),
+        Pair("Wuxia", "wuxia"),
     )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
@@ -200,6 +207,7 @@ class Shinigami : HttpSource() {
     private fun Int.toStatus(): Int = when (this) {
         1 -> SManga.ONGOING
         2 -> SManga.COMPLETED
+        3 -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
