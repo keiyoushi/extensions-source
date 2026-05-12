@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.decodeHex
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -233,15 +234,6 @@ class KadoComi : HttpSource() {
     private fun getWorkCode(manga: SManga): String = manga.url.substringAfterLast("/")
 
     private fun getThumbnailUrl(work: KadoComiWork): String = work.bookCover ?: work.thumbnail
-
-    // https://stackoverflow.com/a/66614516
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
-    }
 
     private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray = imageByteArray.mapIndexed { idx, byte ->
         byte xor hashByteArray[idx % hashByteArray.size]

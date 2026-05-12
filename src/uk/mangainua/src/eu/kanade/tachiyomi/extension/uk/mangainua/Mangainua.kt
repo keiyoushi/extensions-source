@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -41,6 +42,7 @@ class Mangainua :
         .add("Referer", baseUrl)
 
     override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(1, 2)
         .build()
 
     // ============================== Popular ===============================
@@ -145,9 +147,7 @@ class Mangainua :
             setUrlWithoutDomain(attr("href"))
             title = text()
         }
-        thumbnail_url = element.selectFirst("img")?.run {
-            absUrl("data-src").ifEmpty { absUrl("src") }
-        }
+        thumbnail_url = element.selectFirst("img")?.imgAttr()
     }
 
     // ============================== Manga Details ======================================
@@ -155,11 +155,9 @@ class Mangainua :
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
         title = document.selectFirst("span.UAName")!!.ownText()
-        author = "Невідомо"
-        artist = "Невідомо"
         description = document.selectFirst("div.item__full-description p")?.wholeText()
-        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.attr("abs:data-src")
-        status = when (document.getInfoElement("Статус перекладу:")?.ownText()?.trim()) {
+        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.imgAttr()
+        status = when (document.getInfoElement("Статус перекладу:")?.text()) {
             "Триває" -> SManga.ONGOING
             "Заморожено" -> SManga.ON_HIATUS
             "Покинуто" -> SManga.CANCELLED
@@ -278,6 +276,11 @@ class Mangainua :
 
         return userHashQueryRegex.find(script)?.groupValues?.get(1)
             ?: throw Exception("Couldn't find user hash query!")
+    }
+
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
     }
 
     private fun ignoreTags(): Set<String> = preferences.getStringSet(SITE_TAGS_PREF, emptySet<String>())!!

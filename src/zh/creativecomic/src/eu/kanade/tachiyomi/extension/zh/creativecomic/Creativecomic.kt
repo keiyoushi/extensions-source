@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -117,8 +118,8 @@ class Creativecomic : HttpSource() {
         }
 
         val (key, iv) = request.url.fragment!!.split(":")
-        val keyBytes = key.hexStringToByteArray()
-        val ivBytes = iv.hexStringToByteArray()
+        val keyBytes = key.decodeHex()
+        val ivBytes = iv.decodeHex()
         val cipherBytes = response.body.bytes()
         val cipher = Cipher.getInstance("AES/CBC/PKCS7PADDING")
         val keySpec = SecretKeySpec(keyBytes, "AES")
@@ -205,18 +206,4 @@ class Creativecomic : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/zh/book/${manga.url}/content"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/zh/reader_comic/${chapter.url}"
-
-    private fun String.hexStringToByteArray(): ByteArray {
-        val len = length
-        val data = ByteArray(len / 2)
-        var i = 0
-        while (i < len) {
-            data[i / 2] = (
-                (Character.digit(this[i], 16) shl 4) +
-                    Character.digit(this[i + 1], 16)
-                ).toByte()
-            i += 2
-        }
-        return data
-    }
 }

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangamee
 
+import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
@@ -25,12 +26,5 @@ class ImageInterceptor : Interceptor {
         return response.newBuilder()
             .body(body)
             .build()
-    }
-
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 }
