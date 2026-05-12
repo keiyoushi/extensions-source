@@ -1,0 +1,8 @@
+ext {
+    extName = 'NixManga'
+    extClass = '.NixManga'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

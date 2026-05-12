@@ -16,8 +16,6 @@ typealias ApiMangaDetailsResponse = Data<MangaDetailsData>
 
 typealias ApiChapterListResponse = Data<ChapterListData>
 
-typealias ApiPageListResponse = Data<PageListData>
-
 @Serializable
 class Data<T>(val data: T)
 
@@ -148,12 +146,6 @@ class DateDto(
 )
 
 // page list
-@Serializable
-class EncryptedData(
-    @SerialName("tobeparsed")
-    val encrypted: String,
-)
-
 @Serializable
 class PageListData(
     @SerialName("chapterPages") val pageList: Edges<Servers>?,
