@@ -100,7 +100,7 @@ class GirlsTop : HttpSource() {
 
         return SManga.create().apply {
             if (url.contains("models.php")) {
-                title = document.selectFirst("h1.index")?.text()?.replace(TITLE_SUFFIX_REGEX, "")?.trim() ?: ""
+                title = document.selectFirst("h1.index")?.text()?.replace(TITLE_SUFFIX_REGEX, "")?.trim()!!
                 description = document.selectFirst("#modeldesc")?.text()
                 thumbnail_url = document.selectFirst(".model-cover img")?.absUrl("src")
                 status = SManga.ONGOING
