@@ -1,0 +1,8 @@
+ext {
+    extName = 'Mangitto'
+    extClass = '.Mangitto'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
