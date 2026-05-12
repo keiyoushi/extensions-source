@@ -27,14 +27,18 @@ class OnfMangas : HttpSource() {
 
     // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
     override fun headersBuilder() = super.headersBuilder()
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-        .add("Accept-Language", "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7")
-        .add("DNT", "1")
-        .add("Upgrade-Insecure-Requests", "1")
-        .add("Sec-Fetch-Dest", "document")
-        .add("Sec-Fetch-Mode", "navigate")
-        .add("Sec-Fetch-Site", "same-origin")
-        .add("Sec-Fetch-User", "?1")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .set("Accept-Language", "en-US,en;q=0.9")
+        .set("DNT", "1")
+        .set("Sec-GPC", "1")
+        .set("Connection", "keep-alive")
+        .set("Upgrade-Insecure-Requests", "1")
+        .set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "none")
+        .set("Sec-Fetch-User", "?1")
+        .set("Priority", "u=0, i")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {

@@ -1,0 +1,10 @@
+ext {
+    extName = 'TopComicPorno.net'
+    extClass = '.TopComicPornoNet'
+    themePkg = 'madara'
+    baseUrl = 'https://topcomicporno.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

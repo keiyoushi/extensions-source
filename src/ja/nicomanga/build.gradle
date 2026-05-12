@@ -1,9 +1,7 @@
 ext {
     extName = 'Nicomanga'
     extClass = '.Nicomanga'
-    themePkg = 'fmreader'
-    baseUrl = 'https://nicomanga.com'
-    overrideVersionCode = 0
+    extVersionCode = 13
     isNsfw = true
 }
 

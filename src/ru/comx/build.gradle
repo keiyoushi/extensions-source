@@ -1,7 +1,7 @@
 ext {
     extName = 'Com-X'
     extClass = '.ComX'
-    extVersionCode = 35
+    extVersionCode = 36
     isNsfw = false
 }
 
