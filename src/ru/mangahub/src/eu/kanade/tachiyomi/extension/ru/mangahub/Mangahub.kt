@@ -35,7 +35,16 @@ class Mangahub :
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        getString(DOMAIN_OVERRIDE, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != DOMAIN_DEFAULT) {
+                edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .putString(DOMAIN_OVERRIDE, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
 
     override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
@@ -205,7 +214,8 @@ class Mangahub :
             SimpleDateFormat("dd.MM.yyyy", Locale.US)
         }
         private const val DOMAIN_DEFAULT = "https://mangahub.ru"
-        private const val DOMAIN_PREF = "DOMAIN_PREF"
+        private const val DOMAIN_PREF = "defaultBaseUrl"
+        private const val DOMAIN_OVERRIDE = "overrideBaseUrl"
         private const val DOMAIN_RESTART_MESSAGE = "Для смены домена необходимо перезапустить приложение с полной остановкой."
         private const val DOMAIN_MISMATCH_1 = "Домен должен начинаться с https:// или http://."
         private const val DOMAIN_MISMATCH_2 = "Домен не должен заканчиваться символом /."
