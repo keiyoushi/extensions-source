@@ -63,7 +63,7 @@ class Mangadotnet :
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/trending.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/view-all/most-tracked.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
                 addQueryParameter("adult", "both")
             }
