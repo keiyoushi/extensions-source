@@ -105,7 +105,7 @@ class GirlsTop : HttpSource() {
                 thumbnail_url = document.selectFirst(".model-cover img")?.absUrl("src")
                 status = SManga.ONGOING
             } else {
-                title = document.selectFirst("h1")?.text() ?: ""
+                title = document.selectFirst("h1")?.text()!!
                 author = document.selectFirst(".ps-desc a[href*='user.php']")?.text()
                 genre = document.select(".ps-tags a").joinToString(", ") { it.text() }
                 description = buildString {
