@@ -13,6 +13,8 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
+    override val isNeedAuth = true
+
     override fun getFilterList() = FilterList(
         OrderBy(),
         CategoryList(getCategoryList()),
