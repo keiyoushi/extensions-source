@@ -234,6 +234,19 @@ class Mangadotnet :
         return data.mangaData.manga.toSManga(baseUrl)
     }
 
+    override val disableRelatedMangasBySearch = true
+
+    override fun relatedMangaListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val data = response.decodeRscAs<Data<RelatedData>>().data
+
+        return buildList {
+            data.relationsData?.relations?.values?.forEach(::addAll)
+            addAll(data.suggestions)
+        }.map { it.toSManga(baseUrl) }
+    }
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
         coroutineScope {
             val chapters = async {
