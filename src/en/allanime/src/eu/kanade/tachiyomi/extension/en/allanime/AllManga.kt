@@ -231,7 +231,24 @@ class AllManga :
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
-        val interfaceName = randomString()
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = """
+            (function () {
+                const originalParse = JSON.parse;
+                JSON.parse = new Proxy(originalParse, {
+                    apply(target, thisArg, args) {
+                        const result = Reflect.apply(target, thisArg, args);
+                        if (result && result.chapterPages) {
+                            window.$interfaceName.passPayload(args[0]);
+                        }
+                        return result;
+                    }
+                });
+            })();
+        """.trimIndent()
         var webView: WebView? = null
 
         handler.post {
@@ -249,7 +266,7 @@ class AllManga :
             view.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    view.evaluateJavascript(buildWebViewScript(interfaceName)) {}
+                    view.evaluateJavascript(script) {}
                 }
             }
 
@@ -360,29 +377,5 @@ class AllManga :
         private const val SHOW_ADULT_PREF_DEFAULT = false
         private const val IMAGE_QUALITY_PREF = "pref_quality"
         private const val IMAGE_QUALITY_PREF_DEFAULT = "original"
-
-        private val INTERFACE_CHAR_POOL = ('a'..'z') + ('A'..'Z')
-
-        private fun randomString(): String {
-            val length = (10..20).random()
-            return buildString(length) {
-                repeat(length) { append(INTERFACE_CHAR_POOL.random()) }
-            }
-        }
-
-        private fun buildWebViewScript(interfaceName: String) = """
-            (function () {
-                const originalParse = JSON.parse;
-                JSON.parse = new Proxy(originalParse, {
-                    apply(target, thisArg, args) {
-                        const result = Reflect.apply(target, thisArg, args);
-                        if (result && result.chapterPages) {
-                            window.$interfaceName.passPayload(args[0]);
-                        }
-                        return result;
-                    }
-                });
-            })();
-        """.trimIndent()
     }
 }
