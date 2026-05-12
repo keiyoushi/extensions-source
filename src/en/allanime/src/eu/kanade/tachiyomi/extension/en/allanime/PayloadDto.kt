@@ -48,10 +48,3 @@ class ChapterListVariables(
     private val id: String,
     private val showId: String,
 )
-
-@Serializable
-class PageListVariables(
-    private val id: String,
-    private val chapterNum: String,
-    private val translationType: String,
-)
