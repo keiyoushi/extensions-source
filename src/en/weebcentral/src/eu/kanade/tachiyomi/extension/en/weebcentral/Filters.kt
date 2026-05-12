@@ -101,6 +101,38 @@ class OfficialTranslationFilter :
         ),
     )
 
+class AnimeAdaptationFilter :
+    UriPartFilter(
+        "Anime Adaptation",
+        "anime",
+        arrayOf(
+            Pair("Any", "Any"),
+            Pair("True", "True"),
+            Pair("False", "False"),
+        ),
+    )
+
+class AdultContentFilter :
+    UriPartFilter(
+        "Adult Content",
+        "adult",
+        arrayOf(
+            Pair("Any", "Any"),
+            Pair("True", "True"),
+            Pair("False", "False"),
+        ),
+    )
+
+class AuthorFilter :
+    Filter.Text("Author (Case-sensitive)"),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        if (state.isNotEmpty()) {
+            builder.addQueryParameter("author", state)
+        }
+    }
+}
+
 class StatusFilter :
     UriMultiSelectFilter(
         "Series Status",
