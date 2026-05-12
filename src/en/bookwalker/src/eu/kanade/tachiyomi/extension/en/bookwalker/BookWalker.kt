@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagKind
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,11 +29,17 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.e4p.E4PManifestReader
+import keiyoushi.lib.e4p.E4PInterceptor
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAsProto
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -55,11 +62,11 @@ class BookWalker :
 
     override val supportsLatest = true
 
-    private val readerManager = BookWalkerChapterReaderManager(this)
-
     override val client = network.client.newBuilder()
-        .addInterceptor(BookWalkerImageRequestInterceptor(readerManager))
+        .addInterceptor(E4PInterceptor())
         .build()
+
+    private val manifestReader = E4PManifestReader(client, headers)
 
     private val preferences by getPreferencesLazy()
 
@@ -145,7 +152,7 @@ class BookWalker :
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val pageInfo = response.parseProtoAs<SearchResponseDto>()
+        val pageInfo = response.parseAsProto<SearchResponseDto>()
         val results = pageInfo.results.value
         return MangasPage(
             results.map { it.value.toSManga(720) },
@@ -213,13 +220,13 @@ class BookWalker :
                     headers,
                     MangaDetailsRequestDto(manga.url.toMangaId()).toProtoRequestBody(),
                 ),
-            ).asObservableSuccess().map { it.parseProtoAs<MangaDetailsResponseDto>() },
+            ).asObservableSuccess().map { it.parseAsProto<MangaDetailsResponseDto>() },
             // Volume list for cover images
             if (useLatestThumbnail) {
                 client.newCall(chapterListRequest(manga, ChapterType.VOLUMES)).asObservableSuccess().onErrorReturn { null }
             } else {
                 Observable.just(null)
-            }.map { it?.parseProtoAs<ChaptersResponseDto>()?.chapters },
+            }.map { it?.parseAsProto<ChaptersResponseDto>()?.chapters },
         ) { details, volumeList ->
             details.info.toSManga(1200).apply {
                 status = details.status
@@ -236,7 +243,7 @@ class BookWalker :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val details = response.parseProtoAs<MangaDetailsResponseDto>()
+        val details = response.parseAsProto<MangaDetailsResponseDto>()
 
         return details.info.toSManga(1200).apply {
             status = details.status
@@ -260,15 +267,10 @@ class BookWalker :
             },
         ).toList().map { responses ->
             responses.flatMap { response ->
-                val chapters = response.parseProtoAs<ChaptersResponseDto>().chapters
+                val chapters = response.parseAsProto<ChaptersResponseDto>().chapters
                 chapters.mapNotNull {
                     SChapter.create().apply {
-                        // Because preview chapters have a smaller number of pages, we want to avoid a scenario
-                        // where a user starts reading a chapter preview, then decides to purchase the chapter,
-                        // and then finds that the app is still only showing them up to the end of the preview.
-                        // By giving owned chapters a different URL, we can hint to the app that they are
-                        // "different" chapters, and it should therefore fetch a new page list.
-                        url = it.getUrl() + "?$CHAPTER_PREVIEW_QUERY_PARAM=${!it.isOwned}"
+                        url = it.getUrl()
                         val suffix =
                             if (!it.releaseInfo.isReleased) {
                                 if (!filterChapters.includes(FilterChaptersPref.ALL)) {
@@ -300,44 +302,21 @@ class BookWalker :
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore("?")
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = rxSingle {
-        val readerUrl = getChapterUrl(chapter)
-        // Unfortunately, there doesn't appear to be a better way of getting the page count than by opening
-        // the reader and checking there. If a better way is found, this logic should be rewritten to use it.
-        val pageCount = readerManager.getReader(readerUrl).contents.getPageCount()
+        val response = client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess()
 
-        IntRange(0, pageCount - 1).map {
-            // The page index query parameter exists only to prevent the app from trying to
-            // be smart about caching by page URLs, since the URL is the same for all the pages.
-            // It doesn't do anything, and in fact gets stripped back out in imageRequest.
-            Page(
-                it,
-                imageUrl = readerUrl.toHttpUrl().newBuilder()
-                    .setQueryParameter(PAGE_INDEX_QUERY_PARAM, it.toString())
-                    .build()
-                    .toString(),
-            )
+        val manifestInfo = response.asJsoup().extractNextJs<ManifestContainer>()
+            ?: throw Exception("Failed to load chapter. You may need to log in and purchase it to view.")
+
+        when (manifestInfo.mimetype) {
+            "application/vnd.e4p.prpb+deflate+vnd.e4p.qst" ->
+                manifestReader.extractPagesFromEncryptedManifest(manifestInfo.manifestUrl.toHttpUrl())
+            "application/vnd.e4p.prpb" ->
+                manifestReader.extractPagesFromUnencryptedManifest(manifestInfo.manifestUrl.toHttpUrl())
+            else -> throw Exception("Unknown manifest MIME type ${manifestInfo.mimetype}")
         }
     }.toObservable()
 
-    override fun imageRequest(page: Page): Request {
-        // This URL doesn't actually contain the image. It will be intercepted, and the actual image
-        // will be extracted from a webview of the URL being sent here.
-        val imageUrl = page.imageUrl!!.toHttpUrl()
-        return GET(
-            imageUrl.newBuilder()
-                .removeAllQueryParameters(CHAPTER_PREVIEW_QUERY_PARAM)
-                .removeAllQueryParameters(PAGE_INDEX_QUERY_PARAM)
-                .build()
-                .toString(),
-            headers.newBuilder()
-                .set(HEADER_IS_REQUEST_FROM_EXTENSION, "true")
-                .set(HEADER_PAGE_INDEX, imageUrl.queryParameter(PAGE_INDEX_QUERY_PARAM)!!)
-                .build(),
-        )
-    }
-
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     fun checkOldBookWalker(manga: SManga) {
@@ -373,8 +352,8 @@ class BookWalker :
         private const val PURCHASE_ICON = "\uD83D\uDCB5" // dollar bill emoji
         private const val PREORDER_ICON = "\uD83D\uDD51" // two-o-clock emoji
         private const val FREE_ICON = "\uD83C\uDF81" // wrapped present emoji
-
-        private const val CHAPTER_PREVIEW_QUERY_PARAM = "nocache_ispreview"
-        private const val PAGE_INDEX_QUERY_PARAM = "nocache_pagenum"
     }
 }
+
+@Serializable
+private class ManifestContainer(val mimetype: String, val manifestUrl: String)

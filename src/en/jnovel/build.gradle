@@ -8,7 +8,5 @@ ext {
 apply from: "$rootDir/common.gradle"
 
 dependencies {
-    implementation("org.kotlincrypto.hash:blake2:0.8.0") {
-        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
-    }
+    implementation(project(":lib:e4p"))
 }

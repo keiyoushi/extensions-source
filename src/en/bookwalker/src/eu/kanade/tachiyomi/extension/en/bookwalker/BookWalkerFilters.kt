@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagInclusionMode
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
+import keiyoushi.utils.parseAsProto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,7 +67,7 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
                 bookwalker.headers,
                 SearchHeaderRequestDto().toProtoRequestBody(),
             ),
-        ).await().parseProtoAs<SearchHeaderResponseDto>()
+        ).await().parseAsProto<SearchHeaderResponseDto>()
 
         genreFilters = getAllFilters(response.genres).map { TaggedTriState(it.name, it.id) }
 
@@ -91,7 +92,7 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
                             searchDomain = SearchPageTypeDto(SearchPageType.Browse()),
                         ).toProtoRequestBody(),
                     ),
-                ).await().parseProtoAs<SearchFilterOptionsResponseDto>()
+                ).await().parseAsProto<SearchFilterOptionsResponseDto>()
                 results.addAll(lastResponse.results)
             } while (lastResponse.countInfo.limit + lastResponse.countInfo.offset <= lastResponse.countInfo.totalCount)
 
