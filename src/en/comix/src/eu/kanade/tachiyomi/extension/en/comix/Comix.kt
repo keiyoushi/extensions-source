@@ -314,8 +314,30 @@ class Comix :
         val interfaceName = (1..(10..20).random())
             .map { pool.random() }
             .joinToString("")
-        val script = """
+        val script = $$"""
             (function () {
+                const rewriteUrl = function (url) {
+                    if (typeof url === 'string' && url.indexOf('/chapters') !== -1 && /[?&]limit=\d+/.test(url)) {
+                        return url.replace(/([?&]limit=)\d+/, '$1100');
+                    }
+                    return url;
+                };
+                const originalOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function (method, url) {
+                    arguments[1] = rewriteUrl(url);
+                    return originalOpen.apply(this, arguments);
+                };
+                const originalFetch = window.fetch;
+                window.fetch = function (input, init) {
+                    if (typeof input === 'string') {
+                        input = rewriteUrl(input);
+                    } else if (input && typeof input.url === 'string') {
+                        const newUrl = rewriteUrl(input.url);
+                        if (newUrl !== input.url) input = new Request(newUrl, input);
+                    }
+                    return originalFetch.call(this, input, init);
+                };
+
                 const originalParse = JSON.parse;
                 const seen = new Set();
                 JSON.parse = new Proxy(originalParse, {
@@ -335,7 +357,7 @@ class Comix :
                                 if (!seen.has(page)) {
                                     seen.add(page);
                                     const hasNext = !!(meta && meta.hasNext);
-                                    window.$interfaceName.passPayload(args[0], hasNext);
+                                    window.$$interfaceName.passPayload(args[0], hasNext);
                                     if (hasNext) {
                                         let tries = 0;
                                         const iv = setInterval(function () {
