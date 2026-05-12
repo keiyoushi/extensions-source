@@ -33,7 +33,9 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class Comix :
     HttpSource(),
@@ -308,8 +310,9 @@ class Comix :
         val mangaSlug = manga.url.removePrefix("/")
 
         val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        val jsInterface = ChapterListJsInterface(latch)
+        val signal = Semaphore(0)
+        val done = AtomicBoolean(false)
+        val jsInterface = ChapterListJsInterface(signal, done)
         val pool = ('a'..'z') + ('A'..'Z')
         val interfaceName = (1..(10..20).random())
             .map { pool.random() }
@@ -402,10 +405,16 @@ class Comix :
             view.loadUrl(getMangaUrl(manga))
         }
 
-        val completed = latch.await(60, TimeUnit.SECONDS)
+        var timedOut = false
+        while (!done.get()) {
+            if (!signal.tryAcquire(30, TimeUnit.SECONDS)) {
+                timedOut = true
+                break
+            }
+        }
         handler.post { webView?.destroy() }
 
-        if (!completed) throw Exception("Timed out waiting for chapter list")
+        if (timedOut) throw Exception("Timed out waiting for chapter list")
         if (jsInterface.payloads.isEmpty()) throw Exception("Failed to capture chapter list")
 
         val allChapters = jsInterface.payloads.flatMap {
@@ -423,7 +432,10 @@ class Comix :
         return finalChapters.map { it.toSChapter(mangaSlug) }
     }
 
-    private class ChapterListJsInterface(private val latch: CountDownLatch) {
+    private class ChapterListJsInterface(
+        private val signal: Semaphore,
+        private val done: AtomicBoolean,
+    ) {
         private val _payloads = mutableListOf<String>()
         val payloads: List<String> get() = synchronized(_payloads) { _payloads.toList() }
 
@@ -431,7 +443,8 @@ class Comix :
         @Suppress("UNUSED")
         fun passPayload(data: String, hasNext: Boolean) {
             synchronized(_payloads) { _payloads.add(data) }
-            if (!hasNext) latch.countDown()
+            if (!hasNext) done.set(true)
+            signal.release()
         }
     }
 
