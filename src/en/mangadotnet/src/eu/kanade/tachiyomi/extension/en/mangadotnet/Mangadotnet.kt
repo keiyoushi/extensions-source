@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import android.app.Application
 import android.util.Log
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -69,6 +70,9 @@ class Mangadotnet :
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
+            excludedGenresPref().forEach { genre ->
+                addQueryParameter("genre", "-$genre")
+            }
             addQueryParameter("_routes", "pages/ViewAllPage")
         }.build()
 
@@ -92,6 +96,9 @@ class Mangadotnet :
             }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
+            }
+            excludedGenresPref().forEach { genre ->
+                addQueryParameter("genre", "-$genre")
             }
             addQueryParameter("_routes", "pages/ViewAllPage")
         }.build()
@@ -195,7 +202,7 @@ class Mangadotnet :
         SortFilter(),
         StatusFilter(),
         TypeFilter(),
-        GenreFilter(getGenres()),
+        GenreFilter(getGenres(), excludedGenresPref()),
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -347,6 +354,8 @@ class Mangadotnet :
 
     private fun fetchVolumesPref() = preferences.getBoolean(VOLUME_FETCH, false)
 
+    private fun excludedGenresPref(): Set<String> = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
+
     private val genreCacheFile: File by lazy {
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres.json")
     }
@@ -392,6 +401,16 @@ class Mangadotnet :
             summary = "Note: Most titles on the site don't have volumes"
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        val genres = getGenres().sorted()
+        MultiSelectListPreference(screen.context).apply {
+            key = EXCLUDE_GENRE_PREF
+            title = "Genre Blacklist"
+            summary = "Exclude entries with the selected genres from search results."
+            entries = genres.toTypedArray()
+            entryValues = genres.toTypedArray()
+            setDefaultValue(emptySet<String>())
+        }.also(screen::addPreference)
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
@@ -435,3 +454,4 @@ class Mangadotnet :
 
 private const val NSFW_MODE = "pref_nsfw_mode"
 private const val VOLUME_FETCH = "pref_fetch_volume"
+private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"

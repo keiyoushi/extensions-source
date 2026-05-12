@@ -54,12 +54,15 @@ private val types = listOf(
     "One Shot" to "ONESHOT",
 )
 
-class TriStateFilter(name: String, val value: String = name) : Filter.TriState(name)
+class TriStateFilter(name: String, val value: String = name, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
 
-class GenreFilter(genreValues: List<String>) :
+class GenreFilter(genreValues: List<String>, excluded: Set<String>) :
     Filter.Group<TriStateFilter>(
         name = "Genre",
-        state = genreValues.map { TriStateFilter(it) },
+        state = genreValues.map { genre ->
+            val state = if (genre in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
+            TriStateFilter(genre, state = state)
+        },
     ) {
     val included get() = state.filter { it.isIncluded() }.map { it.value }
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }
