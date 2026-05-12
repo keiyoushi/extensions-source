@@ -467,9 +467,96 @@ class Comix :
     }
 
     // =============================== Pages ===============================
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        pageListFromWebView(chapter)
+    }
+
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun pageListFromWebView(chapter: SChapter): List<Page> {
+        val handler = Handler(Looper.getMainLooper())
+        val latch = CountDownLatch(1)
+        val jsInterface = PageListJsInterface(latch)
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = """
+            (function () {
+                const originalParse = JSON.parse;
+                JSON.parse = new Proxy(originalParse, {
+                    apply(target, thisArg, args) {
+                        const parsed = Reflect.apply(target, thisArg, args);
+                        try {
+                            if (parsed && parsed.result && parsed.result.pages) {
+                                window.$interfaceName.passPayload(args[0]);
+                            }
+                        } catch (e) {}
+                        return parsed;
+                    }
+                });
+            })();
+        """.trimIndent()
+
+        var webView: WebView? = null
+        handler.post {
+            val view = WebView(Injekt.get<Application>())
+            webView = view
+
+            with(view.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                blockNetworkImage = true
+                userAgentString = headers["User-Agent"]
+            }
+            view.addJavascriptInterface(jsInterface, interfaceName)
+
+            view.webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view.evaluateJavascript(script) {}
+                }
+            }
+
+            view.loadUrl(getChapterUrl(chapter))
+        }
+
+        val completed = latch.await(30, TimeUnit.SECONDS)
+        handler.post { webView?.destroy() }
+
+        if (!completed) throw Exception("Timed out waiting for page list")
+
+        val payload = jsInterface.payload ?: throw Exception("Failed to capture page list")
+        val res = payload.parseAs<ChapterResponse>()
+        val result = res.result ?: throw Exception("Chapter not found")
+        val pages = result.pages
+        if (pages.items.isEmpty()) {
+            throw Exception("No images found for chapter ${result.id}")
+        }
+        val base = pages.baseUrl.trimEnd('/')
+        return pages.items.mapIndexed { index, img ->
+            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            Page(index, imageUrl = full)
+        }
+    }
+
+    private class PageListJsInterface(private val latch: CountDownLatch) {
+        @Volatile
+        var payload: String? = null
+            private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passPayload(data: String) {
+            if (payload == null) {
+                payload = data
+                latch.countDown()
+            }
+        }
+    }
 
     // ============================= Settings =============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
