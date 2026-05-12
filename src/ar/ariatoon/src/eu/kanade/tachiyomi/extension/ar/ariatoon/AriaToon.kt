@@ -9,12 +9,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 class AriaToon : HttpSource() {
 
@@ -33,20 +29,14 @@ class AriaToon : HttpSource() {
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
-
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/feed/mangas/popular?page=$page&limit=20", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<PaginatedResponseDto<MangaDto>>()
-        val mangas = dto.data.map { it.toSManga(cdnUrl) }
+        val mangas = dto.data.orEmpty().map { it.toSManga(cdnUrl) }
 
-        return MangasPage(mangas, dto.data.size == 20)
+        return MangasPage(mangas, dto.data?.size == 20)
     }
 
     // ============================== Latest ===============================
@@ -72,41 +62,28 @@ class AriaToon : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ==============================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/mangas/$id", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/mangas/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<ItemResponseDto<MangaDto>>()
-        return dto.data.toSManga(cdnUrl).apply {
-            initialized = true
-        }
+        return dto.data.toSManga(cdnUrl)
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/manga/${manga.url}"
 
     // ============================= Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/mangas/$id/episodes?direction=desc&publishStatus=published&limit=100&page=1", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/mangas/${manga.url}/episodes?direction=desc&publishStatus=published&limit=100&page=1", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<PaginatedResponseDto<ChapterDto>>()
-
-        return dto.data.map { chapterDto ->
-            chapterDto.toSChapter().apply {
-                date_upload = dateFormat.tryParse(chapterDto.createdAt?.substringBefore("."))
-            }
-        }
+        return dto.data.orEmpty().map { it.toSChapter() }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/manga/${chapter.url}"
 
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        val mangaId = chapter.url.substringBefore("/episodes/").substringAfterLast("/")
+        val mangaId = chapter.url.substringBefore("/episodes/")
         val episodeId = chapter.url.substringAfterLast("/")
         return GET("$apiUrl/mangas/$mangaId/episodes/$episodeId", headers)
     }
