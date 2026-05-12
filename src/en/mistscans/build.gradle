@@ -3,7 +3,7 @@ ext {
     extClass = '.MistScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://mistscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
