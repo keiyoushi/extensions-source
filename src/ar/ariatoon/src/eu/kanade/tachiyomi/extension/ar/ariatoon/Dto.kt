@@ -2,12 +2,22 @@ package eu.kanade.tachiyomi.extension.ar.ariatoon
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+}
 
 @Serializable
 class PaginatedResponseDto<T>(
-    val data: List<T> = emptyList(),
+    val data: List<T>? = null,
 )
 
 @Serializable
@@ -26,7 +36,7 @@ class MangaDto(
     private val announce: String? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = "/series/manga/$id"
+        url = id
         this.title = this@MangaDto.title
         thumbnail_url = "$cdnUrl/$coverPath"
         author = this@MangaDto.author
@@ -45,20 +55,20 @@ class MangaDto(
                 append("إعلان:\n", announce)
             }
         }
+        initialized = true
     }
 }
 
 @Serializable
 class ChapterDto(
     private val id: String,
-    // The API sends "mangaID" (all-caps), so @SerialName is needed to bridge the two.
     @SerialName("mangaID") private val mangaId: String,
     private val title: String? = null,
     private val number: Float? = null,
-    internal val createdAt: String? = null,
+    private val createdAt: String? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
-        url = "/series/manga/$mangaId/episodes/$id"
+        url = "$mangaId/episodes/$id"
         name = buildString {
             if (number != null) {
                 append("الفصل ")
@@ -75,6 +85,7 @@ class ChapterDto(
             }
         }
         chapter_number = number ?: -1f
+        date_upload = dateFormat.tryParse(createdAt?.substringBefore("."))
     }
 }
 
