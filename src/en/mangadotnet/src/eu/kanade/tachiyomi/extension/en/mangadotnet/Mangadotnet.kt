@@ -426,17 +426,18 @@ class Mangadotnet :
             setDefaultValue(false)
         }.also(screen::addPreference)
 
-        val genres = getGenres()?.sorted()
-        if (genres != null) {
-            MultiSelectListPreference(screen.context).apply {
-                key = EXCLUDE_GENRE_PREF
-                title = "Genre Blacklist"
-                summary = "Exclude entries with the selected genres."
-                entries = genres.toTypedArray()
-                entryValues = genres.toTypedArray()
-                setDefaultValue(emptySet<String>())
-            }.also(screen::addPreference)
-        }
+        val cachedGenres = getGenres()?.sorted()
+        val excluded = excludedGenresPref()
+        val entries = cachedGenres ?: excluded.sorted()
+        MultiSelectListPreference(screen.context).apply {
+            key = EXCLUDE_GENRE_PREF
+            title = "Genre Blacklist"
+            summary = "Exclude entries with the selected genres."
+            this.entries = entries.toTypedArray()
+            entryValues = entries.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            setEnabled(cachedGenres != null || excluded.isNotEmpty())
+        }.also(screen::addPreference)
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
