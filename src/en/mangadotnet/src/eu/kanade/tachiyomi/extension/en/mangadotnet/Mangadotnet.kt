@@ -65,7 +65,7 @@ class Mangadotnet :
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/view-all/trending.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
-                addQueryParameter("adult", "1")
+                addQueryParameter("adult", "both")
             }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -92,7 +92,7 @@ class Mangadotnet :
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/view-all/latest-updates.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
-                addQueryParameter("adult", "1")
+                addQueryParameter("adult", "both")
             }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -153,7 +153,7 @@ class Mangadotnet :
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
-                addQueryParameter("adult", "1")
+                addQueryParameter("adult", "both")
             }
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
