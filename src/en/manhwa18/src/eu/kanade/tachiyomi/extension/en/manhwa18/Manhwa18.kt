@@ -105,7 +105,7 @@ class Manhwa18 : HttpSource() {
 
                 when {
                     name.contains("Author", true) -> author = value
-                    name.contains("Genre", true) -> genre = item.select(".info-value a").joinToString(", ") { it.text() }
+                    name.contains("Genre", true) -> genre = item.select(".info-value a").joinToString { it.text() }
                     name.contains("Status", true) -> status = when (value.lowercase()) {
                         "ongoing" -> SManga.ONGOING
                         "completed" -> SManga.COMPLETED
@@ -132,9 +132,7 @@ class Manhwa18 : HttpSource() {
                 name = a.selectFirst(".chapter-name")!!.text()
 
                 val timeStr = a.selectFirst(".chapter-time")?.text()?.substringAfter("-")?.trim()
-                if (timeStr != null) {
-                    date_upload = dateFormat.tryParse(timeStr)
-                }
+                date_upload = dateFormat.tryParse(timeStr)
             }
         }
     }
