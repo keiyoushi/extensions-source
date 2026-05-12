@@ -157,7 +157,7 @@ class Mangainua :
         title = document.selectFirst("span.UAName")!!.ownText()
         description = document.selectFirst("div.item__full-description p")?.wholeText()
         thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.imgAttr()
-        status = when (document.getInfoElement("Статус перекладу:")?.text()?.trim()) {
+        status = when (document.getInfoElement("Статус перекладу:")?.text()) {
             "Триває" -> SManga.ONGOING
             "Заморожено" -> SManga.ON_HIATUS
             "Покинуто" -> SManga.CANCELLED
