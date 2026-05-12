@@ -130,8 +130,7 @@ class Lelscan : HttpSource() {
             .orEmpty()
     }
 
-    override fun imageUrlParse(response: Response): String =
-        response.asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
+    override fun imageUrlParse(response: Response): String = response.asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
 
     // Helpers
 
