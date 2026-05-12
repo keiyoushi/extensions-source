@@ -35,7 +35,8 @@ abstract class GroupLe(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
-) : ParsedHttpSource(), ConfigurableSource {
+) : ParsedHttpSource(),
+    ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     protected open val isNeedAuth = false
@@ -45,8 +46,10 @@ abstract class GroupLe(
     override val client: OkHttpClient = network.cloudflareClient.newBuilder().rateLimit(2).addNetworkInterceptor { chain ->
         val originalRequest = chain.request()
         val response = chain.proceed(originalRequest)
-        if (originalRequest.url.toString().contains(baseUrl) && (originalRequest.url.toString()
-                .contains("internal/redirect") or (response.code == 301))
+        if (originalRequest.url.toString().contains(baseUrl) && (
+                originalRequest.url.toString()
+                    .contains("internal/redirect") or (response.code == 301)
+                )
         ) {
             if (originalRequest.url.toString().contains("/list?")) {
                 throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
@@ -148,10 +151,11 @@ abstract class GroupLe(
         return GET(url.toString().replace("=%3D", "="), headers)
     }
 
-    protected class OrderBy : Filter.Select<String>(
-        "Сортировка",
-        arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
-    )
+    protected class OrderBy :
+        Filter.Select<String>(
+            "Сортировка",
+            arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
+        )
 
     protected class Genre(name: String, val id: String) : Filter.TriState(name)
 
