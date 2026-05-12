@@ -30,11 +30,10 @@ class Lelscan : HttpSource() {
         val mangas = document.select("#navigation select").first()
             ?.select("option")
             ?.map { option ->
-                val path = option.attr("value").removePrefix(baseUrl)
                 SManga.create().apply {
                     title = option.text()
-                    url = path
-                    thumbnail_url = thumbnailFromPath(path)
+                    setUrlWithoutDomain(option.attr("abs:value"))
+                    thumbnail_url = thumbnailFromPath(url)
                 }
             }
             .orEmpty()
@@ -51,7 +50,7 @@ class Lelscan : HttpSource() {
             val a = li.selectFirst("a.hot_manga_img") ?: return@mapNotNull null
             SManga.create().apply {
                 title = a.attr("title").removeSuffix(" Scan")
-                url = a.attr("abs:href").removePrefix(baseUrl)
+                setUrlWithoutDomain(a.attr("abs:href"))
                 thumbnail_url = a.selectFirst("img")?.attr("abs:src")
             }
         }
@@ -73,11 +72,10 @@ class Lelscan : HttpSource() {
             ?.select("option")
             ?.filter { it.text().contains(query, ignoreCase = true) }
             ?.map { option ->
-                val path = option.attr("value").removePrefix(baseUrl)
                 SManga.create().apply {
                     title = option.text()
-                    url = path
-                    thumbnail_url = thumbnailFromPath(path)
+                    setUrlWithoutDomain(option.attr("abs:value"))
+                    thumbnail_url = thumbnailFromPath(url)
                 }
             }
             .orEmpty()
@@ -109,7 +107,7 @@ class Lelscan : HttpSource() {
             ?.map { option ->
                 val chapterNum = option.text().toFloatOrNull() ?: -1f
                 SChapter.create().apply {
-                    url = option.attr("value").removePrefix(baseUrl)
+                    setUrlWithoutDomain(option.attr("abs:value"))
                     name = "Chapitre ${chapterNum.toString().removeSuffix(".0")}"
                     chapter_number = chapterNum
                     date_upload = 0L
@@ -124,19 +122,16 @@ class Lelscan : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val firstImageUrl = document.selectFirst("#image img")?.attr("abs:src")
-            ?: throw Exception("Image introuvable sur la page")
-        // Images are zero-indexed two-digit filenames: 00.jpg, 01.jpg, …
-        // Strip the query string (?v=…) before extracting the base path.
-        val baseImageUrl = firstImageUrl.substringBefore("?").replace(Regex("\\d{2}\\.jpg$"), "")
-        val pageCount = document.select("#navigation select").getOrNull(2)
-            ?.select("option")?.size ?: 1
-        return (0 until pageCount).map { index ->
-            Page(index, imageUrl = "$baseImageUrl${index.toString().padStart(2, '0')}.jpg")
-        }
+        return document.select("#navigation select").getOrNull(2)
+            ?.select("option")
+            ?.mapIndexed { index, option ->
+                Page(index, url = option.attr("abs:value"))
+            }
+            .orEmpty()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String =
+        response.asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
 
     // Helpers
 
