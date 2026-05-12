@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -198,12 +199,23 @@ class Mangadotnet :
         return GET(url, headers)
     }
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        GenreFilter(getGenres(), excludedGenresPref()),
-    )
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf(
+            SortFilter(),
+            StatusFilter(),
+            TypeFilter(),
+        )
+
+        val genres = getGenres()
+        if (genres != null) {
+            filters.add(GenreFilter(genres, excludedGenresPref()))
+        } else {
+            filters.add(Filter.Separator())
+            filters.add(Filter.Header("Press 'reset' to load genres"))
+        }
+
+        return FilterList(filters)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
@@ -362,15 +374,12 @@ class Mangadotnet :
 
     private val genresLock = ReentrantLock()
 
-    private fun getGenres(): List<String> {
+    private fun getGenres(): List<String>? {
         genresLock.withLock {
-            if (genreCacheFile.exists()) {
-                return genreCacheFile.readText().parseAs<List<String>>()
-            }
-            return this::class.java
-                .getResourceAsStream("/assets/genres.json")!!
-                .bufferedReader().use { it.readText() }
-                .parseAs<List<String>>()
+            if (!genreCacheFile.exists()) return null
+            return runCatching {
+                genreCacheFile.readText().parseAs<List<String>>()
+            }.getOrNull()
         }
     }
 
@@ -379,8 +388,10 @@ class Mangadotnet :
         if (!genresLock.tryLock()) return
         try {
             if (genreCacheFile.exists() && System.currentTimeMillis() - genreCacheFile.lastModified() < 60_000) return
-            val currentGenres = getGenres()
-            if (newGenres.toSet() != currentGenres.toSet()) {
+            val currentGenres = runCatching {
+                if (genreCacheFile.exists()) genreCacheFile.readText().parseAs<List<String>>() else null
+            }.getOrNull()
+            if (newGenres.toSet() != currentGenres?.toSet()) {
                 genreCacheFile.parentFile?.mkdirs()
                 genreCacheFile.writeText(newGenres.toJsonString())
             }
@@ -402,15 +413,17 @@ class Mangadotnet :
             setDefaultValue(false)
         }.also(screen::addPreference)
 
-        val genres = getGenres().sorted()
-        MultiSelectListPreference(screen.context).apply {
-            key = EXCLUDE_GENRE_PREF
-            title = "Genre Blacklist"
-            summary = "Exclude entries with the selected genres from search results."
-            entries = genres.toTypedArray()
-            entryValues = genres.toTypedArray()
-            setDefaultValue(emptySet<String>())
-        }.also(screen::addPreference)
+        val genres = getGenres()?.sorted()
+        if (genres != null) {
+            MultiSelectListPreference(screen.context).apply {
+                key = EXCLUDE_GENRE_PREF
+                title = "Genre Blacklist"
+                summary = "Exclude entries with the selected genres."
+                entries = genres.toTypedArray()
+                entryValues = genres.toTypedArray()
+                setDefaultValue(emptySet<String>())
+            }.also(screen::addPreference)
+        }
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
