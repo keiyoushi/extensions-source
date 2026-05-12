@@ -9,7 +9,7 @@ class MistScans : Keyoapp("Mist Scans", "https://mistscans.com", "en") {
     override fun popularMangaSelector() = ".series-splide .splide__slide"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val a = if (element.tagName() == "a") element else element.selectFirst("a[href]")!!
+        val a = element.selectFirst("a[href]")!!
         title = a.attr("title")
         setUrlWithoutDomain(a.attr("abs:href"))
         thumbnail_url = element.getImageUrl("*[style*=background-image]")
