@@ -12,6 +12,7 @@ data class Pool(
     @SerialName("is_active") val isActive: Boolean? = null,
     val category: String? = null,
     @SerialName("updated_at") val updatedAt: String = "",
+    // @SerialName("creator_name") val creatorName: String = "",
 )
 
 @Serializable

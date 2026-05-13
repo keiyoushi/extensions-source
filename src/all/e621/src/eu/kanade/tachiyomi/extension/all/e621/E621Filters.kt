@@ -4,13 +4,14 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getE621FilterList(categoryPref: String): FilterList = FilterList(
+    Filter.Header("Note: You will need to be logged into E621 via WebView to see certain posts (e.g., 'No Image')"),
     ModeFilter(),
     Filter.Header(""),
     Filter.Separator(),
-    TagGroupFilter("Tag Search Options"),
+    PoolGroupFilter("Pool Search Options", categoryPref),
     Filter.Header(""),
     Filter.Separator(),
-    PoolGroupFilter("Pool Search Options", categoryPref),
+    TagGroupFilter("Tag Search Options"),
     Filter.Header(""),
     // Filter.Header("Search by pool name (Pools mode only)"),
     // DescriptionFilter(),
@@ -48,7 +49,7 @@ class TagGroupFilter(displayName: String) :
             OrderTagFilter(),
             DateFilter(),
             TagsFilter(),
-            Filter.Header("e.g.  `anthro  -mammal  order:random  date:week  score:>100`"),
+            Filter.Header("e.g.,  `anthro  -mammal  order:random  date:week  score:>100`"),
             Filter.Header("Negative tags may not filter everything"),
             // BlacklistFilter(), // Negative tags dont work well enough
             FirstPageFilter(),
@@ -66,7 +67,7 @@ class TagGroupFilter(displayName: String) :
 fun getDefaultModeIndex(modePref: String): Int = when (modePref) {
     "pools" -> 0
     "tags" -> 1
-    else -> 1
+    else -> 0
 }
 
 fun getDefaultCategoryIndex(categoryPref: String): Int = when (categoryPref) {
@@ -87,8 +88,9 @@ fun getDefaultOrderTagsIndex(orderPref: String): Int = when (orderPref) {
     "id_desc" -> 1
     "id" -> 2
     "score" -> 3
-    "favcount" -> 4
-    "random" -> 5
+    "hot" -> 4
+    "favcount" -> 5
+    "random" -> 6
     else -> 0 // "" maps to "Default"
 }
 
@@ -101,7 +103,7 @@ fun getDefaultDateIndex(pref: String): Int = when (pref) {
     else -> 0 // "" maps to "All Time"
 }
 
-class ModeFilter(defaultIndex: Int = 1) :
+class ModeFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Search Mode",
         arrayOf(
@@ -131,6 +133,7 @@ class OrderTagFilter(defaultIndex: Int = 0) :
             Pair("Newest", "id_desc"),
             Pair("Oldest", "id"),
             Pair("Score", "score"),
+            Pair("Hot", "hot"),
             Pair("Favorites", "favcount"),
             Pair("Random", "random"),
         ),

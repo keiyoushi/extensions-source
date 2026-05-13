@@ -75,6 +75,8 @@ class E621 :
 
         val searchMode = preferences.searchModePref
         val category = preferences.categoryPref
+        val popularMode = preferences.popularModePref
+        val firstEnd = preferences.firstEndPref
 
         // A little hacky, but it helps unify things
         return searchMangaRequest(
@@ -84,7 +86,7 @@ class E621 :
                 ModeFilter(getDefaultModeIndex(searchMode)),
                 CategoryFilter(getDefaultCategoryIndex(category)),
                 OrderFilter(getDefaultOrderIndex("post_count")),
-                TagsFilter("order:score ( ~first_page ~end_page )"),
+                TagsFilter("$popularMode $firstEnd".trim()),
             ),
         )
         // return GET("", headers)
@@ -105,6 +107,7 @@ class E621 :
 
         val searchMode = preferences.searchModePref
         val category = preferences.categoryPref
+        var scoreThresh = preferences.scoreThreshPref
 
         // A little hacky, but it helps unify things
         return searchMangaRequest(
@@ -114,7 +117,7 @@ class E621 :
                 ModeFilter(getDefaultModeIndex(searchMode)),
                 CategoryFilter(getDefaultCategoryIndex(category)),
                 OrderFilter(getDefaultOrderIndex("created_at")),
-                TagsFilter("order:id_desc score:>20"),
+                TagsFilter("order:id_desc score:>=$scoreThresh"),
             ),
         )
     }
@@ -124,6 +127,7 @@ class E621 :
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        Log.d("app.mihon:E621", "REQUEST: searchMangaRequest")
         // var poolurl = "$baseUrl/pools.json?limit=24&page=$page&search[order]=updated_at".toHttpUrl().newBuilder()
         // var postsurl = "$baseUrl/posts.json?limit=24&page=$page&tags=$tags"
 
@@ -138,12 +142,14 @@ class E621 :
         var activeOnly = false
         var description = ""
 
-        var tagsMandatory = "inpool:true -video"
+        var tagsMandatory = "inpool:true -video status:any"
         var orderTag = ""
         var tags = ""
         var firstPage = false
         var endPage = false
         var dateTag = ""
+
+        var blacklist = preferences.blacklistPref
 
         filters.forEach { filter ->
             when (filter) {
@@ -194,7 +200,7 @@ class E621 :
             //     url.addQueryParameter("tags", "$tagsMandatory $tags")
             // }
 
-            tags = "$tagsMandatory $tags".trim()
+            tags = "$tagsMandatory $tags $blacklist".trim()
             if (query.isNotEmpty()) {
                 val search = "*${query.trim().replace(" ", "_")}*"
                 tags = "$tags $search"
@@ -219,6 +225,7 @@ class E621 :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        Log.d("app.mihon:E621", "REQUEST: searchMangaParse")
         var mode = response.request.url.encodedPath
 
         if (mode == "/pools.json") {
@@ -231,6 +238,8 @@ class E621 :
 
     private fun parsePoolList(response: Response): MangasPage {
         val pools = response.parseAs<List<Pool>>()
+        Log.d("app.mihon:E621", "pools.size ${pools.size}")
+        // BUG: 'No results found' when the total number of posts is a multiple of 24
         return parsePoolListDirect(pools, pools.size >= 24)
     }
 
@@ -241,7 +250,6 @@ class E621 :
         // Log.d("app.mihon:E621", "RAW:\n" + posts.toString())
         // var testlog = "TEST:\n" + posts.joinToString(separator = "\n") { it.poolIds.toString() }
         // Log.d("app.mihon:E621", testlog)
-        // due to shared pools between posts, we cant assume there isn't a next page until empty
         var test = parsePoolListDirect(pools, posts.size >= 96)
         Log.d("app.mihon:E621", "SIZES: ${posts.size} ${poolIds.size} ${pools.size}")
         return test
@@ -264,6 +272,7 @@ class E621 :
             }
         }
 
+        Log.d("app.mihon:E621", "hasNextPage $hasNextPage")
         return MangasPage(poolList, hasNextPage)
     }
 
@@ -278,10 +287,14 @@ class E621 :
         val pool = response.parseAs<Pool>()
 
         // fetch first 40 posts for common tags and artist
-        val posts = batchFetchPosts(pool.postIds.take(40))
+        // cut off first 20% to try to get more relevant tags
+        val cutoff = (pool.postIds.size * 0.2).toInt()
+        val posts = batchFetchPosts(pool.postIds.drop(cutoff).take(40))
+        Log.d("app.mihon:E621", "posts=${posts.size} drop=$cutoff take=40")
         // fetch last 40 posts for common tags and artist
         // val posts = batchFetchPosts(pool.postIds.takeLast(40))
-        val artists = posts[0].tags.artist
+        val artists = posts.flatMap { it.tags.artist }.toSet()
+        // val artists = posts.firstOrNull()?.tags?.artist ?: listOf<String>(pool.creatorName)
         val rating = when {
             posts.any { it.rating == "e" } -> "rating:Explicit"
             posts.any { it.rating == "q" } -> "rating:Questionable"
@@ -297,7 +310,7 @@ class E621 :
         }.groupingBy { it }.eachCount()
             .filter { it.value >= posts.size / 2 }.toList() // >50% of posts have tag
             .sortedByDescending { it.second } // sort by count
-            // .sortedBy { it.first }                          // sort alphabetically
+            // .sortedBy { it.first } // sort alphabetically
             .map { it.first }
 
         // Log.d("app.mihon:E621", tags.toString())
@@ -629,13 +642,14 @@ class E621 :
         return postIds.chunked(200).flatMap { chunk ->
             runCatching {
                 // val tagQuery = chunk.joinToString(" ") { "~id:$it" }
-                val tagQuery = "id:" + chunk.joinToString(",")
+                val tagQuery = "status:all id:" + chunk.joinToString(",")
                 val url = "$baseUrl/posts.json".toHttpUrl().newBuilder()
                     .addQueryParameter("tags", tagQuery)
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
                 Log.d("app.mihon:E621", "GET9 $url")
+                Log.d("app.mihon:E621", "Chunksize ${chunk.size}")
                 val data = client.newCall(GET(url, headers)).execute()
                     .parseAs<PostsResponse>()
 
