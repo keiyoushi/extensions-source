@@ -44,7 +44,7 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
     // Popular
     // ===============================
-    
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/index.html", headers)
 
     override fun popularMangaSelector() = "li.sidebar-list__item:has(a.sidebar-list__link), div.media-card"
@@ -68,7 +68,7 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
     // Search
     // ===============================
-    
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/arama.html".toHttpUrl().newBuilder()
             .addQueryParameter("icerik", query)
@@ -88,7 +88,7 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
     // Details
     // ===============================
-    
+
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")?.text()?.trim() ?: ""
         thumbnail_url = document.selectFirst("img.poster-card__image, img[src*='covers']")?.absUrl("src")
@@ -100,7 +100,7 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
     // Chapters
     // ===============================
-    
+
     override fun chapterListSelector() = "article.chapter-card, div.chapter-item"
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -158,7 +158,7 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
     // Decode
     // ===============================
-    
+
     private fun decodeOrder(encoded: String): List<Pair<Int, Int>> {
         val list = mutableListOf<Pair<Int, Int>>()
         try {
@@ -193,7 +193,7 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
     // Pages
     // ===============================
-    
+
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
@@ -215,7 +215,7 @@ class MangaTR : ParsedHttpSource() {
                     if (rawOrder.isNotEmpty()) {
                         val orderList = decodeOrder(rawOrder)
                         val sortedOrder = orderList.sortedBy { it.second }
-                        
+
                         for (pair in sortedOrder) {
                             val partIdx = pair.first
                             val url = partsMap[partIdx]
