@@ -16,16 +16,24 @@ fun getE621FilterList(categoryPref: String): FilterList = FilterList(
     TagsFilter(),
 )
 
-private fun getDefaultModeIndex(modePref: String): Int = when (modePref) {
+fun getDefaultModeIndex(modePref: String): Int = when (modePref) {
     "pools" -> 0
     "tags" -> 1
     else -> 0
 }
 
-private fun getDefaultCategoryIndex(categoryPref: String): Int = when (categoryPref) {
+fun getDefaultCategoryIndex(categoryPref: String): Int = when (categoryPref) {
     "series" -> 1
     "collection" -> 2
     else -> 0 // "" (both) maps to "Any"
+}
+
+fun getDefaultOrderIndex(orderPref: String): Int = when (orderPref) {
+    "updated_at" -> 0
+    "post_count" -> 1
+    "name" -> 2
+    "created_at" -> 3
+    else -> 0
 }
 
 class ModeFilter(defaultIndex: Int = 0) :
@@ -38,7 +46,7 @@ class ModeFilter(defaultIndex: Int = 0) :
         defaultIndex,
     )
 
-class OrderFilter :
+class OrderFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Order by",
         arrayOf(
@@ -47,6 +55,7 @@ class OrderFilter :
             Pair("Name (A-Z)", "name"),
             Pair("Newest First", "created_at"),
         ),
+        defaultIndex,
     )
 
 class CategoryFilter(defaultIndex: Int = 0) :
@@ -60,11 +69,13 @@ class CategoryFilter(defaultIndex: Int = 0) :
         defaultIndex,
     )
 
+class TagsFilter(defaultTags: String = "") : Filter.Text("Space separated tags", defaultTags)
+
 class ActiveOnlyFilter : Filter.CheckBox("Active pools only", false)
 
 class DescriptionFilter : Filter.Text("Description contains")
 
-class TagsFilter : Filter.Text("Space separated tags")
+// class TagsFilter : Filter.Text("Space separated tags")
 
 open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, defaultIndex: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultIndex) {
     fun toUriPart() = vals[state].second

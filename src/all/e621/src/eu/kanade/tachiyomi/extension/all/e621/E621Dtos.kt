@@ -28,6 +28,8 @@ data class Post(
     val file: ImageData = ImageData(),
     val tags: Tags = Tags(),
     @SerialName("pools") val poolIds: List<Int> = emptyList(),
+    @SerialName("updated_at") val updatedAt: String = "",
+    @SerialName("created_at") val createdAt: String = "",
     val rating: String = "e",
 )
 
