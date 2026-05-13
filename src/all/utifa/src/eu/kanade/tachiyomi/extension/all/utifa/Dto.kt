@@ -50,7 +50,7 @@ internal class MangaItemDto(
         val mangaId = id ?: return null
         val mangaTitle = title?.takeIf(String::isNotBlank) ?: return null
         return SManga.create().apply {
-            url = "/manga/detail/$mangaId"
+            url = mangaId.toString()
             title = mangaTitle
             author = this@MangaItemDto.author?.takeIf(String::isNotBlank)
             description = buildDescription()
@@ -87,7 +87,7 @@ internal class MangaDetailDto(
         val mangaId = id ?: error("Manga id is missing")
         val mangaTitle = title?.takeIf(String::isNotBlank) ?: error("Manga title is missing")
         return SManga.create().apply {
-            url = "/manga/detail/$mangaId"
+            url = mangaId.toString()
             title = mangaTitle
             author = this@MangaDetailDto.author?.takeIf(String::isNotBlank)
             artist = author
@@ -116,7 +116,7 @@ internal class ChapterDto(
     fun toSChapter(index: Int): SChapter? {
         val chapterId = id ?: return null
         return SChapter.create().apply {
-            url = "/manga/chapter/$chapterId"
+            url = chapterId.toString()
             name = title?.takeIf(String::isNotBlank) ?: "Chapter $chapterId"
             chapter_number = (index + 1).toFloat()
             date_upload = updateTime.parseServerDate()
