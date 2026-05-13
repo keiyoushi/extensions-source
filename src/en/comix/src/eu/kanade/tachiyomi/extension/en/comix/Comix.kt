@@ -378,7 +378,7 @@ class Comix :
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = runBlocking {
         // Legacy URL example: title/qnj9/5241183-chapter-0
-        if (chapter.url.substringBeforeLast("/").indexOf("-") == -1) throw Exception("Outdated chapter URL. Please refresh the chapter list")
+        if (chapter.url.substringAfter("/").substringBeforeLast("/").indexOf("-") == -1) throw Exception("Outdated chapter URL. Please refresh the chapter list")
 
         val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
 
