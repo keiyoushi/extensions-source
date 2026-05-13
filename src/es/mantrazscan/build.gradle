@@ -1,9 +1,7 @@
 ext {
     extName = 'Manhwa Scan'
-    extClass = '.MantrazScan'
-    themePkg = 'madara'
-    baseUrl = 'https://manhwascan.lat'
-    overrideVersionCode = 4
+    extClass = '.ManhwaScan'
+    extVersionCode = 55
     isNsfw = true
 }
 

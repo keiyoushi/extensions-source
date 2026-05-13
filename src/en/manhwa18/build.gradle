@@ -1,8 +1,7 @@
 ext {
     extName = 'Manhwa18'
     extClass = '.Manhwa18'
-    baseUrl = 'https://manhwa18.com'
-    extVersionCode = 12
+    extVersionCode = 13
     isNsfw = true
 }
 

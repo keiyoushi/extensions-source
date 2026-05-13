@@ -303,18 +303,17 @@ class Chapter(
 
 @Serializable
 class ChapterResponse(
-    val result: ChapterResult? = null,
+    val result: ChapterResult,
 ) {
     @Serializable
     class ChapterResult(
-        val id: Int,
-        val pages: Pages = Pages(),
+        val pages: Pages,
     )
 
     @Serializable
     class Pages(
-        val baseUrl: String = "",
-        val items: List<PageDto> = emptyList(),
+        val baseUrl: String,
+        val items: List<PageDto>,
     )
 
     @Serializable

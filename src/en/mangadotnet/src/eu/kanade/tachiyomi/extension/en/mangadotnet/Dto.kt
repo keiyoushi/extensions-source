@@ -68,6 +68,17 @@ class MangaData(
 }
 
 @Serializable
+class RelatedData(
+    val suggestions: List<BrowseManga> = emptyList(),
+    val relationsData: RelationsData? = null,
+) {
+    @Serializable
+    class RelationsData(
+        val relations: Map<String, List<BrowseManga>> = emptyMap(),
+    )
+}
+
+@Serializable
 class Manga(
     private val id: Int,
     private val title: String,

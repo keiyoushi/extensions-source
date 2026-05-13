@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import android.app.Application
 import android.util.Log
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -62,12 +64,15 @@ class Mangadotnet :
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/trending.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/view-all/most-tracked.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
-                addQueryParameter("adult", "1")
+                addQueryParameter("adult", "both")
             }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
+            }
+            excludedGenresPref().forEach { genre ->
+                addQueryParameter("genre", "-$genre")
             }
             addQueryParameter("_routes", "pages/ViewAllPage")
         }.build()
@@ -88,10 +93,13 @@ class Mangadotnet :
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/view-all/latest-updates.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
-                addQueryParameter("adult", "1")
+                addQueryParameter("adult", "both")
             }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
+            }
+            excludedGenresPref().forEach { genre ->
+                addQueryParameter("genre", "-$genre")
             }
             addQueryParameter("_routes", "pages/ViewAllPage")
         }.build()
@@ -146,7 +154,7 @@ class Mangadotnet :
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search.data".toHttpUrl().newBuilder().apply {
             if (adultModePref()) {
-                addQueryParameter("adult", "1")
+                addQueryParameter("adult", "both")
             }
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
@@ -191,12 +199,23 @@ class Mangadotnet :
         return GET(url, headers)
     }
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        GenreFilter(getGenres()),
-    )
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf(
+            SortFilter(),
+            StatusFilter(),
+            TypeFilter(),
+        )
+
+        val genres = getGenres()
+        if (genres != null) {
+            filters.add(GenreFilter(genres, excludedGenresPref()))
+        } else {
+            filters.add(Filter.Separator())
+            filters.add(Filter.Header("Press 'reset' to load genres"))
+        }
+
+        return FilterList(filters)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
@@ -213,6 +232,19 @@ class Mangadotnet :
         val data = response.decodeRscAs<Data<MangaData>>().data
 
         return data.mangaData.manga.toSManga(baseUrl)
+    }
+
+    override val disableRelatedMangasBySearch = true
+
+    override fun relatedMangaListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val data = response.decodeRscAs<Data<RelatedData>>().data
+
+        return buildList {
+            data.relationsData?.relations?.values?.forEach(::addAll)
+            addAll(data.suggestions)
+        }.map { it.toSManga(baseUrl) }
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
@@ -347,21 +379,20 @@ class Mangadotnet :
 
     private fun fetchVolumesPref() = preferences.getBoolean(VOLUME_FETCH, false)
 
+    private fun excludedGenresPref(): Set<String> = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
+
     private val genreCacheFile: File by lazy {
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres.json")
     }
 
     private val genresLock = ReentrantLock()
 
-    private fun getGenres(): List<String> {
+    private fun getGenres(): List<String>? {
         genresLock.withLock {
-            if (genreCacheFile.exists()) {
-                return genreCacheFile.readText().parseAs<List<String>>()
-            }
-            return this::class.java
-                .getResourceAsStream("/assets/genres.json")!!
-                .bufferedReader().use { it.readText() }
-                .parseAs<List<String>>()
+            if (!genreCacheFile.exists()) return null
+            return runCatching {
+                genreCacheFile.readText().parseAs<List<String>>()
+            }.getOrNull()
         }
     }
 
@@ -370,8 +401,10 @@ class Mangadotnet :
         if (!genresLock.tryLock()) return
         try {
             if (genreCacheFile.exists() && System.currentTimeMillis() - genreCacheFile.lastModified() < 60_000) return
-            val currentGenres = getGenres()
-            if (newGenres.toSet() != currentGenres.toSet()) {
+            val currentGenres = runCatching {
+                if (genreCacheFile.exists()) genreCacheFile.readText().parseAs<List<String>>() else null
+            }.getOrNull()
+            if (newGenres.toSet() != currentGenres?.toSet()) {
                 genreCacheFile.parentFile?.mkdirs()
                 genreCacheFile.writeText(newGenres.toJsonString())
             }
@@ -391,6 +424,19 @@ class Mangadotnet :
             title = "Fetch Volumes"
             summary = "Note: Most titles on the site don't have volumes"
             setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        val cachedGenres = getGenres()?.sorted()
+        val excluded = excludedGenresPref()
+        val entries = cachedGenres ?: excluded.sorted()
+        MultiSelectListPreference(screen.context).apply {
+            key = EXCLUDE_GENRE_PREF
+            title = "Genre Blacklist"
+            summary = "Exclude entries with the selected genres."
+            this.entries = entries.toTypedArray()
+            entryValues = entries.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            setEnabled(cachedGenres != null || excluded.isNotEmpty())
         }.also(screen::addPreference)
     }
 
@@ -435,3 +481,4 @@ class Mangadotnet :
 
 private const val NSFW_MODE = "pref_nsfw_mode"
 private const val VOLUME_FETCH = "pref_fetch_volume"
+private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"

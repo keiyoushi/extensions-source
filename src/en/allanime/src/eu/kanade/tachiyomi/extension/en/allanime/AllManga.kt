@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -228,6 +229,8 @@ class AllManga :
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListFromWebView(chapter: SChapter): List<Page> {
+        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
+
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
@@ -270,7 +273,7 @@ class AllManga :
                 }
             }
 
-            view.loadUrl(getChapterUrl(chapter))
+            view.loadDataWithBaseURL(getChapterUrl(chapter), document.outerHtml(), "text/html", "utf-8", null)
         }
 
         val completed = latch.await(30, TimeUnit.SECONDS)
