@@ -36,6 +36,11 @@ class MangaTR : ParsedHttpSource() {
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
         .add("Accept-Language", "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7")
 
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
+
     // ===============================
     // Popular
     // ===============================
@@ -249,6 +254,8 @@ class MangaTR : ParsedHttpSource() {
         }
         return calendar.timeInMillis
     }
+
+    private fun cleanUrl(url: String): String = if (url.startsWith("http")) url.substringAfter(baseUrl) else "/${url.removePrefix("/")}"
 
     override fun getFilterList() = FilterList()
 }
