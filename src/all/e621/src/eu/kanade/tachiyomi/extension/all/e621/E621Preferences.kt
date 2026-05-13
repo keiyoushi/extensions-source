@@ -15,7 +15,7 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         key = TAG_MODE_ENABLE_PREF
         title = "Enable Tag Mode for Popular"
         summary = "Order pools by score in Popular (can result in duplicate pools). When disabled, Popular is ordered by number of posts instead."
-        setDefaultValue(false)
+        setDefaultValue(true)
     }.also(screen::addPreference)
 
     ListPreference(screen.context).apply {
@@ -39,7 +39,7 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     // I couldn't figure out how to get this to work.
     // EditTextPreference(screen.context).apply {
     //     key = BLACKLIST_PREF
-    //     title = "Blacklisted Tags (space separated. Will not filter everyting)"
+    //     title = "Blacklisted Tags (space separated. Will not filter everything)"
     //     // summary = "Space separated blacklisted tags. Will not filter out everything unless searching for First Page (Tag Search Mode only)"
     //     summary = "%s"
     //     setDefaultValue("")

@@ -5,21 +5,68 @@ import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getE621FilterList(categoryPref: String): FilterList = FilterList(
     ModeFilter(),
+    Filter.Header(""),
     Filter.Separator(),
-    Filter.Header("Search by pool name (Pools mode only)"),
-    DescriptionFilter(),
-    OrderFilter(),
-    CategoryFilter(getDefaultCategoryIndex(categoryPref)),
-    ActiveOnlyFilter(),
+    TagGroupFilter("Tag Search Options"),
+    Filter.Header(""),
     Filter.Separator(),
-    Filter.Header("Search by tags (Tags mode only)"),
-    TagsFilter(),
+    PoolGroupFilter("Pool Search Options", categoryPref),
+    Filter.Header(""),
+    // Filter.Header("Search by pool name (Pools mode only)"),
+    // DescriptionFilter(),
+    // OrderFilter(),
+    // CategoryFilter(getDefaultCategoryIndex(categoryPref)),
+    // ActiveOnlyFilter(),
+    // Filter.Separator(),
+    // Filter.Header("Search by tags (Tags mode only)"),
+    // TagsFilter(),
 )
+
+class PoolGroupFilter(displayName: String, categoryPref: String) :
+    Filter.Group<Any>(
+        displayName,
+        listOf(
+            Filter.Header("(Pools Search Mode only)"),
+            DescriptionFilter(),
+            OrderFilter(),
+            CategoryFilter(getDefaultCategoryIndex(categoryPref)),
+            ActiveOnlyFilter(),
+        ),
+    ) {
+    // override val state: List<Filter.State> get() = super.state
+    fun getDescription() = (state[1] as DescriptionFilter).state.trim() // state[1].state.trim()
+    fun getOrder() = (state[2] as OrderFilter).toUriPart() // state[2].state.toUriPart()
+    fun getCategory() = (state[3] as CategoryFilter).toUriPart()
+    fun getActiveOnly() = (state[4] as ActiveOnlyFilter).state
+}
+
+class TagGroupFilter(displayName: String) :
+    Filter.Group<Any>(
+        displayName,
+        listOf(
+            Filter.Header("(Tags Search Mode only)"),
+            OrderTagFilter(),
+            DateFilter(),
+            TagsFilter(),
+            Filter.Header("e.g.  `anthro  -mammal  order:random  date:week  score:>100`"),
+            Filter.Header("Negative tags may not filter everything"),
+            // BlacklistFilter(), // Negative tags dont work well enough
+            FirstPageFilter(),
+            EndPageFilter(),
+            Filter.Header("Note: Filters out pools that don't use the `first_page` or `end_page` tags"),
+        ),
+    ) {
+    fun getOrderTag() = (state[1] as OrderTagFilter).toUriPart()
+    fun getDate() = (state[2] as DateFilter).toUriPart()
+    fun getTags() = (state[3] as TagsFilter).state.trim()
+    fun getFirstPage() = (state[6] as FirstPageFilter).state
+    fun getEndPage() = (state[7] as EndPageFilter).state
+}
 
 fun getDefaultModeIndex(modePref: String): Int = when (modePref) {
     "pools" -> 0
     "tags" -> 1
-    else -> 0
+    else -> 1
 }
 
 fun getDefaultCategoryIndex(categoryPref: String): Int = when (categoryPref) {
@@ -36,7 +83,25 @@ fun getDefaultOrderIndex(orderPref: String): Int = when (orderPref) {
     else -> 0
 }
 
-class ModeFilter(defaultIndex: Int = 0) :
+fun getDefaultOrderTagsIndex(orderPref: String): Int = when (orderPref) {
+    "id_desc" -> 1
+    "id" -> 2
+    "score" -> 3
+    "favcount" -> 4
+    "random" -> 5
+    else -> 0 // "" maps to "Default"
+}
+
+fun getDefaultDateIndex(pref: String): Int = when (pref) {
+    "day" -> 1
+    "week" -> 2
+    "month" -> 3
+    "year" -> 4
+    "decade" -> 5
+    else -> 0 // "" maps to "All Time"
+}
+
+class ModeFilter(defaultIndex: Int = 1) :
     UriPartFilter(
         "Search Mode",
         arrayOf(
@@ -58,6 +123,34 @@ class OrderFilter(defaultIndex: Int = 0) :
         defaultIndex,
     )
 
+class OrderTagFilter(defaultIndex: Int = 0) :
+    UriPartFilter(
+        "Order by",
+        arrayOf(
+            Pair("Default", ""),
+            Pair("Newest", "id_desc"),
+            Pair("Oldest", "id"),
+            Pair("Score", "score"),
+            Pair("Favorites", "favcount"),
+            Pair("Random", "random"),
+        ),
+        defaultIndex,
+    )
+
+class DateFilter(defaultIndex: Int = 0) :
+    UriPartFilter(
+        "Filter Date by",
+        arrayOf(
+            Pair("All Time", ""),
+            Pair("Day", "day"),
+            Pair("Week", "week"),
+            Pair("Month", "month"),
+            Pair("Year", "year"),
+            Pair("Decade", "decade"),
+        ),
+        defaultIndex,
+    )
+
 class CategoryFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Category",
@@ -69,13 +162,15 @@ class CategoryFilter(defaultIndex: Int = 0) :
         defaultIndex,
     )
 
-class TagsFilter(defaultTags: String = "") : Filter.Text("Space separated tags", defaultTags)
+class TagsFilter(defaultTags: String = "") : Filter.Text("Space Separated Tags", defaultTags)
 
 class ActiveOnlyFilter : Filter.CheckBox("Active pools only", false)
 
-class DescriptionFilter : Filter.Text("Description contains")
+class FirstPageFilter : Filter.CheckBox("Search tags by first pages", false)
 
-// class TagsFilter : Filter.Text("Space separated tags")
+class EndPageFilter : Filter.CheckBox("Search tags by end pages", false)
+
+class DescriptionFilter : Filter.Text("Description contains")
 
 open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, defaultIndex: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultIndex) {
     fun toUriPart() = vals[state].second

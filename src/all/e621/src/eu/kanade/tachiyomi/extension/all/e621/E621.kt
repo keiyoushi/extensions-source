@@ -66,6 +66,13 @@ class E621 :
         //     }
         // }
 
+        // Log.d("app.mihon:E621", "Cache: ${network.client.cache}")
+        // network.client.cache?.let { cache ->
+        //     Log.d("app.mihon:E621", "Size: ${cache.size()}")
+        //     Log.d("app.mihon:E621", "Max size: ${cache.maxSize()}")
+        //     Log.d("app.mihon:E621", "Directory: ${cache.directory}")
+        // }
+
         val searchMode = preferences.searchModePref
         val category = preferences.categoryPref
 
@@ -77,7 +84,7 @@ class E621 :
                 ModeFilter(getDefaultModeIndex(searchMode)),
                 CategoryFilter(getDefaultCategoryIndex(category)),
                 OrderFilter(getDefaultOrderIndex("post_count")),
-                TagsFilter("order:score"),
+                TagsFilter("order:score ( ~first_page ~end_page )"),
             ),
         )
         // return GET("", headers)
@@ -88,15 +95,32 @@ class E621 :
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/pools.json?limit=24&page=$page&search[order]=created_at".toHttpUrl().newBuilder()
+        // val url = "$baseUrl/pools.json?limit=24&page=$page&search[order]=created_at".toHttpUrl().newBuilder()
+        // val category = preferences.categoryPref
+        // if (category.isNotEmpty()) {
+        //     url.addQueryParameter("search[category]", category)
+        // }
+        // Log.d("app.mihon:E621", "GET2 ${url.build()}")
+        // return GET(url.build(), headers)
+
+        val searchMode = preferences.searchModePref
         val category = preferences.categoryPref
-        if (category.isNotEmpty()) {
-            url.addQueryParameter("search[category]", category)
-        }
-        Log.d("app.mihon:E621", "GET2 ${url.build()}")
-        return GET(url.build(), headers)
+
+        // A little hacky, but it helps unify things
+        return searchMangaRequest(
+            page,
+            "",
+            FilterList(
+                ModeFilter(getDefaultModeIndex(searchMode)),
+                CategoryFilter(getDefaultCategoryIndex(category)),
+                OrderFilter(getDefaultOrderIndex("created_at")),
+                TagsFilter("order:id_desc score:>20"),
+            ),
+        )
     }
-    override fun latestUpdatesParse(response: Response): MangasPage = parsePoolList(response)
+
+    // override fun latestUpdatesParse(response: Response): MangasPage = parsePoolList(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -113,17 +137,35 @@ class E621 :
         var order = "updated_at"
         var activeOnly = false
         var description = ""
+
         var tagsMandatory = "inpool:true -video"
-        var tags = "$tagsMandatory"
+        var orderTag = ""
+        var tags = ""
+        var firstPage = false
+        var endPage = false
+        var dateTag = ""
 
         filters.forEach { filter ->
             when (filter) {
                 is ModeFilter -> mode = filter.toUriPart()
-                is OrderFilter -> order = filter.toUriPart()
                 is CategoryFilter -> category = filter.toUriPart()
-                is ActiveOnlyFilter -> activeOnly = filter.state
-                is DescriptionFilter -> description = filter.state.trim()
+                is OrderFilter -> order = filter.toUriPart()
                 is TagsFilter -> tags = filter.state.trim()
+                // is ActiveOnlyFilter -> activeOnly = filter.state
+                // is DescriptionFilter -> description = filter.state.trim()
+                is PoolGroupFilter -> {
+                    category = filter.getDescription()
+                    order = filter.getOrder()
+                    activeOnly = filter.getActiveOnly()
+                    description = filter.getDescription()
+                }
+                is TagGroupFilter -> {
+                    orderTag = filter.getOrderTag()
+                    tags = filter.getTags()
+                    firstPage = filter.getFirstPage()
+                    endPage = filter.getEndPage()
+                    dateTag = filter.getDate()
+                }
                 else -> {}
             }
         }
@@ -136,7 +178,7 @@ class E621 :
             if (category.isNotEmpty()) url.addQueryParameter("search[category]", category)
             if (activeOnly) url.addQueryParameter("search[is_active]", "true")
             if (query.isNotEmpty()) {
-                val search = "*${query.replace(" ", "_")}*"
+                val search = "*${query.trim().replace(" ", "_")}*"
                 url.addQueryParameter("search[name_matches]", search)
             }
             if (description.isNotEmpty()) {
@@ -144,16 +186,32 @@ class E621 :
             }
         } else {
             // Posts
+            // if (query.isNotEmpty()) {
+            //     // Glob tag search
+            //     val search = "*${query.replace(" ", "_")}*"
+            //     url.addQueryParameter("tags", "$tagsMandatory $tags $search")
+            // } else {
+            //     url.addQueryParameter("tags", "$tagsMandatory $tags")
+            // }
+
+            tags = "$tagsMandatory $tags".trim()
+            if (query.isNotEmpty()) {
+                val search = "*${query.trim().replace(" ", "_")}*"
+                tags = "$tags $search"
+            }
+            if (orderTag.isNotEmpty()) tags = "$tags order:$orderTag"
+            if (dateTag.isNotEmpty()) tags = "$tags date:$dateTag"
+            if (firstPage && endPage) {
+                tags = "$tags ( ~first_page ~end_page )"
+            } else if (firstPage) {
+                tags = "$tags first_page"
+            } else if (endPage) {
+                tags = "$tags first_page"
+            }
             // Since two requests are made in this mode, and duplicates are culled, I've quadrupled
             // the limit to help reduce requests-per-second.
             url.addQueryParameter("limit", "96")
-            if (query.isNotEmpty()) {
-                // Glob tag search
-                val search = "*${query.replace(" ", "_")}*"
-                url.addQueryParameter("tags", "$tagsMandatory $tags $search")
-            } else {
-                url.addQueryParameter("tags", "$tagsMandatory $tags")
-            }
+            url.addQueryParameter("tags", "$tags")
         }
 
         Log.d("app.mihon:E621", "GET3 $url")
@@ -297,15 +355,18 @@ class E621 :
             // TODO: replace poolsGroups with pools
 
             val poolsGroups = posts.flatMap { post -> post.poolIds.map { it to post.id } }
-                .groupBy({ (poolId, _) -> poolId }, { (_, postId) -> postId }).toMutableMap()
-            poolsGroups.remove(pool.id)
+                .groupBy({ (poolId, _) -> poolId }, { (_, postId) -> postId })
+                .filterValues { it.size < pool.postIds.size }.toMutableMap()
+            // poolsGroups.remove(pool.id)
 
             // Fetch pools for names and dates
             // val poolIds = posts.flatMap { it.poolIds }.toMutableSet().remove(pool.id).toList()
-            val poolIds = (posts.flatMap { it.poolIds }.toSet() - pool.id).toList()
-            val pools = batchFetchPools(poolIds).associate { it.id to it }
+            val getPoolIds = posts.flatMap { it.poolIds }.toSet().toList()
+            val subPools = batchFetchPools(getPoolIds).associate { it.id to it }
+                .filterValues { it.postIds.size < pool.postIds.size }
+            val poolIds = subPools.keys
 
-            Log.d("app.mihon:E621", "SUBPOOLS DETECTED: $poolIds $poolsGroups")
+            // Log.d("app.mihon:E621", "SUBPOOLS DETECTED: $poolIds $poolsGroups")
 
             // For every post (must iterate over every post as a guarentee)
             // If the first post in a pool, then add smallest pool as first chapter
@@ -326,14 +387,15 @@ class E621 :
 
             // TODO: Plenty of room for optimization
             var n: Int = 0
-            return posts.mapNotNull { post ->
-                val isInUsedPool: Boolean = (post.poolIds - pool.id).any { it !in poolsGroups.keys }
+            posts.mapNotNull { post ->
+                val isInUsedPool: Boolean = post.poolIds.filter { it in subPools }
+                    .any { it !in poolsGroups.keys }
 
                 val minPoolFirstInId: Int = (!isInUsedPool).let {
                     poolsGroups.filter { it.value[0] == post.id }.minByOrNull { it.value.size }?.key
                 } ?: 0
 
-                // Log.d("app.mihon:E621", "POST:$n:${post.id} $minPoolFirstInId $isInUsedPool ${post.poolIds}")
+                // Log.d("app.mihon:E621", "POST:$n:${post.id} $minPoolFirstInId $isInUsedPool ${post.poolIds} ${subPools.keys} ${post.poolIds.filter { it in subPools }}")
 
                 // skips processing every post if there is just the one pool
                 // if (smallestUnusedPoolFirstIn == pool.id) {
@@ -351,7 +413,7 @@ class E621 :
                     isInUsedPool -> null
 
                     minPoolFirstInId > 0 -> {
-                        val subPool = pools[minPoolFirstInId] ?: pool
+                        val subPool = subPools[minPoolFirstInId] ?: pool
                         var chapterTitle = subPool.name.replace("_", " ")
                         if (chapterTitle == title) chapterTitle = "Chapter $n"
 
@@ -370,7 +432,7 @@ class E621 :
                             //     "$chapterTitle (${subPool.postIds.size} pages)"
                             // }
                             name = "$chapterTitle (${subPool.postIds.size} pages)"
-                            url = "/pools/$minPoolFirstInId"
+                            url = "/pools/${subPool.id}"
                             chapter_number = (++n).toFloat()
                             // date_upload = if (n == 0) parseDate(updatedAt) else 0L
                             date_upload = parseDate(subPool.updatedAt)
@@ -385,7 +447,7 @@ class E621 :
                     }
                 }
             }.reversed().takeIf {
-                Log.d("app.mihon:E621", "TEST: ${it.size} ${poolIds.size} ${poolsGroups.size}")
+                // Log.d("app.mihon:E621", "TEST: ${it.size} ${poolIds.size} ${poolsGroups.size}")
                 it.size / 2 <= poolIds.size - poolsGroups.size
             } ?: listOf(
                 SChapter.create().apply {
@@ -436,8 +498,6 @@ class E621 :
             //
             //     }
             // }
-
-            emptyList<SChapter>()
         } else if ((preferences.splitChaptersPref == "posts") && postIds.isNotEmpty()) {
             postIds.mapIndexed { index, postId ->
                 SChapter.create().apply {
@@ -447,7 +507,7 @@ class E621 :
                     date_upload = if (index == 0) parseDate(pool.updatedAt) else 0L
                 }
             }.reversed()
-        } else if (preferences.splitChaptersPref == "merge") {
+        } else if (preferences.splitChaptersPref == "merged") {
             // val title = pool.name.replace("_", " ")
             listOf(
                 SChapter.create().apply {
