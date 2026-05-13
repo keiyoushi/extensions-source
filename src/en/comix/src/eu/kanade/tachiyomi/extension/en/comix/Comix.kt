@@ -411,9 +411,9 @@ class Comix :
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val tokenRef = AtomicReference<String>()
-
         var webView: WebView? = null
-        handler.post {
+
+        val createAndLoad = {
             val view = WebView(Injekt.get<Application>())
             webView = view
 
@@ -442,6 +442,12 @@ class Comix :
             }
 
             view.loadUrl(pageUrl)
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            createAndLoad()
+        } else {
+            handler.post(createAndLoad)
         }
 
         val completed = latch.await(30, TimeUnit.SECONDS)
