@@ -8,23 +8,22 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class MangaTR : ParsedHttpSource() {
+@Serializable
+class MangaPageDto(val url: String)
+
+class MangaTR : HttpSource() {
     override val name = "Manga-TR"
     override val baseUrl = "https://manga-tr.com"
     override val lang = "tr"
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(DDoSGuardInterceptor(network.cloudflareClient))
@@ -35,11 +34,6 @@ class MangaTR : ParsedHttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
         .add("Accept-Language", "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7")
-
-    private fun cleanUrl(href: String): String {
-        val path = href.substringAfter(baseUrl).substringAfter("manga-tr.com").removePrefix("/")
-        return "/$path"
-    }
 
     // ===============================
     // Popular
@@ -54,16 +48,11 @@ class MangaTR : ParsedHttpSource() {
         if (link != null) {
             url = cleanUrl(link.attr("href"))
         }
-        title = element.select(".media-card__title, .sidebar-list__body strong, strong").text().trim()
+        title = element.select(".media-card__title, .sidebar-list__body strong, strong").text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     override fun popularMangaNextPageSelector(): String? = null
-
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector(): String? = null
 
     // ===============================
     // Search
@@ -80,7 +69,7 @@ class MangaTR : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         url = cleanUrl(element.attr("href"))
-        title = element.selectFirst(".arama-manga-name")?.text()?.trim() ?: element.text().trim()
+        title = element.selectFirst(".arama-manga-name")?.text() ?: element.text()
     }
 
     override fun searchMangaNextPageSelector(): String? = null
@@ -90,10 +79,10 @@ class MangaTR : ParsedHttpSource() {
     // ===============================
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")?.text()?.trim() ?: ""
+        title = document.selectFirst("h1")?.text() ?: ""
         thumbnail_url = document.selectFirst("img.poster-card__image, img[src*='covers']")?.absUrl("src")
-        description = document.selectFirst("div.detail-copy")?.text()?.trim()
-        author = document.select("span.detail-meta-row__value:contains(Yazar), a[href*='author']").text().trim()
+        description = document.selectFirst("div.detail-copy")?.text()
+        author = document.select("span.detail-meta-row__value:contains(Yazar), a[href*='author']").text()
         genre = document.select("a[href*='tur=']").joinToString { it.text() }
     }
 
@@ -125,10 +114,11 @@ class MangaTR : ParsedHttpSource() {
 
         while (document.selectFirst("a[data-page=$nextPage]") != null) {
             val body = FormBody.Builder().add("page", nextPage.toString()).build()
-            val postResponse = client.newCall(POST(requestUrl, chapterHeaders, body)).execute()
-            document = postResponse.asJsoup()
-            chapters.addAll(document.select(chapterListSelector()).map(::chapterFromElement))
-            nextPage++
+            client.newCall(POST(requestUrl, chapterHeaders, body)).execute().use { postResponse ->
+                document = postResponse.asJsoup()
+                chapters.addAll(document.select(chapterListSelector()).map(::chapterFromElement))
+                nextPage++
+            }
         }
 
         return chapters
@@ -143,7 +133,7 @@ class MangaTR : ParsedHttpSource() {
             } else {
                 "/" + href.removePrefix("/")
             }
-            name = link.text().trim()
+            name = link.text()
         }
         val dateText = element.selectFirst("span.date, div.chapter-card__meta, .chapter-card__date")?.text() ?: ""
         date_upload = parseRelativeDate(dateText)
@@ -162,12 +152,10 @@ class MangaTR : ParsedHttpSource() {
     private fun decodeOrder(encoded: String): List<Pair<Int, Int>> {
         val list = mutableListOf<Pair<Int, Int>>()
         try {
-            // Base64 şifresini çöz ve 0x5A XOR anahtarı ile kilidi aç
             val raw = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
             val decodedBytes = raw.map { (it.toInt() and 0xFF) xor 0x5A }.map { it.toByte() }.toByteArray()
             val jsonStr = String(decodedBytes, Charsets.UTF_8)
 
-            // Çıkan sonucu JSON olarak oku ve sırayı listeye kaydet
             if (jsonStr.startsWith("[")) {
                 val arr = org.json.JSONArray(jsonStr)
                 for (i in 0 until arr.length()) {
@@ -185,7 +173,6 @@ class MangaTR : ParsedHttpSource() {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
         }
         return list
     }
@@ -199,7 +186,7 @@ class MangaTR : ParsedHttpSource() {
 
         document.select("div.chapter-page").forEach { chapterPage ->
             val rawParts = chapterPage.attr("data-parts")
-            val rawOrder = chapterPage.attr("data-order") // Şifreli sıralama haritası
+            val rawOrder = chapterPage.attr("data-order")
 
             if (rawParts.isNotEmpty()) {
                 try {
@@ -220,12 +207,12 @@ class MangaTR : ParsedHttpSource() {
                             val partIdx = pair.first
                             val url = partsMap[partIdx]
                             if (url != null) {
-                                pages.add(Page(pages.size, "", url))
+                                pages.add(Page(pages.size, imageUrl = partsMap[partIdx]!!))
                             }
                         }
                     } else {
                         for (i in 0 until partsMap.size) {
-                            pages.add(Page(pages.size, "", partsMap[i]!!))
+                            pages.add(Page(pages.size, imageUrl = partsMap[i]!!))
                         }
                     }
                 } catch (e: Exception) {
@@ -240,9 +227,13 @@ class MangaTR : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String = ""
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().add("Accept", "image/avif,image/webp,*/*").build())
+    private val imageHeaders by lazy {
+        headersBuilder().add("Accept", "image/avif,image/webp,*/*").build()
+    }
+
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
 
     private fun parseRelativeDate(date: String): Long {
         val calendar = Calendar.getInstance()
