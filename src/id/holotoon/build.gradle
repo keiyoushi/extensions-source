@@ -1,9 +1,7 @@
 ext {
     extName = 'Holotoon'
     extClass = '.Holotoon'
-    themePkg = 'madara'
-    baseUrl = 'https://01.holotoon.site'
-    overrideVersionCode = 0
+    extVersionCode = 51
     isNsfw = true
 }
 
