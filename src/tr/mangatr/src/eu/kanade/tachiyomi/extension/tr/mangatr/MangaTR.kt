@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,7 +20,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class MangaTR : HttpSource() {
+class MangaTR : ParsedHttpSource() {
     override val name = "Manga-TR"
     override val baseUrl = "https://manga-tr.com"
     override val lang = "tr"
