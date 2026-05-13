@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.utifa
 import android.content.SharedPreferences
 import android.text.InputType
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -93,7 +92,7 @@ class Utifa :
         val mangaId = query.toUtifaMangaId()
         if (mangaId != null) {
             return fetchMangaDetails(
-                SManga.create().apply { url = "/manga/detail/$mangaId" },
+                SManga.create().apply { url = mangaId.toString() },
             ).map { MangasPage(listOf(it), false) }
         }
         return super.fetchSearchManga(page, query, filters)
@@ -165,7 +164,7 @@ class Utifa :
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringBefore('?').substringAfterLast("/")
+        val id = manga.url.savedId()
         val url = "$apiUrl/manga/common/get".toHttpUrl().newBuilder()
             .addQueryParameter("id", id)
             .build()
@@ -184,7 +183,7 @@ class Utifa :
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringBefore('?').substringAfterLast("/")
+        val chapterId = chapter.url.savedId()
         val url = "$apiUrl/manga/common/getChapterList".toHttpUrl().newBuilder()
             .addQueryParameter("chapterId", chapterId)
             .build()
@@ -205,9 +204,9 @@ class Utifa :
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/detail/${manga.url.savedId()}"
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/chapter/${chapter.url.savedId()}"
 
     override fun getFilterList(): FilterList = FilterList(
         UtifaSortFilter(),
@@ -232,15 +231,6 @@ class Utifa :
                 editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
             setDefaultValue("")
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_VALIDITY
-            title = "Login validity"
-            entries = arrayOf("1 hour", "1 day", "7 days", "30 days")
-            entryValues = arrayOf("3600", "86400", "604800", "2592000")
-            summary = "%s"
-            setDefaultValue("604800")
         }.also(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
@@ -282,11 +272,10 @@ class Utifa :
             return@synchronized ""
         }
 
-        val validity = preferences.getString(PREF_VALIDITY, "604800").orEmpty().toIntOrNull() ?: 604800
         val url = "$apiUrl/user/login".toHttpUrl().newBuilder()
             .addQueryParameter("userName", username)
             .addQueryParameter("passWord", password)
-            .addQueryParameter("validity", validity.toString())
+            .addQueryParameter("validity", DEFAULT_TOKEN_VALIDITY.toString())
             .build()
 
         val token = network.cloudflareClient.newCall(GET(url, headersBuilder().build()))
@@ -312,6 +301,8 @@ class Utifa :
         return runCatching { peekBody(2048L).string().contains("\"code\":1004") }.getOrDefault(false)
     }
 
+    private fun String.savedId(): String = substringBefore('?').substringAfterLast("/")
+
     private fun String.toUtifaMangaId(): Long? {
         val url = toHttpUrlOrNull() ?: return null
         if (url.host != BASE_HOST) {
@@ -333,9 +324,9 @@ class Utifa :
         private const val SUCCESS_CODE = 1000
         private const val TOKEN_HEADER = "UTifaToken"
         private const val USER_AGENT = "Mozilla/5.0 (Android) Mihon/Utifa"
+        private const val DEFAULT_TOKEN_VALIDITY = 604800
         private const val PREF_USERNAME = "username"
         private const val PREF_PASSWORD = "password"
-        private const val PREF_VALIDITY = "validity"
         private const val PREF_TOKEN = "token"
         private val tokenLock = Any()
     }
