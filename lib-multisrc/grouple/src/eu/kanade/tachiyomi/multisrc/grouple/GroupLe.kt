@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -26,7 +27,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
 import java.text.DecimalFormat
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.regex.Pattern
@@ -37,6 +37,8 @@ abstract class GroupLe(
     final override val lang: String,
 ) : ParsedHttpSource(),
     ConfigurableSource {
+    private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.ROOT)
+
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     protected open val isNeedAuth = false
@@ -320,13 +322,7 @@ abstract class GroupLe(
 
         chapter.chapter_number = chapterInf.attr("data-num").toFloat() / 10
 
-        chapter.date_upload = element.select("td.d-none").last()?.text()?.takeIf { it.isNotBlank() }?.let {
-            try {
-                SimpleDateFormat("dd.MM.yy", Locale.US).parse(it)?.time ?: 0L
-            } catch (_: ParseException) {
-                SimpleDateFormat("dd/MM/yy", Locale.US).parse(it)?.time ?: 0L
-            }
-        } ?: 0
+        chapter.date_upload = dateFormat.tryParse(element.select("td.d-none").last()?.text())
         return chapter
     }
 
