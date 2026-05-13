@@ -19,6 +19,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -59,7 +60,7 @@ class BatCave : HttpSource() {
             val url = buildString {
                 append(baseUrl)
                 append("/search/")
-                append(query.trim())
+                append(URLEncoder.encode(query.trim(), "UTF-8"))
                 if (page > 1) {
                     append("/page/")
                     append(page)
