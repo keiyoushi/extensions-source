@@ -35,18 +35,18 @@ class MangaTR : ParsedHttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
         .add("Accept-Language", "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7")
-    // User-Agent satırını kasten sildik. Mihon artık WebView'un orijinal kimliğini kullanacak.
 
-    // URL'leri her zaman hatasız "/" ile birleştirmek için yardımcı fonksiyon
     private fun cleanUrl(href: String): String {
         val path = href.substringAfter(baseUrl).substringAfter("manga-tr.com").removePrefix("/")
         return "/$path"
     }
 
-    // --- 1. POPÜLER VE GÜNCEL (Duyuru Çözümü) ---
+    // ===============================
+    // Popular
+    // ===============================
+    
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/index.html", headers)
 
-    // Sadece 'sidebar-list__link' sınıfına sahip olanları (gerçek mangalar) ve medya kartlarını seçiyoruz
     override fun popularMangaSelector() = "li.sidebar-list__item:has(a.sidebar-list__link), div.media-card"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -65,7 +65,10 @@ class MangaTR : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    // --- 2. ARAMA (Yeni HTML Yapısına Göre Onarıldı) ---
+    // ===============================
+    // Search
+    // ===============================
+    
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/arama.html".toHttpUrl().newBuilder()
             .addQueryParameter("icerik", query)
@@ -73,18 +76,19 @@ class MangaTR : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    // Doğrudan arama sonuçlarındaki özel 'a' etiketini hedefliyoruz
     override fun searchMangaSelector() = "a.arama-manga-item"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         url = cleanUrl(element.attr("href"))
         title = element.selectFirst(".arama-manga-name")?.text()?.trim() ?: element.text().trim()
-        // Not: Arama kısmında kapak resmi genelde dönmüyor, tıklandığında detay sayfasından yüklenecek.
     }
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    // --- 3. DETAYLAR ---
+    // ===============================
+    // Details
+    // ===============================
+    
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")?.text()?.trim() ?: ""
         thumbnail_url = document.selectFirst("img.poster-card__image, img[src*='covers']")?.absUrl("src")
@@ -93,7 +97,10 @@ class MangaTR : ParsedHttpSource() {
         genre = document.select("a[href*='tur=']").joinToString { it.text() }
     }
 
-    // --- 4. BÖLÜMLER ---
+    // ===============================
+    // Chapters
+    // ===============================
+    
     override fun chapterListSelector() = "article.chapter-card, div.chapter-item"
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -131,7 +138,6 @@ class MangaTR : ParsedHttpSource() {
         val link = element.selectFirst("a")
         if (link != null) {
             val href = link.attr("href")
-            // Linkin başındaki http veya / hatalarını kökten temizleyen yapı
             url = if (href.startsWith("http")) {
                 href.substringAfter(baseUrl)
             } else {
@@ -143,15 +149,16 @@ class MangaTR : ParsedHttpSource() {
         date_upload = parseRelativeDate(dateText)
     }
 
-    // Tıklanan bölümlerin url'sini oluştururken hatasız birleşmesini garanti ediyoruz
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url
         return GET(chapterUrl, headers)
     }
-
-    // --- ŞİFRE ÇÖZÜCÜ (Yapbozun haritasını çözer) ---
+    // ===============================
+    // Decode
+    // ===============================
+    
     private fun decodeOrder(encoded: String): List<Pair<Int, Int>> {
         val list = mutableListOf<Pair<Int, Int>>()
         try {
@@ -183,7 +190,10 @@ class MangaTR : ParsedHttpSource() {
         return list
     }
 
-    // --- 5. SAYFALAR (Tuzakları Yok Eden Okuyucu) ---
+    // ===============================
+    // Pages
+    // ===============================
+    
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
@@ -195,8 +205,6 @@ class MangaTR : ParsedHttpSource() {
                 try {
                     val cleanJson = rawParts.replace("&quot;", "\"")
                     val partsArray = org.json.JSONArray(cleanJson)
-
-                    // Tüm resim parçalarını bir sözlüğe (map) alalım
                     val partsMap = mutableMapOf<Int, String>()
                     for (i in 0 until partsArray.length()) {
                         var url = partsArray.getString(i)
@@ -205,13 +213,9 @@ class MangaTR : ParsedHttpSource() {
                     }
 
                     if (rawOrder.isNotEmpty()) {
-                        // Haritayı çözüyoruz
                         val orderList = decodeOrder(rawOrder)
-                        // Yapboz parçalarını olması gereken pozisyona göre sıralıyoruz
                         val sortedOrder = orderList.sortedBy { it.second }
-
-                        // Sadece haritada olan (gerçek) parçaları sırasıyla listeye ekliyoruz
-                        // Haritada olmayan geometrik/tuzak şekiller otomatik olarak çöpe gidiyor!
+                        
                         for (pair in sortedOrder) {
                             val partIdx = pair.first
                             val url = partsMap[partIdx]
@@ -220,13 +224,11 @@ class MangaTR : ParsedHttpSource() {
                             }
                         }
                     } else {
-                        // Eğer şifreleme yoksa normal ekle
                         for (i in 0 until partsMap.size) {
                             pages.add(Page(pages.size, "", partsMap[i]!!))
                         }
                     }
                 } catch (e: Exception) {
-                    // Hata olursa atla
                 }
             }
         }
