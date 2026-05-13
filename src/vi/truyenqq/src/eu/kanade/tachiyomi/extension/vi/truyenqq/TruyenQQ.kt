@@ -36,7 +36,7 @@ class TruyenQQ :
 
     override val lang: String = "vi"
 
-    private val defaultBaseUrl = "https://truyenqqno.com"
+    private val defaultBaseUrl = "https://truyenqqko.com"
 
     override val supportsLatest: Boolean = true
 
