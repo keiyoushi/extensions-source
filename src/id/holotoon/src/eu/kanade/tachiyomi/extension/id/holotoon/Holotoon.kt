@@ -55,7 +55,7 @@ class Holotoon : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("a._cl")
+        val mangas = document.select("a._lc")
             .distinctBy { it.attr("href") }
             .mapNotNull { element ->
                 val titleText = element.selectFirst("h3")?.text()
@@ -136,10 +136,10 @@ class Holotoon : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div#_cls a._cr").map { element ->
+        return document.select("div#_cls a._rc").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                name = element.select("._ct").joinToString(" ") { it.text() }
+                name = element.select("._tc").joinToString(" ") { it.text() }
                 date_upload = parseDate(element.selectFirst("span.text-right")?.text())
             }
         }
