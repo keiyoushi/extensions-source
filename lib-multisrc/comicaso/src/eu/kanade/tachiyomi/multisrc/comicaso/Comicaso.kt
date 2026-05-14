@@ -181,14 +181,14 @@ abstract class Comicaso(
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val mangaSlug = chapter.url.substringAfter("/komik/").substringBefore("/")
-        val chapterSlug = chapter.url.removeSuffix("/").substringAfterLast("/")
+        val chapterSlug = chapter.url.substringBeforeLast("/").substringAfterLast("/")
 
         return client.newCall(GET("$baseUrl/wp-json/comic/v1/manga/$mangaSlug/chapter/$chapterSlug/", headers))
             .asObservableSuccess()
             .map { response ->
                 val result = response.parseAs<ChapterImagesDto>()
                 result.images.mapIndexed { index, imageUrl ->
-                    Page(index, "", imageUrl)
+                    Page(index, baseUrl + chapter.url, imageUrl)
                 }
             }
     }
