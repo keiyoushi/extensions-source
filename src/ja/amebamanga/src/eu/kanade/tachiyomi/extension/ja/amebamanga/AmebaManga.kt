@@ -187,47 +187,44 @@ class AmebaManga :
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ViewerResponse>().result
-        val guardian = result.guardianServer
-        val s3Key = result.bookData.s3Key
-        val guardianUrl = "$guardian/$s3Key"
-        if (result.bookData.imagedReflow) { // novels
-            val bookJsonUrl = "$guardianUrl/book.json".toHttpUrl().newBuilder()
-                .query(result.signedParams)
-                .build()
-
-            val bookResponse = client.newCall(GET(bookJsonUrl, headers)).execute()
-            val book = bookResponse.parseAs<ReflowBook>()
-
-            val profile = book.reflowData?.profiles?.find { it.id == "mincho_small" }
-                ?: book.reflowData?.profiles?.firstOrNull()
-                ?: throw Exception("No font size was found.")
-
-            val pageCount = profile.bookInfo.pageCount
-
-            val keysMap = result.keys?.jsonObject?.mapValues { it.value.jsonPrimitive.content }
-            val key = keysMap?.get(profile.id)
-
-            return (0 until pageCount).map {
-                val url = "$guardianUrl/${profile.id}/${it + 1}.jpg".toHttpUrl().newBuilder()
-                    .query(result.signedParams)
-                    .fragment(key)
-                    .build()
-                    .toString()
-                Page(it, imageUrl = url)
-            }
-        } else { // mangas
-            val keysArray = result.keys?.jsonArray?.map { it.jsonPrimitive.content } ?: throw Exception("No keys where found.")
-
-            return keysArray.mapIndexed { i, key ->
-                val url = "$guardianUrl/${i + 1}.jpg".toHttpUrl().newBuilder()
-                    .query(result.signedParams)
-                    .fragment(key)
-                    .build()
-                    .toString()
-                Page(i, imageUrl = url)
-            }
+        val guardianUrl = "${result.guardianServer}/${result.bookData.s3Key}"
+        return if (result.bookData.imagedReflow) {
+            parseNovelPages(result, guardianUrl)
+        } else {
+            parseMangaPages(result, guardianUrl)
         }
     }
+
+    private fun parseNovelPages(result: ViewerResult, guardianUrl: String): List<Page> {
+        val bookJsonUrl = "$guardianUrl/book.json".toHttpUrl().newBuilder()
+            .query(result.signedParams)
+            .build()
+
+        val book = client.newCall(GET(bookJsonUrl, headers)).execute().parseAs<ReflowBook>()
+        val profile = book.reflowData?.profiles?.find { it.id == "mincho_small" }
+            ?: book.reflowData?.profiles?.firstOrNull()
+            ?: throw Exception("No profile was found.")
+
+        val key = result.keys?.jsonObject?.get(profile.id)?.jsonPrimitive?.content
+
+        return (0 until profile.bookInfo.pageCount).map {
+            Page(it, imageUrl = buildPageUrl(guardianUrl, "${profile.id}/${it + 1}.jpg", result.signedParams, key))
+        }
+    }
+
+    private fun parseMangaPages(result: ViewerResult, guardianUrl: String): List<Page> {
+        val keys = result.keys?.jsonArray?.map { it.jsonPrimitive.content } ?: throw Exception("No keys were found.")
+
+        return keys.mapIndexed { i, key ->
+            Page(i, imageUrl = buildPageUrl(guardianUrl, "${i + 1}.jpg", result.signedParams, key))
+        }
+    }
+
+    private fun buildPageUrl(guardianUrl: String, path: String, signedParams: String, key: String?): String = "$guardianUrl/$path".toHttpUrl().newBuilder()
+        .query(signedParams)
+        .fragment(key)
+        .build()
+        .toString()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
