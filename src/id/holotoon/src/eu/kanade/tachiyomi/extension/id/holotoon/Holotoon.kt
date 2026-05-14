@@ -145,18 +145,11 @@ class Holotoon : HttpSource() {
         }.map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                val spans = element.select("span")
-                name = spans.filter {
-                    val className = it.className()
-                    !className.contains("text-right") &&
-                        !className.contains("badge") &&
-                        !className.contains("nums") &&
-                        !it.hasAttr("data-user-href") &&
-                        !it.hasAttr("data-team-href")
-                }.joinToString(" ") { it.text() }.trim()
-                date_upload = parseDate(spans.filter { it.hasClass("text-right") }.firstOrNull()?.text())
+                val divs = element.select("> div")
+                name = divs.firstOrNull()?.text()?.trim() ?: ""
+                date_upload = parseDate(divs.lastOrNull()?.select("span")?.lastOrNull()?.text())
             }
-        }.filter { it.name.isNotEmpty() }
+        }.filter { it.name.isNotEmpty() && !it.name.contains("Trap", true) }
     }
 
     // =============================== Pages ===============================
