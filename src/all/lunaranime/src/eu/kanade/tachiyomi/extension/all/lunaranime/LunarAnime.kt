@@ -140,7 +140,7 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<LunarMangaResponse>()
-        return result.manga.toSManga()
+        return result.manga.toSManga().apply { initialized = true }
     }
 
     // ============================== Chapters ==============================
