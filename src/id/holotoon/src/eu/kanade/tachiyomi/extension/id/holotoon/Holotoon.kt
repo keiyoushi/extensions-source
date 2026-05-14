@@ -37,9 +37,18 @@ class Holotoon : HttpSource() {
         .rateLimit(3)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0")
-        .add("Accept-Language", "id-ID,id;q=0.8,en-US;q=0.5,en;q=0.3")
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+        .set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+        .set("Sec-Ch-Ua", "\"Chromium\";v=\"133\", \"Google Chrome\";v=\"133\", \"Not-A.Brand\";v=\"99\"")
+        .set("Sec-Ch-Ua-Mobile", "?0")
+        .set("Sec-Ch-Ua-Platform", "\"Windows\"")
+        .set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "none")
+        .set("Sec-Fetch-User", "?1")
+        .set("Upgrade-Insecure-Requests", "1")
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/browse?sort=popular&page=$page", headers)
@@ -94,7 +103,7 @@ class Holotoon : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        // Migration from old web urls to the new one
+        // Migration from old web urls to the new api based
         if (manga.url.contains("/komik/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
@@ -105,7 +114,7 @@ class Holotoon : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1.text-3xl.font-bold")!!.text()
+            title = document.selectFirst("h1._tt")?.text() ?: document.selectFirst("h1.text-3xl")!!.text()
             thumbnail_url = document.selectFirst("div.aspect-\\[3\\/4\\] img")?.absUrl("src")
             author = document.selectFirst("span:contains(Uploaded by:) a")?.text()
             description = document.selectFirst("div#_sd")?.text()
@@ -130,7 +139,7 @@ class Holotoon : HttpSource() {
         return document.select("div#_cls a._cr").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                name = element.select(".chapter-link").joinToString(" ") { it.text() }
+                name = element.select("._ct").joinToString(" ") { it.text() }
                 date_upload = parseDate(element.selectFirst("span.text-right")?.text())
             }
         }
@@ -138,7 +147,7 @@ class Holotoon : HttpSource() {
 
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        // Migration from old web urls to the new one
+        // Migration from old web urls to the new api based
         if (chapter.url.contains("/komik/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
@@ -183,15 +192,21 @@ class Holotoon : HttpSource() {
         val isEncrypted = page.imageUrl!!.contains("#")
 
         val newHeaders = headers.newBuilder().apply {
-            if (page.url.isNotEmpty()) {
-                set("Referer", page.url)
-            }
+            set("Referer", page.url.takeIf { it.isNotEmpty() } ?: "$baseUrl/")
 
             if (isEncrypted) {
                 set("Accept", "*/*")
+                set("Sec-Fetch-Dest", "empty")
+                set("Sec-Fetch-Mode", "cors")
+                set("Sec-Fetch-Site", "same-origin")
             } else {
                 set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                set("Sec-Fetch-Dest", "image")
+                set("Sec-Fetch-Mode", "no-cors")
+                set("Sec-Fetch-Site", "same-origin")
             }
+            removeAll("Sec-Fetch-User")
+            removeAll("Upgrade-Insecure-Requests")
         }.build()
 
         return GET(page.imageUrl!!, newHeaders)
