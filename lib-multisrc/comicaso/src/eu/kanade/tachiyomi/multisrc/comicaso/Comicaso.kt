@@ -9,9 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -182,44 +180,20 @@ abstract class Comicaso(
     // =============================== Pages ================================
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
-        val cleanUrl = chapterUrl.newBuilder().query(null).build().toString()
+        val mangaSlug = chapter.url.substringAfter("/komik/").substringBefore("/")
+        val chapterSlug = chapter.url.removeSuffix("/").substringAfterLast("/")
 
-        val body = TokenRequestDto(listOf(cleanUrl)).toJsonRequestBody()
-        val tokenHeaders = headersBuilder()
-            .set("Referer", "$baseUrl${chapter.url.substringBeforeLast("/", "").substringBeforeLast("/")}/")
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        val tokenRequest = Request.Builder()
-            .url("$baseUrl/wp-json/mp/v1/chapter")
-            .post(body)
-            .headers(tokenHeaders)
-            .build()
-
-        return client.newCall(tokenRequest).asObservableSuccess().switchMap { response ->
-            val result = response.parseAs<TokenDto>()
-            val token = result.tokens[cleanUrl]
-                ?: throw Exception("Failed to get token for $cleanUrl")
-
-            val pageUrl = chapterUrl.newBuilder()
-                .addQueryParameter("t", token)
-                .addQueryParameter("e", result.expire.toString())
-                .build()
-
-            client.newCall(GET(pageUrl, headers)).asObservableSuccess().map(::pageListParse)
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("img.mjv2-page-image")
-            .map { it.attr("abs:src").ifEmpty { it.attr("abs:data-src") } }
-            .distinct()
-            .mapIndexed { index, imageUrl ->
-                Page(index, document.location(), imageUrl)
+        return client.newCall(GET("$baseUrl/wp-json/comic/v1/manga/$mangaSlug/chapter/$chapterSlug/", headers))
+            .asObservableSuccess()
+            .map { response ->
+                val result = response.parseAs<ChapterImagesDto>()
+                result.images.mapIndexed { index, imageUrl ->
+                    Page(index, "", imageUrl)
+                }
             }
     }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

@@ -99,12 +99,6 @@ class ChapterDto(
 }
 
 @Serializable
-class TokenDto(
-    val tokens: Map<String, String>,
-    val expire: Long,
-)
-
-@Serializable
-class TokenRequestDto(
-    val urls: List<String>,
+class ChapterImagesDto(
+    val images: List<String>,
 )
