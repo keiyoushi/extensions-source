@@ -32,6 +32,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
+import okio.Buffer
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -318,6 +319,7 @@ class Comix :
                 .addPathSegment("chapters")
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("limit", "100")
+                .addQueryParameter("order[number]", "desc")
                 .addQueryParameter("_", token)
                 .build()
             val res = client.newCall(GET(url, headers)).awaitSuccess()
@@ -377,6 +379,9 @@ class Comix :
 
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = runBlocking {
+        // Legacy URL example: title/qnj9/5241183-chapter-0
+        if (chapter.url.substringAfter("/").substringBeforeLast("/").indexOf("-") == -1) throw Exception("Outdated chapter URL. Please refresh the chapter list")
+
         val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
 
         val token = captureToken(
@@ -412,6 +417,7 @@ class Comix :
         val latch = CountDownLatch(1)
         val tokenRef = AtomicReference<String>()
         var webView: WebView? = null
+        val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
 
         val createAndLoad = {
             val view = WebView(Injekt.get<Application>())
@@ -430,14 +436,21 @@ class Comix :
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
                     val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
-                    if (httpUrl != null && urlMatches(httpUrl)) {
+                        ?: return emptyResponse
+
+                    if (urlMatches(httpUrl)) {
                         httpUrl.queryParameter("_")?.let { token ->
                             if (tokenRef.compareAndSet(null, token)) {
                                 latch.countDown()
                             }
                         }
                     }
-                    return null
+
+                    return if (httpUrl.host.contains("comix.to") && (httpUrl.encodedPath.contains(".js") || httpUrl.encodedPath.startsWith("/api/") || httpUrl.encodedPath.startsWith("/title/"))) {
+                        super.shouldInterceptRequest(view, request)
+                    } else {
+                        emptyResponse
+                    }
                 }
             }
 

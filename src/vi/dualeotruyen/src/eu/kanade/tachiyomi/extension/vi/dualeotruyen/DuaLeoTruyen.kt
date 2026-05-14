@@ -33,7 +33,7 @@ class DuaLeoTruyen :
     override val lang = "vi"
     override val supportsLatest = true
 
-    private val defaultBaseUrl = "https://dualeotruyendb.com"
+    private val defaultBaseUrl = "https://dualeotruyenhx.com"
     private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl get() = getPrefBaseUrl()

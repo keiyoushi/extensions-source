@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.grouple
 
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -15,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,7 +27,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
 import java.text.DecimalFormat
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.regex.Pattern
@@ -36,34 +37,33 @@ abstract class GroupLe(
     final override val lang: String,
 ) : ParsedHttpSource(),
     ConfigurableSource {
+    private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.ROOT)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    protected open val isNeedAuth = false
+
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .addNetworkInterceptor { chain ->
-            val originalRequest = chain.request()
-            val response = chain.proceed(originalRequest)
-            if (originalRequest.url.toString().contains(baseUrl) && (
-                    originalRequest.url.toString()
-                        .contains("internal/redirect") or (response.code == 301)
-                    )
-            ) {
-                if (originalRequest.url.toString().contains("/list?")) {
-                    throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
-                }
-                throw IOException(
-                    "URL серии изменился. Перенесите/мигрируйте с $name " +
-                        "на $name (или смежный с GroupLe), чтобы список глав обновился",
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().rateLimit(2).addNetworkInterceptor { chain ->
+        val originalRequest = chain.request()
+        val response = chain.proceed(originalRequest)
+        if (originalRequest.url.toString().contains(baseUrl) && (
+                originalRequest.url.toString()
+                    .contains("internal/redirect") or (response.code == 301)
                 )
+        ) {
+            if (originalRequest.url.toString().contains("/list?")) {
+                throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
             }
-            response
+            throw IOException(
+                "URL серии изменился. Перенесите/мигрируйте с $name на $name (или смежный с GroupLe), чтобы список глав обновился",
+            )
         }
-        .build()
+        response
+    }.build()
 
-    private var uagent = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT)!!
+    private val uagent = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT)!!
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("User-Agent", uagent)
@@ -80,9 +80,8 @@ abstract class GroupLe(
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url =
-            element.select("img.lazy").first()?.attr("data-original")?.replace("_p.", ".")
-        element.select("h3 > a").first()!!.let {
+        manga.thumbnail_url = element.selectFirst("img.lazy")?.attr("data-original")?.replace("_p.", ".")
+        element.selectFirst("h3 > a")?.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.attr("title")
         }
@@ -102,9 +101,7 @@ abstract class GroupLe(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}"
-            .toHttpUrl()
-            .newBuilder()
+        val url = "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}".toHttpUrl().newBuilder()
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
@@ -167,132 +164,38 @@ abstract class GroupLe(
     protected class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанры", genres)
     protected class CategoryList(categories: List<Genre>) : Filter.Group<Genre>("Категории", categories)
     protected class AgeList(ages: List<Genre>) : Filter.Group<Genre>("Возрастная рекомендация", ages)
-    protected class MoreList(moren: List<Genre>) : Filter.Group<Genre>("Прочее", moren)
+    protected class MoreList(more: List<Genre>) : Filter.Group<Genre>("Прочее", more)
     protected class AdditionalFilterList(fils: List<Genre>) : Filter.Group<Genre>("Фильтры", fils)
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val legacyInfoElement = document.selectFirst(".expandable")
-        return if (legacyInfoElement != null) {
-            mangaDetailsParseLegacy(document, legacyInfoElement)
-        } else {
-            mangaDetailsParseModern(document)
-        }
-    }
-
-    private fun mangaDetailsParseLegacy(document: Document, infoElement: Element): SManga {
-        val rawCategory = infoElement.select("span.elem_category").text()
-        val category = rawCategory.ifEmpty { "manga" }
-        val rawAgeStop = normalizeAgeRating(
-            infoElement.selectFirst(".elem_limitation .element-link")?.text().orEmpty(),
-        )
-
-        val ratingValue = (infoElement.select(".rating-block").attr("data-score").toFloatOrNull() ?: 0f) * 2
-        val ratingValueOver = infoElement.select(".info-icon").attr("data-content")
-            .substringBeforeLast("/5</b><br/>")
-            .substringAfterLast(": <b>")
-            .replace(",", ".")
-            .toFloatOrNull()
-            ?.times(2)
-            ?: 0f
-        val ratingVotes = infoElement.select(".col-sm-6 .user-rating meta[itemprop=\"ratingCount\"]")
-            .attr("content")
-            .ifBlank { "0" }
-
-        val manga = SManga.create()
-        manga.title = document.select(".names > .name").text()
-        manga.author = infoElement.selectFirst("span.elem_author")?.text()
-            ?: infoElement.selectFirst("span.elem_screenwriter")?.text()
-        manga.artist = infoElement.selectFirst("span.elem_illustrator")?.text()
-
-        val rawTags = infoElement.select("a[href*=\"/list/genre/\"], a[href*=\"/list/tag/\"]")
-            .map { it.text() }
-
-        manga.genre = listOf(category, rawAgeStop)
-            .plus(rawTags)
-            .map { it.trim().lowercase(Locale.ROOT) }
-            .filter { it.isNotEmpty() }
-            .joinToString(", ")
-
-        val altName = infoElement.selectFirst(".another-names")?.text()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { "Alternative names:\n$it\n\n" }
-            .orEmpty()
-
-        val descriptionText = document.select("div#tab-description .manga-description").text()
-        val ratingSummary = if (ratingValue > 0f) {
-            "${ratingToStars(ratingValue)} $ratingValue[$ratingValueOver] (votes: $ratingVotes)\n"
-        } else {
-            ""
-        }
-        manga.description = ratingSummary + altName + descriptionText
-
-        val pageHtml = document.html().lowercase(Locale.ROOT)
-        val badgesText = infoElement.select("span.badge").joinToString(" ") { it.text().lowercase(Locale.ROOT) }
-        val hasRestrictedBanner =
-            (pageHtml.contains("\u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d") && pageHtml.contains("\u043a\u043e\u043f\u0438\u0440\u0430\u0439\u0442")) ||
-                (pageHtml.contains("\u0442\u0435\u0440\u0440\u0438\u0442\u043e\u0440\u0438\u0438 \u0440\u0444") && pageHtml.contains("\u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d"))
-
-        manga.status = when {
-            hasRestrictedBanner && document.select("div.chapters").isEmpty() -> SManga.LICENSED
-
-            infoElement.html().contains("<b>\u0421\u0438\u043d\u0433\u043b") -> SManga.COMPLETED
-
-            badgesText.contains("\u043f\u0440\u043e\u0434\u043e\u043b\u0436") || badgesText.contains("\u043d\u0430\u0447\u0430\u0442") -> SManga.ONGOING
-
-            badgesText.contains("\u0437\u0430\u0432\u0435\u0440\u0448") -> if (badgesText.contains("\u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0435\u043d")) {
-                SManga.COMPLETED
-            } else {
-                SManga.PUBLISHING_FINISHED
-            }
-
-            badgesText.contains("\u043f\u0440\u0438\u043e\u0441\u0442") || badgesText.contains("\u0437\u0430\u043c\u043e\u0440\u043e\u0436") -> SManga.ON_HIATUS
-
-            else -> SManga.UNKNOWN
-        }
-
-        manga.thumbnail_url = infoElement.selectFirst("img")?.let { img ->
-            img.attr("data-full")
-                .ifEmpty { img.attr("data-original") }
-                .ifEmpty { img.attr("src") }
-        }.orEmpty()
-
-        return manga
-    }
-
-    private fun mangaDetailsParseModern(document: Document): SManga {
         val manga = SManga.create()
 
-        manga.title = document.selectFirst(".cr-hero-names__main")?.text()
-            ?: document.selectFirst("meta[itemprop=name]")?.attr("content").orEmpty()
+        manga.title =
+            document.selectFirst(".cr-hero-names__main")?.text() ?: document.selectFirst("meta[itemprop=name]")?.attr("content").orEmpty()
 
-        val details = linkedMapOf<String, String>()
-        document.select(".cr-info-details__item").forEach { item ->
-            val title = item.selectFirst(".cr-info-details__title")?.text()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-            val value = item.selectFirst(".cr-info-details__content")?.text()?.trim().orEmpty()
+        val details = mutableMapOf<String, String>()
+        document.selectFirst(".cr-hero .cr-info-details")?.children()?.forEach { element ->
+            val title = element.selectFirst(".cr-info-details-item__title")?.text()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+            val value = element.selectFirst(".cr-info-details-item__status")?.text()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+
             if (title.isNotEmpty() && value.isNotEmpty() && !details.containsKey(title)) {
                 details[title] = value
             }
         }
 
-        val releaseStatus = details.entries.firstOrNull { it.key.contains("\u0432\u044b\u043f\u0443\u0441\u043a") }
-            ?.value
-            ?.lowercase(Locale.ROOT)
-            .orEmpty()
-        val translationStatus = details.entries.firstOrNull { it.key.contains("\u043f\u0435\u0440\u0435\u0432\u043e\u0434") }
-            ?.value
-            ?.lowercase(Locale.ROOT)
-            .orEmpty()
+        val releaseStatus = details["выпуск"] ?: ""
+        val translationStatus = details["перевод"] ?: ""
 
         manga.status = when {
-            releaseStatus.contains("\u043f\u0440\u043e\u0434\u043e\u043b\u0436") || releaseStatus.contains("\u043d\u0430\u0447\u0430\u0442") -> SManga.ONGOING
+            releaseStatus.contains("продолж") || releaseStatus.contains("начат") -> SManga.ONGOING
 
-            releaseStatus.contains("\u0437\u0430\u0432\u0435\u0440\u0448") -> if (translationStatus.contains("\u0437\u0430\u0432\u0435\u0440\u0448")) {
+            releaseStatus.contains("заверш") -> if (translationStatus.contains("заверш")) {
                 SManga.COMPLETED
             } else {
                 SManga.PUBLISHING_FINISHED
             }
 
-            releaseStatus.contains("\u043f\u0440\u0438\u043e\u0441\u0442") || releaseStatus.contains("\u0437\u0430\u043c\u043e\u0440\u043e\u0436") -> SManga.ON_HIATUS
+            releaseStatus.contains("приост") || releaseStatus.contains("заморож") -> SManga.ON_HIATUS
 
             else -> SManga.UNKNOWN
         }
@@ -301,108 +204,77 @@ abstract class GroupLe(
         val artistNames = mutableListOf<String>()
         document.select(".cr-main-person-item").forEach { person ->
             val role = person.selectFirst(".cr-main-person-item__role")?.text()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-            val name = person.selectFirst(".cr-main-person-item__name a, .cr-main-person-item__name")
-                ?.text()
-                ?.trim()
-                .orEmpty()
+            val name = person.selectFirst(".cr-main-person-item__name a, .cr-main-person-item__name")?.text()?.trim()
 
-            if (name.isBlank()) return@forEach
+            if (name.isNullOrBlank()) return@forEach
             when {
-                role.contains("\u0430\u0432\u0442\u043e\u0440") || role.contains("\u0441\u0446\u0435\u043d\u0430\u0440") -> authorNames += name
-                role.contains("\u0445\u0443\u0434\u043e\u0436") || role.contains("\u0438\u043b\u043b\u044e\u0441\u0442") -> artistNames += name
+                role.contains("автор") || role.contains("сценар") -> authorNames += name
+                role.contains("худож") || role.contains("иллюст") -> artistNames += name
             }
         }
         manga.author = authorNames.distinct().joinToString(", ").takeIf { it.isNotBlank() }
         manga.artist = artistNames.distinct().joinToString(", ").takeIf { it.isNotBlank() }
 
-        val category = document.selectFirst(".cr-hero-short-details a[href*=\"/list/category/\"]")
-            ?.text()
-            .orEmpty()
+        val category = document.selectFirst(".cr-hero-short-details a[href*=\"/list/category/\"]")?.text().orEmpty()
         val age = normalizeAgeRating(
-            document.selectFirst(".cr-hero-short-details a[href*=\"/list/limitation/\"]")
-                ?.text()
-                .orEmpty(),
+            document.selectFirst(".cr-hero-short-details a[href*=\"/list/limitation/\"]")?.text().orEmpty(),
         )
         val tags = document.select(".cr-tags .cr-tags__item").mapNotNull { tag ->
             tag.select("span").last()?.text()?.trim()?.takeIf { it.isNotEmpty() }
         }
 
-        manga.genre = listOf(category, age)
-            .plus(tags)
-            .map { it.trim().lowercase(Locale.ROOT) }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .joinToString(", ")
+        manga.genre =
+            listOf(category, age).asSequence().plus(tags).map { it.trim().lowercase(Locale.ROOT) }.filter { it.isNotEmpty() }.distinct()
+                .joinToString(", ")
 
-        val altNames = document.select("#alt-names-dialog .modal-body .py-1")
-            .mapNotNull { it.text().trim().takeIf(String::isNotBlank) }
-            .distinct()
-        val altNameText = if (altNames.isEmpty()) {
-            ""
-        } else {
-            "Alternative names:\n${altNames.joinToString(" / ")}\n\n"
-        }
+        val altNames =
+            document.select("#alt-names-dialog .modal-body .py-1").mapNotNull { it.text().trim().takeIf(String::isNotBlank) }.distinct()
+                .takeIf { it.isNotEmpty() }?.let { "Альтернативные названия:\n${it.joinToString(" / ")}\n\n" } ?: ""
 
-        val ratingValue = document.selectFirst(".cr-hero-rating__main .cr-hero-rating__value")
-            ?.text()
-            ?.replace(",", ".")
-            ?.toFloatOrNull()
-            ?: 0f
-        val ratingVotes = document.selectFirst(".cr-hero-rating__votes")
-            ?.text()
-            ?.filter { it.isDigit() }
-            .orEmpty()
-            .ifBlank { "0" }
-        val ratingSummary = if (ratingValue > 0f) {
-            "${ratingToStars(ratingValue)} $ratingValue (votes: $ratingVotes)\n"
-        } else {
-            ""
-        }
+        val ratingValue = document.selectFirst(".cr-hero-rating .cr-hero-rating__value")?.text()?.toFloatOrNull()
 
-        val descriptionText = document.selectFirst(".cr-description__content")
-            ?.text()
-            .orEmpty()
-        manga.description = ratingSummary + altNameText + descriptionText
+        val ratingSummary = ratingValue?.let { rating ->
+            val ratingVotes = document.selectFirst(".cr-hero-rating__text")?.text()?.filter { it.isDigit() } ?: "0"
 
-        val thumbElement = document.selectFirst(".cr-hero-poster__img")
-            ?: document.selectFirst(".cr-hero-overlay__bg")
+            "${ratingToStars(rating)} $rating (голосов: $ratingVotes)\n"
+        } ?: ""
+
+        val descriptionText = document.selectFirst(".cr-description__content")?.text().orEmpty()
+
+        manga.description = ratingSummary + altNames + descriptionText
+
+        val thumbElement = document.selectFirst(".cr-hero-poster__img") ?: document.selectFirst(".cr-hero-overlay__bg")
         manga.thumbnail_url = thumbElement?.let { element ->
-            element.attr("src")
-                .ifEmpty { element.attr("data-src") }
-                .ifEmpty { element.attr("data-original") }
+            element.attr("src").ifEmpty { element.attr("data-src") }.ifEmpty { element.attr("data-original") }
                 .ifEmpty { element.attr("data-bg") }
         }.orEmpty()
 
         return manga
     }
 
-    private fun normalizeAgeRating(rawAgeValue: String): String = when (rawAgeValue) {
+    protected fun normalizeAgeRating(rawAgeValue: String): String = when (rawAgeValue) {
         "NC-17", "R18+" -> "18+"
         "R", "G", "PG" -> "16+"
         "PG-13" -> "12+"
         else -> rawAgeValue
     }
 
-    private fun ratingToStars(ratingValue: Float): String = when {
-        ratingValue > 9.5f -> "*****"
-        ratingValue > 8.5f -> "****+"
-        ratingValue > 7.5f -> "****-"
-        ratingValue > 6.5f -> "***+-"
-        ratingValue > 5.5f -> "***--"
-        ratingValue > 4.5f -> "**+--"
-        ratingValue > 3.5f -> "**---"
-        ratingValue > 2.5f -> "*+---"
-        ratingValue > 1.5f -> "*----"
-        ratingValue > 0.5f -> "+----"
-        else -> "-----"
+    protected fun ratingToStars(ratingValue: Float): String = when {
+        ratingValue > 9.5f -> "★★★★★"
+        ratingValue > 8.5f -> "★★★★✬"
+        ratingValue > 7.5f -> "★★★★☆"
+        ratingValue > 6.5f -> "★★★✬☆"
+        ratingValue > 5.5f -> "★★★☆☆"
+        ratingValue > 4.5f -> "★★✬☆☆"
+        ratingValue > 3.5f -> "★★☆☆☆"
+        ratingValue > 2.5f -> "★✬☆☆☆"
+        ratingValue > 1.5f -> "★☆☆☆☆"
+        ratingValue > 0.5f -> "✬☆☆☆☆"
+        else -> "☆☆☆☆☆"
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.status != SManga.LICENSED) {
-        client.newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, manga)
-            }
+        client.newCall(chapterListRequest(manga)).asObservableSuccess().map { response -> chapterListParse(response, manga) }
     } else {
         Observable.error(java.lang.Exception("Лицензировано - Нет глав"))
     }
@@ -416,11 +288,7 @@ abstract class GroupLe(
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val document = response.asJsoup()
 
-        if (document.select(".user-avatar").isEmpty() &&
-            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") || contains("RuMix") }
-        ) {
-            throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
-        }
+        authGuard(document)
 
         val chapterSearchParams = getChapterSearchParams(document)
 
@@ -430,8 +298,8 @@ abstract class GroupLe(
     override fun chapterListSelector() = "tr.item-row:has(td > a):has(td.date:not(.text-info))"
 
     private fun chapterFromElement(element: Element, manga: SManga, chapterSearchParams: String): SChapter {
-        val urlElement = element.select("a.chapter-link").first()!!
-        val chapterInf = element.select("td.item-title").first()!!
+        val urlElement = element.selectFirst("a.chapter-link")!!
+        val chapterInf = element.selectFirst("td.item-title")!!
         val urlText = urlElement.text()
 
         val chapter = SChapter.create()
@@ -454,29 +322,13 @@ abstract class GroupLe(
 
         chapter.chapter_number = chapterInf.attr("data-num").toFloat() / 10
 
-        chapter.date_upload = element.select("td.d-none").last()?.text()?.let {
-            if (it.isEmpty()) {
-                0L
-            } else {
-                try {
-                    SimpleDateFormat("dd.MM.yy", Locale.US).parse(it)?.time ?: 0L
-                } catch (e: ParseException) {
-                    SimpleDateFormat("dd/MM/yy", Locale.US).parse(it)?.time ?: 0L
-                }
-            }
-        } ?: 0
+        chapter.date_upload = dateFormat.tryParse(element.select("td.d-none").last()?.text())
         return chapter
     }
 
     protected open fun chapterScanlatorFromElement(chapterLinkElement: Element, chapterRowElement: Element): String {
         val translatorElement = chapterLinkElement.attr("title")
-        return if (translatorElement.isNotBlank()) {
-            translatorElement
-                .replace("(Переводчик),", "&")
-                .removeSuffix(" (Переводчик)")
-        } else {
-            ""
-        }
+        return translatorElement.takeIf { it.isNotBlank() }?.replace("(Переводчик),", "&")?.removeSuffix(" (Переводчик)") ?: ""
     }
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
@@ -489,16 +341,14 @@ abstract class GroupLe(
                 if (chapter.name.substringAfter("Экстра").trim().isEmpty()) {
                     chapter.name = chapter.name.replaceFirst(
                         " ",
-                        " - " + DecimalFormat("#,###.##").format(chapter.chapter_number)
-                            .replace(",", ".") + " ",
+                        " - " + DecimalFormat("#,###.##").format(chapter.chapter_number).replace(",", ".") + " ",
                     )
                 }
             }
 
             single.containsMatchIn(chapter.name) -> {
                 if (chapter.name.substringAfter("Сингл").trim().isEmpty()) {
-                    chapter.name = DecimalFormat("#,###.##").format(chapter.chapter_number)
-                        .replace(",", ".") + " " + chapter.name
+                    chapter.name = DecimalFormat("#,###.##").format(chapter.chapter_number).replace(",", ".") + " " + chapter.name
                 }
             }
         }
@@ -507,14 +357,9 @@ abstract class GroupLe(
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
+        authGuard(document)
+
         val html = document.html()
-
-        if (document.select(".user-avatar").isEmpty() &&
-            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") || contains("RuMix") }
-
-        ) {
-            throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
-        }
 
         val readerMark = when {
             html.contains("rm_h.readerInit(") -> "rm_h.readerInit("
@@ -578,8 +423,6 @@ abstract class GroupLe(
         return GET(page.imageUrl!!, imgHeader)
     }
 
-    private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl/$id", headers)
-
     override fun fetchSearchManga(
         page: Int,
         query: String,
@@ -587,57 +430,50 @@ abstract class GroupLe(
     ): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            val titleId = url.pathSegments.firstOrNull()?.takeIf { it.isNotEmpty() }
-                ?: throw Exception("Unsupported url")
+            val titleId = url.pathSegments.firstOrNull()?.takeIf { it.isNotEmpty() } ?: throw Exception("Unsupported url")
             return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
         }
 
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client.newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
+            client.newCall(GET("$baseUrl/$realQuery", headers)).asObservableSuccess().map { response ->
+                val details = mangaDetailsParse(response)
+                details.url = "/$realQuery"
+                MangasPage(listOf(details), false)
+            }
         } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
+            client.newCall(searchMangaRequest(page, query, filters)).asObservableSuccess().map(::searchMangaParse)
+        }
+    }
+
+    private fun authGuard(document: Document) {
+        if (document.select(".user-avatar").isEmpty() && isNeedAuth) {
+            throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
         }
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        screen.addPreference(screen.editTextPreference(UAGENT_TITLE, UAGENT_DEFAULT, uagent))
-    }
-
-    private fun androidx.preference.PreferenceScreen.editTextPreference(
-        title: String,
-        default: String,
-        value: String,
-    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
-        key = title
-        this.title = title
-        summary = value
-        this.setDefaultValue(default)
-        dialogTitle = title
-        setOnPreferenceChangeListener { _, newValue ->
-            try {
-                val res = preferences.edit().putString(title, newValue as String).commit()
-                Toast.makeText(
-                    context,
-                    "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
-                    Toast.LENGTH_LONG,
-                ).show()
-                res
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
+        EditTextPreference(screen.context).apply {
+            key = UAGENT_TITLE
+            title = UAGENT_TITLE
+            summary = uagent
+            setDefaultValue(UAGENT_DEFAULT)
+            dialogTitle = UAGENT_TITLE
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val res = preferences.edit().putString(UAGENT_TITLE, newValue as String).commit()
+                    Toast.makeText(
+                        screen.context,
+                        "Для смены User-Agent необходимо перезапустить приложение с полной остановкой.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    res
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
             }
-        }
+        }.let(screen::addPreference)
     }
 
     companion object {

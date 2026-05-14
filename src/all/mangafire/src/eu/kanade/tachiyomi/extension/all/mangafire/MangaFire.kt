@@ -196,8 +196,8 @@ class MangaFire(
 
     override fun getFilterList() = FilterList(
         TypeFilter(),
-        GenreFilter(),
         GenreModeFilter(),
+        GenreFilter(),
         StatusFilter(),
         YearFilter(),
         MinChapterFilter(),
@@ -226,6 +226,23 @@ class MangaFire(
 
                 selectFirst("h6")?.let { it: Element ->
                     append("\n\nAlternative title: ${it.text()}")
+                }
+
+                val minInfo = selectFirst(".min-info")
+                minInfo?.selectFirst("a[href*=/type/]")?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nType: $it")
+                }
+                selectFirst(".meta span:contains(Published) + span")?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nPublished: $it")
+                }
+                selectFirst(".meta span:contains(Mangazine) + span")?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nMagazines: $it")
+                }
+                minInfo?.selectFirst("span:has(b:contains(MAL))")?.text()?.replace(" MAL", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nMAL Score: $it")
+                }
+                minInfo?.selectFirst(".fa-folder-bookmark")?.parent()?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nBookmarks: $it")
                 }
             }.trim()
 
