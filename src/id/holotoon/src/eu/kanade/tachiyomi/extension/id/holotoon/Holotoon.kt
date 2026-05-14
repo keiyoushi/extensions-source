@@ -55,7 +55,9 @@ class Holotoon : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("a._lc")
+        val mangas = document.select("a._lc, a[href*=/comic/]").filter {
+            it.parents().none { p -> p.attr("aria-hidden") == "true" || p.attr("style").contains("display:none", true) }
+        }
             .distinctBy { it.attr("href") }
             .mapNotNull { element ->
                 val titleText = element.selectFirst("h3")?.text()
@@ -103,7 +105,7 @@ class Holotoon : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        // Migration from old web urls to the new api based
+        // Migration from old web urls to the new one
         if (manga.url.contains("/komik/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
@@ -114,10 +116,12 @@ class Holotoon : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1._tt")?.text() ?: document.selectFirst("h1.text-3xl")!!.text()
+            title = document.selectFirst("h1._tt")?.text() ?: document.selectFirst("h1")?.text() ?: ""
             thumbnail_url = document.selectFirst("div.aspect-\\[3\\/4\\] img")?.absUrl("src")
             author = document.selectFirst("span:contains(Uploaded by:) a")?.text()
-            description = document.selectFirst("div#_sd")?.text()
+            description = document.select("#synopsis-wrapper > div, #synopsis-text, div#_ds, div#_sd").filter {
+                it.parents().none { p -> p.attr("aria-hidden") == "true" } && !it.text().contains("Loading", true)
+            }.firstNotNullOfOrNull { it.text() }
             genre = document.select("a[href*=/browse?genre=]").joinToString(", ") { it.text() }
 
             status = document.selectFirst(".flex.items-start.gap-3 span.border")?.text()?.lowercase()?.let {
@@ -136,18 +140,28 @@ class Holotoon : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div#_cls a._rc").map { element ->
+        return document.select("a[href*=/read/]").filter {
+            it.parents().none { p -> p.attr("aria-hidden") == "true" || p.attr("style").contains("display:none", true) }
+        }.map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                name = element.select("._tc").joinToString(" ") { it.text() }
-                date_upload = parseDate(element.selectFirst("span.text-right")?.text())
+                val spans = element.select("span")
+                name = spans.filter {
+                    val className = it.className()
+                    !className.contains("text-right") &&
+                        !className.contains("badge") &&
+                        !className.contains("nums") &&
+                        !it.hasAttr("data-user-href") &&
+                        !it.hasAttr("data-team-href")
+                }.joinToString(" ") { it.text() }.trim()
+                date_upload = parseDate(spans.filter { it.hasClass("text-right") }.firstOrNull()?.text())
             }
-        }
+        }.filter { it.name.isNotEmpty() }
     }
 
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        // Migration from old web urls to the new api based
+        // Migration from old web urls to the new one
         if (chapter.url.contains("/komik/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
@@ -159,7 +173,7 @@ class Holotoon : HttpSource() {
         val document = response.asJsoup()
         val referer = response.request.url.toString()
 
-        val pageElements = document.select("#reader-pages [data-sec-src], #reader-pages img[src]:not([src='']), #reader-pages img[data-src]")
+        val pageElements = document.select("#reader-pages img[src], #reader-pages img[data-src], #reader-pages [data-sec-src]")
 
         if (pageElements.isEmpty()) {
             val title = document.title()
@@ -178,7 +192,7 @@ class Holotoon : HttpSource() {
                 element.absUrl("data-sec-src") + "#" + xorKey
             } else {
                 val src = element.attr("abs:data-src").takeIf { it.isNotEmpty() } ?: element.absUrl("src")
-                src.takeIf { it.isNotEmpty() }
+                src.takeIf { it.isNotEmpty() && !it.contains("avatar") && !it.contains("cover") }
             }
         }.distinct().mapIndexed { index, url ->
             Page(index, url = referer, imageUrl = url)
