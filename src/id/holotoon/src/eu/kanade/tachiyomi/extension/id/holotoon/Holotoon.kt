@@ -32,6 +32,10 @@ class Holotoon : HttpSource() {
 
     override val supportsLatest = true
 
+    // Bump versionId to 2 because the website was completely redesigned
+    // and some comic slugs have changed, requiring a full library migration.
+    override val versionId = 2
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
         .rateLimit(3)
@@ -55,7 +59,7 @@ class Holotoon : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("a._lc, a[href*=/comic/]").filter {
+        val mangas = document.select("a[href*=/comic/]").filter {
             it.parents().none { p -> p.attr("aria-hidden") == "true" || p.attr("style").contains("display:none", true) }
         }
             .distinctBy { it.attr("href") }
@@ -118,7 +122,9 @@ class Holotoon : HttpSource() {
         return SManga.create().apply {
             title = document.selectFirst("h1._tt")?.text() ?: document.selectFirst("h1")?.text() ?: ""
             thumbnail_url = document.selectFirst("div.aspect-\\[3\\/4\\] img")?.absUrl("src")
-            author = document.selectFirst("span:contains(Uploaded by:) a")?.text()
+            author = document.selectFirst("span:contains(Author:) > span")?.text()
+                ?: document.selectFirst("span:contains(Uploaded by:) a")?.text()
+            artist = document.selectFirst("span:contains(Artist:) > span")?.text()
             description = document.select("#synopsis-wrapper > div, #synopsis-text, div#_ds, div#_sd").filter {
                 it.parents().none { p -> p.attr("aria-hidden") == "true" } && !it.text().contains("Loading", true)
             }.firstNotNullOfOrNull { it.text() }
