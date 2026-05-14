@@ -13,14 +13,6 @@ fun getE621FilterList(categoryPref: String): FilterList = FilterList(
     Filter.Separator(),
     TagGroupFilter("Tag Search Options"),
     Filter.Header(""),
-    // Filter.Header("Search by pool name (Pools mode only)"),
-    // DescriptionFilter(),
-    // OrderFilter(),
-    // CategoryFilter(getDefaultCategoryIndex(categoryPref)),
-    // ActiveOnlyFilter(),
-    // Filter.Separator(),
-    // Filter.Header("Search by tags (Tags mode only)"),
-    // TagsFilter(),
 )
 
 class PoolGroupFilter(displayName: String, categoryPref: String) :
@@ -34,9 +26,8 @@ class PoolGroupFilter(displayName: String, categoryPref: String) :
             ActiveOnlyFilter(),
         ),
     ) {
-    // override val state: List<Filter.State> get() = super.state
-    fun getDescription() = (state[1] as DescriptionFilter).state.trim() // state[1].state.trim()
-    fun getOrder() = (state[2] as OrderFilter).toUriPart() // state[2].state.toUriPart()
+    fun getDescription() = (state[1] as DescriptionFilter).state.trim()
+    fun getOrder() = (state[2] as OrderFilter).toUriPart()
     fun getCategory() = (state[3] as CategoryFilter).toUriPart()
     fun getActiveOnly() = (state[4] as ActiveOnlyFilter).state
 }

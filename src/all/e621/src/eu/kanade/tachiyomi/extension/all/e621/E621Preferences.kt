@@ -35,7 +35,7 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         key = FIRST_END_PREF
         title = "Enable First Page/Last Page filter for Popular"
         summary = "Searches pools by their First and Last page. Can improve results, but will also hide posts that don't utilize those tags. (Tag Search Mode only)"
-        setDefaultValue(true)
+        setDefaultValue(false)
     }.also(screen::addPreference)
 
     ListPreference(screen.context).apply {
@@ -61,10 +61,6 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         setDefaultValue("20")
     }.also(screen::addPreference)
 
-    // PreferenceCategory { title = "Header" }.also(screen::addPreference)
-    // Preference(screen.context).apply { summary = "text" }.also(screen::addPreference)
-    // PreferenceCategory().apply { summary = "text" }.also(screen::addPreference)
-
     ListPreference(screen.context).apply {
         key = CATEGORY_PREF
         title = "Pool category filter for Popular and Latest (No Tag Mode)"
@@ -75,11 +71,11 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     }.also(screen::addPreference)
 }
 
-val SharedPreferences.firstEndPref: String
-    get() = if (getBoolean(FIRST_END_PREF, true)) "( ~first_page ~end_page )" else ""
-
 val SharedPreferences.searchModePref: String
     get() = if (getBoolean(TAG_MODE_ENABLE_PREF, true)) "tags" else "pools"
+
+val SharedPreferences.firstEndPref: String
+    get() = if (getBoolean(FIRST_END_PREF, false)) "( ~first_page ~end_page )" else ""
 
 val SharedPreferences.splitChaptersPref: String
     get() = getString(SPLIT_CHAPTERS_PREF, "chapters")!!
