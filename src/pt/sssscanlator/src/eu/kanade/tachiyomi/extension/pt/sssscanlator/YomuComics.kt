@@ -122,12 +122,7 @@ class YomuComics : HttpSource() {
             .set("RSC", "1")
             .build()
 
-        val cleanUrl = when {
-            chapterPageUrl.startsWith("http") -> chapterPageUrl.toHttpUrl()
-            else -> "$baseUrl$chapterPageUrl".toHttpUrl()
-        }
-
-        return GET(cleanUrl.toString(), requestHeaders)
+        return GET(chapterPageUrl, requestHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -200,7 +195,7 @@ class YomuComics : HttpSource() {
         return SeriesPageData(manga, chapters)
     }
 
-    private data class SeriesPageData(
+    private class SeriesPageData(
         val manga: SManga,
         val chapters: List<SChapter>,
     )
@@ -212,8 +207,9 @@ class YomuComics : HttpSource() {
         const val DEFAULT_SORT = "popular"
     }
 
-    private val bibliotecaHeaders
-        get() = headers.newBuilder()
+    private val bibliotecaHeaders by lazy {
+        headers.newBuilder()
             .set("Referer", "$baseUrl/biblioteca")
             .build()
+    }
 }
