@@ -309,10 +309,10 @@ class ComX :
         val verifyReq = Request.Builder()
             .url("$baseUrl/_v")
             .post(verifyBody)
+            .headers(headers)
             .header("X-Requested-With", "XMLHttpRequest")
             .header("Referer", challenge.request.url.toString())
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .headers(headers)
             .build()
         chain.proceed(verifyReq).close()
 
