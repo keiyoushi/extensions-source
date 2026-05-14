@@ -181,7 +181,7 @@ abstract class MadTheme(
 
             val altNames = document.selectFirst(".detail h2")?.text()
                 ?.split(',', ';')
-                ?.mapNotNull { it -> it.trim().takeIf { it != title && it.isNotEmpty() } }
+                ?.mapNotNull { it.trim().takeIf { it != title && it.isNotEmpty() } }
                 ?: emptyList()
 
             description = buildString {
@@ -248,7 +248,9 @@ abstract class MadTheme(
         val requestUrl = response.request.url.toString()
 
         if (requestUrl.contains("/api/manga/") || requestUrl.contains("/service/backend/chaplist/")) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
+            return document.select(chapterListSelector())
+                .map { chapterFromElement(it) }
+                .distinctBy { it.url }
         }
 
         var chaptersList = document.select(chapterListSelector()).map { chapterFromElement(it) }
@@ -273,16 +275,22 @@ abstract class MadTheme(
             chaptersList = (chaptersList.subList(0, cutIndex) + apiChapters)
         }
 
-        return chaptersList
+        // distinctBy acts as a foolproof safeguard against any malformed URLs that fail to merge properly
+        return chaptersList.distinctBy { it.url }
     }
 
     open fun chapterListSelector(): String = "#chapter-list > li"
 
     open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         // Not using setUrlWithoutDomain() to support external chapters
-        url = element.selectFirst("a")!!
-            .absUrl("href")
-            .removePrefix(baseUrl)
+        val rawUrl = element.selectFirst("a")!!.absUrl("href")
+
+        // Strip the baseUrl and heavily normalize double slashes to prevent duplicate mismatching
+        url = if (rawUrl.startsWith(baseUrl)) {
+            rawUrl.substringAfter(baseUrl).replace(Regex("/{2,}"), "/")
+        } else {
+            rawUrl
+        }
 
         name = element.selectFirst(".chapter-title")!!.text()
         date_upload = parseChapterDate(element.selectFirst(".chapter-update")?.text())
