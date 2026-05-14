@@ -174,7 +174,7 @@ class BookWalker :
             headers,
             SearchRequestDto(
                 limitOffset = LimitOffsetDto(PAGE_SIZE, PAGE_SIZE * (page - 1)),
-                sort = SortDto.LAST_UPDATED,
+                sort = SortDto.NEWEST,
                 formats = listOf(SeriesFormat.MANGA),
                 filters = listOf(),
                 searchDomain = SearchPageTypeDto(SearchPageType.Browse()),
@@ -230,7 +230,9 @@ class BookWalker :
         ) { details, volumeList ->
             details.info.toSManga(1200).apply {
                 status = details.status
-                description = "${details.tagline}\n\n${details.description}"
+                description = tagToMarkdown.fold("${details.tagline}\n\n${details.description}") { acc, (from, to) ->
+                    acc.replace(from, to)
+                }.trim()
                 author = details.metadata.find { it.name == "AUTHOR" }?.contents?.joinToString { it.name }
                 artist = details.metadata.find { it.name == "ARTIST" }?.contents?.joinToString { it.name }
 
@@ -269,6 +271,10 @@ class BookWalker :
             responses.flatMap { response ->
                 val chapters = response.parseAsProto<ChaptersResponseDto>().chapters
                 chapters.mapNotNull {
+                    if (!it.releaseInfo.isAvailable) {
+                        return@mapNotNull null
+                    }
+
                     SChapter.create().apply {
                         url = it.getUrl()
                         val suffix =
@@ -352,6 +358,13 @@ class BookWalker :
         private const val PURCHASE_ICON = "\uD83D\uDCB5" // dollar bill emoji
         private const val PREORDER_ICON = "\uD83D\uDD51" // two-o-clock emoji
         private const val FREE_ICON = "\uD83C\uDF81" // wrapped present emoji
+
+        private val tagToMarkdown = listOf(
+            "<BR>".toRegex(RegexOption.IGNORE_CASE) to "\n",
+            "</?P>".toRegex(RegexOption.IGNORE_CASE) to "\n",
+            "</?B>".toRegex(RegexOption.IGNORE_CASE) to "**",
+            "</?I>".toRegex(RegexOption.IGNORE_CASE) to "_",
+        )
     }
 }
 

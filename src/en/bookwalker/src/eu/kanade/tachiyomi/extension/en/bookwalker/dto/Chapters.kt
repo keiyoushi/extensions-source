@@ -28,7 +28,7 @@ class ChapterDto(
     @ProtoNumber(8) val currentPrice: Int = 0,
     @ProtoNumber(9) val regularPrice: Int = 0,
     // 0 = unowned, 1 = owned
-    @ProtoNumber(10) private val _isOwned: Int,
+    @ProtoNumber(10) private val _isOwned: Int = 0,
 ) {
     val isOwned: Boolean
         get() = _isOwned == 1
@@ -44,8 +44,12 @@ class ChapterNumberDto(
 class ReleaseInfoDto(
     // Unix time in seconds
     @ProtoNumber(1) val releaseDate: WrapperDto<Long>,
+    @ProtoNumber(2) private val _isAvailable: Int = 0,
     @ProtoNumber(3) private val _isReleased: Int = 0,
 ) {
+    val isAvailable: Boolean
+        get() = _isAvailable == 1
+
     val isReleased: Boolean
         get() = _isReleased == 1
 }
