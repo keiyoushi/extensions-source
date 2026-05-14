@@ -45,7 +45,6 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -498,6 +497,28 @@ abstract class Japscan :
             }
         }
 
+        // Pick the reader driver from the chapter URL's first path segment. Japscan
+        // shapes every chapter URL as `/<type>/<slug>/<num>/` (the `CHAPTER_PATH_TYPES`
+        // set above curates the valid types), and the type maps cleanly to a reader
+        // format: `manhwa` / `manhua` are vertical/long-strip (webtoon); `manga`,
+        // `bd`, `comic` are paginated.
+        //
+        // We do NOT detect from the server-rendered HTML: the reader DOM
+        // (`#full-reader` / `#single-reader` and the `d-none` toggle) is mounted
+        // client-side by the reader JS, so Jsoup on the initial HTML returns
+        // "paginated" for every chapter — including manhwa.
+        //
+        // The two drivers need incompatible JS hooks: paginated uses a minimal
+        // `URL.createObjectURL` capture and would be tripped by the shadow-DOM /
+        // drawImage / RAF / viewport overrides the webtoon driver needs, so we
+        // MUST commit to one driver before any hook is installed.
+        val urlSegment = chapter.url.trimStart('/').substringBefore('/').lowercase()
+        val isWebtoon = urlSegment == "manhwa" || urlSegment == "manhua"
+        Log.d(
+            "Japscan",
+            "[wv-kt] reader mode hint from URL segment='$urlSegment' → ${if (isWebtoon) "webtoon" else "paginated"}",
+        )
+
         handler.post {
             val innerWv = WebView(context)
 
@@ -513,21 +534,25 @@ abstract class Japscan :
             // JS layer (navigator.userAgent / innerWidth / matchMedia / etc.)
             // in the page-started hook below.
             innerWv.settings.userAgentString = headers["User-Agent"]
-            // Use wide viewport so window.innerWidth reflects the layout width
-            // we force on the WebView (instead of the device's mobile width).
-            innerWv.settings.useWideViewPort = true
-            innerWv.settings.loadWithOverviewMode = false
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-            // Force a real viewport size on the detached WebView so the page actually
-            // gets a non-zero layout. Without this, `document.documentElement.clientWidth`
-            // is 0, no element gets bounding-rect dimensions, and the descrambler only
-            // renders the top tile of each page (everything past the first viewport
-            // height stays unmaterialized).
-            innerWv.measure(
-                View.MeasureSpec.makeMeasureSpec(WEBVIEW_VIEWPORT_WIDTH, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(WEBVIEW_VIEWPORT_HEIGHT, View.MeasureSpec.EXACTLY),
-            )
-            innerWv.layout(0, 0, WEBVIEW_VIEWPORT_WIDTH, WEBVIEW_VIEWPORT_HEIGHT)
+            if (isWebtoon) {
+                // Webtoon-only: wide viewport so window.innerWidth reflects the
+                // layout width we force on the WebView. Without this the
+                // descrambler picks a mobile-tile-per-page path that only
+                // materialises one tile and stalls.
+                innerWv.settings.useWideViewPort = true
+                innerWv.settings.loadWithOverviewMode = false
+                // Force a real viewport size on the detached WebView so the page actually
+                // gets a non-zero layout. Without this, `document.documentElement.clientWidth`
+                // is 0, no element gets bounding-rect dimensions, and the descrambler only
+                // renders the top tile of each page (everything past the first viewport
+                // height stays unmaterialized).
+                innerWv.measure(
+                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_VIEWPORT_WIDTH, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_VIEWPORT_HEIGHT, View.MeasureSpec.EXACTLY),
+                )
+                innerWv.layout(0, 0, WEBVIEW_VIEWPORT_WIDTH, WEBVIEW_VIEWPORT_HEIGHT)
+            }
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
             // Forward in-page console.log calls to Logcat (tag "Japscan") so the JS
@@ -554,6 +579,44 @@ abstract class Japscan :
                     // and sets `__poisoned = true`, which makes the reader refuse to render.
                     // We therefore (a) override attachShadow only, (b) mask its `.toString` so it
                     // still reads as native, and (c) leave atob/replace/fetch/drawImage alone.
+                    //
+                    // Webtoon-only payload below: the wide-spectrum hook set is required for the
+                    // descrambler to paint every tile of a long-strip page. The paginated reader
+                    // refuses to deliver its payload if these same hooks are present (the
+                    // `__poisoned = true` bot-detect trips on too many tampered built-ins), so
+                    // the paginated path uses a separate minimal hook installed in the `else`
+                    // branch further down.
+                    if (!isWebtoon) {
+                        // Paginated mode: minimal createObjectURL capture, ported verbatim
+                        // from the fix/japscan branch. The descrambler surfaces each
+                        // composited page as a `blob:` URL via URL.createObjectURL —
+                        // capturing the latest one per page-click is enough.
+                        view?.evaluateJavascript(
+                            $$"""
+                                (function(){
+                                    if (window.__japscanHooked) return;
+                                    window.__japscanHooked = true;
+                                    window.__japscanLastBlob = null;
+                                    var _orig = URL.createObjectURL.bind(URL);
+                                    URL.createObjectURL = function(obj){
+                                        var u = _orig(obj);
+                                        try {
+                                            if (obj && obj.type && /^image\//.test(obj.type)) {
+                                                window.__japscanLastBlob = u;
+                                            }
+                                        } catch(e) {}
+                                        return u;
+                                    };
+                                    try {
+                                        URL.createObjectURL.toString = function(){
+                                            return 'function createObjectURL() { [native code] }';
+                                        };
+                                    } catch(e) {}
+                                })();
+                            """.trimIndent(),
+                        ) {}
+                        return
+                    }
                     view?.evaluateJavascript(
                         $$"""
                             (function(){
@@ -822,13 +885,124 @@ abstract class Japscan :
                     // we're detached. resumeTimers is global to all WebViews in the process.
                     view?.onResume()
                     view?.resumeTimers()
-                    // Drive the reader through every chapter page and composite each page out
-                    // of the shadow-DOM canvases. The page is rendered as a stack of <canvas>
-                    // tiles inside `<w-f1db5>` elements with a (formerly closed, now forced
-                    // open by the attachShadow hook) shadow root. We walk every canvas in the
-                    // page container, project each onto a fresh master canvas at the natural
-                    // tile resolution using bounding-rect coordinates, and ship the result
-                    // through the JS interface as a data: URI.
+                    if (!isWebtoon) {
+                        // Paginated driver, ported verbatim from the fix/japscan branch.
+                        // Drives the reader through every page via the #block-right /
+                        // #block-left click-zones; the createObjectURL hook installed in
+                        // onPageStarted gives us one blob per page in `__japscanLastBlob`.
+                        view?.evaluateJavascript(
+                            $$"""
+                                (async function(){
+                                    var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+
+                                    async function saveBlobUrl(u){
+                                        if (!u) return false;
+                                        try {
+                                            var r = await fetch(u);
+                                            var b = await r.blob();
+                                            var d = await new Promise(function(res, rej){
+                                                var fr = new FileReader();
+                                                fr.onload = function(){ res(fr.result); };
+                                                fr.onerror = rej;
+                                                fr.readAsDataURL(b);
+                                            });
+                                            if (typeof d === 'string' && d.indexOf('data:image/') === 0) {
+                                                window.$$interfaceName.savePage(d);
+                                                return true;
+                                            }
+                                        } catch(e) {
+                                            console.log('[japscan] saveBlobUrl failed: ' + e);
+                                        } finally {
+                                            try { URL.revokeObjectURL(u); } catch(e) {}
+                                        }
+                                        return false;
+                                    }
+
+                                    async function waitForBlob(timeoutMs){
+                                        var w = 0;
+                                        while (!window.__japscanLastBlob && w < timeoutMs) {
+                                            await sleep(100); w += 100;
+                                        }
+                                        if (!window.__japscanLastBlob) return -1;
+                                        var lastUrl = window.__japscanLastBlob;
+                                        var stable = 0;
+                                        while (stable < 400) {
+                                            await sleep(100);
+                                            if (window.__japscanLastBlob !== lastUrl) {
+                                                lastUrl = window.__japscanLastBlob;
+                                                stable = 0;
+                                            } else {
+                                                stable += 100;
+                                            }
+                                        }
+                                        return w;
+                                    }
+
+                                    var sel = document.getElementById('pages');
+                                    var total = sel ? sel.options.length : 1;
+                                    var nextBtn = document.getElementById('block-right');
+                                    var prevBtn = document.getElementById('block-left');
+                                    console.log('[japscan] paginated mode, total = ' + total + ', next=' + !!nextBtn + ', prev=' + !!prevBtn);
+
+                                    function nav(btn, fallbackKey){
+                                        try {
+                                            if (btn) { btn.click(); return; }
+                                            document.dispatchEvent(new KeyboardEvent('keydown', {
+                                                key: fallbackKey, code: fallbackKey,
+                                                which: fallbackKey === 'ArrowRight' ? 39 : 37,
+                                                keyCode: fallbackKey === 'ArrowRight' ? 39 : 37,
+                                                bubbles: true,
+                                            }));
+                                        } catch(e) {
+                                            console.log('[japscan] nav failed: ' + e);
+                                        }
+                                    }
+
+                                    // The reader pre-renders pages on load (the final pre-render is
+                                    // the *last* page, not page 1), so the very first blob the hook
+                                    // sees is unreliable. Wait for things to settle, discard whatever
+                                    // was captured, then bounce next->prev to force a clean page-1
+                                    // render before we start harvesting.
+                                    await sleep(5000);
+                                    window.__japscanLastBlob = null;
+
+                                    nav(nextBtn, 'ArrowRight');
+                                    await waitForBlob(8000);
+                                    window.__japscanLastBlob = null;
+
+                                    nav(prevBtn, 'ArrowLeft');
+                                    var t0 = await waitForBlob(8000);
+                                    var u0 = window.__japscanLastBlob;
+                                    window.__japscanLastBlob = null;
+                                    if (total > 1) nav(nextBtn, 'ArrowRight');
+                                    var saved = u0 ? ((await saveBlobUrl(u0)) ? 1 : 0) : 0;
+                                    console.log('[japscan] page 1 captured after ' + t0 + 'ms (saved=' + saved + ')');
+
+                                    for (var i = 1; i < total; i++) {
+                                        var t = await waitForBlob(8000);
+                                        var u = window.__japscanLastBlob;
+                                        window.__japscanLastBlob = null;
+                                        if (i < total - 1) nav(nextBtn, 'ArrowRight');
+                                        var ok = u ? await saveBlobUrl(u) : false;
+                                        if (ok) saved++;
+                                        console.log('[japscan] page ' + (i + 1) + ' captured after ' + t + 'ms (saved=' + saved + ')');
+                                    }
+
+                                    console.log('[japscan] done, ' + saved + ' / ' + total + ' pages saved');
+                                    try {
+                                        window.$$interfaceName.passDone();
+                                    } catch(e) {
+                                        console.log('[japscan] passDone failed: ' + e);
+                                    }
+                                })();
+                            """.trimIndent(),
+                        ) { result -> Log.d("Japscan", "[wv-kt] paginated driver eval result=$result") }
+                        return
+                    }
+                    // Webtoon driver: drives the reader through every chapter page and composites
+                    // each page out of the shadow-DOM canvases. The page is rendered as a stack
+                    // of <canvas> tiles inside `<w-f1db5>` elements with a (formerly closed, now
+                    // forced open by the attachShadow hook) shadow root.
                     view?.evaluateJavascript(
                         $$"""
                             (async function(){
@@ -1123,7 +1297,13 @@ abstract class Japscan :
                                     : [];
                                 var singleHidden = singleReader && singleReader.classList.contains('d-none');
                                 var isWebtoon = dImgContainers.length > 0 && (singleHidden || !singleReader);
-                                window.__jlog('[japscan] mode: webtoon=' + isWebtoon + ' pages=' + dImgContainers.length);
+                                // The Kotlin side picked us based on the URL segment ($$urlSegment).
+                                // Compare against what the DOM actually mounted so a misclassified
+                                // series shows up in Logcat instead of producing silent garbage.
+                                var urlHint = '$$urlSegment';
+                                var hintMode = (urlHint === 'manhwa' || urlHint === 'manhua') ? 'webtoon' : 'paginated';
+                                var domMode = isWebtoon ? 'webtoon' : 'paginated';
+                                window.__jlog('[japscan] mode: webtoon=' + isWebtoon + ' pages=' + dImgContainers.length + ' urlHint=' + hintMode + ' dom=' + domMode + (hintMode !== domMode ? ' MISMATCH' : ''));
 
 
 
