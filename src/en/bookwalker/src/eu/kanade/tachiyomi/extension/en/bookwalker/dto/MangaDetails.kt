@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.bookwalker.dto
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
-import kotlinx.serialization.protobuf.ProtoPacked
 
 @Serializable
 class MangaDetailsRequestDto(
@@ -20,7 +19,7 @@ class MangaDetailsResponseDto(
     @ProtoNumber(7) val tagline: String = "",
     @ProtoNumber(8) val description: String = "",
     @ProtoNumber(9) val metadata: List<MangaMetadataSectionDto>,
-    @ProtoNumber(11) @ProtoPacked private val _chapterTypes: List<Int>,
+    @ProtoNumber(11) private val _chapterTypes: List<Int>,
 ) {
     val isMature: Boolean
         get() = _isMature == 1

@@ -8,9 +8,12 @@ class SearchHeaderRequestDto
 
 @Serializable
 class SearchHeaderResponseDto(
-    @ProtoNumber(1) val formats: List<SeriesFormat>,
+    @ProtoNumber(1) private val _formats: List<Int>,
     @ProtoNumber(2) val genres: SearchFilterOptionsDto,
-)
+) {
+    val formats: List<SeriesFormat>
+        get() = _formats.map { SeriesFormat(it) }
+}
 
 @Serializable
 class SearchFiltersRequestDto(
