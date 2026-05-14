@@ -30,7 +30,9 @@ class LectorJpg : HttpSource() {
 
     override val lang = "es"
 
-    override val baseUrl = "https://lectorjpg.com"
+    override val baseUrl = "https://visorjpg.lat"
+
+    private val apiUrl = "https://panel.visorjpg.lat"
 
     override val supportsLatest = true
 
@@ -47,26 +49,18 @@ class LectorJpg : HttpSource() {
     private val latestMangaCursor = LimitedCache<Int, String?>()
     private val searchMangaCursor = LimitedCache<SearchKey, String?>()
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/front/home/trending", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.relative div.flex.w-fit article").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("h3")!!.text()
-                url = element.selectFirst("a")!!.attr("href").substringAfterLast("/series/").removeSuffix("/")
-                thumbnail_url = element.selectFirst("div.bg-cover")?.imageFromStyle()
-            }
-        }
+        val result = response.parseAs<SeriesQueryDto>()
+        val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
         val cursor = latestMangaCursor[page - 1] ?: createLatestCursor()
-        val url = "$baseUrl/serie-query".toHttpUrl().newBuilder()
+        val url = "$apiUrl/front/home/lastest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
-            .addQueryParameter("perPage", "35")
-            .addQueryParameter("type", "updated")
             .fragment(page.toString())
 
         return GET(url.build(), headers)
@@ -90,10 +84,8 @@ class LectorJpg : HttpSource() {
         val searchKey = SearchKey(page - 1, query, genresParam)
 
         val cursor = searchMangaCursor[searchKey] ?: ""
-        val url = "$baseUrl/serie-query".toHttpUrl().newBuilder()
+        val url = "$apiUrl/front/search".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
-            .addQueryParameter("perPage", "35")
-            .addQueryParameter("type", "query")
             .addQueryParameter("name", query)
             .fragment(page.toString())
 
