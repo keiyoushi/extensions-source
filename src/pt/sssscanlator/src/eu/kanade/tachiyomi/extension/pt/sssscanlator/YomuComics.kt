@@ -9,8 +9,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -116,6 +119,7 @@ class YomuComics : HttpSource() {
 
         val requestHeaders = headers.newBuilder()
             .set("Referer", chapterPageUrl)
+            .set("RSC", "1")
             .build()
 
         val cleanUrl = when {
@@ -127,32 +131,12 @@ class YomuComics : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-
-        val preloadPages = document
-            .select("head > link[rel=preload][as=image][href]")
-            .map { it.attr("href") }
-            .filter(String::isNotBlank)
-
-        if (preloadPages.isNotEmpty()) {
-            return preloadPages.mapIndexed { index, imageUrl ->
-                Page(index, imageUrl = imageUrl)
-            }
+        val data = response.body.string().extractNextJsRsc<ChapterContentDto> {
+            it is JsonObject && "content" in it && "id" in it && "number" in it && it["content"] is JsonArray
         }
 
-        val body = document.html()
-        val contentBlock = CONTENT_ARRAY_REGEX.find(body)?.groupValues?.get(1)
-
-        val rscPages = if (contentBlock != null) {
-            CDN_URL_REGEX.findAll(contentBlock)
-                .map { it.groupValues[1] }
-                .toList()
-        } else {
-            emptyList()
-        }
-
-        if (rscPages.isNotEmpty()) {
-            return rscPages.mapIndexed { index, imageUrl ->
+        if (data != null && data.content.isNotEmpty()) {
+            return data.content.mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
         }
@@ -216,11 +200,6 @@ class YomuComics : HttpSource() {
         return SeriesPageData(manga, chapters)
     }
 
-    private fun buildChapterHttpUrl(chapterUrl: String) = when {
-        chapterUrl.startsWith("http") -> chapterUrl.toHttpUrl()
-        else -> "$baseUrl$chapterUrl".toHttpUrl()
-    }
-
     private data class SeriesPageData(
         val manga: SManga,
         val chapters: List<SChapter>,
@@ -231,12 +210,6 @@ class YomuComics : HttpSource() {
         const val DEFAULT_TYPE = "all"
         const val DEFAULT_STATUS = "all"
         const val DEFAULT_SORT = "popular"
-
-        /** Matches the flat string array assigned to the "content" key in the RSC payload. */
-        val CONTENT_ARRAY_REGEX = Regex(""""content":\[([^\]]+)\]""")
-
-        /** Matches a single CDN image URL inside the content array. */
-        val CDN_URL_REGEX = Regex(""""(https://cdn\.yomu\.com\.br/[^"]+)"""")
     }
 
     private val bibliotecaHeaders
