@@ -17,6 +17,3 @@ enum class FilterChaptersPref(val key: String) {
         fun fromKey(key: String) = entries.find { it.key == key } ?: defaultOption
     }
 }
-
-const val HEADER_IS_REQUEST_FROM_EXTENSION = "x-is-bookwalker-extension"
-const val HEADER_PAGE_INDEX = "x-page-index"

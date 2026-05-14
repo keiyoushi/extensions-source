@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagKind
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -35,16 +34,11 @@ import keiyoushi.lib.e4p.E4PManifestReader
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAsProto
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import rx.Single
 
 class BookWalker :
     HttpSource(),
@@ -131,7 +125,9 @@ class BookWalker :
 
         return FilterList(
             SortFilter,
-            FormatFilter,
+            // Currently Webtoons aren't supported in-browser and so are tricky to support here.
+            // Once they are working again, this can be re-enabled.
+//            FormatFilter,
             TriStateFilter("Genres", "genres", filterInfo.genreFilters ?: fallbackFilters),
         )
     }
@@ -230,9 +226,12 @@ class BookWalker :
         ) { details, volumeList ->
             details.info.toSManga(1200).apply {
                 status = details.status
+
+                // Replace simple HTML tags with markdown equivalent.
                 description = tagToMarkdown.fold("${details.tagline}\n\n${details.description}") { acc, (from, to) ->
                     acc.replace(from, to)
                 }.trim()
+
                 author = details.metadata.find { it.name == "AUTHOR" }?.contents?.joinToString { it.name }
                 artist = details.metadata.find { it.name == "ARTIST" }?.contents?.joinToString { it.name }
 
@@ -307,9 +306,7 @@ class BookWalker :
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore("?")
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = rxSingle {
-        val response = client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess()
-
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(getChapterUrl(chapter), headers)).asObservableSuccess().map { response ->
         val manifestInfo = response.asJsoup().extractNextJs<ManifestContainer>()
             ?: throw Exception("Failed to load chapter. You may need to log in and purchase it to view.")
 
@@ -320,7 +317,7 @@ class BookWalker :
                 manifestReader.extractPagesFromUnencryptedManifest(manifestInfo.manifestUrl.toHttpUrl())
             else -> throw Exception("Unknown manifest MIME type ${manifestInfo.mimetype}")
         }
-    }.toObservable()
+    }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -339,16 +336,6 @@ class BookWalker :
     private fun String.toMangaId() = "CNT_" + substringAfter("/series/").substringBefore("/")
 
     private fun ChapterDto.getUrl() = "/read/${readId.substringAfter("PRD_")}/$slug"
-
-    private fun <T> rxSingle(dispatcher: CoroutineDispatcher = Dispatchers.IO, block: suspend CoroutineScope.() -> T): Single<T> = Single.create { sub ->
-        CoroutineScope(dispatcher).launch {
-            try {
-                sub.onSuccess(block())
-            } catch (e: Throwable) {
-                sub.onError(e)
-            }
-        }
-    }
 
     companion object {
         private val fallbackFilters = listOf(TaggedTriState("Press reset to load filters", ""))
