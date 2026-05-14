@@ -471,7 +471,7 @@ class MyDto(
 - **Map only used fields:** Do not map all fields from the JSON response in your DTOs if they are not used. Omit unused fields to keep the class clean and reduce bytecode.
 - **Mandatory fields should not have defaults:** Do not provide default empty/null values to mandatory fields (like a manga's ID or title) in DTOs just to avoid parsing exceptions. Let the parser fail early so broken entries are detected.
 - **Avoid `buildJsonObject` for requests:** Instead of manually building `JsonObject` with `buildJsonObject { put(...) }`, define a `@Serializable` request DTO class and use `toJsonRequestBody()`.
-- **Do not use `peekBody` for JSON:** Avoid using `response.peekBody(Long.MAX_VALUE).string()` to read JSON. Use `response.parseAs<T>()` directly.
+- **Avoid manual JSON string reading:** Avoid manually reading the response body as a string to parse JSON (e.g., `response.body.string()` or `response.peekBody(Long.MAX_VALUE).string()` outside of interceptors). Use `response.parseAs<T>()` directly, which handles efficient stream decoding and automatically closes the response body.
 
 ##### Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`
 
@@ -823,8 +823,6 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 - **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
 - **Code organization:** For readability, group related methods together in your extension class (e.g., all popular manga methods, then all latest manga methods, then search methods, and so on). A logical ordering like Popular → Latest → Search → Details → Chapters → Pages → Filters → Utilities makes the class easier to navigate and maintain without needing explicit section header comments.
 - **DTO extensions:** Move mapping extensions for DTOs (like `fun MyDto.toSManga()`) into the DTO file itself to keep the main source class clean.
-- **Libraries for single sources:** Do not create a `lib/` module for code that is only used by a single multisrc theme. Keep it within the multisrc module.
-- **`initialized` flag:** You do not need to manually set `initialized = true` inside `getMangaDetails`. The app's base `fetchMangaDetails` method automatically sets it to `true` after successfully calling `getMangaDetails`.
 
 ### Advanced Extension features
 
