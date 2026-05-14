@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaBuddy'
     themePkg = 'madtheme'
     baseUrl = 'https://mangabuddy.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

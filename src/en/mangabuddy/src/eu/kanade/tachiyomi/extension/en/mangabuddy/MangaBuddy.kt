@@ -6,6 +6,10 @@ import org.jsoup.nodes.Element
 
 class MangaBuddy : MadTheme("MangaBuddy", "https://mangabuddy.com", "en") {
     override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
-        url = url.replace(Regex("(?<=[^:/])//+"), "/")
+        url = url.replace(URL_CLEAN_REGEX, "/")
+    }
+
+    companion object {
+        private val URL_CLEAN_REGEX = Regex("(?<=[^:/])//+")
     }
 }
