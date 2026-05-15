@@ -10,24 +10,19 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import java.math.BigInteger
 
-@Serializable(with = ReactFlightBigIntSerializer::class)
-class ReactFlightBigInt : BigInteger {
-    constructor(value: BigInteger) : super(value.toString())
+/** A [BigInteger] whose React Flight `$n<digits>` string is parsed by [ReactFlightBigIntSerializer]. */
+typealias ReactFlightBigInt =
+    @Serializable(with = ReactFlightBigIntSerializer::class)
+    BigInteger
 
-    override fun toByte(): Byte = toInt().toByte()
-    override fun toShort(): Short = toInt().toShort()
-}
-
-object ReactFlightBigIntSerializer : KSerializer<ReactFlightBigInt> {
+object ReactFlightBigIntSerializer : KSerializer<BigInteger> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("ReactFlightBigInt", PrimitiveKind.STRING)
 
-    override fun serialize(encoder: Encoder, value: ReactFlightBigInt): Unit = throw SerializationException("Stub !")
+    override fun serialize(encoder: Encoder, value: BigInteger): Unit = throw SerializationException("Stub !")
 
-    override fun deserialize(decoder: Decoder): ReactFlightBigInt {
+    override fun deserialize(decoder: Decoder): BigInteger {
         val raw = decoder.decodeString()
-        return ReactFlightBigInt(
-            runCatching { BigInteger(raw) }.getOrNull()
-                ?: throw IllegalArgumentException("Failed to parse BigInt: $raw"),
-        )
+        return runCatching { BigInteger(raw) }.getOrNull()
+            ?: throw IllegalArgumentException("Failed to parse BigInt: $raw")
     }
 }

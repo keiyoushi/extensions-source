@@ -13,21 +13,21 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-@Serializable(with = ReactFlightDateSerializer::class)
-class ReactFlightDate : Date {
-    constructor(date: Date) : super(date.time)
-}
+/** A [Date] whose React Flight `$D<iso>` string is parsed by [ReactFlightDateSerializer]. */
+typealias ReactFlightDate =
+    @Serializable(with = ReactFlightDateSerializer::class)
+    Date
 
-object ReactFlightDateSerializer : KSerializer<ReactFlightDate> {
+object ReactFlightDateSerializer : KSerializer<Date> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("ReactFlightDate", PrimitiveKind.STRING)
     private val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override fun serialize(encoder: Encoder, value: ReactFlightDate): Unit = throw SerializationException("Stub !")
+    override fun serialize(encoder: Encoder, value: Date): Unit = throw SerializationException("Stub !")
 
-    override fun deserialize(decoder: Decoder): ReactFlightDate {
+    override fun deserialize(decoder: Decoder): Date {
         val dateString = decoder.decodeString()
-        return ReactFlightDate(format.parse(dateString) ?: throw IllegalArgumentException("Failed to parse date: $dateString"))
+        return format.parse(dateString) ?: throw IllegalArgumentException("Failed to parse date: $dateString")
     }
 }
