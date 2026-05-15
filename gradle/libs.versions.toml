@@ -28,6 +28,7 @@ injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "41
 jsoup = { module = "org.jsoup:jsoup", version = "1.22.1" }
 kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlin-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
+kotlin-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin-gradle" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.3.2" }
 quickjs = { module = "app.cash.quickjs:quickjs-android", version = "0.9.2" }
@@ -43,4 +44,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 [bundles]
-common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "jsoup", "okhttp", "tachiyomi-lib", "quickjs"]
+common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "okhttp", "tachiyomi-lib", "quickjs"]
