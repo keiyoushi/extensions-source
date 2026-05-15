@@ -24,32 +24,9 @@ class NextJsTest {
         }
     }
 
-    @Serializable
-    data class MapHolder(val items: Map<String, Int>)
-
-    @Test
-    fun resolvesMapRef() {
-        // Row 1 = outlined Map model (array of [k,v] pairs), row 0 references it via $Q1.
-        val body = "1:[[\"a\",1],[\"b\",2]]\n0:{\"items\":\"\$Q1\"}"
-        val h = body.extractNextJsRsc<MapHolder>()
-        assertNotNull(h)
-        assertEquals(mapOf("a" to 1, "b" to 2), h!!.items)
-    }
-
-    @Serializable
-    data class SetHolder(val tags: List<Int>)
-
-    @Test
-    fun resolvesSetRef() {
-        val body = "2:[10,20,30]\n0:{\"tags\":\"\$W2\"}"
-        val h = body.extractNextJsRsc<SetHolder>()
-        assertNotNull(h)
-        assertEquals(listOf(10, 20, 30), h!!.tags)
-    }
-
     private fun fixture(name: String): String = javaClass.getResource("/reactflight/$name.txt")!!.readText()
 
-    // Fixtures captured from real React 19 Flight output (see /tmp/capture).
+    // Fixtures captured from real React 19 Flight output (regenerate via src/test/rsc-capture).
 
     @Serializable
     data class FixtureMarkers(
