@@ -11,25 +11,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okio.Buffer
 import org.jsoup.nodes.Element
 import rx.Observable
-import rx.schedulers.Schedulers
-import uy.kohesive.injekt.injectLazy
 import java.util.Calendar
 
 class NineHentai : HttpSource() {
@@ -44,152 +34,62 @@ class NineHentai : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val json: Json by injectLazy()
-
-    // Builds request for /api/getBooks endpoint
-    private fun buildSearchRequest(
-        searchText: String = "",
-        page: Int,
-        sort: Int = 0,
-        range: List<Int> = listOf(0, 2000),
-        includedTags: List<Tag> = listOf(),
-        excludedTags: List<Tag> = listOf(),
-    ): Request {
-        val searchRequest = SearchRequest(
-            text = searchText,
-            page = page - 1, // Source starts counting from 0, not 1
-            sort = sort,
-            pages = Range(range),
-            tag = Items(
-                items = TagArrays(
-                    included = includedTags,
-                    excluded = excludedTags,
-                ),
-            ),
-        )
-        val jsonString = json.encodeToString(SearchRequestPayload(search = searchRequest))
-        return POST("$baseUrl$SEARCH_URL", headers, jsonString.toRequestBody(MEDIA_TYPE))
-    }
-
-    private fun parseSearchResponse(response: Response): MangasPage = response.use {
-        val page = json.decodeFromString<SearchRequestPayload>(it.request.bodyString).search.page
-        json.decodeFromString<SearchResponse>(it.body.string()).let { searchResponse ->
-            MangasPage(
-                searchResponse.results.map {
-                    SManga.create().apply {
-                        url = "/g/${it.id}"
-                        title = it.title
-                        // Cover is the compressed first page (cover might change if page count changes)
-                        thumbnail_url = "${it.image_server}${it.id}/1.jpg?${it.total_page}"
-                    }
-                },
-                searchResponse.totalCount - 1 > page,
-            )
-        }
-    }
-
-    // Builds request for /api/getBookById endpoint
-    private fun buildDetailRequest(id: Int): Request {
-        val jsonString = buildJsonObject { put("id", id) }.toString()
-        return POST("$baseUrl$MANGA_URL", headers, jsonString.toRequestBody(MEDIA_TYPE))
-    }
-
-    // Popular
-
+    // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request = buildSearchRequest(page = page, sort = 1)
 
     override fun popularMangaParse(response: Response): MangasPage = parseSearchResponse(response)
 
-    // Latest
+    // ============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request = buildSearchRequest(page = page)
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseSearchResponse(response)
 
-    // Search
+    // ============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
+            val url = query.toHttpUrlOrNull()
+            if (url != null && url.host == baseUrl.toHttpUrlOrNull()?.host) {
+                val id = url.pathSegments.getOrNull(1)
+                if (id != null) {
+                    return fetchSearchManga(page, "id:$id", filters)
+                }
             }
-            val id = url.pathSegments[1]
-            return fetchSearchManga(page, "id:$id", filters)
+            return Observable.just(MangasPage(emptyList(), false))
         }
+
         if (query.startsWith("id:")) {
-            val id = query.substringAfter("id:").toInt()
+            val id = query.substringAfter("id:").toIntOrNull() ?: return Observable.just(MangasPage(emptyList(), false))
             return client.newCall(buildDetailRequest(id))
                 .asObservableSuccess()
-                .map { response ->
-                    fetchSingleManga(response)
-                }
+                .map { response -> fetchSingleManga(response) }
         }
+
         return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        var sort = 0
-        val range = mutableListOf(0, 2000)
+
+        val sort = filterList.firstInstanceOrNull<SortFilter>()?.state ?: 0
+        val minPages = filterList.firstInstanceOrNull<MinPagesFilter>()?.state?.toIntOrNull() ?: 0
+        val maxPages = filterList.firstInstanceOrNull<MaxPagesFilter>()?.state?.toIntOrNull() ?: 2000
+
         val includedTags = mutableListOf<Tag>()
         val excludedTags = mutableListOf<Tag>()
-        for (filter in filterList) {
-            when (filter) {
-                is SortFilter -> {
-                    sort = filter.state
-                }
 
-                is MinPagesFilter -> {
-                    try {
-                        range[0] = filter.state.toInt()
-                    } catch (_: NumberFormatException) {
-                        // Suppress and retain default value
-                    }
-                }
+        filterList.firstInstanceOrNull<IncludedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 1) }
+        filterList.firstInstanceOrNull<ExcludedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { excludedTags += getTags(it, 1) }
+        filterList.firstInstanceOrNull<GroupFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 2) }
+        filterList.firstInstanceOrNull<ParodyFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 3) }
+        filterList.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 4) }
+        filterList.firstInstanceOrNull<CharacterFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 5) }
+        filterList.firstInstanceOrNull<CategoryFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 6) }
 
-                is MaxPagesFilter -> {
-                    try {
-                        range[1] = filter.state.toInt()
-                    } catch (_: NumberFormatException) {
-                        // Suppress and retain default value
-                    }
-                }
-
-                is IncludedFilter -> {
-                    includedTags += getTags(filter.state, 1)
-                }
-
-                is ExcludedFilter -> {
-                    excludedTags += getTags(filter.state, 1)
-                }
-
-                is GroupFilter -> {
-                    includedTags += getTags(filter.state, 2)
-                }
-
-                is ParodyFilter -> {
-                    includedTags += getTags(filter.state, 3)
-                }
-
-                is ArtistFilter -> {
-                    includedTags += getTags(filter.state, 4)
-                }
-
-                is CharacterFilter -> {
-                    includedTags += getTags(filter.state, 5)
-                }
-
-                is CategoryFilter -> {
-                    includedTags += getTags(filter.state, 6)
-                }
-
-                else -> { /* Do nothing */ }
-            }
-        }
         return buildSearchRequest(
             searchText = query,
             page = page,
             sort = sort,
-            range = range,
+            range = listOf(minPages, maxPages),
             includedTags = includedTags,
             excludedTags = excludedTags,
         )
@@ -197,39 +97,28 @@ class NineHentai : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = parseSearchResponse(response)
 
-    // Manga Details
-
+    // ============================== Details ==============================
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        response.asJsoup().selectFirst("div#bigcontainer")!!.let { info ->
-            title = info.select("h1").text()
-            thumbnail_url = info.selectFirst("div#cover v-lazy-image")!!.attr("abs:src")
-            status = SManga.COMPLETED
-            artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
-            author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
-            genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
-            // Additional details
-            description = listOf(
-                Pair("Alternative Title", info.selectTextOrNull("h2")),
-                Pair("Pages", info.selectTextOrNull("div#info > div:contains(pages)")),
-                Pair("Parody", info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")),
-                Pair("Category", info.selectTextOrNull("div.field-name:contains(Category:) a.tag")),
-                Pair("Language", info.selectTextOrNull("div.field-name:contains(Language:) a.tag")),
-            ).filterNot { it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
-        }
+        val document = response.asJsoup()
+        val info = document.selectFirst("div#bigcontainer") ?: return this
+
+        title = info.select("h1").text()
+        thumbnail_url = info.selectFirst("div#cover v-lazy-image")?.attr("abs:src")
+        status = SManga.COMPLETED
+        artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
+        author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
+        genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
+
+        description = buildString {
+            info.selectTextOrNull("h2")?.let { append("Alternative Title: ", it, "\n\n") }
+            info.selectTextOrNull("div#info > div:contains(pages)")?.let { append("Pages: ", it, "\n\n") }
+            info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")?.let { append("Parody: ", it, "\n\n") }
+            info.selectTextOrNull("div.field-name:contains(Category:) a.tag")?.let { append("Category: ", it, "\n\n") }
+            info.selectTextOrNull("div.field-name:contains(Language:) a.tag")?.let { append("Language: ", it) }
+        }.trim()
     }
 
-    // Ensures no exceptions are thrown when scraping additional details
-    private fun Element.selectTextOrNull(selector: String): String? {
-        val list = this.select(selector)
-        return if (list.isEmpty()) {
-            null
-        } else {
-            list.joinToString(", ") { it.text() }
-        }
-    }
-
-    // Chapter
-
+    // ============================= Chapters ==============================
     override fun chapterListParse(response: Response): List<SChapter> {
         val time = response.asJsoup().select("div#info div time").text()
         return listOf(
@@ -241,120 +130,34 @@ class NineHentai : HttpSource() {
         )
     }
 
-    private fun parseChapterDate(date: String): Long {
-        val dateStringSplit = date.split(" ")
-        val value = dateStringSplit[0].toInt()
-
-        return when (dateStringSplit[1].removeSuffix("s")) {
-            "sec" -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, -value)
-            }.timeInMillis
-
-            "min" -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, -value)
-            }.timeInMillis
-
-            "hour" -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, -value)
-            }.timeInMillis
-
-            "day" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value)
-            }.timeInMillis
-
-            "week" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value * 7)
-            }.timeInMillis
-
-            "month" -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, -value)
-            }.timeInMillis
-
-            "year" -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, -value)
-            }.timeInMillis
-
-            else -> {
-                return 0
-            }
-        }
-    }
-
-    // Page List
-
+    // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        val mangaId = chapter.url.substringAfter("/g/").toInt()
+        val mangaId = chapter.url.substringAfter("/g/").substringBefore("/").toInt()
         return buildDetailRequest(mangaId)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val resultsObj = json.parseToJsonElement(response.body.string()).jsonObject["results"]!!
-        val manga = json.decodeFromJsonElement<Manga>(resultsObj)
-        val imageUrl = manga.image_server + manga.id
-        var totalPages = manga.total_page
+        val manga = response.parseAs<SingleMangaResponse>().results
+        val imageUrl = manga.getImageUrl()
+        var totalPages = manga.totalPage
 
-        client.newCall(
-            GET(
-                "$imageUrl/preview/${totalPages}t.jpg",
-                headersBuilder().build(),
-            ),
-        ).execute().code.let { code ->
+        client.newCall(GET("$imageUrl/preview/${totalPages}t.jpg", headers)).execute().code.let { code ->
             if (code == 404) totalPages--
         }
 
         return (1..totalPages).map {
-            Page(it - 1, "", "$imageUrl/$it.jpg")
+            Page(it - 1, imageUrl = "$imageUrl/$it.jpg")
         }
     }
 
-    private fun getTags(queries: String, type: Int): List<Tag> = queries.split(",").map(String::trim)
-        .filterNot(String::isBlank).mapNotNull { query ->
-            val jsonString = buildJsonObject {
-                put("tag_name", query)
-                put("tag_type", type)
-            }.toString()
-            lookupTags(jsonString)
-        }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Based on HentaiHand ext
-    private fun lookupTags(request: String): Tag? {
-        return client.newCall(POST("$baseUrl$TAG_URL", headers, request.toRequestBody(MEDIA_TYPE)))
-            .asObservableSuccess()
-            .subscribeOn(Schedulers.io())
-            .map { response ->
-                // Returns the first matched tag, or null if there are no results
-                val tagList = json.parseToJsonElement(response.body.string()).jsonObject["results"]!!.jsonArray.map {
-                    json.decodeFromJsonElement<Tag>(it)
-                }
-                if (tagList.isEmpty()) {
-                    return@map null
-                } else {
-                    tagList.first()
-                }
-            }.toBlocking().first()
-    }
-
-    private fun fetchSingleManga(response: Response): MangasPage {
-        val resultsObj = json.parseToJsonElement(response.body.string()).jsonObject["results"]!!
-        val manga = json.decodeFromJsonElement<Manga>(resultsObj)
-        val list = listOf(
-            SManga.create().apply {
-                setUrlWithoutDomain("/g/${manga.id}")
-                title = manga.title
-                thumbnail_url = "${manga.image_server + manga.id}/cover.jpg"
-            },
-        )
-        return MangasPage(list, false)
-    }
-
-    // Filters
-
+    // ============================== Filters ==============================
     private class SortFilter :
         Filter.Select<String>(
             "Sort by",
             arrayOf("Newest", "Popular Right now", "Most Fapped", "Most Viewed", "By Title"),
         )
-
     private class MinPagesFilter : Filter.Text("Minimum Pages")
     private class MaxPagesFilter : Filter.Text("Maximum Pages")
     private class IncludedFilter : Filter.Text("Included Tags")
@@ -380,19 +183,82 @@ class NineHentai : HttpSource() {
         CategoryFilter(),
     )
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // ============================= Utilities =============================
+    private fun buildSearchRequest(
+        searchText: String = "",
+        page: Int,
+        sort: Int = 0,
+        range: List<Int> = listOf(0, 2000),
+        includedTags: List<Tag> = emptyList(),
+        excludedTags: List<Tag> = emptyList(),
+    ): Request {
+        val searchRequest = SearchRequest(
+            text = searchText,
+            page = page - 1, // Source starts counting from 0, not 1
+            sort = sort,
+            pages = Range(range),
+            tag = Items(
+                items = TagArrays(
+                    included = includedTags,
+                    excluded = excludedTags,
+                ),
+            ),
+        )
+        val payload = SearchRequestPayload(search = searchRequest)
+        // Store the queried page into a transient URL param to be safely pulled within `parseSearchResponse`
+        return POST("$baseUrl$SEARCH_URL?req_page=$page", headers, payload.toJsonRequestBody())
+    }
 
-    private val Request.bodyString: String
-        get() {
-            val requestCopy = newBuilder().build()
-            val buffer = Buffer()
+    private fun parseSearchResponse(response: Response): MangasPage {
+        val reqPage = response.request.url.queryParameter("req_page")?.toIntOrNull() ?: 1
+        val searchResponse = response.parseAs<SearchResponse>()
+        val mangas = searchResponse.results.map { it.toSManga() }
 
-            return runCatching { buffer.apply { requestCopy.body!!.writeTo(this) }.readUtf8() }
-                .getOrNull() ?: ""
+        return MangasPage(mangas, searchResponse.totalCount > reqPage)
+    }
+
+    private fun buildDetailRequest(id: Int): Request = POST("$baseUrl$MANGA_URL", headers, IdRequest(id).toJsonRequestBody())
+
+    private fun fetchSingleManga(response: Response): MangasPage {
+        val manga = response.parseAs<SingleMangaResponse>().results
+        return MangasPage(listOf(manga.toSManga()), false)
+    }
+
+    private fun Element.selectTextOrNull(selector: String): String? {
+        val list = this.select(selector)
+        return if (list.isEmpty()) {
+            null
+        } else {
+            list.joinToString { it.text() }
+        }
+    }
+
+    private fun parseChapterDate(date: String): Long {
+        val dateStringSplit = date.split(" ")
+        val value = dateStringSplit.getOrNull(0)?.toIntOrNull() ?: return 0L
+
+        return when (dateStringSplit.getOrNull(1)?.removeSuffix("s")) {
+            "sec" -> Calendar.getInstance().apply { add(Calendar.SECOND, -value) }.timeInMillis
+            "min" -> Calendar.getInstance().apply { add(Calendar.MINUTE, -value) }.timeInMillis
+            "hour" -> Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -value) }.timeInMillis
+            "day" -> Calendar.getInstance().apply { add(Calendar.DATE, -value) }.timeInMillis
+            "week" -> Calendar.getInstance().apply { add(Calendar.DATE, -value * 7) }.timeInMillis
+            "month" -> Calendar.getInstance().apply { add(Calendar.MONTH, -value) }.timeInMillis
+            "year" -> Calendar.getInstance().apply { add(Calendar.YEAR, -value) }.timeInMillis
+            else -> 0L
+        }
+    }
+
+    private fun getTags(queries: String, type: Int): List<Tag> = queries.split(",")
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .mapNotNull { query ->
+            val request = TagRequest(query, type)
+            val response = client.newCall(POST("$baseUrl$TAG_URL", headers, request.toJsonRequestBody())).execute()
+            response.parseAs<TagResponse>().results.firstOrNull()
         }
 
     companion object {
-        private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
         private const val SEARCH_URL = "/api/getBook"
         private const val MANGA_URL = "/api/getBookByID"
         private const val TAG_URL = "/api/getTag"
