@@ -34,14 +34,14 @@ object ReactFlightNumberSerializer : KSerializer<ReactFlightNumber> {
     override fun serialize(encoder: Encoder, value: ReactFlightNumber): Unit = throw SerializationException("Stub !")
 
     override fun deserialize(decoder: Decoder): ReactFlightNumber {
-        // Value may be a bare JSON number (3.14) or a stripped token string
-        // ("Infinity"/"NaN"/"-0" from NextJs.kt) -> read content via JsonDecoder.
+        // Value may be a bare JSON number (3.14) or a token string already stripped of its
+        // leading '$' by resolveNextJsRefs ("Infinity"/"-Infinity"/"NaN"/"-0").
         val raw = (decoder as JsonDecoder).decodeJsonElement().jsonPrimitive.content
         val value = when (raw) {
-            "Infinity", "\$Infinity" -> Double.POSITIVE_INFINITY
-            "-Infinity", "\$-Infinity" -> Double.NEGATIVE_INFINITY
-            "NaN", "\$NaN" -> Double.NaN
-            "-0", "\$-0" -> -0.0
+            "Infinity" -> Double.POSITIVE_INFINITY
+            "-Infinity" -> Double.NEGATIVE_INFINITY
+            "NaN" -> Double.NaN
+            "-0" -> -0.0
             else -> raw.toDoubleOrNull()
                 ?: throw IllegalArgumentException("Failed to parse Number: $raw")
         }
