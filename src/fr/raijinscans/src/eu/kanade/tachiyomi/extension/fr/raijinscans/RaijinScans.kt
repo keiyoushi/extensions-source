@@ -174,11 +174,13 @@ class RaijinScans :
 
     override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
-    private fun parseStatus(status: String?): Int = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("En cours", ignoreCase = true) -> SManga.ONGOING
-        status.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
+    private fun parseStatus(status: String?): Int {
+        val lcStatus = status?.lowercase() ?: return SManga.UNKNOWN
+        return when {
+            "en cours" in lcStatus -> SManga.ONGOING
+            "terminé" in lcStatus -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
     }
 
     // ========================= Chapter List ==========================
@@ -302,11 +304,8 @@ class RaijinScans :
                     .addFormDataPart(reqKey("cursor"), cursor)
                     .build()
 
-                val ajaxResponse = client.newCall(
-                    POST(ajaxUrl, ajaxHeaders, body),
-                ).execute()
-
-                val payload = ajaxResponse.parseAs<JsonObject>()[resKey("payload")]!!.jsonObject
+                val payload = client.newCall(POST(ajaxUrl, ajaxHeaders, body)).execute()
+                    .use { it.parseAs<JsonObject>() }[resKey("payload")]!!.jsonObject
 
                 payload[resKey("images")]!!.jsonArray.forEach { image ->
                     val url = image.jsonObject[resKey("url")]!!.jsonPrimitive.content
