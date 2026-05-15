@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
-import keiyoushi.utils.nextJsSerializer.NextJSDate
+import keiyoushi.utils.reactFlight.ReactFlightDate
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -46,9 +46,9 @@ class CategoryData(val name: String)
 class ChapterData(
     val number: Float,
     val title: String? = null,
-    val createdAt: NextJSDate,
+    val createdAt: ReactFlightDate,
     val isPremium: Boolean? = false,
-    val premiumUntil: NextJSDate? = null,
+    val premiumUntil: ReactFlightDate? = null,
     val isVolume: Boolean? = false,
 )
 
