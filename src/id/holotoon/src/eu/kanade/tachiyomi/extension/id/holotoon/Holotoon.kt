@@ -20,6 +20,8 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.ForwardingSource
 import okio.buffer
+import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import java.util.Calendar
 
 class Holotoon : HttpSource() {
@@ -59,17 +61,12 @@ class Holotoon : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("a[href*=/comic/]").filter {
-            it.parents().none { p -> p.attr("aria-hidden") == "true" || p.attr("style").contains("display:none", true) }
-        }
+        val mangas = document.select("a[href*=/comic/]").filterVisible()
             .distinctBy { it.attr("href") }
-            .mapNotNull { element ->
-                val titleText = element.selectFirst("h3")?.text()
-                if (titleText.isNullOrEmpty()) return@mapNotNull null
-
+            .map { element ->
                 SManga.create().apply {
                     setUrlWithoutDomain(element.absUrl("href"))
-                    title = titleText
+                    title = element.selectFirst("h3")!!.text()
                     thumbnail_url = element.selectFirst("img")?.absUrl("src")
                 }
             }
@@ -120,15 +117,15 @@ class Holotoon : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1._tt")?.text() ?: document.selectFirst("h1")?.text() ?: ""
+            title = document.select("h1._tt, h1").filterVisible().first().text()
             thumbnail_url = document.selectFirst("div.aspect-\\[3\\/4\\] img")?.absUrl("src")
-            author = document.selectFirst("span:contains(Author:) > span")?.text()
-                ?: document.selectFirst("span:contains(Uploaded by:) a")?.text()
-            artist = document.selectFirst("span:contains(Artist:) > span")?.text()
-            description = document.select("#synopsis-wrapper > div, #synopsis-text, div#_ds, div#_sd").filter {
-                it.parents().none { p -> p.attr("aria-hidden") == "true" } && !it.text().contains("Loading", true)
-            }.firstNotNullOfOrNull { it.text() }
-            genre = document.select("a[href*=/browse?genre=]").joinToString(", ") { it.text() }
+            author = document.select("span:contains(Author:) > span, span:contains(Uploaded by:) a").filterVisible().firstOrNull()?.text()
+            artist = document.select("span:contains(Artist:) > span").filterVisible().firstOrNull()?.text()
+            description = document.select("#synopsis-wrapper > div, #synopsis-text, div#_ds, div#_sd")
+                .filterVisible()
+                .filter { !it.text().contains("Loading", true) }
+                .firstNotNullOfOrNull { it.text() }
+            genre = document.select("a[href*=/browse?genre=]").filterVisible().joinToString(", ") { it.text() }
 
             status = document.selectFirst(".flex.items-start.gap-3 span.border")?.text()?.lowercase()?.let {
                 when {
@@ -146,16 +143,14 @@ class Holotoon : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("a[href*=/read/]").filter {
-            it.parents().none { p -> p.attr("aria-hidden") == "true" || p.attr("style").contains("display:none", true) }
-        }.map { element ->
+        return document.select("a[href*=/read/]").filterVisible().map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 val divs = element.select("> div")
-                name = divs.firstOrNull()?.text()?.trim() ?: ""
+                name = divs.first()!!.text().trim()
                 date_upload = parseDate(divs.lastOrNull()?.select("span")?.lastOrNull()?.text())
             }
-        }.filter { it.name.isNotEmpty() && !it.name.contains("Trap", true) }
+        }.filter { !it.name.contains("Trap", true) }
     }
 
     // =============================== Pages ===============================
@@ -236,6 +231,18 @@ class Holotoon : HttpSource() {
     )
 
     // ============================= Utilities =============================
+
+    private fun Elements.filterVisible() = filter { it.isVisible() }
+
+    private fun Element?.isVisible(): Boolean = this?.let {
+        parents().none { p -> p.isHidden() } && !it.isHidden()
+    } ?: false
+
+    private fun Element.isHidden(): Boolean = attr("aria-hidden") == "true" ||
+        attr("style").contains("display:none", true) ||
+        attr("style").contains("clip:rect", true) ||
+        attr("style").contains("left:-9999px", true) ||
+        className().contains("sr-only", true)
 
     private fun parseDate(dateStr: String?): Long {
         if (dateStr == null) return 0L
