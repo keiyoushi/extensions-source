@@ -34,6 +34,7 @@ class Yupmanga : HttpSource() {
     private var csrfToken: String = ""
     private var dataK: String = ""
     private var dataV: String = ""
+    private var anchorScript: String = ""
 
     // Peeks at every HTML response to extract the token and data-k values without consuming the body.
     private val tokenInterceptor = Interceptor { chain ->
@@ -65,6 +66,7 @@ class Yupmanga : HttpSource() {
                     }
                 }.joinToString("")
             }
+            ANCHOR_SCRIPT_REGEX.find(html)?.groupValues?.get(1)?.let { anchorScript = it }
         }
         response
     }
@@ -251,6 +253,16 @@ class Yupmanga : HttpSource() {
         val answer = QuickJs.create().use {
             it.evaluate(
                 """
+                var cssVars = {};
+                var window = {
+                    getComputedStyle: function(el) {
+                        return {
+                            getPropertyValue: function(prop) {
+                                return cssVars[prop] || "$csrfToken";
+                            }
+                        };
+                    }
+                };
                 var mockElem = {
                     value: "$csrfToken",
                     content: "$csrfToken",
@@ -266,9 +278,15 @@ class Yupmanga : HttpSource() {
                     innerHTML: "$csrfToken",
                     id: "csrf_token",
                     name: "_token",
-                    className: "_cr"
+                    className: "_cr",
+                    style: {
+                        setProperty: function(prop, val) {
+                            cssVars[prop] = val;
+                        }
+                    }
                 };
                 var document = {
+                    documentElement: mockElem,
                     querySelector: function(sel) { return mockElem; },
                     getElementById: function(id) { return mockElem; },
                     getElementsByName: function(name) { return [mockElem]; },
@@ -276,6 +294,11 @@ class Yupmanga : HttpSource() {
                     getElementsByClassName: function(cls) { return [mockElem]; },
                     cookie: ""
                 };
+
+                try {
+                    $anchorScript
+                } catch(e) {}
+
                 (function(){ ${challenge.challengeJs} })();
                 """.trimIndent(),
             )?.toString()
@@ -339,5 +362,6 @@ class Yupmanga : HttpSource() {
         private val TOKEN_JS_REGEX = """(?:_token|csrf-token).*?String\.fromCharCode\(([^)]+)\)""".toRegex()
         private val DATAK_REGEX = """id=["']app-cfg["']\s+data-k=["']([^"']+)["']""".toRegex()
         private val DATAV_REGEX = """['"]data-v['"].*?String\.fromCharCode\(([^)]+)\)""".toRegex()
+        private val ANCHOR_SCRIPT_REGEX = """<script>\s*(\(\s*function\(\)\s*\{\s*document\.querySelector\(':root'\)[\s\S]*?\}\s*\)\(\);?)\s*</script>""".toRegex()
     }
 }
