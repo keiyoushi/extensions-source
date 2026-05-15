@@ -1,9 +1,9 @@
 ext {
     extName = 'Ota Scans'
     extClass = '.OtaScans'
-    themePkg = 'mangathemesia'
+    themePkg = 'madara'
     baseUrl = 'https://yurilabs.my.id'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
