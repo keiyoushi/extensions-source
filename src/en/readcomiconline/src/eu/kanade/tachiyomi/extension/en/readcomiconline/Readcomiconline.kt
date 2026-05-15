@@ -38,7 +38,7 @@ class Readcomiconline :
 
     override val name = "ReadComicOnline"
 
-    override val baseUrl = "https://readcomiconline.li"
+    override val baseUrl = "https://rcostation.xyz"
 
     override val lang = "en"
 
