@@ -1,5 +1,6 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.gradle.tasks.PackageAndroidArtifact
 import keiyoushi.gradle.extensions.alias
 import keiyoushi.gradle.extensions.baseVersionCode
 import keiyoushi.gradle.extensions.compileOnly
@@ -17,6 +18,7 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
+import org.gradle.kotlin.dsl.withType
 
 @Suppress("UNUSED")
 class PluginExtensionLegacy : Plugin<Project> {
@@ -140,6 +142,15 @@ class PluginExtensionLegacy : Plugin<Project> {
             if (theme != null) implementation(theme) // Overrides core launcher icons
             implementation(project(":core"))
             compileOnly(libs.bundles.common)
+        }
+
+        afterEvaluate {
+            tasks.withType<PackageAndroidArtifact>().configureEach {
+                createdBy.set("")
+                doFirst {
+                    appMetadata.asFile.orNull?.writeText("")
+                }
+            }
         }
     }
 }
