@@ -1,5 +1,6 @@
 plugins {
     id("com.android.library")
+    id("kotlinx-serialization")
     id("keiyoushi.lint")
 }
 
@@ -16,6 +17,10 @@ android {
         resValues = false
         shaders = false
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
@@ -27,4 +32,7 @@ kotlin {
 
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+
+    testImplementation(versionCatalogs.named("libs").findBundle("common").get())
+    testImplementation("junit:junit:4.13.2")
 }
