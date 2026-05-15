@@ -43,6 +43,7 @@ class Yupmanga : HttpSource() {
             val html = response.peekBody(3 * 1024 * 1024L).string()
 
             TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
+            TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let { csrfToken = it }
             TOKEN_JS_REGEX.find(html)?.groupValues?.get(1)?.let { match ->
                 csrfToken = match.split(",").mapNotNull {
                     val clean = it.trim()
@@ -252,9 +253,11 @@ class Yupmanga : HttpSource() {
                 """
                 var mockElem = {
                     value: "$csrfToken",
+                    content: "$csrfToken",
                     getAttribute: function(attr) {
                         if (attr === 'data-k') return "$dataK";
                         if (attr === 'data-v') return "${dataV.ifEmpty { csrfToken }}";
+                        if (attr === 'content') return "$csrfToken";
                         return "$csrfToken";
                     },
                     dataset: { token: "$csrfToken", k: "$dataK", v: "$dataV" },
@@ -332,7 +335,8 @@ class Yupmanga : HttpSource() {
 
     companion object {
         private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
-        private val TOKEN_JS_REGEX = """_token.*?String\.fromCharCode\(([^)]+)\)""".toRegex()
+        private val TOKEN_META_REGEX = """name=["']csrf-token["'][^>]*?content=["']([^"']+)["']""".toRegex()
+        private val TOKEN_JS_REGEX = """(?:_token|csrf-token).*?String\.fromCharCode\(([^)]+)\)""".toRegex()
         private val DATAK_REGEX = """id=["']app-cfg["']\s+data-k=["']([^"']+)["']""".toRegex()
         private val DATAV_REGEX = """['"]data-v['"].*?String\.fromCharCode\(([^)]+)\)""".toRegex()
     }
