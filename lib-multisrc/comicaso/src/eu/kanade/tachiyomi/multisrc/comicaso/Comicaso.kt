@@ -179,21 +179,19 @@ abstract class Comicaso(
 
     // =============================== Pages ================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override fun pageListRequest(chapter: SChapter): Request {
         val mangaSlug = chapter.url.substringAfter("/komik/").substringBefore("/")
         val chapterSlug = chapter.url.substringBeforeLast("/").substringAfterLast("/")
 
-        return client.newCall(GET("$baseUrl/wp-json/comic/v1/manga/$mangaSlug/chapter/$chapterSlug/", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val result = response.parseAs<ChapterImagesDto>()
-                result.images.mapIndexed { index, imageUrl ->
-                    Page(index, baseUrl + chapter.url, imageUrl)
-                }
-            }
+        return GET("$baseUrl/wp-json/comic/v1/manga/$mangaSlug/chapter/$chapterSlug/", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAs<ChapterImagesDto>()
+        return result.images.mapIndexed { index, imageUrl ->
+            Page(index, "", imageUrl)
+        }
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
