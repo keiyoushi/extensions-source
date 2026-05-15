@@ -144,7 +144,7 @@ class PoseidonScans :
             SHOW_PREMIUM_DEFAULT,
         )
         return mangaPageDto.manga.chapters.mapNotNull { ch ->
-            val isLocked = ch.isPremium == true && !mangaPageDto.isPremiumUser
+            val isLocked = ch.isPremium == true && mangaPageDto.isPremiumUser != true
 
             if (isLocked && !showPremium) {
                 val premiumUntilDate = ch.premiumUntil?.time ?: 0L

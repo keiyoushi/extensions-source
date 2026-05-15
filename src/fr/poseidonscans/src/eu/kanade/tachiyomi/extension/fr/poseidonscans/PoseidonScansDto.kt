@@ -23,7 +23,7 @@ class PopularMangaData(
 
 @Serializable
 class MangaPageDetailsData(
-    val isPremiumUser: Boolean,
+    val isPremiumUser: Boolean?,
     val manga: MangaDetailsData,
 )
 
