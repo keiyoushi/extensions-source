@@ -1,0 +1,2 @@
+:N1778838642905.6316
+0:{"name":"hello","big":"$n123456789012345678901234567890","date":"$D2024-01-02T03:04:05.000Z","inf":"$Infinity","negInf":"$-Infinity","nan":"$NaN","negZero":"$-0","plain":3.14,"missing":"$undefined"}
