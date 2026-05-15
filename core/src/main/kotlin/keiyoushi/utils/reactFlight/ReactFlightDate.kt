@@ -1,4 +1,4 @@
-package keiyoushi.utils.nextJsSerializer
+package keiyoushi.utils.reactFlight
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -13,21 +13,21 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-@Serializable(with = NextJSDateSerializer::class)
-class NextJSDate : Date {
+@Serializable(with = ReactFlightDateSerializer::class)
+class ReactFlightDate : Date {
     constructor(date: Date) : super(date.time)
 }
 
-object NextJSDateSerializer : KSerializer<NextJSDate> {
-    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("NextJSDate", PrimitiveKind.STRING)
+object ReactFlightDateSerializer : KSerializer<ReactFlightDate> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("ReactFlightDate", PrimitiveKind.STRING)
     private val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override fun serialize(encoder: Encoder, value: NextJSDate): Unit = throw SerializationException("Stub !")
+    override fun serialize(encoder: Encoder, value: ReactFlightDate): Unit = throw SerializationException("Stub !")
 
-    override fun deserialize(decoder: Decoder): NextJSDate {
+    override fun deserialize(decoder: Decoder): ReactFlightDate {
         val dateString = decoder.decodeString()
-        return NextJSDate(format.parse(dateString) ?: throw IllegalArgumentException("Failed to parse date: $dateString"))
+        return ReactFlightDate(format.parse(dateString) ?: throw IllegalArgumentException("Failed to parse date: $dateString"))
     }
 }
