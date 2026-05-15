@@ -28,7 +28,7 @@ class TeamLanhLung : HttpSource() {
 
     override val name: String = "Team Lạnh Lùng"
 
-    override val baseUrl: String = "https://hongtruyentranh.com"
+    override val baseUrl: String = "https://nhalung.top"
 
     override val lang: String = "vi"
 

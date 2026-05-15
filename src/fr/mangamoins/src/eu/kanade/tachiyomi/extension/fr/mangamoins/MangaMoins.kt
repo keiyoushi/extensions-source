@@ -159,9 +159,11 @@ class MangaMoins : HttpSource() {
     private var cachedSalt: String? = null
     private var lastSaltFetch: Long = 0
 
-    private fun getSalt(): String {
+    private fun getSalt(pagesBaseUrl: String): String {
         val now = System.currentTimeMillis()
-        if (cachedSalt != null && now - lastSaltFetch < SALT_EXPIRY) {
+        val lastSegment = pagesBaseUrl.trimEnd('/').substringAfterLast('/')
+
+        if (cachedSalt != null && now - lastSaltFetch < SALT_EXPIRY && lastSegment.startsWith(cachedSalt!!)) {
             return cachedSalt!!
         }
 
@@ -169,8 +171,11 @@ class MangaMoins : HttpSource() {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
             val response = client.newCall(GET(scriptUrl, headers)).execute()
             val script = response.body.string()
-            val saltRegex = """\d+[a-zA-Z]{2,}Plop""".toRegex()
-            saltRegex.find(script)?.value ?: SALT
+            val saltRegex = """['"]([a-zA-Z0-9_]+)['"]""".toRegex()
+            saltRegex.findAll(script)
+                .map { it.groupValues[1] }
+                .filter { it.length > 5 && lastSegment.startsWith(it) && lastSegment != it }
+                .maxByOrNull { it.length } ?: SALT
         } catch (e: Exception) {
             SALT // Fallback to hardcoded salt on error
         }
@@ -182,7 +187,7 @@ class MangaMoins : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ScanResponse>()
-        val salt = getSalt()
+        val salt = getSalt(data.pagesBaseUrl)
         // Remove the dynamic salt prefix from the last path segment
         val baseUrl = data.pagesBaseUrl.removeSuffix("/").replace("/$salt", "/")
         return (1..data.pageNumbers).map { i ->
@@ -195,7 +200,7 @@ class MangaMoins : HttpSource() {
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
-        private const val SALT = "4445xcPlop"
+        private const val SALT = "4445xcsltlesnoobsarretezdevolernoscansmerci123891b"
         private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
     }
 }

@@ -90,6 +90,7 @@ class Manga(
         altTitlesInDesc: Boolean = false,
         scorePosition: String,
         showExtraInfo: Boolean = true,
+        showTags: Boolean = false,
     ) = SManga.create().apply {
         url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
         title = this@Manga.title
@@ -140,7 +141,7 @@ class Manga(
             else -> SManga.UNKNOWN
         }
         thumbnail_url = this@Manga.poster?.from(posterQuality)
-        genre = getGenres()
+        genre = getGenres(showTags)
     }
 
     fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
@@ -162,9 +163,11 @@ class Manga(
 
     // The site has separate `genres`, `tags`, `formats`, and `demographics`
     // groupings but only the curated `genres` (plus the type and demographics)
-    // belong in Mihon's "genre" chips. Including the long `tags` list flooded
-    // the UI with dozens of narrative tags that aren't shown on the site.
-    private fun getGenres() = buildList {
+    // belong in Mihon's "genre" chips by default — the `tags` list is dozens
+    // of narrative descriptors and the site doesn't surface them in its own
+    // detail layout. Users who want them back can flip the
+    // "Show tags in genre chips" preference.
+    private fun getGenres(showTags: Boolean) = buildList {
         when (type) {
             "manhwa" -> add("Manhwa")
             "manhua" -> add("Manhua")
@@ -173,6 +176,7 @@ class Manga(
         }
         (genres ?: genreOld)?.map { it.title }?.let { addAll(it) }
         (demographics ?: demographicOld)?.map { it.title }?.let { addAll(it) }
+        if (showTags) tags?.map { it.title }?.let { addAll(it) }
         if (contentRating == "erotica" || contentRating == "pornographic") add("NSFW")
     }.distinct().joinToString()
 }
@@ -240,6 +244,7 @@ class ChapterDetailsResponse(
 @Serializable
 class Chapter(
     val id: Int,
+    val url: String = "",
     val number: Double,
     private val name: String = "",
     val votes: Int = 0,
@@ -258,7 +263,13 @@ class Chapter(
     }
 
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        url = "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+        url = this@Chapter.url.indexOf("/title/").let { index ->
+            if (index != -1) {
+                this@Chapter.url.substring(index + 1)
+            } else {
+                "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+            }
+        }
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
@@ -299,18 +310,17 @@ class Chapter(
 
 @Serializable
 class ChapterResponse(
-    val result: ChapterResult? = null,
+    val result: ChapterResult,
 ) {
     @Serializable
     class ChapterResult(
-        val id: Int,
-        val pages: Pages = Pages(),
+        val pages: Pages,
     )
 
     @Serializable
     class Pages(
-        val baseUrl: String = "",
-        val items: List<PageDto> = emptyList(),
+        val baseUrl: String,
+        val items: List<PageDto>,
     )
 
     @Serializable

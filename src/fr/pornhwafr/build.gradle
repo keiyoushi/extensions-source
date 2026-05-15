@@ -1,0 +1,10 @@
+ext {
+    extName = 'Pornhwa.fr'
+    extClass = '.PornhwaFR'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://pornhwa.fr'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

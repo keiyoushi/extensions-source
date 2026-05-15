@@ -9,8 +9,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -22,7 +23,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -33,7 +33,7 @@ abstract class MadTheme(
     override val baseUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -91,29 +91,20 @@ abstract class MadTheme(
 
     private var genreKey = "genre[]"
 
-    // Popular
+    // ============================== Popular ==============================
+
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(0)))
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun popularMangaSelector(): String = searchMangaSelector()
+    // ============================== Latest ===============================
 
-    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector(): String? = searchMangaNextPageSelector()
-
-    // Latest
     override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(1)))
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesSelector(): String = searchMangaSelector()
+    // ============================== Search ===============================
 
-    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String? = searchMangaNextPageSelector()
-
-    // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
@@ -146,10 +137,26 @@ abstract class MadTheme(
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaSelector(): String = ".book-detailed-item"
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        if (genresList == null) {
+            genresList = parseGenres(document)
+        }
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        val mangas = document.select(searchMangaSelector()).map { element ->
+            searchMangaFromElement(element)
+        }
+        val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
+            document.selectFirst(selector) != null
+        } ?: false
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    open fun searchMangaSelector(): String = ".book-detailed-item"
+
+    open fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst("a")!!.attr("title")
         element.selectFirst(".summary")?.text()?.let { description = it }
         element.select(".genres > *").joinToString { it.text() }.takeIf { it.isNotEmpty() }?.let { genre = it }
@@ -160,34 +167,44 @@ abstract class MadTheme(
      * Only some sites use the next/previous buttons, so instead we check for the next link
      * after the active one. We use the :not() selector to exclude the optional next button
      */
-    override fun searchMangaNextPageSelector(): String? = ".paginator > a.active + a:not([rel=next])"
+    open fun searchMangaNextPageSelector(): String? = ".paginator > a.active + a:not([rel=next])"
 
-    // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".detail h1")!!.text()
-        author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
-        genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
-        thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src") + "#image-request"
+    // ============================== Details ==============================
 
-        val altNames = document.selectFirst(".detail h2")?.text()
-            ?.split(',', ';')
-            ?.mapNotNull { it.trim().takeIf { it != title } }
-            ?: listOf()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst(".detail h1")!!.text()
+            author = document.select(".detail .meta > p > strong:contains(Authors) ~ a").joinToString { it.text().trim(',', ' ') }
+            genre = document.select(".detail .meta > p > strong:contains(Genres) ~ a").joinToString { it.text().trim(',', ' ') }
+            thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src") + "#image-request"
 
-        description = document.select(".summary .content, .summary .content ~ p").text() +
-            (altNames.takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): ${it.joinToString()}" } ?: "")
+            val altNames = document.selectFirst(".detail h2")?.text()
+                ?.split(',', ';')
+                ?.mapNotNull { it -> it.trim().takeIf { it != title && it.isNotEmpty() } }
+                ?: emptyList()
 
-        val statusText = document.selectFirst(".detail .meta > p > strong:contains(Status) ~ a")!!.text()
-        status = when (statusText.lowercase(Locale.ENGLISH)) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "on-hold" -> SManga.ON_HIATUS
-            "canceled" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
+            description = buildString {
+                append(document.select(".summary .content, .summary .content ~ p").text())
+                if (altNames.isNotEmpty()) {
+                    append("\n\nAlt name(s): ")
+                    append(altNames.joinToString())
+                }
+            }
+
+            val statusText = document.selectFirst(".detail .meta > p > strong:contains(Status) ~ a")!!.text()
+            status = when (statusText.lowercase(Locale.ENGLISH)) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "on-hold" -> SManga.ON_HIATUS
+                "canceled" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
         }
     }
 
-    // Chapters
+    // ============================= Chapters ==============================
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         // API is heavily rate limited. Use custom client
         return if (manga.status != SManga.LICENSED) {
@@ -201,17 +218,38 @@ abstract class MadTheme(
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.request.url.fragment == "idFound") {
-            return super.chapterListParse(response)
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaId = MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)
+
+        if (useLegacyApi) {
+            val url = mangaId?.let {
+                "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
+                    .addQueryParameter("manga_id", it)
+                    .addQueryParameter("manga_name", manga.title)
+                    .build()
+                    .toString()
+            } ?: (baseUrl + manga.url)
+
+            return GET(url, headers)
         }
 
-        val document = response.asJsoup()
+        val mangaSlug = manga.url.substringAfterLast("/").substringBefore("?")
+        val targetPath = if (useSlugSearch) mangaSlug else mangaId
 
-        val script = document.selectFirst("script:containsData(bookId)")
-            ?: throw Exception("Cannot find script")
-        val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
-        val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
+        if (!targetPath.isNullOrEmpty()) {
+            return GET(buildChapterUrl(mangaId.orEmpty(), mangaSlug), headers)
+        }
+
+        return GET(baseUrl + manga.url, headers)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val requestUrl = response.request.url.toString()
+
+        if (requestUrl.contains("/api/manga/") || requestUrl.contains("/service/backend/chaplist/")) {
+            return document.select(chapterListSelector()).map { chapterFromElement(it) }
+        }
 
         var chaptersList = document.select(chapterListSelector()).map { chapterFromElement(it) }
 
@@ -220,8 +258,13 @@ abstract class MadTheme(
             ?: false
 
         if (fetchApi) {
+            val script = document.selectFirst("script:containsData(bookId)")
+                ?: throw Exception("Cannot find script")
+            val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
+            val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
+
             val apiChapters = client.newCall(GET(buildChapterUrl(bookId, bookSlug), headers)).execute()
-                .asJsoup().select(chapterListSelector()).map { chapterFromElement(it) }
+                .use { it.asJsoup().select(chapterListSelector()).map { element -> chapterFromElement(element) } }
 
             val cutIndex = chaptersList.indexOfFirst { chapter ->
                 apiChapters.any { it.url == chapter.url }
@@ -233,41 +276,9 @@ abstract class MadTheme(
         return chaptersList
     }
 
-    private fun buildChapterUrl(mangaId: String, mangaSlug: String): HttpUrl = baseUrl.toHttpUrl().newBuilder().apply {
-        addPathSegment("api")
-        addPathSegment("manga")
-        addPathSegment(if (useSlugSearch) mangaSlug else mangaId)
-        addPathSegment("chapters")
-        addQueryParameter("source", "detail")
-    }.build()
+    open fun chapterListSelector(): String = "#chapter-list > li"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        if (useLegacyApi) {
-            val mangaId = MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)
-            val url = mangaId?.let {
-                "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
-                    .addQueryParameter("manga_id", it)
-                    .addQueryParameter("manga_name", manga.title)
-                    .fragment("idFound")
-                    .build()
-                    .toString()
-            } ?: (baseUrl + manga.url)
-
-            return GET(url, headers)
-        }
-        return GET(baseUrl + manga.url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (genresList == null) {
-            genresList = parseGenres(response.asJsoup(response.peekBody(Long.MAX_VALUE).string()))
-        }
-        return super.searchMangaParse(response)
-    }
-
-    override fun chapterListSelector(): String = "#chapter-list > li"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+    open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         // Not using setUrlWithoutDomain() to support external chapters
         url = element.selectFirst("a")!!
             .absUrl("href")
@@ -277,14 +288,16 @@ abstract class MadTheme(
         date_upload = parseChapterDate(element.selectFirst(".chapter-update")?.text())
     }
 
-    // Pages
-    override fun pageListParse(document: Document): List<Page> {
+    // =============================== Pages ===============================
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val mangaId = MANGA_ID_REGEX.find(document.location())?.groupValues?.get(1)
         val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
 
         val html = if (mangaId != null && chapterId != null) {
             val url = GET("$baseUrl/service/backend/chapterServer/?server_id=1&chapter_id=$chapterId", headers)
-            client.newCall(url).execute().body.string()
+            client.newCall(url).execute().use { it.body.string() }
         } else {
             document.html()
         }
@@ -314,7 +327,7 @@ abstract class MadTheme(
                     // Great, we can use these.
                     if (chapterImagesFromHtml.count() < chapterImagesFromJs.count()) {
                         // Seems like we've hit such a host, let's use the images we've obtained
-                        // from the javascript string.
+                        // from the JavaScript string.
                         return chapterImagesFromJs.mapIndexed { index, path ->
                             Page(index, imageUrl = path)
                         }
@@ -344,40 +357,6 @@ abstract class MadTheme(
         }
     }
 
-    /**
-     * Resolves the best available image URL from a chapter image element.
-     *
-     * For all images, we attempt to extract the site's own onerror fallback URL and
-     * encode it as the fragment (mainUrl#fallbackUrl). The OkHttp interceptor will
-     * then transparently retry with the fallback if the primary request fails.
-     *
-     * For known broken CDN servers (currently s20), the onerror fallback is returned
-     * as the primary URL directly — no point trying s20 at all.
-     *
-     * Note: the fallback URL has a different path structure than data-src
-     * (it omits the /toonily/ path segment), so we cannot simply swap the domain —
-     * we must extract it from the onerror attribute directly.
-     *
-     * Example:
-     *   data-src → https://s20.toonilycdnv2.xyz/toonily/manga/.../page.jpg
-     *   onerror  → //sb.toonilycdnv2.xyz/manga/.../page.jpg?v=1  (different path!)
-     */
-    private fun Element.resolveImageUrl(): String {
-        val dataSrc = attr("abs:data-src")
-        val raw = attr("onerror")
-            .substringAfter("this.src='", "")
-            .substringBefore("'")
-        val fallback = when {
-            raw.startsWith("https://") || raw.startsWith("http://") -> raw
-            raw.startsWith("//") -> "https:$raw"
-            else -> return dataSrc // no onerror available, use data-src as-is
-        }
-        // For known broken servers, use the fallback as the primary URL directly.
-        // For everything else, encode fallback as fragment for the interceptor to retry with on failure.
-        return if ("://s20." in dataSrc) fallback else "$dataSrc#$fallback"
-    }
-
-    // Image
     override fun pageListRequest(chapter: SChapter): Request = if (chapter.url.toHttpUrlOrNull() != null) {
         // External chapter
         GET(chapter.url, headers)
@@ -387,51 +366,10 @@ abstract class MadTheme(
 
     override fun imageRequest(page: Page): Request = GET("${page.imageUrl}#image-request", headers)
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Date logic lifted from Madara
-    private fun parseChapterDate(date: String?): Long {
-        date ?: return 0
+    // ============================== Filters ==============================
 
-        fun SimpleDateFormat.tryParse(string: String): Long = try {
-            parse(string)?.time ?: 0
-        } catch (_: ParseException) {
-            0
-        }
-
-        return when {
-            " ago" in date -> {
-                parseRelativeDate(date)
-            }
-
-            else -> dateFormat.tryParse(date)
-        }
-    }
-
-    private fun parseRelativeDate(date: String): Long {
-        val number = NUMBER_REGEX.find(date)?.groupValues?.getOrNull(0)?.toIntOrNull() ?: return 0
-        val cal = Calendar.getInstance()
-
-        return when {
-            date.contains("year") -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
-            date.contains("month") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
-            date.contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            date.contains("hour") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            date.contains("minute") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            date.contains("second") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
-            else -> 0
-        }
-    }
-
-    // Dynamic genres
-    private fun parseGenres(document: Document): List<Genre>? = document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.run {
-        firstOrNull()?.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
-        map {
-            Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
-        }
-    }
-
-    // Filters
     override fun getFilterList() = FilterList(
         // TODO: Filters for sites that support it:
         // excluded genres
@@ -483,6 +421,83 @@ abstract class MadTheme(
         state: Int = 0,
     ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
+    }
+
+    // ============================= Utilities =============================
+
+    private fun buildChapterUrl(mangaId: String, mangaSlug: String): HttpUrl = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("api")
+        addPathSegment("manga")
+        addPathSegment(if (useSlugSearch) mangaSlug else mangaId)
+        addPathSegment("chapters")
+        addQueryParameter("source", "detail")
+    }.build()
+
+    /**
+     * Resolves the best available image URL from a chapter image element.
+     *
+     * For all images, we attempt to extract the site's own onerror fallback URL and
+     * encode it as the fragment (mainUrl#fallbackUrl). The OkHttp interceptor will
+     * then transparently retry with the fallback if the primary request fails.
+     *
+     * For known broken CDN servers (currently s20), the onerror fallback is returned
+     * as the primary URL directly — no point trying s20 at all.
+     *
+     * Note: the fallback URL has a different path structure than data-src
+     * (it omits the /toonily/ path segment), so we cannot simply swap the domain —
+     * we must extract it from the onerror attribute directly.
+     *
+     * Example:
+     *   data-src → https://s20.toonilycdnv2.xyz/toonily/manga/.../page.jpg
+     *   onerror  → //sb.toonilycdnv2.xyz/manga/.../page.jpg?v=1  (different path!)
+     */
+    private fun Element.resolveImageUrl(): String {
+        val dataSrc = attr("abs:data-src")
+        val raw = attr("onerror")
+            .substringAfter("this.src='", "")
+            .substringBefore("'")
+        val fallback = when {
+            raw.startsWith("https://") || raw.startsWith("http://") -> raw
+            raw.startsWith("//") -> "https:$raw"
+            else -> return dataSrc // no onerror available, use data-src as-is
+        }
+        // For known broken servers, use the fallback as the primary URL directly.
+        // For everything else, encode fallback as fragment for the interceptor to retry with on failure.
+        return if ("://s20." in dataSrc) fallback else "$dataSrc#$fallback"
+    }
+
+    private fun parseChapterDate(date: String?): Long {
+        date ?: return 0
+
+        return when {
+            " ago" in date -> {
+                parseRelativeDate(date)
+            }
+            else -> dateFormat.tryParse(date)
+        }
+    }
+
+    private fun parseRelativeDate(date: String): Long {
+        val number = NUMBER_REGEX.find(date)?.groupValues?.getOrNull(0)?.toIntOrNull() ?: return 0
+        val cal = Calendar.getInstance()
+
+        return when {
+            date.contains("year") -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            date.contains("month") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            date.contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+            date.contains("hour") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            date.contains("minute") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            date.contains("second") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            else -> 0
+        }
+    }
+
+    // Dynamic genres
+    private fun parseGenres(document: Document): List<Genre>? = document.selectFirst(".checkbox-group.genres")?.select(".checkbox-wrapper")?.run {
+        firstOrNull()?.selectFirst("input")?.attr("name")?.takeIf { it.isNotEmpty() }?.let { genreKey = it }
+        map {
+            Genre(it.selectFirst(".radio__label")!!.text(), it.selectFirst("input")!!.`val`())
+        }
     }
 
     companion object {

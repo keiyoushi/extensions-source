@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mokuro
 
+import keiyoushi.utils.decodeHex
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -7,7 +8,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import okio.ByteString.Companion.decodeHex
 import okio.buffer
 import okio.source
 import java.io.FilterInputStream

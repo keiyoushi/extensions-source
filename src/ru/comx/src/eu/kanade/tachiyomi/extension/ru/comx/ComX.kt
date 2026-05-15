@@ -27,11 +27,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
 import java.io.IOException
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -94,10 +96,8 @@ class ComX :
             }
 
             var response = chain.proceed(finalRequest)
-            val bodyString = response.peekBody(2048).string()
-            if (response.code == 404 && bodyString.contains("Protected by Batman")) {
-                response.close()
-                throw IOException("Antibot, попробуйте пройти капчу в WebView")
+            if (response.code == 404 && response.request.url.encodedPath == "/_c") {
+                response = solveGuardChallenge(chain, response, finalRequest)
             }
 
             val imgPreloadHost = baseUrl.replace(Regex("^https?://"), "img.")
@@ -281,6 +281,40 @@ class ComX :
         element.contains("Продолжается") || element.contains(" из ") || element.contains("Онгоинг") -> SManga.ONGOING
         element.contains("Заверш") || element.contains("Лимитка") || element.contains("Ван шот") || element.contains("Графический роман") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
+    }
+
+    private fun solveGuardChallenge(chain: Interceptor.Chain, challenge: Response, original: Request): Response {
+        val token = TOKEN_REGEX.find(challenge.peekBody(4096).string())?.groupValues?.get(1)
+            ?: throw IOException("Antibot challenge failed: token not found")
+        challenge.close()
+
+        var nonce = 0L
+        val md = MessageDigest.getInstance("SHA-256")
+        val start = System.currentTimeMillis()
+        while (md.digest("$token:$nonce".toByteArray())[0] != 0.toByte()) {
+            nonce++
+            if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
+        }
+        val workTime = (System.currentTimeMillis() - start).coerceAtLeast(120)
+
+        val verifyBody = FormBody.Builder()
+            .add("token", token).add("mode", "modern")
+            .add("workTime", workTime.toString()).add("iterations", (nonce + 1).toString())
+            .add("webdriver", "0").add("touch", "1")
+            .add("screen_w", "390").add("screen_h", "844").add("screen_cd", "24")
+            .add("wgv", "Apple Inc.").add("wgr", "Apple GPU")
+            .add("tz", "-180").add("dpr", "3").add("cdp", "0").add("cdpf", "")
+            .build()
+
+        val verifyReq = Request.Builder()
+            .url("$baseUrl/_v")
+            .post(verifyBody)
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Referer", challenge.request.url.toString())
+            .build()
+        chain.proceed(verifyReq).close()
+
+        return chain.proceed(original)
     }
 
     // Chapters
@@ -499,5 +533,6 @@ class ComX :
 
         private val URL_REGEX = Regex("^https?://.+")
         private val IMG_DOMAIN_REGEX = "\"host\":\"(.+?)\"".toRegex()
+        private val TOKEN_REGEX = """token:\s*"([^"]+)"""".toRegex()
     }
 }
