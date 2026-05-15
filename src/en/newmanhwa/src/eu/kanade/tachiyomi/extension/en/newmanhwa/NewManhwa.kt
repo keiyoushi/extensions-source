@@ -161,10 +161,12 @@ class NewManhwa :
     // ========================= Chapters =========================
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(".chapter-list a.chapter-row").map { element ->
+        return document.select(".chapter-list .chapter-row").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
-                name = element.selectFirst(".chapter-name strong")!!.text()
+                val link = element.selectFirst("a.chapter-main")!!
+
+                setUrlWithoutDomain(link.attr("href"))
+                name = link.selectFirst(".chapter-name strong")!!.text()
                 date_upload = element.selectFirst(".chapter-age")?.text()?.let {
                     DATE_FORMAT.tryParse(it)
                 } ?: 0L
