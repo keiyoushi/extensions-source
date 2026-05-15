@@ -2,7 +2,6 @@ package keiyoushi.utils
 
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -12,21 +11,12 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.reflect.typeOf
 
 private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
-
-private val nextJsJsonInstance by lazy {
-    Json(jsonInstance) {
-        serializersModule = SerializersModule {
-            include(jsonInstance.serializersModule)
-        }
-    }
-}
 
 private fun <T> extractValueNextJs(
     payload: JsonElement,
@@ -35,7 +25,7 @@ private fun <T> extractValueNextJs(
 ): T? {
     if (payload !is JsonObject && payload !is JsonArray) return null
     if (predicate(payload)) {
-        return nextJsJsonInstance.decodeFromJsonElement(deserializer, payload)
+        return jsonInstance.decodeFromJsonElement(deserializer, payload)
     }
     val children: Iterable<JsonElement> = when (payload) {
         is JsonObject -> payload.values
@@ -137,7 +127,7 @@ private fun Document.extractAppRouterPayloads(
     .flatMap { script ->
         try {
             val raw = NEXT_F_REGEX.find(script)?.groupValues?.get(1) ?: return@flatMap emptyList()
-            val arr = nextJsJsonInstance.parseToJsonElement(raw).jsonArray
+            val arr = jsonInstance.parseToJsonElement(raw).jsonArray
             val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@flatMap emptyList()
 
             extractRscPayloads(content, chunkCache, modelCache)
@@ -149,7 +139,7 @@ private fun Document.extractAppRouterPayloads(
 private fun Document.extractPagesRouterPayloads(): List<JsonElement> {
     val data = selectFirst("script#__NEXT_DATA__")?.data() ?: return emptyList()
     return try {
-        val root = nextJsJsonInstance.parseToJsonElement(data)
+        val root = jsonInstance.parseToJsonElement(data)
         val pageProps = root.jsonObject["props"]?.jsonObject?.get("pageProps")
         listOfNotNull(pageProps, root)
     } catch (_: Exception) {
@@ -211,7 +201,7 @@ private fun extractRscPayloads(
             chunkCache[id] = chunkContent
 
             try {
-                results.add(nextJsJsonInstance.parseToJsonElement(chunkContent))
+                results.add(jsonInstance.parseToJsonElement(chunkContent))
             } catch (_: Exception) {
             }
         } else {
@@ -259,7 +249,7 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
             '{', '[' -> depth++
             '}', ']' -> if (--depth == 0) {
                 return try {
-                    Pair(nextJsJsonInstance.parseToJsonElement(body.substring(start, i)), i)
+                    Pair(jsonInstance.parseToJsonElement(body.substring(start, i)), i)
                 } catch (_: Exception) {
                     Pair(null, i)
                 }
@@ -267,7 +257,7 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
         }
         if (depth == 0 && c.isWhitespace()) {
             return try {
-                Pair(nextJsJsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
+                Pair(jsonInstance.parseToJsonElement(body.substring(start, i - 1)), i)
             } catch (_: Exception) {
                 Pair(null, i)
             }
@@ -297,9 +287,10 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
         serializer<T>().descriptor
     }
 
-    val requiredKeys = (0 until elementDescriptor.elementsCount).filterNot {
-        elementDescriptor.isElementOptional(it) || elementDescriptor.getElementDescriptor(it).isNullable
-    }.map { elementDescriptor.getElementName(it) }.toSet()
+    val requiredKeys = (0 until elementDescriptor.elementsCount)
+        .filterNot { elementDescriptor.isElementOptional(it) || elementDescriptor.getElementDescriptor(it).isNullable }
+        .map { elementDescriptor.getElementName(it) }
+        .toSet()
 
     require(requiredKeys.isNotEmpty()) {
         "Cannot infer a predicate for ${elementDescriptor.serialName}: all fields are optional or nullable. Provide an explicit predicate instead."
@@ -307,11 +298,15 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
 
     return if (isList) {
         { element ->
-            element is JsonArray && element.isNotEmpty() && element.first() is JsonObject && requiredKeys.all { it in element.first().jsonObject }
+            element is JsonArray &&
+                element.isNotEmpty() &&
+                element.first() is JsonObject &&
+                requiredKeys.all { it in element.first().jsonObject }
         }
     } else {
         { element ->
-            element is JsonObject && requiredKeys.all { it in element }
+            element is JsonObject &&
+                requiredKeys.all { it in element }
         }
     }
 }
