@@ -50,7 +50,7 @@ class NewManhwa :
     private fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select("a.series-card").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.attr("abs:href"))
                 title = element.selectFirst("strong")!!.text().removeTitleRank()
                 thumbnail_url = element.selectFirst("img")?.let {
                     it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
@@ -165,7 +165,7 @@ class NewManhwa :
             SChapter.create().apply {
                 val link = element.selectFirst("a.chapter-main")!!
 
-                setUrlWithoutDomain(link.attr("href"))
+                setUrlWithoutDomain(link.attr("abs:href"))
                 name = link.selectFirst(".chapter-name strong")!!.text()
                 date_upload = element.selectFirst(".chapter-age")?.text()?.let {
                     DATE_FORMAT.tryParse(it)
