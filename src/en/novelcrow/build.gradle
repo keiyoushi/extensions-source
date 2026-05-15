@@ -3,7 +3,7 @@ ext {
     extClass = '.NovelCrow'
     themePkg = 'madara'
     baseUrl = 'https://novelcrow.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
