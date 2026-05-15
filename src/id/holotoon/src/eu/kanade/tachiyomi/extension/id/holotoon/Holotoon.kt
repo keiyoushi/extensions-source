@@ -21,7 +21,6 @@ import okio.Buffer
 import okio.ForwardingSource
 import okio.buffer
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import java.util.Calendar
 
 class Holotoon : HttpSource() {
@@ -39,7 +38,7 @@ class Holotoon : HttpSource() {
     override val versionId = 2
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::imageIntercept)
+        .addInterceptor { chain -> imageIntercept(chain) }
         .rateLimit(3)
         .build()
 
@@ -61,12 +60,15 @@ class Holotoon : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("a[href*=/comic/]").filterVisible()
+        val mangas = document.select("a[href*=/comic/]").filter { it.isVisible() }
             .distinctBy { it.attr("href") }
-            .map { element ->
+            .mapNotNull { element ->
+                val titleText = element.selectFirst("h3")?.text() ?: return@mapNotNull null
+                val mangaUrl = element.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
                 SManga.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href"))
-                    title = element.selectFirst("h3")!!.text()
+                    setUrlWithoutDomain(mangaUrl)
+                    title = titleText
                     thumbnail_url = element.selectFirst("img")?.absUrl("src")
                 }
             }
@@ -117,15 +119,18 @@ class Holotoon : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.select("h1._tt, h1").filterVisible().first().text()
+            // Prioritize text-3xl class for the real title to avoid honeypots
+            title = document.select("h1.text-3xl, h1._tt, h1").firstOrNull { it.isVisible() }?.text()
+                ?: document.selectFirst("h1")?.text()
+                ?: "Judul tidak ditemukan"
             thumbnail_url = document.selectFirst("div.aspect-\\[3\\/4\\] img")?.absUrl("src")
-            author = document.select("span:contains(Author:) > span, span:contains(Uploaded by:) a").filterVisible().firstOrNull()?.text()
-            artist = document.select("span:contains(Artist:) > span").filterVisible().firstOrNull()?.text()
+            author = document.select("span:contains(Author:) > span, span:contains(Uploaded by:) a").firstOrNull { it.isVisible() }?.text()
+            artist = document.select("span:contains(Artist:) > span").firstOrNull { it.isVisible() }?.text()
             description = document.select("#synopsis-wrapper > div, #synopsis-text, div#_ds, div#_sd")
-                .filterVisible()
+                .filter { it.isVisible() }
                 .filter { !it.text().contains("Loading", true) }
                 .firstNotNullOfOrNull { it.text() }
-            genre = document.select("a[href*=/browse?genre=]").filterVisible().joinToString(", ") { it.text() }
+            genre = document.select("a[href*=/browse?genre=]").filter { it.isVisible() }.joinToString(", ") { it.text() }
 
             status = document.selectFirst(".flex.items-start.gap-3 span.border")?.text()?.lowercase()?.let {
                 when {
@@ -143,14 +148,17 @@ class Holotoon : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("a[href*=/read/]").filterVisible().map { element ->
+        return document.select("a[href*=/read/]").filter { it.isVisible() }.mapNotNull { element ->
+            val divs = element.select("> div")
+            val nameText = divs.firstOrNull()?.text()?.trim() ?: return@mapNotNull null
+            if (nameText.contains("Trap", true) || nameText.lowercase() == "chapter") return@mapNotNull null
+
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                val divs = element.select("> div")
-                name = divs.first()!!.text().trim()
+                name = nameText
                 date_upload = parseDate(divs.lastOrNull()?.select("span")?.lastOrNull()?.text())
             }
-        }.filter { !it.name.contains("Trap", true) }
+        }
     }
 
     // =============================== Pages ===============================
@@ -197,7 +205,7 @@ class Holotoon : HttpSource() {
 
     // =============================== Image ===============================
     override fun imageRequest(page: Page): Request {
-        val isEncrypted = page.imageUrl!!.contains("#")
+        val isEncrypted = page.imageUrl?.contains("#") ?: false
 
         val newHeaders = headers.newBuilder().apply {
             set("Referer", page.url.takeIf { it.isNotEmpty() } ?: "$baseUrl/")
@@ -206,18 +214,17 @@ class Holotoon : HttpSource() {
                 set("Accept", "*/*")
                 set("Sec-Fetch-Dest", "empty")
                 set("Sec-Fetch-Mode", "cors")
-                set("Sec-Fetch-Site", "same-origin")
             } else {
                 set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
                 set("Sec-Fetch-Dest", "image")
                 set("Sec-Fetch-Mode", "no-cors")
-                set("Sec-Fetch-Site", "same-origin")
             }
+            set("Sec-Fetch-Site", "same-origin")
             removeAll("Sec-Fetch-User")
             removeAll("Upgrade-Insecure-Requests")
         }.build()
 
-        return GET(page.imageUrl!!, newHeaders)
+        return GET(page.imageUrl ?: "", newHeaders)
     }
 
     // ============================== Filters ==============================
@@ -232,17 +239,27 @@ class Holotoon : HttpSource() {
 
     // ============================= Utilities =============================
 
-    private fun Elements.filterVisible() = filter { it.isVisible() }
+    private fun Element.isVisible(): Boolean {
+        var curr: Element? = this
+        while (curr != null) {
+            if (curr.isHidden()) return false
+            curr = curr.parent()
+        }
+        return true
+    }
 
-    private fun Element?.isVisible(): Boolean = this?.let {
-        parents().none { p -> p.isHidden() } && !it.isHidden()
-    } ?: false
-
-    private fun Element.isHidden(): Boolean = attr("aria-hidden") == "true" ||
-        attr("style").contains("display:none", true) ||
-        attr("style").contains("clip:rect", true) ||
-        attr("style").contains("left:-9999px", true) ||
-        className().contains("sr-only", true)
+    private fun Element.isHidden(): Boolean {
+        val style = attr("style").lowercase().replace(" ", "")
+        return attr("aria-hidden") == "true" ||
+            style.contains("display:none") ||
+            style.contains("clip:rect") ||
+            style.contains("clip-path:inset") ||
+            style.contains("left:-999") ||
+            style.contains("opacity:0") ||
+            style.contains("visibility:hidden") ||
+            (style.contains("position:absolute") && (style.contains("width:1px") || style.contains("width:0px"))) ||
+            className().contains("sr-only", true)
+    }
 
     private fun parseDate(dateStr: String?): Long {
         if (dateStr == null) return 0L
@@ -269,6 +286,7 @@ class Holotoon : HttpSource() {
         val xorKey = url.fragment
 
         val response = chain.proceed(request)
+        val body = response.body
         if (xorKey.isNullOrEmpty() || !response.isSuccessful) return response
 
         val decodedKey = try {
@@ -280,7 +298,6 @@ class Holotoon : HttpSource() {
             xorKey.toByteArray()
         }
 
-        val body = response.body
         val contentType = body.contentType()
         val keyLen = decodedKey.size
 
