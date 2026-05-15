@@ -16,7 +16,6 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -24,7 +23,6 @@ import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 
 class PoseidonScans :
     HttpSource(),
@@ -50,10 +48,6 @@ class PoseidonScans :
         if (this.startsWith("/api/covers/")) return baseUrl + this
         if (this.startsWith("/")) return baseUrl + this
         return "$baseUrl/api/covers/$this"
-    }
-
-    private val isoDateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
     }
 
     // found /manga/all too
@@ -111,21 +105,7 @@ class PoseidonScans :
 
             status = parseStatus(mangaDto.status)
 
-            var potentialDescription: String? = null
-
-            val jsonDescription = mangaDto.description.trim()
-            if (!jsonDescription.matches(Regex("^\\$[a-f0-9]+$"))) {
-                potentialDescription = jsonDescription
-            }
-
-            // Workaround for cases where description is a pointer to a chunk in the RSC data.
-            description = potentialDescription.takeIf { !it.isNullOrBlank() }
-                ?: document.selectFirst("p.text-gray-300.leading-relaxed")
-                    ?.text()
-                    ?.trim()
-                    ?.replaceFirst("${mangaDto.title} : ", "")
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
+            description = mangaDto.description.trim().takeIf { it.isNotEmpty() }
 
             setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }
@@ -164,10 +144,10 @@ class PoseidonScans :
             SHOW_PREMIUM_DEFAULT,
         )
         return mangaPageDto.manga.chapters.mapNotNull { ch ->
-            val isLocked = ch.isPremium == true && !mangaPageDto.isPremiumUser
+            val isLocked = ch.isPremium == true && mangaPageDto.isPremiumUser != true
 
             if (isLocked && !showPremium) {
-                val premiumUntilDate = ch.premiumUntil?.let { parseIsoDate(it) } ?: 0L
+                val premiumUntilDate = ch.premiumUntil?.time ?: 0L
                 if (System.currentTimeMillis() <= premiumUntilDate) return@mapNotNull null
             }
             SChapter.create().apply {
@@ -194,9 +174,7 @@ class PoseidonScans :
 
                     if (isLocked) {
                         val dateParts = formatTimestamp(
-                            parseIsoDate(
-                                ch.premiumUntil,
-                            ),
+                            ch.premiumUntil?.time ?: 0L,
                         ).split(" ")
                         // formatTimestamp gives: [dd, MMMM, HH:mm]
                         append(
@@ -207,7 +185,7 @@ class PoseidonScans :
                 setUrlWithoutDomain(
                     "/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString",
                 )
-                date_upload = parseIsoDate(ch.createdAt)
+                date_upload = ch.createdAt.time
                 chapter_number = ch.number
             }
         }.sortedByDescending { it.chapter_number }
@@ -216,14 +194,6 @@ class PoseidonScans :
     fun formatTimestamp(timestamp: Long): String {
         val sdf = SimpleDateFormat("dd MMMM HH:mm", Locale.getDefault())
         return sdf.format(Date(timestamp))
-    }
-
-    private fun parseIsoDate(dateString: String?): Long {
-        if (dateString.isNullOrBlank()) return 0L
-
-        val cleaned = dateString.removeSurrounding("\"").removePrefix($$"$D")
-
-        return isoDateFormatter.tryParse(cleaned)
     }
 
     // =============================== Pages ================================
