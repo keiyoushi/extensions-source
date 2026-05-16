@@ -4,7 +4,7 @@ ext {
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/boredslayerscan'
     overrideVersionCode = 0
-    isNsfw = false
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
