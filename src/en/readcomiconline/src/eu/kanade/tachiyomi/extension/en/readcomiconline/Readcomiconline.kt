@@ -192,9 +192,11 @@ class Readcomiconline :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
+    private val viewsRegex = Regex("Views:\\s*([\\d,]+)")
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val infoElement = document.select("div.barContent").first()!!
+        val infoElement = document.selectFirst("div.barContent")!!
 
         val manga = SManga.create()
         manga.title = infoElement.selectFirst("a.bigChar")!!.text()
@@ -205,12 +207,12 @@ class Readcomiconline :
             infoElement.select("p:has(span:contains(Summary:)) ~ p").text().takeIf { it.isNotEmpty() },
             infoElement.select("p:has(span:contains(Publisher:))").text().takeIf { it.isNotEmpty() }?.let { "\n$it" },
             infoElement.select("p:has(span:contains(Publication date:))").text().takeIf { it.isNotEmpty() },
-            Regex("Views:\\s*([\\d,]+)").find(infoElement.select("p:has(span:contains(Views:))").text())
+            viewsRegex.find(infoElement.select("p:has(span:contains(Views:))").text())
                 ?.let { "Views: ${it.groupValues[1]}" },
         ).joinToString("\n")
         manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
             .let { parseStatus(it) }
-        manga.thumbnail_url = document.select(".rightBox:eq(0) img").first()?.absUrl("src")
+        manga.thumbnail_url = document.selectFirst(".rightBox:eq(0) img")?.absUrl("src")
         return manga
     }
 
@@ -299,7 +301,7 @@ class Readcomiconline :
         }
     }
 
-    override fun imageUrlParse(response: Response) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private class Status :
         SelectFilter(
@@ -430,13 +432,6 @@ class Readcomiconline :
             entries = arrayOf("High Quality", "Low Quality")
             entryValues = arrayOf("hq", "lq")
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(QUALITY_PREF, entry).commit()
-            }
         }
 
         val serverPref = ListPreference(screen.context).apply {
@@ -445,13 +440,6 @@ class Readcomiconline :
             entries = arrayOf("Server 1", "Server 2")
             entryValues = arrayOf("", "s2")
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(SERVER_PREF, entry).commit()
-            }
         }
 
         screen.addPreference(mirrorPref)
