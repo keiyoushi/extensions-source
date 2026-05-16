@@ -51,7 +51,7 @@ class EpsilonScan :
     override val baseUrl = "https://epsilonscan.to"
     private val baseHttpUrl = baseUrl.toHttpUrl()
     override val supportsLatest = true
-    override val versionId = 1
+    override val versionId = 2
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
