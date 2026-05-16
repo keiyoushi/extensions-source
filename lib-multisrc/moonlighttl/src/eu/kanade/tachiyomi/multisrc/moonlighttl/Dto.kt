@@ -1,7 +1,8 @@
-package eu.kanade.tachiyomi.extension.es.traduccionesmoonlight
+package eu.kanade.tachiyomi.multisrc.moonlighttl
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -47,13 +48,13 @@ class SeriesDto(
         url = "$seriesPath/$slug"
     }
 
-    fun toSMangaDetails(): SManga = SManga.create().apply {
+    fun toSMangaDetails(intl: Intl): SManga = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
         description = synopsis
         if (!alternativeName.isNullOrBlank()) {
             if (!description.isNullOrBlank()) description += "\n\n"
-            description += "Nombres alternativos: $alternativeName"
+            description += "${intl["alternative_names"]}: $alternativeName"
         }
         genre = genders.joinToString { it.gender.name }
         author = authors.joinToString { it.author.name }
@@ -95,8 +96,8 @@ class ChapterDto(
     private val slug: String,
     @SerialName("created_at") private val date: String,
 ) {
-    fun toSChapter(seriesPath: String, seriesSlug: String): SChapter = SChapter.create().apply {
-        name = "Capítulo ${number.toString().removeSuffix(".0")}"
+    fun toSChapter(seriesPath: String, seriesSlug: String, intl: Intl): SChapter = SChapter.create().apply {
+        name = "${intl["chapter"]} ${number.toString().removeSuffix(".0")}"
         if (!this@ChapterDto.name.isNullOrBlank()) {
             name += " - ${this@ChapterDto.name}"
         }

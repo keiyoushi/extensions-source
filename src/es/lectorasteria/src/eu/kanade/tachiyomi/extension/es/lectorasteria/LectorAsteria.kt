@@ -1,17 +1,15 @@
-package eu.kanade.tachiyomi.extension.es.traduccionesmoonlight
+package eu.kanade.tachiyomi.extension.es.lectorasteria
 
 import eu.kanade.tachiyomi.multisrc.moonlighttl.MoonlightTL
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-class TraduccionesMoonlight :
+class LectorAsteria :
     MoonlightTL(
-        "Traducciones Moonlight",
-        "https://traduccionesmoonlight.com",
+        "Lector Asteria",
+        "https://lectorasteria.com",
         "es",
     ) {
-
-    override val versionId = 3
 
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)

@@ -1,26 +1,27 @@
-package eu.kanade.tachiyomi.extension.es.traduccionesmoonlight
+package eu.kanade.tachiyomi.multisrc.moonlighttl
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.lib.i18n.Intl
 
-fun getFilters() = FilterList(
-    SortByFilter("Ordenar por", getSortProperties()),
-    StatusFilter("Estado", getStatusList()),
+fun getFilters(intl: Intl) = FilterList(
+    SortByFilter(intl["sort_by"], getSortProperties(intl)),
+    StatusFilter(intl["status"], getStatusList(intl)),
 )
 
-private fun getSortProperties(): List<SortProperty> = listOf(
-    SortProperty("Nombre", "name"),
-    SortProperty("Vistas", "views"),
-    SortProperty("Actualización", "updated_at"),
-    SortProperty("Agregado", "created_at"),
+private fun getSortProperties(intl: Intl): List<SortProperty> = listOf(
+    SortProperty(intl["sort_name"], "name"),
+    SortProperty(intl["sort_views"], "views"),
+    SortProperty(intl["sort_updated"], "updated_at"),
+    SortProperty(intl["sort_created"], "created_at"),
 )
 
-private fun getStatusList() = arrayOf(
-    Pair("Todos", 0),
-    Pair("En curso", 1),
-    Pair("En pausa", 2),
-    Pair("Abandonado", 3),
-    Pair("Finalizado", 4),
+private fun getStatusList(intl: Intl) = arrayOf(
+    intl["status_all"] to 0,
+    intl["status_ongoing"] to 1,
+    intl["status_hiatus"] to 2,
+    intl["status_dropped"] to 3,
+    intl["status_completed"] to 4,
 )
 
 class SortProperty(val name: String, val value: String)
