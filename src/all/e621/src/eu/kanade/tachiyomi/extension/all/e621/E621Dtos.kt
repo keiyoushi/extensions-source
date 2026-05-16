@@ -31,7 +31,15 @@ data class Post(
     @SerialName("pools") val poolIds: List<Int> = emptyList(),
     @SerialName("updated_at") val updatedAt: String = "",
     @SerialName("created_at") val createdAt: String = "",
-    val rating: String = "e",
+    val rating: String = "",
+    val score: Score = Score(),
+)
+
+@Serializable
+data class Score(
+    val up: Int = 0,
+    val down: Int = 0,
+    val total: Int = 0,
 )
 
 @Serializable

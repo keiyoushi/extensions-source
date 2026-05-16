@@ -6,15 +6,24 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 
+private const val BETTER_DETAILS_PREF = "better_details"
 private const val TAG_MODE_ENABLE_PREF = "tag_mode_enable"
 private const val SPLIT_CHAPTERS_PREF = "split_chapters2" // Set to 2 to avoid user caching issues
 private const val POPULAR_MODE_PREF = "popular_mode"
 private const val CATEGORY_PREF = "category_filter"
 private const val BLACKLIST_PREF = "blacklist"
+private const val WHITELIST_PREF = "whitelist"
 private const val SCORE_THRESH_PREF = "score_tresh"
 private const val FIRST_END_PREF = "first_end"
 
 fun setupE621PreferenceScreen(screen: PreferenceScreen) {
+    SwitchPreferenceCompat(screen.context).apply {
+        key = BETTER_DETAILS_PREF
+        title = "Enable Better Manga Details"
+        summary = "Improves Manga Details by adding authors, tags, and chapter detection. Disabling this will load manga details and chapter lists faster, and reduce API calls."
+        setDefaultValue(true)
+    }.also(screen::addPreference)
+
     ListPreference(screen.context).apply {
         key = SPLIT_CHAPTERS_PREF
         title = "Split chapters by"
@@ -43,15 +52,22 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         title = "Filter Popular by (Tag Mode)"
         entries = arrayOf("Hot", "Week", "Month", "Year", "All Time")
         entryValues = arrayOf("order:hot", "order:score date:week", "order:score date:month", "order:score date:year", "order:score")
-        setDefaultValue("order:score date:month")
+        setDefaultValue("order:score date:year")
         summary = "%s"
     }.also(screen::addPreference)
 
     EditTextPreference(screen.context).apply {
         key = BLACKLIST_PREF
         title = "Blacklisted Tags"
-        summary = "Space separated blacklisted tags. !Will not filter out everything! (Tag Search Mode only)"
-        setDefaultValue("gore feces urine diaper fart")
+        summary = "Space separated blacklisted tags. WILL NOT FILTER OUT EVERYTHING! (Tag Search Mode only)"
+        setDefaultValue("gore feces urine diaper fart burp_cloud")
+    }.also(screen::addPreference)
+
+    EditTextPreference(screen.context).apply {
+        key = WHITELIST_PREF
+        title = "Whitelisted Tags"
+        summary = "Space separated whitelisted tags. This will be applied to all your searches! (Tag Search Mode only)"
+        setDefaultValue("")
     }.also(screen::addPreference)
 
     EditTextPreference(screen.context).apply {
@@ -71,6 +87,9 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     }.also(screen::addPreference)
 }
 
+val SharedPreferences.betterDetailsPref: Boolean
+    get() = getBoolean(BETTER_DETAILS_PREF, true)
+
 val SharedPreferences.searchModePref: String
     get() = if (getBoolean(TAG_MODE_ENABLE_PREF, true)) "tags" else "pools"
 
@@ -87,8 +106,11 @@ val SharedPreferences.blacklistPref: String
     get() = getString(BLACKLIST_PREF, "gore feces urine diaper fart")!!.trim().replace(Regex("\\s+"), " ")
         .split(" ").joinToString(" ") { "-$it" }
 
+val SharedPreferences.whitelistPref: String
+    get() = getString(WHITELIST_PREF, "")!!.trim().replace(Regex("\\s+"), " ")
+
 val SharedPreferences.popularModePref: String
-    get() = getString(POPULAR_MODE_PREF, "order:score date:month")!!
+    get() = getString(POPULAR_MODE_PREF, "order:score date:year")!!
 
 val SharedPreferences.scoreThreshPref: String
     get() = getString(SCORE_THRESH_PREF, "20")!!.replace(Regex("\\s+"), " ")

@@ -6,13 +6,13 @@ import eu.kanade.tachiyomi.source.model.FilterList
 fun getE621FilterList(categoryPref: String): FilterList = FilterList(
     Filter.Header("Note: You will need to be logged into E621 via WebView to see certain posts (e.g., 'No Image')"),
     ModeFilter(),
-    Filter.Header(""),
+    // Filter.Header(""),
     Filter.Separator(),
     PoolGroupFilter("Pool Search Options", categoryPref),
-    Filter.Header(""),
+    // Filter.Header(""),
     Filter.Separator(),
     TagGroupFilter("Tag Search Options"),
-    Filter.Header(""),
+    // Filter.Header(""),
 )
 
 class PoolGroupFilter(displayName: String, categoryPref: String) :
@@ -40,12 +40,12 @@ class TagGroupFilter(displayName: String) :
             OrderTagFilter(),
             DateFilter(),
             TagsFilter(),
-            Filter.Header("e.g.,  `anthro  -mammal  order:random  date:week  score:>100`"),
+            Filter.Header("e.g.,  `anthro  -mammal  order:random  date:month  score:>100`"),
             Filter.Header("Negative tags may not filter everything"),
             // BlacklistFilter(), // Negative tags dont work well enough
             FirstPageFilter(),
             EndPageFilter(),
-            Filter.Header("Note: Filters out pools that don't use the `first_page` or `end_page` tags"),
+            Filter.Header("Warning: will filter out pools that don't use the `first_page` or `end_page` tags."),
         ),
     ) {
     fun getOrderTag() = (state[1] as OrderTagFilter).toUriPart()
@@ -90,7 +90,7 @@ fun getDefaultDateIndex(pref: String): Int = when (pref) {
     "week" -> 2
     "month" -> 3
     "year" -> 4
-    "decade" -> 5
+    // "decade" -> 5 // Doesn't behave?
     else -> 0 // "" maps to "All Time"
 }
 
@@ -140,7 +140,7 @@ class DateFilter(defaultIndex: Int = 0) :
             Pair("Week", "week"),
             Pair("Month", "month"),
             Pair("Year", "year"),
-            Pair("Decade", "decade"),
+            // Pair("Decade", "decade"), // Doesn't behave?
         ),
         defaultIndex,
     )
