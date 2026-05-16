@@ -327,8 +327,8 @@ abstract class Iken(
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringBeforeLast("#")}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#")
-        return GET("$apiUrl/api/post?postId=$id", headers)
+        val slug = manga.url.substringBeforeLast("#")
+        return GET("$apiUrl/api/post?postSlug=$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Post<Manga>>().post.toSManga()
@@ -344,11 +344,9 @@ abstract class Iken(
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val id = response.request.url.queryParameter("postId")
-
         val data = response.parseAs<Post<ChapterListResponse>>()
 
-        launchIO { updateViews(id?.toInt()) }
+        launchIO { updateViews(data.post.id) }
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
 
