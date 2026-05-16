@@ -1,5 +1,5 @@
 ext {
-    extName = 'ℳᥫ᭡. Crimson's ⛧Scan'
+    extName = 'Crimson Scan'
     extClass = '.CrimsonSScan'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/crimsonscan'
