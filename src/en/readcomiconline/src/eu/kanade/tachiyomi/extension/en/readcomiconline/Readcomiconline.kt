@@ -254,13 +254,7 @@ class Readcomiconline :
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val qualitySuffix =
-            if ((qualityPref() != "lq" && serverPref() != "s2") || (qualityPref() == "lq" && serverPref() == "s2")) {
-                "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
-            } else {
-                "&s=${serverPref()}&readType=1"
-            }
-
+        val qualitySuffix = "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
 
