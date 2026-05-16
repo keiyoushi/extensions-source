@@ -2,9 +2,15 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.serializer
 import kotlin.math.roundToInt
 
 @Serializable
@@ -74,8 +80,24 @@ class RelatedData(
 ) {
     @Serializable
     class RelationsData(
-        val relations: Map<String, List<BrowseManga>> = emptyMap(),
+        @Serializable(RelationsMapSerializer::class)
+        val relations: Map<String, List<BrowseManga>>? = null,
     )
+}
+
+internal object RelationsMapSerializer : KSerializer<Map<String, List<BrowseManga>>?> {
+    private val delegate = serializer<Map<String, List<BrowseManga>>>()
+    override val descriptor = delegate.descriptor
+
+    override fun deserialize(decoder: Decoder): Map<String, List<BrowseManga>>? {
+        val element = (decoder as JsonDecoder).decodeJsonElement()
+        if (element is JsonArray) return null
+        return decoder.json.decodeFromJsonElement(delegate, element)
+    }
+
+    override fun serialize(encoder: Encoder, value: Map<String, List<BrowseManga>>?) {
+        if (value != null) delegate.serialize(encoder, value)
+    }
 }
 
 @Serializable
