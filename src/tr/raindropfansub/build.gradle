@@ -7,4 +7,4 @@ ext {
     overrideVersionCode = 0
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
