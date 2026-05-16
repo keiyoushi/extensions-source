@@ -1,3 +1,5 @@
+package keiyoushi.gradle.extensions
+
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.kotlin.dsl.extra
 
