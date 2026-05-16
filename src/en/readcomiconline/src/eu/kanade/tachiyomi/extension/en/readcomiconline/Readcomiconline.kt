@@ -29,6 +29,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import org.jsoup.nodes.TextNode
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -200,20 +201,32 @@ class Readcomiconline :
 
         val manga = SManga.create()
         manga.title = infoElement.selectFirst("a.bigChar")!!.text()
-        manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
-        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().joinToString()
-        manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
+        manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").eachText().summarize()
+        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().summarize()
+        manga.genre = infoElement.select("p:has(span:contains(Genres:)) > a").eachText().joinToString()
         manga.description = listOfNotNull(
-            infoElement.select("p:has(span:contains(Summary:)) ~ p").text().takeIf { it.isNotEmpty() },
+            infoElement.select("p:has(span:contains(Summary:)) ~ p")
+                .joinToString("\n\n") { it.textPreserveLineBreaks() }
+                .trim()
+                .takeIf { it.isNotEmpty() },
             infoElement.select("p:has(span:contains(Publisher:))").text().takeIf { it.isNotEmpty() }?.let { "\n$it" },
             infoElement.select("p:has(span:contains(Publication date:))").text().takeIf { it.isNotEmpty() },
             viewsRegex.find(infoElement.select("p:has(span:contains(Views:))").text())
                 ?.let { "Views: ${it.groupValues[1]}" },
         ).joinToString("\n")
-        manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
+        manga.status = infoElement.selectFirst("p:has(span:contains(Status:))")?.text().orEmpty()
             .let { parseStatus(it) }
         manga.thumbnail_url = document.selectFirst(".rightBox:eq(0) img")?.absUrl("src")
         return manga
+    }
+
+    private fun List<String>.summarize(): String = if (size > 2) "${first()} & others" else joinToString()
+
+    private fun Element.textPreserveLineBreaks(): String {
+        // Replace <br> with newline text nodes so wholeText() preserves them as line breaks.
+        // .text() would collapse them into spaces.
+        select("br").forEach { it.replaceWith(TextNode("\n")) }
+        return wholeText()
     }
 
     override fun getMangaUrl(manga: SManga): String {
