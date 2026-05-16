@@ -252,9 +252,10 @@ class Mangadotnet :
             ArtistFilter(),
         )
 
-        val genres = getGenres()
-        if (genres != null) {
-            filters.add(GenreFilter(genres, excludedGenresPref()))
+        val genres = getGenreLists()
+        val genreList = if (adultModePref().let { it == "1" || it == "both" }) genres.adult else genres.normal
+        if (genreList != null) {
+            filters.add(GenreFilter(genreList, excludedGenresPref()))
         } else {
             filters.add(Filter.Separator())
             filters.add(Filter.Header("Press 'reset' to load genres"))
@@ -454,16 +455,19 @@ class Mangadotnet :
 
     private val genresLock = ReentrantLock()
 
-    private fun getGenres(): List<String>? {
+    private data class GenreLists(
+        val normal: List<String>? = null,
+        val adult: List<String>? = null,
+    )
+
+    private fun getGenreLists(): GenreLists {
         genresLock.withLock {
-            val isAdult = adultModePref().let { it == "1" || it == "both" }
-            val file = if (isAdult) genreCacheAdultFile else genreCacheNormalFile
-            if (!file.exists()) {
-                if (genreCacheNormalFile.exists()) return runCatching { genreCacheNormalFile.readText().parseAs<List<String>>() }.getOrNull()
-                if (genreCacheAdultFile.exists()) return runCatching { genreCacheAdultFile.readText().parseAs<List<String>>() }.getOrNull()
-                return null
-            }
-            return runCatching { file.readText().parseAs<List<String>>() }.getOrNull()
+            val normal = runCatching { genreCacheNormalFile.readText().parseAs<List<String>>() }.getOrNull()
+            val adult = runCatching { genreCacheAdultFile.readText().parseAs<List<String>>() }.getOrNull()
+            return GenreLists(
+                normal = normal ?: adult,
+                adult = adult ?: normal,
+            )
         }
     }
 
@@ -505,30 +509,28 @@ class Mangadotnet :
             summary = "%s\nNote: Most titles don't have volumes"
         }.also(screen::addPreference)
 
-        val cachedGenres = getGenres()
+        val genres = getGenreLists()
 
         val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
-        val normalEntries = cachedGenres ?: excludedNormal.toList()
+        val normalEntries = genres.normal ?: excludedNormal.toList()
         MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_PREF
-            title = "Genre Blacklist (Normal Mode)"
+            title = "Genre Blacklist"
             summary = "Exclude genres when browsing without 18+ content."
             this.entries = normalEntries.toTypedArray()
             entryValues = normalEntries.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(cachedGenres != null || excludedNormal.isNotEmpty())
+            setEnabled(genres.normal != null || excludedNormal.isNotEmpty())
         }.also(screen::addPreference)
 
         val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
-        val adultEntries = cachedGenres ?: excludedAdult.toList()
+        val adultEntries = genres.adult ?: excludedAdult.toList()
         MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_ADULT_PREF
             title = "Genre Blacklist (Adult Mode)"
             summary = "Exclude genres when browsing with 18+ content."
             this.entries = adultEntries.toTypedArray()
             entryValues = adultEntries.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(cachedGenres != null || excludedAdult.isNotEmpty())
+            setEnabled(genres.adult != null || excludedAdult.isNotEmpty())
         }.also(screen::addPreference)
     }
 
