@@ -5,14 +5,35 @@ ext {
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
-def domainNumberFileName = "src/ko/wolfdotcom/src/eu/kanade/tachiyomi/extension/ko/wolfdotcom/DomainNumber.kt"
-def domainNumberFile = new File(domainNumberFileName)
-def backupFile = new File(domainNumberFileName + "_bak")
+androidComponents {
+    onVariants(selector().all(), { variant ->
+        def kotlin = variant.sources.kotlin
+        if (kotlin != null) {
+            def variantName = variant.name.capitalize()
 
-tasks.register('updateDomainNumber') {
-    doLast {
+            def task = tasks.register("update${variantName}DomainNumber", UpdateDomainNumberTask) {
+                defaultDomainNumber.set(393)
+
+                outputs.upToDateWhen { false }
+            }
+
+            kotlin.addGeneratedSourceDirectory(task) { it.outputDir }
+        }
+    })
+}
+
+abstract class UpdateDomainNumberTask extends DefaultTask {
+
+    @Input
+    abstract Property<Integer> getDefaultDomainNumber()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDir()
+
+    @TaskAction
+    void action() {
         def domainNumber = -1
         def response = new URL("https://nicelink52.com/").text
         def matcher = response =~ ~/https?:\/\/wfwf(\d+)\.com/
@@ -20,35 +41,15 @@ tasks.register('updateDomainNumber') {
             domainNumber = matcher[0][1]
             println("[Wolf.com] new domain number: $domainNumber")
         } else {
-            println("[Wolf.com] domain number not found")
+            domainNumber = defaultDomainNumber.get()
+            println("[Wolf.com] domain number not found using default: $domainNumber")
         }
 
-        if (domainNumber != -1) {
-            domainNumberFile.renameTo(backupFile)
-            domainNumberFile.withPrintWriter {
-                it.println("// spotless:off")
-                it.println("// THIS FILE IS AUTO-GENERATED, DO NOT COMMIT")
-                it.println("package eu.kanade.tachiyomi.extension.ko.wolfdotcom")
-                it.println("const val DEFAULT_DOMAIN_NUMBER = \"$domainNumber\"")
-            }
+        def domainNumberFile = outputDir.get().file("DomainNumber.kt").asFile
+        domainNumberFile.parentFile.mkdirs()
+        domainNumberFile.withPrintWriter {
+            it.println("package eu.kanade.tachiyomi.extension.ko.wolfdotcom\n")
+            it.println("const val DEFAULT_DOMAIN_NUMBER = \"$domainNumber\"")
         }
-    }
-}
-
-preBuild.dependsOn updateDomainNumber
-
-tasks.register('restoreBackup') {
-    doLast {
-        if (backupFile.exists()) {
-            println("[Wolf.com] Restoring placeholder file")
-            domainNumberFile.delete()
-            backupFile.renameTo(domainNumberFile)
-        }
-    }
-}
-
-tasks.configureEach { task ->
-    if (task.name == "assembleDebug" || task.name == "assembleRelease") {
-        task.finalizedBy(restoreBackup)
     }
 }

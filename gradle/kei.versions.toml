@@ -1,0 +1,13 @@
+[versions]
+# Used in [/gradle/build-config/src/main/kotlin/PluginKotlinMultiplatform.kt]
+android-sdk-min = "21"
+android-sdk-compile = "34"
+android-sdk-target = "34"
+java = "11"
+
+[plugins]
+android-base = { id = "kei.plugins.android.base" }
+extension-legacy = { id = "kei.plugins.extension.legacy" }
+library = { id = "kei.plugins.library" }
+multisrc = { id = "kei.plugins.multisrc" }
+spotless = { id = "kei.plugins.spotless" }
