@@ -1,6 +1,6 @@
 ext {
     extName = 'FaxxTraduce'
-    extClass = '.Faxxtraduce'
+    extClass = '.FaxxTraduce'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/faxxtraduce'
     overrideVersionCode = 0
