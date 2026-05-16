@@ -1,0 +1,10 @@
+ext {
+    extName = 'KuroTranslations'
+    extClass = '.Kurotranslations'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/kurotranslations'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'fafa'
+    extClass = '.Fafa'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/fafa'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"
