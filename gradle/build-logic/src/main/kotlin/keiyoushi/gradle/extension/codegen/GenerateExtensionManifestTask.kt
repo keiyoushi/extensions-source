@@ -3,7 +3,6 @@ package keiyoushi.gradle.extension.codegen
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
-import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
@@ -25,9 +24,6 @@ private fun String.xmlAttr(): String = this
 @CacheableTask
 abstract class GenerateExtensionManifestTask : DefaultTask() {
     @get:Input
-    abstract val pkg: Property<String>
-
-    @get:Input
     abstract val filters: ListProperty<DeeplinkFilter>
 
     @get:OutputFile
@@ -35,7 +31,6 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        val pkgValue = pkg.get()
         val filterList = filters.get()
         val out = outputFile.get().asFile
         out.parentFile.mkdirs()
@@ -62,7 +57,7 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
             |<manifest xmlns:android="http://schemas.android.com/apk/res/android">
             |    <application>
             |        <activity
-            |            android:name="$pkgValue.GeneratedUrlActivity"
+            |            android:name="keiyoushi.core.UrlDispatchActivity"
             |            android:excludeFromRecents="true"
             |            android:exported="true"
             |            android:theme="@android:style/Theme.NoDisplay">

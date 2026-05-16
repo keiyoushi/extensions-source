@@ -1,11 +1,12 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
-import com.diffplug.gradle.spotless.SpotlessExtension
+import com.google.devtools.ksp.gradle.KspExtension
+import keiyoushi.gradle.extension.GENERATED_EXTENSION_CLASS
 import keiyoushi.gradle.extension.VariantBridges
 import keiyoushi.gradle.extension.codegen.DeeplinkFilter
+import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
-import keiyoushi.gradle.extension.lint.GeneratedFieldOverrideCheck
-import keiyoushi.gradle.extension.registerCodegenTasks
+import keiyoushi.gradle.extension.registerManifestTask
 import keiyoushi.gradle.extension.resolveExtensionSpec
 import keiyoushi.gradle.extension.wireVariantApi
 import keiyoushi.gradle.extensions.alias
@@ -15,12 +16,14 @@ import keiyoushi.gradle.extensions.kei
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.utils.assertWithoutFlag
+import kotlinx.serialization.json.Json
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.withType
+import java.util.Base64
 
 @Suppress("UNUSED")
 class PluginExtension : Plugin<Project> {
@@ -28,6 +31,7 @@ class PluginExtension : Plugin<Project> {
         plugins {
             alias(libs.plugins.android.application)
             alias(libs.plugins.kotlin.serialization)
+            alias(libs.plugins.ksp)
             alias(kei.plugins.android.base)
             alias(kei.plugins.spotless)
         }
@@ -41,7 +45,6 @@ class PluginExtension : Plugin<Project> {
             versionName = objects.property(String::class.java),
             appName = objects.property(String::class.java),
             nsfw = objects.property(String::class.java),
-            extClass = objects.property(String::class.java),
         )
 
         configureAndroidExtension(applicationIdSuffix)
@@ -49,11 +52,11 @@ class PluginExtension : Plugin<Project> {
             archivesName.set(bridges.versionName.map { vn -> "tachiyomi-$applicationIdSuffix-v$vn" })
         }
 
-        val codegenTasks = registerCodegenTasks()
-        wireVariantApi(spec, bridges, codegenTasks)
+        val manifestTask = registerManifestTask()
+        wireVariantApi(spec, bridges, manifestTask)
 
-        extensions.configure(SpotlessExtension::class.java) {
-            kotlin { addStep(GeneratedFieldOverrideCheck.create()) }
+        dependencies {
+            add("ksp", project(":compiler"))
         }
 
         afterEvaluate {
@@ -63,15 +66,12 @@ class PluginExtension : Plugin<Project> {
             bridges.versionName.set(resolved.effectiveVersionName)
             bridges.appName.set("Tachiyomi: ${resolved.extension.name}")
             bridges.nsfw.set(if (spec.nsfw.get()) "1" else "0")
-            bridges.extClass.set(".${resolved.extension.extensionClass}Generated")
 
-            codegenTasks.source.configure { this.spec.set(resolved.extension) }
-            codegenTasks.urlActivity.configure {
-                this.pkg.set(pkg)
-                logTag.set(resolved.extension.name)
+            extensions.configure(KspExtension::class.java) {
+                arg("keiyoushi.spec", encodeSpec(resolved.extension))
             }
-            codegenTasks.manifest.configure {
-                this.pkg.set(pkg)
+
+            manifestTask.configure {
                 filters.set(
                     resolved.extension.sources.mapNotNull {
                         if (!it.hasDeeplink) null
@@ -91,6 +91,11 @@ class PluginExtension : Plugin<Project> {
                 doFirst { appMetadata.asFile.orNull?.writeText("") }
             }
         }
+    }
+
+    private fun encodeSpec(extension: ResolvedExtension): String {
+        val json = Json.encodeToString(ResolvedExtension.serializer(), extension)
+        return Base64.getEncoder().encodeToString(json.toByteArray())
     }
 
     // Package is derived from the project path as eu.kanade.tachiyomi.extension.<lang>.<ext>.

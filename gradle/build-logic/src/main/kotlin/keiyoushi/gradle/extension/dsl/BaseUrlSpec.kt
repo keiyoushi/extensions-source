@@ -1,10 +1,21 @@
 package keiyoushi.gradle.extension.dsl
 
-import java.io.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import java.io.Serializable as JvmSerializable
 
-sealed interface BaseUrlSpec : Serializable {
+@Serializable
+sealed interface BaseUrlSpec : JvmSerializable {
+    @Serializable
+    @SerialName("static")
     data class Static(val url: String) : BaseUrlSpec
+
+    @Serializable
+    @SerialName("mirrors")
     data class Mirrors(val urls: List<String>) : BaseUrlSpec
+
+    @Serializable
+    @SerialName("custom")
     data class Custom(val defaultUrl: String) : BaseUrlSpec
 }
 

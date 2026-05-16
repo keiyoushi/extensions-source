@@ -11,7 +11,6 @@ abstract class ExtensionSpec @Inject constructor(
     abstract val name: Property<String>
     abstract val versionCode: Property<Int>
     abstract val nsfw: Property<Boolean>
-    abstract val extensionClass: Property<String>
     abstract val theme: Property<String>
     abstract val sources: ListProperty<SourceSpec>
 
