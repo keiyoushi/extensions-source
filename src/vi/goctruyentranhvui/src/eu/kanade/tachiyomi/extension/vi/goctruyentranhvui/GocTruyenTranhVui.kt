@@ -41,15 +41,26 @@ class GocTruyenTranhVui :
     ConfigurableSource {
     override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui23.com"
+    private val defaultBaseUrl = "https://goctruyentranhvuiiiiiiiiii.site"
+
+    override val baseUrl get() = getPrefBaseUrl()
 
     override val name = "Goc Truyen Tranh Vui"
 
-    private val apiUrl = "$baseUrl/api/v2"
+    private val apiUrl get() = "$baseUrl/api/v2"
 
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences = getPreferences {
+        getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
@@ -282,6 +293,15 @@ class GocTruyenTranhVui :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
             key = CUSTOM_TOKEN
             title = "Authorization Token"
             summary = "Enter token manually"
@@ -294,9 +314,15 @@ class GocTruyenTranhVui :
         }.also(screen::addPreference)
     }
 
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
     }
 }
