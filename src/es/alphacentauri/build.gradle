@@ -1,0 +1,10 @@
+ext {
+    extName = 'Alpha Centauri'
+    extClass = '.AlphaCentauri'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/alphacentauri'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

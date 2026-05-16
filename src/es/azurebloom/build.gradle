@@ -1,0 +1,10 @@
+ext {
+    extName = 'Azure Bloom'
+    extClass = '.AzureBloom'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/azurebloom'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

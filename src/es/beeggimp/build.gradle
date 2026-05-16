@@ -1,0 +1,10 @@
+ext {
+    extName = 'Beeg Gimp'
+    extClass = '.BeegGimp'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/beeggimp'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"
