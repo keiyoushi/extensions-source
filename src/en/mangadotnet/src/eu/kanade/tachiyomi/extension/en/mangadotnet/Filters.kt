@@ -6,9 +6,9 @@ class SortFilter :
     Filter.Sort(
         name = "Sort",
         values = sortOrders.map { it.first }.toTypedArray(),
-        state = Selection(0, false),
+        state = Selection(2, false),
     ) {
-    val sort get() = sortOrders[state?.index ?: 0].second
+    val sort get() = sortOrders[state?.index ?: 2].second
     val ascending get() = state?.ascending ?: false
 }
 
@@ -53,6 +53,10 @@ private val types = listOf(
     "Manhua" to "CN",
     "One Shot" to "ONESHOT",
 )
+
+class AuthorFilter : Filter.Text("Author")
+
+class ArtistFilter : Filter.Text("Artist")
 
 class TriStateFilter(name: String, val value: String = name, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
 

@@ -121,10 +121,10 @@ class Manga(
             }
         }
         author = authors?.let {
-            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()
+            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B$it" }
         }
         artist = artists?.let {
-            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()
+            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B\u200B$it" }
         }
         genre = buildList {
             when (this@Manga.origin) {
@@ -189,19 +189,33 @@ class Manga(
 
 @Serializable
 class Chapter(
-    val id: String,
-    val source: String,
+    val id: Int,
     @SerialName("chapter_number")
-    val number: String? = null,
+    val number: Float? = null,
+    @SerialName("volume_number")
+    val volume: Float? = null,
     @SerialName("chapter_title")
     val name: String? = null,
+    val language: String? = null,
+    @SerialName("group_id")
+    val groupId: Int? = null,
     @SerialName("group_name")
     val group: String? = null,
     @SerialName("scanlator_name")
     val scanlator: String? = null,
     @SerialName("date_added")
     val date: String? = null,
-)
+    @SerialName("page_count")
+    val pageCount: Int? = null,
+    val source: String = "user",
+    val groups: List<Group> = emptyList(),
+) {
+    @Serializable
+    class Group(
+        val id: Int,
+        val name: String,
+    )
+}
 
 @Serializable
 class Volume(
@@ -214,11 +228,12 @@ class Volume(
     val scanlator: String? = null,
     @SerialName("date_added")
     val date: String? = null,
+    val source: String = "user",
 )
 
 @Serializable
 class ChapterUrl(
-    val id: String,
+    val id: Int,
     val source: String,
     val isVolume: Boolean,
 )
