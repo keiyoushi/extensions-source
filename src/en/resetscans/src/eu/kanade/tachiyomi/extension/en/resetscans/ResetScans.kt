@@ -18,7 +18,7 @@ class ResetScans :
         "Reset Scans",
         "https://reset-scans.org",
         "en",
-        dateFormat = SimpleDateFormat("MMM dd", Locale.US),
+        dateFormat = SimpleDateFormat("dd-MMM", Locale.US),
     ),
     ConfigurableSource {
     // Moved from FuzzyDoodle to Madara
@@ -40,7 +40,7 @@ class ResetScans :
     // at "#"). When the bypass is on, chapterListParse swaps in the
     // icmadara-derived list anyway, so this only affects the disabled-
     // bypass path.
-    override fun chapterListSelector() = "li.wp-manga-chapter>div:not(:has(a[href*=#]))"
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(:has(> a[href*=\"#\"]))"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         if (restFallback.isEnabled(preferences)) {
