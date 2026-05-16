@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.katsudonmanga
 
 import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
-class Katsudonmanga :
+class KatsudonManga :
     LectorMoe(
         "KatsudonManga",
         "https://capibaratraductor.com/katsudonmanga",

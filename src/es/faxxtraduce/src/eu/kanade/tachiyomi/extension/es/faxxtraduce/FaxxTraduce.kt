@@ -1,10 +1,10 @@
-package eu.kanade.tachiyomi.extension.es.faxxtraduceoo
+package eu.kanade.tachiyomi.extension.es.faxxtraduce
 
 import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
-class FaxxtraduceoO :
+class FaxxTraduce :
     LectorMoe(
-        "FaxxTraduceO_o",
+        "FaxxTraduce",
         "https://capibaratraductor.com/faxxtraduce",
         "es",
     )

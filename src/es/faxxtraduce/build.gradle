@@ -1,10 +1,10 @@
 ext {
-    extName = 'FaxxTraduceO_o'
-    extClass = '.FaxxtraduceoO'
+    extName = 'FaxxTraduce'
+    extClass = '.Faxxtraduce'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/faxxtraduce'
     overrideVersionCode = 0
-    isNsfw = false
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"

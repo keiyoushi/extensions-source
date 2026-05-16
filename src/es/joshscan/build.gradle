@@ -1,6 +1,6 @@
 ext {
     extName = 'JoshScan'
-    extClass = '.Joshscan'
+    extClass = '.JoshScan'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/joshscan'
     overrideVersionCode = 0

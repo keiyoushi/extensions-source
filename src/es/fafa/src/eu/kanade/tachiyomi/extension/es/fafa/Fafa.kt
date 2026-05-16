@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
 class Fafa :
     LectorMoe(
-        "fafa",
+        "Fafa",
         "https://capibaratraductor.com/fafa",
         "es",
     )

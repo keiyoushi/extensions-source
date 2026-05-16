@@ -1,6 +1,6 @@
 ext {
     extName = 'CathalTraducciones'
-    extClass = '.Cathaltraducciones'
+    extClass = '.CathalTraducciones'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/cathaltl'
     overrideVersionCode = 0

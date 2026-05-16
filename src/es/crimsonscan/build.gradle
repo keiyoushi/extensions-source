@@ -1,10 +1,10 @@
 ext {
     extName = 'Crimson Scan'
-    extClass = '.CrimsonSScan'
+    extClass = '.CrimsonScan'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/crimsonscan'
     overrideVersionCode = 0
-    isNsfw = false
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
