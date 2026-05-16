@@ -1,5 +1,5 @@
 ext {
-    extName = 'BONBON ꒰ ݊🍮݊ ꒱ SCANLATION  ׅ ᮫  ׅ 𓈒  ༉'
+    extName = 'Bonbon Scanlation'
     extClass = '.BonbonScanlation'
     themePkg = 'lectormoe'
     baseUrl = 'https://capibaratraductor.com/bonbonscanlation'

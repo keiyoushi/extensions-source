@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
 class BonbonScanlation :
     LectorMoe(
-        "BONBON ꒰ ݊🍮݊ ꒱ SCANLATION  ׅ ᮫  ׅ 𓈒  ༉",
+        "Bonbon Scanlation",
         "https://capibaratraductor.com/bonbonscanlation",
         "es",
     )
