@@ -1,30 +1,25 @@
 plugins {
-    id("com.android.library")
-    id("keiyoushi.lint")
+    alias(libs.plugins.android.library)
+
+    alias(kei.plugins.android.base)
+    alias(kei.plugins.spotless)
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
-    }
-
     namespace = "keiyoushi.core"
 
     buildFeatures {
         resValues = false
-        shaders = false
     }
-}
 
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
-        freeCompilerArgs.add("-Xcontext-parameters")
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
 dependencies {
-    compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    compileOnly(libs.bundles.common)
+
+    testImplementation(libs.bundles.common)
+    testImplementation(libs.junit)
 }
