@@ -138,7 +138,6 @@ class Readcomiconline :
                 addPathSegment(genreName)
                 if (sortOption != null) addPathSegment(sortOption)
                 addQueryParameter("page", page.toString())
-                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
             GET(url, headers)
         } else if (query.isEmpty() && genreList.included.isEmpty() && genreList.excluded.isEmpty() && yearOption == null) {
@@ -183,7 +182,6 @@ class Readcomiconline :
                     addPathSegment(sortOption)
                 }
                 addQueryParameter("page", page.toString())
-                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
             GET(url, headers)
         } else {
