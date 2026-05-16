@@ -110,26 +110,21 @@ abstract class Iken(
     // search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (!query.startsWith("http")) {
-            return super.fetchSearchManga(page, query, filters)
+        if (query.startsWith("https://")) {
+            val mangaUrl = query.toHttpUrl()
+            if (mangaUrl.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            if (mangaUrl.pathSegments.size < 2) {
+                throw Exception("Unsupported url")
+            }
+            val slug = mangaUrl.pathSegments[1]
+            val manga = SManga.create().apply { url = slug }
+            return fetchMangaDetails(manga)
+                .map { MangasPage(listOf(it), false) }
         }
 
-        val url = query.toHttpUrl()
-        val baseHost = baseUrl.toHttpUrl().host
-
-        if (url.host != baseHost) throw Exception("Unsupported URL")
-
-        val pathSegments = url.pathSegments
-        val slug = pathSegments.getOrNull(1)
-            ?.takeIf { it.isNotBlank() }
-            ?: throw Exception("Invalid URL format")
-
-        val manga = SManga.create().apply {
-            this@apply.url = slug
-        }
-
-        return fetchMangaDetails(manga)
-            .map { MangasPage(listOf(it), false) }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

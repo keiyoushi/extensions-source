@@ -17,8 +17,8 @@ class SearchResponse(
 
 @Serializable
 class Manga(
-    private val id: Int,
-    private val slug: String,
+    val id: Int,
+    val slug: String,
     private val postTitle: String,
     private val postContent: String? = null,
     val isNovel: Boolean = false,
