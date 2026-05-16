@@ -24,12 +24,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
+import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -98,6 +100,25 @@ class Readcomiconline :
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("http")) {
+            val url = query.toHttpUrlOrNull()
+            val mirrorHosts = MIRROR_URLS.map { it.toHttpUrl().host }
+            if (url != null && url.host in mirrorHosts &&
+                url.pathSegments.size >= 2 && url.pathSegments[0] == "Comic"
+            ) {
+                val manga = SManga.create().apply {
+                    this.url = "/Comic/${url.pathSegments[1]}"
+                }
+                return fetchMangaDetails(manga).map { details ->
+                    details.url = manga.url
+                    MangasPage(listOf(details), false)
+                }
+            }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(
         page: Int,
