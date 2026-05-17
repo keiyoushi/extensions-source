@@ -6,10 +6,22 @@ import kotlinx.serialization.Serializable
 class SearchResponseDto(
     val record_count: Int = 0,
     val records: Map<String, List<RecordDto>> = emptyMap(),
+    val info: Map<String, SearchInfoDto> = emptyMap(),
 ) {
     val items: List<RecordDto>
         get() = records.values.firstOrNull().orEmpty()
+
+    val pageInfo: SearchInfoDto?
+        get() = info.values.firstOrNull()
 }
+
+@Serializable
+class SearchInfoDto(
+    val current_page: Int = 1,
+    val num_pages: Int = 1,
+    val per_page: Int = 20,
+    val total_result_count: Int = 0,
+)
 
 @Serializable
 class RecordDto(
@@ -65,5 +77,4 @@ class DownloadDto(
 class DownloadImageDto(
     val page_number: Int,
     val thumbnail_url: String? = null,
-    val signed_url: String? = null,
 )

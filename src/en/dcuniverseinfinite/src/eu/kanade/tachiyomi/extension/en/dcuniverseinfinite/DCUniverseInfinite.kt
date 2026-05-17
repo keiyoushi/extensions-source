@@ -101,7 +101,7 @@ class DCUniverseInfinite : HttpSource() {
             append(""""per_page":$PER_PAGE,""")
             append(""""document_types":["comicseries"],""")
             if (!query.isNullOrBlank()) {
-                append(""""query":${query.jsonStr()},""")
+                append(""""q":${query.jsonStr()},""")
             }
             append(""""filters":{"comicseries":$seriesFilters},""")
             append(""""sort_field":{"comicseries":${sortField.jsonStr()}},""")
@@ -119,10 +119,8 @@ class DCUniverseInfinite : HttpSource() {
     private fun parseSeriesList(response: Response): MangasPage {
         val result = response.parseAs<SearchResponseDto>()
         val mangas = result.items.map { it.toSManga() }
-        val page = Regex(""""page":(\d+)""")
-            .find(response.request.body.bodyString())
-            ?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val hasNextPage = page * PER_PAGE < result.record_count
+        val info = result.pageInfo
+        val hasNextPage = (info?.current_page ?: 1) < (info?.num_pages ?: 1)
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -173,15 +171,13 @@ class DCUniverseInfinite : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var result = response.parseAs<SearchResponseDto>()
-        val total = result.record_count
-        // Prefer extracting from the request body because the API does not always echo
-        // back series_uuid in the transformed search results.
+        val totalPages = result.pageInfo?.num_pages ?: 1
         val reqBody = response.request.body.bodyString()
         val seriesUuid = Regex(""""series_uuid":"([^"]+)"""").find(reqBody)?.groupValues?.get(1)
             ?: result.items.firstOrNull()?.series_uuid
         val books = result.items.toMutableList()
         var page = 1
-        while (seriesUuid != null && books.size < total) {
+        while (seriesUuid != null && page < totalPages) {
             page++
             result = client.newCall(chapterPageRequest(seriesUuid, page)).execute()
                 .parseAs<SearchResponseDto>()
@@ -224,7 +220,6 @@ class DCUniverseInfinite : HttpSource() {
             throw IOException(who)
         }
 
-        val bookUuid = response.request.url.pathSegments.last()
         val pageHeaders = headersBuilder()
             .set("x-auth-jwt", jwt)
             .build()
@@ -234,13 +229,13 @@ class DCUniverseInfinite : HttpSource() {
         var numPages = 1
         while (pageNum <= numPages) {
             val request = GET(
-                "$apiUrl/comics/1/book/$bookUuid/download/?page=$pageNum&quality=SD&trans=en",
+                "$apiUrl/comics/1/book/download/?page=$pageNum&quality=SD&trans=en",
                 pageHeaders,
             )
             val manifest = client.newCall(request).execute().parseAs<DownloadDto>()
             numPages = manifest.num_pages
             manifest.images.forEach { img ->
-                val url = img.thumbnail_url ?: img.signed_url ?: return@forEach
+                val url = img.thumbnail_url ?: return@forEach
                 pages.add(Page(pages.size, imageUrl = url))
             }
             pageNum++
@@ -306,7 +301,7 @@ class DCUniverseInfinite : HttpSource() {
 
     companion object {
         private const val CONSUMER_KEY = "DA59dtVXYLxajktV"
-        private const val PER_PAGE = 30
+        private const val PER_PAGE = 20
         private val JSON_MEDIA_TYPE = "application/json;charset=UTF-8".toMediaType()
         private const val LOGIN_MESSAGE =
             "Log in via WebView with an active subscription to read this issue."

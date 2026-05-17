@@ -1,7 +1,7 @@
 ext {
     extName = 'DC Universe Infinite'
     extClass = '.DCUniverseInfinite'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = false
 }
 
