@@ -1,5 +1,5 @@
 ext {
-	extName = 'MangadotnetTEST'
+	extName = 'Mangadotnet'
 	extClass = '.Mangadotnet'
 	extVersionCode = 5
 	isNsfw = true
