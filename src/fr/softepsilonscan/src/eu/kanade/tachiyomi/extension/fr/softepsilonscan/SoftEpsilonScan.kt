@@ -543,5 +543,5 @@ class SoftEpsilonScan :
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
-private const val PREFIX_LENGTH = 128
+private const val PREFIX_LENGTH = 192
 private const val STREAM_HEADER_LENGTH = 24
