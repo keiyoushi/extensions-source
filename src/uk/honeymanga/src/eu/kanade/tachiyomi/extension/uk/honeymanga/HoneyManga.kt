@@ -2,11 +2,6 @@ package eu.kanade.tachiyomi.extension.uk.honeymanga
 
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.CompleteHoneyMangaDto
-import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterPagesDto
-import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterResponseDto
-import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaDto
-import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaResponseDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -18,14 +13,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -58,12 +52,41 @@ class HoneyManga :
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = makeHoneyMangaRequest(page, "likes")
 
-    override fun popularMangaParse(response: Response) = parseAsMangaResponseDto(response)
+    override fun popularMangaParse(response: Response) = parseAsCatalogResponseDto(response)
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int) = makeHoneyMangaRequest(page, "lastUpdated")
 
-    override fun latestUpdatesParse(response: Response) = parseAsMangaResponseDto(response)
+    override fun latestUpdatesParse(response: Response) = parseAsCatalogResponseDto(response)
+
+    // =============================== Latest/Popular Utilities ===============================
+    private fun makeHoneyMangaRequest(page: Int, sortBy: String): Request {
+        val filters = mutableListOf<SearchFilter>()
+        val blockedTypes = blockTypes()
+        val blockedGenres = blockGenres()
+
+        if (blockedTypes.isNotEmpty()) {
+            filters.add(SearchFilter(filterBy = "type", filterOperator = "NOT_IN", filterValue = blockedTypes.toList()))
+        }
+        if (blockedGenres.isNotEmpty()) {
+            filters.add(SearchFilter(filterBy = "genres", filterOperator = "NOT_IN", filterValue = blockedGenres.toList()))
+        }
+
+        val body = SearchRequestBody(
+            page = page,
+            pageSize = DEFAULT_PAGE_SIZE,
+            sort = SearchSort( sortBy = sortBy, sortOrder = "DESC" ),
+            filters = filters.ifEmpty { null },
+        ).toJsonRequestBody()
+
+        return POST("$API_URL/v2/manga/cursor-list", headers, body)
+    }
+
+    private fun parseAsCatalogResponseDto(response: Response): MangasPage {
+        val result = response.asClass<CatalogResponseDto>()
+        val mangas = result.data.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL) }
+        return MangasPage(mangas, result.hasNextPage)
+    }
 
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -77,7 +100,13 @@ class HoneyManga :
         }
     }
 
-    override fun searchMangaParse(response: Response) = parseAsMangaResponseArray(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val blockedGenres = blockGenres()
+        val blockedTypes = blockTypes()
+        val result = response.parseAs<CatalogResponseDto>()
+        val mangas = result.data.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL, blockedTypes, blockedGenres) }
+        return MangasPage(mangas, result.hasNextPage)
+    }
 
     // =========================== Manga Details ============================
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -145,71 +174,6 @@ class HoneyManga :
     override fun imageUrlParse(response: Response): String = ""
 
     // ============================= Utilities ==============================
-    private fun parseAsMangaResponseDto(response: Response): MangasPage {
-        val mangaList = response.asClass<HoneyMangaResponseDto>().data
-        return makeMangasPage(mangaList)
-    }
-
-    private fun parseAsMangaResponseArray(response: Response): MangasPage {
-        val mangaList = response.asClass<List<HoneyMangaDto>>()
-        return makeMangasPageSearch(mangaList)
-    }
-
-    private fun makeHoneyMangaRequest(page: Int, sortBy: String): Request {
-        val blockedGenres = blockGenres()
-        val blockedTypes = blockTypes()
-        val body = buildJsonObject {
-            put("page", page)
-            put("pageSize", DEFAULT_PAGE_SIZE)
-            putJsonObject("sort") {
-                put("sortBy", sortBy)
-                put("sortOrder", "DESC")
-            }
-            if (blockedGenres.isNotEmpty() || blockedTypes.isNotEmpty()) {
-                putJsonArray("filters") {
-                    if (blockedTypes.isNotEmpty()) {
-                        addJsonObject {
-                            put("filterBy", "type")
-                            put("filterOperator", "NOT_IN")
-                            putJsonArray("filterValue") {
-                                blockedTypes.forEach { add(it) }
-                            }
-                        }
-                    }
-                    if (blockedGenres.isNotEmpty()) {
-                        addJsonObject {
-                            put("filterBy", "genres")
-                            put("filterOperator", "NOT_IN")
-                            putJsonArray("filterValue") {
-                                blockedGenres.forEach { add(it) }
-                            }
-                        }
-                    }
-                }
-            }
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
-
-        return POST("$API_URL/v2/manga/cursor-list", headers, body)
-    }
-
-    private fun makeMangasPage(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
-        mangaList.map(::makeSManga),
-        mangaList.size == DEFAULT_PAGE_SIZE,
-    )
-
-    private fun makeMangasPageSearch(mangaList: List<HoneyMangaDto>): MangasPage = MangasPage(
-        mangaList
-            .filter { !blockTypes().contains(it.type) }
-            .filter { blockGenres().intersect((it.genres ?: emptyList()).toSet()).isEmpty() }
-            .map(::makeSManga),
-        mangaList.size == DEFAULT_PAGE_SIZE,
-    )
-
-    private fun makeSManga(mangaDto: HoneyMangaDto) = SManga.create().apply {
-        title = mangaDto.title
-        thumbnail_url = "$IMAGE_STORAGE_URL/${mangaDto.posterId}"
-        url = "$baseUrl/book/${mangaDto.id}"
-    }
 
     companion object {
         private const val API_URL = "https://data.api.honey-manga.com.ua"
@@ -299,7 +263,7 @@ class HoneyManga :
     // ============================ Preferences =============================
 
     private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet<String>())!!
-    private fun blockTypes(): Set<String> = preferences.getStringSet(TYPE_PREF, emptySet<String>())!!
+    private fun blockTypes(): Set<String> = preferences.getStringSet(TYPE_PREF, setOf("Новела"))!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         MultiSelectListPreference(screen.context).apply {
@@ -319,13 +283,15 @@ class HoneyManga :
         }.let(screen::addPreference)
 
         MultiSelectListPreference(screen.context).apply {
+            val blockedTypes = blockTypes()
             key = TYPE_PREF
             title = "Приховані категорії"
             entries = mangaType
             entryValues = mangaType
-            summary = blockTypes().joinToString()
+            summary = blockedTypes.joinToString()
             dialogTitle = "Виберіть категорії які потрібно сховати"
             setDefaultValue(setOf("Новела"))
+            setEnabled(blockedTypes.isNotEmpty())
 
             setOnPreferenceChangeListener { _, values ->
                 val selected = values as Set<*>
