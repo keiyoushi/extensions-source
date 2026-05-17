@@ -250,10 +250,10 @@ class DCUniverseInfinite : HttpSource() {
         EraFilter(),
     )
 
-    private class Sort(val name: String, val field: String, val direction: String)
+    private class SortOption(val name: String, val field: String, val direction: String)
 
     private class SortFilter : Filter.Select<String>("Sort by", SORTS.map { it.name }.toTypedArray()) {
-        val selected: Sort get() = SORTS[state]
+        val selected: SortOption get() = SORTS[state]
     }
 
     private class EraFilter : Filter.Select<String>("Era", ERAS.map { it.first }.toTypedArray()) {
@@ -298,10 +298,10 @@ class DCUniverseInfinite : HttpSource() {
             "Log in via WebView with an active subscription to read this issue."
 
         private val SORTS = listOf(
-            Sort("Newest", "first_released", "desc"),
-            Sort("Oldest", "first_released", "asc"),
-            Sort("Title A-Z", "title", "asc"),
-            Sort("Title Z-A", "title", "desc"),
+            SortOption("Newest", "first_released", "desc"),
+            SortOption("Oldest", "first_released", "asc"),
+            SortOption("Title A-Z", "title", "asc"),
+            SortOption("Title Z-A", "title", "desc"),
         )
 
         private val ERAS = listOf(
