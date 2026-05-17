@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.dcuniverseinfinite
 
 import android.util.Base64
+import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -53,7 +54,39 @@ class DCUniverseInfinite : HttpSource() {
             }
             response
         }
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            if (!request.url.host.endsWith("dcuniverseinfinite.com")) {
+                return@addNetworkInterceptor chain.proceed(request)
+            }
+            // The site may set auth cookies host-scoped on the apex domain while the
+            // API is on www. AndroidCookieJar then misses them. Merge cookies from
+            // both hosts (apex first, jar/www last so the freshest wins).
+            val cm = CookieManager.getInstance()
+            val merged = mergeCookies(
+                cm.getCookie("https://dcuniverseinfinite.com"),
+                cm.getCookie("https://www.dcuniverseinfinite.com"),
+                request.header("Cookie"),
+            )
+            if (merged.isBlank() || merged == request.header("Cookie")) {
+                chain.proceed(request)
+            } else {
+                chain.proceed(request.newBuilder().header("Cookie", merged).build())
+            }
+        }
         .build()
+
+    private fun mergeCookies(vararg sources: String?): String {
+        val jar = LinkedHashMap<String, String>()
+        sources.forEach { src ->
+            src?.split(";")?.forEach { pair ->
+                val t = pair.trim()
+                val i = t.indexOf('=')
+                if (i > 0) jar[t.substring(0, i)] = t.substring(i + 1)
+            }
+        }
+        return jar.entries.joinToString("; ") { "${it.key}=${it.value}" }
+    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -220,7 +253,13 @@ class DCUniverseInfinite : HttpSource() {
         val rights = decodeJwtPayload(jwt).parseAs<RightsDto>()
         if (!rights.rights.can_read) {
             val who = if (rights.user_guid.isNullOrBlank()) {
-                "You appear signed out. Open WebView, sign in, let the page fully load, then retry."
+                val sent = response.request.header("Cookie").orEmpty()
+                val cm = CookieManager.getInstance()
+                val diag = "[cookies sent -> session:${sent.contains("session=")} " +
+                    "psmSessionId:${sent.contains("psmSessionId=")} count:${if (sent.isBlank()) 0 else sent.split(";").size}; " +
+                    "jar www:${!cm.getCookie("https://www.dcuniverseinfinite.com").isNullOrBlank()} " +
+                    "apex:${!cm.getCookie("https://dcuniverseinfinite.com").isNullOrBlank()}]"
+                "You appear signed out. Sign in via Komikku's WebView, let the page fully load, then retry. $diag"
             } else {
                 "Signed in, but this issue isn't readable on your account (it likely needs an active subscription)."
             }
