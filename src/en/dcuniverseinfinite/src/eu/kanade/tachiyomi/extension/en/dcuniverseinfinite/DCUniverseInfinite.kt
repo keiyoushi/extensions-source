@@ -59,22 +59,32 @@ class DCUniverseInfinite : HttpSource() {
             if (!request.url.host.endsWith("dcuniverseinfinite.com")) {
                 return@addNetworkInterceptor chain.proceed(request)
             }
-            // The site may set auth cookies host-scoped on the apex domain while the
-            // API is on www. AndroidCookieJar then misses them. Merge cookies from
-            // both hosts (apex first, jar/www last so the freshest wins).
+            // AndroidCookieJar can hand OkHttp an empty Cookie set even when the
+            // WebView jar is populated. Always rebuild the Cookie header straight
+            // from CookieManager for both apex and www hosts.
             val cm = CookieManager.getInstance()
             val merged = mergeCookies(
+                request.header("Cookie"),
                 cm.getCookie("https://dcuniverseinfinite.com"),
                 cm.getCookie("https://www.dcuniverseinfinite.com"),
-                request.header("Cookie"),
             )
-            if (merged.isBlank() || merged == request.header("Cookie")) {
-                chain.proceed(request)
+            val finalRequest = if (merged.isBlank()) {
+                request
             } else {
-                chain.proceed(request.newBuilder().header("Cookie", merged).build())
+                request.newBuilder().header("Cookie", merged).build()
             }
+            if (request.url.pathSegments.any { it == "rights" }) {
+                lastWireCookie = merged
+            }
+            chain.proceed(finalRequest)
         }
         .build()
+
+    @Volatile
+    private var lastWireCookie: String = ""
+
+    @Volatile
+    private var lastSetCookieCode: Int = -1
 
     private fun mergeCookies(vararg sources: String?): String {
         val jar = LinkedHashMap<String, String>()
@@ -238,8 +248,8 @@ class DCUniverseInfinite : HttpSource() {
         runCatching {
             client.newCall(
                 POST("$apiUrl/users/set_cookie?trans=en", headers, "".toRequestBody()),
-            ).execute().close()
-        }
+            ).execute().use { lastSetCookieCode = it.code }
+        }.onFailure { lastSetCookieCode = -2 }
         val uuid = (baseUrl + chapter.url).toHttpUrl().pathSegments.last()
         return GET("$apiUrl/5/1/rights/comic/$uuid?trans=en", headers)
     }
@@ -253,15 +263,13 @@ class DCUniverseInfinite : HttpSource() {
         val rights = decodeJwtPayload(jwt).parseAs<RightsDto>()
         if (!rights.rights.can_read) {
             val who = if (rights.user_guid.isNullOrBlank()) {
-                val sent = response.request.header("Cookie").orEmpty()
-                val www = CookieManager.getInstance().getCookie("https://www.dcuniverseinfinite.com").orEmpty()
+                val wire = lastWireCookie
                 fun Boolean.c() = if (this) "Y" else "n"
-                // Diagnostic FIRST so it isn't truncated. jarS/jarP = session/psm in
-                // Komikku's cookie jar; reqS/reqP = same cookies on the rights request.
-                "DCUI diag jarS=${www.contains("session=").c()} jarP=${www.contains("psmSessionId=").c()} " +
-                    "jarN=${if (www.isBlank()) 0 else www.split(";").size} " +
-                    "reqS=${sent.contains("session=").c()} reqP=${sent.contains("psmSessionId=").c()} " +
-                    "reqN=${if (sent.isBlank()) 0 else sent.split(";").size} | signed out — log in via Komikku WebView"
+                // wireS/wireP = session/psm actually sent on the wire for the rights
+                // call; sc = set_cookie HTTP status (-2 threw, -1 not run).
+                "DCUI diag wireS=${wire.contains("session=").c()} wireP=${wire.contains("psmSessionId=").c()} " +
+                    "wireN=${if (wire.isBlank()) 0 else wire.split(";").size} sc=$lastSetCookieCode " +
+                    "uid=${rights.user_guid ?: "null"} | signed out — log in via Komikku WebView"
             } else {
                 "Signed in, but this issue isn't readable on your account (it likely needs an active subscription)."
             }
