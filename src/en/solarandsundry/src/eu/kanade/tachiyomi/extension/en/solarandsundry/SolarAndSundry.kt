@@ -31,7 +31,7 @@ class SolarAndSundry : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     @Serializable
     private data class SasPage(

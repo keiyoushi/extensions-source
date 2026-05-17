@@ -21,7 +21,7 @@ abstract class MangaCatalog(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

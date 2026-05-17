@@ -39,7 +39,7 @@ class Toonkor :
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val webtoonsRequestPath = "/%EC%9B%B9%ED%88%B0"
     private val latestRequestModifier = "?fil=%EC%B5%9C%EC%8B%A0"

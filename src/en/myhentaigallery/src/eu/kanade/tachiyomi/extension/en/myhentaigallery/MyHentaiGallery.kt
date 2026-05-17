@@ -25,7 +25,7 @@ class MyHentaiGallery : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     // =============================== Popular ================================
 

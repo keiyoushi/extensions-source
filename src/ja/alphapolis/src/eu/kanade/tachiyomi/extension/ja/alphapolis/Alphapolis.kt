@@ -44,7 +44,7 @@ class Alphapolis :
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
         .add("X-Requested-With", "XMLHttpRequest")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             response.headers("Set-Cookie")

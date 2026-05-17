@@ -24,7 +24,7 @@ class PatchFriday : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private fun createManga(): SManga = SManga.create().apply {
         initialized = true

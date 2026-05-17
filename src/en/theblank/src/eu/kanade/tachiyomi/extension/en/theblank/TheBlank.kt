@@ -54,7 +54,7 @@ class TheBlank :
     override val versionId = 2
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             return@addInterceptor if (request.url.fragment == THUMBNAIL_FRAGMENT) {
@@ -67,7 +67,7 @@ class TheBlank :
         .rateLimit(1)
         .build()
 
-    private val thumbnailClient = network.cloudflareClient
+    private val thumbnailClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", "https://${baseHttpUrl.host}")

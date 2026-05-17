@@ -33,7 +33,7 @@ class Mangafreak : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US)
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(1, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)

@@ -23,7 +23,7 @@ class KomikIndoID : HttpSource() {
     override val baseUrl = "https://komikindo.ch"
     override val lang = "id"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 

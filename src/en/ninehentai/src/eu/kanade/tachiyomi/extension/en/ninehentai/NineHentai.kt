@@ -32,7 +32,7 @@ class NineHentai : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request = buildSearchRequest(page = page, sort = 1)

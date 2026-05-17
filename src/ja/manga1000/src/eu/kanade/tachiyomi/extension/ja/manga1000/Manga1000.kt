@@ -24,7 +24,7 @@ class Manga1000 : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")

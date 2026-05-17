@@ -35,7 +35,7 @@ class Nekopost : HttpSource() {
     override val lang = "th"
     override val name = "Nekopost"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val projectDataEndpoint = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
     private val fileHost = "https://www.osemocphoto.com"

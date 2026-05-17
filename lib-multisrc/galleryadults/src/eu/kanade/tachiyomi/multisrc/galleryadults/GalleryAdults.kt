@@ -46,7 +46,7 @@ abstract class GalleryAdults(
 ) : HttpSource(),
     ConfigurableSource {
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     protected open val xhrHeaders = headers.newBuilder()
         .add("X-Requested-With", "XMLHttpRequest")

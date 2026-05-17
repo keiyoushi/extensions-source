@@ -22,7 +22,7 @@ class MangaDenizi : HttpSource() {
     override val lang = "tr"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT)
 

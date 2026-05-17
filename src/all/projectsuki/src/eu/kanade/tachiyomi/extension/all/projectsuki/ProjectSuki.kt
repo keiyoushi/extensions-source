@@ -209,7 +209,7 @@ class ProjectSuki :
      * (this is a permalink, check for updated version),
      * most client options are already set as they should be, including the [Cache][okhttp3.Cache].
      */
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 

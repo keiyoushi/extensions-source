@@ -74,7 +74,7 @@ class Desu :
     }
 
     override val client: OkHttpClient =
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 3)
             .build()
 

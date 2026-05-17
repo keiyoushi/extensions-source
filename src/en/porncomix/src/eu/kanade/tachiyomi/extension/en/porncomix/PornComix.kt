@@ -27,7 +27,7 @@ class PornComix : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -24,7 +24,7 @@ class BroccoliSoup : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client: OkHttpClient = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
 
     // Popular
 

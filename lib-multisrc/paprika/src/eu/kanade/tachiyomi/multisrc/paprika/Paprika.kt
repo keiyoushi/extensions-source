@@ -27,7 +27,7 @@ abstract class Paprika(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     // Popular
 

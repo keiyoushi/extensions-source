@@ -41,7 +41,7 @@ class Mangainua :
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1, 2)
         .build()
 

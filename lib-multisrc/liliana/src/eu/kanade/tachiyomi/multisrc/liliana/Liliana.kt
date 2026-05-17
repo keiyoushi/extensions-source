@@ -38,7 +38,7 @@ abstract class Liliana(
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

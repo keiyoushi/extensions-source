@@ -86,7 +86,7 @@ class AsuraScans :
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::scrambledImageInterceptor)
         .rateLimit(2, 2)
         .build()

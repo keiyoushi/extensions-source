@@ -33,7 +33,7 @@ class Explosm : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val archivePage = "$baseUrl/comics"
 

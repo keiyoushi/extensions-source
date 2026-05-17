@@ -35,7 +35,7 @@ open class Hentai3(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")

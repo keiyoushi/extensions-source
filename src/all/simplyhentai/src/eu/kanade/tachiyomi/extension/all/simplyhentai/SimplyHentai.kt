@@ -31,7 +31,7 @@ open class SimplyHentai(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override val versionId = 2
 

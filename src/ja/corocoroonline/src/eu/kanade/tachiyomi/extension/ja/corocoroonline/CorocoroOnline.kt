@@ -33,7 +33,7 @@ class CorocoroOnline : HttpSource() {
 
     private val apiUrl = "$baseUrl/api/csr"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 

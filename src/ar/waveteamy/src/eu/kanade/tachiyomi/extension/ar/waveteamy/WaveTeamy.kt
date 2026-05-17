@@ -36,7 +36,7 @@ class WaveTeamy : HttpSource() {
     private val oldDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH)
 
     override val client =
-        network.cloudflareClient
+        network.client
             .newBuilder()
             .rateLimit(10, 1, TimeUnit.SECONDS)
             .build()

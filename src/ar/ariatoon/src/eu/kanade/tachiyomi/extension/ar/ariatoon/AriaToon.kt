@@ -19,7 +19,7 @@ class AriaToon : HttpSource() {
     override val lang = "ar"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     private val apiUrl = "https://api.ariatoon.com/v1"
     private val cdnUrl = "https://api.ariatoon.com/uploads"

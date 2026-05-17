@@ -44,7 +44,7 @@ open class NovelCool(
 
     private val apiUrl = "https://api.novelcool.com"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
 

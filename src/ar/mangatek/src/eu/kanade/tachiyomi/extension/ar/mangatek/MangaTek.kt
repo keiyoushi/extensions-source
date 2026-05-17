@@ -22,7 +22,7 @@ class MangaTek : HttpSource() {
     override val baseUrl = "https://mangatek.com"
     override val lang = "ar"
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

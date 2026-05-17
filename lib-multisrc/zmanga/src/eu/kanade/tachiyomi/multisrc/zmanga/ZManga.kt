@@ -24,7 +24,7 @@ abstract class ZManga(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     protected fun pagePathSegment(page: Int): String = if (page > 1) "page/$page/" else ""
 

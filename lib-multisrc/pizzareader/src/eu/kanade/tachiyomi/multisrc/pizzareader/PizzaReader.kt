@@ -29,7 +29,7 @@ abstract class PizzaReader(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     open val apiUrl by lazy { "$baseUrl$apiPath" }
 

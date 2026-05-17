@@ -43,7 +43,7 @@ class PixivComic : HttpSource() {
         randomString()
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ShuffledImageInterceptor(key))
         .addNetworkInterceptor(::tagInterceptor)
         .build()

@@ -36,7 +36,7 @@ class PandaChaika(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
         .newBuilder()
         .addInterceptor(::intercept)
         .build()

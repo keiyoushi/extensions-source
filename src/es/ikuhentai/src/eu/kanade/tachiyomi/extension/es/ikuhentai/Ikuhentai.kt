@@ -24,7 +24,7 @@ class Ikuhentai : HttpSource() {
     override val baseUrl = "https://ikuhentai.net"
     override val lang = "es"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 
