@@ -67,8 +67,13 @@ class DCUniverseInfinite : HttpSource(), ConfigurableSource {
             val sessionCookie = preferences.getString(PREF_SESSION_COOKIE, "").orEmpty().trim()
             val request = chain.request()
             if (sessionCookie.isNotBlank() && request.url.host.endsWith("dcuniverseinfinite.com")) {
-                val existing = request.header("Cookie").orEmpty()
-                val merged = if (existing.isBlank()) "session=$sessionCookie" else "$existing; session=$sessionCookie"
+                // Strip any stale session= the cookie jar may have added before appending ours.
+                val stripped = request.header("Cookie").orEmpty()
+                    .split(";")
+                    .map { it.trim() }
+                    .filter { !it.startsWith("session=") }
+                    .joinToString("; ")
+                val merged = if (stripped.isBlank()) "session=$sessionCookie" else "$stripped; session=$sessionCookie"
                 chain.proceed(request.newBuilder().header("Cookie", merged).build())
             } else {
                 chain.proceed(request)
