@@ -189,10 +189,10 @@ class Manga(
 
 @Serializable
 class Chapter(
-    val id: String,
+    val id: Long,
     val source: String,
     @SerialName("chapter_number")
-    val number: String? = null,
+    val number: Float? = null,
     @SerialName("chapter_title")
     val name: String? = null,
     @SerialName("group_name")

@@ -254,14 +254,15 @@ class Mangadotnet :
                 response.parseAs<List<Chapter>>()
                     .map { chapter ->
                         SChapter.create().apply {
-                            url = ChapterUrl(chapter.id, chapter.source, false).toJsonString()
+                            url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
                             name = buildString {
-                                val number = (chapter.number ?: "0").toFloat().toString().substringBefore(".0")
+                                val number = (chapter.number ?: "0f").toString().substringBefore(".0")
                                 val name = chapter.name ?: ""
                                 if (!name.contains(number)) append("Chapter ", number, ": ")
                                 append(name.trim())
                             }
-                            chapter_number = (chapter.number ?: "0").toFloat()
+                            val num: Float = chapter.number ?: 0f
+                            chapter_number = num
                             scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
                             date_upload = dateFormat.tryParse(chapter.date)
                         }
