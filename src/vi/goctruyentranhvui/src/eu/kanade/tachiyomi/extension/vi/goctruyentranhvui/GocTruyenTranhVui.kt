@@ -84,13 +84,14 @@ class GocTruyenTranhVui :
             .build()
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET(
-        apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("home/filter")
-            addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("value", "recommend")
-        }.build(),
-        xhrHeaders,
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortByList(getSortByList()).apply {
+                state[0].state = true
+            },
+        ),
     )
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -320,7 +321,7 @@ class GocTruyenTranhVui :
         EditTextPreference(screen.context).apply {
             key = PREF_CUSTOM_DOMAIN
             title = "Tùy chỉnh tên miền"
-            summary = "Nhập tên miền đầy đủ (ví dụ: https://goctruyentranhvuiiiiiiiiii.site)"
+            summary = "Nhập tên miền đầy đủ (ví dụ: $defaultBaseUrl)"
             setDefaultValue(defaultBaseUrl)
             dialogTitle = "Ghi đè URL cơ sở"
             dialogMessage = "Default: $defaultBaseUrl"
@@ -333,7 +334,7 @@ class GocTruyenTranhVui :
                     Toast.makeText(screen.context, "Tên miền đã được thay đổi", Toast.LENGTH_LONG).show()
                     true
                 } catch (e: Exception) {
-                    Toast.makeText(screen.context, "Lỗi không nhập đúng định dạng URL: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(screen.context, "Lỗi sai định dạng URL: ${e.message}", Toast.LENGTH_LONG).show()
                     false
                 }
             }
