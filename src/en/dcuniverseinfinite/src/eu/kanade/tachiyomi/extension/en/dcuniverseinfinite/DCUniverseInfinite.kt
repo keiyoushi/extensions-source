@@ -1,9 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.dcuniverseinfinite
 
+import android.app.Application
 import android.util.Base64
 import android.webkit.CookieManager
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,12 +24,14 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class DCUniverseInfinite : HttpSource() {
+class DCUniverseInfinite : HttpSource(), ConfigurableSource {
 
     override val name = "DC Universe Infinite"
     override val baseUrl = "https://www.dcuniverseinfinite.com"
@@ -33,6 +39,19 @@ class DCUniverseInfinite : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api"
+
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private fun manualCookieString(): String {
+        val session = preferences.getString(PREF_SESSION, "").orEmpty().trim()
+        val psm = preferences.getString(PREF_PSM, "").orEmpty().trim()
+        return buildList {
+            if (session.isNotEmpty()) add("session=$session")
+            if (psm.isNotEmpty()) add("psmSessionId=$psm")
+        }.joinToString("; ")
+    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -63,28 +82,22 @@ class DCUniverseInfinite : HttpSource() {
             // WebView jar is populated. Always rebuild the Cookie header straight
             // from CookieManager for both apex and www hosts.
             val cm = CookieManager.getInstance()
+            // Manual cookies last so a pasted, authenticated session/psmSessionId
+            // overrides the anonymous values the in-app WebView produces.
             val merged = mergeCookies(
                 request.header("Cookie"),
                 cm.getCookie("https://dcuniverseinfinite.com"),
                 cm.getCookie("https://www.dcuniverseinfinite.com"),
+                manualCookieString(),
             )
             val finalRequest = if (merged.isBlank()) {
                 request
             } else {
                 request.newBuilder().header("Cookie", merged).build()
             }
-            if (request.url.pathSegments.any { it == "rights" }) {
-                lastWireCookie = merged
-            }
             chain.proceed(finalRequest)
         }
         .build()
-
-    @Volatile
-    private var lastWireCookie: String = ""
-
-    @Volatile
-    private var lastSetCookieCode: Int = -1
 
     private fun mergeCookies(vararg sources: String?): String {
         val jar = LinkedHashMap<String, String>()
@@ -248,8 +261,8 @@ class DCUniverseInfinite : HttpSource() {
         runCatching {
             client.newCall(
                 POST("$apiUrl/users/set_cookie?trans=en", headers, "".toRequestBody()),
-            ).execute().use { lastSetCookieCode = it.code }
-        }.onFailure { lastSetCookieCode = -2 }
+            ).execute().close()
+        }
         val uuid = (baseUrl + chapter.url).toHttpUrl().pathSegments.last()
         return GET("$apiUrl/5/1/rights/comic/$uuid?trans=en", headers)
     }
@@ -263,13 +276,10 @@ class DCUniverseInfinite : HttpSource() {
         val rights = decodeJwtPayload(jwt).parseAs<RightsDto>()
         if (!rights.rights.can_read) {
             val who = if (rights.user_guid.isNullOrBlank()) {
-                val wire = lastWireCookie
-                fun Boolean.c() = if (this) "Y" else "n"
-                // wireS/wireP = session/psm actually sent on the wire for the rights
-                // call; sc = set_cookie HTTP status (-2 threw, -1 not run).
-                "DCUI diag wireS=${wire.contains("session=").c()} wireP=${wire.contains("psmSessionId=").c()} " +
-                    "wireN=${if (wire.isBlank()) 0 else wire.split(";").size} sc=$lastSetCookieCode " +
-                    "uid=${rights.user_guid ?: "null"} | signed out — log in via Komikku WebView"
+                "Signed out. Komikku's WebView can't complete DC's SSO login. " +
+                    "Open this source's settings and paste your 'session' (and " +
+                    "ideally 'psmSessionId') cookie value from a desktop browser " +
+                    "where you're logged in. See the settings screen for steps."
             } else {
                 "Signed in, but this issue isn't readable on your account (it likely needs an active subscription)."
             }
@@ -325,6 +335,39 @@ class DCUniverseInfinite : HttpSource() {
         val selectedValue: String get() = ERAS[state].second
     }
 
+    // Settings
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val intro = "Komikku's in-app WebView cannot complete DC Universe Infinite's " +
+            "login (it uses Warner Bros. federated SSO), so the session it creates is " +
+            "signed-out. Work around it by pasting the cookie value from a desktop " +
+            "browser where you ARE logged in:\n" +
+            "1. Log in at dcuniverseinfinite.com in Chrome/Firefox\n" +
+            "2. DevTools (F12) -> Application -> Cookies -> https://www.dcuniverseinfinite.com\n" +
+            "3. Copy the Value of the row, paste it below (value only, not the name)\n\n" +
+            "The session value expires roughly daily; if reading stops working, " +
+            "paste a fresh one. Pasting psmSessionId too lets the extension refresh " +
+            "the session automatically and last much longer."
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_SESSION
+            title = "session cookie value"
+            summary = intro
+            dialogTitle = "Paste 'session' value"
+            setDefaultValue("")
+            screen.addPreference(this)
+        }
+        EditTextPreference(screen.context).apply {
+            key = PREF_PSM
+            title = "psmSessionId cookie value (optional)"
+            summary = "Optional but recommended: paste the 'psmSessionId' value too " +
+                "so the session auto-refreshes and you rarely need to re-paste."
+            dialogTitle = "Paste 'psmSessionId' value"
+            setDefaultValue("")
+            screen.addPreference(this)
+        }
+    }
+
     // Helpers
 
     private fun decodeJwtPayload(jwt: String): String {
@@ -354,6 +397,8 @@ class DCUniverseInfinite : HttpSource() {
         private val JSON_MEDIA_TYPE = "application/json;charset=UTF-8".toMediaType()
         private const val LOGIN_MESSAGE =
             "Log in via WebView with an active subscription to read this issue."
+        private const val PREF_SESSION = "session_cookie"
+        private const val PREF_PSM = "psm_session_id"
 
         private val SORTS = listOf(
             SortOption("Newest", "first_released", "desc"),
