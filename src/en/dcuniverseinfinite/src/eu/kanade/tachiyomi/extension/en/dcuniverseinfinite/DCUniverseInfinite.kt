@@ -174,7 +174,11 @@ class DCUniverseInfinite : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         var result = response.parseAs<SearchResponseDto>()
         val total = result.record_count
-        val seriesUuid = result.items.firstOrNull()?.series_uuid
+        // Prefer extracting from the request body because the API does not always echo
+        // back series_uuid in the transformed search results.
+        val reqBody = response.request.body.bodyString()
+        val seriesUuid = Regex(""""series_uuid":"([^"]+)"""").find(reqBody)?.groupValues?.get(1)
+            ?: result.items.firstOrNull()?.series_uuid
         val books = result.items.toMutableList()
         var page = 1
         while (seriesUuid != null && books.size < total) {
@@ -220,6 +224,7 @@ class DCUniverseInfinite : HttpSource() {
             throw IOException(who)
         }
 
+        val bookUuid = response.request.url.pathSegments.last()
         val pageHeaders = headersBuilder()
             .set("x-auth-jwt", jwt)
             .build()
@@ -229,13 +234,13 @@ class DCUniverseInfinite : HttpSource() {
         var numPages = 1
         while (pageNum <= numPages) {
             val request = GET(
-                "$apiUrl/comics/1/book/download/?page=$pageNum&quality=SD&trans=en",
+                "$apiUrl/comics/1/book/$bookUuid/download/?page=$pageNum&quality=SD&trans=en",
                 pageHeaders,
             )
             val manifest = client.newCall(request).execute().parseAs<DownloadDto>()
             numPages = manifest.num_pages
             manifest.images.forEach { img ->
-                val url = img.thumbnail_url ?: return@forEach
+                val url = img.thumbnail_url ?: img.signed_url ?: return@forEach
                 pages.add(Page(pages.size, imageUrl = url))
             }
             pageNum++
