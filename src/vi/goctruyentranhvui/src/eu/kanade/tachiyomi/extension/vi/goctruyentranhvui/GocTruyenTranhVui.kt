@@ -27,7 +27,6 @@ import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -114,19 +113,23 @@ class GocTruyenTranhVui :
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null && (url.host == baseUrl.toHttpUrl().host || url.host == defaultBaseUrl.toHttpUrl().host)) {
-                if (url.pathSegments.size >= 2 && url.pathSegments[0] == "truyen") {
-                    // Note: Fetching manga details directly for Deep Links is a temporary workaround
-                    // because the website currently restricts browsing/searching.
-                    // This allows users to access specific manga via URL as a temporary support measure.
-                    return client.newCall(GET(query, headers))
-                        .asObservableSuccess()
-                        .map { response ->
-                            val manga = mangaDetailsParse(response)
-                            MangasPage(listOf(manga), false)
-                        }
-                }
+            val url = query.toHttpUrl()
+            val baseHost = baseUrl.toHttpUrl().host
+            val defaultHost = defaultBaseUrl.toHttpUrl().host
+            if (url.host != baseHost && url.host != defaultHost) {
+                throw Exception("Tên miền không được hỗ trợ")
+            }
+
+            if (url.pathSegments.size >= 2 && url.pathSegments[0] == "truyen") {
+                // Note: Fetching manga details directly for Deep Links is a temporary workaround
+                // because the website currently restricts browsing/searching.
+                // This allows users to access specific manga via URL as a temporary support measure.
+                return client.newCall(GET(query, headers))
+                    .asObservableSuccess()
+                    .map { response ->
+                        val manga = mangaDetailsParse(response)
+                        MangasPage(listOf(manga), false)
+                    }
             }
             return Observable.just(MangasPage(emptyList(), false))
         }
