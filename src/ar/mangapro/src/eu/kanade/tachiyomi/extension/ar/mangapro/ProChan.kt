@@ -58,7 +58,7 @@ class ProChan : HttpSource() {
     override val supportsLatest = true
     override val versionId = 5
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .addNetworkInterceptor(
             CookieInterceptor(

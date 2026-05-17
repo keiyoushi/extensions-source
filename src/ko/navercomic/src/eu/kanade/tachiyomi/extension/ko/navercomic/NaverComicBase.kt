@@ -23,7 +23,7 @@ abstract class NaverComicBase(protected val mType: String) : HttpSource() {
     override val baseUrl: String = "https://comic.naver.com"
     internal val mobileUrl = "https://m.comic.naver.com"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     protected open val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.KOREA)
 

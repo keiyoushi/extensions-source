@@ -22,7 +22,7 @@ class MangaPill : HttpSource() {
     override val baseUrl = "https://mangapill.com"
     override val lang = "en"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Popular fetches the homepage where the "Trending Mangas" section is

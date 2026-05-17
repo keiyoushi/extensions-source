@@ -29,7 +29,7 @@ class LuminareTranslations : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(listOf(Filters("popular", "")))))
 

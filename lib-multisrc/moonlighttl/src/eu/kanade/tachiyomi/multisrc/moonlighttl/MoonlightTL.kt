@@ -27,7 +27,7 @@ abstract class MoonlightTL(
 ) : HttpSource() {
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

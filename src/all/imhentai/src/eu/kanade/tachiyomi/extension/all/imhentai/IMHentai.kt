@@ -28,7 +28,7 @@ class IMHentai(
             if (it == LANGUAGE_SPEECHLESS) mangaLang else it
         }
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
         .newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()

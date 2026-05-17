@@ -26,7 +26,7 @@ abstract class ZeistManga(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     protected val json: Json by injectLazy()
 

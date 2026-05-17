@@ -40,7 +40,7 @@ class AzComic : HttpSource() {
     @Volatile
     private var isPrefetchingSeries = false
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         val series = getSeries().sortedByDescending { it.updatedAt }

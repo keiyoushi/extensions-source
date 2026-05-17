@@ -31,7 +31,7 @@ class Bakamh :
 
     override val baseUrl by lazy { preferences.baseUrl() }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(UserAgentClientHintsInterceptor())
         .rateLimit(permits = 2, period = 1, unit = TimeUnit.SECONDS) // Rate limit added to prevent 429 errors during library updates
         .build()

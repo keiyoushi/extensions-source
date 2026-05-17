@@ -28,7 +28,7 @@ abstract class Gattsu(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     override fun headersBuilder() = Headers.Builder()
         .add("Accept", ACCEPT)

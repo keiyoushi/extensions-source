@@ -22,7 +22,7 @@ class BRYaoi : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     // ====================== Popular ===============================
 

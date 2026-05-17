@@ -25,7 +25,7 @@ open class EroMuse(override val name: String, override val baseUrl: String) : Ht
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     /**
      * Browse, search, and latest all run through an ArrayDeque of requests that acts as a stack we push and pop to/from

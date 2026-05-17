@@ -24,7 +24,7 @@ class MeoSua : HttpSource() {
     override val baseUrl = "https://meosua.com"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

@@ -26,7 +26,7 @@ class DFlowScans : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/Series", headers)
 

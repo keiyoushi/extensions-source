@@ -29,7 +29,7 @@ class InManga : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val postHeaders = headers.newBuilder()
         .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")

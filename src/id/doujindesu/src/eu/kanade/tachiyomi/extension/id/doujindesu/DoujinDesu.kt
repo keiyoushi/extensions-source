@@ -40,7 +40,7 @@ class DoujinDesu :
     override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
     override val lang = "id"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

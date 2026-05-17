@@ -51,7 +51,7 @@ class Honeytoon(
     private val isAdultContentEnabled: Boolean
         get() = preferences.getBoolean(PREF_ADULT_KEY, false)
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 1)
         .addInterceptor { chain ->
             val fragment = chain.request().url.fragment

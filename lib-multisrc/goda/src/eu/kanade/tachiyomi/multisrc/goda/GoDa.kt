@@ -29,7 +29,7 @@ open class GoDa(
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     private fun getKey(link: String): String = link.substringAfter("/manga/").removeSuffix("/")
 

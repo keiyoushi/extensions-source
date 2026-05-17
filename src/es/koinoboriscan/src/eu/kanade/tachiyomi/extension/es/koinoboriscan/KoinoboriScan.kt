@@ -42,7 +42,7 @@ class KoinoboriScan : HttpSource() {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2, 1)
         .build()
 

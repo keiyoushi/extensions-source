@@ -39,7 +39,7 @@ class AnimeXNovel : HttpSource() {
 
     override val versionId: Int = 2
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .readTimeout(1, TimeUnit.MINUTES)
         .callTimeout(1, TimeUnit.MINUTES)
         .rateLimit(3, 1)

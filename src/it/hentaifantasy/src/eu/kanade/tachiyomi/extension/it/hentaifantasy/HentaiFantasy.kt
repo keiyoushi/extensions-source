@@ -24,7 +24,7 @@ class HentaiFantasy : HttpSource() {
     override val baseUrl = "https://hentaifantasy.it"
     override val lang = "it"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     companion object {
         private val pagesUrlPattern = Regex(""""url":"(.*?)"""")

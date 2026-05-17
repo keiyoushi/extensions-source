@@ -38,7 +38,7 @@ class InsanosScan :
     override val supportsLatest = true
     override val versionId = 2
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("es"))
 

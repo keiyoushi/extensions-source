@@ -27,7 +27,7 @@ class TheLibraryOfOhara(override val lang: String, private val siteLang: String)
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
 

@@ -144,7 +144,7 @@ class MangaDash :
         chain.proceed(request)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(loginInterceptor)
         .addInterceptor(pdfInterceptor)
         .build()
@@ -189,7 +189,7 @@ class MangaDash :
 
     private fun performLogin(username: String, password: String) {
         val loginUrl = "$baseUrl/auth/login"
-        val baseClient = network.cloudflareClient
+        val baseClient = network.client
 
         // 1. Get CSRF Token. Using Use block for safety.
         val getRequest = GET(loginUrl, headers)

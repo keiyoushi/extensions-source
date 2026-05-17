@@ -52,7 +52,7 @@ class Zebrack :
 
     private var secret: String? = null
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()

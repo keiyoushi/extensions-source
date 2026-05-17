@@ -30,7 +30,7 @@ class MangaBTT : HttpSource() {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(2)
             .build()
     }

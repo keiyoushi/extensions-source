@@ -35,7 +35,7 @@ class RawUwU : HttpSource() {
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

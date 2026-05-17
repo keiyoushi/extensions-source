@@ -40,7 +40,7 @@ class Azuki :
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor {
             val request = it.request()

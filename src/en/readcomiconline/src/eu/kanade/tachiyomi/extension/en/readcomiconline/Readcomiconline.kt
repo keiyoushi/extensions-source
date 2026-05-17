@@ -60,7 +60,7 @@ class Readcomiconline :
             filterInclude = listOf("chrome"),
         )
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::captchaInterceptor).build()
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {

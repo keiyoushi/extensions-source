@@ -65,7 +65,7 @@ class SpyFakku :
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         // add referer in interceptor due to domain change preference
         .addNetworkInterceptor { chain ->
             val request = chain.request().newBuilder()

@@ -31,7 +31,7 @@ class BacaKomik : HttpSource() {
 
     override val id = 4383360263234319058
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(12, 3)
         .build()
 

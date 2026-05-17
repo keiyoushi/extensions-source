@@ -26,7 +26,7 @@ class PerfScan : HttpSource() {
     override val supportsLatest = true
     override val versionId = 2
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     private val chapterNumberFormat = DecimalFormat("#.##")

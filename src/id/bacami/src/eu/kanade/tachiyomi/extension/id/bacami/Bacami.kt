@@ -26,7 +26,7 @@ class Bacami : HttpSource() {
     override val lang = "id"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     private val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale.ENGLISH)
 

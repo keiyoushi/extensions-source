@@ -50,7 +50,7 @@ abstract class GreenShit :
     private var tokenExpiryTime: Long = 0L
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(rateLimitPerSecond)
             .addInterceptor(::authIntercept)
             .build()
@@ -116,7 +116,7 @@ abstract class GreenShit :
 
             val headers = headersBuilder().set("Accept", "application/json").build()
 
-            val response = network.cloudflareClient.newCall(
+            val response = network.client.newCall(
                 POST("$apiUrl/auth/login", headers, body),
             ).execute()
 

@@ -25,7 +25,7 @@ class MomonGA : HttpSource() {
 
     override val baseUrl = "https://momon-ga.com"
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     // Chapters
 

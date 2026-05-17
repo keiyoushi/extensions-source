@@ -30,7 +30,7 @@ class Kuaikanmanhua : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val apiUrl = "https://api.kkmh.com"
 

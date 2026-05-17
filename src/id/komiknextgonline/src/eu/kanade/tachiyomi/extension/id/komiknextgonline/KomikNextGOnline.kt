@@ -29,7 +29,7 @@ class KomikNextGOnline : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US)
 

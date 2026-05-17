@@ -34,7 +34,7 @@ class EgoToons :
 
     override val versionId = 3
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .addInterceptor(ImageDecryptor())
         .build()

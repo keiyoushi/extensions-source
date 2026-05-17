@@ -121,11 +121,11 @@ class Koharu(
             .build()
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    private val clearanceClient = network.cloudflareClient.newBuilder()
+    private val clearanceClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url

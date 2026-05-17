@@ -24,7 +24,7 @@ class YSKComics(
     private val apiBaseUrl = "https://api.ysk-comics.com"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("x-localization", lang)

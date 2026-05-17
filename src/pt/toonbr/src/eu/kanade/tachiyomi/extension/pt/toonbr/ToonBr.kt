@@ -35,7 +35,7 @@ class ToonBr :
 
     override val client by lazy {
         val token = getToken()
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {

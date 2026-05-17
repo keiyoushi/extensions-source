@@ -20,7 +20,7 @@ class AnimeGDRClub : HttpSource() {
     override val baseUrl = "http://www.agcscanlation.it/"
     override val lang = "it"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/serie.php", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)

@@ -34,7 +34,7 @@ class AnimeSama : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")

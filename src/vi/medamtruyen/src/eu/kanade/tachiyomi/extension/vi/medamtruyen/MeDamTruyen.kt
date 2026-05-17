@@ -46,7 +46,7 @@ class MeDamTruyen : HttpSource() {
         chain.proceed(fallbackRequest)
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .addInterceptor(thumbnailFallbackInterceptor)
         .build()
