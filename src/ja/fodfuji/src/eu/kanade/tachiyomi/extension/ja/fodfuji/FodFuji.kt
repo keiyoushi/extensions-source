@@ -36,7 +36,7 @@ class FodFuji :
     override fun headersBuilder() = super.headersBuilder()
         .add("Zk-Web-Version", "1.3.5")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addNetworkInterceptor(CookieInterceptor(domain, ("sfsc" to "0")))
         .addInterceptor {
@@ -170,11 +170,12 @@ class FodFuji :
         }
     }
 
-    private fun buildPageUrl(guardianUrl: String, path: String, signedParams: String?, key: String?): String = "$guardianUrl/$path".toHttpUrl().newBuilder()
-        .query(signedParams)
-        .fragment(key)
-        .build()
-        .toString()
+    private fun buildPageUrl(guardianUrl: String, path: String, signedParams: String?, key: String?): String = "$guardianUrl/$path".toHttpUrl().newBuilder().apply {
+        if (!signedParams.isNullOrEmpty()) {
+            query(signedParams)
+        }
+        fragment(key)
+    }.build().toString()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
