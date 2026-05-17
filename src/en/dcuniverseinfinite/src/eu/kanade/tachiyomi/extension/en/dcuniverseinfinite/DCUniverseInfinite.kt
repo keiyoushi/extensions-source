@@ -205,10 +205,19 @@ class DCUniverseInfinite : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val jwt = response.parseAs<String>()
+        val raw = response.body.string().trim()
+        if (response.code != 200) {
+            throw IOException("Rights check failed (HTTP ${response.code}). Open WebView and sign in, then retry.")
+        }
+        val jwt = raw.removeSurrounding("\"")
         val rights = decodeJwtPayload(jwt).parseAs<RightsDto>()
         if (!rights.rights.can_read) {
-            throw IOException(LOGIN_MESSAGE)
+            val who = if (rights.user_guid.isNullOrBlank()) {
+                "You appear signed out to the server (no account detected). Open WebView, sign in, and let the page fully load before retrying."
+            } else {
+                "Signed in, but this issue isn't readable on your account (it likely needs an active subscription)."
+            }
+            throw IOException(who)
         }
 
         val pageHeaders = headersBuilder()

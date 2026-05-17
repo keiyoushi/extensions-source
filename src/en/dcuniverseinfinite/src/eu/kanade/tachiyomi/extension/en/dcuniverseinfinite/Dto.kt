@@ -46,6 +46,7 @@ class TagDto(
 @Serializable
 class RightsDto(
     val rights: RightsInfoDto = RightsInfoDto(),
+    val user_guid: String? = null,
 )
 
 @Serializable
