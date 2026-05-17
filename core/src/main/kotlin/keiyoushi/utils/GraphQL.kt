@@ -52,6 +52,9 @@ private class PersistedQueryExtension(
  */
 inline fun <reified T> T.toJsonElement(json: Json = jsonInstance): JsonElement = json.encodeToJsonElement(serializer(), this)
 
+/**
+ * Intercepts HTTP responses and throws [GraphQLException] if the body contains GraphQL errors.
+ */
 class GraphQLErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -70,6 +73,7 @@ class GraphQLErrorInterceptor : Interceptor {
  * @param operationName The GraphQL operation name.
  * @param variables Variables pre-encoded as a [JsonElement].
  * @param extensions Optional protocol extensions.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
  * @see persistedQueryExtension
  */
 fun graphQLBody(
@@ -88,7 +92,14 @@ fun graphQLBody(
 /**
  * Typed-variables overload of [graphQLBody].
  *
- * @param json [Json] instance for encoding [variables]. Defaults to [jsonInstance].
+ * Builds a GraphQL POST [RequestBody].
+ *
+ * @param query The GraphQL query string.
+ * @param operationName The GraphQL operation name.
+ * @param variables Variables to serialize as [JsonElement] and embed in the request body.
+ * @param extensions Optional protocol extensions.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @see persistedQueryExtension
  */
 inline fun <reified V : Any> graphQLBody(
     query: String? = null,
@@ -108,6 +119,13 @@ inline fun <reified V : Any> graphQLBody(
  * Appends GraphQL parameters (`operationName`, `query`, `variables`, `extensions`) as URL
  * query parameters. Use for sources that send GraphQL over GET rather than POST.
  * Null parameters are not appended.
+ *
+ * @param query The GraphQL query string.
+ * @param operationName The GraphQL operation name.
+ * @param variables Variables pre-encoded as a [JsonElement].
+ * @param extensions Optional protocol extensions.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @see persistedQueryExtension
  */
 fun Builder.appendGraphQLParams(
     query: String? = null,
@@ -124,6 +142,17 @@ fun Builder.appendGraphQLParams(
 
 /**
  * Typed-variables overload of [appendGraphQLParams].
+ *
+ * Appends GraphQL parameters (`operationName`, `query`, `variables`, `extensions`) as URL
+ * query parameters. Use for sources that send GraphQL over GET rather than POST.
+ * Null parameters are not appended.
+ *
+ * @param query The GraphQL query string.
+ * @param operationName The GraphQL operation name.
+ * @param variables Variables to serialize as [JsonElement] and embed in the request body.
+ * @param extensions Optional protocol extensions.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @see persistedQueryExtension
  */
 inline fun <reified V : Any> Builder.appendGraphQLParams(
     query: String? = null,
@@ -149,6 +178,7 @@ inline fun <reified V : Any> Builder.appendGraphQLParams(
  * @param variables Variables pre-encoded as a [JsonElement].
  * @param extensions Optional protocol extensions.
  * @param cache The cache control strategy.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
  * @see persistedQueryExtension
  */
 fun graphQLPost(
@@ -159,15 +189,26 @@ fun graphQLPost(
     variables: JsonElement? = null,
     extensions: JsonElement? = null,
     cache: CacheControl? = null,
+    json: Json = jsonInstance,
 ): Request {
-    val body = graphQLBody(query, operationName, variables, extensions)
+    val body = graphQLBody(query, operationName, variables, extensions, json)
     return if (cache != null) POST(url, headers, body, cache) else POST(url, headers, body)
 }
 
 /**
  * Typed-variables overload of [graphQLPost].
  *
- * @param json [Json] instance for encoding [variables]. Defaults to [jsonInstance].
+ * Builds a GraphQL POST [Request].
+ *
+ * @param url The endpoint URL.
+ * @param headers The HTTP request headers.
+ * @param query The GraphQL query string.
+ * @param operationName The GraphQL operation name.
+ * @param variables Variables to serialize as [JsonElement] and embed in the request body.
+ * @param extensions Optional protocol extensions.
+ * @param cache The cache control strategy.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @see persistedQueryExtension
  */
 inline fun <reified V : Any> graphQLPost(
     url: String,
@@ -178,7 +219,7 @@ inline fun <reified V : Any> graphQLPost(
     extensions: JsonElement? = null,
     cache: CacheControl? = null,
     json: Json = jsonInstance,
-): Request = graphQLPost(url, headers, query, operationName, variables.toJsonElement(json), extensions, cache)
+): Request = graphQLPost(url, headers, query, operationName, variables.toJsonElement(json), extensions, cache, json)
 
 /**
  * Builds a GraphQL GET [Request] with parameters encoded as URL query parameters.
@@ -190,6 +231,7 @@ inline fun <reified V : Any> graphQLPost(
  * @param variables Variables pre-encoded as a [JsonElement].
  * @param extensions Optional protocol extensions.
  * @param cache The cache control strategy.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
  * @see persistedQueryExtension
  */
 fun graphQLGet(
@@ -202,14 +244,27 @@ fun graphQLGet(
     cache: CacheControl? = null,
     json: Json = jsonInstance,
 ): Request {
-    val url = url.toHttpUrl().newBuilder().appendGraphQLParams(query, operationName, variables, extensions, json).build().toString()
+    val url = url.toHttpUrl().newBuilder()
+        .appendGraphQLParams(query, operationName, variables, extensions, json)
+        .build()
+        .toString()
     return if (cache != null) GET(url, headers, cache) else GET(url, headers)
 }
 
 /**
  * Typed-variables overload of [graphQLGet].
  *
- * @param json [Json] instance for encoding [variables]. Defaults to [jsonInstance].
+ * Builds a GraphQL GET [Request] with parameters encoded as URL query parameters.
+ *
+ * @param url The endpoint URL.
+ * @param headers The HTTP request headers.
+ * @param query The GraphQL query string.
+ * @param operationName The GraphQL operation name.
+ * @param variables Variables to serialize as [JsonElement] and embed in the request body.
+ * @param extensions Optional protocol extensions.
+ * @param cache The cache control strategy.
+ * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @see persistedQueryExtension
  */
 inline fun <reified V : Any> graphQLGet(
     url: String,
@@ -220,12 +275,12 @@ inline fun <reified V : Any> graphQLGet(
     extensions: JsonElement? = null,
     cache: CacheControl? = null,
     json: Json = jsonInstance,
-): Request = graphQLGet(url, headers, query, operationName, variables.toJsonElement(json), extensions, cache)
+): Request = graphQLGet(url, headers, query, operationName, variables.toJsonElement(json), extensions, cache, json)
 
 /**
- * Pass the result to the `extensions` parameter of [graphQLPost] or [graphQLGet].
+ * Pass the result to the `extensions` parameter of [graphQLBody], [graphQLPost] or [graphQLGet].
  *
- * @param hash SHA-256 hash of the full query document.
+ * @param hash SHA-256 hash of the query string.
  * @param version APQ protocol version. Defaults to `1`.
  */
 fun persistedQueryExtension(hash: String, version: Int = 1): JsonElement = PersistedQueryExtension(PersistedQueryExtension.PersistedQuery(version, hash)).toJsonElement()
