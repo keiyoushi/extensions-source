@@ -22,6 +22,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -56,18 +57,19 @@ class YellowNote :
 
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.US)
 
-    // yyyy.MM.dd
     private val dateRegex = """\d{4}\.\d{2}\.\d{2}""".toRegex()
 
-    // <div role="img" class="img" style="background-image:url('https://img.xchina.io/photos/641aea8f589cb/0068_600x0.webp');"></div>
     private val styleUrlRegex = """background-image\s*:\s*url\('([^']+)'\)""".toRegex()
 
-    // 100P + 2V
     private val mediaCountRegex = """\d+P( \+ \d+V)?""".toRegex()
 
     private val mangaSelector = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
     private val nextPageSelector = "div.pager:first-of-type > a.pager-next"
     private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
+
+    private val videosRegex = """var videos = (\[.*?\]);""".toRegex(RegexOption.DOT_MATCHES_ALL)
+    private val videoUrlRegex = """"url":"([^"]+)"""".toRegex()
+    private val domainRegex = """var domain = "([^"]+)";""".toRegex()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         Preferences.buildPreferences(screen.context, intl)
@@ -189,12 +191,39 @@ class YellowNote :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select(imageSelector)
+        val html = response.body.string()
+        val document = Jsoup.parse(html)
+
+        val videoDomain = domainRegex.find(html)?.groupValues?.get(1)
+            ?: "https://img.xchina.io"
+
+        val firstImageUrl = document.selectFirst(imageSelector)
+            ?.let { parseUrlFormStyle(it.selectFirst("div.img")) }
+
+        val videoPages = videosRegex.find(html)?.let { match ->
+            val jsonStr = match.groupValues[1]
+            videoUrlRegex.findAll(jsonStr).map { it.groupValues[1] }.toList()
+                .mapIndexed { i, path ->
+                    Page(
+                        index = i,
+                        url = "$videoDomain$path",
+                        imageUrl = firstImageUrl,
+                    )
+                }
+        } ?: emptyList()
+
+        val offset = videoPages.size
+        val imagePages = document.select(imageSelector)
             .mapIndexed { i, imageElement ->
                 val url = parseUrlFormStyle(imageElement.selectFirst("div.img"))!!
-                Page(i, imageUrl = url)
+                Page(
+                    index = offset + i,
+                    url = null,
+                    imageUrl = url,
+                )
             }
+
+        return videoPages + imagePages
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
