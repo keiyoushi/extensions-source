@@ -15,8 +15,22 @@ private const val BLACKLIST_PREF = "blacklist"
 private const val WHITELIST_PREF = "whitelist"
 private const val SCORE_THRESH_PREF = "score_tresh"
 private const val FIRST_END_PREF = "first_end"
+private const val FULL_RESOLUTION_PREF = "first_end"
+
+// Attempted to exclude only sexual gore (to not exclude more sfw stories with action related violence)
+private const val COMMON_BLACKLIST = "( gore necrophilia ) ( gore sex ) mutilation snuff torture gore_focus character_prepared_as_food castration feces urine diaper fart burp_cloud"
+
+private const val RXPARENTH = "\\([^)]*\\)"
+private const val RXNOWHITE = "\\S+"
 
 fun setupE621PreferenceScreen(screen: PreferenceScreen) {
+    SwitchPreferenceCompat(screen.context).apply {
+        key = FULL_RESOLUTION_PREF
+        title = "Enable Full Image Resolutions"
+        summary = "Loads images at their full resolution. Full images often have absurd resolutions. Disabling this will speed up image loading at the tradeoff of image quality (usually not noticable)."
+        setDefaultValue(false)
+    }.also(screen::addPreference)
+
     SwitchPreferenceCompat(screen.context).apply {
         key = BETTER_DETAILS_PREF
         title = "Enable Better Manga Details"
@@ -60,14 +74,14 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         key = BLACKLIST_PREF
         title = "Blacklisted Tags"
         summary = "Space separated blacklisted tags. WILL NOT FILTER OUT EVERYTHING! (Tag Search Mode only)"
-        setDefaultValue("gore feces urine diaper fart burp_cloud")
+        setDefaultValue(COMMON_BLACKLIST)
     }.also(screen::addPreference)
 
     EditTextPreference(screen.context).apply {
         key = WHITELIST_PREF
         title = "Whitelisted Tags"
-        summary = "Space separated whitelisted tags. This will be applied to all your searches! (Tag Search Mode only)"
-        setDefaultValue("")
+        summary = "Space separated whitelisted tags. This will be applied everywhere! (Tag Search Mode only)"
+        setDefaultValue("score:>10")
     }.also(screen::addPreference)
 
     EditTextPreference(screen.context).apply {
@@ -90,6 +104,9 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
 val SharedPreferences.betterDetailsPref: Boolean
     get() = getBoolean(BETTER_DETAILS_PREF, true)
 
+val SharedPreferences.fullResolution: Boolean
+    get() = getBoolean(FULL_RESOLUTION_PREF, false)
+
 val SharedPreferences.searchModePref: String
     get() = if (getBoolean(TAG_MODE_ENABLE_PREF, true)) "tags" else "pools"
 
@@ -103,11 +120,12 @@ val SharedPreferences.categoryPref: String
     get() = getString(CATEGORY_PREF, "series")!!
 
 val SharedPreferences.blacklistPref: String
-    get() = getString(BLACKLIST_PREF, "gore feces urine diaper fart")!!.trim().replace(Regex("\\s+"), " ")
-        .split(" ").joinToString(" ") { "-$it" }
+    get() = Regex("(?=$RXPARENTH)$RXPARENTH|$RXNOWHITE").findAll(
+        getString(BLACKLIST_PREF, COMMON_BLACKLIST)!!.trim().replace(Regex("\\s+"), " "),
+    ).joinToString(" ") { "-${it.value}" }
 
 val SharedPreferences.whitelistPref: String
-    get() = getString(WHITELIST_PREF, "")!!.trim().replace(Regex("\\s+"), " ")
+    get() = getString(WHITELIST_PREF, "score:>10")!!.trim().replace(Regex("\\s+"), " ")
 
 val SharedPreferences.popularModePref: String
     get() = getString(POPULAR_MODE_PREF, "order:score date:year")!!

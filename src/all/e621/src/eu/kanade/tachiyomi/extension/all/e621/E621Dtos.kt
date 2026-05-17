@@ -50,6 +50,9 @@ data class Flags(
 @Serializable
 data class ImageData(
     val url: String? = null,
+    val has: Boolean = true,
+    val width: Int = 0,
+    val height: Int = 0,
 )
 
 @Serializable

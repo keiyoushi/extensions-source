@@ -38,7 +38,7 @@ class E621 :
     override val client = network.cloudflareClient
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    // private val logTag = "app.mihon:E621" // For Debugging
+    // private val logTag = "app.mihon:E621" // DEBUG
 
     // e621 needs a custom User-Agent header
     override fun headersBuilder() = Headers.Builder()
@@ -172,6 +172,8 @@ class E621 :
         var activeOnly = false
         var description = ""
 
+        // TODO: Get this to work. Requires implementing posts as a manga url.
+        // var tagsMandatory = "( ~inpool:true ~( comic tall_image ) ) -video status:any"
         var tagsMandatory = "inpool:true -video status:any"
         var orderTag = ""
         var tags = ""
@@ -316,11 +318,7 @@ class E621 :
             posts.any { it.rating == "s" } -> "rating:Safe, "
             else -> ""
         }
-        // // weighted average score
-        // val score = posts.sumOf( it.score.total * it.score.total ) / posts.sumOf( it.score.total )
-        // val maxScore = posts.maxOrNull( it.score.total ) ?: -9999
-        // val minScore = posts.minOrNull( it.score.total ) ?: -9999
-        // val score =  if (maxScore != -9999 && minScore != -9999) "score:$minScore..$maxScore, " else ""
+
         val medScore = posts.map { it.score.total }.sorted().getOrNull(posts.size / 2) ?: -99999
         val score = if (medScore != -99999) "score:>${medScore - 1}, " else ""
 
@@ -400,7 +398,7 @@ class E621 :
         return GET(url, headers)
     }
 
-    // Big chonker function. TODO: Maybe break it up or simplify it?
+    // A bit big on the chonk chart. TODO: Maybe break it up or simplify it?
     override fun chapterListParse(response: Response): List<SChapter> {
         val pool = response.parseAs<Pool>()
         val postIds = pool.postIds
@@ -583,12 +581,19 @@ class E621 :
     }
 
     private fun extractImageUrl(post: Post): String? {
-        // Full Resolution (best quality for reading)
-        post.file.url?.let {
-            if (it != "null" && it.isNotEmpty()) return it
-        }
+        // Full Resolution (best for reading. can be absurd resolution)
+        post.file.url
+            ?.takeIf {
+                preferences.fullResolution ||
+                    !post.sample.has ||
+                    post.sample.width < 800 ||
+                    post.sample.height < 1200
+            }
+            ?.let {
+                if (it != "null" && it.isNotEmpty()) return it
+            }
 
-        // Sample
+        // Sample (usually good enough quality for reading)
         post.sample.url?.let {
             if (it != "null" && it.isNotEmpty()) return it
         }
