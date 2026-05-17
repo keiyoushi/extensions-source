@@ -200,6 +200,14 @@ class DCUniverseInfinite : HttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
+        // The browser calls set_cookie on every page load before checking rights.
+        // It converts the stored auth token into a fresh HttpOnly session cookie,
+        // without which the rights endpoint returns user_guid=null and can_read=false.
+        runCatching {
+            client.newCall(
+                POST("$apiUrl/users/set_cookie?trans=en", headers, "".toRequestBody()),
+            ).execute().close()
+        }
         val uuid = (baseUrl + chapter.url).toHttpUrl().pathSegments.last()
         return GET("$apiUrl/5/1/rights/comic/$uuid?trans=en", headers)
     }
