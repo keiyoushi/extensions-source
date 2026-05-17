@@ -198,6 +198,15 @@ class DCUniverseInfinite : HttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
+        // PSM auth: the durable psmSessionId cookie (set by WebView login) must be
+        // exchanged for a short-lived `session` cookie via set_cookie on every read,
+        // exactly as the site's JS does. Without this the rights endpoint returns
+        // user_guid=null / can_read=false even when psmSessionId is present.
+        runCatching {
+            client.newCall(
+                POST("$apiUrl/users/set_cookie?trans=en", headers, "".toRequestBody()),
+            ).execute().close()
+        }
         val uuid = (baseUrl + chapter.url).toHttpUrl().pathSegments.last()
         return GET("$apiUrl/5/1/rights/comic/$uuid?trans=en", headers)
     }
