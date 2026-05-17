@@ -60,16 +60,6 @@ class GocTruyenTranhVui :
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-        .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
-        .add("Cache-Control", "max-age=0")
-        .add("Sec-Ch-Ua-Mobile", "?1")
-        .add("Sec-Ch-Ua-Platform", "\"Android\"")
-        .add("Sec-Fetch-Dest", "document")
-        .add("Sec-Fetch-Mode", "navigate")
-        .add("Sec-Fetch-Site", "same-origin")
-        .add("Sec-Fetch-User", "?1")
-        .add("Upgrade-Insecure-Requests", "1")
         .apply {
             build()["user-agent"]?.let { userAgent ->
                 set("user-agent", removeWebViewToken(userAgent))
@@ -81,6 +71,16 @@ class GocTruyenTranhVui :
     private val xhrHeaders by lazy {
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+            .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
+            .add("Cache-Control", "max-age=0")
+            .add("Sec-Ch-Ua-Mobile", "?1")
+            .add("Sec-Ch-Ua-Platform", "\"Android\"")
+            .add("Sec-Fetch-Dest", "document")
+            .add("Sec-Fetch-Mode", "navigate")
+            .add("Sec-Fetch-Site", "same-origin")
+            .add("Sec-Fetch-User", "?1")
+            .add("Upgrade-Insecure-Requests", "1")
             .build()
     }
 
