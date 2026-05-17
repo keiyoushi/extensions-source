@@ -187,14 +187,13 @@ class GocTruyenTranhVui :
 
         // Extract ID and slug for internal use (especially for Deep Links)
         val script = document.select("script").firstOrNull { it.data().contains("const comic = {") }?.data()
-        if (script != null) {
-            val id = COMIC_ID_REGEX.find(script)?.groupValues?.get(1)
-            val nameEn = COMIC_NAME_EN_REGEX.find(script)?.groupValues?.get(1)
-                ?: response.request.url.pathSegments.getOrNull(1)
+        val id = script?.let { COMIC_ID_REGEX.find(it)?.groupValues?.get(1) }
+            ?: document.selectFirst("#comic-id-comment")?.attr("value")
+        val nameEn = script?.let { COMIC_NAME_EN_REGEX.find(it)?.groupValues?.get(1) }
+            ?: response.request.url.pathSegments.getOrNull(1)
 
-            if (id != null && nameEn != null) {
-                this.url = "$id:$nameEn"
-            }
+        if (id != null && nameEn != null) {
+            this.url = "$id:$nameEn"
         }
     }
 
