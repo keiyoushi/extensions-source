@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.dcuniverseinfinite
 
+import android.app.Application
 import android.util.Base64
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -19,12 +23,14 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class DCUniverseInfinite : HttpSource() {
+class DCUniverseInfinite : HttpSource(), ConfigurableSource {
 
     override val name = "DC Universe Infinite"
     override val baseUrl = "https://www.dcuniverseinfinite.com"
@@ -32,6 +38,10 @@ class DCUniverseInfinite : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api"
+
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -52,6 +62,17 @@ class DCUniverseInfinite : HttpSource() {
                 throw IOException(LOGIN_MESSAGE)
             }
             response
+        }
+        .addNetworkInterceptor { chain ->
+            val sessionCookie = preferences.getString(PREF_SESSION_COOKIE, "").orEmpty().trim()
+            val request = chain.request()
+            if (sessionCookie.isNotBlank() && request.url.host.endsWith("dcuniverseinfinite.com")) {
+                val existing = request.header("Cookie").orEmpty()
+                val merged = if (existing.isBlank()) "session=$sessionCookie" else "$existing; session=$sessionCookie"
+                chain.proceed(request.newBuilder().header("Cookie", merged).build())
+            } else {
+                chain.proceed(request)
+            }
         }
         .build()
 
@@ -218,8 +239,13 @@ class DCUniverseInfinite : HttpSource() {
         val jwt = raw.removeSurrounding("\"")
         val rights = decodeJwtPayload(jwt).parseAs<RightsDto>()
         if (!rights.rights.can_read) {
+            val sessionCookie = preferences.getString(PREF_SESSION_COOKIE, "").orEmpty().trim()
             val who = if (rights.user_guid.isNullOrBlank()) {
-                "You appear signed out to the server (no account detected). Open WebView, sign in, and let the page fully load before retrying."
+                if (sessionCookie.isBlank()) {
+                    "You appear signed out. Open the extension settings and paste your 'session' cookie value, or open WebView and sign in."
+                } else {
+                    "Session cookie set but server still sees you as signed out — the cookie may be expired. Get a fresh 'session' value from your browser's DevTools and update the extension settings."
+                }
             } else {
                 "Signed in, but this issue isn't readable on your account (it likely needs an active subscription)."
             }
@@ -275,6 +301,26 @@ class DCUniverseInfinite : HttpSource() {
         val selectedValue: String get() = ERAS[state].second
     }
 
+    // Settings
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = PREF_SESSION_COOKIE
+            title = "Session cookie"
+            summary = "Paste the value of the 'session' cookie from your browser.\n\n" +
+                "How to get it:\n" +
+                "1. Sign in at dcuniverseinfinite.com in a desktop browser\n" +
+                "2. Open DevTools → Application → Cookies → https://www.dcuniverseinfinite.com\n" +
+                "3. Copy the Value of the 'session' row\n" +
+                "4. Paste it here\n\n" +
+                "Current value: ${preferences.getString(PREF_SESSION_COOKIE, "").orEmpty().let { if (it.isBlank()) "(not set)" else "(set)" }}"
+            setDefaultValue("")
+            dialogTitle = "Session cookie value"
+            dialogMessage = "Paste the full value of the 'session' cookie (not the name, just the value)."
+            screen.addPreference(this)
+        }
+    }
+
     // Helpers
 
     private fun decodeJwtPayload(jwt: String): String {
@@ -298,19 +344,13 @@ class DCUniverseInfinite : HttpSource() {
         append('"')
     }
 
-    private fun okhttp3.RequestBody?.bodyString(): String {
-        this ?: return ""
-        val buffer = okio.Buffer()
-        writeTo(buffer)
-        return buffer.readUtf8()
-    }
-
     companion object {
         private const val CONSUMER_KEY = "DA59dtVXYLxajktV"
         private const val PER_PAGE = 20
         private val JSON_MEDIA_TYPE = "application/json;charset=UTF-8".toMediaType()
         private const val LOGIN_MESSAGE =
             "Log in via WebView with an active subscription to read this issue."
+        private const val PREF_SESSION_COOKIE = "session_cookie"
 
         private val SORTS = listOf(
             SortOption("Newest", "first_released", "desc"),
