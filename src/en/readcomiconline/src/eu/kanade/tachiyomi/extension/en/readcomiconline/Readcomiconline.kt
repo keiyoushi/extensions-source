@@ -113,6 +113,7 @@ class Readcomiconline :
                 }
                 return fetchMangaDetails(manga).map { details ->
                     details.url = manga.url
+                    details.initialized = true
                     MangasPage(listOf(details), false)
                 }
             }
