@@ -27,6 +27,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -39,13 +40,15 @@ import java.util.concurrent.TimeUnit
 class GocTruyenTranhVui :
     HttpSource(),
     ConfigurableSource {
-    override val lang = "vi"
-
-    override val baseUrl = "https://goctruyentranhvui23.com"
-
     override val name = "Goc Truyen Tranh Vui"
 
-    private val apiUrl = "$baseUrl/api/v2"
+    override val lang = "vi"
+
+    private val defaultBaseUrl = "https://goctruyentranhvuiiiiiiiiii.site"
+
+    override val baseUrl get() = getPrefBaseUrl()
+
+    private val apiUrl get() = "$baseUrl/api/v2"
 
     override val supportsLatest: Boolean = true
 
@@ -108,6 +111,27 @@ class GocTruyenTranhVui :
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrlOrNull()
+            if (url != null && (url.host == baseUrl.toHttpUrl().host || url.host == defaultBaseUrl.toHttpUrl().host)) {
+                if (url.pathSegments.size >= 2 && url.pathSegments[0] == "truyen") {
+                    // Note: Fetching manga details directly for Deep Links is a temporary workaround
+                    // because the website currently restricts browsing/searching.
+                    // This allows users to access specific manga via URL as a temporary support measure.
+                    return client.newCall(GET(query, headers))
+                        .asObservableSuccess()
+                        .map { response ->
+                            val manga = mangaDetailsParse(response)
+                            MangasPage(listOf(manga), false)
+                        }
+                }
+            }
+            return Observable.just(MangasPage(emptyList(), false))
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -156,6 +180,18 @@ class GocTruyenTranhVui :
         status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")?.text())
         author = document.selectFirst(".mb-1:contains(Tác giả:) span")?.text()
         description = document.select(".v-card-text").joinToString { it.wholeText().trim() }
+
+        // Extract ID and slug for internal use (especially for Deep Links)
+        val script = document.select("script").firstOrNull { it.data().contains("const comic = {") }?.data()
+        if (script != null) {
+            val id = COMIC_ID_REGEX.find(script)?.groupValues?.get(1)
+            val nameEn = COMIC_NAME_EN_REGEX.find(script)?.groupValues?.get(1)
+                ?: response.request.url.pathSegments.getOrNull(1)
+
+            if (id != null && nameEn != null) {
+                this.url = "$id:$nameEn"
+            }
+        }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -282,6 +318,27 @@ class GocTruyenTranhVui :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
+            key = PREF_CUSTOM_DOMAIN
+            title = "Tùy chỉnh tên miền"
+            summary = "Nhập tên miền đầy đủ (ví dụ: https://goctruyentranhvuiiiiiiiiii.site)"
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = "Ghi đè URL cơ sở"
+            dialogMessage = "Default: $defaultBaseUrl"
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val inputUrl = newValue as String
+                    if (inputUrl.isNotBlank()) {
+                        inputUrl.toHttpUrl()
+                    }
+                    Toast.makeText(screen.context, "Tên miền đã được thay đổi", Toast.LENGTH_LONG).show()
+                    true
+                } catch (e: Exception) {
+                    Toast.makeText(screen.context, "Lỗi không nhập đúng định dạng URL: ${e.message}", Toast.LENGTH_LONG).show()
+                    false
+                }
+            }
+        }.let(screen::addPreference)
+        EditTextPreference(screen.context).apply {
             key = CUSTOM_TOKEN
             title = "Authorization Token"
             summary = "Enter token manually"
@@ -293,10 +350,13 @@ class GocTruyenTranhVui :
             }
         }.also(screen::addPreference)
     }
-
+    private fun getPrefBaseUrl(): String = preferences.getString(PREF_CUSTOM_DOMAIN, defaultBaseUrl)!!
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
+        private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+        private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
+        private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
     }
 }
