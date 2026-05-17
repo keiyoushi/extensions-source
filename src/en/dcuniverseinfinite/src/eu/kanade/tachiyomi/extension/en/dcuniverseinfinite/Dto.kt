@@ -56,6 +56,24 @@ class TagDto(
 )
 
 @Serializable
+class SeriesBooksDto(
+    val page: Int = 1,
+    val num_pages: Int = 1,
+    val total: Int = 0,
+    val values: List<SeriesBookDto> = emptyList(),
+)
+
+@Serializable
+class SeriesBookDto(
+    val uuid: String,
+    val slug: String? = null,
+    val title: String? = null,
+    val issue_number: String? = null,
+    val publish_date: String? = null,
+    val release_date: String? = null,
+)
+
+@Serializable
 class RightsDto(
     val rights: RightsInfoDto = RightsInfoDto(),
     val user_guid: String? = null,

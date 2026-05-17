@@ -36,6 +36,9 @@ class DCUniverseInfinite : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
+    private val dateFormatDay = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
@@ -158,41 +161,36 @@ class DCUniverseInfinite : HttpSource() {
 
     // Chapters
 
-    override fun chapterListRequest(manga: SManga): Request =
-        chapterPageRequest((baseUrl + manga.url).toHttpUrl().pathSegments.last(), 1)
-
-    private fun chapterPageRequest(seriesUuid: String, page: Int): Request {
-        val body = """{"page":$page,"per_page":$PER_PAGE,"document_types":["book"],""" +
-            """"filters":{"book":{"series_uuid":${seriesUuid.jsonStr()}}},""" +
-            """"sort_field":{"book":"first_released"},"sort_direction":{"book":"asc"},""" +
-            """"apply_transform":true}"""
-        return POST("$apiUrl/search_proxy/1/search", headers, body.toRequestBody(JSON_MEDIA_TYPE))
+    override fun chapterListRequest(manga: SManga): Request {
+        val seriesUuid = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
+        return seriesBooksRequest(seriesUuid, 1)
     }
 
+    private fun seriesBooksRequest(seriesUuid: String, page: Int): Request =
+        GET("$apiUrl/comics/1/series/$seriesUuid/books/issue?page=$page&trans=en", headers)
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        var result = response.parseAs<SearchResponseDto>()
-        val totalPages = result.pageInfo?.num_pages ?: 1
-        val reqBody = response.request.body.bodyString()
-        val seriesUuid = Regex(""""series_uuid":"([^"]+)"""").find(reqBody)?.groupValues?.get(1)
-            ?: result.items.firstOrNull()?.series_uuid
-        val books = result.items.toMutableList()
+        var result = response.parseAs<SeriesBooksDto>()
+        val segments = response.request.url.pathSegments
+        val seriesUuid = segments.getOrNull(segments.indexOf("series") + 1)
+        val books = result.values.toMutableList()
         var page = 1
-        while (seriesUuid != null && page < totalPages) {
+        while (seriesUuid != null && page < result.num_pages) {
             page++
-            result = client.newCall(chapterPageRequest(seriesUuid, page)).execute()
-                .parseAs<SearchResponseDto>()
-            if (result.items.isEmpty()) break
-            books.addAll(result.items)
+            result = client.newCall(seriesBooksRequest(seriesUuid, page)).execute()
+                .parseAs<SeriesBooksDto>()
+            if (result.values.isEmpty()) break
+            books.addAll(result.values)
         }
         return books.mapIndexed { index, book -> book.toSChapter(index) }.reversed()
     }
 
-    private fun RecordDto.toSChapter(index: Int): SChapter = SChapter.create().apply {
+    private fun SeriesBookDto.toSChapter(index: Int): SChapter = SChapter.create().apply {
         val s = slug ?: "comic"
         setUrlWithoutDomain("/comics/book/$s/$uuid")
         name = title ?: issue_number?.let { "Issue #$it" } ?: "Issue"
         chapter_number = issue_number?.toFloatOrNull() ?: (index + 1).toFloat()
-        date_upload = dateFormat.tryParse(first_released?.take(19))
+        date_upload = dateFormatDay.tryParse(publish_date ?: release_date)
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}/c/reader"
