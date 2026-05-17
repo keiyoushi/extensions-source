@@ -254,12 +254,14 @@ class DCUniverseInfinite : HttpSource() {
         if (!rights.rights.can_read) {
             val who = if (rights.user_guid.isNullOrBlank()) {
                 val sent = response.request.header("Cookie").orEmpty()
-                val cm = CookieManager.getInstance()
-                val diag = "[cookies sent -> session:${sent.contains("session=")} " +
-                    "psmSessionId:${sent.contains("psmSessionId=")} count:${if (sent.isBlank()) 0 else sent.split(";").size}; " +
-                    "jar www:${!cm.getCookie("https://www.dcuniverseinfinite.com").isNullOrBlank()} " +
-                    "apex:${!cm.getCookie("https://dcuniverseinfinite.com").isNullOrBlank()}]"
-                "You appear signed out. Sign in via Komikku's WebView, let the page fully load, then retry. $diag"
+                val www = CookieManager.getInstance().getCookie("https://www.dcuniverseinfinite.com").orEmpty()
+                fun Boolean.c() = if (this) "Y" else "n"
+                // Diagnostic FIRST so it isn't truncated. jarS/jarP = session/psm in
+                // Komikku's cookie jar; reqS/reqP = same cookies on the rights request.
+                "DCUI diag jarS=${www.contains("session=").c()} jarP=${www.contains("psmSessionId=").c()} " +
+                    "jarN=${if (www.isBlank()) 0 else www.split(";").size} " +
+                    "reqS=${sent.contains("session=").c()} reqP=${sent.contains("psmSessionId=").c()} " +
+                    "reqN=${if (sent.isBlank()) 0 else sent.split(";").size} | signed out — log in via Komikku WebView"
             } else {
                 "Signed in, but this issue isn't readable on your account (it likely needs an active subscription)."
             }
