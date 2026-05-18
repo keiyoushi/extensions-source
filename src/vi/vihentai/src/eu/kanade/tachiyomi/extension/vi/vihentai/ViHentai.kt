@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.vihentai
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,11 +10,22 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.JSON_MEDIA_TYPE
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -30,6 +42,21 @@ class ViHentai : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(5)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            if (!request.url.toString().startsWith(baseUrl)) return@addInterceptor response
+
+            val body = response.peekBody(Long.MAX_VALUE).string()
+            if (!body.contains("wire:initial-data") || !body.contains("enter-secret")) {
+                return@addInterceptor response
+            }
+
+            response.close()
+            solvePassword(chain, body)
+            chain.proceed(request)
+        }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -152,6 +179,99 @@ class ViHentai : HttpSource() {
         }.distinctBy { it.url }
     }
 
+    // ============================== Password ===============================
+
+    private fun solvePassword(chain: okhttp3.Interceptor.Chain, html: String) {
+        val wireDataStr = WIRE_INITIAL_DATA_REGEX.find(html)?.groupValues?.get(1)
+            ?.replace("&quot;", "\"")
+            ?.replace("&amp;", "&")
+            ?.replace("&#039;", "'")
+            ?: throw IOException("Password: wire:initial-data not found")
+
+        val csrfToken = LIVEWIRE_TOKEN_REGEX.find(html)?.groupValues?.get(1)
+            ?: throw IOException("Password: CSRF token not found")
+
+        val password = PASSWORD_REGEX.find(html)?.groupValues?.get(1)
+            ?: throw IOException("Password: password not found")
+
+        val wireData = wireDataStr.parseAs<JsonObject>()
+        val fingerprint = wireData["fingerprint"]!!.jsonObject
+        val serverMemo = wireData["serverMemo"]!!.jsonObject
+
+        val livewireHeaders = Headers.Builder()
+            .add("Content-Type", "application/json")
+            .add("X-CSRF-TOKEN", csrfToken)
+            .add("X-Livewire", "true")
+            .add("Accept", "text/html, application/xhtml+xml")
+            .add("Referer", "$baseUrl/")
+            .build()
+
+        val syncPayload = buildJsonObject {
+            put("fingerprint", fingerprint)
+            put("serverMemo", serverMemo)
+            putJsonArray("updates") {
+                add(
+                    buildJsonObject {
+                        put("type", "syncInput")
+                        putJsonObject("payload") {
+                            put("id", "s1")
+                            put("name", "password")
+                            put("value", password)
+                        }
+                    },
+                )
+            }
+        }
+
+        val syncRequest = POST(
+            "$baseUrl/livewire/message/enter-secret",
+            livewireHeaders,
+            syncPayload.toString().toRequestBody(JSON_MEDIA_TYPE),
+        )
+        val syncResponse = chain.proceed(syncRequest)
+        val syncResult = syncResponse.parseAs<JsonObject>()
+
+        val syncMemo = syncResult["serverMemo"]?.jsonObject
+        val mergedMemo = buildJsonObject {
+            serverMemo.forEach { (key, value) ->
+                when {
+                    key == "data" && syncMemo?.containsKey("data") == true -> {
+                        putJsonObject("data") {
+                            serverMemo["data"]!!.jsonObject.forEach { (k, v) -> put(k, v) }
+                            syncMemo["data"]!!.jsonObject.forEach { (k, v) -> put(k, v) }
+                        }
+                    }
+                    syncMemo?.containsKey(key) == true -> put(key, syncMemo[key]!!)
+                    else -> put(key, value)
+                }
+            }
+        }
+
+        val submitPayload = buildJsonObject {
+            put("fingerprint", fingerprint)
+            put("serverMemo", mergedMemo)
+            putJsonArray("updates") {
+                add(
+                    buildJsonObject {
+                        put("type", "callMethod")
+                        putJsonObject("payload") {
+                            put("id", "c1")
+                            put("method", "submit")
+                            putJsonArray("params") {}
+                        }
+                    },
+                )
+            }
+        }
+
+        val submitRequest = POST(
+            "$baseUrl/livewire/message/enter-secret",
+            livewireHeaders,
+            submitPayload.toString().toRequestBody(JSON_MEDIA_TYPE),
+        )
+        chain.proceed(submitRequest).close()
+    }
+
     // =============================== Pages ================================
 
     override fun pageListParse(response: Response): List<Page> {
@@ -183,5 +303,8 @@ class ViHentai : HttpSource() {
 
     companion object {
         private val BACKGROUND_IMAGE_REGEX = Regex("""background-image:\s*url\(['"]?(.*?)['"]?\)""")
+        private val WIRE_INITIAL_DATA_REGEX = Regex("""wire:initial-data="([^"]+)"""")
+        private val LIVEWIRE_TOKEN_REGEX = Regex("""livewire_token\s*=\s*'([^']+)'""")
+        private val PASSWORD_REGEX = Regex("""input\.value\s*=\s*'([^']+)'""")
     }
 }
