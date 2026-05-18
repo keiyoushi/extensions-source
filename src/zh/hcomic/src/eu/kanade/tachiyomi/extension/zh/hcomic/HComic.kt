@@ -1,19 +1,18 @@
 package eu.kanade.tachiyomi.extension.zh.hcomic
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.parseAs
+import keiyoushi.utils.firstInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import java.lang.IllegalStateException
+import rx.Observable
+import java.net.URLEncoder
 
 class HComic : HttpSource() {
     override val baseUrl = "https://h-comic.com"
@@ -21,93 +20,86 @@ class HComic : HttpSource() {
     override val name = "H-Comic"
     override val supportsLatest = true
 
+    private val imgUrl = "https://h-comic.link/api"
+
     // Popular (Random)
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/random/__data.json")
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<IndexResponse>()
-        val mangas = result.new.map(NewItem::toSManga)
-        return MangasPage(mangas, mangas.isNotEmpty())
+        val result = response.parseAsMangaList(0)
+        return MangasPage(result.first.map { it.toSManga(imgUrl) }, true)
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/__data.json?page=$page")
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")!!.toInt()
+        val result = response.parseAsMangaList(page)
+        return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
+    }
 
     // Search
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("筛选条件（搜索关键字时无效）"),
-        TypeFilter(),
-        BrandFilter(),
-    )
+    override fun getFilterList() = FilterList(RandomFilter(), TagGroup())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-        if (query.isEmpty()) {
-            url.addPathSegment("lists.php")
-                .addQueryParameter("c", filters[1].toString())
-                .addQueryParameter("m", filters[2].toString())
-        } else {
-            url.addPathSegment("search.php").addQueryParameter("k", query)
-        }
-        url.addQueryParameter("p", page.toString()).addQueryParameter("s", "20")
-        return GET(url.build(), headers)
+        val tags = filters.firstInstance<TagGroup>().state.filter { it.state }.joinToString(",") { it.value }
+        val url = "${baseUrl + filters[0]}/__data.json".toHttpUrl().newBuilder()
+        url.addQueryParameter("tag", tags).addQueryParameter("q", query).addQueryParameter("page", page.toString())
+        return GET(url.build())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponse>()
-        return MangasPage(result.magazine.map(SearchItem::toSManga), true)
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+
+    // Manga Detail
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${URLEncoder.encode(manga.title, "UTF-8")}/1"
+
+    override fun mangaDetailsRequest(manga: SManga) = GET("${getMangaUrl(manga)}/__data.json")
+
+    override fun mangaDetailsParse(response: Response) = response.parseAsManga().toSManga(imgUrl)
+
+    // Chapters
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/comics/${URLEncoder.encode(chapter.name, "UTF-8")}/1"
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val info = manga.url.split('|')
+        return Observable.just(
+            listOf(
+                SChapter.create().apply {
+                    url = info.first()
+                    name = manga.title
+                    date_upload = info.last().substringBefore(':').toLong() * 1000L
+                    scanlator = info.last().substringAfter(':')
+                },
+            ),
+        )
     }
 
-    // Manga Detail Page
+    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<ShowResponse>()
-        if (result.content.isEmpty()) throw IllegalStateException("内容解析为空！")
-        val item = result.content[0]
-        return SManga.create().apply {
-            title = item.magName
-            author = item.magName.split(" ")[0]
-            thumbnail_url = item.magPic
-            url = "/show.php?a=${item.magId}"
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    // Pages
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val info = chapter.url.split(':')
+        return Observable.just(
+            List(info.last().toInt()) {
+                Page(it, imageUrl = "$imgUrl/${info.first()}/pages/${it + 1}")
+            },
+        )
     }
 
-    // Manga Detail Page / Chapters Page (Separate)
+    override fun pageListRequest(chapter: SChapter) = throw UnsupportedOperationException()
 
-    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ShowResponse>()
-        if (result.content.isEmpty()) return emptyList()
-        val item = result.content[0]
-        val chapter = SChapter.create().apply {
-            url = "/show.php?a=${item.magId}"
-            name = item.magName
-            chapter_number = 1F
-        }
-        return listOf(chapter)
-    }
-
-    // Manga View Page
-
-    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ShowResponse>()
-        return result.content.mapIndexed { i, it -> it.toPage(i) }
-    }
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     // Image
-
-    // override fun imageRequest(page: Page) = GET(page.url, headers)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

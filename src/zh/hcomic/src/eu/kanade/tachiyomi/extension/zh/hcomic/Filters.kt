@@ -2,28 +2,39 @@ package eu.kanade.tachiyomi.extension.zh.hcomic
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class TypeFilter :
-    Filter.Select<String>(
-        "分类",
-        arrayOf("女装服饰", "美妆美发", "时尚男士", "娱乐明星", "手工制作", "居家生活"),
-    ) {
-    override fun toString() = arrayOf("6", "8", "9", "10", "127", "168")[state]
+class RandomFilter : Filter.Select<String>("排序", arrayOf("最近更新", "随机排序")) {
+    override fun toString() = arrayOf("", "/random")[state]
 }
 
-class BrandFilter :
-    Filter.Select<String>(
-        "品牌",
-        arrayOf(
-            "全部", "BeasUp", "美的", "VoCE", "MAQUIA", "nail venus",
-            "ageha", "NAIL MAX", "Nail Up", "ar", "TOMOTOMO",
-            "CHOKiCHOKi", "springヘア&ビューティー", "美ST", "LDK the Beauty",
-            "preppy", "Nail Ex", "HAIR MODE", "其他美容美甲画册",
+class TagGroup :
+    Filter.Group<TagBox>(
+        "人氣標籤",
+        listOf(
+            TagBox("全彩", "full color"),
+            TagBox("巨乳", "big breasts"),
+            TagBox("黑絲 / 白襪", "stockings"),
+            TagBox("NTR", "netorare"),
+            TagBox("足交 / 腳交", "footjob"),
+            TagBox("女學生", "schoolgirl uniform"),
+            TagBox("眼鏡控", "glasses"),
+            TagBox("口交", "blowjob"),
+            TagBox("正太控", "shotacon"),
+            TagBox("亂倫", "incest"),
+            TagBox("熟女 / 人妻", "milf"),
+            TagBox("同志 BL", "yaoi"),
+            TagBox("黑肉", "dark skin"),
+            TagBox("泳裝", "swimsuit"),
+            TagBox("手淫", "masturbation"),
+            TagBox("肌肉", "muscle"),
+            TagBox("姐姐 / 妹妹", "sister"),
+            TagBox("捆綁", "bondage"),
+            TagBox("調教", "femdom"),
+            TagBox("催眠", "mind control"),
+            TagBox("露出", "exhibitionism"),
+            TagBox("群交", "group"),
+            TagBox("肛交", "anal"),
+            TagBox("獸交", "bestiality"),
         ),
-    ) {
-    override fun toString(): String = arrayOf(
-        "", "36", "48", "51", "53", "65", "84",
-        "109", "121", "149", "155", "178",
-        "214", "357", "361", "386", "395",
-        "400", "349",
-    )[state]
-}
+    )
+
+class TagBox(name: String, val value: String) : Filter.CheckBox(name)
