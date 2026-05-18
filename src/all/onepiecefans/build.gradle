@@ -1,0 +1,8 @@
+ext {
+    extName = 'One Piece Fans'
+    extClass = '.OnePieceFansFactory'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

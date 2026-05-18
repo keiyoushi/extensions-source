@@ -2,9 +2,9 @@ ext {
     extName = 'Medusascans'
     extClass = '.Medusascans'
     themePkg = 'comicaso'
-    baseUrl = 'https://medusascans.com'
+    baseUrl = 'https://medusascans.pro'
     overrideVersionCode = 1
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

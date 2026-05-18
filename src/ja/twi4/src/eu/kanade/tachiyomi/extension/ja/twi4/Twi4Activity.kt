@@ -1,23 +1,26 @@
 package eu.kanade.tachiyomi.extension.ja.twi4
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import kotlin.system.exitProcess
 
 class Twi4Activity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 2) {
-            val slug = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Twi4.SEARCH_PREFIX_SLUG}$slug")
-                putExtra("filter", packageName)
-            }
 
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
+
+        try {
             startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("Twi4Activity", "Unable to launch activity", e)
         }
 
         finish()

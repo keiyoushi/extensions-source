@@ -43,6 +43,7 @@ class LuminareTranslations : HttpSource() {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
+            .addQueryParameter("type", "manga")
 
         if (query.isNotBlank()) {
             url.addQueryParameter("search", query)
@@ -71,10 +72,6 @@ class LuminareTranslations : HttpSource() {
             ?.takeIf { it.isNotEmpty() }
             ?.let { url.addQueryParameter("artist", it) }
 
-        filters.firstInstanceOrNull<TypeFilter>()?.selected
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { url.addQueryParameter("type", it) }
-
         filters.firstInstanceOrNull<StatusFilter>()?.selected
             ?.takeIf { it.isNotEmpty() }
             ?.let { url.addQueryParameter("status", it) }
@@ -100,7 +97,7 @@ class LuminareTranslations : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val entrySlug = response.request.url.pathSegments[4]
-        return response.parseAs<ChapterResponse>().data.map { it.toSChapter(entrySlug) }.reversed()
+        return response.parseAs<ChapterResponse>().data.map { it.toSChapter(entrySlug) }.sortedBy { it.chapter_number }.reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url}"
@@ -136,7 +133,6 @@ class LuminareTranslations : HttpSource() {
             FilterList(
                 Filter.Header("Note: Search and active filters are applied together"),
                 SortFilter(data.sorts),
-                TypeFilter(data.types.filter { it.name !in EXCLUDED_TYPES }),
                 StatusFilter(data.statuses),
                 Filter.Separator(),
                 GenreFilter(data.genres),

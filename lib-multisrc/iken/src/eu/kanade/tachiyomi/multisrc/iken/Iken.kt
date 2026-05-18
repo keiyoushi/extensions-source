@@ -86,6 +86,11 @@ abstract class Iken(
      */
     protected open val sendUpdateViews: Boolean = true
 
+    /**
+     * The number of items to fetch per page in search/popular/latest requests.
+     */
+    protected open val perPage: Int = 18
+
     // Popular (Search with popular order and nothing else)
     protected open val popularFilter by lazy {
         FilterList(SortFilter("", sortFilterKey, sortOptions, sortOptions[1].second))
@@ -105,32 +110,27 @@ abstract class Iken(
     // search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (!query.startsWith("http")) {
-            return super.fetchSearchManga(page, query, filters)
+        if (query.startsWith("https://")) {
+            val mangaUrl = query.toHttpUrl()
+            if (mangaUrl.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            if (mangaUrl.pathSegments.size < 2) {
+                throw Exception("Unsupported url")
+            }
+            val slug = mangaUrl.pathSegments[1]
+            val manga = SManga.create().apply { url = slug }
+            return fetchMangaDetails(manga)
+                .map { MangasPage(listOf(it), false) }
         }
 
-        val url = query.toHttpUrl()
-        val baseHost = baseUrl.toHttpUrl().host
-
-        if (url.host != baseHost) throw Exception("Unsupported URL")
-
-        val pathSegments = url.pathSegments
-        val slug = pathSegments.getOrNull(1)
-            ?.takeIf { it.isNotBlank() }
-            ?: throw Exception("Invalid URL format")
-
-        val manga = SManga.create().apply {
-            this@apply.url = slug
-        }
-
-        return fetchMangaDetails(manga)
-            .map { MangasPage(listOf(it), false) }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", PER_PAGE.toString())
+            addQueryParameter("perPage", perPage.toString())
             addQueryParameter("searchTerm", query.trim())
             filters.filterIsInstance<UrlPartFilter>().forEach {
                 it.addUrlParameter(this)
@@ -158,7 +158,7 @@ abstract class Iken(
             .filterNot { it.isNovel }
             .map { it.toSManga() }
 
-        val hasNextPage = data.totalCount > (page * PER_PAGE)
+        val hasNextPage = data.totalCount > (page * perPage)
 
         val key = keyFromUrl(response.request.url)
         if (page == 1) pageNumber[key] = 1
@@ -322,8 +322,8 @@ abstract class Iken(
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringBeforeLast("#")}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#")
-        return GET("$apiUrl/api/post?postId=$id", headers)
+        val slug = manga.url.substringBeforeLast("#")
+        return GET("$apiUrl/api/post?postSlug=$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Post<Manga>>().post.toSManga()
@@ -339,11 +339,9 @@ abstract class Iken(
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val id = response.request.url.queryParameter("postId")
-
         val data = response.parseAs<Post<ChapterListResponse>>()
 
-        launchIO { updateViews(id?.toInt()) }
+        launchIO { updateViews(data.post.id) }
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
 
@@ -424,7 +422,6 @@ abstract class Iken(
     protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     companion object {
-        const val PER_PAGE = 18
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val numberRegex = Regex("\\d+")

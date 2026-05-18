@@ -9,8 +9,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -112,34 +115,38 @@ class YomuComics : HttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = resolveChapterId(chapter)
+        val chapterPageUrl = getChapterUrl(chapter)
+
         val requestHeaders = headers.newBuilder()
-            .set("Referer", getChapterUrl(chapter))
+            .set("Referer", chapterPageUrl)
+            .set("RSC", "1")
             .build()
 
-        return GET("$baseUrl/api/chapters?id=$chapterId", requestHeaders)
+        return GET(chapterPageUrl, requestHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseAs<ChapterPagesResponseDto>()
-            .chapter
-            .content
-            .filter(String::isNotBlank)
-
-        if (pages.isEmpty()) {
-            throw IllegalStateException("Nenhuma pagina encontrada para este capitulo")
+        val data = response.body.string().extractNextJsRsc<ChapterContentDto> {
+            it is JsonObject && "content" in it && "id" in it && "number" in it && it["content"] is JsonArray
         }
 
-        return pages.mapIndexed { index, imageUrl ->
-            val proxyUrl = "$baseUrl/api/proxy-image".toHttpUrl().newBuilder()
-                .addQueryParameter("url", imageUrl)
-                .toString()
-
-            Page(index, imageUrl = proxyUrl)
+        if (data != null && data.content.isNotEmpty()) {
+            return data.content.mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
         }
+
+        throw IllegalStateException("Nenhuma pagina encontrada para este capitulo")
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val requestHeaders = headers.newBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, requestHeaders)
+    }
 
     // Filters
 
@@ -188,40 +195,7 @@ class YomuComics : HttpSource() {
         return SeriesPageData(manga, chapters)
     }
 
-    private fun buildChapterHttpUrl(chapterUrl: String) = when {
-        chapterUrl.startsWith("http") -> chapterUrl.toHttpUrl()
-        else -> "$baseUrl$chapterUrl".toHttpUrl()
-    }
-
-    private fun resolveChapterId(chapter: SChapter): String {
-        val chapterUrl = buildChapterHttpUrl(chapter.url)
-        chapterUrl.queryParameter("chapterId")?.let { return it }
-
-        val pathSegments = chapterUrl.pathSegments
-        val readerSegmentIndex = pathSegments.indexOf("ler")
-        if (readerSegmentIndex == -1 || pathSegments.size <= readerSegmentIndex + 2) {
-            throw IllegalStateException("chapterId nao encontrado na URL do capitulo")
-        }
-
-        val mangaSlug = pathSegments[readerSegmentIndex + 1]
-        val chapterNumberLabel = pathSegments[readerSegmentIndex + 2]
-        val request = GET("$baseUrl/obra/$mangaSlug", headers)
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Falha ao recarregar a obra para resolver chapterId")
-            }
-
-            val payload = extractSeriesPayload(response.asJsoup(), mangaSlug)
-
-            return payload.chapters
-                .firstOrNull { it.number.toChapterNumberString() == chapterNumberLabel }
-                ?.chapterId
-                ?: throw IllegalStateException("chapterId nao encontrado para $mangaSlug/$chapterNumberLabel")
-        }
-    }
-
-    private data class SeriesPageData(
+    private class SeriesPageData(
         val manga: SManga,
         val chapters: List<SChapter>,
     )
@@ -233,8 +207,9 @@ class YomuComics : HttpSource() {
         const val DEFAULT_SORT = "popular"
     }
 
-    private val bibliotecaHeaders
-        get() = headers.newBuilder()
+    private val bibliotecaHeaders by lazy {
+        headers.newBuilder()
             .set("Referer", "$baseUrl/biblioteca")
             .build()
+    }
 }

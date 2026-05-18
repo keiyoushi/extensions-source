@@ -6,4 +6,4 @@ ext {
     themePkg = "mangareader"
     baseUrl = "https://jmanga.codes"
 }
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

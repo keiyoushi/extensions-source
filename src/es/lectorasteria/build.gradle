@@ -1,0 +1,10 @@
+ext {
+    extName = 'Lector Asteria'
+    extClass = '.LectorAsteria'
+    baseUrl = 'https://lectorasteria.com'
+    themePkg = 'moonlighttl'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,8 @@
 ext {
     extName = 'Plot Twist No Fansub'
     extClass = '.PlotTwistNoFansub'
-    extVersionCode = 12
+    extVersionCode = 13
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

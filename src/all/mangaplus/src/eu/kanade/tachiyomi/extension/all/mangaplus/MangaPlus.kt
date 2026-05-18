@@ -146,12 +146,35 @@ class MangaPlus(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = if (page == 1) {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { searchMangaParse(it, query) }
-    } else {
-        Observable.just(parseDirectory(page))
+    ): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host !in listOf(
+                    "mangaplus.shueisha.co.jp",
+                    "www.mangaplus.shueisha.co.jp",
+                    "jumpg-webapi.tokyo-cdn.com",
+                    "www.jumpg-webapi.tokyo-cdn.com",
+                )
+            ) {
+                throw Exception("Unsupported url")
+            }
+            val newQuery = when {
+                url.pathSegments.firstOrNull() == "viewer" ->
+                    PREFIX_CHAPTER_ID_SEARCH + url.pathSegments[1]
+                url.pathSegments.lastOrNull() == "sns_share" ->
+                    url.queryParameter("title_id")?.let { PREFIX_ID_SEARCH + it }
+                        ?: throw Exception("Unsupported url")
+                else -> PREFIX_ID_SEARCH + url.pathSegments[1]
+            }
+            return fetchSearchManga(page, newQuery, filters)
+        }
+        return if (page == 1) {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { searchMangaParse(it, query) }
+        } else {
+            Observable.just(parseDirectory(page))
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

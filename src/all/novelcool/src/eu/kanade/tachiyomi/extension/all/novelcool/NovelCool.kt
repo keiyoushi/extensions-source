@@ -21,7 +21,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -317,21 +316,27 @@ open class NovelCool(
             .build()
         val response = chain.proceed(request.newBuilder().headers(headers).build())
 
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-        val jsRedirect = document.selectFirst("script:containsData(window.location.href)")?.html()
-            ?.substringAfter("\"")
-            ?.substringBefore("\"")
+        if (response.header("Content-Type")?.contains("text/html") != true) {
+            return response
+        }
+
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+        val document = Jsoup.parse(responseBody)
+        val script = document.selectFirst("script:containsData(window.location.href)")?.html()
+            ?: return response
+
+        val jsRedirect = JS_REDIRECT_REGEX.find(script)?.groupValues?.get(1)
             ?: return response
 
         val requestUrl = response.request.url
 
-        val url = "${requestUrl.scheme}://${requestUrl.host}$jsRedirect".toHttpUrlOrNull()
+        val url = requestUrl.resolve(jsRedirect)
             ?: return response
 
         response.close()
 
-        val newHeaders = headersBuilder()
-            .add("Referer", requestUrl.toString())
+        val newHeaders = request.headers.newBuilder()
+            .set("Referer", requestUrl.toString())
             .build()
 
         return chain.proceed(
@@ -379,6 +384,8 @@ open class NovelCool(
         // Matches any http/https URL inside single or double quotes within the all_imgs_url array.
         // Using the same approach as NineAnime which shares the same image-serving infrastructure.
         private val imageUrlRegex = Regex("""["'](https?://[^"']+)["']""")
+
+        private val JS_REDIRECT_REGEX = Regex("""window\.location\.href\s*=\s*["']([^"']+)["']""")
 
         private const val PREF_API_SEARCH = "pref_use_search_api"
 

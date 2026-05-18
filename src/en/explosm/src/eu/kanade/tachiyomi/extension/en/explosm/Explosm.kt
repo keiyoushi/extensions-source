@@ -111,11 +111,16 @@ class Explosm : HttpSource() {
                             SChapter.create().apply {
                                 name = comic.getContent("slug")
                                 // we get the url for page.imageurl here
-                                url = if (comic.getContent("file_static") != "null") {
-                                    comic.getContent("file_static")
-                                } else {
-                                    "https://files.explosm.net/comics/${comic.getContent("file")}"
+                                val slug = comic.getContent("slug")
+                                val file = comic.getContent("file")
+                                val fileStatic = comic.getContent("file_static")
+
+                                val imageUrl = when {
+                                    fileStatic != "null" -> fileStatic
+                                    file.startsWith("http") -> file
+                                    else -> "https://files.explosm.net/comics/$file"
                                 }
+                                url = "/comics/$slug#$imageUrl"
                                 date_upload = date.parse(comic.getContent("publish_at"))?.time ?: 0L
                                 scanlator = comic.getContent("author_name")
                                 chapter_number = chapterCount // so no "missing chapters" warning in app
@@ -132,7 +137,7 @@ class Explosm : HttpSource() {
 
     // Pages
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, "", chapter.url)))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, "", chapter.url.substringAfter("#"))))
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 

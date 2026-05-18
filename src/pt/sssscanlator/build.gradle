@@ -1,9 +1,9 @@
 ext {
     extName = 'Yomu Comics'
     extClass = '.YomuComics'
-    extVersionCode = 42
+    extVersionCode = 44
     isNsfw = true
 
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

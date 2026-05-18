@@ -12,27 +12,16 @@ class MangaUpUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1) {
-            val query = pathSegments[1]
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-            if (query != null) {
-                val mainIntent = Intent().apply {
-                    action = "eu.kanade.tachiyomi.SEARCH"
-                    putExtra("query", MangaUp.PREFIX_ID_SEARCH + query)
-                    putExtra("filter", packageName)
-                }
-
-                try {
-                    startActivity(mainIntent)
-                } catch (e: ActivityNotFoundException) {
-                    Log.e("MangaPlusUrlActivity", e.toString())
-                }
-            } else {
-                Log.e("MangaUpUrlActivity", "Missing the title ID from the URL")
-            }
-        } else {
-            Log.e("MangaUpUrlActivity", "Could not parse URI from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("MangaUpUrlActivity", "Unable to launch activity", e)
         }
 
         finish()

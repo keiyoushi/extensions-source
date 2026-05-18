@@ -10,31 +10,19 @@ import kotlin.system.exitProcess
 class HeanCmsUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
+        val mainIntent = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
 
-        if (pathSegments != null && pathSegments.size >= 2) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", createQuery(pathSegments))
-                putExtra("filter", packageName)
-            }
-            try {
-                startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.e("HeanCmsUrlActivity", e.toString())
-            }
-        } else {
-            Log.e("HeanCmsUrlActivity", "could not parse uri from intent $intent")
+        try {
+            startActivity(mainIntent)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("HeanCmsUrlActivity", "Unable to launch activity", e)
         }
 
         finish()
         exitProcess(0)
-    }
-
-    private fun createQuery(pathSegments: MutableList<String>): String? = if (pathSegments.size >= 2) {
-        val slug = pathSegments[1]
-        "${HeanCms.SEARCH_PREFIX}$slug"
-    } else {
-        null
     }
 }

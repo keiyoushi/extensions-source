@@ -91,7 +91,14 @@ open class Comikey(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+    ): Observable<MangasPage> = if (query.startsWith("https://")) {
+        val url = query.toHttpUrl()
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported url")
+        }
+        val slug = "${url.pathSegments[1]}/${url.pathSegments[2]}"
+        fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$slug", filters)
+    } else if (query.startsWith(PREFIX_SLUG_SEARCH)) {
         val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
         val url = "/comics/$slug/"
 

@@ -12,22 +12,20 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
 class InfinityScans : HttpSource() {
 
     override val name = "InfinityScans"
 
     override val baseUrl = "https://infinityscans.org"
-    private val cdnHost = "cdn.infinityscans.net"
+    private val cdnHost = "cdn.infinityscans.org"
 
     override val lang = "en"
 
@@ -50,9 +48,7 @@ class InfinityScans : HttpSource() {
         add("X-requested-with", "XMLHttpRequest")
     }.build()
 
-    private val json: Json by injectLazy()
-
-    // Popular
+    // ============================== Popular ==============================
 
     override fun popularMangaRequest(page: Int): Request = fetchJson("api/ranking")
 
@@ -64,7 +60,7 @@ class InfinityScans : HttpSource() {
         return MangasPage(entries, false)
     }
 
-    // Latest
+    // ============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request = fetchJson("api/comics")
 
@@ -78,7 +74,7 @@ class InfinityScans : HttpSource() {
         return MangasPage(entries, false)
     }
 
-    // Search
+    // ============================== Search ===============================
 
     override fun fetchSearchManga(
         page: Int,
@@ -99,41 +95,38 @@ class InfinityScans : HttpSource() {
                 when (filter) {
                     is SortFilter -> {
                         when (filter.selected) {
-                            "title" -> {
-                                titles = titles.sortedBy { it.title }
-                            }
-
-                            "popularity" -> {
-                                titles = titles.sortedByDescending { it.all_views }
-                            }
-
-                            "latest" -> {
-                                titles = titles.sortedByDescending { it.updated }
-                            }
+                            "title" -> titles = titles.sortedBy { it.title }
+                            "popularity" -> titles = titles.sortedByDescending { it.allViews }
+                            "latest" -> titles = titles.sortedByDescending { it.updated }
                         }
                     }
 
                     is GenreFilter -> {
-                        filter.checked?.also {
-                            titles = titles.filter { it.genres?.split(",")?.any { genre -> genre in filter.checked!! } ?: true }
+                        val checkedGenres = filter.checked
+                        if (checkedGenres != null) {
+                            titles = titles.filter {
+                                it.genres?.split(",")?.any { genre -> genre in checkedGenres } ?: true
+                            }
                         }
                     }
 
                     is AuthorFilter -> {
-                        filter.checked?.also {
-                            titles = titles.filter { it.authors?.split(",")?.any { author -> author in filter.checked!! } ?: true }
+                        val checkedAuthors = filter.checked
+                        if (checkedAuthors != null) {
+                            titles = titles.filter {
+                                it.authors?.split(",")?.any { author -> author in checkedAuthors } ?: true
+                            }
                         }
                     }
 
                     is StatusFilter -> {
-                        filter.checked?.also {
-                            titles = titles.filter { filter.checked!!.any { status -> status == it.status } }
+                        val checkedStatuses = filter.checked
+                        if (checkedStatuses != null) {
+                            titles = titles.filter { it.status in checkedStatuses }
                         }
                     }
 
-                    else -> {
-                        /* Do Nothing */
-                    }
+                    else -> { /* Do Nothing */ }
                 }
             }
 
@@ -143,20 +136,88 @@ class InfinityScans : HttpSource() {
         }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    private fun fetchJson(api: String): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments(api)
+    // ============================== Details ==============================
 
-        val searchHeaders = apiHeaders.newBuilder().apply {
-            set("Referer", url.build().newBuilder().removePathSegment(0).build().toString())
-        }.build()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.use { it.asJsoup() }
 
-        return GET(url.build(), searchHeaders)
+        val desc = document.select("div:has(>h4:contains(Summary)) p")
+            .text()
+            .split("</br>")
+            .joinToString("\n", transform = String::trim)
+
+        val details = document.selectFirst("div:has(>span:contains(Rank:))")?.parent()
+
+        return SManga.create().apply {
+            description = buildString {
+                append(desc)
+                details?.getInfo("Alternative Titles")?.let {
+                    append("\n\nAlternative Title: ")
+                    append(it)
+                }
+            }
+            author = details?.getLinks("Authors")
+            genre = details?.getLinks("Genres")
+            status = details?.getInfo("Status").parseStatus()
+        }
     }
 
-    // Filters
+    // ============================= Chapters ==============================
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val url = response.request.url
+        val slug = url.pathSegments.take(3).joinToString("/", prefix = "/")
+
+        val chapterHeaders = apiHeaders.newBuilder().apply {
+            add("content-length", "0")
+            add("Origin", baseUrl)
+            set("Referer", url.toString())
+        }.build()
+
+        val chapterListData = client.newCall(
+            POST(url.toString(), chapterHeaders),
+        ).execute().parseAs<ResponseDto<List<ChapterEntryDto>>>()
+
+        return chapterListData.result.map {
+            it.toSChapter(slug)
+        }
+    }
+
+    // =============================== Pages ===============================
+
+    override fun pageListParse(response: Response): List<Page> {
+        val url = response.request.url
+
+        val pageListHeaders = apiHeaders.newBuilder().apply {
+            add("content-length", "0")
+            add("Origin", baseUrl)
+            set("Referer", url.toString())
+        }.build()
+
+        val pageListData = client.newCall(
+            POST(url.toString(), pageListHeaders),
+        ).execute().parseAs<ResponseDto<List<PageEntryDto>>>()
+
+        return pageListData.result.mapIndexed { index, p ->
+            Page(index, imageUrl = p.link)
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val pageHeaders = headersBuilder().apply {
+            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
+            add("Host", page.imageUrl!!.toHttpUrl().host)
+        }.build()
+
+        return GET(page.imageUrl!!, pageHeaders)
+    }
+
+    // ============================== Filters ==============================
 
     private fun updateFilters(data: SearchResultDto) {
         data.genres?.also { genreDto ->
@@ -195,32 +256,19 @@ class InfinityScans : HttpSource() {
         return FilterList(filters)
     }
 
-    // Details
+    // ============================= Utilities =============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.use { it.asJsoup() }
+    private fun fetchJson(api: String): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(api)
 
-        val desc = document.select("div:has(>h4:contains(Summary)) p")
-            .text()
-            .split("</br>")
-            .joinToString("\n", transform = String::trim)
-            .trim()
+        val searchHeaders = apiHeaders.newBuilder().apply {
+            set("Referer", url.build().newBuilder().removePathSegment(0).build().toString())
+        }.build()
 
-        return SManga.create().apply {
-            document.selectFirst("div:has(>span:contains(Rank:))")!!.parent()!!.also { details ->
-                description = desc
-                author = details.getLinks("Authors")
-                genre = details.getLinks("Genres")
-                status = details.getInfo("Status").parseStatus()
-
-                details.getInfo("Alternative Titles")?.let {
-                    description = "$desc\n\nAlternative Title: $it"
-                }
-            }
-        }
+        return GET(url.build(), searchHeaders)
     }
 
-    // From mangathemesia
     private fun String?.parseStatus(): Int = when {
         this == null -> SManga.UNKNOWN
         listOf("ongoing", "publishing").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
@@ -233,68 +281,6 @@ class InfinityScans : HttpSource() {
     private fun Element.getInfo(name: String): String? = selectFirst("div:has(>span:matches($name:))")?.ownText()
 
     private fun Element.getLinks(name: String): String? = select("div:has(>span:matches($name:)) a")
-        .joinToString(", ", transform = Element::text).trim()
-        .takeIf { it.isNotBlank() }
-
-    // Chapters
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val url = response.request.url
-        val slug = url.pathSegments.take(3).joinToString("/", prefix = "/")
-
-        // Create POST request
-        val chapterHeaders = apiHeaders.newBuilder().apply {
-            add("content-length", "0")
-            add("Origin", baseUrl)
-            set("Referer", url.toString())
-        }.build()
-
-        val chapterListData = client.newCall(
-            POST(url.toString(), chapterHeaders),
-        ).execute().parseAs<ResponseDto<List<ChapterEntryDto>>>()
-
-        return chapterListData.result.map {
-            it.toSChapter(slug)
-        }
-    }
-
-    // Pages
-
-    override fun pageListParse(response: Response): List<Page> {
-        val url = response.request.url
-
-        // Create POST request
-        val pageListHeaders = apiHeaders.newBuilder().apply {
-            add("content-length", "0")
-            add("Origin", baseUrl)
-            set("Referer", url.toString())
-        }.build()
-
-        val pageListData = client.newCall(
-            POST(url.toString(), pageListHeaders),
-        ).execute().parseAs<ResponseDto<List<PageEntryDto>>>()
-
-        return pageListData.result.mapIndexed { index, p ->
-            Page(index, url.toString(), p.link)
-        }
-    }
-
-    // Image
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val pageHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-        }.build()
-
-        return GET(page.imageUrl!!, pageHeaders)
-    }
-
-    // Utilities
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
-    }
+        .joinToString(transform = Element::text)
+        .takeIf { it.isNotEmpty() }
 }

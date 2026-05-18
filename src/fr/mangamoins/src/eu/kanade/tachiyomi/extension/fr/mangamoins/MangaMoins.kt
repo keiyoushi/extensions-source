@@ -156,9 +156,51 @@ class MangaMoins : HttpSource() {
         return GET(url, headers)
     }
 
+    private var cachedSalts: List<String> = emptyList()
+    private var lastSaltFetch: Long = 0
+
+    private fun getSalts(pagesBaseUrl: String): List<String> {
+        val now = System.currentTimeMillis()
+        if (cachedSalts.isNotEmpty() && now - lastSaltFetch < SALT_EXPIRY) {
+            return cachedSalts
+        }
+
+        try {
+            val scriptUrl = "$baseUrl/includes/components/js/reader.js"
+            client.newCall(GET(scriptUrl, headers)).execute().use { response ->
+                val script = response.body.string()
+
+                val matchParams = DECODER_PARAMS_REGEX.find(script)
+                val mult = matchParams?.groupValues?.get(1)?.toLong(16) ?: 3L
+                val offset = matchParams?.groupValues?.get(2)?.toLong(16) ?: 7L
+
+                val salts = HEX_ARRAY_REGEX.findAll(script)
+                    .map { match ->
+                        match.value.removeSurrounding("[", "]").split(",")
+                            .map { it.trim().removePrefix("0x").toLong(16) }
+                            .map { ALPHABET[((it * mult + offset) % ALPHABET.length).toInt()] }
+                            .joinToString("")
+                    }
+                    .filter { it.length > 5 && pagesBaseUrl.contains(it) }
+                    .distinct()
+                    .toList()
+
+                if (salts.isNotEmpty()) {
+                    cachedSalts = salts
+                    lastSaltFetch = now
+                }
+            }
+        } catch (_: Exception) { }
+
+        return cachedSalts.ifEmpty { FALLBACK_SALTS }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ScanResponse>()
-        val baseUrl = data.pagesBaseUrl.removeSuffix("/")
+        val salts = getSalts(data.pagesBaseUrl)
+
+        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt -> url.replace(salt, "") }
+
         return (1..data.pageNumbers).map { i ->
             val pageNum = i.toString().padStart(2, '0')
             Page(i - 1, imageUrl = "$baseUrl/$pageNum.webp")
@@ -169,5 +211,11 @@ class MangaMoins : HttpSource() {
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
+        private val FALLBACK_SALTS = listOf("qbtb8822zh", "ebzb882bzh8")
+        private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
+
+        private val HEX_ARRAY_REGEX = Regex("""\[0x[a-f0-9]+(?:,0x[a-f0-9]+)+\]""")
+        private val DECODER_PARAMS_REGEX = Regex("""\*0x([a-f0-9]+)\+0x([a-f0-9]+)""")
+        private const val ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
     }
 }

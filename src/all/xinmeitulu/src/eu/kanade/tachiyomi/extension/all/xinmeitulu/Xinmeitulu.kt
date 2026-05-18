@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -52,12 +53,24 @@ class Xinmeitulu : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("SLUG:")) {
-        val slug = query.removePrefix("SLUG:")
-        client.newCall(GET("$baseUrl/photo/$slug", headers)).asObservableSuccess()
-            .map { response -> MangasPage(listOf(mangaDetailsParse(response)), false) }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments.getOrNull(1)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "SLUG:$slug", filters)
+        }
+
+        return if (query.startsWith("SLUG:")) {
+            val slug = query.removePrefix("SLUG:")
+            client.newCall(GET("$baseUrl/photo/$slug", headers)).asObservableSuccess()
+                .map { response -> MangasPage(listOf(mangaDetailsParse(response)), false) }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     // Details

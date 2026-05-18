@@ -32,6 +32,9 @@ class LunarMangaDto(
     @SerialName("publication_status") val publicationStatus: String? = null,
     val author: String? = null,
     val artist: String? = null,
+    @SerialName("alternative_titles") val alternativeTitles: String? = null,
+    val demographic: String? = null,
+    val themes: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@LunarMangaDto.title
@@ -39,7 +42,22 @@ class LunarMangaDto(
         url = "/manga/$slug"
         author = this@LunarMangaDto.author?.trim()
         artist = this@LunarMangaDto.artist?.trim()
-        description = this@LunarMangaDto.description
+
+        description = buildString {
+            this@LunarMangaDto.description?.let { append(it) }
+
+            alternativeTitles?.let { alt ->
+                try {
+                    val titles = alt.parseAs<List<String>>()
+                    if (titles.isNotEmpty()) {
+                        if (isNotEmpty()) append("\n\n")
+                        append("Alternative Titles: ")
+                        append(titles.joinToString())
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
         status = when (publicationStatus?.lowercase(Locale.ROOT)) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -48,14 +66,26 @@ class LunarMangaDto(
             "cancelled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        genre = genres?.let { g ->
-            try {
-                g.parseAs<List<String>>().joinToString()
-            } catch (e: Exception) {
-                g
+
+        genre = buildList {
+            demographic?.takeIf { it.isNotBlank() }?.let { d ->
+                add(d.replaceFirstChar { it.titlecase(Locale.ROOT) })
             }
-        }
-        initialized = true
+
+            genres?.let { g ->
+                try {
+                    addAll(g.parseAs<List<String>>())
+                } catch (e: Exception) {
+                    add(g)
+                }
+            }
+
+            themes?.let { t ->
+                try {
+                    addAll(t.parseAs<List<String>>())
+                } catch (_: Exception) {}
+            }
+        }.filter { it.isNotBlank() }.distinct().joinToString()
     }
 }
 

@@ -3,11 +3,14 @@ package eu.kanade.tachiyomi.extension.vi.mimi
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(genreList: List<Pair<String, Int>>): FilterList = FilterList(
-    SortByList(),
-    TextField("Tác giả", "author"),
+fun getFilters(
+    genreList: List<GenreDto>,
+): FilterList = FilterList(
+    SortByFilter(),
     TextField("Parody", "parody"),
     TextField("Nhân vật", "character"),
+    Filter.Header("ID Tác giả (chỉ nhập số)"),
+    TextField("ID Tác giả", "author"),
     if (genreList.isEmpty()) {
         Filter.Header("Nhấn 'Làm mới' để tải thể loại")
     } else {
@@ -15,26 +18,23 @@ fun getFilters(genreList: List<Pair<String, Int>>): FilterList = FilterList(
     },
 )
 
-class Genre(name: String, val id: String) : Filter.TriState(name) {
+class Genre(name: String, val id: Int) : Filter.TriState(name) {
     override fun toString(): String = name
 }
 
-class GenresFilter(pairs: List<Pair<String, Int>>) :
+class GenresFilter(pairs: List<GenreDto>) :
     Filter.Group<Genre>(
         "Thể loại",
-        pairs.map { Genre(it.first, it.second.toString()) },
+        pairs.map { Genre(it.name, it.id) },
     )
 
 class TextField(name: String, val key: String) : Filter.Text(name)
 
-class SortByList :
-    Filter.Select<Genre>(
+class SortByFilter :
+    Filter.Select<String>(
         "Sắp xếp",
-        arrayOf(
-            Genre("Mới", "updated_at"),
-            Genre("Likes", "likes"),
-            Genre("Views", "views"),
-            Genre("Lưu", "follows"),
-            Genre("Tên", "title"),
-        ),
-    )
+        arrayOf("Mặc định", "Mới", "Likes", "Views", "Lưu", "Tên"),
+    ) {
+    val sortValues = arrayOf("", "updated_at", "likes", "views", "follows", "title")
+    val selectedSort get() = sortValues[state]
+}

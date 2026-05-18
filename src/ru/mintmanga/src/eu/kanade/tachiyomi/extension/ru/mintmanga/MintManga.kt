@@ -7,12 +7,13 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
 
 class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
-
     override val id: Long = 6
 
     private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
+
+    override val isNeedAuth = true
 
     override fun getFilterList() = FilterList(
         OrderBy(),

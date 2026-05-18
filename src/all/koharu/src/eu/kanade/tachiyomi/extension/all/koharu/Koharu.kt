@@ -273,6 +273,12 @@ class Koharu(
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith("https://") -> {
+            val url = query.toHttpUrl()
+            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
+            fetchSearchManga(page, "$PREFIX_ID_KEY_SEARCH$id", filters)
+        }
+
         query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
             val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
             val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()

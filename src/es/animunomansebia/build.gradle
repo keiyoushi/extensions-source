@@ -1,0 +1,10 @@
+ext {
+    extName = 'Animu No Mansebia'
+    extClass = '.AnimuNoMansebia'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/animunm'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

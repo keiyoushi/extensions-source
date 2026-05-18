@@ -126,6 +126,14 @@ class ZettaHQ : HttpSource() {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val item = url.pathSegments.last { it.isNotBlank() }
+            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
+        }
         if (query.startsWith(PREFIX_SEARCH)) {
             val slug = query.substringAfter(PREFIX_SEARCH)
             return fetchMangaDetails(SManga.create().apply { url = "/$slug" })

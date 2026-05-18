@@ -1,0 +1,10 @@
+ext {
+    extName = 'DailySuka'
+    extClass = '.DailySuka'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://dailysuka.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

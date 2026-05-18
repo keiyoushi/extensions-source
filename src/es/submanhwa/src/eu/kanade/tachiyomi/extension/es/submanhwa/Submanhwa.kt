@@ -95,9 +95,8 @@ class Submanhwa : HttpSource() {
             val box = document.selectFirst(".main-content > .boxed-modern")
 
             status = when (box?.selectFirst(".detail-label:contains(Estado) + .detail-value span")?.text()?.lowercase()) {
-                "completed" -> SManga.COMPLETED
-                "cancelled" -> SManga.CANCELLED
-                "ongoing" -> SManga.ONGOING
+                "completa" -> SManga.COMPLETED
+                "en curso" -> SManga.ONGOING
                 else -> SManga.UNKNOWN
             }
 

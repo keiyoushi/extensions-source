@@ -2,9 +2,9 @@ ext {
     extName = 'Nivera Fansub'
     extClass = '.NiveraFansub'
     themePkg = 'madara'
-    baseUrl = 'https://niverafansub.org'
-    overrideVersionCode = 2
+    baseUrl = 'https://niverafansub.lol'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

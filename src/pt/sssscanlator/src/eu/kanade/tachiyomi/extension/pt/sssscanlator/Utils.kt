@@ -35,13 +35,7 @@ internal fun extractBadgeTexts(titleElement: Element?): List<String> {
         .distinct()
 }
 
-internal fun isStatusBadge(text: String): Boolean = when (text.lowercase()) {
-    "em lancamento", "em lançamento", "ongoing" -> true
-    "completo", "concluido", "concluído", "completed" -> true
-    "hiato", "hiatus" -> true
-    "cancelado", "canceled", "cancelled" -> true
-    else -> false
-}
+internal fun isStatusBadge(text: String): Boolean = parseStatus(text) != SManga.UNKNOWN
 
 internal fun parseStatus(statusText: String?): Int = when (statusText?.lowercase()) {
     "em lancamento", "em lançamento", "ongoing" -> SManga.ONGOING
@@ -61,10 +55,11 @@ private fun JsonElement.matchesSeriesPayload(expectedSlug: String): Boolean {
         "id" in chapterObject && "number" in chapterObject
     }
 
-    return "seriesId" in payload &&
+    return ("catalogId" in payload || "seriesId" in payload || "contentRef" in payload) &&
         hasValidChapterShape &&
         (
-            "totalChapters" in payload ||
+            "chapterTotal" in payload ||
+                "totalChapters" in payload ||
                 "coverImage" in payload ||
                 "description" in payload
             )

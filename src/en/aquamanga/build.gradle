@@ -2,9 +2,9 @@ ext {
     extName = 'Aqua Manga'
     extClass = '.AquaManga'
     themePkg = 'madara'
-    baseUrl = 'https://aquareader.net'
-    overrideVersionCode = 10
+    baseUrl = 'https://aquareader.org'
+    overrideVersionCode = 11
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

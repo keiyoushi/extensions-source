@@ -59,7 +59,14 @@ class Kiutaku : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
+        val url = query.toHttpUrl()
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported url")
+        }
+        val id = url.pathSegments.first()
+        fetchSearchManga(page, "$PREFIX_SEARCH$id", filters)
+    } else if (query.startsWith(PREFIX_SEARCH)) {
         val id = query.removePrefix(PREFIX_SEARCH)
         client.newCall(GET("$baseUrl/$id"))
             .asObservableSuccess()

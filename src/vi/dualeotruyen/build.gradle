@@ -1,8 +1,8 @@
 ext {
     extName = "Dua Leo Truyen"
     extClass = ".DuaLeoTruyen"
-    extVersionCode = 16
+    extVersionCode = 17
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

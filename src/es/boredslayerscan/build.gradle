@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bored Slayer Scan'
+    extClass = '.BoredSlayerScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/boredslayerscan'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

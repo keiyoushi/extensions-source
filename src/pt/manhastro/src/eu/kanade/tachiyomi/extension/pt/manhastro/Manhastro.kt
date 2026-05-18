@@ -1,18 +1,20 @@
 package eu.kanade.tachiyomi.extension.pt.manhastro
 
 import android.app.Application
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
@@ -20,13 +22,14 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class Manhastro : HttpSource() {
+class Manhastro :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Manhastro"
 
@@ -38,7 +41,7 @@ class Manhastro : HttpSource() {
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
@@ -152,7 +155,7 @@ class Manhastro : HttpSource() {
         if (generos.isNullOrBlank()) return emptyList()
 
         return try {
-            json.decodeFromString<List<String>>(generos)
+            generos.parseAs<List<String>>()
         } catch (_: Exception) {
             if (generos.contains(",")) {
                 generos.split(",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -255,14 +258,32 @@ class Manhastro : HttpSource() {
 
     private fun MangaDto.toSManga() = SManga.create().apply {
         url = "/manga/$mangaId"
-        title = displayTitle
+        title = if (useEnglishTitle) {
+            titulo.takeIf { it.isNotBlank() } ?: displayTitle
+        } else {
+            displayTitle
+        }
         description = displayDescription
         genre = parseGenres(generos).joinToString()
         thumbnail_url = thumbnailUrl
         status = SManga.UNKNOWN
     }
 
+    private val useEnglishTitle: Boolean
+        get() =
+            preferences.getBoolean(ENGLISH_TITLE_PREF, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ENGLISH_TITLE_PREF
+            title = "Títulos em inglês"
+            summary = "Use títulos em inglês como principal quando disponível. (Requer ativar \"Atualizar os títulos dos mangás da biblioteca para corresponder à fonte\" em \"Avançado\")"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+        private const val ENGLISH_TITLE_PREF = "englishTitlePref"
     }
 }

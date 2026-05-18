@@ -1,8 +1,8 @@
 ext {
     extName = 'StoneScape'
     extClass = '.StoneScape'
-    extVersionCode = 48
+    extVersionCode = 49
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

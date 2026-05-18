@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kingdom Dark Scan'
+    extClass = '.KingdomDarkScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/kingdomdarkscan'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

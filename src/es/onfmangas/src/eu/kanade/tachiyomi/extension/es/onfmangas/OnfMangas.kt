@@ -25,8 +25,20 @@ class OnfMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
+    // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .set("Accept-Language", "en-US,en;q=0.9")
+        .set("DNT", "1")
+        .set("Sec-GPC", "1")
+        .set("Connection", "keep-alive")
+        .set("Upgrade-Insecure-Requests", "1")
+        .set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "none")
+        .set("Sec-Fetch-User", "?1")
+        .set("Priority", "u=0, i")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
@@ -40,15 +52,17 @@ class OnfMangas : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".manga-grid .manga-card").mapNotNull { element ->
+        val mangas = document.select("a.pop-podium-card, a.pop-card").mapNotNull { element ->
             SManga.create().apply {
-                title = element.selectFirst(".manga-title")?.text()
+                title = element.selectFirst(".pop-podium-name, .pop-name")?.text()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
                 setUrlWithoutDomain(
-                    element.selectFirst("a")?.attr("abs:href")
-                        ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
+                    element.attr("abs:href")
+                        .takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
                 )
-                thumbnail_url = element.selectFirst(".card-cover img")?.attr("abs:src")
+
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
         return MangasPage(mangas, false)
@@ -86,7 +100,12 @@ class OnfMangas : HttpSource() {
         val genero = filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "0"
 
         url.addQueryParameter("tab", tab)
-        url.addQueryParameter("genero", genero)
+
+        // The website expects "generos[0]" instead of "genero"
+        // Also skip adding it entirely if the default "Todas las categorías" (0) is selected
+        if (genero != "0") {
+            url.addQueryParameter("generos[0]", genero)
+        }
 
         return GET(url.build(), headers)
     }
@@ -106,7 +125,7 @@ class OnfMangas : HttpSource() {
             title = document.selectFirst(".manga-title")?.text()
                 ?.takeIf { it.isNotEmpty() }
                 ?: throw Exception("Could not parse manga title")
-            author = document.selectFirst("div:contains(Autor:) b")?.text()
+            author = document.selectFirst(".author-link")?.text()
             description = document.selectFirst(".manga-description")?.text()
             genre = document.select(".genre-tag").joinToString { it.text() }
             thumbnail_url = document.selectFirst(".manga-poster")?.attr("abs:src")
@@ -147,7 +166,6 @@ class OnfMangas : HttpSource() {
             }
             chapters.add(parentChapter)
 
-            // Inject joint/alternative scanlator versions if they exist
             dto.getOtherVersions()?.forEach { otherVersion ->
                 chapters.add(
                     otherVersion.toSChapter(dto).apply {
