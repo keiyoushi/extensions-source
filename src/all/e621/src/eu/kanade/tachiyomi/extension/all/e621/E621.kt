@@ -34,7 +34,7 @@ class E621 :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) = setupE621PreferenceScreen(screen)
 
-    override val client = network.cloudflareClient
+    override val client = network.client
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // e621 needs a custom User-Agent header

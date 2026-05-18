@@ -673,7 +673,7 @@ either `SourceFactory` or `HttpSource`.
   ```
 - **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually.
 - **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings. The same applies to `.ownText()`. This also means you should not use `.trim()` with these functions.
-- **Use `cloudflareClient`:** When overriding the client for sources protected by Cloudflare, explicitly set `override val client = network.cloudflareClient.newBuilder()...` instead of `network.client`. The `client` property is deprecated for this purpose in the app.
+- **Use `network.client` for Cloudflare:** When overriding the client for sources protected by Cloudflare, simply use `override val client = network.client.newBuilder()...`. The default `client` now handles Cloudflare challenges automatically. Do **not** use `network.cloudflareClient`, as it is deprecated.
 - **Never use `Thread.sleep()`:** Do not use `Thread.sleep()` for rate limiting. Use OkHttp's `rateLimitHost` interceptor instead.
 - **Avoid synchronous calls in `parse` methods:** Do not call `client.newCall(...).execute()` inside parsing methods like `pageListParse` or `chapterListParse`. Make the request part of the standard flow by overriding the corresponding request method (e.g., `pageListRequest`) or `fetchImageUrl`.
 - **Pass `HttpUrl` directly:** The `GET()` and `POST()` helpers accept an `HttpUrl` object. Do not call `.toString()` on a built `HttpUrl` before passing it.
@@ -1229,7 +1229,7 @@ class MySource : HttpSource() {
         return this
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .ignoreAllSSLErrors()
         .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress("10.0.2.2", 8080)))
         .build()
