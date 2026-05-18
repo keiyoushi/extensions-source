@@ -2,15 +2,15 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.serializer
+import kotlin.collections.emptyMap
 import kotlin.math.roundToInt
 
 @Serializable
@@ -81,22 +81,16 @@ class RelatedData(
     @Serializable
     class RelationsData(
         @Serializable(RelationsMapSerializer::class)
-        val relations: Map<String, List<BrowseManga>>? = null,
+        val relations: Map<String, List<BrowseManga>> = emptyMap(),
     )
-}
 
-internal object RelationsMapSerializer : KSerializer<Map<String, List<BrowseManga>>?> {
-    private val delegate = serializer<Map<String, List<BrowseManga>>>()
-    override val descriptor = delegate.descriptor
-
-    override fun deserialize(decoder: Decoder): Map<String, List<BrowseManga>>? {
-        val element = (decoder as JsonDecoder).decodeJsonElement()
-        if (element is JsonArray) return null
-        return decoder.json.decodeFromJsonElement(delegate, element)
-    }
-
-    override fun serialize(encoder: Encoder, value: Map<String, List<BrowseManga>>?) {
-        if (value != null) delegate.serialize(encoder, value)
+    internal object RelationsMapSerializer : JsonTransformingSerializer<Map<String, List<BrowseManga>>>(
+        serializer<Map<String, List<BrowseManga>>>(),
+    ) {
+        override fun transformDeserialize(element: JsonElement): JsonElement {
+            if (element is JsonArray) return JsonObject(emptyMap())
+            return element
+        }
     }
 }
 
@@ -255,7 +249,7 @@ class Volume(
 
 @Serializable
 class ChapterUrl(
-    val id: Int,
+    val id: String,
     val source: String,
     val isVolume: Boolean,
 )

@@ -61,6 +61,36 @@ class Mangadotnet :
     override val client = network.cloudflareClient
     private val preferences = getPreferences()
 
+    init {
+        migrateAdultPref()
+        migrateChapterModePref()
+    }
+
+    private fun migrateChapterModePref() {
+        val oldKey = "pref_fetch_volume"
+        if (preferences.contains(oldKey)) {
+            val fetchVolumes = preferences.getBoolean(oldKey, false)
+            val newMode = if (fetchVolumes) "both" else "chapters"
+
+            preferences.edit()
+                .putString(CHAPTER_MODE, newMode)
+                .remove(oldKey)
+                .apply()
+        }
+    }
+
+    private fun migrateAdultPref() {
+        if (!preferences.contains(NSFW_MODE)) return
+        try {
+            val isAdult = preferences.getBoolean(NSFW_MODE, false)
+            preferences.edit()
+                .remove(NSFW_MODE)
+                .putString(NSFW_MODE, if (isAdult) "both" else "none")
+                .apply()
+        } catch (_: ClassCastException) {
+        }
+    }
+
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
@@ -163,7 +193,7 @@ class Mangadotnet :
                 } else {
                     val chapter = SChapter.create().apply {
                         this.url = ChapterUrl(
-                            id = url.pathSegments[1].toInt(),
+                            id = url.pathSegments[1],
                             source = url.queryParameter("source") ?: "user",
                             isVolume = url.queryParameter("mode") == "volume",
                         ).toJsonString()
@@ -303,7 +333,7 @@ class Mangadotnet :
                     response.parseAs<List<Chapter>>()
                         .map { chapter ->
                             SChapter.create().apply {
-                                url = ChapterUrl(chapter.id, chapter.source, false).toJsonString()
+                                url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
                                 name = buildString {
                                     val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
                                     val name = chapter.name ?: ""
@@ -326,7 +356,7 @@ class Mangadotnet :
                     response.parseAs<List<Volume>>()
                         .map { volume ->
                             SChapter.create().apply {
-                                url = ChapterUrl(volume.id, volume.source, true).toJsonString()
+                                url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().substringBefore(".0")}"
                                 chapter_number = -2f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
@@ -367,7 +397,7 @@ class Mangadotnet :
             } else {
                 addPathSegment("chapters")
             }
-            addPathSegment(chapterUrl.id.toString())
+            addPathSegment(chapterUrl.id)
             addPathSegment("images")
         }.build()
 
@@ -379,7 +409,7 @@ class Mangadotnet :
 
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("chapter")
-            addPathSegment(chapterUrl.id.toString())
+            addPathSegment(chapterUrl.id)
             if (chapterUrl.isVolume || chapterUrl.source == "user") {
                 addQueryParameter("source", "user")
             }
