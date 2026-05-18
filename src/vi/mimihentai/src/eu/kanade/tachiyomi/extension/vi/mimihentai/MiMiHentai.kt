@@ -10,20 +10,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import java.io.IOException
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -205,9 +204,7 @@ class MiMiHentai : HttpSource() {
 
     private fun solvePassword(chain: okhttp3.Interceptor.Chain, html: String) {
         val wireDataStr = WIRE_INITIAL_DATA_REGEX.find(html)?.groupValues?.get(1)
-            ?.replace("&quot;", "\"")
-            ?.replace("&amp;", "&")
-            ?.replace("&#039;", "'")
+            ?.let { Parser.unescapeEntities(it, true) }
             ?: throw IOException("Password: wire:initial-data not found")
 
         val csrfToken = LIVEWIRE_TOKEN_REGEX.find(html)?.groupValues?.get(1)
@@ -228,27 +225,25 @@ class MiMiHentai : HttpSource() {
             .add("Referer", "$baseUrl/")
             .build()
 
-        val syncPayload = buildJsonObject {
-            put("fingerprint", fingerprint)
-            put("serverMemo", serverMemo)
-            putJsonArray("updates") {
-                add(
-                    buildJsonObject {
-                        put("type", "syncInput")
-                        putJsonObject("payload") {
-                            put("id", "s1")
-                            put("name", "password")
-                            put("value", password)
-                        }
-                    },
-                )
-            }
-        }
+        val syncPayload = SyncInputRequestDto(
+            fingerprint = fingerprint,
+            serverMemo = serverMemo,
+            updates = listOf(
+                SyncInputUpdateDto(
+                    type = "syncInput",
+                    payload = SyncInputPayloadDto(
+                        id = "s1",
+                        name = "password",
+                        value = password,
+                    ),
+                ),
+            ),
+        )
 
         val syncRequest = POST(
             "$baseUrl/livewire/message/enter-secret",
             livewireHeaders,
-            syncPayload.toString().toRequestBody(JSON_MEDIA_TYPE),
+            syncPayload.toJsonRequestBody(),
         )
         val syncResponse = chain.proceed(syncRequest)
         val syncResult = syncResponse.parseAs<JsonObject>()
@@ -269,27 +264,25 @@ class MiMiHentai : HttpSource() {
             }
         }
 
-        val submitPayload = buildJsonObject {
-            put("fingerprint", fingerprint)
-            put("serverMemo", mergedMemo)
-            putJsonArray("updates") {
-                add(
-                    buildJsonObject {
-                        put("type", "callMethod")
-                        putJsonObject("payload") {
-                            put("id", "c1")
-                            put("method", "submit")
-                            putJsonArray("params") {}
-                        }
-                    },
-                )
-            }
-        }
+        val submitPayload = SubmitRequestDto(
+            fingerprint = fingerprint,
+            serverMemo = mergedMemo,
+            updates = listOf(
+                SubmitUpdateDto(
+                    type = "callMethod",
+                    payload = SubmitPayloadDto(
+                        id = "c1",
+                        method = "submit",
+                        params = emptyList(),
+                    ),
+                ),
+            ),
+        )
 
         val submitRequest = POST(
             "$baseUrl/livewire/message/enter-secret",
             livewireHeaders,
-            submitPayload.toString().toRequestBody(JSON_MEDIA_TYPE),
+            submitPayload.toJsonRequestBody(),
         )
         chain.proceed(submitRequest).close()
     }
