@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.asmotoon
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.en.asmotoon.waybackmachineinterceptor.WaybackMachineInterceptor
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.util.Locale
 
@@ -32,5 +37,38 @@ class Asmotoon :
             }.let(::add)
             document.select(genreSelector).forEach { add(it.text().removeSuffix(",")) }
         }.joinToString()
+    }
+
+    val waybackMachineClient: OkHttpClient = super
+        .client
+        .newBuilder()
+        .addInterceptor(WaybackMachineInterceptor())
+        .followRedirects(false)
+        .build()
+
+    override val client: OkHttpClient get() = if (preferences.getUseWaybackMachinePref()) {
+        waybackMachineClient
+    } else {
+        super.client
+    }
+
+    private fun SharedPreferences.getUseWaybackMachinePref(): Boolean = getBoolean(
+        PREF_USE_WAYBACK_MACHINE,
+        false,
+    )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_WAYBACK_MACHINE
+            title = "Use WayBack Machine (web.archive.org)"
+            summaryOff = "Requests are not redirected to web.archive.org"
+            summaryOn = "Requests are redirected to web.archive.org"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_USE_WAYBACK_MACHINE = "pref_use_wayback_machine"
     }
 }
