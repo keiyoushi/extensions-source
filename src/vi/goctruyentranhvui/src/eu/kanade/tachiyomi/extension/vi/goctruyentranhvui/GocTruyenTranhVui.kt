@@ -51,7 +51,16 @@ class GocTruyenTranhVui :
 
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences = getPreferences {
+        getString(PREF_DEFAULT_BASE_URL, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                edit()
+                    .putString(PREF_BASE_URL, defaultBaseUrl)
+                    .putString(PREF_DEFAULT_BASE_URL, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
@@ -356,6 +365,8 @@ class GocTruyenTranhVui :
     private fun getPrefBaseUrl(): String = preferences.getString(PREF_CUSTOM_DOMAIN, defaultBaseUrl)!!
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
+        private const val PREF_DEFAULT_BASE_URL = "pref_default_base_url"
+        private const val PREF_BASE_URL = "pref_base_url"
         private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
