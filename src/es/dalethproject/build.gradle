@@ -1,0 +1,10 @@
+ext {
+    extName = 'Daleth Project'
+    extClass = '.DalethProject'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/nameless'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

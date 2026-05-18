@@ -247,10 +247,11 @@ abstract class Keyoapp(
     }
 
     // Chapter list
+    protected open val paidChapterSelector: String = "img[alt~=Coin]"
 
     override fun chapterListSelector(): String {
         if (!preferences.showPaidChapters) {
-            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[alt~=Coin]))"
+            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has($paidChapterSelector))"
         }
         return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
     }
@@ -261,7 +262,7 @@ abstract class Keyoapp(
         element.selectFirst(dateSelector)?.run {
             date_upload = text().trim().parseDate()
         }
-        if (element.select("img[src*=Coin.svg]").isNotEmpty()) {
+        if (element.select(paidChapterSelector).isNotEmpty()) {
             name = "🔒 $name"
         }
     }

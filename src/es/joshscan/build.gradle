@@ -1,0 +1,10 @@
+ext {
+    extName = 'JoshScan'
+    extClass = '.JoshScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/joshscan'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"
