@@ -18,6 +18,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -193,7 +195,23 @@ class HentaiCB :
         return request.newBuilder().url(url).build()
     }
 
-    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).distinctBy { it.imageUrl }
+    override fun pageListParse(document: Document): List<Page> {
+        document.selectFirst("#manga-secure-reader")
+            ?: return super.pageListParse(document).distinctBy { it.imageUrl }
+
+        val chapterUrl = document.location()
+        val apiHeaders = headers.newBuilder()
+            .set("Referer", chapterUrl)
+            .set("Accept", "application/json")
+            .build()
+        val images = client.newCall(GET("$baseUrl/wp-json/manga-reader/v1/images", apiHeaders)).execute()
+            .parseAs<SecureReaderDto>()
+            .images
+
+        return images.mapIndexed { index, imageUrl ->
+            Page(index, chapterUrl, imageUrl)
+        }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -238,6 +256,11 @@ class HentaiCB :
             }
         }.let(screen::addPreference)
     }
+
+    @Serializable
+    class SecureReaderDto(
+        val images: List<String>,
+    )
 
     companion object {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"

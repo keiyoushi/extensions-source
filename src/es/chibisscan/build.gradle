@@ -1,0 +1,10 @@
+ext {
+    extName = 'Chibis Scan'
+    extClass = '.ChibisScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/chibis'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"
