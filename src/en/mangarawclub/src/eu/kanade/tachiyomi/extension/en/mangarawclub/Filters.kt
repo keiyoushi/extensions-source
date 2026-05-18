@@ -24,12 +24,12 @@ fun getFilters(): FilterList = FilterList(
 internal fun Filter<*>.isDefault() = when (this) {
     is SortFilter -> state == 1
     is Filter.Select<*> -> state == 0
-    is Filter.Text -> state.isBlank()
-    is Filter.CheckBox -> state == false
+    is Filter.Text -> state.isEmpty()
+    is Filter.CheckBox -> !state
     is Filter.TriState -> state == 0
     is Filter.Group<*> -> state.all {
         when (it) {
-            is Filter.CheckBox -> it.state == false
+            is Filter.CheckBox -> !it.state
             is Filter.TriState -> it.state == 0
             else -> true
         }
@@ -37,92 +37,49 @@ internal fun Filter<*>.isDefault() = when (this) {
     else -> true
 }
 
-internal open class ExtraFilter(name: String) :
+internal class ExtraFilter(name: String) :
     Filter.Group<CheckBoxFilter>(
         name,
         listOf(
-            Pair("Only completed series ", "only_completed"),
-            Pair("At least 50+ chapters translated", "only_translated"),
-            Pair("Hide long hiatus (> 6 months) ", "hide_on_break"),
-        ).map { CheckBoxFilter(it.first, it.second) },
+            CheckBoxFilter("Only completed series", "only_completed"),
+            CheckBoxFilter("At least 50+ chapters translated", "only_translated"),
+            CheckBoxFilter("Hide long hiatus (> 6 months)", "hide_on_break"),
+        ),
     )
 
-internal open class CheckBoxFilter(name: String, val value: String) : Filter.CheckBox(name)
-internal open class StatusFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.map { it }.toTypedArray(), state) {
+internal class CheckBoxFilter(name: String, val value: String) : Filter.CheckBox(name)
+
+internal class StatusFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.toTypedArray(), state) {
     val selected get() = vals[state].replace("Any", "")
 }
 
-internal open class TypeFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.map { it }.toTypedArray(), state) {
+internal class TypeFilter(name: String, val vals: List<String>, state: Int = 0) : Filter.Select<String>(name, vals.toTypedArray(), state) {
     val selected get() = vals[state].replace("Any", "")
 }
 
 internal class GenreFilter(name: String, genreList: List<String>) : Filter.Group<TriFilter>(name, genreList.map { TriFilter(it) })
 
-internal open class TriFilter(name: String) : Filter.TriState(name)
+internal class TriFilter(name: String) : Filter.TriState(name)
+internal class ChapterMinFilter(name: String) : Filter.Text(name)
+internal class ChapterMaxFilter(name: String) : Filter.Text(name)
+internal class RatingFilter(name: String) : Filter.Text(name)
+internal class TextFilter(name: String) : Filter.Text(name)
 
-internal open class ChapterMinFilter(name: String) : Filter.Text(name)
-
-internal open class ChapterMaxFilter(name: String) : Filter.Text(name)
-
-internal open class RatingFilter(name: String) : Filter.Text(name)
-
-internal open class TextFilter(name: String) : Filter.Text(name)
-
-internal open class SortFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 1) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+internal class SortFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 1) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     val selected get() = vals[state].second.takeIf { it.isNotEmpty() }
 }
 
 private val getGenres = listOf(
-    "Action",
-    "Adventure",
-    "Comedy",
-    "Cooking",
-    "Manga",
-    "Drama",
-    "Fantasy",
-    "Gender Bender",
-    "Harem",
-    "Historical",
-    "Horror",
-    "Isekai",
-    "Josei",
-    "Manhua",
-    "Manhwa",
-    "Martial Arts",
-    "Mature",
-    "Mecha",
-    "Medical",
-    "Mystery",
-    "One Shot",
-    "Psychological",
-    "Romance",
-    "School Life",
-    "Sci Fi",
-    "Seinen",
-    "Shoujo",
-    "Shounen",
-    "Slice Of Life",
-    "Sports",
-    "Supernatural",
-    "Tragedy",
-    "Webtoons",
-    "Ladies",
+    "Action", "Adventure", "Comedy", "Cooking", "Manga", "Drama", "Fantasy",
+    "Gender bender", "Harem", "Historical", "Horror", "Isekai", "Josei",
+    "Manhua", "Manhwa", "Martial arts", "Mature", "Mecha", "Medical",
+    "Mystery", "One shot", "Psychological", "Romance", "School life",
+    "Sci fi", "Seinen", "Shoujo", "Shounen", "Slice of life", "Sports",
+    "Supernatural", "Tragedy", "Webtoons", "Ladies",
 )
 
-private val getStatusList = listOf(
-    "Any",
-    "Ongoing",
-    "Completed",
-    "Hiatus",
-)
-
-private val getTypeList = listOf(
-    "Any",
-    "Manga",
-    "Manhwa",
-    "Manhua",
-    "Webtoon",
-)
+private val getStatusList = listOf("Any", "Ongoing", "Completed", "Hiatus")
+private val getTypeList = listOf("Any", "Manga", "Manhwa", "Manhua", "Webtoon")
 
 private val getSortsList: List<Pair<String, String>> = listOf(
     Pair("New", "recently_added"),
