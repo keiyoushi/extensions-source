@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hachimitsu Tsuki'
+    extClass = '.HachimitsuTsuki'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/shojopapers'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

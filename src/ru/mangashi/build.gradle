@@ -1,9 +1,7 @@
 ext {
     extName = 'Manga-shi'
     extClass = '.MangaShi'
-    themePkg = 'madara'
-    baseUrl = 'https://manga-shi.org'
-    overrideVersionCode = 0
+    extVersionCode = 51
     isNsfw = true
 }
 
