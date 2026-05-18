@@ -247,7 +247,6 @@ fun graphQLGet(
     val url = url.toHttpUrl().newBuilder()
         .appendGraphQLParams(query, operationName, variables, extensions, json)
         .build()
-        .toString()
     return if (cache != null) GET(url, headers, cache) else GET(url, headers)
 }
 

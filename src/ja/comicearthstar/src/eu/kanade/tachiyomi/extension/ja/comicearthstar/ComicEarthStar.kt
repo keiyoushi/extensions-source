@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
@@ -20,6 +21,10 @@ class ComicEarthStar :
     ) {
     private val apiUrl = "$baseUrl/graphql"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
+
+    override val client = super.client.newBuilder()
+        .addInterceptor(GraphQLErrorInterceptor())
+        .build()
 
     override val supportsLatest = false
 
