@@ -13,7 +13,7 @@ private const val POPULAR_MODE_PREF = "popular_mode"
 private const val CATEGORY_PREF = "category_filter"
 private const val BLACKLIST_PREF = "blacklist"
 private const val WHITELIST_PREF = "whitelist"
-private const val SCORE_THRESH_PREF = "score_tresh"
+private const val SCORE_THRESH_PREF = "score_thresh"
 private const val FIRST_END_PREF = "first_end"
 private const val FULL_RESOLUTION_PREF = "first_end"
 
@@ -35,7 +35,7 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         key = BETTER_DETAILS_PREF
         title = "Enable Better Manga Details"
         summary = "Improves Manga Details by adding authors, tags, and chapter detection. Disabling this will load manga details and chapter lists faster, and reduce API calls."
-        setDefaultValue(true)
+        setDefaultValue(false)
     }.also(screen::addPreference)
 
     ListPreference(screen.context).apply {
@@ -54,12 +54,15 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
         setDefaultValue(true)
     }.also(screen::addPreference)
 
-    SwitchPreferenceCompat(screen.context).apply {
-        key = FIRST_END_PREF
-        title = "Enable First Page/Last Page filter for Popular"
-        summary = "Searches pools by their First and Last page. Can improve results, but will also hide posts that don't utilize those tags. (Tag Search Mode only)"
-        setDefaultValue(false)
-    }.also(screen::addPreference)
+    // TODO: Disabled for now. Consider deleting. The user might not realize just how many pools this excludes.
+    // They can still filter for this via the normal filters.
+
+    // SwitchPreferenceCompat(screen.context).apply {
+    //     key = FIRST_END_PREF
+    //     title = "Enable First Page/Last Page filter for Popular"
+    //     summary = "Searches pools by their First and Last page, but will also hide posts that don't utilize those tags. (Tag Search Mode only)"
+    //     setDefaultValue(false)
+    // }.also(screen::addPreference)
 
     ListPreference(screen.context).apply {
         key = POPULAR_MODE_PREF
@@ -102,7 +105,7 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
 }
 
 val SharedPreferences.betterDetailsPref: Boolean
-    get() = getBoolean(BETTER_DETAILS_PREF, true)
+    get() = getBoolean(BETTER_DETAILS_PREF, false)
 
 val SharedPreferences.fullResolution: Boolean
     get() = getBoolean(FULL_RESOLUTION_PREF, false)
