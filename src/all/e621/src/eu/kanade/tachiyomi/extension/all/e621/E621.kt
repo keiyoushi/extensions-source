@@ -20,7 +20,6 @@ import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
-// import android.util.Log // DEBUG
 
 class E621 :
     HttpSource(),
@@ -37,8 +36,6 @@ class E621 :
 
     override val client = network.cloudflareClient
     private val preferences: SharedPreferences by getPreferencesLazy()
-
-    // private val logTag = "app.mihon:E621" // DEBUG
 
     // e621 needs a custom User-Agent header
     override fun headersBuilder() = Headers.Builder()
@@ -246,7 +243,6 @@ class E621 :
             url.addQueryParameter("tags", "$tags")
         }
 
-        // Log.d(logTag, "GET $url") // DEBUG
         return GET(url.build(), headers)
     }
 
@@ -295,7 +291,6 @@ class E621 :
     override fun mangaDetailsRequest(manga: SManga): Request {
         val poolId = manga.url
         val url = "$baseUrl/pools/$poolId.json"
-        // Log.d(logTag, "GET $url") // DEBUG
         return GET(url, headers)
     }
 
@@ -394,7 +389,6 @@ class E621 :
     override fun chapterListRequest(manga: SManga): Request {
         val poolId = manga.url
         val url = "$baseUrl/pools/$poolId.json"
-        // Log.d(logTag, "GET $url") // DEBUG
         return GET(url, headers)
     }
 
@@ -455,7 +449,7 @@ class E621 :
 
                     // Add Post
                     else -> SChapter.create().apply {
-                        name = "Post ${post.id}"
+                        name = "Post #${post.id}"
                         url = "/posts/${post.id}"
                         chapter_number = (++n).toFloat()
                         date_upload = parseDate(post.createdAt)
@@ -464,7 +458,7 @@ class E621 :
                 // If more than half of the chapters are not pools, then merge into single pool
             }.reversed().takeIf { it.size / 2 <= usedPools.size } ?: listOf(
                 SChapter.create().apply {
-                    name = "$title$title (${pool.postIds.size} pages)"
+                    name = "\u200B$title (${pool.postIds.size} pages)"
                     url = "/pools/${pool.id}"
                     chapter_number = 1f
                     date_upload = parseDate(pool.updatedAt)
@@ -473,7 +467,7 @@ class E621 :
         } else if ((splitChaptersPref == "posts")) {
             postIds.mapIndexed { index, postId ->
                 SChapter.create().apply {
-                    name = "Post ${index + 1}"
+                    name = "Post #$postId"
                     url = "/posts/$postId"
                     chapter_number = (index + 1).toFloat()
                     // date_upload = if (index == 0) parseDate(pool.updatedAt) else 0L
@@ -483,9 +477,9 @@ class E621 :
         } else if (splitChaptersPref == "merged") {
             listOf(
                 SChapter.create().apply {
-                    name = "$title$title (${postIds.size} pages)"
+                    name = "Pool #${pool.id} (${postIds.size} pages)"
                     url = "/pools/${pool.id}"
-                    chapter_number = 1f // Stops missing chapters warning
+                    chapter_number = 1f
                     date_upload = parseDate(pool.updatedAt)
                 },
             )
@@ -507,16 +501,11 @@ class E621 :
                     addQueryParameter("limit", "1")
                 }
             }.build()
-            // Log.d(logTag, "GET $url") // DEBUG
             GET(url, headers)
         } else if (chapterUrl.pathSegments.getOrNull(0) == "pools") {
             val poolId = chapterUrl.pathSegments.last()
             val url = "$baseUrl/pools/$poolId.json"
-            // Log.d(logTag, "GET $url") // DEBUG
             GET(url, headers)
-        } else if (chapterUrl.pathSegments.getOrNull(0) == "posts.json") {
-            // For later
-            GET("", headers)
         } else {
             GET("", headers)
         }
@@ -527,7 +516,6 @@ class E621 :
 
         // Single post chapter (split chapters mode)
         if (url.encodedPath == "/posts.json") {
-            // TODO: Change 'post' to 'posts'
             val post = response.parseAs<PostsResponse>().posts.firstOrNull()
             val imageUrl = when {
                 post == null -> "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted" // Not returned by API
@@ -618,7 +606,6 @@ class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
-                // Log.d(logTag, "GET $url") // DEBUG
                 val data = client.newCall(GET(url, headers)).execute()
                     .parseAs<PostsResponse>()
 
@@ -638,7 +625,6 @@ class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
-                // Log.d(logTag, "GET $url") // DEBUG
                 val data = client.newCall(GET(url, headers)).execute()
                     .parseAs<List<Pool>>()
 
