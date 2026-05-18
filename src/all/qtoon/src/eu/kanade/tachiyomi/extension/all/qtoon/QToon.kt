@@ -30,8 +30,6 @@ class QToon(
 
     override val supportsLatest = true
 
-    override val client = network.client
-
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 

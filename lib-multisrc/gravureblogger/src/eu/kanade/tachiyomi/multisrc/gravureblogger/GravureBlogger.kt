@@ -30,8 +30,6 @@ abstract class GravureBlogger(
 
     override val supportsLatest = false
 
-    override val client = network.client
-
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 

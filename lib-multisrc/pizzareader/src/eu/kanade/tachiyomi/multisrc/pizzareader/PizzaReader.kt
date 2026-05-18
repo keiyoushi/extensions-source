@@ -29,8 +29,6 @@ abstract class PizzaReader(
 
     override val supportsLatest = true
 
-    override val client = network.client
-
     open val apiUrl by lazy { "$baseUrl$apiPath" }
 
     protected open val json: Json by injectLazy()

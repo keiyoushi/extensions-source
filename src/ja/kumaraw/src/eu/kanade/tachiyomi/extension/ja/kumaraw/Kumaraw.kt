@@ -29,7 +29,6 @@ class Kumaraw : HttpSource() {
     override val lang = "ja"
     override val supportsLatest = true
 
-    override val client = network.client
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("Asia/Tokyo") // Implied
     }

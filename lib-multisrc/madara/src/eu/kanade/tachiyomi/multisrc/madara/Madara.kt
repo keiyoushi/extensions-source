@@ -44,8 +44,6 @@ abstract class Madara(
 
     override val supportsLatest = true
 
-    override val client = network.client
-
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 

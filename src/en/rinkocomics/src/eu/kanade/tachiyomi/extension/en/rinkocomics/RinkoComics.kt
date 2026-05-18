@@ -40,8 +40,6 @@ class RinkoComics :
 
     override val supportsLatest = true
 
-    override val client = network.client
-
     private val preferences by getPreferencesLazy()
 
     private var genresList: List<Genre> = emptyList()

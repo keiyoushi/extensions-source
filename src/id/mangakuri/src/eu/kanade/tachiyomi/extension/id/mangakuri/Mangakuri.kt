@@ -29,8 +29,6 @@ class Mangakuri : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.client
-
     override val versionId = 2
 
     private val apiUrl = "https://api.$DOMAIN/api"
