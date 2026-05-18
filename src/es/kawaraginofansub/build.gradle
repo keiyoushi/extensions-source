@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kawaragi No Fansub'
+    extClass = '.KawaragiNoFansub'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/kawaraginofansub'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

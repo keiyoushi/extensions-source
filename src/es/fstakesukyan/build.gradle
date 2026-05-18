@@ -1,0 +1,10 @@
+ext {
+    extName = 'Fstake Sukyan'
+    extClass = '.FstakeSukyan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/fstakesukyan'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Koronesuki'
+    extClass = '.Koronesuki'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/koronesuki'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Eljeksreal'
+    extClass = '.Eljeksreal'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/eljeksreal'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"
