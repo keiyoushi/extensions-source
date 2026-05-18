@@ -110,7 +110,7 @@ inline fun <reified V : Any> graphQLBody(
 ): RequestBody = graphQLBody(
     query = query,
     operationName = operationName,
-    variables = json.parseToJsonElement(variables.toJsonString(json)),
+    variables = variables.toJsonElement(json),
     extensions = extensions,
     json = json,
 )
