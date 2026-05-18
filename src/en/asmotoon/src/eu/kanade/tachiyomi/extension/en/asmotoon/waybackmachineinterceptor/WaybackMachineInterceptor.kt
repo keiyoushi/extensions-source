@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.asmotoon.waybackmachineinterceptor
 
+import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -33,26 +34,28 @@ class WaybackMachineInterceptor : Interceptor {
         var response = chain.proceed(request)
 
         while (response.isRedirect) {
-            response.close()
-            response = chain.proceed(
-                request
-                    .newBuilder()
-                    .url(response.header("Location")!!)
-                    .build(),
-            )
+            response = response.use {
+                chain.proceed(
+                    request
+                        .newBuilder()
+                        .url(it.header("Location")!!)
+                        .build(),
+                )
+            }
         }
 
         // Sometimes, the response is truncated. This prevents an EOFException
         if (response.request.url.host == HOST) {
-            response = response.newBuilder().headers(
-                response.headers.newBuilder()
-                    .removeAll("Content-Encoding")
-                    .removeAll("Content-Length")
-                    .build(),
-            ).body(
-                Buffer().also {
-                    val out = it.outputStream()
-                    response.body.byteStream().use { stream ->
+            response = response.use { response ->
+                response.newBuilder().headers(
+                    response.headers.newBuilder()
+                        .removeAll("Content-Encoding")
+                        .removeAll("Content-Length")
+                        .build(),
+                ).body(
+                    Buffer().also {
+                        val stream = response.body.byteStream()
+                        val out = it.outputStream()
                         val buf = ByteArray(8192)
                         while (true) {
                             try {
@@ -60,13 +63,13 @@ class WaybackMachineInterceptor : Interceptor {
                                 if (len <= 0) break
                                 out.write(buf, 0, len)
                             } catch (_: EOFException) {
+                                Log.e("WaybackMachine", "Response truncated")
                                 break
                             }
                         }
-                        stream.close()
-                    }
-                }.asResponseBody(response.header("Content-Type")?.toMediaType()),
-            ).build()
+                    }.asResponseBody(response.header("Content-Type")?.toMediaType()),
+                ).build()
+            }
         }
 
         return response
@@ -79,7 +82,9 @@ class WaybackMachineInterceptor : Interceptor {
                 .newBuilder()
                 .url(url)
                 .build(),
-        ).apply { close() }.header("Location")?.substring(WEB_PREFIX.length, WEB_PREFIX.length + 14)
+        ).use {
+            it.header("Location")?.substring(WEB_PREFIX.length, WEB_PREFIX.length + 14)
+        }
 
         private const val HOST = "web.archive.org"
         private const val SAVE_PREFIX = "https://$HOST/save/"
