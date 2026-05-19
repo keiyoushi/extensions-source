@@ -157,8 +157,11 @@ class Lmtos : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/manga/${chapter.url}", headers)
 
-    override fun pageListParse(response: Response): List<Page> = response.extractNextJs<ChapterPages>()!!.chapter.pages.orEmpty().mapIndexed { index, url ->
-        Page(index, imageUrl = url)
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.extractNextJs<ChapterPages>() ?: return emptyList()
+        return result.chapter.pages.orEmpty().mapIndexed { index, url ->
+            Page(index, imageUrl = url)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
