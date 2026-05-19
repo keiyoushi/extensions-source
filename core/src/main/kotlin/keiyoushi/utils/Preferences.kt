@@ -23,4 +23,7 @@ inline fun HttpSource.getPreferencesLazy(
 /**
  * Returns the [SharedPreferences] associated with passed source id
  */
-fun getPreferences(sourceId: Long): SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$sourceId", 0x0000)
+fun getPreferences(sourceId: Long): SharedPreferences = application.getSharedPreferences("source_$sourceId", 0x0000)
+
+// This ensures the type token isn't duplicated at each call site
+val application: Application get() = Injekt.get()
