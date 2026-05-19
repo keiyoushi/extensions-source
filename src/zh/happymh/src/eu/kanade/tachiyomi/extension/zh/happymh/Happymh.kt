@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.extension.zh.happymh
 
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -18,6 +24,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
@@ -30,7 +37,13 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+private val handler = Handler(Looper.getMainLooper())
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
@@ -233,6 +246,50 @@ class Happymh :
 
     // Pages
 
+    // If gtag cookies are not present and fresh, shuffled pages are returned
+    private fun refreshGACookies(url: String) {
+        val cookieName = "_ga_HVJMXGJXFJ="
+        val latch = CountDownLatch(1)
+        var webView: WebView? = null
+        val handler = Handler(Looper.getMainLooper())
+
+        handler.post {
+            val cm = CookieManager.getInstance().apply { setAcceptCookie(true) }
+            val oldGA = cm.getCookie(baseUrl).orEmpty().split(";").firstOrNull { it.trim().startsWith(cookieName) }?.trim()
+
+            webView = WebView(Injekt.get<Application>()).apply {
+                settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    blockNetworkImage = true
+                    userAgentString = headersBuilder()["User-Agent"]
+                }
+                cm.setAcceptThirdPartyCookies(this, true)
+
+                webViewClient = object : WebViewClient() {
+                    override fun onLoadResource(v: WebView?, u: String?) {
+                        val newGA = cm.getCookie(baseUrl).orEmpty().split(";").firstOrNull { it.trim().startsWith(cookieName) }?.trim()
+                        if (newGA != null && newGA != oldGA) {
+                            latch.countDown()
+                            v?.stopLoading()
+                        }
+                    }
+                }
+                loadUrl(url)
+            }
+        }
+
+        val success = latch.await(8, TimeUnit.SECONDS)
+
+        handler.post {
+            webView?.stopLoading()
+            webView?.destroy()
+        }
+        if (!success) {
+            error("Failed to capture new GA cookie, check the webview")
+        }
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
         if (!chapter.url.contains(DUMMY_CHAPTER_MARK)) {
             // Old format is detected
@@ -242,6 +299,10 @@ class Happymh :
         val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
         val comicId = chapterUrl.pathSegments[0]
         val chapterId = chapterUrl.pathSegments[2]
+
+        val startTime = System.nanoTime()
+
+        refreshGACookies("$baseUrl/mangaread/$comicId/$chapterId")
 
         val url = "$baseUrl/v2.0/apis/manga/reading".toHttpUrl().newBuilder()
             .addQueryParameter("code", comicId)
