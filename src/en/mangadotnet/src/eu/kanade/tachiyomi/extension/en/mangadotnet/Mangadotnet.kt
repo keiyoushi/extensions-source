@@ -148,18 +148,7 @@ class Mangadotnet :
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("\u200B\u200B")) {
             val name = query.removePrefix("\u200B\u200B")
-            val newFilters = buildList {
-                filters.forEach { filter ->
-                    if (filter is ArtistFilter) {
-                        add(ArtistFilter().apply { state = name })
-                    } else {
-                        add(filter)
-                    }
-                }
-                if (filters.none { it is ArtistFilter }) {
-                    add(ArtistFilter().apply { state = name })
-                }
-            }
+           val newFilters = filters.apply { firstInstance<ArtistFilter>().state = name  }
             return super.fetchSearchManga(page, "", FilterList(newFilters))
         }
         if (query.startsWith("\u200B")) {
