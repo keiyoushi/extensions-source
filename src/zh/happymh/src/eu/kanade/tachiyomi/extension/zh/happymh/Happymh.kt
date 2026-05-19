@@ -43,8 +43,6 @@ import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-private val handler = Handler(Looper.getMainLooper())
-
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
 class Happymh :
@@ -58,6 +56,8 @@ class Happymh :
     private val json: Json by injectLazy()
 
     private val preferences = getPreferences()
+
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     init {
         val oldUa = preferences.getString("userAgent", null)
@@ -251,7 +251,6 @@ class Happymh :
         val cookieName = "_ga_HVJMXGJXFJ="
         val latch = CountDownLatch(1)
         var webView: WebView? = null
-        val handler = Handler(Looper.getMainLooper())
 
         handler.post {
             val cm = CookieManager.getInstance().apply { setAcceptCookie(true) }
