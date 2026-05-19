@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -148,7 +149,7 @@ class Mangadotnet :
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("\u200B\u200B")) {
             val name = query.removePrefix("\u200B\u200B")
-           val newFilters = filters.apply { firstInstance<ArtistFilter>().state = name  }
+            val newFilters = filters.apply { firstInstance<ArtistFilter>().state = name }
             return super.fetchSearchManga(page, "", FilterList(newFilters))
         }
         if (query.startsWith("\u200B")) {
