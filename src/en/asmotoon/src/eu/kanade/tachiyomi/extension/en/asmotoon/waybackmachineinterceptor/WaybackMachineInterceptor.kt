@@ -26,7 +26,10 @@ class WaybackMachineInterceptor(
     /**
      * Gets the response from the Wayback Machine without following redirects
      */
-    private fun getImmediateResponse(chain: Interceptor.Chain, request: Request): Response = urlCache[request.url]?.let {
+    private fun getImmediateResponse(
+        chain: Interceptor.Chain,
+        request: Request,
+    ): Response = urlCache[request.url]?.let {
         // url is cached, use cached url
         chain.proceed(request.newBuilder().url(it).build())
     } ?: request.url.let { url ->
@@ -34,14 +37,14 @@ class WaybackMachineInterceptor(
             // url is a Wayback Machine URL, do nothing
             chain.proceed(request)
         } else {
-            val (dateStr, newUrl) = getDateStr(chain, "$WEB_PREFIX$url")?.let {
-                val date = DATE_FORMAT.parse(it)!!
+            val (dateStr, newUrl) = getDateStr(chain, "$WEB_PREFIX$url")?.let { dateStr ->
+                val date = DATE_FORMAT.parse(dateStr)!!
                 if (System.currentTimeMillis() - date.time > 24 * 60 * 60 * 1000) {
                     // archive is older than 24 hours, create a new archive
-                    archiveUrl(chain, url) ?: Pair(it, url)
+                    archiveUrl(chain, url) ?: Pair(dateStr, url)
                 } else {
                     // archive is recent
-                    Pair(it, url)
+                    Pair(dateStr, url)
                 }
             }
 
@@ -69,10 +72,10 @@ class WaybackMachineInterceptor(
 
         // resolve all redirects
         while (response.isRedirect) {
-            response = response.use {
+            response = response.use { response ->
                 getImmediateResponse(
                     chain,
-                    it
+                    response
                         .request
                         .newBuilder()
                         .url(response.request.header("Location")!!)
@@ -118,12 +121,12 @@ class WaybackMachineInterceptor(
     private fun archiveUrl(
         chain: Interceptor.Chain,
         url: HttpUrl,
-    ): Pair<String, HttpUrl>? = getDateStr(chain, "$SAVE_PREFIX$url")?.let {
-        Pair(it, url)
+    ): Pair<String, HttpUrl>? = getDateStr(chain, "$SAVE_PREFIX$url")?.let { dateStr ->
+        Pair(dateStr, url)
     } ?: getRetryUrl(url).let { retryUrl ->
         // Retry archive with a new URL
-        getDateStr(chain, "$SAVE_PREFIX$retryUrl")?.let {
-            Pair(it, retryUrl)
+        getDateStr(chain, "$SAVE_PREFIX$retryUrl")?.let { dateStr ->
+            Pair(dateStr, retryUrl)
         }
     }
 
