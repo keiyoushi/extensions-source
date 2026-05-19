@@ -40,7 +40,7 @@ class MangaHoNa : HttpSource() {
         val mangaList = response.parseAs<List<MangaDto>>()
         val mangas = mangaList.map { dto ->
             SManga.create().apply {
-                url = "/manga/${dto.id}"
+                url = dto.id
                 title = dto.name
                 thumbnail_url = dto.coverImage?.let {
                     "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
@@ -85,7 +85,7 @@ class MangaHoNa : HttpSource() {
         if (isDeeplink) {
             val dto = response.parseAs<MangaDto>()
             val manga = SManga.create().apply {
-                this.url = "/manga/${dto.id}"
+                this.url = dto.id
                 title = dto.name
                 thumbnail_url = dto.coverImage?.let {
                     "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
@@ -107,7 +107,7 @@ class MangaHoNa : HttpSource() {
         }
         val mangas = filtered.map { dto ->
             SManga.create().apply {
-                this.url = "/manga/${dto.id}"
+                this.url = dto.id
                 title = dto.name
                 thumbnail_url = dto.coverImage?.let {
                     "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
@@ -123,17 +123,19 @@ class MangaHoNa : HttpSource() {
 
     // ========================= Details =========================
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$apiBaseUrl/manga/$mangaId", headers)
+        if (manga.url.startsWith("/manga/")) {
+            throw Exception("Migrate from $name to $name (same extension)")
+        }
+        return GET("$apiBaseUrl/manga/${manga.url}", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<MangaDto>()
         return SManga.create().apply {
-            url = "/manga/${dto.id}"
+            url = dto.id
             title = dto.name
             description = dto.description?.replace("\r\n", "\n")?.trim()
             author = dto.author?.trim()
@@ -183,8 +185,10 @@ class MangaHoNa : HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
-        return GET("$apiBaseUrl/chapters/$mangaId", headers)
+        if (manga.url.startsWith("/manga/")) {
+            throw Exception("Migrate from $name to $name (same extension)")
+        }
+        return GET("$apiBaseUrl/chapters/${manga.url}", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -202,6 +206,9 @@ class MangaHoNa : HttpSource() {
     // ========================= Pages =========================
 
     override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.startsWith("/manga/")) {
+            throw Exception("Migrate from $name to $name (same extension)")
+        }
         val pathParts = chapter.url.removePrefix("/czytaj/").split("/")
         val mangaId = pathParts[0]
         val chapterIndex = pathParts[1]
