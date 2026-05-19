@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,12 +18,16 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -30,6 +35,7 @@ import java.util.TimeZone
 class MoeTruyen :
     HttpSource(),
     ConfigurableSource {
+
     override val name = "MoeTruyen"
     override val lang = "vi"
     override val baseUrl get() = getPrefBaseUrl()
@@ -37,23 +43,43 @@ class MoeTruyen :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    private val apiUrl = "https://moe.suicaodex.com/v2"
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+        .add("Accept", "application/json, text/plain, */*")
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request {
+        if (!useApiPref()) {
+            return GET(baseUrl, headers)
+        }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+        val url = "$apiUrl/manga/top".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("include", "")
+            .addQueryParameter("sort_by", "views")
+            .addQueryParameter("time", "all_time")
+            .build()
+
+        return GET(url, headers)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage = if (useApiPref()) {
+        parseApiMangaList(response.parseAs<ApiListResponse<MangaDto>>())
+    } else {
         val mangas = response.asJsoup()
             .select("ol.homepage-ranking-list[data-ranking-period=total] a.homepage-ranking-item__link")
             .map(::popularMangaFromElement)
 
-        return MangasPage(mangas, false)
+        MangasPage(mangas, false)
     }
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -67,14 +93,28 @@ class MoeTruyen :
     // ============================== Latest ================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
+        if (!useApiPref()) {
+            val url = "$baseUrl/manga".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .build()
+
+            return GET(url, headers)
+        }
+
+        val url = "$apiUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("sort", "updated_at")
             .build()
 
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
+    override fun latestUpdatesParse(response: Response): MangasPage = if (useApiPref()) {
+        parseApiMangaList(response.parseAs<ApiListResponse<MangaDto>>())
+    } else {
+        parseHtmlMangaList(response.asJsoup())
+    }
 
     private fun latestMangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("a[href^=/manga/]")!!
@@ -103,7 +143,7 @@ class MoeTruyen :
         return imageAlt ?: titleText
     }
 
-    private fun parseMangaList(document: Document): MangasPage {
+    private fun parseHtmlMangaList(document: Document): MangasPage {
         val mangas = document.select("article.manga-card--list")
             .map(::latestMangaFromElement)
 
@@ -119,33 +159,86 @@ class MoeTruyen :
     // ============================== Search ================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()
+        if (!useApiPref()) {
+            val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()
+            val includedGenres = filters.firstInstanceOrNull<GenreFilter>()
+                ?.state
+                ?.filter { it.state }
+                .orEmpty()
+            val hasFilter = status != null || includedGenres.isNotEmpty()
+
+            if (query.isBlank() && !hasFilter) {
+                return latestUpdatesRequest(page)
+            }
+
+            val url = "$baseUrl/manga".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .apply {
+                    if (query.isNotBlank()) {
+                        addQueryParameter("q", query)
+                    }
+
+                    status?.let { addQueryParameter("status", it) }
+                    includedGenres.forEach { addQueryParameter("include", it.id) }
+                }
+                .build()
+
+            return GET(url, headers)
+        }
+
+        extractMangaIdFromQuery(query)?.let { mangaId ->
+            return GET("$apiUrl/manga/$mangaId?include=genres", headers)
+        }
+
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()?.toApiStatus()
         val includedGenres = filters.firstInstanceOrNull<GenreFilter>()
             ?.state
             ?.filter { it.state }
             .orEmpty()
+
         val hasFilter = status != null || includedGenres.isNotEmpty()
 
         if (query.isBlank() && !hasFilter) {
             return latestUpdatesRequest(page)
         }
 
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
+        val url = "$apiUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", PAGE_SIZE.toString())
             .apply {
                 if (query.isNotBlank()) {
                     addQueryParameter("q", query)
                 }
 
                 status?.let { addQueryParameter("status", it) }
-                includedGenres.forEach { addQueryParameter("include", it.id) }
+                if (includedGenres.isNotEmpty()) {
+                    addQueryParameter("genre", includedGenres.joinToString(",") { it.id })
+                }
             }
             .build()
 
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (!useApiPref()) {
+            return parseHtmlMangaList(response.asJsoup())
+        }
+
+        val encodedPath = response.request.url.encodedPath
+        return if (MANGA_DETAILS_PATH_REGEX.matches(encodedPath)) {
+            val manga = response.parseAs<ApiResponse<MangaDto>>().data.toSManga()
+            MangasPage(listOf(manga), false)
+        } else {
+            parseApiMangaList(response.parseAs<ApiListResponse<MangaDto>>())
+        }
+    }
+
+    private fun parseApiMangaList(apiResponse: ApiListResponse<MangaDto>): MangasPage {
+        val mangas = apiResponse.data.map { it.toSManga() }
+        val hasNextPage = apiResponse.meta?.pagination?.hasNextPage() ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
 
     // ============================== Filters ===============================
 
@@ -153,53 +246,112 @@ class MoeTruyen :
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-
-        return SManga.create().apply {
-            title = document.selectFirst("h1.manga-detail-title")!!.text()
-            author = document.select("p.manga-detail-meta-line")
-                .firstOrNull { line ->
-                    line.selectFirst(".manga-detail-meta-label")
-                        ?.text()
-                        ?.contains("Tác giả")
-                        ?: false
-                }
-                ?.select("a.inline-link")
-                ?.joinToString { it.text() }
-                ?.ifEmpty { null }
-            genre = document.select(".manga-detail-genre-chips a.chip")
-                .joinToString { it.text() }
-                .ifEmpty { null }
-            description = document.selectFirst("[data-description-content]")
-                ?.text()
-                ?.ifEmpty { null }
-                ?: document.selectFirst(".manga-description__text")
-                    ?.text()
-                    ?.ifEmpty { null }
-            status = parseStatus(document.selectFirst(".manga-status-pill")?.text())
-            thumbnail_url = document.selectFirst(".detail-cover img")?.absUrl("src")
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        if (!useApiPref() && !manga.url.isApiMangaUrl()) {
+            return GET("$baseUrl${manga.url.substringBefore('#')}", headers)
         }
+
+        val mangaId = manga.url.extractMangaId()
+            ?: throw Exception("Không thể xác định id truyện từ URL: ${manga.url}")
+
+        return GET("$apiUrl/manga/$mangaId?include=genres", headers)
     }
 
-    private fun parseStatus(status: String?): Int = when (status?.trim()) {
-        "Còn tiếp" -> SManga.ONGOING
-        "Hoàn thành" -> SManga.COMPLETED
-        "Tạm dừng" -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(response: Response): SManga {
+        val isApiResponse = response.request.url.encodedPath.startsWith("/v2/manga/")
+        return if (isApiResponse) {
+            response.parseAs<ApiResponse<MangaDto>>().data.toSManga()
+        } else {
+            val document = response.asJsoup()
+
+            SManga.create().apply {
+                title = document.selectFirst("h1.manga-detail-title")!!.text()
+                author = document.select("p.manga-detail-meta-line")
+                    .firstOrNull { line ->
+                        line.selectFirst(".manga-detail-meta-label")
+                            ?.text()
+                            ?.contains("Tác giả")
+                            ?: false
+                    }
+                    ?.select("a.inline-link")
+                    ?.joinToString { it.text() }
+                    ?.ifEmpty { null }
+                genre = document.select(".manga-detail-genre-chips a.chip")
+                    .joinToString { it.text() }
+                    .ifEmpty { null }
+                description = document.selectFirst("[data-description-content]")
+                    ?.text()
+                    ?.ifEmpty { null }
+                    ?: document.selectFirst(".manga-description__text")
+                        ?.text()
+                        ?.ifEmpty { null }
+                status = parseStatus(document.selectFirst(".manga-status-pill")?.text())
+                thumbnail_url = document.selectFirst(".detail-cover img")?.absUrl("src")
+            }
+        }
     }
 
     // ============================== Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> = rx.Observable.fromCallable {
-        client.newCall(chapterListRequest(manga)).execute().use { response ->
-            chapterListParsePaginated(response)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        if (!useApiPref() && !manga.url.isApiMangaUrl()) {
+            client.newCall(chapterListRequest(manga)).execute().use { response ->
+                return@fromCallable chapterListParsePaginated(response)
+            }
+        }
+
+        val mangaId = manga.url.extractMangaId()
+            ?: throw Exception("Không thể xác định id truyện từ URL: ${manga.url}")
+
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
+        var hasNextPage: Boolean
+
+        do {
+            val url = "$apiUrl/manga/$mangaId/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("limit", CHAPTER_PAGE_SIZE.toString())
+                .build()
+
+            val response = client.newCall(GET(url, headers)).execute()
+            response.use {
+                val apiResponse = it.parseAs<ApiResponse<ChapterListDataDto>>()
+                chapters += apiResponse.data.chapters.map { chapter -> chapter.toSChapter(mangaId) }
+
+                hasNextPage = apiResponse.meta?.pagination?.hasNextPage() ?: false
+                page++
+            }
+        } while (hasNextPage)
+
+        chapters
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val path = manga.url.substringBefore('#')
+        return if (!useApiPref() && !manga.url.isApiMangaUrl()) {
+            GET("$baseUrl$path", headers)
+        } else {
+            val mangaId = manga.url.extractMangaId()
+                ?: throw Exception("Không thể xác định id truyện từ URL: ${manga.url}")
+            val url = "$apiUrl/manga/$mangaId/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("page", "1")
+                .addQueryParameter("limit", CHAPTER_PAGE_SIZE.toString())
+                .build()
+            GET(url, headers)
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = parseChapterList(response.asJsoup())
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val isApiResponse = response.request.url.encodedPath.startsWith("/v2/manga/")
+        return if (isApiResponse) {
+            val mangaId = response.request.url.encodedPath.substringAfter("/v2/manga/").substringBefore('/').toLongOrNull()
+                ?: throw Exception("Không thể xác định id truyện từ request: ${response.request.url}")
+            val apiResponse = response.parseAs<ApiResponse<ChapterListDataDto>>()
+            apiResponse.data.chapters.map { it.toSChapter(mangaId) }
+        } else {
+            parseChapterList(response.asJsoup())
+        }
+    }
 
     private fun chapterListParsePaginated(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -247,7 +399,7 @@ class MoeTruyen :
                 ?.ifEmpty { null }
 
             date_upload = parseRelativeDate(relativeDate).takeIf { it != 0L }
-                ?: dateFormat.tryParse(absoluteDate)
+                ?: htmlDateFormat.tryParse(absoluteDate)
         }
     }
 
@@ -273,33 +425,79 @@ class MoeTruyen :
 
     // ============================== Pages =================================
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (!useApiPref() && !chapter.url.isApiChapterUrl()) {
+            return GET("$baseUrl${chapter.url.substringBefore('#')}", headers)
+        }
+
+        val chapterId = chapter.url.extractChapterId()
+            ?: throw Exception("Không thể xác định id chapter từ URL: ${chapter.url}")
+
+        return GET("$apiUrl/chapters/$chapterId", headers)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val isApiResponse = response.request.url.encodedPath.startsWith("/v2/chapters/")
+        if (!isApiResponse) {
+            val document = response.asJsoup()
 
-        val imageUrls = document.select("img.page-media")
-            .asSequence()
-            .filterNot { element ->
-                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
-            }
-            .map { element ->
-                element.absUrl("data-src").ifEmpty { element.absUrl("src") }
-            }
-            .filter { imageUrl ->
-                imageUrl.isNotBlank() && !imageUrl.startsWith("data:")
-            }
-            .distinct()
-            .toList()
+            val imageUrls = document.select("img.page-media")
+                .asSequence()
+                .filterNot { element ->
+                    element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
+                }
+                .map { element ->
+                    element.absUrl("data-src").ifEmpty { element.absUrl("src") }
+                }
+                .filter { imageUrl ->
+                    imageUrl.isNotBlank() && !imageUrl.startsWith("data:")
+                }
+                .distinct()
+                .toList()
 
-        return imageUrls.mapIndexed { index, imageUrl ->
+            return imageUrls.mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
+        }
+
+        val apiResponse = response.parseAs<ApiResponse<ChapterPagesDataDto>>()
+        return apiResponse.data.pageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    override fun getMangaUrl(manga: SManga): String {
+        val path = manga.url.substringBefore('#')
+        return if (path.startsWith(API_MANGA_PREFIX)) {
+            val mangaId = path.removePrefix(API_MANGA_PREFIX).substringBefore('/')
+            "$baseUrl/manga/$mangaId"
+        } else {
+            "$baseUrl$path"
+        }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val path = chapter.url.substringBefore('#')
+        return if (path.startsWith(API_MANGA_PREFIX)) {
+            val chapterId = path.removePrefix(API_MANGA_PREFIX).substringAfter('/', "")
+            "$baseUrl/chapter/$chapterId"
+        } else {
+            "$baseUrl$path"
+        }
+    }
+
     // ============================== Preferences ===========================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_API
+            title = "Sử dụng API"
+            summary = "Bật để dùng api"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+
         val customUrlPref = EditTextPreference(screen.context).apply {
             key = PREF_CUSTOM_DOMAIN
             title = "Tên miền tùy chỉnh"
@@ -315,7 +513,7 @@ class MoeTruyen :
                     Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_SHORT).show()
                     true
                 } catch (e: Exception) {
-                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message} ", Toast.LENGTH_LONG).show()
+                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message}", Toast.LENGTH_LONG).show()
                     false
                 }
             }
@@ -338,22 +536,143 @@ class MoeTruyen :
         customUrlPref.let(screen::addPreference)
     }
 
+    private fun useApiPref(): Boolean = preferences.getBoolean(PREF_USE_API, true)
+
     private fun getPrefBaseUrl(): String = when (preferences.getPrefUrl()) {
         UrlMode.DEFAULT -> DEFAULT_DOMAIN
         UrlMode.GLOBAL -> DOMAIN_GLOBAL
         UrlMode.CUSTOM -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
     }.removeSuffix("/")
+
+    private fun String.toApiStatus(): String? = when (this) {
+        "Còn tiếp" -> "ongoing"
+        "Hoàn thành" -> "completed"
+        "Tạm dừng" -> "hiatus"
+        else -> null
+    }
+
+    private fun MangaDto.toSManga(): SManga = SManga.create().apply {
+        url = "$API_MANGA_PREFIX$id"
+        title = this@toSManga.title
+        thumbnail_url = coverUrl
+        author = this@toSManga.author
+        genre = genres?.joinToString { it.name }?.ifBlank { null }
+        description = buildString {
+            this@toSManga.description?.takeIf { it.isNotBlank() }?.let { append(it) }
+            if (!this@toSManga.altTitles.isNullOrEmpty()) {
+                if (isNotEmpty()) {
+                    append("\n\n")
+                }
+                append("Tên khác: ")
+                append(this@toSManga.altTitles.joinToString())
+            }
+        }.ifBlank { null }
+        status = parseStatus(this@toSManga.status)
+    }
+
+    private fun parseStatus(status: String?): Int = when (status?.trim()?.lowercase(Locale.ROOT)) {
+        "còn tiếp", "ongoing" -> SManga.ONGOING
+        "hoàn thành", "completed" -> SManga.COMPLETED
+        "tạm dừng", "hiatus" -> SManga.ON_HIATUS
+        "cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
+
+    private fun ChapterDto.toSChapter(mangaId: Long): SChapter = SChapter.create().apply {
+        url = "$API_MANGA_PREFIX$mangaId/$id"
+
+        val chapterLabel = numberText
+            ?.removeSuffix(".000")
+            ?.ifBlank { null }
+            ?: number?.toString()?.removeSuffix(".0")
+            ?: "?"
+
+        name = buildString {
+            append("Chương ")
+            append(chapterLabel)
+            title?.takeIf { it.isNotBlank() }?.let {
+                append(" - ")
+                append(it)
+            }
+        }
+
+        chapter_number = number?.toFloat() ?: numberText?.toFloatOrNull() ?: 0f
+        date_upload = parseChapterDate(date)
+        scanlator = groupName?.ifBlank { null }
+    }
+
+    private fun parseChapterDate(raw: String?): Long {
+        if (raw.isNullOrBlank()) return 0L
+        return chapterDateFormat.tryParse(raw)
+            ?: chapterDateFormatWithoutMillis.tryParse(raw)
+            ?: 0L
+    }
+
+    private fun extractMangaIdFromQuery(query: String): Long? {
+        if (!query.startsWith("http", ignoreCase = true)) return null
+
+        val parsed = query.toHttpUrlOrNull() ?: return null
+        val currentHost = baseUrl.toHttpUrl().host
+        if (parsed.host != currentHost) return null
+
+        val slug = parsed.pathSegments
+            .dropWhile { it != "manga" }
+            .drop(1)
+            .firstOrNull()
+            ?: return null
+
+        return slug.substringBefore('-').toLongOrNull()
+    }
+
+    private fun String.extractMangaId(): Long? {
+        val normalized = substringBefore('#')
+        if (normalized.startsWith(API_MANGA_PREFIX)) {
+            return normalized.removePrefix(API_MANGA_PREFIX).substringBefore('/').toLongOrNull()
+        }
+
+        val fragmentId = substringAfter('#', "").toLongOrNull()
+        if (fragmentId != null) return fragmentId
+
+        val slug = normalized
+            .substringAfter("/manga/", "")
+            .substringBefore('/')
+
+        return slug.substringBefore('-').toLongOrNull()
+    }
+
+    private fun String.extractChapterId(): Long? {
+        val path = substringBefore('#')
+        if (path.startsWith(API_MANGA_PREFIX)) {
+            return path.removePrefix(API_MANGA_PREFIX).substringAfter('/', "").toLongOrNull()
+        }
+        if (path.startsWith("/chapter/")) {
+            return path.removePrefix("/chapter/").substringBefore('/').toLongOrNull()
+        }
+        return substringAfter('#', "").toLongOrNull()
+    }
+
+    private fun String.isApiMangaUrl(): Boolean = substringBefore('#').startsWith(API_MANGA_PREFIX)
+
+    private fun String.isApiChapterUrl(): Boolean = substringBefore('#').startsWith(API_MANGA_PREFIX)
+
     enum class UrlMode {
         DEFAULT,
         GLOBAL,
         CUSTOM,
     }
+
     private fun SharedPreferences.getPrefUrl(): UrlMode = when (getString(PREF_DOMAIN, "default")) {
         "default" -> UrlMode.DEFAULT
         "global" -> UrlMode.GLOBAL
         else -> UrlMode.CUSTOM
     }
+
     companion object {
+        private const val PAGE_SIZE = 24
+        private const val CHAPTER_PAGE_SIZE = 100
+        private const val API_MANGA_PREFIX = "/g/"
+
+        private const val PREF_USE_API = "pref_use_api"
         private const val PREF_DOMAIN = "pref_domain"
         private const val DEFAULT_DOMAIN = "https://moetruyen.net"
         private const val DOMAIN_GLOBAL = "https://truyen.moe"
@@ -369,8 +688,19 @@ class MoeTruyen :
         )
         private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
         private const val NOTIFICATION_SHOW = "Tên miền đã được thay đổi."
+
+        private val MANGA_DETAILS_PATH_REGEX = Regex("""/v2/manga/\d+""")
         private val NUMBER_REGEX = Regex("""\d+""")
-        private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
+
+        private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        private val chapterDateFormatWithoutMillis = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        private val htmlDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
     }
