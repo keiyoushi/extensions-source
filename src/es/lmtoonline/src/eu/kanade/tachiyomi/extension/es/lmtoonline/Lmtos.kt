@@ -153,7 +153,7 @@ class Lmtos : HttpSource() {
         return result.chapters.map { it.toSChapter(mangaSlug) }
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/manga/${chapter.url}", headers)
 
