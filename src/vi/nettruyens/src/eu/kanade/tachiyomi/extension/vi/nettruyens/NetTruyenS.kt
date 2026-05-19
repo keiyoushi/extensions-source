@@ -117,10 +117,9 @@ class NetTruyenS : HttpSource() {
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.selectFirst("h3 a")!!.let {
-            title = it.text()
-            setUrlWithoutDomain(it.absUrl("href"))
-        }
+        val link: Element = element.selectFirst("h3 a")!!
+        title = link.text()
+        setUrlWithoutDomain(link.absUrl("href"))
         thumbnail_url = element.selectFirst("div.image img")?.imageUrl()
     }
 
@@ -164,10 +163,9 @@ class NetTruyenS : HttpSource() {
         val document = response.asJsoup()
         return document.select("div.list-chapter li.row:not(.heading)").map { element ->
             SChapter.create().apply {
-                element.selectFirst("a")!!.let {
-                    name = it.text()
-                    setUrlWithoutDomain(it.absUrl("href"))
-                }
+                val link: Element = element.selectFirst("a")!!
+                name = link.text()
+                setUrlWithoutDomain(link.absUrl("href"))
                 date_upload = element.selectFirst("div.col-xs-4")?.text().parseRelativeDate()
             }
         }
