@@ -300,8 +300,6 @@ class Happymh :
         val comicId = chapterUrl.pathSegments[0]
         val chapterId = chapterUrl.pathSegments[2]
 
-        val startTime = System.nanoTime()
-
         refreshGACookies("$baseUrl/mangaread/$comicId/$chapterId")
 
         val url = "$baseUrl/v2.0/apis/manga/reading".toHttpUrl().newBuilder()
