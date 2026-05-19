@@ -42,7 +42,7 @@ class Asmotoon :
     val waybackMachineClient: OkHttpClient = super
         .client
         .newBuilder()
-        .addInterceptor(WaybackMachineInterceptor())
+        .addInterceptor(WaybackMachineInterceptor("""\w+://asmotoon\.com/.*""".toRegex()))
         .followRedirects(false)
         .build()
 
