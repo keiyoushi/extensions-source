@@ -3,26 +3,26 @@ package eu.kanade.tachiyomi.extension.vi.moetruyen
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ApiResponse<T>(
+class ApiResponse<T>(
     val success: Boolean,
     val data: T,
     val meta: MetaDto? = null,
 )
 
 @Serializable
-data class ApiListResponse<T>(
+class ApiListResponse<T>(
     val success: Boolean,
     val data: List<T>,
     val meta: MetaDto? = null,
 )
 
 @Serializable
-data class MetaDto(
+class MetaDto(
     val pagination: PaginationDto? = null,
 )
 
 @Serializable
-data class PaginationDto(
+class PaginationDto(
     val page: Int = 1,
     val limit: Int = 0,
     val total: Int = 0,
@@ -32,7 +32,7 @@ data class PaginationDto(
 }
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val id: Long,
     val slug: String,
     val title: String,
@@ -45,18 +45,18 @@ data class MangaDto(
 )
 
 @Serializable
-data class GenreDto(
+class GenreDto(
     val id: Long,
     val name: String,
 )
 
 @Serializable
-data class ChapterListDataDto(
+class ChapterListDataDto(
     val chapters: List<ChapterDto> = emptyList(),
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: Long,
     val number: Double? = null,
     val numberText: String? = null,
@@ -66,6 +66,6 @@ data class ChapterDto(
 )
 
 @Serializable
-data class ChapterPagesDataDto(
+class ChapterPagesDataDto(
     val pageUrls: List<String> = emptyList(),
 )
