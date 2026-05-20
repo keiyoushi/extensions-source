@@ -1,0 +1,8 @@
+ext {
+    extName = 'MangaDNA'
+    extClass = '.MangaDNAFactory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"
