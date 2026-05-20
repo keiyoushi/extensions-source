@@ -34,7 +34,7 @@ class Ono :
     override val lang = "fr"
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::authInterceptor)
         .addInterceptor(::wafInterceptor)
         .build()
