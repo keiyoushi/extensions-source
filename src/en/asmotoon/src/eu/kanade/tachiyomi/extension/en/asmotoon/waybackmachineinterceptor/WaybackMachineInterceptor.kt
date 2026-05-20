@@ -167,7 +167,7 @@ class WaybackMachineInterceptor(
         private const val RANDOM_QUERY_PARAM = "__WaybackMachineInterceptor_RANDOM_QUERY_PARAM__"
         private const val SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000
         private const val URL_CACHE_MAX_ENTRIES = 250
-        private val TIMESTAMP_REGEX = """(?<=://${Regex.escape(HOST)})/web/)\d{14}""".toRegex()
+        private val TIMESTAMP_REGEX = """(?<=://${Regex.escape(HOST)}/web/)\d{14}""".toRegex()
         private val DATE_FORMAT = SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
