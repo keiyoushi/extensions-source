@@ -42,4 +42,13 @@ data class ImageData(
 @Serializable
 data class Tags(
     val artist: List<String> = emptyList(),
-)
+    val character: List<String> = emptyList(),
+    val copyright: List<String> = emptyList(),
+    val general: List<String> = emptyList(),
+    val lore: List<String> = emptyList(),
+    val meta: List<String> = emptyList(),
+    val species: List<String> = emptyList(),
+) {
+    val allTags: List<String>
+        get() = artist + character + copyright + general + lore + meta + species
+}
