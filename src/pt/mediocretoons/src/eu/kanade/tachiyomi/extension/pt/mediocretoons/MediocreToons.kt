@@ -21,6 +21,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.api.get
@@ -33,18 +34,31 @@ class MediocreToons :
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
     override val supportsLatest = true
-    private val apiUrl = "https://api.mediocretoons.net"
 
+    private val apiUrl = "https://back.mediocrescan.com"
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    companion object {
+        const val CDN_URL = "https://cdn.mediocrescan.com"
+        private const val POPULAR_FORMATOS = "1,3,4,5,8,9,13"
+        private const val EMAIL_PREF = "email"
+        private const val PASSWORD_PREF = "password"
+    }
 
     private var cachedToken: String? = null
     private var tokenExpiryTime: Long = 0L
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .addInterceptor(::authIntercept)
         .build()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("x-app-key", "toons-mediocre-app")
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
+
+    // ============================== Authentication ===============================
     private fun authIntercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
@@ -83,11 +97,9 @@ class MediocreToons :
 
     private fun getValidToken(): String? {
         val now = System.currentTimeMillis()
-
         if (cachedToken != null && now < tokenExpiryTime) {
             return cachedToken
         }
-
         return fetchNewToken()
     }
 
@@ -99,8 +111,7 @@ class MediocreToons :
             if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
                 return null
             }
-
-            return loginAndGetToken(email, password)
+            loginAndGetToken(email, password)
         } catch (e: Exception) {
             null
         }
@@ -122,12 +133,11 @@ class MediocreToons :
                 .header("Accept", "application/json")
                 .build()
 
-            val response = network.client.newCall(request).execute()
+            val response = network.cloudflareClient.newCall(request).execute()
 
             if (response.isSuccessful) {
                 val responseBody = response.body.string()
                 val jsonResponse = JSONObject(responseBody)
-
                 val token = when {
                     jsonResponse.has("token") -> jsonResponse.getString("token")
                     jsonResponse.has("access_token") -> jsonResponse.getString("access_token")
@@ -138,25 +148,14 @@ class MediocreToons :
                     val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
                     cachedToken = token
                     tokenExpiryTime = System.currentTimeMillis() + expiresIn
-
                     return token
-                } else {
-                    return null
                 }
-            } else {
-                val errorBody = response.body.string()
-                null
             }
+            null
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("x-app-key", "toons-mediocre-app")
-        .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
 
     // ============================== Popular ================================
     override fun popularMangaRequest(page: Int): Request {
@@ -167,6 +166,7 @@ class MediocreToons :
             .addQueryParameter("formato", POPULAR_FORMATOS)
             .addQueryParameter("ordenarPor", "view_geral")
             .build()
+
         return GET(url, headers)
     }
 
@@ -174,22 +174,23 @@ class MediocreToons :
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
+
         return MangasPage(mangas, hasNextPage = hasNext)
     }
 
     // ============================= Latest Updates ==========================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/novos".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/adicionados-recentes".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "24")
+            .addQueryParameter("limit", "24")
             .addQueryParameter("formato", "5")
             .build()
+
         return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
-
+        val dto = response.parseAs<MediocreListDto<List<MediocreMangaSimpleDto>>>()
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
 
@@ -198,43 +199,38 @@ class MediocreToons :
 
     // =============================== Search ================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addQueryParameter("limite", "20")
+        val url = "$apiUrl/obras/buscar".toHttpUrl().newBuilder()
+            .addQueryParameter("limite", "24")
             .addQueryParameter("pagina", page.toString())
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("string", query)
         }
 
+        var formatoSelecionado = ""
         filters.forEach { filter ->
             when (filter) {
-                is FormatoFilter -> {
-                    if (filter.selected.isNotEmpty()) {
-                        url.addQueryParameter("formato", filter.selected)
-                    }
-                }
-
+                is FormatoFilter -> formatoSelecionado = filter.selected
                 is StatusFilter -> {
                     if (filter.selected.isNotEmpty()) {
                         url.addQueryParameter("status", filter.selected)
                     }
                 }
-
                 is SortFilter -> {
                     url.addQueryParameter("ordenarPor", filter.selected)
                 }
-
                 else -> {}
             }
         }
 
-        val finalUrl = url.build()
-        return GET(finalUrl, headers)
+        val formato = if (formatoSelecionado.isNotEmpty()) formatoSelecionado else POPULAR_FORMATOS
+        url.addQueryParameter("formato", formato)
+
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
-
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
 
@@ -275,66 +271,6 @@ class MediocreToons :
             ),
         )
 
-    private class TagsFilter :
-        Filter.Group<TagCheckBox>(
-            "Tags",
-            listOf(
-                TagCheckBox("Ação", "2"),
-                TagCheckBox("Aventura", "3"),
-                TagCheckBox("Fantasia", "4"),
-                TagCheckBox("Romance", "5"),
-                TagCheckBox("Comédia", "6"),
-                TagCheckBox("Drama", "7"),
-                TagCheckBox("Terror", "8"),
-                TagCheckBox("Horror", "9"),
-                TagCheckBox("Suspense", "10"),
-                TagCheckBox("Histórico", "11"),
-                TagCheckBox("Vida escolar", "12"),
-                TagCheckBox("Sobrenatural", "13"),
-                TagCheckBox("Militar", "14"),
-                TagCheckBox("Shounen", "15"),
-                TagCheckBox("Shoujo", "16"),
-                TagCheckBox("Josei", "17"),
-                TagCheckBox("One-shot", "18"),
-                TagCheckBox("Isekai", "19"),
-                TagCheckBox("Retorno", "20"),
-                TagCheckBox("Reencarnação", "21"),
-                TagCheckBox("Sistema", "22"),
-                TagCheckBox("Cultivo", "23"),
-                TagCheckBox("Artes Marciais", "24"),
-                TagCheckBox("Dungeon", "25"),
-                TagCheckBox("Tragédia", "26"),
-                TagCheckBox("Psicológico", "27"),
-                TagCheckBox("Culinaria", "28"),
-                TagCheckBox("Magia", "29"),
-                TagCheckBox("SuperPoder", "30"),
-                TagCheckBox("Murim", "31"),
-                TagCheckBox("Necromante", "32"),
-                TagCheckBox("Apocalipse", "33"),
-                TagCheckBox("Seinen", "34"),
-                TagCheckBox("Luta", "35"),
-                TagCheckBox("máfia", "36"),
-                TagCheckBox("Monstros", "37"),
-                TagCheckBox("Esportes", "38"),
-                TagCheckBox("Demônios", "39"),
-                TagCheckBox("Ficção Científica", "40"),
-                TagCheckBox("Fatia da Vida/Slice of Life", "41"),
-                TagCheckBox("Ecchi", "42"),
-                TagCheckBox("Mistério", "43"),
-                TagCheckBox("Harém", "44"),
-                TagCheckBox("manhua", "45"),
-                TagCheckBox("Jogo", "46"),
-                TagCheckBox("Regressão", "47"),
-                TagCheckBox("+18", "48"),
-                TagCheckBox("Oneshot", "49"),
-                TagCheckBox("Yuri", "50"),
-                TagCheckBox("Crime", "51"),
-                TagCheckBox("Policial", "52"),
-                TagCheckBox("Viagem no Tempo", "53"),
-                TagCheckBox("Moderno", "54"),
-            ),
-        )
-
     private class SortFilter :
         UriSelectFilter(
             "Ordenar Por",
@@ -345,8 +281,6 @@ class MediocreToons :
             ),
             defaultValue = 0,
         )
-
-    private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
     private open class UriSelectFilter(
         displayName: String,
@@ -363,8 +297,7 @@ class MediocreToons :
     // ============================ Manga Details ============================
     override fun getMangaUrl(manga: SManga): String {
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
-        val finalUrl = "$baseUrl/obra/$id"
-        return finalUrl
+        return "$baseUrl/obra/$id"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -374,39 +307,22 @@ class MediocreToons :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<MediocreMangaDto>()
-        return dto.toSManga(isDetails = true)
+        val dto = response.parseAs<MediocreMangaDetailsDto>()
+        return dto.toSManga()
     }
 
     // ============================== Chapters ===============================
-    override fun getChapterUrl(chapter: SChapter): String {
-        val finalUrl = "$baseUrl${chapter.url}"
-        return finalUrl
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val id = manga.url.substringAfter("/obra/")
-        val allChapters = mutableListOf<SChapter>()
-        var page = 1
 
-        do {
-            val url = "$apiUrl/capitulos".toHttpUrl().newBuilder()
-                .addQueryParameter("obr_id", id)
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limite", "100")
-                .addQueryParameter("order", "desc")
-                .build()
-
-            val response = client.newCall(GET(url, headers)).execute()
-            val dto = response.parseAs<MediocreListDto<List<MediocreChapterSimpleDto>>>()
-
-            allChapters.addAll(dto.data.map { it.toSChapter() })
-
-            val hasNext = dto.pagination?.hasNextPage ?: false
-            page++
-        } while (hasNext)
-
-        return Observable.just(allChapters.distinctBy { it.url }.sortedByDescending { it.chapter_number })
+        return Observable.fromCallable {
+            val response = client.newCall(GET("$apiUrl/obras/$id", headers)).execute()
+            val dto = response.parseAs<MediocreMangaDetailsDto>()
+            val chapters = dto.chapters.map { it.toSChapter() }
+            chapters.sortedByDescending { it.chapter_number }
+        }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
@@ -419,9 +335,51 @@ class MediocreToons :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val dto = response.parseAs<MediocreChapterDetailDto>()
-        val pages = dto.toPageList()
-        return pages
+        val json = JSONObject(response.peekBody(Long.MAX_VALUE).string())
+
+        val capUuid = json.optString("cap_uuid", "")
+        val obraId = json.optJSONObject("obra")?.optInt("id", 0) ?: 0
+        val capNum = json.optInt("cap_num", 0)
+
+        if (capUuid.isEmpty() || obraId == 0) {
+            return emptyList()
+        }
+
+        return fetchPagesFromCdn(obraId, capNum, capUuid)
+    }
+
+    private fun fetchPagesFromCdn(obraId: Int, capNum: Int, capUuid: String): List<Page> {
+        return try {
+            val pagesUrl = "$CDN_URL/obras/$obraId/capitulos/$capNum/$capUuid.json"
+
+            val request = Request.Builder()
+                .url(pagesUrl)
+                .header("Referer", baseUrl)
+                .build()
+
+            val response = client.newCall(request).execute()
+
+            if (!response.isSuccessful) {
+                return emptyList()
+            }
+
+            val body = response.body?.string() ?: return emptyList()
+            val pagesArray = JSONArray(body)
+
+            val pages = mutableListOf<Page>()
+            for (i in 0 until pagesArray.length()) {
+                val pageObj = pagesArray.getJSONObject(i)
+                val pageUrl = pageObj.optString("url")
+                if (pageUrl.isNotEmpty()) {
+                    val fullUrl = "$CDN_URL/$pageUrl"
+                    pages.add(Page(i, imageUrl = fullUrl))
+                }
+            }
+
+            pages
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -448,13 +406,6 @@ class MediocreToons :
             summary = "Senha para login automático"
             setDefaultValue("")
         }.also(screen::addPreference)
-    }
-
-    companion object {
-        const val CDN_URL = "https://api.mediocretoons.net/storage"
-        private const val POPULAR_FORMATOS = "1,3,4,5,8,9,13"
-        private const val EMAIL_PREF = "email"
-        private const val PASSWORD_PREF = "password"
     }
 }
 
