@@ -164,7 +164,7 @@ class Ono :
             .build()
         val retry = client.newCall(
             response.request.newBuilder().url(retryUrl)
-                .header("Cache-Control", "no-cache").build(),
+               .cacheControl(CacheControl.FORCE_NETWORK).build(),
         ).execute()
         return retry.extractNextJs<SeriesDetail>()!!
     }
