@@ -33,7 +33,7 @@ open class MCCMS(
     }
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .addInterceptor { chain ->
                 // for thumbnail requests

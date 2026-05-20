@@ -44,7 +44,7 @@ class Kodansha :
     private var tokenExpiration: Long = 0L
     private var loginFailed = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor {
             val request = it.request()
             if (request.url.encodedPath.endsWith("/account/token")) {

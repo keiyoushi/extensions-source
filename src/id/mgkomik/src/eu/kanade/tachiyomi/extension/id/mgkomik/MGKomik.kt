@@ -31,7 +31,7 @@ class MGKomik :
         set("Sec-Fetch-Site", "none")
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {

@@ -25,7 +25,7 @@ class MangaToshokanZ : HttpSource() {
     override val name = "マンガ図書館Z"
     override val baseUrl = "https://www.mangaz.com"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(::r18Interceptor)
         .build()
 

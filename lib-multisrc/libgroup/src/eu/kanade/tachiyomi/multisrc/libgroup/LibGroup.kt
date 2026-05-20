@@ -74,7 +74,7 @@ abstract class LibGroup(
     private val apiDomain: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString()
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(3)
             .rateLimitHost(apiDomain.toHttpUrl(), 1)
             .rateLimitHost(baseUrl.toHttpUrl(), 1)

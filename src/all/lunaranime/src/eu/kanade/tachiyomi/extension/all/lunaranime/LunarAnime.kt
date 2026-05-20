@@ -26,7 +26,7 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(API_URL.toHttpUrl(), 2)
         .rateLimitHost(CDN_URL.toHttpUrl(), 2)
         .addInterceptor { chain ->

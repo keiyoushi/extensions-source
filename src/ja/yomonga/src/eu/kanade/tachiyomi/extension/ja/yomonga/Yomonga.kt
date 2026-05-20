@@ -28,7 +28,7 @@ class Yomonga : HttpSource() {
     private val json = Injekt.get<Json>()
     private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
         .build()
 

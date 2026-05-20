@@ -40,7 +40,7 @@ class DreComics :
     private var tokenExpiration: Long = 0L
     private var loginFailed = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()

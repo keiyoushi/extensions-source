@@ -88,7 +88,7 @@ class BookWalker :
     private val viewerUrl = "https://viewer.$domain"
     private val trialUrl = "https://viewer-trial.$domain"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(PublusInterceptor())
         .addInterceptor(BookWalkerImageRequestInterceptor(this))
         .build()

@@ -32,7 +32,7 @@ class PlotTwistNoFansub : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
         .build()
 

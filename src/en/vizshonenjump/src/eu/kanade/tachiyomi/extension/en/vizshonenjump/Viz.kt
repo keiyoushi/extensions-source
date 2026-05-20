@@ -35,7 +35,7 @@ open class Viz(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::headersIntercept)
         .addInterceptor(::authCheckIntercept)
         .addInterceptor(::authChapterCheckIntercept)
@@ -262,7 +262,7 @@ open class Viz(
 
         val loginCheckRequest = GET("$baseUrl/$REFRESH_LOGIN_LINKS_URL", refreshHeaders)
         try {
-            network.cloudflareClient.newCall(loginCheckRequest).execute().use { response ->
+            network.client.newCall(loginCheckRequest).execute().use { response ->
                 val document = response.asJsoup()
                 loggedIn = document.selectFirst("div#o_account-links-content")
                     ?.attr("logged_in")?.toBoolean() ?: false

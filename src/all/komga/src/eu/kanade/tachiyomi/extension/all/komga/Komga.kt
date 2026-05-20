@@ -95,7 +95,7 @@ open class Komga(private val suffix: String = "") :
         }
 
     override val client: OkHttpClient =
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .authenticator { _, response ->
                 if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
                     null // Give up if API key is set or we've already failed to authenticate.

@@ -34,8 +34,6 @@ class PoseidonScans :
     override val supportsLatest = true
     override val versionId = 2
 
-    override val client = network.cloudflareClient
-
     val rscHeaders = headersBuilder().add("RSC", "1").build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()

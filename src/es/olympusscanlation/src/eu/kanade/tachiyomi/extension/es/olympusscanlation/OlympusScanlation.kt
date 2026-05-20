@@ -44,7 +44,7 @@ class OlympusScanlation :
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
-            val initClient = network.cloudflareClient
+            val initClient = network.client
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://olympus.pages.dev", headers)).execute().asJsoup()
             val domain = document.selectFirst("meta[property=og:url]")?.attr("content")
@@ -79,7 +79,7 @@ class OlympusScanlation :
     }
 
     override val client by lazy {
-        val client = network.cloudflareClient.newBuilder()
+        val client = network.client.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
             .build()

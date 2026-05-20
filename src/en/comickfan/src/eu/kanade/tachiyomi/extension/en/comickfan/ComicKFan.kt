@@ -26,7 +26,6 @@ class ComicKFan : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT)
 
     override fun headersBuilder() = super.headersBuilder()

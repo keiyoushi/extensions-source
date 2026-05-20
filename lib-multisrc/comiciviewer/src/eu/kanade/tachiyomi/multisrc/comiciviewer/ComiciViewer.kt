@@ -34,7 +34,7 @@ abstract class ComiciViewer(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 

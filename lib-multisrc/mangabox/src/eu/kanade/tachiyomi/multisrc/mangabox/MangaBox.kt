@@ -60,7 +60,7 @@ abstract class MangaBox(
 
     override val baseUrl: String get() = mirror
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::mergeImagesInterceptor)
         .addInterceptor(::useAltCdnInterceptor)
         .build()

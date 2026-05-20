@@ -45,7 +45,7 @@ abstract class GigaViewer(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor {
             // Search returns 404 when no results are found.

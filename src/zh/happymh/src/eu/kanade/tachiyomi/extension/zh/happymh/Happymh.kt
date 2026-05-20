@@ -71,7 +71,7 @@ class Happymh :
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(rewriteOctetStream)
         .build()
 

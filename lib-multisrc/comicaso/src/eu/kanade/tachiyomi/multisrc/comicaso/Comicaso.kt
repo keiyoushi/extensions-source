@@ -25,8 +25,6 @@ abstract class Comicaso(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     override val versionId = 2
 
     override fun headersBuilder() = super.headersBuilder()
