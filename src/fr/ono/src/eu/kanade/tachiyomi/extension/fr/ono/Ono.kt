@@ -13,17 +13,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.util.Locale
@@ -98,7 +96,7 @@ class Ono :
     private val rscHeaders by lazy { headersBuilder().add("RSC", "1").build() }
 
     private val gqlHeaders by lazy {
-        Headers.Builder()
+        headersBuilder()
             .add("Content-Type", "application/json")
             .add("Origin", baseUrl)
             .add("Referer", "$baseUrl/")
@@ -116,7 +114,7 @@ class Ono :
             put("operationName", "getCatalogRanking")
             put("query", RANKING_QUERY)
             put("variables", buildJsonObject {})
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toJsonRequestBody()
         return POST(apiUrl, gqlHeaders, payload)
     }
 
@@ -146,7 +144,7 @@ class Ono :
             put("operationName", "searchCatalogByTerm")
             put("query", SEARCH_QUERY)
             put("variables", buildJsonObject { put("term", query) })
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toJsonRequestBody()
         return POST(apiUrl, gqlHeaders, payload)
     }
 
@@ -168,8 +166,7 @@ class Ono :
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     private fun seriesDetail(response: Response): SeriesDetail {
-        val body = response.body.string()
-        body.extractNextJsRsc<SeriesDetail>()?.let { return it }
+        response.extractNextJs<SeriesDetail>()?.let { return it }
 
         // RSC payload can be partial on client-side navigation; retry cache-busted.
         val retryUrl = response.request.url.newBuilder()
@@ -179,7 +176,7 @@ class Ono :
             response.request.newBuilder().url(retryUrl)
                 .header("Cache-Control", "no-cache").build(),
         ).execute()
-        return retry.body.string().extractNextJsRsc<SeriesDetail>()!!
+        return retry.extractNextJs<SeriesDetail>()!!
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -263,7 +260,7 @@ class Ono :
                     put("slug", slug)
                 },
             )
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toJsonRequestBody()
         return POST(apiUrl, gqlHeaders, payload)
     }
 
@@ -325,7 +322,7 @@ class Ono :
                 "variables",
                 buildJsonObject { put("publicationId", publicationId) },
             )
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toJsonRequestBody()
 
         val result = client.newCall(POST(apiUrl, gqlHeaders, body)).execute()
             .parseAs<GraphQLResponse<UnlockData>>()
@@ -361,7 +358,6 @@ class Ono :
     companion object {
         private const val API_HOST = "ws.ono.live"
         private const val COGNITO_CLIENT_ID = "12kanvg0bocd5hjtuul46phv7s"
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
         private val SEARCH_QUERY =
             $$"query searchCatalogByTerm($term:String!)" +
