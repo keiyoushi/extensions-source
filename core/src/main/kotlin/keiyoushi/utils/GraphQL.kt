@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.POST
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.serializer
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Builder
@@ -46,11 +45,6 @@ private class PersistedQueryExtension(
         private val sha256Hash: String,
     )
 }
-
-/**
- * Encodes [this] into a [JsonElement] using [json].
- */
-inline fun <reified T> T.toJsonElement(json: Json = jsonInstance): JsonElement = json.encodeToJsonElement(serializer(), this)
 
 /**
  * Intercepts HTTP responses and throws [GraphQLException] if the body contains GraphQL errors.
