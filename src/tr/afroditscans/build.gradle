@@ -1,9 +1,9 @@
 ext {
     extName = 'Afrodit Scans'
     extClass = '.AfroditScans'
-    themePkg = 'mangathemesia'
+    themePkg = 'uzaymanga'
     baseUrl = 'https://afroditscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 31
     isNsfw = false
 }
 
