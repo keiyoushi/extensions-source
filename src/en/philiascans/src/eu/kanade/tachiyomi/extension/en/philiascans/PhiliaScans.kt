@@ -404,6 +404,7 @@ class PhiliaScans :
         private val shortDateRegex = Regex("""\b(\d{1,2}/\d{1,2}/\d{4})\b""")
         private val customDateRegex = Regex("""(\d{1,2}/[A-Za-z]{3})(?:/(\d{4}))?\s+(\d{1,2}:\d{2}\s+(?:am|pm|AM|PM))""")
         private val chapterCleanupRegex = Regex("""(?i)\b(free|premium|EN)\b""")
+
         // Used to fetch the independent React Flight payload strings from script tags safely.
         private val nextFlightRegex = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
         private val fallbackDateFormat = SimpleDateFormat("M/d/yyyy", Locale.US)
