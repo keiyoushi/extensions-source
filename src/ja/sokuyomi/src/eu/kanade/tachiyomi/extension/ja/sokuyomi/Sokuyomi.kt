@@ -53,7 +53,11 @@ class Sokuyomi :
                     header("Authorization", "Bearer $token")
                 }
             }.build()
-            it.proceed(newRequest)
+            val response = it.proceed(newRequest)
+            if (response.code == 403) {
+                throw IOException("This service is only available in Japan.")
+            }
+            response
         }
         .build()
 
@@ -161,7 +165,7 @@ class Sokuyomi :
                 Page(it.pageNumber, imageUrl = "$cdnUrl/${it.key}#scramble")
             }
         } catch (e: GraphQLException) {
-            throw IOException(e.message?.substringAfter("input: getVolumeViewer ") + "(Log in via Settings.)")
+            throw IOException(e.message?.substringAfter("input: getVolumeViewer ") + " (Log in via Settings.)")
         }
     }
 

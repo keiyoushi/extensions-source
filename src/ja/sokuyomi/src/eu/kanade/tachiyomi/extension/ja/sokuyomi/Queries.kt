@@ -109,7 +109,6 @@ val DETAILS_QUERY = $$"""
           name_katakana
           description
           is_adult
-          is_magazine
           is_finished
         }
 """.trimIndent()
