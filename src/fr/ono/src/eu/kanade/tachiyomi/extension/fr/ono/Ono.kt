@@ -18,11 +18,13 @@ import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.util.Locale
 
 class Ono :
@@ -37,6 +39,7 @@ class Ono :
     override val client = network.client.newBuilder()
         .addInterceptor(::authInterceptor)
         .addInterceptor(::wafInterceptor)
+        .addInterceptor(::imageRetryInterceptor)
         .build()
 
     private val apiUrl = "https://ws.ono.live/graphql"
@@ -164,7 +167,7 @@ class Ono :
             .build()
         val retry = client.newCall(
             response.request.newBuilder().url(retryUrl)
-               .cacheControl(CacheControl.FORCE_NETWORK).build(),
+                .cacheControl(CacheControl.FORCE_NETWORK).build(),
         ).execute()
         return retry.extractNextJs<SeriesDetail>()!!
     }
@@ -232,11 +235,15 @@ class Ono :
 
     // =============================== Pages ================================
 
+    @Volatile private var lastSlug = ""
+
+    @Volatile private var lastNum = ""
+
     override fun pageListRequest(chapter: SChapter): Request {
         val segments = chapter.url.trim('/').split('/')
-        val num = segments.last()
-        val slug = segments[segments.size - 2]
-        return startReadingRequest(num, slug)
+        lastNum = segments.last()
+        lastSlug = segments[segments.size - 2]
+        return startReadingRequest(lastNum, lastSlug)
     }
 
     private fun startReadingRequest(num: String, slug: String): Request = graphQLPost(
@@ -251,21 +258,7 @@ class Ono :
     )
 
     override fun pageListParse(response: Response): List<Page> {
-        var payload = response.parseGraphQLAs<StartReadingSessionData>()
-            .startReadingSessionBySlugAndNum!!
-
-        // Wait-until-free chapters come back as UserHasNotAccess until unlocked.
-        // If a WaitNReadAvailable method is offered, claim it for free, then retry.
-        if (payload.__typename == "UserHasNotAccess") {
-            val wnr = payload.publicationAccessMethods
-                .firstOrNull { it.__typename == "WaitNReadAvailable" && it.publicationId != null }
-            if (wnr?.publicationId != null) {
-                unlockByWaitAndRead(wnr.publicationId)
-                val retry = client.newCall(response.request.newBuilder().build()).execute()
-                payload = retry.parseGraphQLAs<StartReadingSessionData>()
-                    .startReadingSessionBySlugAndNum!!
-            }
-        }
+        val payload = fetchReadingSession(lastNum, lastSlug)
 
         when (payload.__typename) {
             "SessionStarted" -> {}
@@ -296,8 +289,28 @@ class Ono :
             else -> throw Exception("Accès refusé (${payload.__typename})")
         }
 
-        return payload.publicationMetadata?.pages!!
-            .mapIndexed { i, url -> Page(i, imageUrl = url) }
+        val pages = payload.publicationMetadata?.pages!!
+        val fragment = "$lastSlug/$lastNum"
+        return pages.mapIndexed { i, url -> Page(i, imageUrl = "$url#$fragment") }
+    }
+
+    private fun fetchReadingSession(num: String, slug: String): ReadingSessionPayload {
+        var payload = client.newCall(startReadingRequest(num, slug)).execute()
+            .parseGraphQLAs<StartReadingSessionData>()
+            .startReadingSessionBySlugAndNum!!
+
+        if (payload.__typename == "UserHasNotAccess") {
+            val wnr = payload.publicationAccessMethods
+                .firstOrNull { it.__typename == "WaitNReadAvailable" && it.publicationId != null }
+            if (wnr?.publicationId != null) {
+                unlockByWaitAndRead(wnr.publicationId)
+                payload = client.newCall(startReadingRequest(num, slug)).execute()
+                    .parseGraphQLAs<StartReadingSessionData>()
+                    .startReadingSessionBySlugAndNum!!
+            }
+        }
+
+        return payload
     }
 
     private fun unlockByWaitAndRead(publicationId: String) {
@@ -318,6 +331,35 @@ class Ono :
                     (result.code?.let { " ($it)" } ?: "") + ".",
             )
         }
+    }
+
+    // CloudFront signed URLs expire. If a chapter is preloaded and read later,
+    // images return 403. Re-fetch the reading session to get fresh signed URLs.
+    // Chapter slug/num is embedded as a URL fragment (never sent to server).
+    private fun imageRetryInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (response.code != HttpURLConnection.HTTP_FORBIDDEN) return response
+
+        val fragment = chain.request().url.fragment ?: return response
+        val parts = fragment.split('/')
+        if (parts.size != 2) return response
+        val (slug, num) = parts
+
+        response.close()
+
+        val payload = fetchReadingSession(num, slug)
+        val freshPages = payload.publicationMetadata?.pages
+            ?: throw IOException("Pas de pages dans la session rafraîchie")
+
+        val originalPath = chain.request().url.encodedPath
+        val freshUrl = freshPages.firstOrNull { it.toHttpUrl().encodedPath == originalPath }
+            ?: throw IOException("Page introuvable après rafraîchissement")
+
+        return chain.proceed(
+            chain.request().newBuilder()
+                .url(freshUrl)
+                .build(),
+        )
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
