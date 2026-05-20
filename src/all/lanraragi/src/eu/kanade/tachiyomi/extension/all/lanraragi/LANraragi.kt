@@ -461,7 +461,7 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     // Headers (currently auth) are done in headersBuilder
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .dns(Dns.SYSTEM)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())

@@ -43,7 +43,7 @@ class Jinmantiantang :
     private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
     // 处理URL请求
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
         .newBuilder()
         // Add rate limit to fix manga thumbnail load failure
         .rateLimitHost(

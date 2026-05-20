@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -23,8 +22,6 @@ abstract class ZManga(
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     protected fun pagePathSegment(page: Int): String = if (page > 1) "page/$page/" else ""
 

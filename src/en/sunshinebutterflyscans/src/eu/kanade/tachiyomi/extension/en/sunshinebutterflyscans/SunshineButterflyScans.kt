@@ -33,7 +33,7 @@ class SunshineButterflyScans : HttpSource() {
     // Madara -> custom theme
     override val versionId = 2
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
 

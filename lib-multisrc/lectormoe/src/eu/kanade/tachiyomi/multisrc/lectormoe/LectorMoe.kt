@@ -26,7 +26,7 @@ abstract class LectorMoe(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
         .build()

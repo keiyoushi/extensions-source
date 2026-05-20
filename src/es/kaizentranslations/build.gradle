@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kaizen Translations'
+    extClass = '.KaizenTranslations'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/kaizen'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

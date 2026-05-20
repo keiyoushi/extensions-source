@@ -57,7 +57,6 @@ class Mangadotnet :
     override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
     private val preferences = getPreferences()
 
     override fun headersBuilder() = super.headersBuilder()

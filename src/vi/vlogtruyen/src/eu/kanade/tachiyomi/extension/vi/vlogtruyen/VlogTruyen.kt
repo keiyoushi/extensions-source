@@ -49,7 +49,7 @@ class VlogTruyen :
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

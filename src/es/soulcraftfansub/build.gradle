@@ -1,0 +1,10 @@
+ext {
+    extName = 'Soul Craft Fansub'
+    extClass = '.SoulCraftFansub'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/soulcraft'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

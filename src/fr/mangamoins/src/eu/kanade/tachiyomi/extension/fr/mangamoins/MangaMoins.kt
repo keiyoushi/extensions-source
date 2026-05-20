@@ -27,7 +27,7 @@ class MangaMoins : HttpSource() {
 
     private val apiUrl = "$baseUrl/api/v1"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)

@@ -31,7 +31,7 @@ class DaoMeoDen : HttpSource() {
     override val baseUrl = "https://daomeoden.net"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

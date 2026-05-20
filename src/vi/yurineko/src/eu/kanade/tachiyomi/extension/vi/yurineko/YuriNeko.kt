@@ -32,7 +32,7 @@ class YuriNeko : HttpSource() {
     private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"
     private val webApiUrl = "$baseUrl/api/v1"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
         .addInterceptor(ImageDecryptor::interceptor)
         .build()

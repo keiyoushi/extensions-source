@@ -1,9 +1,9 @@
 ext {
     extName = 'SapphireScan'
     extClass = '.SapphireScan'
-    themePkg = 'madara'
-    baseUrl = 'https://sapphirescan.com'
-    overrideVersionCode = 0
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.sapphirescan.com'
+    overrideVersionCode = 39
     isNsfw = false
 }
 

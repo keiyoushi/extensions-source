@@ -1,0 +1,10 @@
+ext {
+    extName = 'Last Exile Scan'
+    extClass = '.LastExileScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/lastexilescan'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

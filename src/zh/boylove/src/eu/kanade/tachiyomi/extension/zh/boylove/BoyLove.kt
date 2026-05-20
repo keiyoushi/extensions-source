@@ -46,7 +46,7 @@ class BoyLove :
         "https://" + mirrors[index]
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .addInterceptor(UnscramblerInterceptor())
         .build()

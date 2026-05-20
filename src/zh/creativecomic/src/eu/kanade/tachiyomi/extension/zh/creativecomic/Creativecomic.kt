@@ -105,7 +105,7 @@ class Creativecomic : HttpSource() {
         return Pair(pageKey!!, pageIv!!)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::authIntercept)
         .build()
 

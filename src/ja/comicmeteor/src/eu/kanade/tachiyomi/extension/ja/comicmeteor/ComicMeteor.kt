@@ -38,7 +38,7 @@ class ComicMeteor : HttpSource() {
     private var readAtTimestamp: String? = null
     private var allFiltersList: List<FilterOption> = emptyList()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
         .apply {
             val interceptors = interceptors()

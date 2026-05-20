@@ -32,7 +32,7 @@ open class TaddyInk(
     override val supportsLatest = false
 
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(4)
             .build()
     }
