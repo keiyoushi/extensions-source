@@ -53,7 +53,7 @@ class Vomic :
         }
     }
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor { chain ->
+    override val client = network.client.newBuilder().addInterceptor { chain ->
         try {
             val response = chain.proceed(chain.request())
             if (response.isSuccessful) {

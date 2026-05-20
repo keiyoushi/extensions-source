@@ -26,7 +26,7 @@ class LoppyToon : HttpSource() {
     override val baseUrl = "https://loppytoon.com"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
         .addNetworkInterceptor {
             val request = it.request()

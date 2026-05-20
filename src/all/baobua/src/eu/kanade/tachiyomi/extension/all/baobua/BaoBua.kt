@@ -28,7 +28,7 @@ class BaoBua : HttpSource() {
     override val supportsLatest = false
     override val disableRelatedMangas = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

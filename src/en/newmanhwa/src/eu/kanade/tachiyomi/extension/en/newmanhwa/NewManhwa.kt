@@ -35,8 +35,6 @@ class NewManhwa :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()

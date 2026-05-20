@@ -35,7 +35,7 @@ class ShadowManga : HttpSource() {
 
     private val fallbackPrefix = "/api/media/"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrl.toHttpUrl().host, fallbackPrefix))
         .build()

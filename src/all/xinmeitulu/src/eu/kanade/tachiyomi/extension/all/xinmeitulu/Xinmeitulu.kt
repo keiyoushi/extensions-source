@@ -22,7 +22,7 @@ class Xinmeitulu : HttpSource() {
     override val name = "Xinmeitulu"
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(::contentTypeIntercept).build()
+    override val client = network.client.newBuilder().addInterceptor(::contentTypeIntercept).build()
 
     // Latest
 

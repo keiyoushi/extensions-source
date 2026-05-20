@@ -39,10 +39,10 @@ class MangaTR : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Accept-Language", "en-US,en;q=0.5")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::verifyChallengeInterceptor)
         .addInterceptor(::coverInterceptor)
-        .addInterceptor(DDoSGuardInterceptor(network.cloudflareClient))
+        .addInterceptor(DDoSGuardInterceptor(network.client))
         .rateLimit(2)
         .build()
 
@@ -378,7 +378,7 @@ class MangaTR : HttpSource() {
                         .header("X-Requested-With", "XMLHttpRequest")
                         .build()
 
-                    network.cloudflareClient.newCall(verifyRequest).execute().close()
+                    network.client.newCall(verifyRequest).execute().close()
 
                     response.close()
                     return chain.proceed(request)

@@ -84,7 +84,7 @@ class Mangamo :
     private val exclusivesOnlyPref
         get() = preferences.getStringSet(MangamoConstants.EXCLUSIVES_ONLY_PREF, setOf())!!
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor {
             val request = it.request()
             val response = it.proceed(request)

@@ -21,7 +21,6 @@ import kotlinx.serialization.json.long
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
@@ -38,8 +37,6 @@ abstract class FansubsCat(
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Tachiyomi/${AppInfo.getVersionName()}")
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val json: Json by injectLazy()
 

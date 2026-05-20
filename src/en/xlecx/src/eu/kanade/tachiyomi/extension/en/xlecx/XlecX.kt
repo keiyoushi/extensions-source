@@ -28,7 +28,7 @@ class XlecX : HttpSource() {
     // TODO: description - text, other `subInfoLinks`s, JSON-LD,
     // TODO: deep link via UrlActivity
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.code == 403 && response.header("Content-Type")?.contains("text/html") == true) {

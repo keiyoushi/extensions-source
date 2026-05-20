@@ -27,7 +27,7 @@ class Manatoki : HttpSource() {
     override val versionId = 2
 
     // Slow down requests to 2 per second to prevent 403s on image loading
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .build()
 

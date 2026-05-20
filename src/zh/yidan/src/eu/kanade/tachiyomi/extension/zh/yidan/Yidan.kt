@@ -62,7 +62,7 @@ class Yidan :
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor { chain ->
+    override val client: OkHttpClient = network.client.newBuilder().addInterceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)
         val requestUrl = request.url.toString()

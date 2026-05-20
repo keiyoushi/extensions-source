@@ -40,7 +40,7 @@ class MangaKingdom :
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addNetworkInterceptor(CookieInterceptor(domain, "is_verified_age_over_18" to "1"))
         .addInterceptor {

@@ -57,7 +57,7 @@ class Mehgazone :
     override val supportsLatest = false
 
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient
+        network.client
             .newBuilder()
             .addInterceptor(TextInterceptor())
             .addInterceptor(authInterceptor)

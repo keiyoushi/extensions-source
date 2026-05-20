@@ -43,7 +43,7 @@ class HattoriManga : HttpSource() {
 
     private var genresList: List<Genre> = emptyList()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().contains("manga/search")) {

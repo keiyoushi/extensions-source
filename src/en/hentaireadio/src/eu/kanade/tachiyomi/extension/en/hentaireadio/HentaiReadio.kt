@@ -27,7 +27,6 @@ class HentaiReadio : HttpSource() {
     override val supportsLatest = true
 
     // Site is behind Cloudflare
-    override val client = network.cloudflareClient
 
     private val dateFormat by lazy {
         SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)

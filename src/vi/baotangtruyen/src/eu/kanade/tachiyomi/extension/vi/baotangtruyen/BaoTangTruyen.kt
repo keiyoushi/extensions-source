@@ -45,7 +45,7 @@ class BaoTangTruyen : HttpSource() {
 
     private val apiUrl = "https://api.chilltruyentranh.site"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

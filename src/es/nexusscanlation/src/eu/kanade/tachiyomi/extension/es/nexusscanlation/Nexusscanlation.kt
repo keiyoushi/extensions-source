@@ -28,7 +28,7 @@ class Nexusscanlation : HttpSource() {
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 1, 3) // API: max 1 request per 3 seconds
         .build()
 
