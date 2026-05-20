@@ -42,6 +42,8 @@ class Ono :
         .addInterceptor(::wafInterceptor)
         .build()
 
+    private val apiUrl = "https://ws.ono.live/graphql"
+
     // Cognito stores its JWTs as cookies on the www domain. The website sends the
     // idToken as `Authorization: bearer <jwt>` to the GraphQL API. Mirror that:
     // pull the idToken cookie (set after WebView login) and attach it to API calls.
@@ -91,8 +93,6 @@ class Ono :
         return response
     }
 
-    private val apiUrl = "https://ws.ono.live/graphql"
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val rscHeaders by lazy { headersBuilder().add("RSC", "1").build() }
@@ -122,7 +122,7 @@ class Ono :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val series = response.parseAs<GraphQLResponse<RankingData>>()
-            .data?.getCatalogRanking?.series.orEmpty()
+            .data?.getCatalogRanking?.series!!
         val mangas = series.map { s ->
             SManga.create().apply {
                 title = s.title
@@ -142,23 +142,17 @@ class Ono :
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val gqlQuery = $$"query searchCatalogByTerm($term:String!)" +
-            $$"{searchCatalogByTerm(input:{term:$term})" +
-            "{series{id title contentType slug}}}"
         val payload = buildJsonObject {
             put("operationName", "searchCatalogByTerm")
-            put("query", gqlQuery)
-            put(
-                "variables",
-                buildJsonObject { put("term", query) },
-            )
+            put("query", SEARCH_QUERY)
+            put("variables", buildJsonObject { put("term", query) })
         }.toString().toRequestBody(JSON_MEDIA_TYPE)
         return POST(apiUrl, gqlHeaders, payload)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val series = response.parseAs<GraphQLResponse<SearchCatalogData>>()
-            .data?.searchCatalogByTerm?.series.orEmpty()
+            .data?.searchCatalogByTerm?.series!!
         val mangas = series.map { s ->
             SManga.create().apply {
                 title = s.title
@@ -175,7 +169,7 @@ class Ono :
 
     private fun seriesDetail(response: Response): SeriesDetail {
         val body = response.body.string()
-        body.extractSeries()?.let { return it }
+        body.extractNextJsRsc<SeriesDetail>()?.let { return it }
 
         // RSC payload can be partial on client-side navigation; retry cache-busted.
         val retryUrl = response.request.url.newBuilder()
@@ -185,14 +179,7 @@ class Ono :
             response.request.newBuilder().url(retryUrl)
                 .header("Cache-Control", "no-cache").build(),
         ).execute()
-        return retry.body.string().extractSeries()
-            ?: throw Exception("Impossible de charger la série")
-    }
-
-    private fun String.extractSeries(): SeriesDetail? = try {
-        this.extractNextJsRsc<SeriesDetail>()
-    } catch (_: Exception) {
-        null
+        return retry.body.string().extractNextJsRsc<SeriesDetail>()!!
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -282,8 +269,7 @@ class Ono :
 
     override fun pageListParse(response: Response): List<Page> {
         var payload = response.parseAs<GraphQLResponse<StartReadingSessionData>>()
-            .data?.startReadingSessionBySlugAndNum
-            ?: throw Exception("Réponse GraphQL invalide")
+            .data?.startReadingSessionBySlugAndNum!!
 
         // Wait-until-free chapters come back as UserHasNotAccess until unlocked.
         // If a WaitNReadAvailable method is offered, claim it for free, then retry.
@@ -294,8 +280,7 @@ class Ono :
                 unlockByWaitAndRead(wnr.publicationId)
                 val retry = client.newCall(response.request.newBuilder().build()).execute()
                 payload = retry.parseAs<GraphQLResponse<StartReadingSessionData>>()
-                    .data?.startReadingSessionBySlugAndNum
-                    ?: throw Exception("Réponse GraphQL invalide")
+                    .data?.startReadingSessionBySlugAndNum!!
             }
         }
 
@@ -328,7 +313,7 @@ class Ono :
             else -> throw Exception("Accès refusé (${payload.__typename})")
         }
 
-        return payload.publicationMetadata?.pages.orEmpty()
+        return payload.publicationMetadata?.pages!!
             .mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
@@ -344,11 +329,11 @@ class Ono :
 
         val result = client.newCall(POST(apiUrl, gqlHeaders, body)).execute()
             .parseAs<GraphQLResponse<UnlockData>>()
-            .data?.unlockPublicationByWnR
-        if (result?.success != true) {
+            .data?.unlockPublicationByWnR!!
+        if (result.success != true) {
             throw Exception(
                 "Échec du déblocage 'wait until free'" +
-                    (result?.code?.let { " ($it)" } ?: "") + ".",
+                    (result.code?.let { " ($it)" } ?: "") + ".",
             )
         }
     }
@@ -377,6 +362,11 @@ class Ono :
         private const val API_HOST = "ws.ono.live"
         private const val COGNITO_CLIENT_ID = "12kanvg0bocd5hjtuul46phv7s"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
+        private val SEARCH_QUERY =
+            $$"query searchCatalogByTerm($term:String!)" +
+                $$"{searchCatalogByTerm(input:{term:$term})" +
+                "{series{id title contentType slug}}}"
 
         private val RANKING_QUERY =
             $$"query getCatalogRanking($genreSlug:String)" +
