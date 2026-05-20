@@ -12,6 +12,7 @@ data class Pool(
     @SerialName("is_active") val isActive: Boolean? = null,
     val category: String? = null,
     @SerialName("updated_at") val updatedAt: String = "",
+    // @SerialName("creator_name") val creatorName: String = "",
 )
 
 @Serializable
@@ -27,6 +28,18 @@ data class Post(
     val sample: ImageData = ImageData(),
     val file: ImageData = ImageData(),
     val tags: Tags = Tags(),
+    @SerialName("pools") val poolIds: List<Int> = emptyList(),
+    @SerialName("updated_at") val updatedAt: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+    val rating: String = "",
+    val score: Score = Score(),
+)
+
+@Serializable
+data class Score(
+    val up: Int = 0,
+    val down: Int = 0,
+    val total: Int = 0,
 )
 
 @Serializable
@@ -37,9 +50,17 @@ data class Flags(
 @Serializable
 data class ImageData(
     val url: String? = null,
+    val has: Boolean = true,
+    val width: Int = 0,
+    val height: Int = 0,
 )
 
 @Serializable
 data class Tags(
+    val general: List<String> = emptyList(),
     val artist: List<String> = emptyList(),
+    val copyright: List<String> = emptyList(),
+    val character: List<String> = emptyList(),
+    val species: List<String> = emptyList(),
+    val lore: List<String> = emptyList(),
 )
