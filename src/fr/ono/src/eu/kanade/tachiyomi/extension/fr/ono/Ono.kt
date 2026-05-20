@@ -142,8 +142,8 @@ class Ono :
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val gqlQuery = $"query searchCatalogByTerm($term:String!)" +
-            $"{searchCatalogByTerm(input:{term:$term})" +
+        val gqlQuery = $$"query searchCatalogByTerm($term:String!)" +
+            $$"{searchCatalogByTerm(input:{term:$term})" +
             "{series{id title contentType slug}}}"
         val payload = buildJsonObject {
             put("operationName", "searchCatalogByTerm")
@@ -379,8 +379,8 @@ class Ono :
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
         private val RANKING_QUERY =
-            "query getCatalogRanking(\$genreSlug:String)" +
-                "{getCatalogRanking(filter:{genreSlug:\$genreSlug})" +
+            $$"query getCatalogRanking($genreSlug:String)" +
+                $$"{getCatalogRanking(filter:{genreSlug:$genreSlug})" +
                 "{__typename ...on GetCatalogRankingPayload{" +
                 "series{id slug title contentType imageURL}}" +
                 "...on ErrorWithCode{__typename code}}}"
@@ -390,8 +390,8 @@ class Ono :
         private const val SHOW_WAF_DEFAULT = true
 
         private val START_READING_QUERY =
-            "query StartReadingSession(\$num:String!\$slug:String!)" +
-                "{startReadingSessionBySlugAndNum(input:{num:\$num slug:\$slug})" +
+            $$"query StartReadingSession($num:String!$slug:String!)" +
+                $$"{startReadingSessionBySlugAndNum(input:{num:$num slug:$slug})" +
                 "{...C}}" +
                 "fragment C on StartReadingSessionPayload{" +
                 "...on PublicationUnavailable{__typename unavailabilityReason}" +
@@ -406,8 +406,8 @@ class Ono :
                 "...on GiftTicketsAvailable{publicationId}}"
 
         private val UNLOCK_WNR_MUTATION =
-            "mutation unlockPublicationByWnR(\$publicationId:UUID!)" +
-                "{unlockPublicationByWnR(input:{publicationId:\$publicationId})" +
+            $$"mutation unlockPublicationByWnR($publicationId:UUID!)" +
+                $$"{unlockPublicationByWnR(input:{publicationId:$publicationId})" +
                 "{...on UnlockPublicationResult{success}" +
                 "...on ErrorWithCode{__typename code}}}"
     }
