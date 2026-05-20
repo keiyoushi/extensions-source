@@ -13,13 +13,20 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -256,43 +263,71 @@ class PhiliaScans :
     // =============================== Pages ===============================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val html = document.outerHtml()
+        val pagesMap = mutableMapOf<Int, String>()
 
-        var images = document.select("main img, #chapter-content img, .reader-images img, #ch-images img, .reading-content img, .reader-images-container img")
-            .asSequence()
-            .map { it.attr("abs:data-src").ifBlank { it.attr("abs:src") } }
-            .filter { it.isNotBlank() }
-            .map { cleanImageUrl(it) }
-            .filterNot { url ->
-                val lower = url.lowercase()
-                "avatar" in lower || "logo" in lower || "favicon" in lower || "og-default" in lower
+        document.select("main img, #chapter-content img, .reader-images img, #ch-images img, .reading-content img, .reader-images-container img").forEachIndexed { index, img ->
+            val url = img.attr("abs:data-src").ifBlank { img.attr("abs:src") }
+            if (url.isNotBlank()) {
+                val clean = cleanImageUrl(url)
+                val lower = clean.lowercase()
+                if ("avatar" !in lower && "logo" !in lower && "favicon" !in lower && "og-default" !in lower) {
+                    val pageNum = img.attr("data-page").toIntOrNull() ?: (index + 1)
+                    pagesMap[pageNum] = clean
+                }
             }
-            .distinct()
-            .toList()
-
-        // Fallback for RSC/Next.js JSON payloads where pages are not currently in the DOM.
-        if (images.isEmpty()) {
-            images = imageUrlRegex.findAll(html)
-                .map {
-                    it.value
-                        .replace("\\/", "/")
-                        .replace("\\\\u0026", "&")
-                        .replace("\\u0026", "&")
-                        .removeSuffix("\\")
-                }
-                .map { Parser.unescapeEntities(it, true) }
-                .map { cleanImageUrl(it) }
-                .filterNot { url ->
-                    val lower = url.lowercase()
-                    "avatar" in lower || "logo" in lower || "favicon" in lower || "og-default" in lower
-                }
-                .distinct()
-                .toList()
         }
 
-        if (images.isEmpty()) return emptyList()
+        val totalPagesStr = document.selectFirst("#total-pages")?.text()?.substringAfter("/")?.trim()
+        val totalPages = totalPagesStr?.toIntOrNull() ?: 0
 
-        return images.mapIndexed { i, url -> Page(i, imageUrl = url) }
+        // Fallback for RSC/Next.js JSON payloads where pages are lazy-loaded.
+        if (pagesMap.isEmpty() || pagesMap.size < totalPages) {
+            document.select("script:not([src])").forEach { script ->
+                val data = script.data()
+                if ("self.__next_f.push" !in data) return@forEach
+
+                val match = nextFlightRegex.find(data) ?: return@forEach
+                try {
+                    val arr = jsonInstance.parseToJsonElement(match.groupValues[1]).jsonArray
+                    val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@forEach
+
+                    // The content payload holds chunks separated by line breaks.
+                    content.split('\n').forEach { line ->
+                        val colonIdx = line.indexOf(':')
+                        if (colonIdx != -1) {
+                            val jsonStr = line.substring(colonIdx + 1)
+                            if (jsonStr.startsWith("[") || jsonStr.startsWith("{")) {
+                                try {
+                                    val element = jsonInstance.parseToJsonElement(jsonStr)
+                                    element.findPages(pagesMap)
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        if (pagesMap.isEmpty()) return emptyList()
+
+        return pagesMap.toSortedMap().values.mapIndexed { i, url -> Page(i, imageUrl = url) }
+    }
+
+    private fun JsonElement.findPages(map: MutableMap<Int, String>) {
+        when (this) {
+            is JsonObject -> {
+                val src = this["src"]?.jsonPrimitive?.contentOrNull
+                val pageNumber = this["pageNumber"]?.jsonPrimitive?.intOrNull
+                if (src != null && pageNumber != null && src.contains("media")) {
+                    map[pageNumber] = cleanImageUrl(src)
+                }
+                values.forEach { it.findPages(map) }
+            }
+            is JsonArray -> {
+                forEach { it.findPages(map) }
+            }
+            else -> {}
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -365,12 +400,12 @@ class PhiliaScans :
         private const val PREF_SHOW_LOCKED_CHAPS_DEFAULT = false
 
         private val metaRedirectRegex = Regex("""<meta\s+id="__next-page-redirect"\s+http-equiv="refresh"\s+content="[^"]*url=([^"]+)"""")
-        private val imageUrlRegex = Regex("""(?:https?://[^/"'\s<>]+)?(?:/|\\/)?(?:api(?:/|\\/))?(?:legacy-media|media)[^"'\s<>]+\.(?:jpg|png|webp|jpeg|avif|gif)(?:\?[^"'\s<>]*)?""")
         private val relativeDateRegex = Regex("""(\d+)\s*([mhdwyMHDWY])(?:in|ins|our|ours|ay|ays|eek|eeks|ear|ears)?\s+ago""")
         private val shortDateRegex = Regex("""\b(\d{1,2}/\d{1,2}/\d{4})\b""")
         private val customDateRegex = Regex("""(\d{1,2}/[A-Za-z]{3})(?:/(\d{4}))?\s+(\d{1,2}:\d{2}\s+(?:am|pm|AM|PM))""")
         private val chapterCleanupRegex = Regex("""(?i)\b(free|premium|EN)\b""")
-
+        // Used to fetch the independent React Flight payload strings from script tags safely.
+        private val nextFlightRegex = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s*$""", RegexOption.DOT_MATCHES_ALL)
         private val fallbackDateFormat = SimpleDateFormat("M/d/yyyy", Locale.US)
         private val customDateFormat = SimpleDateFormat("dd/MMM yyyy h:mm a", Locale.ENGLISH)
         private val isoDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
