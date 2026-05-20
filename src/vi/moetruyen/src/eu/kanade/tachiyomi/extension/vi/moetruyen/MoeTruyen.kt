@@ -45,7 +45,7 @@ class MoeTruyen :
 
     private val apiUrl = "https://moe.suicaodex.com/v2"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
