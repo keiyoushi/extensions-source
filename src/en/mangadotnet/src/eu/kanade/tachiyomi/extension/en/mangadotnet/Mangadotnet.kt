@@ -89,6 +89,11 @@ class Mangadotnet :
                 .putString(NSFW_MODE, if (isAdult) "both" else "none")
                 .apply()
         } catch (_: ClassCastException) {
+            val value = preferences.getString(NSFW_MODE, null)
+            when (value) {
+                "0" -> preferences.edit().putString(NSFW_MODE, "none").apply()
+                "1" -> preferences.edit().putString(NSFW_MODE, "both").apply()
+            }
         }
     }
 
@@ -154,18 +159,7 @@ class Mangadotnet :
         }
         if (query.startsWith("\u200B")) {
             val name = query.removePrefix("\u200B")
-            val newFilters = buildList {
-                filters.forEach { filter ->
-                    if (filter is AuthorFilter) {
-                        add(AuthorFilter().apply { state = name })
-                    } else {
-                        add(filter)
-                    }
-                }
-                if (filters.none { it is AuthorFilter }) {
-                    add(AuthorFilter().apply { state = name })
-                }
-            }
+            val newFilters = filters.apply { firstInstance<AuthorFilter>().state = name }
             return super.fetchSearchManga(page, "", FilterList(newFilters))
         }
         if (query.startsWith("https://")) {
