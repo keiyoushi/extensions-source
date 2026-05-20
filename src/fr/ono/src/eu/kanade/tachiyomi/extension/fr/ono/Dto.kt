@@ -58,9 +58,6 @@ class SeriesElement(
 class WaitAndRead(val __typename: String)
 
 @Serializable
-class GraphQLResponse<T>(val data: T? = null)
-
-@Serializable
 class SearchCatalogData(
     val searchCatalogByTerm: SearchCatalogResult? = null,
 )

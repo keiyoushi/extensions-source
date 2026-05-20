@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,8 +14,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.parseGraphQLAs
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -97,7 +96,6 @@ class Ono :
 
     private val gqlHeaders by lazy {
         headersBuilder()
-            .add("Content-Type", "application/json")
             .add("Origin", baseUrl)
             .add("Referer", "$baseUrl/")
             .add("ono-platform", "website")
@@ -109,18 +107,11 @@ class Ono :
 
     // =============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        val payload = buildJsonObject {
-            put("operationName", "getCatalogRanking")
-            put("query", RANKING_QUERY)
-            put("variables", buildJsonObject {})
-        }.toJsonRequestBody()
-        return POST(apiUrl, gqlHeaders, payload)
-    }
+    override fun popularMangaRequest(page: Int): Request = graphQLPost(apiUrl, gqlHeaders, query = RANKING_QUERY, operationName = "getCatalogRanking")
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val series = response.parseAs<GraphQLResponse<RankingData>>()
-            .data?.getCatalogRanking?.series!!
+        val series = response.parseGraphQLAs<RankingData>()
+            .getCatalogRanking?.series!!
         val mangas = series.map { s ->
             SManga.create().apply {
                 title = s.title
@@ -139,18 +130,17 @@ class Ono :
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = buildJsonObject {
-            put("operationName", "searchCatalogByTerm")
-            put("query", SEARCH_QUERY)
-            put("variables", buildJsonObject { put("term", query) })
-        }.toJsonRequestBody()
-        return POST(apiUrl, gqlHeaders, payload)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = graphQLPost(
+        apiUrl,
+        gqlHeaders,
+        query = SEARCH_QUERY,
+        operationName = "searchCatalogByTerm",
+        variables = buildJsonObject { put("term", query) },
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val series = response.parseAs<GraphQLResponse<SearchCatalogData>>()
-            .data?.searchCatalogByTerm?.series!!
+        val series = response.parseGraphQLAs<SearchCatalogData>()
+            .searchCatalogByTerm?.series!!
         val mangas = series.map { s ->
             SManga.create().apply {
                 title = s.title
@@ -249,24 +239,20 @@ class Ono :
         return startReadingRequest(num, slug)
     }
 
-    private fun startReadingRequest(num: String, slug: String): Request {
-        val payload = buildJsonObject {
-            put("operationName", "StartReadingSession")
-            put("query", START_READING_QUERY)
-            put(
-                "variables",
-                buildJsonObject {
-                    put("num", num)
-                    put("slug", slug)
-                },
-            )
-        }.toJsonRequestBody()
-        return POST(apiUrl, gqlHeaders, payload)
-    }
+    private fun startReadingRequest(num: String, slug: String): Request = graphQLPost(
+        apiUrl,
+        gqlHeaders,
+        query = START_READING_QUERY,
+        operationName = "StartReadingSession",
+        variables = buildJsonObject {
+            put("num", num)
+            put("slug", slug)
+        },
+    )
 
     override fun pageListParse(response: Response): List<Page> {
-        var payload = response.parseAs<GraphQLResponse<StartReadingSessionData>>()
-            .data?.startReadingSessionBySlugAndNum!!
+        var payload = response.parseGraphQLAs<StartReadingSessionData>()
+            .startReadingSessionBySlugAndNum!!
 
         // Wait-until-free chapters come back as UserHasNotAccess until unlocked.
         // If a WaitNReadAvailable method is offered, claim it for free, then retry.
@@ -276,8 +262,8 @@ class Ono :
             if (wnr?.publicationId != null) {
                 unlockByWaitAndRead(wnr.publicationId)
                 val retry = client.newCall(response.request.newBuilder().build()).execute()
-                payload = retry.parseAs<GraphQLResponse<StartReadingSessionData>>()
-                    .data?.startReadingSessionBySlugAndNum!!
+                payload = retry.parseGraphQLAs<StartReadingSessionData>()
+                    .startReadingSessionBySlugAndNum!!
             }
         }
 
@@ -315,18 +301,17 @@ class Ono :
     }
 
     private fun unlockByWaitAndRead(publicationId: String) {
-        val body = buildJsonObject {
-            put("operationName", "unlockPublicationByWnR")
-            put("query", UNLOCK_WNR_MUTATION)
-            put(
-                "variables",
-                buildJsonObject { put("publicationId", publicationId) },
-            )
-        }.toJsonRequestBody()
+        val request = graphQLPost(
+            apiUrl,
+            gqlHeaders,
+            query = UNLOCK_WNR_MUTATION,
+            operationName = "unlockPublicationByWnR",
+            variables = buildJsonObject { put("publicationId", publicationId) },
+        )
 
-        val result = client.newCall(POST(apiUrl, gqlHeaders, body)).execute()
-            .parseAs<GraphQLResponse<UnlockData>>()
-            .data?.unlockPublicationByWnR!!
+        val result = client.newCall(request).execute()
+            .parseGraphQLAs<UnlockData>()
+            .unlockPublicationByWnR!!
         if (result.success != true) {
             throw Exception(
                 "Échec du déblocage 'wait until free'" +
