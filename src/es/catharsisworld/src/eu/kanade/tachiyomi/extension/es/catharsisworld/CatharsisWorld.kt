@@ -18,7 +18,7 @@ import java.util.Locale
 class CatharsisWorld :
     Madara(
         "Catharsis World",
-        "https://catharsisworld.online",
+        "https://catharsisworld.dig-it.info",
         "es",
         SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
