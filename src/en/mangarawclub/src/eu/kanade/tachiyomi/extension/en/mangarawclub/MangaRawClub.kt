@@ -36,8 +36,7 @@ class MangaRawClub :
     override val baseUrl = "https://www.mgeko.cc"
     override val lang = "en"
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()

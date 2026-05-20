@@ -49,7 +49,7 @@ class IkigaiMangas :
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
-            val initClient = network.cloudflareClient
+            val initClient = network.client
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
             val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
@@ -76,7 +76,7 @@ class IkigaiMangas :
     override val supportsLatest: Boolean = true
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
             .addNetworkInterceptor(::nsfwCookieInterceptor)

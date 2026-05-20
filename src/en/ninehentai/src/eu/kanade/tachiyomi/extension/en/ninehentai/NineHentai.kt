@@ -15,7 +15,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -31,8 +30,6 @@ class NineHentai : HttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request = buildSearchRequest(page = page, sort = 1)

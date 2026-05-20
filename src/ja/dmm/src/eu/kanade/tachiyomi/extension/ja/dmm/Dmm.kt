@@ -36,7 +36,7 @@ abstract class Dmm :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .addInterceptor(PublusInterceptor())
             .addNetworkInterceptor(CookieInterceptor(domain, listOf("book_safe_mode_level" to "off", "age_check_done" to "1")))
             .addInterceptor { chain ->

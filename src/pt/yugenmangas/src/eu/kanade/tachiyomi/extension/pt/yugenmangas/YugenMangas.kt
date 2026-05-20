@@ -50,7 +50,7 @@ class YugenMangas :
 
     private val preferences by getPreferencesLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .rateLimitHost(apiUrl.toHttpUrl(), 2)
         .build()

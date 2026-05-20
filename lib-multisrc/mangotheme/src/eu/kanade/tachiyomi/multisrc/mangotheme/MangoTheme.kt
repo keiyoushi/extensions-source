@@ -152,7 +152,7 @@ abstract class MangoTheme :
     }
 
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .addInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, emptyList()))
             .addInterceptor(authInterceptor)
             .addInterceptor(decryptInterceptor)

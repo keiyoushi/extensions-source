@@ -1,0 +1,10 @@
+ext {
+    extName = 'Limbo Scanlation'
+    extClass = '.LimboScanlation'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/limbo'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

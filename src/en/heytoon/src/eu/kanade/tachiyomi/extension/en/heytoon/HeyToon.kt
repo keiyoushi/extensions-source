@@ -33,8 +33,6 @@ class HeyToon : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient
-
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
         super.fetchPopularManga(page)
     } else {

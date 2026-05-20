@@ -36,7 +36,7 @@ class AmebaManga :
     private val pageSize = 50
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addNetworkInterceptor(CookieInterceptor(domain, ("AC" to "1")))
         .addInterceptor {

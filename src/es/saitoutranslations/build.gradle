@@ -1,0 +1,10 @@
+ext {
+    extName = 'Saitou Translations'
+    extClass = '.SaitouTranslations'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/saitoutranslations'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

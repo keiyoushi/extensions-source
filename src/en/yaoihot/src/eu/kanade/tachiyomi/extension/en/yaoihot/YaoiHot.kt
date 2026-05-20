@@ -23,8 +23,6 @@ class YaoiHot : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {

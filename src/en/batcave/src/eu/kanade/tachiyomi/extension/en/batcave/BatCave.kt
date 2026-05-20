@@ -34,7 +34,7 @@ class BatCave : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     // Use cloudflareClient to sync cookies with WebView and intercept the DLE Guard redirect.
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             // Detect if the site redirected us to the anti-bot challenge page

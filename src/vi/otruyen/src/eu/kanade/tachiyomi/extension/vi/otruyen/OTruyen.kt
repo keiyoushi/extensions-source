@@ -43,7 +43,7 @@ class OTruyen : HttpSource() {
 
     private val imgUrl = "https://img.$domainApi/uploads/comics"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

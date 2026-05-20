@@ -56,21 +56,21 @@ jobs:
               },
               {
                 "type": "both",
-                "regex": "(remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io)",
+                "regex": "\\b(remanga\\.org|nhentai(\\.net)?|e([x-])?hentai(\\.org)?|hitomi\\.la|pururin(\\.me)?|hentai2read(\\.com)?|hentai20\\.io)\\b",
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "{match} will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca).\nThis was also mentioned in #14260, which is pinned on the Issues page. Search the existing requests first & don't acknowledge that you searched when you clearly didn't."
               },
               {
                 "type": "both",
-                "regex": "(kumanga\\.com|sakuramangas\\.org)",
+                "regex": "\\b(kumanga\\.com|sakuramangas\\.org)\\b",
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "{match} will not be added back as it is too difficult to maintain.\nThis was also mentioned in #14260, which is pinned on the Issues page. Search the existing requests first & don't acknowledge that you searched when you clearly didn't."
               },
               {
                 "type": "both",
-                "regex": "(centralnovel\\.com)",
+                "regex": "\\b(centralnovel\\.com)\\b",
                 "ignoreCase": true,
                 "labels": ["invalid"],
                 "message": "Novels aren't supported"

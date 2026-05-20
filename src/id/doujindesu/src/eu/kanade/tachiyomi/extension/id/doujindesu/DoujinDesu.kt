@@ -23,7 +23,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -40,7 +39,6 @@ class DoujinDesu :
     override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
     override val lang = "id"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

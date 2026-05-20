@@ -30,7 +30,6 @@ class VortexScans :
     override val lang = "en"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
     private val preferences by getPreferencesLazy()
 
     private val baseHost = baseUrl.toHttpUrl().host
