@@ -515,7 +515,7 @@ class Mangadotnet :
             summary = "Exclude genres when browsing without 18+ content."
             this.entries = normalEntries.toTypedArray()
             entryValues = normalEntries.toTypedArray()
-            setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && (mode == "none" || mode == "both"))
+            setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && mode == "none")
         }.also(screen::addPreference)
 
         val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
@@ -531,7 +531,7 @@ class Mangadotnet :
 
         nsfwPref.setOnPreferenceChangeListener { _, newValue ->
             val newMode = newValue as String
-            normalGenrePref.setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && (newMode == "none" || newMode == "both"))
+            normalGenrePref.setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && newMode == "none")
             adultGenrePref.setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (newMode == "1" || newMode == "both"))
             true
         }
