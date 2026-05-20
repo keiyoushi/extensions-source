@@ -92,7 +92,7 @@ class Mangadotnet :
             val value = preferences.getString(NSFW_MODE, null)
             when (value) {
                 "0" -> preferences.edit().putString(NSFW_MODE, "none").apply()
-                "1" -> preferences.edit().putString(NSFW_MODE, "both").apply()
+                "1" -> preferences.edit().putString(NSFW_MODE, "1").apply()
             }
         }
     }
