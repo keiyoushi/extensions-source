@@ -60,39 +60,25 @@ class Mangadotnet :
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
-    private val preferences = getPreferences()
-
-    init {
-        migrateAdultPref()
-        migrateChapterModePref()
-    }
-
-    private fun migrateChapterModePref() {
-        val oldKey = "pref_fetch_volume"
-        if (preferences.contains(oldKey)) {
-            val fetchVolumes = preferences.getBoolean(oldKey, false)
-            val newMode = if (fetchVolumes) "both" else "chapters"
-
-            preferences.edit()
-                .putString(CHAPTER_MODE, newMode)
-                .remove(oldKey)
+    private val preferences = getPreferences {
+        val oldChapterKey = "pref_fetch_volume"
+        if (contains(oldChapterKey)) {
+            val fetchVolumes = getBoolean(oldChapterKey, false)
+            edit()
+                .putString(CHAPTER_MODE, if (fetchVolumes) "both" else "chapters")
+                .remove(oldChapterKey)
                 .apply()
         }
-    }
 
-    private fun migrateAdultPref() {
-        if (!preferences.contains(NSFW_MODE)) return
-        try {
-            val isAdult = preferences.getBoolean(NSFW_MODE, false)
-            preferences.edit()
-                .remove(NSFW_MODE)
-                .putString(NSFW_MODE, if (isAdult) "both" else "none")
-                .apply()
-        } catch (_: ClassCastException) {
-            val value = preferences.getString(NSFW_MODE, null)
-            when (value) {
-                "0" -> preferences.edit().putString(NSFW_MODE, "none").apply()
-                "1" -> preferences.edit().putString(NSFW_MODE, "1").apply()
+        if (contains(NSFW_MODE)) {
+            when (val value = all[NSFW_MODE]) {
+                is Boolean -> edit()
+                    .putString(NSFW_MODE, if (value) "both" else "none")
+                    .apply()
+                is String -> when (value) {
+                    "0" -> edit().putString(NSFW_MODE, "none").apply()
+                    "1" -> edit().putString(NSFW_MODE, "1").apply()
+                }
             }
         }
     }
@@ -441,12 +427,7 @@ class Mangadotnet :
             )
     }
 
-    private fun adultModePref(): String = try {
-        preferences.getString(NSFW_MODE, "none")!!
-    } catch (_: Exception) {
-        preferences.edit().remove(NSFW_MODE).apply()
-        "none"
-    }
+    private fun adultModePref(): String = preferences.getString(NSFW_MODE, "none")!!
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
 
@@ -505,7 +486,10 @@ class Mangadotnet :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        val mode = adultModePref()
+        val genres = getGenreLists()
+
+        val nsfwPref = ListPreference(screen.context).apply {
             key = NSFW_MODE
             title = "NSFW (18+) Content"
             entries = arrayOf("No 18+", "18+ Only", "Both 18+ & No 18+")
@@ -523,29 +507,34 @@ class Mangadotnet :
             summary = "%s\nNote: Most titles don't have volumes"
         }.also(screen::addPreference)
 
-        val genres = getGenreLists()
-
         val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
         val normalEntries = genres.normal ?: excludedNormal.toList()
-        MultiSelectListPreference(screen.context).apply {
+        val normalGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_PREF
             title = "Genre Blacklist"
             summary = "Exclude genres when browsing without 18+ content."
             this.entries = normalEntries.toTypedArray()
             entryValues = normalEntries.toTypedArray()
-            setEnabled(genres.normal != null || excludedNormal.isNotEmpty())
+            setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && (mode == "none" || mode == "both"))
         }.also(screen::addPreference)
 
         val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
         val adultEntries = genres.adult ?: excludedAdult.toList()
-        MultiSelectListPreference(screen.context).apply {
+        val adultGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_ADULT_PREF
             title = "Genre Blacklist (Adult Mode)"
             summary = "Exclude genres when browsing with 18+ content."
             this.entries = adultEntries.toTypedArray()
             entryValues = adultEntries.toTypedArray()
-            setEnabled(genres.adult != null || excludedAdult.isNotEmpty())
+            setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (mode == "1" || mode == "both"))
         }.also(screen::addPreference)
+
+        nsfwPref.setOnPreferenceChangeListener { _, newValue ->
+            val newMode = newValue as String
+            normalGenrePref.setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && (newMode == "none" || newMode == "both"))
+            adultGenrePref.setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (newMode == "1" || newMode == "both"))
+            true
+        }
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
