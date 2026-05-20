@@ -54,6 +54,10 @@ class WaybackMachineInterceptor(
         .setQueryParameter(RANDOM_QUERY_PARAM, UUID.randomUUID().toString())
         .build()
 
+    private fun timestampIsExpired(timestamp: String): Boolean = System.currentTimeMillis() - DATE_FORMAT.parse(
+        timestamp,
+    )!!.time > SNAPSHOT_MAX_AGE_MS
+
     /**
      * Gets the response from the Wayback Machine without following redirects
      */
@@ -62,13 +66,24 @@ class WaybackMachineInterceptor(
         url: HttpUrl,
     ): Response = chain.proceed(
         chain.request().newBuilder().url(
-            urlCache[url] ?: if (url.host == HOST || !include.matches(url.toString())) {
+            urlCache[url]?.let { cachedUrl ->
+                if (TIMESTAMP_REGEX.find(cachedUrl.toString())?.value?.let {
+                        timestampIsExpired(it)
+                    } ?: false
+                ) {
+                    // URL expired
+                    urlCache.remove(url)
+                    null
+                } else {
+                    cachedUrl
+                }
+            } ?: if (url.host == HOST || !include.matches(url.toString())) {
                 // url is a Wayback Machine URL or isn't matched, do nothing
                 url
             } else {
                 getTimestamp(chain, "$WEB_PREFIX$url".toHttpUrl())?.let { timestamp ->
-                    if (System.currentTimeMillis() - DATE_FORMAT.parse(timestamp)!!.time > SNAPSHOT_MAX_AGE_MS) {
-                        // snapshot is older than SNAPSHOT_MAX_AGE_MS, attempt to create a new snapshot
+                    if (timestampIsExpired(timestamp)) {
+                        // snapshot is expired, attempt to create a new snapshot
                         snapshot(chain, url) ?: getSnapshotUrl(timestamp, url)
                     } else {
                         // snapshot is recent
