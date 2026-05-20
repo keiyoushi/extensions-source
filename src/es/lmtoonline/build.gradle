@@ -1,9 +1,7 @@
 ext {
     extName = 'Lmtos'
     extClass = '.Lmtos'
-    themePkg = 'madara'
-    baseUrl = 'https://www.lmtos.com'
-    overrideVersionCode = 2
+    extVersionCode = 53
     isNsfw = true
 }
 
