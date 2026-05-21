@@ -260,7 +260,7 @@ class Happymh :
         val cookie = Cookie.Builder()
             .name("_ga_HVJMXGJXFJ")
             .value("GS2.1.s${gaTimestamp}\$o9\$g1\$t${gaTimestamp + 99999}\$j43\$l0\$h0")
-            .domain("happymh.com")
+            .domain(baseUrl.toHttpUrl().host)
             .path("/")
             .expiresAt(System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000)
             .build()
