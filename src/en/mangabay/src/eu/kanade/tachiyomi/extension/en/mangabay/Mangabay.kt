@@ -57,8 +57,11 @@ class Mangabay : HttpSource() {
                 return@addNetworkInterceptor chain.proceed(request)
             }
             val mangaId = request.url.pathSegments.getOrNull(1).orEmpty()
-            val existing = request.header("Cookie").orEmpty()
-            val merged = if (existing.isEmpty()) "adult=$mangaId" else "$existing; adult=$mangaId"
+            val kept = request.header("Cookie")
+                ?.split("; ")
+                ?.filter { it.isNotEmpty() && !it.startsWith("adult=") }
+                .orEmpty()
+            val merged = (kept + "adult=$mangaId").joinToString("; ")
             chain.proceed(request.newBuilder().header("Cookie", merged).build())
         }
         .build()
