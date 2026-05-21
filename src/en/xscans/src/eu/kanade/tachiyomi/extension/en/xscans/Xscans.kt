@@ -82,9 +82,13 @@ class Xscans :
 
     // ============================== Details ==============================
 
+    override fun mangaDetailsRequest(manga: SManga): Request = mangaPageRequest(manga)
+
     override fun mangaDetailsParse(response: Response): SManga = response.extractMangaData().props.pageProps.initialManga.toSManga(baseUrl)
 
     // ============================= Chapters ==============================
+
+    override fun chapterListRequest(manga: SManga): Request = mangaPageRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val showLocked = preferences.getBoolean(PREF_SHOW_LOCKED, PREF_SHOW_LOCKED_DEFAULT)
@@ -124,6 +128,8 @@ class Xscans :
     }
 
     // ============================= Utilities =============================
+
+    private fun mangaPageRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}", headersBuilder().add("rsc", "1").build())
 
     private fun Response.extractMangaData(): NextJsDataDto = requireNotNull(extractNextJs<NextJsDataDto>()) { "Failed to extract Next.js data" }
 
