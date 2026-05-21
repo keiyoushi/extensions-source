@@ -42,7 +42,7 @@ class MangaDto(
     private val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = "/manga/$slug"
+        url = slug
         title = this@MangaDto.title
         thumbnail_url = coverImage?.let { if (it.startsWith("http")) it else baseUrl + it }
         description = this@MangaDto.description
