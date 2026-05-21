@@ -23,7 +23,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -38,14 +37,7 @@ class Mangabay : HttpSource() {
         .set("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            if (response.request.url.pathSegments.firstOrNull() == "_c") {
-                response.close()
-                throw IOException("Open in WebView to bypass site protection")
-            }
-            response
-        }
+        .addInterceptor(DleGuardResolver.interceptor(baseUrl))
         .addNetworkInterceptor { chain ->
             val request = chain.request()
             if (!request.url.encodedPath.startsWith("/reader/")) {
