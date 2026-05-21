@@ -207,6 +207,19 @@ class Mangabay : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = extractData(response)?.parseAs<ChapterListDto>()?.toSChapterList() ?: emptyList()
 
+    override fun relatedMangaListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val document = response.asJsoup()
+        return document.select("section.sect--hot > .sect__content > a.poster").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
+                title = element.selectFirst(".poster__title")!!.text()
+                thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+            }
+        }
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val data = extractData(response)?.parseAs<PageListDto>() ?: return emptyList()
         return data.images.mapIndexed { idx, img ->
