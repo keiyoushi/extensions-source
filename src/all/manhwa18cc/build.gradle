@@ -1,7 +1,7 @@
 ext {
     extName = 'Manhwa18.cc'
     extClass = '.Manhwa18CcFactory'
-    overrideVersionCode = 7
+    extVersionCode = 7
     isNsfw = true
 }
 apply plugin: "kei.plugins.extension.legacy"
