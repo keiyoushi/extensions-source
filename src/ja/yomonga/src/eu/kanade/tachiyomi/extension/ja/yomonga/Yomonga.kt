@@ -88,7 +88,7 @@ class Yomonga : HttpSource() {
         return document.select(".episode-list[data-episode_no]").map {
             SChapter.create().apply {
                 name = it.selectFirst(".episode-name")!!.text()
-                setUrlWithoutDomain(it.selectFirst("a.button-type1")!!.absUrl("href").substringBefore("#"))
+                setUrlWithoutDomain(it.selectFirst("a.button-type1")!!.absUrl("href"))
             }
         }
     }
