@@ -23,6 +23,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -38,6 +39,18 @@ class Mangabay : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(DleGuardResolver.interceptor(baseUrl))
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val fragment = request.url.fragment
+            if (response.code == 404 && fragment != null && fragment.startsWith(FALLBACK_PREFIX)) {
+                response.close()
+                val fallbackUrl = fragment.removePrefix(FALLBACK_PREFIX)
+                chain.proceed(request.newBuilder().url(fallbackUrl).build())
+            } else {
+                response
+            }
+        }
         .addNetworkInterceptor { chain ->
             val request = chain.request()
             if (!request.url.encodedPath.startsWith("/reader/")) {
@@ -138,7 +151,13 @@ class Mangabay : HttpSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
-                thumbnail_url = element.selectFirst(".readed__img img")?.absUrl("data-src")
+                val miniUrl = element.selectFirst(".readed__img img")?.absUrl("data-src")
+                val hdUrl = hdPosterUrl(url)
+                thumbnail_url = when {
+                    hdUrl == null -> miniUrl
+                    miniUrl == null -> hdUrl
+                    else -> "$hdUrl#$FALLBACK_PREFIX$miniUrl"
+                }
             }
         }
         val hasNextPage = document.selectFirst("div.pagination__pages")
@@ -298,7 +317,15 @@ class Mangabay : HttpSource() {
         }
     }
 
+    private fun hdPosterUrl(mangaUrl: String): String? {
+        val slug = MANGA_PATH_REGEX.matchEntire(mangaUrl)?.groupValues?.get(1) ?: return null
+        val firstByte = MessageDigest.getInstance("MD5").digest(slug.toByteArray())[0].toInt() and 0xff
+        val prefix = "%02x".format(firstByte)
+        return "$baseUrl/uploads/posts/poster/$prefix/$slug.jpg"
+    }
+
     companion object {
-        private val MANGA_PATH_REGEX = Regex("""^/\d+-[^/]+\.html$""")
+        private val MANGA_PATH_REGEX = Regex("""^/\d+-([^/]+)\.html$""")
+        private const val FALLBACK_PREFIX = "fallback="
     }
 }
