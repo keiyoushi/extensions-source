@@ -86,10 +86,9 @@ class Yomonga : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select(".episode-list[data-episode_no]").map {
-            val link = it.selectFirst("a.button-type1")
             SChapter.create().apply {
                 name = it.selectFirst(".episode-name")!!.text()
-                setUrlWithoutDomain(link!!.absUrl("href").substringBefore("#"))
+                setUrlWithoutDomain(it.selectFirst("a.button-type1")!!.absUrl("href").substringBefore("#"))
             }
         }
     }
