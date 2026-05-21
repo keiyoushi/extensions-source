@@ -5,30 +5,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable
-class GraphQLResponse<T>(
-    val data: T,
-)
-
-@Suppress("unused")
-@Serializable
-class Payload<T>(
-    val operationName: String,
-    val variables: T,
-    val extensions: Extensions,
-) {
-    @Serializable
-    class Extensions(
-        val persistedQuery: PersistedQuery,
-    ) {
-        @Serializable
-        class PersistedQuery(
-            val version: Int,
-            val sha256Hash: String,
-        )
-    }
-}
-
 // Variables
 @Serializable
 object EmptyVariables
