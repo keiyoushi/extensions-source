@@ -45,12 +45,12 @@ class IdVariables(
 // Responses
 @Serializable
 class PopularResponse(
-    @JsonNames("tag") val ranking: Ranking,
+    val ranking: Ranking,
 )
 
 @Serializable
 class Ranking(
-    @JsonNames("works") val monthly2: Monthly2,
+    val monthly2: Monthly2,
 )
 
 @Serializable
