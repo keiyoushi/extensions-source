@@ -1,7 +1,7 @@
 ext {
     extName = 'Voyce.Me'
     extClass = '.VoyceMe'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = false
 }
 
