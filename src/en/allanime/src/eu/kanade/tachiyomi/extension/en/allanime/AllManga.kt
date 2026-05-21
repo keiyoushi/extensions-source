@@ -55,7 +55,7 @@ class AllManga :
 
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 1)
         .build()
 

@@ -50,7 +50,7 @@ abstract class NatsuId(
 
     protected open fun OkHttpClient.Builder.customizeClient(): OkHttpClient.Builder = this
 
-    final override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    final override val client: OkHttpClient = network.client.newBuilder()
         .customizeClient()
         // fix disk cache
         .apply {

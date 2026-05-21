@@ -22,7 +22,7 @@ class OrckuMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3, 1)
         .build()
 

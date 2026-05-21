@@ -37,7 +37,7 @@ abstract class MadTheme(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)
         // Intercepts chapter image requests that have a fallback URL encoded in the fragment.
         // If the primary CDN returns a failure, we retry with the fallback URL.
@@ -81,7 +81,7 @@ abstract class MadTheme(
 
     // TODO: better cookie sharing
     // TODO: don't count cached responses against rate limit
-    private val chapterClient: OkHttpClient = network.cloudflareClient.newBuilder()
+    private val chapterClient: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 12, TimeUnit.SECONDS)
         .build()
 

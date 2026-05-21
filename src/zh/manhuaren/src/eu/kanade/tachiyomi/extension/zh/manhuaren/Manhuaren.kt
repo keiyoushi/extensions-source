@@ -67,7 +67,7 @@ class Manhuaren :
         const val TOKEN_PREF = "token"
     }
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
         .newBuilder()
         .apply { interceptors().removeAll { it.javaClass.simpleName == "BrotliInterceptor" } }
         .addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))

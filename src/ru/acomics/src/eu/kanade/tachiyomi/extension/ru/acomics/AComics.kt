@@ -22,7 +22,7 @@ class AComics : HttpSource() {
 
     override val lang = "ru"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val newReq = chain
                 .request()

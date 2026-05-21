@@ -49,13 +49,13 @@ class Dynasty :
     // Dynasty-Series
     override val id = 669095474988166464
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::fetchCoverUrlInterceptor)
         .addInterceptor(::coverInterceptor)
         .rateLimit(1)
         .build()
 
-    private val coverClient = network.cloudflareClient
+    private val coverClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

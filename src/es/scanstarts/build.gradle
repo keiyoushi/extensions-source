@@ -1,0 +1,10 @@
+ext {
+    extName = 'Scan Starts'
+    extClass = '.ScanStarts'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/scanstarts'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

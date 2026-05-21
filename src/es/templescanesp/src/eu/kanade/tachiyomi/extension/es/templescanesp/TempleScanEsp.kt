@@ -42,7 +42,7 @@ class TempleScanEsp :
         }
 
         try {
-            val initClient = network.cloudflareClient
+            val initClient = network.client
             val headers = super.headersBuilder()
                 .add("apikey", SUPABASE_API_KEY)
                 .add("Accept", "application/json")

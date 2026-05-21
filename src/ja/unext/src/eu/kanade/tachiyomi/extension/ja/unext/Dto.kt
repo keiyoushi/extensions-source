@@ -9,25 +9,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-@Suppress("unused")
-@Serializable
-class Payload<T>(
-    val operationName: String,
-    val variables: T,
-    val extensions: Extensions,
-) {
-    @Serializable
-    class Extensions(
-        val persistedQuery: PersistedQuery,
-    ) {
-        @Serializable
-        class PersistedQuery(
-            val version: Int,
-            val sha256Hash: String,
-        )
-    }
-}
-
 // Variables
 @Suppress("unused")
 @Serializable
@@ -88,111 +69,81 @@ class PageInfo(
 
 @Serializable
 class PopularResponse(
-    val data: Data,
-) {
-    @Serializable
-    class Data(
-        val bookRanking: BookRanking,
-    )
+    val bookRanking: BookRanking,
+)
 
-    @Serializable
-    class BookRanking(
-        val books: List<BookRankingSakuhin>,
-        val pageInfo: PageInfo,
-    )
+@Serializable
+class BookRanking(
+    val books: List<BookRankingSakuhin>,
+    val pageInfo: PageInfo,
+)
 
-    @Serializable
-    class BookRankingSakuhin(
-        val bookSakuhin: BookSakuhin,
-    )
-}
+@Serializable
+class BookRankingSakuhin(
+    val bookSakuhin: BookSakuhin,
+)
 
 @Serializable
 class LatestResponse(
-    val data: Data,
-) {
-    @Serializable
-    class Data(
-        @SerialName("webfront_newBooks")
-        val newBooks: NewBooks,
-    )
+    @SerialName("webfront_newBooks")
+    val newBooks: NewBooks,
+)
 
-    @Serializable
-    class NewBooks(
-        val books: List<BookSakuhin>,
-        val pageInfo: PageInfo,
-    )
-}
+@Serializable
+class NewBooks(
+    val books: List<BookSakuhin>,
+    val pageInfo: PageInfo,
+)
 
 @Serializable
 class SearchResponse(
-    val data: Data,
-) {
-    @Serializable
-    class Data(
-        @SerialName("webfront_bookFreewordSearch")
-        val search: SearchResult,
-    )
+    @SerialName("webfront_bookFreewordSearch")
+    val search: SearchResult,
+)
 
-    @Serializable
-    class SearchResult(
-        val books: List<BookSakuhin>,
-        val pageInfo: PageInfo,
-    )
-}
+@Serializable
+class SearchResult(
+    val books: List<BookSakuhin>,
+    val pageInfo: PageInfo,
+)
 
 @Serializable
 class DetailsResponse(
-    val data: Data,
-) {
-    @Serializable
-    class Data(
-        val bookTitle: BookSakuhin,
-    )
-}
+    val bookTitle: BookSakuhin,
+)
 
 @Serializable
 class ChapterListResponse(
-    val data: Data,
-) {
-    @Serializable
-    class Data(
-        @SerialName("bookTitle_books")
-        val bookTitleBooks: BookTitleBooks,
-    )
+    @SerialName("bookTitle_books")
+    val bookTitleBooks: BookTitleBooks,
+)
 
-    @Serializable
-    class BookTitleBooks(
-        val books: List<Book>,
-    )
-}
+@Serializable
+class BookTitleBooks(
+    val books: List<Book>,
+)
 
 @Serializable
 class PlaylistResponse(
-    val data: Data?,
-) {
-    @Serializable
-    class Data(
-        @SerialName("webfront_bookPlaylistUrl")
-        val playlistUrl: PlaylistUrl,
-    )
+    @SerialName("webfront_bookPlaylistUrl")
+    val playlistUrl: PlaylistUrl,
+)
 
-    @Serializable
-    class PlaylistUrl(
-        val playlistBaseUrl: String,
-        val playlistUrl: UbookContainer,
-    )
+@Serializable
+class PlaylistUrl(
+    val playlistBaseUrl: String,
+    val playlistUrl: UbookContainer,
+)
 
-    @Serializable
-    class UbookContainer(
-        val ubooks: List<UBook>,
-    )
+@Serializable
+class UbookContainer(
+    val ubooks: List<UBook>,
+)
 
-    @Serializable
-    class UBook(
-        val content: String,
-    )
-}
+@Serializable
+class UBook(
+    val content: String,
+)
 
 @Serializable
 class BookSakuhin(

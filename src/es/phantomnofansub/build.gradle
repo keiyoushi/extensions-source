@@ -1,0 +1,10 @@
+ext {
+    extName = 'Phantom No Fansub'
+    extClass = '.PhantomNoFansub'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/phantomnofansub'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

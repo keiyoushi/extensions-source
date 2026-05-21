@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -35,8 +34,6 @@ class TencentComics : HttpSource() {
     override val supportsLatest = true
 
     override val id: Long = 6353436350537369479
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")

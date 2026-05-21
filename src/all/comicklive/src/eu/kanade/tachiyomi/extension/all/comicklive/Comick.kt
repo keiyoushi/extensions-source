@@ -57,7 +57,7 @@ class Comick(
             return domains[index]
         }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         // Referer in interceptor due to domain change preference
         .addNetworkInterceptor { chain ->
             val request = chain.request().newBuilder()

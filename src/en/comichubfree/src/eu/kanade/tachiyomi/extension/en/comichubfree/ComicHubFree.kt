@@ -27,8 +27,6 @@ class ComicHubFree : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/popular-comic".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())

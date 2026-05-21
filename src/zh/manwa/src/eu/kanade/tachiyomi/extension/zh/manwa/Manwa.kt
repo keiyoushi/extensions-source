@@ -70,7 +70,7 @@ class Manwa :
     private val imageSource: Interceptor = ImageSource(baseUrl, preferences)
 
     override val client: OkHttpClient =
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .addNetworkInterceptor(rewriteOctetStream)
             .addInterceptor(imageSource)
             .addInterceptor(updateMirror)

@@ -44,7 +44,7 @@ class Mangahere : HttpSource() {
         ),
     )
 
-    private val notRateLimitClient: OkHttpClient = network.cloudflareClient.newBuilder()
+    private val notRateLimitClient: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(cookieInterceptor)
         .build()
 

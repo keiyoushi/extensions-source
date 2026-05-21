@@ -30,7 +30,7 @@ class Komiic :
     override val baseUrl = "https://komiic.com"
     override val lang = "zh"
     override val supportsLatest = true
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             refreshToken(chain)
             val origin = chain.request()

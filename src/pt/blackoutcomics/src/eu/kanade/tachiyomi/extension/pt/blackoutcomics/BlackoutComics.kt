@@ -43,7 +43,7 @@ class BlackoutComics :
 
     private var loginState = LoginState.UNCHECKED
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::ageGateInterceptor)
         .build()
 

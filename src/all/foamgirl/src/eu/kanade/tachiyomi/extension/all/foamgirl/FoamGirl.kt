@@ -27,7 +27,7 @@ class FoamGirl : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

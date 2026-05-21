@@ -49,7 +49,7 @@ class Reimanga :
     override val baseUrl = "https://$DOMAIN"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(
             CookieInterceptor(DOMAIN, "showAdultContent" to "true"),
         )
