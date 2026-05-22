@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
@@ -23,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -33,8 +33,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
@@ -474,7 +472,7 @@ class Comix :
 
         var webView: WebView? = null
         handler.post {
-            val view = WebView(Injekt.get<Application>())
+            val view = WebView(applicationContext)
             webView = view
 
             with(view.settings) {
