@@ -12,11 +12,11 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
       
       - name: Run Spotless Apply
-        run: ./gradlew spotlessApply
+        run: ./gradlew spotlessApply --stacktrace --info
       
       - name: Commit and push changes
         run: |
