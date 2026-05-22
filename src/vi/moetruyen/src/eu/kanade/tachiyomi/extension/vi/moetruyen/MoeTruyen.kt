@@ -16,14 +16,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -31,6 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 class MoeTruyen :
     HttpSource(),
@@ -45,8 +51,13 @@ class MoeTruyen :
 
     private val apiUrl = "https://moe.suicaodex.com/v2"
 
+    private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()
+
     override val client = network.client.newBuilder()
         .rateLimit(3)
+        .addInterceptor(CookieInterceptor("moetruyen.net", WEB_UNLOCK_COOKIE))
+        .addInterceptor(CookieInterceptor("truyen.moe", WEB_UNLOCK_COOKIE))
+        .addInterceptor(imgxInterceptor())
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -439,31 +450,110 @@ class MoeTruyen :
     override fun pageListParse(response: Response): List<Page> {
         val isApiResponse = response.request.url.encodedPath.startsWith("/v2/chapters/")
         if (!isApiResponse) {
-            val document = response.asJsoup()
-
-            val imageUrls = document.select("img.page-media")
-                .asSequence()
-                .filterNot { element ->
-                    element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
-                }
-                .map { element ->
-                    element.absUrl("data-src").ifEmpty { element.absUrl("src") }
-                }
-                .filter { imageUrl ->
-                    imageUrl.isNotBlank() && !imageUrl.startsWith("data:")
-                }
-                .distinct()
-                .toList()
-
-            return imageUrls.mapIndexed { index, imageUrl ->
-                Page(index, imageUrl = imageUrl)
-            }
+            return parseHtmlPageList(response)
         }
 
         val apiResponse = response.parseAs<ApiResponse<ChapterPagesDataDto>>()
-        return apiResponse.data.pageUrls.mapIndexed { index, imageUrl ->
+        val data = apiResponse.data
+        val slug = data.manga?.slug
+        val chapterNumber = data.chapter?.number
+
+        if (slug != null && chapterNumber != null) {
+            val accessUrl = "$baseUrl/manga/$slug/chapters/$chapterNumber/page-access"
+            val pageCount = data.pageUrls.size
+            return fetchPagesWithGrants(accessUrl, pageCount)
+        }
+
+        return data.pageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
+    }
+
+    private fun parseHtmlPageList(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val images = document.select("img.page-media")
+            .filterNot { element ->
+                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
+            }
+
+        val accessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
+
+        if (accessUrl != null) {
+            val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
+            return fetchPagesWithGrants(fullAccessUrl, images.size)
+        }
+
+        val imageUrls = images
+            .asSequence()
+            .map { element ->
+                element.absUrl("data-src").ifEmpty { element.absUrl("src") }
+            }
+            .filter { imageUrl ->
+                imageUrl.isNotBlank() && !imageUrl.startsWith("data:")
+            }
+            .distinct()
+            .toList()
+
+        return imageUrls.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun fetchPagesWithGrants(accessUrl: String, pageCount: Int): List<Page> {
+        val pages = mutableListOf<Page>()
+        val batchSize = IMGX_MAX_WINDOW
+
+        for (start in 0 until pageCount step batchSize) {
+            val end = minOf(start + batchSize, pageCount)
+            val indices = (start until end).toList()
+            val body = PageAccessRequest(pageIndexes = indices).toJsonRequestBody()
+
+            val request = Request.Builder()
+                .url(accessUrl)
+                .post(body)
+                .headers(headers)
+                .build()
+
+            val response = client.newCall(request).execute()
+            val pageAccess = response.use { it.parseAs<PageAccessResponse>() }
+
+            for (entry in pageAccess.pages) {
+                if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
+                    imgxGrants[entry.downloadUrl] = entry
+                    pages.add(Page(entry.pageIndex, imageUrl = entry.downloadUrl))
+                }
+            }
+        }
+
+        return pages.sortedBy { it.index }
+    }
+
+    private fun imgxInterceptor() = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url.toString()
+        val entry = imgxGrants.remove(url)
+
+        if (entry?.grant == null) {
+            return@Interceptor chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+        val imgxData = response.body.bytes()
+
+        if (imgxData.size <= 13 ||
+            imgxData[0] != 0x49.toByte() || imgxData[1] != 0x4D.toByte() ||
+            imgxData[2] != 0x47.toByte() || imgxData[3] != 0x58.toByte()
+        ) {
+            return@Interceptor response.newBuilder()
+                .body(imgxData.toResponseBody(response.body.contentType()))
+                .build()
+        }
+
+        val webp = ImgxDecoder.decrypt(imgxData, entry.grant, entry.storageKey)
+
+        response.newBuilder()
+            .body(webp.toResponseBody(WEBP_MEDIA_TYPE))
+            .build()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -488,68 +578,7 @@ class MoeTruyen :
         }
     }
 
-    // ============================== Preferences ===========================
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_USE_API
-            title = "Sử dụng API"
-            summary = "Bật để dùng api"
-            setDefaultValue(true)
-        }.let(screen::addPreference)
-
-        val customUrlPref = EditTextPreference(screen.context).apply {
-            key = PREF_CUSTOM_DOMAIN
-            title = "Tên miền tùy chỉnh"
-            summary = "Nhập tên miền bạn muốn sử dụng (ví dụ: https://moetruyen.xyz)"
-            setEnabled(preferences.getPrefUrl() == UrlMode.CUSTOM)
-            dialogTitle = "Tên miền tùy chỉnh"
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val inputUrl = newValue as String
-                    if (inputUrl.isNotBlank()) {
-                        inputUrl.toHttpUrl()
-                    }
-                    Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_SHORT).show()
-                    true
-                } catch (e: Exception) {
-                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    false
-                }
-            }
-        }
-
-        ListPreference(screen.context).apply {
-            key = PREF_DOMAIN
-            title = "Tên miền chính"
-            entries = LIST_DOMAIN_ENTRIES
-            entryValues = LIST_DOMAIN_VALUES
-            summary = "%s"
-            setDefaultValue("default")
-            setOnPreferenceChangeListener { _, newValue ->
-                val index = entryValues.indexOf(newValue as String)
-                summary = entries[index]
-                customUrlPref.setEnabled(newValue == "custom")
-                true
-            }
-        }.let(screen::addPreference)
-        customUrlPref.let(screen::addPreference)
-    }
-
-    private fun useApiPref(): Boolean = preferences.getBoolean(PREF_USE_API, true)
-
-    private fun getPrefBaseUrl(): String = when (preferences.getPrefUrl()) {
-        UrlMode.DEFAULT -> DEFAULT_DOMAIN
-        UrlMode.GLOBAL -> DOMAIN_GLOBAL
-        UrlMode.CUSTOM -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
-    }.removeSuffix("/")
-
-    private fun String.toApiStatus(): String? = when (this) {
-        "Còn tiếp" -> "ongoing"
-        "Hoàn thành" -> "completed"
-        "Tạm dừng" -> "hiatus"
-        else -> null
-    }
+    // ============================== Helpers =============================
 
     private fun MangaDto.toSManga(): SManga = SManga.create().apply {
         url = "$API_MANGA_PREFIX$id"
@@ -576,6 +605,13 @@ class MoeTruyen :
         "tạm dừng", "hiatus" -> SManga.ON_HIATUS
         "cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
+    }
+
+    private fun String.toApiStatus(): String? = when (this) {
+        "Còn tiếp" -> "ongoing"
+        "Hoàn thành" -> "completed"
+        "Tạm dừng" -> "hiatus"
+        else -> null
     }
 
     private fun ChapterDto.toSChapter(mangaId: Long): SChapter = SChapter.create().apply {
@@ -655,6 +691,62 @@ class MoeTruyen :
 
     private fun String.isApiChapterUrl(): Boolean = substringBefore('#').startsWith(API_MANGA_PREFIX)
 
+    // ============================== Preferences ===========================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_API
+            title = "Sử dụng API"
+            summary = "Bật để dùng api bên thứ ba"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
+        val customUrlPref = EditTextPreference(screen.context).apply {
+            key = PREF_CUSTOM_DOMAIN
+            title = "Tên miền tùy chỉnh"
+            summary = "Nhập tên miền bạn muốn sử dụng (ví dụ: https://moetruyen.xyz)"
+            setEnabled(preferences.getPrefUrl() == UrlMode.CUSTOM)
+            dialogTitle = "Tên miền tùy chỉnh"
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val inputUrl = newValue as String
+                    if (inputUrl.isNotBlank()) {
+                        inputUrl.toHttpUrl()
+                    }
+                    Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_SHORT).show()
+                    true
+                } catch (e: Exception) {
+                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    false
+                }
+            }
+        }
+
+        ListPreference(screen.context).apply {
+            key = PREF_DOMAIN
+            title = "Tên miền chính"
+            entries = LIST_DOMAIN_ENTRIES
+            entryValues = LIST_DOMAIN_VALUES
+            summary = "%s"
+            setDefaultValue("default")
+            setOnPreferenceChangeListener { _, newValue ->
+                val index = entryValues.indexOf(newValue as String)
+                summary = entries[index]
+                customUrlPref.setEnabled(newValue == "custom")
+                true
+            }
+        }.let(screen::addPreference)
+        customUrlPref.let(screen::addPreference)
+    }
+
+    private fun useApiPref(): Boolean = preferences.getBoolean(PREF_USE_API, false)
+
+    private fun getPrefBaseUrl(): String = when (preferences.getPrefUrl()) {
+        UrlMode.DEFAULT -> DEFAULT_DOMAIN
+        UrlMode.GLOBAL -> DOMAIN_GLOBAL
+        UrlMode.CUSTOM -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
+    }.removeSuffix("/")
+
     enum class UrlMode {
         DEFAULT,
         GLOBAL,
@@ -670,7 +762,10 @@ class MoeTruyen :
     companion object {
         private const val PAGE_SIZE = 24
         private const val CHAPTER_PAGE_SIZE = 100
+        private const val IMGX_MAX_WINDOW = 5
         private const val API_MANGA_PREFIX = "/g/"
+        private val WEB_UNLOCK_COOKIE = "moetruyen_full_web" to "Moetruyen123456"
+        private val WEBP_MEDIA_TYPE = "image/webp".toMediaType()
 
         private const val PREF_USE_API = "pref_use_api"
         private const val PREF_DOMAIN = "pref_domain"
