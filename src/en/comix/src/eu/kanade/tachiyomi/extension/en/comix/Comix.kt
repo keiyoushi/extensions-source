@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -14,7 +15,6 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -26,7 +26,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -36,9 +35,8 @@ import okio.Buffer
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 class Comix :
     HttpSource(),
@@ -299,35 +297,83 @@ class Comix :
     // ============================= Chapters ==============================
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val deduplicate = preferences.deduplicateChapters()
         val mangaSlug = manga.url.removePrefix("/")
-        val hid = mangaSlug.substringBefore("-")
 
-        val token = captureToken(
+        val payload = runInWebView(
             pageUrl = getMangaUrl(manga),
-        ) { url ->
-            url.encodedPath.endsWith("api/v1/manga/$hid/chapters")
-        }
+            buildScript = { interfaceName ->
+                $$"""
+                (function () {
+                    const rewriteUrl = function (url) {
+                        if (typeof url === 'string' && url.indexOf('/chapters') !== -1 && /[?&]limit=\d+/.test(url)) {
+                            return url.replace(/([?&]limit=)\d+/, '$1100');
+                        }
+                        return url;
+                    };
+                    const originalOpen = XMLHttpRequest.prototype.open;
+                    XMLHttpRequest.prototype.open = function (method, url) {
+                        arguments[1] = rewriteUrl(url);
+                        return originalOpen.apply(this, arguments);
+                    };
 
-        val allChapters = mutableListOf<Chapter>()
-        var page = 1
-        while (true) {
-            val url = apiUrl.toHttpUrl().newBuilder()
-                .addPathSegment("manga")
-                .addPathSegment(hid)
-                .addPathSegment("chapters")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", "100")
-                .addQueryParameter("order[number]", "desc")
-                .addQueryParameter("_", token)
-                .build()
-            val res = client.newCall(GET(url, headers)).awaitSuccess()
-                .parseAs<ChapterDetailsResponse>()
-            allChapters.addAll(res.result.items)
-            if (!res.result.hasNextPage()) break
-            page++
-        }
+                    const originalParse = JSON.parse;
+                    const seen = new Set();
+                    const items = [];
+                    let submitted = false;
+                    const submit = function () {
+                        if (submitted) return;
+                        submitted = true;
+                        window.$$interfaceName.passPayload(JSON.stringify(items));
+                    };
+
+                    JSON.parse = new Proxy(originalParse, {
+                        apply(target, thisArg, args) {
+                            const parsed = Reflect.apply(target, thisArg, args);
+                            try {
+                                if (
+                                    !submitted &&
+                                    parsed && parsed.result &&
+                                    Array.isArray(parsed.result.items) &&
+                                    parsed.result.items.length > 0 &&
+                                    parsed.result.items[0] &&
+                                    parsed.result.items[0].id !== undefined &&
+                                    parsed.result.items[0].mangaId !== undefined
+                                ) {
+                                    const meta = parsed.result.meta || parsed.result.pagination;
+                                    const page = (meta && meta.page) || 1;
+                                    if (!seen.has(page)) {
+                                        seen.add(page);
+                                        for (const it of parsed.result.items) items.push(it);
+                                        if (meta && meta.hasNext) {
+                                            window.$$interfaceName.resetTimer();
+                                            let tries = 0;
+                                            const iv = setInterval(function () {
+                                                const btn = document.querySelector('.mchap-foot button[aria-label*=Next]');
+                                                if (btn && !btn.disabled) {
+                                                    btn.click();
+                                                    clearInterval(iv);
+                                                } else if (++tries > 50) {
+                                                    clearInterval(iv);
+                                                    submit();
+                                                }
+                                            }, 100);
+                                        } else {
+                                            submit();
+                                        }
+                                    }
+                                }
+                            } catch (e) {}
+                            return parsed;
+                        }
+                    });
+                })();
+                """.trimIndent()
+            },
+        )
+
+        val allChapters = payload.parseAs<List<Chapter>>()
 
         val finalChapters: List<Chapter> = if (deduplicate) {
             val chapterMap = LinkedHashMap<Number, Chapter>()
@@ -337,9 +383,7 @@ class Comix :
             allChapters
         }
 
-        Observable.just(
-            finalChapters.map { it.toSChapter(mangaSlug) },
-        )
+        finalChapters.map { it.toSChapter(mangaSlug) }
     }
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
@@ -378,33 +422,36 @@ class Comix :
     }
 
     // =============================== Pages ===============================
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = runBlocking {
-        // Legacy URL example: title/qnj9/5241183-chapter-0
-        if (chapter.url.substringAfter("/").substringBeforeLast("/").indexOf("-") == -1) throw Exception("Outdated chapter URL. Please refresh the chapter list")
-
-        val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
-
-        val token = captureToken(
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val payload = runInWebView(
             pageUrl = getChapterUrl(chapter),
-        ) { url ->
-            url.encodedPath.endsWith("api/v1/chapters/$chapterId")
-        }
+            buildScript = { interfaceName ->
+                """
+                (function () {
+                    const originalParse = JSON.parse;
+                    JSON.parse = new Proxy(originalParse, {
+                        apply(target, thisArg, args) {
+                            const parsed = Reflect.apply(target, thisArg, args);
+                            try {
+                                if (parsed && parsed.result && parsed.result.pages) {
+                                    window.$interfaceName.passPayload(args[0]);
+                                }
+                            } catch (e) {}
+                            return parsed;
+                        }
+                    });
+                })();
+                """.trimIndent()
+            },
+        )
 
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("chapters")
-            .addPathSegment(chapterId)
-            .addQueryParameter("_", token)
-            .build()
+        val pages = payload.parseAs<ChapterResponse>().result.pages
+        val base = pages.baseUrl.trimEnd('/')
 
-        val result = client.newCall(GET(url, headers)).awaitSuccess()
-            .parseAs<ChapterResponse>().result.pages
-        val base = result.baseUrl.trimEnd('/')
-        val pages = result.items.mapIndexed { index, img ->
+        pages.items.mapIndexed { index, img ->
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
             Page(index, imageUrl = full)
         }
-
-        Observable.just(pages)
     }
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
@@ -412,14 +459,21 @@ class Comix :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun captureToken(pageUrl: String, urlMatches: (HttpUrl) -> Boolean): String {
+    private fun runInWebView(
+        pageUrl: String,
+        buildScript: (interfaceName: String) -> String,
+    ): String {
         val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        val tokenRef = AtomicReference<String>()
-        var webView: WebView? = null
+        val jsInterface = WebViewPayloadInterface()
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = buildScript(interfaceName)
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
 
-        val createAndLoad = {
+        var webView: WebView? = null
+        handler.post {
             val view = WebView(Injekt.get<Application>())
             webView = view
 
@@ -429,6 +483,7 @@ class Comix :
                 blockNetworkImage = true
                 userAgentString = headers["User-Agent"]
             }
+            view.addJavascriptInterface(jsInterface, interfaceName)
 
             view.webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
@@ -438,36 +493,66 @@ class Comix :
                     val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
                         ?: return emptyResponse
 
-                    if (urlMatches(httpUrl)) {
-                        httpUrl.queryParameter("_")?.let { token ->
-                            if (tokenRef.compareAndSet(null, token)) {
-                                latch.countDown()
-                            }
-                        }
-                    }
-
-                    return if (httpUrl.host.contains("comix.to") && (httpUrl.encodedPath.contains(".js") || httpUrl.encodedPath.startsWith("/api/") || httpUrl.encodedPath.startsWith("/title/"))) {
+                    return if (httpUrl.host.contains("comix.to") &&
+                        (
+                            httpUrl.encodedPath.contains(".js") ||
+                                httpUrl.encodedPath.startsWith("/api/") ||
+                                httpUrl.encodedPath.startsWith("/title/")
+                            )
+                    ) {
                         super.shouldInterceptRequest(view, request)
                     } else {
                         emptyResponse
                     }
+                }
+
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view.evaluateJavascript(script) {}
                 }
             }
 
             view.loadUrl(pageUrl)
         }
 
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            createAndLoad()
-        } else {
-            handler.post(createAndLoad)
+        val completed = try {
+            jsInterface.await(30, TimeUnit.SECONDS)
+        } finally {
+            handler.post { webView?.destroy() }
         }
 
-        val completed = latch.await(30, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
+        if (!completed) throw Exception("Timed out waiting for WebView payload")
+        return jsInterface.payload ?: throw Exception("Failed to capture WebView payload")
+    }
 
-        if (!completed) throw Exception("Timed out waiting for token")
-        return tokenRef.get() ?: throw Exception("Failed to capture token")
+    private class WebViewPayloadInterface {
+        private val signal = Semaphore(0)
+
+        @Volatile
+        var payload: String? = null
+            private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passPayload(data: String) {
+            if (payload == null) {
+                payload = data
+                signal.release()
+            }
+        }
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun resetTimer() {
+            signal.release()
+        }
+
+        fun await(timeout: Long, unit: TimeUnit): Boolean {
+            while (payload == null) {
+                if (!signal.tryAcquire(timeout, unit)) return false
+            }
+            return true
+        }
     }
 
     // ============================= Settings =============================
