@@ -186,6 +186,26 @@ class SingleMangaResponse(
     val result: Manga,
 )
 
+// Lightweight view of the (unencrypted) /api/v1/manga/{hid} response, used only
+// to obtain a reader-page URL to boot the WebView from. The chapter list itself
+// lives behind the encrypted /chapters endpoint, but this details payload is
+// plain JSON and exposes ready-to-use chapter URLs.
+@Serializable
+class MangaBootUrls(
+    val result: Urls = Urls(),
+) {
+    @Serializable
+    class Urls(
+        val hasChapters: Boolean = false,
+        val firstChapterUrl: String? = null,
+        val latestChapterUrl: String? = null,
+    ) {
+        // Prefer the first chapter (stable, always present once hasChapters is
+        // true); fall back to the latest if the API ever omits it.
+        val bootChapterUrl: String? get() = firstChapterUrl ?: latestChapterUrl
+    }
+}
+
 @Serializable
 class Meta(
     val page: Int = 1,
