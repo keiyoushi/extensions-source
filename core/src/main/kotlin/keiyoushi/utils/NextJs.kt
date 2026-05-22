@@ -22,20 +22,24 @@ private fun <T> extractValueNextJs(
     payload: JsonElement,
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
-): T? {
-    if (payload !is JsonObject && payload !is JsonArray) return null
+    results: MutableList<T>,
+    firstOnly: Boolean,
+): Boolean {
+    if (payload !is JsonObject && payload !is JsonArray) return false
     if (predicate(payload)) {
-        return jsonInstance.decodeFromJsonElement(deserializer, payload)
+        results += jsonInstance.decodeFromJsonElement(deserializer, payload)
+        if (firstOnly) return true
     }
     val children: Iterable<JsonElement> = when (payload) {
         is JsonObject -> payload.values
         is JsonArray -> payload
     }
     for (child in children) {
-        val result = extractValueNextJs(child, predicate, deserializer)
-        if (result != null) return result
+        if (extractValueNextJs(child, predicate, deserializer, results, firstOnly)) {
+            return true
+        }
     }
-    return null
+    return false
 }
 
 /**
@@ -271,7 +275,8 @@ private fun parseJsonAt(body: String, start: Int): Pair<JsonElement?, Int> {
  * [JsonObject] that contains all non-optional, non-nullable fields of [T].
  *
  * Used internally by the predicate-free overloads of [Document.extractNextJs],
- * [String.extractNextJsRsc], and [Response.extractNextJs].
+ * [Document.extractAllNextJs], [String.extractNextJsRsc], [String.extractAllNextJsRsc],
+ * [Response.extractNextJs], and [Response.extractAllNextJs].
  *
  * @throws IllegalArgumentException if all fields of [T] are optional or nullable, as no
  * meaningful predicate can be inferred. Provide an explicit predicate in that case.
@@ -313,6 +318,24 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
 
 // ---- Document ----
 
+private fun <T> Document.extractNextJsInternal(
+    predicate: (JsonElement) -> Boolean,
+    deserializer: DeserializationStrategy<T>,
+    firstOnly: Boolean,
+): List<T> {
+    val chunkCache = mutableMapOf<String, String>()
+    val modelCache = mutableMapOf<String, JsonElement>()
+    val payloads = extractAppRouterPayloads(chunkCache, modelCache).ifEmpty { extractPagesRouterPayloads() }
+    val results = mutableListOf<T>()
+    for (payload in payloads) {
+        val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
+        if (extractValueNextJs(resolvedPayload, predicate, deserializer, results, firstOnly) && firstOnly) {
+            break
+        }
+    }
+    return results
+}
+
 /**
  * Extracts all Next.js hydrated flight data payloads from the inline `<script>` tags of this
  * [Document] and returns the first nested element that fulfills the given [predicate],
@@ -327,24 +350,32 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
  * evaluated.
  * @param deserializer The [DeserializationStrategy] used to deserialize the matched element
  * into [T]. Prefer the [reified overload][extractNextJs] unless an explicit strategy is needed.
- * @return The first matching element deserialized as [T], or `null` if no match was found or
- * deserialization failed.
+ * @return The first matching element deserialized as [T], or `null` if no match was found.
  */
 fun <T> Document.extractNextJs(
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
-): T? {
-    val chunkCache = mutableMapOf<String, String>()
-    val modelCache = mutableMapOf<String, JsonElement>()
-    val payloads = extractAppRouterPayloads(chunkCache, modelCache).ifEmpty { extractPagesRouterPayloads() }
+): T? = extractNextJsInternal(predicate, deserializer, true).firstOrNull()
 
-    for (payload in payloads) {
-        val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
-        val result = extractValueNextJs(resolvedPayload, predicate, deserializer)
-        if (result != null) return result
-    }
-    return null
-}
+/**
+ * Extracts all nested elements from the Next.js payloads of this [Document] that fulfill
+ * the given [predicate], deserialized as [T] using the provided [deserializer].
+ *
+ * Supports both the App Router (Next.js >= 13, RSC flight data via `self.__next_f.push`) and
+ * the Pages Router (Next.js <= 12, JSON hydration via `<script id="__NEXT_DATA__">`).
+ *
+ * @param T The target type to deserialize the matched element into.
+ * @param predicate A function that receives each [JsonElement] candidate and returns `true`
+ * for the element that should be extracted. Only [JsonObject] and [JsonArray] elements are
+ * evaluated.
+ * @param deserializer The [DeserializationStrategy] used to deserialize the matched element
+ * into [T]. Prefer the [reified overload][extractAllNextJs] unless an explicit strategy is needed.
+ * @return All matching elements deserialized as [T], or an empty list if none were found.
+ */
+fun <T> Document.extractAllNextJs(
+    predicate: (JsonElement) -> Boolean,
+    deserializer: DeserializationStrategy<T>,
+): List<T> = extractNextJsInternal(predicate, deserializer, false)
 
 /**
  * Reified overload; infers [deserializer] from [T]. See the
@@ -357,6 +388,16 @@ inline fun <reified T> Document.extractNextJs(
 ): T? = extractNextJs(predicate, serializer<T>())
 
 /**
+ * Reified overload; infers [deserializer] from [T]. See the
+ * [explicit-deserializer overload][Document.extractAllNextJs] for full documentation.
+ *
+ * @param T Must be serializable via [kotlinx.serialization].
+ */
+inline fun <reified T> Document.extractAllNextJs(
+    noinline predicate: (JsonElement) -> Boolean,
+): List<T> = extractAllNextJs(predicate, serializer<T>())
+
+/**
  * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
  * descriptor via [inferredNextJsPredicate]. See the
  * [explicit-deserializer overload][Document.extractNextJs] for full documentation.
@@ -365,7 +406,33 @@ inline fun <reified T> Document.extractNextJs(
  */
 inline fun <reified T> Document.extractNextJs(): T? = extractNextJs(inferredNextJsPredicate<T>(), serializer<T>())
 
+/**
+ * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
+ * descriptor via [inferredNextJsPredicate]. See the
+ * [explicit-deserializer overload][Document.extractAllNextJs] for full documentation.
+ *
+ * @param T Must be serializable via [kotlinx.serialization].
+ */
+inline fun <reified T> Document.extractAllNextJs(): List<T> = extractAllNextJs(inferredNextJsPredicate<T>(), serializer<T>())
+
 // ---- String (RSC) ----
+
+private fun <T> String.extractNextJsRscInternal(
+    predicate: (JsonElement) -> Boolean,
+    deserializer: DeserializationStrategy<T>,
+    firstOnly: Boolean,
+): List<T> {
+    val chunkCache = mutableMapOf<String, String>()
+    val modelCache = mutableMapOf<String, JsonElement>()
+    val results = mutableListOf<T>()
+    for (payload in extractRscPayloads(this, chunkCache, modelCache)) {
+        val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
+        if (extractValueNextJs(resolvedPayload, predicate, deserializer, results, firstOnly) && firstOnly) {
+            break
+        }
+    }
+    return results
+}
 
 /**
  * Parses this string as a raw RSC (React Server Components) flight response body and returns
@@ -382,22 +449,33 @@ inline fun <reified T> Document.extractNextJs(): T? = extractNextJs(inferredNext
  * evaluated.
  * @param deserializer The [DeserializationStrategy] used to deserialize the matched element
  * into [T]. Prefer the [reified overload][extractNextJsRsc] unless an explicit strategy is needed.
- * @return The first matching element deserialized as [T], or `null` if no match was found or
- * deserialization failed.
+ * @return The first matching element deserialized as [T], or `null` if no match was found.
  */
 fun <T> String.extractNextJsRsc(
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
-): T? {
-    val chunkCache = mutableMapOf<String, String>()
-    val modelCache = mutableMapOf<String, JsonElement>()
-    for (payload in extractRscPayloads(this, chunkCache, modelCache)) {
-        val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
-        val result = extractValueNextJs(resolvedPayload, predicate, deserializer)
-        if (result != null) return result
-    }
-    return null
-}
+): T? = extractNextJsRscInternal(predicate, deserializer, true).firstOrNull()
+
+/**
+ * Parses this string as a raw RSC (React Server Components) flight response body and returns
+ * all nested elements that fulfill the given [predicate], deserialized as [T].
+ *
+ * Use this when the RSC payload is fetched directly as a `text/x-component` response rather
+ * than embedded in an HTML document, which occurs when Next.js performs client-side navigation
+ * via fetch rather than a full page load. For HTML documents, prefer [Document.extractAllNextJs].
+ *
+ * @param T The target type to deserialize the matched element into.
+ * @param predicate A function that receives each [JsonElement] candidate and returns `true`
+ * for the element that should be extracted. Only [JsonObject] and [JsonArray] elements are
+ * evaluated.
+ * @param deserializer The [DeserializationStrategy] used to deserialize the matched element
+ * into [T]. Prefer the [reified overload][extractAllNextJsRsc] unless an explicit strategy is needed.
+ * @return All matching elements deserialized as [T], or an empty list if none were found.
+ */
+fun <T> String.extractAllNextJsRsc(
+    predicate: (JsonElement) -> Boolean,
+    deserializer: DeserializationStrategy<T>,
+): List<T> = extractNextJsRscInternal(predicate, deserializer, false)
 
 /**
  * Reified overload; infers [deserializer] from [T]. See the
@@ -410,6 +488,16 @@ inline fun <reified T> String.extractNextJsRsc(
 ): T? = extractNextJsRsc(predicate, serializer<T>())
 
 /**
+ * Reified overload; infers [deserializer] from [T]. See the
+ * [explicit-deserializer overload][String.extractAllNextJsRsc] for full documentation.
+ *
+ * @param T Must be serializable via [kotlinx.serialization].
+ */
+inline fun <reified T> String.extractAllNextJsRsc(
+    noinline predicate: (JsonElement) -> Boolean,
+): List<T> = extractAllNextJsRsc(predicate, serializer<T>())
+
+/**
  * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
  * descriptor via [inferredNextJsPredicate]. See the
  * [explicit-deserializer overload][String.extractNextJsRsc] for full documentation.
@@ -417,6 +505,15 @@ inline fun <reified T> String.extractNextJsRsc(
  * @param T Must be serializable via [kotlinx.serialization].
  */
 inline fun <reified T> String.extractNextJsRsc(): T? = extractNextJsRsc(inferredNextJsPredicate<T>(), serializer<T>())
+
+/**
+ * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
+ * descriptor via [inferredNextJsPredicate]. See the
+ * [explicit-deserializer overload][String.extractAllNextJsRsc] for full documentation.
+ *
+ * @param T Must be serializable via [kotlinx.serialization].
+ */
+inline fun <reified T> String.extractAllNextJsRsc(): List<T> = extractAllNextJsRsc(inferredNextJsPredicate<T>(), serializer<T>())
 
 // ---- OkHttp Response ----
 
@@ -434,8 +531,7 @@ inline fun <reified T> String.extractNextJsRsc(): T? = extractNextJsRsc(inferred
  * evaluated.
  * @param deserializer The [DeserializationStrategy] used to deserialize the matched element
  * into [T]. Prefer the [reified overload][extractNextJs] unless an explicit strategy is needed.
- * @return The first matching element deserialized as [T], or `null` if no match was found,
- * deserialization failed, or the response body was null.
+ * @return The first matching element deserialized as [T], or `null` if no match was found.
  * @throws IllegalStateException if the `Content-Type` is neither `text/html` nor `text/x-component`.
  */
 fun <T> Response.extractNextJs(
@@ -451,6 +547,35 @@ fun <T> Response.extractNextJs(
 }
 
 /**
+ * Consumes this [Response] body and extracts all nested elements that fulfill the given
+ * [predicate], deserialized as [T].
+ *
+ * Automatically dispatches to the appropriate extractor based on the `Content-Type` header:
+ * - `text/x-component` — parsed as a raw RSC flight response via [String.extractAllNextJsRsc]
+ * - `text/html` — parsed as an HTML document via [Document.extractAllNextJs]
+ *
+ * @param T The target type to deserialize the matched element into.
+ * @param predicate A function that receives each [JsonElement] candidate and returns `true`
+ * for the element that should be extracted. Only [JsonObject] and [JsonArray] elements are
+ * evaluated.
+ * @param deserializer The [DeserializationStrategy] used to deserialize the matched element
+ * into [T]. Prefer the [reified overload][extractAllNextJs] unless an explicit strategy is needed.
+ * @return All matching elements deserialized as [T], or an empty list if none were found.
+ * @throws IllegalStateException if the `Content-Type` is neither `text/html` nor `text/x-component`.
+ */
+fun <T> Response.extractAllNextJs(
+    predicate: (JsonElement) -> Boolean,
+    deserializer: DeserializationStrategy<T>,
+): List<T> {
+    val contentType = header("Content-Type") ?: ""
+    return when {
+        "text/x-component" in contentType -> body.string().extractAllNextJsRsc(predicate, deserializer)
+        "text/html" in contentType -> asJsoup().extractAllNextJs(predicate, deserializer)
+        else -> error("Unsupported Content-Type for Next.js extraction: $contentType")
+    }
+}
+
+/**
  * Reified overload; infers [deserializer] from [T]. See the
  * [explicit-deserializer overload][Response.extractNextJs] for full documentation.
  *
@@ -461,6 +586,16 @@ inline fun <reified T> Response.extractNextJs(
 ): T? = extractNextJs(predicate, serializer<T>())
 
 /**
+ * Reified overload; infers [deserializer] from [T]. See the
+ * [explicit-deserializer overload][Response.extractAllNextJs] for full documentation.
+ *
+ * @param T Must be serializable via [kotlinx.serialization].
+ */
+inline fun <reified T> Response.extractAllNextJs(
+    noinline predicate: (JsonElement) -> Boolean,
+): List<T> = extractAllNextJs(predicate, serializer<T>())
+
+/**
  * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
  * descriptor via [inferredNextJsPredicate]. See the
  * [explicit-deserializer overload][Response.extractNextJs] for full documentation.
@@ -468,3 +603,12 @@ inline fun <reified T> Response.extractNextJs(
  * @param T Must be serializable via [kotlinx.serialization].
  */
 inline fun <reified T> Response.extractNextJs(): T? = extractNextJs(inferredNextJsPredicate<T>(), serializer<T>())
+
+/**
+ * Predicate-free overload; infers both the deserializer and predicate from [T]'s serial
+ * descriptor via [inferredNextJsPredicate]. See the
+ * [explicit-deserializer overload][Response.extractAllNextJs] for full documentation.
+ *
+ * @param T Must be serializable via [kotlinx.serialization].
+ */
+inline fun <reified T> Response.extractAllNextJs(): List<T> = extractAllNextJs(inferredNextJsPredicate<T>(), serializer<T>())
