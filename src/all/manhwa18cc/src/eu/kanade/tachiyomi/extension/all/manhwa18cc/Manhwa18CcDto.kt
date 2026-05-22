@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.all.manhwa18cc
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// ─── Latest & Genre Browse ────────────────────────────────────────────────────
+// --- Latest & Genre Browse ---
 
 @Serializable
 data class LatestResponseDto(
@@ -30,7 +30,7 @@ data class MangaItemDto(
     val thumbnail: String? = null,
 )
 
-// ─── Search ───────────────────────────────────────────────────────────────────
+// --- Search ---
 
 @Serializable
 data class SearchResponseDto(
@@ -51,7 +51,7 @@ data class SearchResultDto(
     @SerialName("isAdult") val isAdult: Boolean = false,
 )
 
-// ─── Manga Detail ─────────────────────────────────────────────────────────────
+// --- Manga Detail ---
 
 @Serializable
 data class MangaDetailResponseDto(
@@ -77,7 +77,7 @@ data class RatingDto(
     val count: Int = 0,
 )
 
-// ─── Chapter ──────────────────────────────────────────────────────────────────
+// --- Chapter ---
 
 /** Chapter stub used inside MangaDetailResponseDto. */
 @Serializable
@@ -87,7 +87,7 @@ data class ChapterDto(
     val date: String? = null,
 )
 
-// ─── Chapter Reader ───────────────────────────────────────────────────────────
+// --- Chapter Reader ---
 
 @Serializable
 data class ChapterResponseDto(
@@ -100,7 +100,7 @@ data class ChapterResponseDto(
     val nextChapter: String? = null,
 )
 
-// ─── Genre List ───────────────────────────────────────────────────────────────
+// --- Genre List ---
 
 @Serializable
 data class GenresResponseDto(
