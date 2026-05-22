@@ -40,7 +40,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
      */
     open fun isMangaForLang(title: String): Boolean = true
 
-    // ─── Popular ──────────────────────────────────────────────────────────────
+    // --- Popular ---
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$apiUrl/latest?page=$page", headers)
@@ -53,14 +53,14 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         return MangasPage(mangas, hasNextPage = dto.page < dto.totalPages)
     }
 
-    // ─── Latest ───────────────────────────────────────────────────────────────
+    // --- Latest ---
 
     override fun latestUpdatesRequest(page: Int): Request =
         GET("$apiUrl/latest?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // ─── Search ───────────────────────────────────────────────────────────────
+    // --- Search ---
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Keyword search
@@ -71,7 +71,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
             return GET(url, headers)
         }
 
-        // Genre filter
+        // ... Genre filter
         val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selected
         return if (!genre.isNullOrBlank() && genre != GENRE_ALL) {
             val genreSlug = genre.lowercase().replace(" ", "-")
@@ -111,8 +111,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         }
     }
 
-    // ─── Manga Details ────────────────────────────────────────────────────────
-
+    // --- Manga Details ---
     // manga.url format: /webtoon/{slug}
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.trimStart('/').removePrefix("webtoon/").substringBefore("/")
@@ -134,8 +133,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         }
     }
 
-    // ─── Chapter List ─────────────────────────────────────────────────────────
-
+    // --- Chapter List ---
     // Reuse the manga detail endpoint — it already returns the full chapter list.
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
@@ -151,7 +149,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         }
     }
 
-    // ─── Page List ────────────────────────────────────────────────────────────
+    // --- Page List ---
 
     // chapter.url format: /webtoon/{mangaSlug}/{chapterSlug}
     override fun pageListRequest(chapter: SChapter): Request {
@@ -173,7 +171,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     override fun imageUrlParse(response: Response): String =
         throw UnsupportedOperationException("imageUrlParse is not used by this source")
 
-    // ─── Filters ──────────────────────────────────────────────────────────────
+    // --- Filters ---
 
     private var cachedGenres: List<String> = emptyList()
 
@@ -202,7 +200,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
             }
         }
 
-    // ─── Private Helpers ──────────────────────────────────────────────────────
+    // --- Private Helpers ---
 
     /** Deserialize the response body into [T] using the shared [json] instance. */
     private inline fun <reified T> Response.parseAs(): T =
@@ -230,7 +228,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     private fun Float.toDisplay(): String =
         if (this == toLong().toFloat()) toLong().toString() else toString()
 
-    // ─── DTO → Source Model Conversions ───────────────────────────────────────
+    // --- DTO - Source Model Conversions ---
 
     private fun MangaItemDto.toSManga() = SManga.create().apply {
         url = "/webtoon/$slug"
@@ -244,7 +242,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         thumbnail_url = thumbnail
     }
 
-    // ─── Constants ────────────────────────────────────────────────────────────
+    // --- Constants ---
 
     companion object {
         private const val GENRE_ALL = "All"
@@ -252,7 +250,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     }
 }
 
-// ─── Filter Definitions ───────────────────────────────────────────────────────
+// --- Filter Definitions ---
 
 class GenreFilter(genres: List<String>) :
     Filter.Select<String>("Genre", genres.toTypedArray()) {
