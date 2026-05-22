@@ -42,8 +42,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
 
     // --- Popular ---
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$apiUrl/latest?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/latest?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<LatestResponseDto>()
@@ -55,8 +54,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
 
     // --- Latest ---
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$apiUrl/latest?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/latest?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -168,8 +166,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     }
 
     // imageUrlParse is unused because Page already carries imageUrl directly.
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("imageUrlParse is not used by this source")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("imageUrlParse is not used by this source")
 
     // --- Filters ---
 
@@ -203,8 +200,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     // --- Private Helpers ---
 
     /** Deserialize the response body into [T] using the shared [json] instance. */
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     /** Map API status strings → Tachiyomi SManga status constants. */
     private fun String.toMangaStatus(): Int = when (lowercase().trim()) {
@@ -225,8 +221,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
      * Display a Float chapter number without a trailing ".0" for whole numbers.
      * e.g. 92.0 → "92", 92.5 → "92.5"
      */
-    private fun Float.toDisplay(): String =
-        if (this == toLong().toFloat()) toLong().toString() else toString()
+    private fun Float.toDisplay(): String = if (this == toLong().toFloat()) toLong().toString() else toString()
 
     // --- DTO - Source Model Conversions ---
 
@@ -252,7 +247,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
 
 // --- Filter Definitions ---
 
-class GenreFilter(genres: List<String>) :
-    Filter.Select<String>("Genre", genres.toTypedArray()) {
+class GenreFilter(genres: List<String>) : Filter.Select<String>("Genre", genres.toTypedArray()) {
     val selected: String get() = values[state]
 }
