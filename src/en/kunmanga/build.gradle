@@ -2,8 +2,8 @@ ext {
     extName = 'Kun Manga'
     extClass = '.KunManga'
     themePkg = 'madara'
-    baseUrl = 'https://kunmanga.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://kunmanga.co.uk'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
