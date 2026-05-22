@@ -310,17 +310,20 @@ class Chapter(
 
 @Serializable
 class ChapterResponse(
-    val result: ChapterResult,
+    // nullable — the WebView-intercept approach captures the raw JSON which
+    // is then parsed; if the API returns an error body, result will be null
+    val result: ChapterResult? = null,
 ) {
     @Serializable
     class ChapterResult(
-        val pages: Pages,
+        val id: Int,
+        val pages: Pages = Pages(),
     )
 
     @Serializable
     class Pages(
-        val baseUrl: String,
-        val items: List<PageDto>,
+        val baseUrl: String = "",
+        val items: List<PageDto> = emptyList(),
     )
 
     @Serializable

@@ -5,8 +5,7 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.ListPreference
@@ -14,7 +13,6 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -26,19 +24,18 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import okio.Buffer
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 class Comix :
     HttpSource(),
@@ -297,36 +294,137 @@ class Comix :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title${manga.url}"
 
     // ============================= Chapters ==============================
+    // NOTE: Chapter list and page list are fetched through a WebView because
+    // comix.to encrypts its API responses (x-enc: 1 header → {"e":"..."}).
+    // By intercepting JSON.parse inside the WebView, we capture the data
+    // AFTER the site's own JavaScript has already decrypted it. This avoids
+    // having to reverse-engineer the Jscrambler-based decryption.
+
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        chapterListFromWebView(manga)
+    }
+
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun chapterListFromWebView(manga: SManga): List<SChapter> {
         val deduplicate = preferences.deduplicateChapters()
         val mangaSlug = manga.url.removePrefix("/")
-        val hid = mangaSlug.substringBefore("-")
 
-        val token = captureToken(
-            pageUrl = getMangaUrl(manga),
-        ) { url ->
-            url.encodedPath.endsWith("api/v1/manga/$hid/chapters")
+        val handler = Handler(Looper.getMainLooper())
+        val signal = Semaphore(0)
+        val done = AtomicBoolean(false)
+        val jsInterface = ChapterListJsInterface(signal, done)
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = """
+            (function () {
+                const rewriteUrl = function (url) {
+                    if (typeof url === 'string' && url.indexOf('/chapters') !== -1 && /[?&]limit=\d+/.test(url)) {
+                        return url.replace(/([?&]limit=)\d+/, '${'$'}1100');
+                    }
+                    return url;
+                };
+                const originalOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function (method, url) {
+                    arguments[1] = rewriteUrl(url);
+                    return originalOpen.apply(this, arguments);
+                };
+                const originalFetch = window.fetch;
+                window.fetch = function (input, init) {
+                    if (typeof input === 'string') {
+                        input = rewriteUrl(input);
+                    } else if (input && typeof input.url === 'string') {
+                        const newUrl = rewriteUrl(input.url);
+                        if (newUrl !== input.url) input = new Request(newUrl, input);
+                    }
+                    return originalFetch.call(this, input, init);
+                };
+
+                const originalParse = JSON.parse;
+                const seen = new Set();
+                JSON.parse = new Proxy(originalParse, {
+                    apply(target, thisArg, args) {
+                        const parsed = Reflect.apply(target, thisArg, args);
+                        try {
+                            if (
+                                parsed && parsed.result &&
+                                Array.isArray(parsed.result.items) &&
+                                parsed.result.items.length > 0 &&
+                                parsed.result.items[0] &&
+                                parsed.result.items[0].id !== undefined &&
+                                parsed.result.items[0].mangaId !== undefined
+                            ) {
+                                const meta = parsed.result.meta || parsed.result.pagination;
+                                const page = (meta && meta.page) || 1;
+                                if (!seen.has(page)) {
+                                    seen.add(page);
+                                    const hasNext = !!(meta && meta.hasNext);
+                                    window.${'$'}{interfaceName}.passPayload(args[0], hasNext);
+                                    if (hasNext) {
+                                        let tries = 0;
+                                        const iv = setInterval(function () {
+                                            const btn = document.querySelector('.mchap-foot button[aria-label*=Next]');
+                                            if (btn && !btn.disabled) {
+                                                btn.click();
+                                                clearInterval(iv);
+                                            } else if (++tries > 50) {
+                                                clearInterval(iv);
+                                            }
+                                        }, 100);
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                        return parsed;
+                    }
+                });
+            })();
+        """.trimIndent()
+
+        var webView: WebView? = null
+        handler.post {
+            val view = WebView(Injekt.get<Application>())
+            webView = view
+
+            with(view.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                blockNetworkImage = true
+                userAgentString = headers["User-Agent"]
+            }
+            view.addJavascriptInterface(jsInterface, interfaceName)
+
+            view.webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view.evaluateJavascript(script) {}
+                }
+            }
+
+            view.loadUrl(getMangaUrl(manga))
         }
 
-        val allChapters = mutableListOf<Chapter>()
-        var page = 1
-        while (true) {
-            val url = apiUrl.toHttpUrl().newBuilder()
-                .addPathSegment("manga")
-                .addPathSegment(hid)
-                .addPathSegment("chapters")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", "100")
-                .addQueryParameter("order[number]", "desc")
-                .addQueryParameter("_", token)
-                .build()
-            val res = client.newCall(GET(url, headers)).awaitSuccess()
-                .parseAs<ChapterDetailsResponse>()
-            allChapters.addAll(res.result.items)
-            if (!res.result.hasNextPage()) break
-            page++
+        var timedOut = false
+        while (!done.get()) {
+            if (!signal.tryAcquire(30, TimeUnit.SECONDS)) {
+                timedOut = true
+                break
+            }
+        }
+        handler.post { webView?.destroy() }
+
+        if (timedOut) throw Exception("Timed out waiting for chapter list")
+        if (jsInterface.payloads.isEmpty()) throw Exception("Failed to capture chapter list")
+
+        val allChapters = jsInterface.payloads.flatMap {
+            it.parseAs<ChapterDetailsResponse>().result.items
         }
 
         val finalChapters: List<Chapter> = if (deduplicate) {
@@ -337,14 +435,24 @@ class Comix :
             allChapters
         }
 
-        Observable.just(
-            finalChapters.map { it.toSChapter(mangaSlug) },
-        )
+        return finalChapters.map { it.toSChapter(mangaSlug) }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    private class ChapterListJsInterface(
+        private val signal: Semaphore,
+        private val done: AtomicBoolean,
+    ) {
+        private val _payloads = mutableListOf<String>()
+        val payloads: List<String> get() = synchronized(_payloads) { _payloads.toList() }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passPayload(data: String, hasNext: Boolean) {
+            synchronized(_payloads) { _payloads.add(data) }
+            if (!hasNext) done.set(true)
+            signal.release()
+        }
+    }
 
     private fun deduplicateChapters(
         chapterMap: LinkedHashMap<Number, Chapter>,
@@ -378,33 +486,8 @@ class Comix :
     }
 
     // =============================== Pages ===============================
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = runBlocking {
-        // Legacy URL example: title/qnj9/5241183-chapter-0
-        if (chapter.url.substringAfter("/").substringBeforeLast("/").indexOf("-") == -1) throw Exception("Outdated chapter URL. Please refresh the chapter list")
-
-        val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
-
-        val token = captureToken(
-            pageUrl = getChapterUrl(chapter),
-        ) { url ->
-            url.encodedPath.endsWith("api/v1/chapters/$chapterId")
-        }
-
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("chapters")
-            .addPathSegment(chapterId)
-            .addQueryParameter("_", token)
-            .build()
-
-        val result = client.newCall(GET(url, headers)).awaitSuccess()
-            .parseAs<ChapterResponse>().result.pages
-        val base = result.baseUrl.trimEnd('/')
-        val pages = result.items.mapIndexed { index, img ->
-            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            Page(index, imageUrl = full)
-        }
-
-        Observable.just(pages)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        pageListFromWebView(chapter)
     }
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
@@ -412,62 +495,127 @@ class Comix :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun captureToken(pageUrl: String, urlMatches: (HttpUrl) -> Boolean): String {
+    private fun pageListFromWebView(chapter: SChapter): List<Page> {
+        // Legacy URL example: title/qnj9/5241183-chapter-0
+        if (chapter.url.substringAfter("/").substringBeforeLast("/").indexOf("-") == -1) throw Exception("Outdated chapter URL. Please refresh the chapter list")
+
+        val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
+
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val tokenRef = AtomicReference<String>()
-        var webView: WebView? = null
-        val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
+        val jsInterface = PageListJsInterface(latch)
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = """
+            (function () {
+                const targetPath = '/api/v1/chapters/$chapterId';
+                var done = false;
 
-        val createAndLoad = {
+                function tryPayload(text) {
+                    if (done) return;
+                    try {
+                        var obj = JSON.parse(text);
+                        if (obj && obj.result && obj.result.pages) {
+                            done = true;
+                            window.$interfaceName.passPayload(text);
+                        }
+                    } catch (e) {}
+                }
+
+                // Hook JSON.parse
+                var _parse = JSON.parse;
+                JSON.parse = function() {
+                    var r = _parse.apply(this, arguments);
+                    try {
+                        if (r && r.result && r.result.pages) {
+                            done = true;
+                            window.$interfaceName.passPayload(arguments[0]);
+                        }
+                    } catch (e) {}
+                    return r;
+                };
+
+                // Also hook fetch/XHR response bodies as fallback
+                var _fetch = window.fetch;
+                window.fetch = function(input, init) {
+                    return _fetch.call(this, input, init).then(function(resp) {
+                        var url = typeof input === 'string' ? input : (input && input.url);
+                        if (typeof url === 'string' && url.indexOf(targetPath) !== -1) {
+                            resp.clone().text().then(tryPayload);
+                        }
+                        return resp;
+                    });
+                };
+                var _open = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url) {
+                    if (typeof url === 'string' && url.indexOf(targetPath) !== -1) {
+                        this.addEventListener('load', function() {
+                            tryPayload(this.responseText);
+                        });
+                    }
+                    return _open.apply(this, arguments);
+                };
+            })();
+        """.trimIndent()
+
+        var webView: WebView? = null
+        handler.post {
             val view = WebView(Injekt.get<Application>())
             webView = view
 
             with(view.settings) {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                blockNetworkImage = true
+                blockNetworkImage = false // allow images so chapter reader initializes
                 userAgentString = headers["User-Agent"]
             }
+            view.addJavascriptInterface(jsInterface, interfaceName)
 
             view.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
-                        ?: return emptyResponse
-
-                    if (urlMatches(httpUrl)) {
-                        httpUrl.queryParameter("_")?.let { token ->
-                            if (tokenRef.compareAndSet(null, token)) {
-                                latch.countDown()
-                            }
-                        }
-                    }
-
-                    return if (httpUrl.host.contains("comix.to") && (httpUrl.encodedPath.contains(".js") || httpUrl.encodedPath.startsWith("/api/") || httpUrl.encodedPath.startsWith("/title/"))) {
-                        super.shouldInterceptRequest(view, request)
-                    } else {
-                        emptyResponse
-                    }
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    // Inject early so we wrap fetch/XHR before site's code runs
+                    view.evaluateJavascript(script) {}
                 }
             }
 
-            view.loadUrl(pageUrl)
-        }
-
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            createAndLoad()
-        } else {
-            handler.post(createAndLoad)
+            view.loadUrl(getChapterUrl(chapter))
         }
 
         val completed = latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
-        if (!completed) throw Exception("Timed out waiting for token")
-        return tokenRef.get() ?: throw Exception("Failed to capture token")
+        if (!completed) throw Exception("Timed out waiting for page list")
+
+        val payload = jsInterface.payload ?: throw Exception("Failed to capture page list")
+        val res = payload.parseAs<ChapterResponse>()
+        val result = res.result ?: throw Exception("Chapter not found")
+        val pages = result.pages
+        if (pages.items.isEmpty()) {
+            throw Exception("No images found for chapter ${result.id}")
+        }
+        val base = pages.baseUrl.trimEnd('/')
+        return pages.items.mapIndexed { index, img ->
+            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            Page(index, imageUrl = full)
+        }
+    }
+
+    private class PageListJsInterface(private val latch: CountDownLatch) {
+        @Volatile
+        var payload: String? = null
+            private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passPayload(data: String) {
+            if (payload == null) {
+                payload = data
+                latch.countDown()
+            }
+        }
     }
 
     // ============================= Settings =============================
