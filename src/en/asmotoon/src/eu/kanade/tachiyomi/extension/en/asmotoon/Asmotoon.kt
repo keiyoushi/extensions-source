@@ -20,9 +20,9 @@ class Asmotoon :
         .build()
 
     // filtering novel entries
-    override fun popularMangaSelector() = "div:contains(Trending) + div .group.overflow-hidden.grid:not(:has(.capitalize:contains(Novel)))"
-    override fun latestUpdatesSelector() = "div.grid > div.group:not(:has(.capitalize:contains(Novel)))"
-    override fun searchMangaSelector() = "#searched_series_page > button:not(:has(.capitalize:contains(Novel)))"
+    override fun popularMangaSelector() = "div:contains(Trending) + div .group:not([data-type=novel])"
+    override fun latestUpdatesSelector() = ".group:not([data-type=novel])"
+    override fun searchMangaSelector() = ".group:not([data-type=novel])"
 
     override val descriptionSelector: String = "#expand_content"
     override val genreSelector: String = ".gap-3 .gap-1 a"
