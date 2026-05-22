@@ -12,7 +12,8 @@ on:
       - '.github/workflows/build_push.yml'
   workflow_dispatch:
 
-permissions: {}
+permissions:
+ contents: write
 
 concurrency:
   group: ${{ github.workflow }}
