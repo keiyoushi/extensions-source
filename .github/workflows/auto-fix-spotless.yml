@@ -1,0 +1,31 @@
+name: Auto-fix Spotless Formatting
+
+on:
+  workflow_dispatch:  # Manual trigger from Actions tab
+
+jobs:
+  spotless-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      
+      - name: Run Spotless Apply
+        run: ./gradlew spotlessApply
+      
+      - name: Commit and push changes
+        run: |
+          git config user.email "github-actions[bot]@users.githubusercontent.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+          else
+            git commit -m "chore: apply spotless formatting"
+            git push
+          fi
