@@ -232,7 +232,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
 
     private fun MangaItemDto.toSManga() = SManga.create().apply {
         url = "/webtoon/$slug"
-        title = this@toSManga.title
+        title = this.title
         thumbnail_url = thumbnail
     }
 
