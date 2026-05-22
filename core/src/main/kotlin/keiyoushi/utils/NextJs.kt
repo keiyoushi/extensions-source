@@ -26,7 +26,7 @@ private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s
  * @param deserializer Deserializer used to convert matching nodes into [T].
  * @param results Accumulator for matched results.
  * @param firstOnly If true, stops after the first match is found.
- * @return `true` if caller should stop recursing (only when firstOnly && match found)
+ * @return `true` if caller should stop recursing (only when firstOnly && match found).
  */
 private fun <T> extractValueNextJs(
     payload: JsonElement,
