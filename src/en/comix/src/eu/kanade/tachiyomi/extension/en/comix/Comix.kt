@@ -14,6 +14,7 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,16 +23,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
+import org.jsoup.nodes.Document
 import rx.Observable
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
@@ -299,8 +303,11 @@ class Comix :
         val deduplicate = preferences.deduplicateChapters()
         val mangaSlug = manga.url.removePrefix("/")
 
+        val document = runBlocking {
+            client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
+        }
         val payload = runInWebView(
-            pageUrl = getMangaUrl(manga),
+            document = document,
             buildScript = { interfaceName ->
                 $$"""
                 (function () {
@@ -421,8 +428,11 @@ class Comix :
 
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val document = runBlocking {
+            client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().asJsoup()
+        }
         val payload = runInWebView(
-            pageUrl = getChapterUrl(chapter),
+            document = document,
             buildScript = { interfaceName ->
                 """
                 (function () {
@@ -458,7 +468,7 @@ class Comix :
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun runInWebView(
-        pageUrl: String,
+        document: Document,
         buildScript: (interfaceName: String) -> String,
     ): String {
         val handler = Handler(Looper.getMainLooper())
@@ -489,7 +499,7 @@ class Comix :
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
                     val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
-                        ?: return emptyResponse
+                        ?: return super.shouldInterceptRequest(view, request)
 
                     return if (httpUrl.host.contains("comix.to") &&
                         (
@@ -510,7 +520,7 @@ class Comix :
                 }
             }
 
-            view.loadUrl(pageUrl)
+            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
         }
 
         val completed = try {
