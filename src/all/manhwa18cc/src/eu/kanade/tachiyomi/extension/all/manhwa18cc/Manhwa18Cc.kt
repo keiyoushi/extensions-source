@@ -186,7 +186,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
      * Fetch genre list from the API and cache it for getFilterList().
      * Called automatically by the app when the user taps "Reset".
      */
-    override fun fetchGenres() = client.newCall(GET("$apiUrl/genres", headers))
+    private fun fetchGenres() = client.newCall(GET("$apiUrl/genres", headers))
         .execute()
         .let { response ->
             runCatching {
