@@ -3,6 +3,9 @@ name: Auto-fix Spotless Formatting
 on:
   workflow_dispatch:  # Manual trigger from Actions tab
 
+permissions:
+ contents: write
+
 jobs:
   spotless-fix:
     runs-on: ubuntu-latest
