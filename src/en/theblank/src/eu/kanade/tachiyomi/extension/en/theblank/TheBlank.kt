@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.en.theblank
 import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.en.theblank.decryption.SecretStream
-import eu.kanade.tachiyomi.extension.en.theblank.decryption.State
-import eu.kanade.tachiyomi.extension.en.theblank.decryption.X25519
+import keiyoushi.lib.secretstream.SecretStream
+import keiyoushi.lib.secretstream.State
+import keiyoushi.lib.secretstream.X25519
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -54,7 +54,7 @@ class TheBlank :
     override val versionId = 2
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             return@addInterceptor if (request.url.fragment == THUMBNAIL_FRAGMENT) {
@@ -67,7 +67,7 @@ class TheBlank :
         .rateLimit(1)
         .build()
 
-    private val thumbnailClient = network.cloudflareClient
+    private val thumbnailClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", "https://${baseHttpUrl.host}")
@@ -548,5 +548,5 @@ class TheBlank :
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
-private const val PREFIX_LENGTH = 128
+private const val PREFIX_LENGTH = 192
 private const val STREAM_HEADER_LENGTH = 24
