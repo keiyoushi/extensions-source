@@ -3,9 +3,6 @@ package eu.kanade.tachiyomi.extension.fr.softepsilonscan
 import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import keiyoushi.lib.secretstream.SecretStream
-import keiyoushi.lib.secretstream.State
-import keiyoushi.lib.secretstream.X25519
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -18,6 +15,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.secretstream.SecretStream
+import keiyoushi.lib.secretstream.State
+import keiyoushi.lib.secretstream.X25519
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
