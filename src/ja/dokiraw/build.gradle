@@ -1,9 +1,9 @@
 ext {
     extName = 'Dokiraw'
     extClass = '.Dokiraw'
-    baseUrl = 'https://dokiraw.tech'
+    baseUrl = 'https://dokiraw.team'
     themePkg = 'liliana'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
