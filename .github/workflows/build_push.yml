@@ -23,29 +23,34 @@ env:
   IS_PR_CHECK: false
 
 jobs:
-  prepare:
-    name: Prepare job
+  build_individual_extension:
+    name: Build MangaPro Extension Only
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      matrix: ${{ steps.generate-matrices.outputs.matrix }}
-      delete: ${{ steps.generate-matrices.outputs.delete }}
+
     steps:
-      - name: Checkout main branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+    - name: Checkout project code
+      uses: actions/checkout@v4
 
-      - name: Get last successful CI commit
-        uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
-        with:
-          fallback-sha: 4b825dc642cb6eb9a060e54bf8d69288fbee4904 # empty tree
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'microsoft'
 
-      - id: generate-matrices
-        name: Create output matrices
-        run: |
-          python ./.github/scripts/generate-build-matrices.py "$NX_BASE" Release
+    - name: Accept Android SDK Licenses and Create Properties
+      run: |
+        mkdir -p ./android-sdk/licenses
+        echo -e "\n893a4cd1db981502063774b772413550192400ae\n2512d861773d22b04316a906a52dd11d12d54573\nd56f5187479451eabf01fb7431302450f3a66e55" > ./android-sdk/licenses/android-sdk-license
+        echo "sdk.dir=./android-sdk" > local.properties
+
+    - name: Build APK without style checks
+      run: ./gradlew :src:ar:mangapro:assembleDebug -x spotlessKotlinCheck -x spotlessCheck
+
+    - name: Upload Finished APK File
+      uses: actions/upload-artifact@v4
+      with:
+        name: MangaPro-ProChan-APK
+        path: src/ar/mangapro/build/outputs/apk/debug/*.apk
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
