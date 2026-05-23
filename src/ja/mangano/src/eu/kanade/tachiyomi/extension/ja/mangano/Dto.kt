@@ -65,13 +65,13 @@ class Edge(
 
 @Serializable
 class Node(
-    val id: String,
-    val title: String,
-    val description: String?,
-    val isCompleted: Boolean?,
-    val coverImage: CoverImage?,
-    val user: User?,
-    val tags: List<Tag>?,
+    private val id: String,
+    private val title: String,
+    private val description: String?,
+    private val isCompleted: Boolean?,
+    private val coverImage: CoverImage?,
+    private val user: User?,
+    private val tags: List<Tag>?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = id
@@ -148,13 +148,13 @@ class ChapterEdge(
 
 @Serializable
 class ChapterNodeX(
-    val id: String,
-    val title: String,
-    val number: Int?,
-    val salesInfo: SalesInfo?,
-    val purchasedByViewer: Boolean?,
-    val canViewerSkipPaywall: Boolean?,
-    val publishedAt: String?,
+    private val id: String,
+    private val title: String,
+    private val number: Int?,
+    private val salesInfo: SalesInfo?,
+    private val purchasedByViewer: Boolean?,
+    private val canViewerSkipPaywall: Boolean?,
+    private val publishedAt: String?,
 ) {
     private val isPaid get() = purchasedByViewer != true && canViewerSkipPaywall != true
 
@@ -216,22 +216,22 @@ class Image(
 @Suppress("unused")
 @Serializable
 class LoginRequestBody(
-    val email: String,
-    val password: String,
-    val returnSecureToken: Boolean,
+    private val email: String,
+    private val password: String,
+    private val returnSecureToken: Boolean,
 )
 
 @Suppress("unused")
 @Serializable
 class RefreshRequestBody(
-    @SerialName("grant_type") val grantType: String,
-    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("grant_type") private val grantType: String,
+    @SerialName("refresh_token") private val refreshToken: String,
 )
 
 @Suppress("unused")
 @Serializable
 class SecureTokenRequestBody(
-    val returnSecureToken: Boolean,
+    private val returnSecureToken: Boolean,
 )
 
 @Serializable
