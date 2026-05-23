@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.asmotoon
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.util.Locale
 
@@ -11,10 +13,16 @@ class Asmotoon :
         "https://asmotoon.com",
         "en",
     ) {
+    override val client = super
+        .client
+        .newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 5)
+        .build()
+
     // filtering novel entries
-    override fun popularMangaSelector() = "div:contains(Trending) + div .group.overflow-hidden.grid:not(:has(.capitalize:contains(Novel)))"
-    override fun latestUpdatesSelector() = "div.grid > div.group:not(:has(.capitalize:contains(Novel)))"
-    override fun searchMangaSelector() = "#searched_series_page > button:not(:has(.capitalize:contains(Novel)))"
+    override fun popularMangaSelector() = "div:contains(Trending) + div .group:not([data-type=novel])"
+    override fun latestUpdatesSelector() = ".group:not([data-type=novel])"
+    override fun searchMangaSelector() = ".group:not([data-type=novel])"
 
     override val descriptionSelector: String = "#expand_content"
     override val genreSelector: String = ".gap-3 .gap-1 a"
