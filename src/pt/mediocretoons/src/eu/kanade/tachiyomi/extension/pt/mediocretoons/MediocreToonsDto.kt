@@ -25,38 +25,38 @@ data class MediocrePaginationDto(
 
 @Serializable
 data class MediocreListDto<T>(
-    val data: T,
+    @JsonNames("data", "items") val data: T,
     val pagination: MediocrePaginationDto? = null,
 )
 
 @Serializable
 data class MediocreTagDto(
     val id: Int = 0,
-    @SerialName("nome") val name: String = "",
+    @JsonNames("nome", "tag_nome") val name: String = "",
 )
 
 @Serializable
 data class MediocreFormatDto(
-    val id: Int = 0,
-    @SerialName("nome") val name: String = "",
+    @JsonNames("id", "formt_id") val id: Int = 0,
+    @JsonNames("nome", "formt_nome") val name: String = "",
 )
 
 @Serializable
 data class MediocreStatusDto(
     val id: Int = 0,
-    @SerialName("nome") val name: String = "",
+    @JsonNames("nome", "status_nome") val name: String = "",
 )
 
 @Serializable
 data class MediocreChapterSimpleDto(
-    val id: Int = 0,
-    @SerialName("nome") val name: String = "",
-    @SerialName("numero") val number: Float? = null,
-    @SerialName("imagem") val image: String? = null,
-    @SerialName("lancado_em") val releasedAt: String? = null,
-    @SerialName("criado_em") val createdAt: String? = null,
-    @SerialName("descricao") val description: String? = null,
-    @SerialName("tem_paginas") val hasPages: Boolean = false,
+    @JsonNames("id", "cap_id") val id: Int = 0,
+    @JsonNames("nome", "cap_nome") val name: String = "",
+    @JsonNames("numero", "cap_num") val number: Float? = null,
+    @JsonNames("imagem", "cap_imagem") val image: String? = null,
+    @JsonNames("lancado_em", "cap_lancado_em", "publicado_em") val releasedAt: String? = null,
+    @JsonNames("criado_em", "cap_criado_em") val createdAt: String? = null,
+    @JsonNames("descricao", "cap_desc") val description: String? = null,
+    @JsonNames("tem_paginas") val hasPages: Boolean = false,
     val totallinks: Int = 0,
     @SerialName("lido") val read: Boolean = false,
     val views: Int = 0,
@@ -64,32 +64,34 @@ data class MediocreChapterSimpleDto(
 
 @Serializable
 data class MediocreMangaDto(
-    val id: Int = 0,
+    @JsonNames("id", "obr_id") val id: Int = 0,
     val slug: String? = null,
-    @SerialName("nome") val name: String = "",
-    @SerialName("descricao") val description: String? = null,
-    @SerialName("imagem") val image: String? = null,
-    @SerialName("formato") val format: MediocreFormatDto? = null,
+    @JsonNames("nome", "obr_nome") val name: String = "",
+    @JsonNames("descricao", "obr_descricao") val description: String? = null,
+    @JsonNames("imagem", "obr_imagem") val image: String? = null,
     val tags: List<MediocreTagDto> = emptyList(),
     val status: MediocreStatusDto? = null,
-    @SerialName("total_capitulos") val totalChapters: Int = 0,
+    @SerialName("obr_status") val statusName: String? = null,
+    @JsonNames("total_capitulos", "capitulos_count", "total_capitulos_ativos") val totalChapters: Int = 0,
     @SerialName("capitulos") val chapters: List<MediocreChapterSimpleDto> = emptyList(),
 )
 
 @Serializable
 data class MediocrePageSrcDto(
-    val src: String = "",
+    @JsonNames("src", "url") val src: String = "",
+    val ordem: Int = 0,
 )
 
 @Serializable
 data class MediocreChapterDetailDto(
-    val id: Int = 0,
-    @SerialName("nome") val name: String = "",
-    @SerialName("numero") val number: Float? = null,
-    @SerialName("imagem") val image: String? = null,
-    @SerialName("paginas") val pages: List<MediocrePageSrcDto> = emptyList(),
-    @SerialName("lancado_em") val releasedAt: String? = null,
-    @SerialName("criado_em") val createdAt: String? = null,
+    @JsonNames("id", "cap_id") val id: Int = 0,
+    @JsonNames("uuid", "cap_uuid") val uuid: String? = null,
+    @JsonNames("nome", "cap_nome") val name: String = "",
+    @JsonNames("numero", "cap_num") val number: Float? = null,
+    @JsonNames("imagem", "cap_imagem") val image: String? = null,
+    @JsonNames("paginas", "paginas2") val pages: List<MediocrePageSrcDto> = emptyList(),
+    @JsonNames("lancado_em", "cap_lancado_em") val releasedAt: String? = null,
+    @JsonNames("criado_em", "cap_criado_em") val createdAt: String? = null,
     @SerialName("obra") val manga: MediocreMangaDto? = null,
 )
 
@@ -99,7 +101,7 @@ fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
         thumbnail_url = image?.let {
             when {
                 it.startsWith("http") -> it
-                else -> "${MediocreToons.CDN_URL}/obras/${this@toSManga.id}/$it?v=3"
+                else -> "${MediocreToons.CDN_URL}/obras/${this@toSManga.id}/$it"
             }
         }
         initialized = isDetails
@@ -109,10 +111,11 @@ fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
 
     description?.let { sManga.description = Jsoup.parseBodyFragment(it).text() }
 
-    status?.let {
-        sManga.status = when (it.name.lowercase()) {
-            "em andamento", "ativo" -> SManga.ONGOING
-            "completo", "concluído" -> SManga.COMPLETED
+    val statusText = status?.name ?: statusName
+    statusText?.let {
+        sManga.status = when (it.lowercase()) {
+            "em andamento", "ativo", "em_lancamento", "em lançamento" -> SManga.ONGOING
+            "completo", "concluído", "concluido" -> SManga.COMPLETED
             "hiato" -> SManga.ON_HIATUS
             "cancelada" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
@@ -125,16 +128,27 @@ fun MediocreChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
     name = this@toSChapter.name
     chapter_number = number ?: 0f
     url = "/capitulo/$id"
-    date_upload = dateFormat.tryParse(createdAt)
+    date_upload = dateFormat.tryParse(releasedAt ?: createdAt)
 }
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
     val obraId = manga?.id ?: 0
     val chapterNumber = number?.toString()?.removeSuffix(".0") ?: name
-    return pages.mapIndexed { idx, p ->
-        val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/${p.src}"
+    return pages.sortedWith(compareBy<MediocrePageSrcDto> { it.ordem }.thenBy { it.src }).mapIndexed { idx, p ->
+        val imageUrl = when {
+            p.src.startsWith("http") -> p.src
+            p.src.startsWith("obras/") -> "${MediocreToons.CDN_URL}/${p.src}"
+            else -> "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/${p.src}"
+        }
         Page(idx, imageUrl = imageUrl)
     }
+}
+
+fun MediocreChapterDetailDto.toCdnPageListUrl(): String? {
+    val obraId = manga?.id ?: return null
+    val chapterUuid = uuid ?: return null
+    val chapterNumber = number?.toString()?.removeSuffix(".0") ?: return null
+    return "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/$chapterUuid.json"
 }
 
 private val dateFormat by lazy {

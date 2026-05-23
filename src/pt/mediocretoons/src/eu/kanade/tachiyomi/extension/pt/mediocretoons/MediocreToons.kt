@@ -21,6 +21,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.api.get
@@ -33,7 +34,7 @@ class MediocreToons :
     override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
     override val supportsLatest = true
-    private val apiUrl = "https://api.mediocretoons.net"
+    private val apiUrl = "https://back.mediocrescan.com"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -64,7 +65,7 @@ class MediocreToons :
         val response = chain.proceed(authenticatedRequest)
 
         if (response.code == 401) {
-            response.body?.close()
+            response.body.close()
             cachedToken = null
             tokenExpiryTime = 0L
             val newToken = getValidToken()
@@ -179,9 +180,9 @@ class MediocreToons :
 
     // ============================= Latest Updates ==========================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/novos".toHttpUrl().newBuilder()
-            .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "24")
+        val url = "$apiUrl/obras/atualizadas-recentes".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", "24")
+            .addQueryParameter("offset", ((page - 1) * 24).toString())
             .addQueryParameter("formato", "5")
             .build()
         return GET(url, headers)
@@ -198,9 +199,10 @@ class MediocreToons :
 
     // =============================== Search ================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/buscar".toHttpUrl().newBuilder()
             .addQueryParameter("limite", "20")
             .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("temCapitulo", "true")
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("string", query)
@@ -209,9 +211,7 @@ class MediocreToons :
         filters.forEach { filter ->
             when (filter) {
                 is FormatoFilter -> {
-                    if (filter.selected.isNotEmpty()) {
-                        url.addQueryParameter("formato", filter.selected)
-                    }
+                    url.addQueryParameter("formato", filter.selected.ifEmpty { POPULAR_FORMATOS })
                 }
 
                 is StatusFilter -> {
@@ -253,7 +253,6 @@ class MediocreToons :
             "Formato",
             arrayOf(
                 Pair("Todos", ""),
-                Pair("Novel", "3"),
                 Pair("Shoujo", "4"),
                 Pair("Comic", "5"),
                 Pair("Yaoi", "8"),
@@ -267,11 +266,10 @@ class MediocreToons :
             "Status",
             arrayOf(
                 Pair("Todos", ""),
-                Pair("Ativo", "1"),
-                Pair("Em Andamento", "2"),
-                Pair("Cancelada", "3"),
-                Pair("Concluído", "4"),
-                Pair("Hiato", "6"),
+                Pair("Em lançamento", "1"),
+                Pair("Finalizado", "2"),
+                Pair("Hiato", "3"),
+                Pair("Cancelado", "4"),
             ),
         )
 
@@ -386,27 +384,15 @@ class MediocreToons :
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val id = manga.url.substringAfter("/obra/")
-        val allChapters = mutableListOf<SChapter>()
-        var page = 1
+        val response = client.newCall(GET("$apiUrl/obras/$id", headers)).execute()
+        val dto = response.parseAs<MediocreMangaDto>()
 
-        do {
-            val url = "$apiUrl/capitulos".toHttpUrl().newBuilder()
-                .addQueryParameter("obr_id", id)
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limite", "100")
-                .addQueryParameter("order", "desc")
-                .build()
+        val chapters = dto.chapters
+            .map { it.toSChapter() }
+            .distinctBy { it.url }
+            .sortedByDescending { it.chapter_number }
 
-            val response = client.newCall(GET(url, headers)).execute()
-            val dto = response.parseAs<MediocreListDto<List<MediocreChapterSimpleDto>>>()
-
-            allChapters.addAll(dto.data.map { it.toSChapter() })
-
-            val hasNext = dto.pagination?.hasNextPage ?: false
-            page++
-        } while (hasNext)
-
-        return Observable.just(allChapters.distinctBy { it.url }.sortedByDescending { it.chapter_number })
+        return Observable.just(chapters)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
@@ -421,7 +407,25 @@ class MediocreToons :
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<MediocreChapterDetailDto>()
         val pages = dto.toPageList()
-        return pages
+        if (pages.isNotEmpty()) return pages
+
+        val cdnPageListUrl = dto.toCdnPageListUrl() ?: return emptyList()
+        val cdnResponse = client.newCall(GET(cdnPageListUrl, headers)).execute()
+        val pageList = JSONArray(cdnResponse.body.string())
+
+        return (0 until pageList.length()).mapNotNull { index ->
+            val page = pageList.optJSONObject(index) ?: return@mapNotNull null
+            val imageUrl = page.optString("url")
+                .takeIf { it.isNotBlank() }
+                ?.let {
+                    when {
+                        it.startsWith("http") -> it
+                        else -> "$CDN_URL/$it"
+                    }
+                }
+
+            imageUrl?.let { Page(index, imageUrl = it) }
+        }
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -451,8 +455,8 @@ class MediocreToons :
     }
 
     companion object {
-        const val CDN_URL = "https://api.mediocretoons.net/storage"
-        private const val POPULAR_FORMATOS = "1,3,4,5,8,9,13"
+        const val CDN_URL = "https://cdn.mediocrescan.com"
+        private const val POPULAR_FORMATOS = "1,4,5,8,9,13"
         private const val EMAIL_PREF = "email"
         private const val PASSWORD_PREF = "password"
     }
