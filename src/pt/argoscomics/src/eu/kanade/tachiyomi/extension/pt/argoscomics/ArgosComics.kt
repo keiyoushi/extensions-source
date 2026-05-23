@@ -9,13 +9,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.extractNextJsRsc
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 class ArgosComics : HttpSource() {
@@ -34,6 +32,10 @@ class ArgosComics : HttpSource() {
         .rateLimit(3, 2)
         .build()
 
+    private val rscHeaders by lazy {
+        headersBuilder().set("rsc", "1").build()
+    }
+
     // ======================== Popular =============================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -41,27 +43,19 @@ class ArgosComics : HttpSource() {
             .addPathSegment("projetos")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers.newBuilder().set("rsc", "1").build())
+        return GET(url, rscHeaders)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val body = response.body.string()
-        val dto = body.extractNextJsRsc<MangasListDto>()
-        return dto!!.toMangasPage()
-    }
+    override fun popularMangaParse(response: Response): MangasPage = response.extractNextJs<MangasListDto>()!!.toMangasPage()
 
     // ======================== Latest =============================
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().build()
-        return GET(url, headers.newBuilder().set("rsc", "1").build())
+        return GET(url, rscHeaders)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val body = response.body.string()
-        val dto = body.extractNextJsRsc<LatestMangas>()
-        return dto!!.toMangasPage()
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = response.extractNextJs<LatestMangas>()!!.toMangasPage()
 
     // ======================== Search =============================
 
@@ -69,13 +63,12 @@ class ArgosComics : HttpSource() {
         val searchHeaders = headers.newBuilder()
             .set("Next-Action", SEARCH_TOKEN)
             .build()
-        val payload = listOf(query).toJsonString().toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+        val payload = listOf(query).toJsonRequestBody()
         return POST(baseUrl, searchHeaders, payload)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val body = response.body.string()
-        val dto = body.extractNextJsRsc<List<MangaDto>>() ?: emptyList()
+        val dto = response.extractNextJs<List<MangaDto>>() ?: emptyList()
         return MangasPage(dto.map(MangaDto::toSManga), false)
     }
 
@@ -85,18 +78,14 @@ class ArgosComics : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = getMangaUrl(manga)
-        val payload = url.toHttpUrl().pathSegments.toJsonString().toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+        val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
         val detailsHeaders = headers.newBuilder()
             .set("Next-Action", DETAILS_TOKEN)
             .build()
         return POST(url, detailsHeaders, payload)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val body = response.body.string()
-        val dto = body.extractNextJsRsc<MangaDetailsDto>()!!
-        return dto.toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<MangaDetailsDto>()!!.toSManga()
 
     // ======================== Chapters =============================
 
@@ -111,9 +100,7 @@ class ArgosComics : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val pathSegment = response.request.url.toString().substringAfter(baseUrl)
-        val body = response.body.string()
-        val dto = body.extractNextJsRsc<VolumeChapterDto>()!!
-        return dto.toChapterList(pathSegment)
+        return response.extractNextJs<VolumeChapterDto>()!!.toChapterList(pathSegment)
     }
 
     // ======================== Pages =============================
@@ -122,10 +109,7 @@ class ArgosComics : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val segments = getChapterUrl(chapter).toHttpUrl().pathSegments
-        val payload = buildList {
-            add(segments.first())
-            add(segments.last())
-        }.toJsonString().toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+        val payload = listOf(segments.first(), segments.last()).toJsonRequestBody()
         val pagesHeaders = headers.newBuilder()
             .set("Next-Action", PAGES_TOKEN)
             .build()
@@ -134,15 +118,12 @@ class ArgosComics : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         if (response.request.url.encodedPath == "/login") error("Login to read")
-        val body = response.body.string()
-        val dto = body.extractNextJsRsc<PagesDto>()
-        return dto!!.toPageList()
+        return response.extractNextJs<PagesDto>()!!.toPageList()
     }
 
     override fun imageUrlParse(response: Response) = ""
 
     companion object {
-        private val TEXT_PLAIN_MEDIA_TYPE = "text/plain;charset=UTF-8".toMediaTypeOrNull()
         private const val SEARCH_TOKEN = "406369e6483a4fe640a38cebf46ca5ea2385392f8d"
         private const val CHAPTERS_TOKEN = "6075c7373783e0d2488372dc7fcb9ffe1470bc41d2"
         private const val DETAILS_TOKEN = "60bd903bddc3d9d07f2b58fe32f0238afd74e492d6"
