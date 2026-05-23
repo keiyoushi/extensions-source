@@ -1,0 +1,36 @@
+name: My Private MangaPro Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  single_build:
+    name: Build My APK
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'microsoft'
+
+    - name: Set SDK Location
+      run: |
+        mkdir -p ./android-sdk/licenses
+        echo -e "\n893a4cd1db981502063774b772413550192400ae\n2512d861773d22b04316a906a52dd11d12d54573\nd56f5187479451eabf01fb7431302450f3a66e55" > ./android-sdk/licenses/android-sdk-license
+        echo "sdk.dir=./android-sdk" > local.properties
+
+    - name: Build APK Only
+      run: ./gradlew :src:ar:mangapro:assembleDebug -x spotlessKotlinCheck -x spotlessCheck
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: ProChan-MangaPro-APK
+        path: src/ar/mangapro/build/outputs/apk/debug/*.apk
