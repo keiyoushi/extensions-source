@@ -20,10 +20,21 @@ jobs:
         java-version: '17'
         distribution: 'microsoft'
 
-    - name: Set SDK Location
+    - name: Setup Android SDK and Accept ALL Licenses
       run: |
+        # إنشاء مجلد الـ SDK الخاص بنا
         mkdir -p ./android-sdk/licenses
-        echo -e "\n893a4cd1db981502063774b772413550192400ae\n2512d861773d22b04316a906a52dd11d12d54573\nd56f5187479451eabf01fb7431302450f3a66e55" > ./android-sdk/licenses/android-sdk-license
+        
+        # استخدام أداة النظام الرسمية في السيرفر للموافقة التلقائية على كل تراخيص جوجل
+        # ونقلها مباشرة إلى مجلد المشروع ليتعرف عليها Gradle
+        if [ -d "$ANDROID_HOME/tools/bin" ]; then
+          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses
+        elif [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ]; then
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        fi
+        
+        # نسخ التراخيص المعتمدة إلى مجلدنا
+        cp -r $ANDROID_HOME/licenses/* ./android-sdk/licenses/ || true
         echo "sdk.dir=./android-sdk" > local.properties
 
     - name: Build APK Only
