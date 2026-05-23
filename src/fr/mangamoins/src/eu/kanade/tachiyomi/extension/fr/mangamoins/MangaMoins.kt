@@ -169,19 +169,13 @@ class MangaMoins : HttpSource() {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
             client.newCall(GET(scriptUrl, headers)).execute().use { response ->
                 val script = response.body.string()
+                val arrayContent = ARRAY_REGEX.find(script)?.groupValues?.get(1)
+                    ?: error("Failed to find array content")
 
-                val matchParams = DECODER_PARAMS_REGEX.find(script)
-                val mult = matchParams?.groupValues?.get(1)?.toLong(16) ?: 3L
-                val offset = matchParams?.groupValues?.get(2)?.toLong(16) ?: 7L
-
-                val salts = HEX_ARRAY_REGEX.findAll(script)
-                    .map { match ->
-                        match.value.removeSurrounding("[", "]").split(",")
-                            .map { it.trim().removePrefix("0x").toLong(16) }
-                            .map { ALPHABET[((it * mult + offset) % ALPHABET.length).toInt()] }
-                            .joinToString("")
-                    }
-                    .filter { it.length > 5 && pagesBaseUrl.contains(it) }
+                val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
+                val salts = STRINGS_REGEX.findAll(arrayContent)
+                    .map { it.groupValues[1].replace(ESCAPE_REGEX) { m -> m.groupValues[1].toInt(16).toChar().toString() } }
+                    .filter { it.length >= 3 && pathSegment.contains(it) }
                     .distinct()
                     .toList()
 
@@ -211,11 +205,11 @@ class MangaMoins : HttpSource() {
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
-        private val FALLBACK_SALTS = listOf("qbtb8822zh", "ebzb882bzh8")
+        private val FALLBACK_SALTS = listOf("a1f", "Z0_9")
         private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
 
-        private val HEX_ARRAY_REGEX = Regex("""\[0x[a-f0-9]+(?:,0x[a-f0-9]+)+\]""")
-        private val DECODER_PARAMS_REGEX = Regex("""\*0x([a-f0-9]+)\+0x([a-f0-9]+)""")
-        private const val ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private val ARRAY_REGEX = Regex("""_[a-f\d]+=\s*\[(['"].*?)]""")
+        private val STRINGS_REGEX = Regex("""['"]([^'"]*)['"]""")
+        private val ESCAPE_REGEX = Regex("""\\x([a-f\d]{2})""", RegexOption.IGNORE_CASE)
     }
 }

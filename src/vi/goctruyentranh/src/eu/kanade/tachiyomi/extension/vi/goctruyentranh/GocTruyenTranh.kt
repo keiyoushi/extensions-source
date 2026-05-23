@@ -22,6 +22,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -34,7 +35,7 @@ class GocTruyenTranh :
 
     private val defaultBaseUrl = "https://goctruyentranh.com"
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val baseUrl get() = getPrefBaseUrl()
 
     override val name = "GocTruyenTranh"
 
@@ -46,6 +47,24 @@ class GocTruyenTranh :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            if (response.code == 400 && request.url.encodedPath.contains("_next/image")) {
+                val widths = listOf("384", "750", "960", "256", "1200", "1920", "3840", "96")
+                for (width in widths) {
+                    val newUrl = request.url.newBuilder().setQueryParameter("w", width).build()
+                    val retryResponse = chain.proceed(request.newBuilder().url(newUrl).build())
+                    if (retryResponse.isSuccessful) {
+                        response.close()
+                        return@addInterceptor retryResponse
+                    }
+                    retryResponse.close()
+                }
+            }
+            response
+        }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -60,13 +79,7 @@ class GocTruyenTranh :
                 val sel = element.selectFirst("a.line-clamp-2")!!
                 setUrlWithoutDomain(sel.absUrl("href"))
                 title = sel.text()
-                thumbnail_url = element.selectFirst("img")
-                    ?.absUrl("src")
-                    ?.let { url ->
-                        url.toHttpUrlOrNull()
-                            ?.queryParameter("url")
-                            ?: url
-                    }
+                thumbnail_url = getImgUrl(element.selectFirst("img"))
             }
         }
         val hasNextPage = document.selectFirst("nav ul li") != null
@@ -112,13 +125,7 @@ class GocTruyenTranh :
             val blocks = container.select("p")
             if (blocks.isNotEmpty()) blocks.joinToString("\n\n") { it.wholeText().trim() } else container.wholeText().trim()
         }
-        thumbnail_url = document.selectFirst("section aside:first-child img")
-            ?.absUrl("src")
-            ?.let { url ->
-                url.toHttpUrlOrNull()
-                    ?.queryParameter("url")
-                    ?: url
-            }
+        thumbnail_url = getImgUrl(document.selectFirst("section aside:first-child img"))
         status = parseStatus(document.selectFirst("span:contains(Trạng thái:) + b")?.text())
         author = document.selectFirst("span:contains(Tác giả:) + b")?.text()
     }
@@ -176,12 +183,40 @@ class GocTruyenTranh :
         val manga = json.comics.data.map {
             SManga.create().apply {
                 title = it.name
-                thumbnail_url = it.thumbnail
+                thumbnail_url = getThumbnail(it.thumbnail)
                 setUrlWithoutDomain("$baseUrl/" + it.slug)
             }
         }
         val hasNextPage = json.comics.current_page != json.comics.last_page
         return MangasPage(manga, hasNextPage)
+    }
+
+    private fun getImgUrl(element: Element?): String? {
+        val url = element?.absUrl("src")?.takeIf { it.isNotEmpty() }
+            ?: element?.attr("srcset")?.takeIf { it.isNotEmpty() }?.let { srcset ->
+                val firstUrl = srcset.split(',').first().trim().split(' ').first()
+                if (firstUrl.startsWith("http")) firstUrl else "$baseUrl$firstUrl"
+            }
+        return getThumbnail(url)
+    }
+
+    private fun getThumbnail(url: String?): String? {
+        if (url.isNullOrEmpty()) return null
+        val httpUrl = url.toHttpUrlOrNull() ?: return url
+
+        val builder = if (url.contains("_next/image")) {
+            httpUrl.newBuilder()
+        } else {
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("_next")
+                .addPathSegment("image")
+                .addQueryParameter("url", url)
+        }
+
+        return builder
+            .setQueryParameter("w", "384")
+            .setQueryParameter("q", "75")
+            .build().toString()
     }
 
     override fun getFilterList() = FilterList(
@@ -214,9 +249,18 @@ class GocTruyenTranh :
             dialogTitle = BASE_URL_PREF_TITLE
             dialogMessage = "Default: $defaultBaseUrl"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    val inputUrl = newValue as String
+                    if (inputUrl.isNotBlank()) {
+                        inputUrl.toHttpUrl()
+                    }
+                    Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_LONG).show()
+                    true
+                } catch (e: Exception) {
+                    Toast.makeText(screen.context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    false
+                }
             }
         }
         screen.addPreference(baseUrlPref)
@@ -226,7 +270,7 @@ class GocTruyenTranh :
 
     companion object {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val NOTIFICATION_SHOW = "Tên miền đã được thay đổi."
         private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY =
