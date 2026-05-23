@@ -33,11 +33,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
-    /**
-     * Language predicate — override in EN/KO subclasses.
-     * Titles ending in "Raw" are treated as Korean; everything else as English.
-     * Default (ALL): accept everything.
-     */
     open fun isMangaForLang(title: String): Boolean = true
 
     // --- Popular ---
@@ -61,7 +56,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     // --- Search ---
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Keyword search
         if (query.isNotBlank()) {
             val url = "$apiUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
@@ -69,7 +63,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
             return GET(url, headers)
         }
 
-        // ... Genre filter
         val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selected
         return if (!genre.isNullOrBlank() && genre != GENRE_ALL) {
             val genreSlug = genre.lowercase().replace(" ", "-")
@@ -89,7 +82,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
                 val mangas = dto.results
                     .filter { isMangaForLang(it.name) }
                     .map { it.toSManga() }
-                MangasPage(mangas, hasNextPage = false) // search results are not paginated
+                MangasPage(mangas, hasNextPage = false)
             }
             "/genre/" in reqUrl -> {
                 val dto = json.decodeFromString<GenreResponseDto>(body)
@@ -99,7 +92,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
                 MangasPage(mangas, hasNextPage = dto.page < dto.totalPages)
             }
             else -> {
-                // Fallback: treat as latest
                 val dto = json.decodeFromString<LatestResponseDto>(body)
                 val mangas = dto.manga
                     .filter { isMangaForLang(it.title) }
@@ -110,7 +102,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     }
 
     // --- Manga Details ---
-    // manga.url format: /webtoon/{slug}
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.trimStart('/').removePrefix("webtoon/").substringBefore("/")
         return GET("$apiUrl/manga/$slug", headers)
@@ -132,7 +124,7 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
     }
 
     // --- Chapter List ---
-    // Reuse the manga detail endpoint — it already returns the full chapter list.
+
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -149,10 +141,8 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
 
     // --- Page List ---
 
-    // chapter.url format: /webtoon/{mangaSlug}/{chapterSlug}
     override fun pageListRequest(chapter: SChapter): Request {
         val segments = chapter.url.trimStart('/').split("/")
-        // index 0 = "webtoon", 1 = mangaSlug, 2 = chapterSlug
         val mangaSlug = segments.getOrElse(1) { "" }
         val chapterSlug = segments.getOrElse(2) { "" }
         return GET("$apiUrl/chapter/$mangaSlug/$chapterSlug", headers)
@@ -165,7 +155,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         }
     }
 
-    // imageUrlParse is unused because Page already carries imageUrl directly.
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("imageUrlParse is not used by this source")
 
     // --- Filters ---
@@ -182,10 +171,6 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         return FilterList(header, GenreFilter(genres))
     }
 
-    /**
-     * Fetch genre list from the API and cache it for getFilterList().
-     * Called automatically by the app when the user taps "Reset".
-     */
     private fun fetchGenres() = client.newCall(GET("$apiUrl/genres", headers))
         .execute()
         .let { response ->
@@ -199,10 +184,8 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
 
     // --- Private Helpers ---
 
-    /** Deserialize the response body into [T] using the shared [json] instance. */
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    /** Map API status strings → Tachiyomi SManga status constants. */
     private fun String.toMangaStatus(): Int = when (lowercase().trim()) {
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
@@ -211,23 +194,18 @@ abstract class Manhwa18Cc(override val lang: String) : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    /** Parse ISO date strings (yyyy-MM-dd). Returns 0 on failure. */
     private fun String?.parseDate(): Long {
         if (isNullOrBlank()) return 0L
         return runCatching { DATE_FORMAT.parse(this)?.time ?: 0L }.getOrDefault(0L)
     }
 
-    /**
-     * Display a Float chapter number without a trailing ".0" for whole numbers.
-     * e.g. 92.0 → "92", 92.5 → "92.5"
-     */
     private fun Float.toDisplay(): String = if (this == toLong().toFloat()) toLong().toString() else toString()
 
     // --- DTO - Source Model Conversions ---
 
     private fun MangaItemDto.toSManga() = SManga.create().apply {
         url = "/webtoon/$slug"
-        title = this.title
+        title = this@toSManga.title
         thumbnail_url = thumbnail
     }
 
