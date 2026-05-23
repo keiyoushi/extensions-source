@@ -56,7 +56,7 @@ data class MediocreChapterSimpleDto(
     @JsonNames("lancado_em", "cap_lancado_em", "publicado_em") val releasedAt: String? = null,
     @JsonNames("criado_em", "cap_criado_em") val createdAt: String? = null,
     @JsonNames("descricao", "cap_desc") val description: String? = null,
-    @JsonNames("tem_paginas") val hasPages: Boolean = false,
+    @SerialName("tem_paginas") val hasPages: Boolean = false,
     val totallinks: Int = 0,
     @SerialName("lido") val read: Boolean = false,
     val views: Int = 0,
@@ -143,6 +143,18 @@ fun MediocreChapterDetailDto.toPageList(): List<Page> {
         Page(idx, imageUrl = imageUrl)
     }
 }
+
+fun List<MediocrePageSrcDto>.toPageList(): List<Page> = sortedWith(compareBy<MediocrePageSrcDto> { it.ordem }.thenBy { it.src })
+    .mapIndexedNotNull { idx, page ->
+        val imageUrl = page.src.takeIf { it.isNotBlank() }?.let {
+            when {
+                it.startsWith("http") -> it
+                else -> "${MediocreToons.CDN_URL}/$it"
+            }
+        }
+
+        imageUrl?.let { Page(idx, imageUrl = it) }
+    }
 
 fun MediocreChapterDetailDto.toCdnPageListUrl(): String? {
     val obraId = manga?.id ?: return null

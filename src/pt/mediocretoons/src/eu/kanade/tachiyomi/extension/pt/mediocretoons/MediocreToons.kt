@@ -21,7 +21,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.json.JSONArray
 import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.api.get
@@ -411,21 +410,8 @@ class MediocreToons :
 
         val cdnPageListUrl = dto.toCdnPageListUrl() ?: return emptyList()
         val cdnResponse = client.newCall(GET(cdnPageListUrl, headers)).execute()
-        val pageList = JSONArray(cdnResponse.body.string())
 
-        return (0 until pageList.length()).mapNotNull { index ->
-            val page = pageList.optJSONObject(index) ?: return@mapNotNull null
-            val imageUrl = page.optString("url")
-                .takeIf { it.isNotBlank() }
-                ?.let {
-                    when {
-                        it.startsWith("http") -> it
-                        else -> "$CDN_URL/$it"
-                    }
-                }
-
-            imageUrl?.let { Page(index, imageUrl = it) }
-        }
+        return cdnResponse.parseAs<List<MediocrePageSrcDto>>().toPageList()
     }
 
     override fun imageUrlParse(response: Response): String = ""
