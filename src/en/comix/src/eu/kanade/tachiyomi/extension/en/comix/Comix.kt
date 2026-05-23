@@ -189,7 +189,12 @@ class Comix :
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        chapterListFromWebView(manga)
+        WEBVIEW_SEMAPHORE.acquire()
+        try {
+            chapterListFromWebView(manga)
+        } finally {
+            WEBVIEW_SEMAPHORE.release()
+        }
     }
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
@@ -376,7 +381,12 @@ class Comix :
 
     // ==================== Page list via WebView interception ====================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        pageListFromWebView(chapter)
+        WEBVIEW_SEMAPHORE.acquire()
+        try {
+            pageListFromWebView(chapter)
+        } finally {
+            WEBVIEW_SEMAPHORE.release()
+        }
     }
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
@@ -561,5 +571,10 @@ class Comix :
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
         private const val PREF_SCORE_POSITION = "pref_score_position"
         private const val DEFAULT_CONTENT_RATING = "suggestive"
+
+        // Limit concurrent WebView instances — spawning dozens of WebViews
+        // simultaneously during library updates overwhelms the renderer pool
+        // and triggers rate-limiting / Cloudflare challenges.
+        private val WEBVIEW_SEMAPHORE = Semaphore(2)
     }
 }
