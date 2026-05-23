@@ -297,7 +297,6 @@ class Comix :
         handler.post {
             val view = WebView(Injekt.get<Application>())
             webView = view
-            view.layout(0, 0, 1920, 1080)
             with(view.settings) {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -415,11 +414,10 @@ class Comix :
         handler.post {
             val view = WebView(Injekt.get<Application>())
             webView = view
-            view.layout(0, 0, 800, 600)
             with(view.settings) {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                blockNetworkImage = false
+                blockNetworkImage = false // allow images so chapter reader initializes
                 userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36"
             }
             view.addJavascriptInterface(jsInterface, interfaceName)
