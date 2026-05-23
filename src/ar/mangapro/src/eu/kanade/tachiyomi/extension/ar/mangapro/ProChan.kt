@@ -202,34 +202,47 @@ class ProChan : HttpSource() {
         val urlParts = response.request.url.toString().split("/")
         val chapterId = urlParts.getOrElse(urlParts.size - 2) { "0" }
 
-        val token = Regex(
-            """eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+""",
-        ).find(html)?.value ?: return emptyList()
-
         val apiHeaders = headers.newBuilder().set("Accept", "application/json").build()
 
-        val firstResp = client.newCall(
-            GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=0", apiHeaders),
-        ).execute()
-        val firstResult = firstResp.parseAs<ChapterDeferredResponse>()
-        if (!firstResult.success || firstResult.data == null) return emptyList()
+        var token = ""
 
-        val splitIndex = firstResult.data.splitIndex
-        val allSplitData = mutableListOf(firstResult.data)
+        try {
+            val keyResp = client.newCall(
+                GET("$baseUrl/chapter-map-session-key/$chapterId", apiHeaders)
+            ).execute()
+            val keyText = keyResp.body.string()
+            val keyRegex = Regex(""""key"\s*:\s*"([^"]+)"""")
+            token = keyRegex.find(keyText)?.groups?.get(1)?.value ?: ""
+        } catch (e: Exception) {}
 
-        for (s in 1..splitIndex) {
+        if (token.isEmpty()) {
+            val jwtRegex = Regex("""eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+""")
+            token = jwtRegex.find(html)?.value ?: ""
+        }
+
+        if (token.isEmpty()) return emptyList()
+
+        var currentSplit = 0
+        var maxSplit = 0
+        val allSplitData = mutableListOf<ChapterDeferredData>()
+
+        do {
             try {
                 val resp = client.newCall(
-                    GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=$s", apiHeaders),
+                    GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=$currentSplit", apiHeaders)
                 ).execute()
                 val result = resp.parseAs<ChapterDeferredResponse>()
                 if (result.success && result.data != null) {
                     allSplitData.add(result.data)
+                    maxSplit = result.data.splitIndex
+                } else {
+                    break
                 }
             } catch (e: Exception) {
                 break
             }
-        }
+            currentSplit++
+        } while (currentSplit <= maxSplit)
 
         val pages = mutableListOf<Page>()
         var index = 0
@@ -271,59 +284,56 @@ class ProChan : HttpSource() {
     private fun reconstructPage(map: ScrambledMap): ByteArray? {
         val totalW = map.dim.getOrElse(0) { 800 }
         val totalH = map.dim.getOrElse(1) { 1200 }
-
         val (cols, rows) = parseMode(map.mode, map.pieces.size)
 
-        val bitmaps = arrayOfNulls<Bitmap>(map.pieces.size)
+        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+
         try {
-            for (i in map.pieces.indices) {
+            for (targetIdx in map.pieces.indices) {
+                val srcIdx = map.order.getOrElse(targetIdx) { targetIdx }
+                val pieceUrl = map.pieces.getOrNull(srcIdx) ?: continue
+
                 val req = Request.Builder()
-                    .url(map.pieces[i])
+                    .url(pieceUrl)
                     .header("Referer", "$baseUrl/")
                     .header("Accept", "image/avif,*/*")
                     .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
                     .build()
+
                 val resp = client.newCall(req).execute()
+                if (!resp.isSuccessful) {
+                    resp.close()
+                    continue
+                }
                 val bytes = resp.body.bytes()
                 resp.close()
-                bitmaps[i] = decodeAvif(bytes)
-            }
 
-            val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(result)
+                val bmp = decodeAvif(bytes) ?: continue
 
-            for (targetIdx in map.pieces.indices) {
-                val srcIdx = map.order.getOrElse(targetIdx) { targetIdx }
-                val bmp = bitmaps[srcIdx] ?: continue
-
-                val pieceW = bmp.width
-                val pieceH = bmp.height
+                val expectedPieceW = totalW / cols
+                val expectedPieceH = totalH / rows
 
                 val col = targetIdx % cols
                 val row = targetIdx / cols
 
-                val left = col * pieceW
-                val top = row * pieceH
+                val left = col * expectedPieceW
+                val top = row * expectedPieceH
 
-                val dst = Rect(
-                    left,
-                    top,
-                    left + pieceW,
-                    top + pieceH
-                )
+                val dst = Rect(left, top, left + expectedPieceW, top + expectedPieceH)
+                val src = Rect(0, 0, bmp.width, bmp.height)
 
-                canvas.drawBitmap(bmp, null, dst, null)
+                canvas.drawBitmap(bmp, src, dst, null)
+                bmp.recycle()
             }
 
             val out = ByteArrayOutputStream()
             result.compress(Bitmap.CompressFormat.JPEG, 90, out)
-            result.recycle()
-            bitmaps.forEach { it?.recycle() }
-
             return out.toByteArray()
         } catch (e: Exception) {
-            bitmaps.forEach { it?.recycle() }
             return null
+        } finally {
+            result.recycle()
         }
     }
 
