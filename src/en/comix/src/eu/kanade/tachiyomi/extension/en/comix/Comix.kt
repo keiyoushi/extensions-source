@@ -53,6 +53,7 @@ class Comix :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
+        .addInterceptor(Cipher.interceptor)
         .rateLimit(5)
         .build()
 
