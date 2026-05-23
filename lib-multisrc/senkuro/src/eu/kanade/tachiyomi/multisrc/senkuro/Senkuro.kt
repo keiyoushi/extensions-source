@@ -43,6 +43,7 @@ abstract class Senkuro(
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         .add("Content-Type", "application/json")
+        .add("App-Id", if (name == "Senkuro") "4026531840100" else "5033164800100")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val apiUrl: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString() + "/graphql"
@@ -60,6 +61,10 @@ abstract class Senkuro(
         val requestBody = GraphQL(
             SEARCH_QUERY,
             SearchVariables(
+                orderBy = SearchVariables.OrderDto(
+                    "POPULARITY_SCORE",
+                    "DESC",
+                ),
                 offset = OFFSET_COUNT * (page - 1),
                 label = SearchVariables.FiltersDto(
                     // Senkuro eternal built-in exclude 18+ filter
@@ -106,9 +111,16 @@ abstract class Senkuro(
         val excludeTStatus = mutableListOf<String>()
         val includeAges = mutableListOf<String>()
         val excludeAges = mutableListOf<String>()
+        var mangaTachiyomiField: String? = null
+        var orderDirection: String? = null
 
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
+                is OrderBy -> {
+                    mangaTachiyomiField = arrayOf("SCORE", "POPULARITY_SCORE")[filter.state!!.index]
+                    orderDirection = if (filter.state!!.ascending) "ASC" else "DESC"
+                }
+
                 is GenreList -> filter.state.forEach { label ->
                     if (label.state != Filter.TriState.STATE_IGNORE) {
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
@@ -182,6 +194,10 @@ abstract class Senkuro(
             SEARCH_QUERY,
             SearchVariables(
                 query = query,
+                orderBy = SearchVariables.OrderDto(
+                    mangaTachiyomiField,
+                    orderDirection,
+                ),
                 offset = OFFSET_COUNT * (page - 1),
                 label = SearchVariables.FiltersDto(
                     includeGenres,
@@ -373,6 +389,14 @@ abstract class Senkuro(
     }
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
+        filters += listOf(
+            OrderBy(),
+            TypeList(getTypeList()),
+            FormatList(getFormatList()),
+            StatList(getStatList()),
+            StatTranslateList(getStatTranslateList()),
+            AgeList(getAgeList()),
+        )
         filters += if (labelsList.isEmpty()) {
             listOf(
                 Filter.Separator(),
@@ -388,13 +412,6 @@ abstract class Senkuro(
                 AgeDemoList(labelsList.filter { it.rootId == "TEFCRUw6Nw" }), // Демография
             )
         }
-        filters += listOf(
-            TypeList(getTypeList()),
-            FormatList(getFormatList()),
-            StatList(getStatList()),
-            StatTranslateList(getStatTranslateList()),
-            AgeList(getAgeList()),
-        )
         return FilterList(filters)
     }
 
@@ -412,6 +429,13 @@ abstract class Senkuro(
     private class AgeList(ages: List<FilterersTri>) : Filter.Group<FilterersTri>("Возрастное ограничение", ages)
 
     private var labelsList: List<FilterersTriRoot> = listOf()
+
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("По рейтингу", "По популярности"),
+            Selection(1, false),
+        )
     private fun getTypeList() = listOf(
         FilterersTri("Манга", "MANGA"),
         FilterersTri("Манхва", "MANHWA"),
