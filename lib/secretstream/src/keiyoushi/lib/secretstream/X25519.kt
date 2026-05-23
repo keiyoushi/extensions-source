@@ -1,4 +1,4 @@
-package keiyoushi.lib.secretstream;
+package keiyoushi.lib.secretstream
 
 import java.math.BigInteger
 
